@@ -1,0 +1,724 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		8BCF6CF23035824C00E02EB4 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 8642BFB82234E9FB47DA5BF8 /* ComposableArchitecture */; };
+		8BCF6DE33036C4FF00E02EB4 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF6DE23036C4FF00E02EB4 /* SnapshotTesting */; };
+		8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7813303D6B6F00E02EB4 /* SwiftVLC */; };
+		8BCF7817303D6B8200E02EB4 /* XCoordinator in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7816303D6B8200E02EB4 /* XCoordinator */; };
+		8BCF781A303D6B9000E02EB4 /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7819303D6B9000E02EB4 /* Shimmer */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8BCF6C873035797500E02EB4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BCF6C6D3035797400E02EB4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BCF6C743035797400E02EB4;
+			remoteInfo = PureIPTV;
+		};
+		8BCF6C913035797500E02EB4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BCF6C6D3035797400E02EB4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BCF6C743035797400E02EB4;
+			remoteInfo = PureIPTV;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		8BCF6C753035797400E02EB4 /* PureIPTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PureIPTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8BCF6C983035797500E02EB4 /* Exceptions for "PureIPTV" folder in "PureIPTV" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8BCF6C743035797400E02EB4 /* PureIPTV */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		8BCF6C773035797400E02EB4 /* PureIPTV */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8BCF6C983035797500E02EB4 /* Exceptions for "PureIPTV" folder in "PureIPTV" target */,
+			);
+			path = PureIPTV;
+			sourceTree = "<group>";
+		};
+		8BCF6C893035797500E02EB4 /* PureIPTVTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PureIPTVTests;
+			sourceTree = "<group>";
+		};
+		8BCF6C933035797500E02EB4 /* PureIPTVUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PureIPTVUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8BCF6C723035797400E02EB4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8BCF7817303D6B8200E02EB4 /* XCoordinator in Frameworks */,
+				8BCF781A303D6B9000E02EB4 /* Shimmer in Frameworks */,
+				8BCF6CF23035824C00E02EB4 /* ComposableArchitecture in Frameworks */,
+				8BCF6DE33036C4FF00E02EB4 /* SnapshotTesting in Frameworks */,
+				8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C833035797500E02EB4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C8D3035797500E02EB4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		8BCF6C6C3035797400E02EB4 = {
+			isa = PBXGroup;
+			children = (
+				8BCF6C773035797400E02EB4 /* PureIPTV */,
+				8BCF6C893035797500E02EB4 /* PureIPTVTests */,
+				8BCF6C933035797500E02EB4 /* PureIPTVUITests */,
+				8BCF6C763035797400E02EB4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8BCF6C763035797400E02EB4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8BCF6C753035797400E02EB4 /* PureIPTV.app */,
+				8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */,
+				8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8BCF6C743035797400E02EB4 /* PureIPTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BCF6C993035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTV" */;
+			buildPhases = (
+				AE7081399988FFC6CA6A88F6 /* SwiftFormat */,
+				8BCF6C713035797400E02EB4 /* Sources */,
+				8BCF6C723035797400E02EB4 /* Frameworks */,
+				8BCF6C733035797400E02EB4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8BCF6C773035797400E02EB4 /* PureIPTV */,
+			);
+			name = PureIPTV;
+			packageProductDependencies = (
+				8642BFB82234E9FB47DA5BF8 /* ComposableArchitecture */,
+				8BCF6DE23036C4FF00E02EB4 /* SnapshotTesting */,
+				8BCF7813303D6B6F00E02EB4 /* SwiftVLC */,
+				8BCF7816303D6B8200E02EB4 /* XCoordinator */,
+				8BCF7819303D6B9000E02EB4 /* Shimmer */,
+			);
+			productName = PureIPTV;
+			productReference = 8BCF6C753035797400E02EB4 /* PureIPTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8BCF6C853035797500E02EB4 /* PureIPTVTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BCF6C9E3035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTVTests" */;
+			buildPhases = (
+				8BCF6C823035797500E02EB4 /* Sources */,
+				8BCF6C833035797500E02EB4 /* Frameworks */,
+				8BCF6C843035797500E02EB4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8BCF6C883035797500E02EB4 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8BCF6C893035797500E02EB4 /* PureIPTVTests */,
+			);
+			name = PureIPTVTests;
+			productName = PureIPTVTests;
+			productReference = 8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		8BCF6C8F3035797500E02EB4 /* PureIPTVUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BCF6CA13035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTVUITests" */;
+			buildPhases = (
+				8BCF6C8C3035797500E02EB4 /* Sources */,
+				8BCF6C8D3035797500E02EB4 /* Frameworks */,
+				8BCF6C8E3035797500E02EB4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8BCF6C923035797500E02EB4 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8BCF6C933035797500E02EB4 /* PureIPTVUITests */,
+			);
+			name = PureIPTVUITests;
+			productName = PureIPTVUITests;
+			productReference = 8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8BCF6C6D3035797400E02EB4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					8BCF6C743035797400E02EB4 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					8BCF6C853035797500E02EB4 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 8BCF6C743035797400E02EB4;
+					};
+					8BCF6C8F3035797500E02EB4 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 8BCF6C743035797400E02EB4;
+					};
+				};
+			};
+			buildConfigurationList = 8BCF6C703035797400E02EB4 /* Build configuration list for PBXProject "PureIPTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 8BCF6C6C3035797400E02EB4;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				85199307F3BABDCB08BDEA6B /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
+				8BCF7812303D6B6F00E02EB4 /* XCRemoteSwiftPackageReference "SwiftVLC" */,
+				8BCF7815303D6B8200E02EB4 /* XCRemoteSwiftPackageReference "XCoordinator" */,
+				8BCF7818303D6B9000E02EB4 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 8BCF6C763035797400E02EB4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8BCF6C743035797400E02EB4 /* PureIPTV */,
+				8BCF6C853035797500E02EB4 /* PureIPTVTests */,
+				8BCF6C8F3035797500E02EB4 /* PureIPTVUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8BCF6C733035797400E02EB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C843035797500E02EB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C8E3035797500E02EB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AE7081399988FFC6CA6A88F6 /* SwiftFormat */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = SwiftFormat;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\nif which swiftformat > /dev/null; then\n  swiftformat \"$SRCROOT\"\nelse\n  echo \"warning: SwiftFormat not installed, download from https://github.com/nicklockwood/SwiftFormat\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8BCF6C713035797400E02EB4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C823035797500E02EB4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BCF6C8C3035797500E02EB4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8BCF6C883035797500E02EB4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BCF6C743035797400E02EB4 /* PureIPTV */;
+			targetProxy = 8BCF6C873035797500E02EB4 /* PBXContainerItemProxy */;
+		};
+		8BCF6C923035797500E02EB4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BCF6C743035797400E02EB4 /* PureIPTV */;
+			targetProxy = 8BCF6C913035797500E02EB4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		8BCF6C9A3035797500E02EB4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PureIPTV/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TVOS_DEPLOYMENT_TARGET = 17.6;
+			};
+			name = Debug;
+		};
+		8BCF6C9B3035797500E02EB4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PureIPTV/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TVOS_DEPLOYMENT_TARGET = 17.6;
+			};
+			name = Release;
+		};
+		8BCF6C9C3035797500E02EB4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TVOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		8BCF6C9D3035797500E02EB4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TVOS_DEPLOYMENT_TARGET = 26.5;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		8BCF6C9F3035797500E02EB4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PureIPTV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PureIPTV";
+				TVOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		8BCF6CA03035797500E02EB4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PureIPTV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PureIPTV";
+				TVOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		8BCF6CA23035797500E02EB4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TEST_TARGET_NAME = PureIPTV;
+			};
+			name = Debug;
+		};
+		8BCF6CA33035797500E02EB4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TEST_TARGET_NAME = PureIPTV;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		8BCF6C703035797400E02EB4 /* Build configuration list for PBXProject "PureIPTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BCF6C9C3035797500E02EB4 /* Debug */,
+				8BCF6C9D3035797500E02EB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BCF6C993035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BCF6C9A3035797500E02EB4 /* Debug */,
+				8BCF6C9B3035797500E02EB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BCF6C9E3035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTVTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BCF6C9F3035797500E02EB4 /* Debug */,
+				8BCF6CA03035797500E02EB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BCF6CA13035797500E02EB4 /* Build configuration list for PBXNativeTarget "PureIPTVUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BCF6CA23035797500E02EB4 /* Debug */,
+				8BCF6CA33035797500E02EB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		85199307F3BABDCB08BDEA6B /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.11.2;
+			};
+			traits = (
+			);
+		};
+		8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.19.4;
+			};
+		};
+		8BCF7812303D6B6F00E02EB4 /* XCRemoteSwiftPackageReference "SwiftVLC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/harflabs/SwiftVLC.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		8BCF7815303D6B8200E02EB4 /* XCRemoteSwiftPackageReference "XCoordinator" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/QuickBirdEng/XCoordinator.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.1;
+			};
+		};
+		8BCF7818303D6B9000E02EB4 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/markiv/SwiftUI-Shimmer.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8642BFB82234E9FB47DA5BF8 /* ComposableArchitecture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 85199307F3BABDCB08BDEA6B /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			productName = ComposableArchitecture;
+		};
+		8BCF6DE23036C4FF00E02EB4 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
+		};
+		8BCF7813303D6B6F00E02EB4 /* SwiftVLC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF7812303D6B6F00E02EB4 /* XCRemoteSwiftPackageReference "SwiftVLC" */;
+			productName = SwiftVLC;
+		};
+		8BCF7816303D6B8200E02EB4 /* XCoordinator */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF7815303D6B8200E02EB4 /* XCRemoteSwiftPackageReference "XCoordinator" */;
+			productName = XCoordinator;
+		};
+		8BCF7819303D6B9000E02EB4 /* Shimmer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF7818303D6B9000E02EB4 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
+			productName = Shimmer;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 8BCF6C6D3035797400E02EB4 /* Project object */;
+}

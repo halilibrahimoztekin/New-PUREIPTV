@@ -1,0 +1,206 @@
+{
+  "sourceLanguage": "tr",
+  "strings": {
+    "M3U desteği çok yakında geliyor! Şimdilik Xtream Codes kullanın.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Playlist Ekle": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Xtream Codes bilgilerinizi veya M3U adresinizi girin": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Bağlan": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kullanıcı adı veya şifre hatalı.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "PureIPTV": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Xtream Codes veya\\nM3U URL ile bağlanın.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Yükleniyor...": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Hemen İzle": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Yakında geliyor…": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Ayarlar yakında geliyor…": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "CANLI": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Bu kategoride kanal bulunamadı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kategori bulunamadı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kategoriler": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kanallar yükleniyor…": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kanal bulunamadı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Yayın oynatılamıyor.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Media Info": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Ses İzleri": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Altyazılar": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Kapalı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Seçenek bulunmuyor.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Arama altyapısı hazırlanıyor...\\n(Bu işlem ilk girişte birkaç saniye sürebilir)": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Bu kategoride dizi bulunamadı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "İzle": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "placeholder text line 1...": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "placeholder text line 2...": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "placeholder text line 3...": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Sezonlar": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "episodes": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Pure. Premium. IPTV.": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Bu kategoride film bulunamadı": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Şimdi İzle": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Türler": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Overview": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Yapım Ülkeleri": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Yapım Şirketleri": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "IMDb'de Görüntüle": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    },
+    "Benzer İçerikler": {
+      "extractionState": "manual",
+      "localizations": {
+      }
+    }
+  },
+  "version": "1.0"
+}
