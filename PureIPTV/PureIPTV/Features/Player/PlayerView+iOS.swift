@@ -68,81 +68,88 @@ public struct PlayerView_iOS: View {
             if store.isControlsVisible {
                 VStack {
                     // Top Bar
-                    HStack {
-                        Button(action: { store.send(.closeTapped) }) {
-                            Image(systemName: "xmark")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-
-                        VStack(alignment: .leading) {
-                            Text(store.item.title)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(.leading, 8)
-
-                        Spacer()
-
-                        // PiP Button
-                        if pipController != nil {
-                            Button(action: {
-                                pipController?.start()
-                            }) {
-                                Image(systemName: "pip.enter")
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Button(action: { HapticManager.shared.trigger(.light); store.send(.closeTapped) }) {
+                                Image(systemName: "xmark")
                                     .font(.title3)
                                     .foregroundColor(.white)
                                     .padding(12)
                                     .background(.ultraThinMaterial, in: Circle())
                             }
-                        }
 
-                        // AirPlay Button
-                        AirPlayView()
-                            .frame(width: 44, height: 44)
-                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                            Spacer()
 
-                        // Channels Button (Zapping)
-                        if store.playlist != nil {
-                            Button(action: { store.send(.toggleChannelList, animation: .easeInOut) }) {
-                                Image(systemName: "list.dash")
-                                    .font(.title3)
-                                    .foregroundColor(.white)
-                                    .padding(12)
-                                    .background(store.isChannelListVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                            // Action Buttons grouped
+                            HStack(spacing: 8) {
+                                // PiP Button
+                                if pipController != nil {
+                                    Button(action: { HapticManager.shared.trigger(.light)
+                                        pipController?.start()
+                                    }) {
+                                        Image(systemName: "pip.enter")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(.ultraThinMaterial, in: Circle())
+                                    }
+                                }
+
+                                // AirPlay Button
+                                AirPlayView()
+                                    .frame(width: 40, height: 40)
+                                    .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+
+                                // Channels Button (Zapping)
+                                if store.playlist != nil {
+                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleChannelList, animation: .easeInOut) }) {
+                                        Image(systemName: "list.dash")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(store.isChannelListVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    }
+                                }
+
+                                // EPG Button
+                                if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
+                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleEPG, animation: .easeInOut) }) {
+                                        Image(systemName: "list.bullet.rectangle")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(store.isEPGVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    }
+                                }
+
+                                // Tracks Button
+                                Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleTracksMenu, animation: .easeInOut) }) {
+                                    Image(systemName: "captions.bubble")
+                                        .font(.title3)
+                                        .foregroundColor(.white)
+                                        .padding(10)
+                                        .background(store.isTracksMenuVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                }
+
+                                // Info Button
+                                Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleInfo, animation: .easeInOut) }) {
+                                    Image(systemName: "info.circle")
+                                        .font(.title3)
+                                        .foregroundColor(.white)
+                                        .padding(10)
+                                        .background(store.isInfoVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                }
                             }
                         }
 
-                        // EPG Button
-                        if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
-                            Button(action: { store.send(.toggleEPG, animation: .easeInOut) }) {
-                                Image(systemName: "list.bullet.rectangle")
-                                    .font(.title3)
-                                    .foregroundColor(.white)
-                                    .padding(12)
-                                    .background(store.isEPGVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                            }
-                        }
-
-                        // Tracks Button
-                        Button(action: { store.send(.toggleTracksMenu, animation: .easeInOut) }) {
-                            Image(systemName: "captions.bubble")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(store.isTracksMenuVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                        }
-
-                        // Info Button
-                        Button(action: { store.send(.toggleInfo, animation: .easeInOut) }) {
-                            Image(systemName: "info.circle")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(store.isInfoVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                        }
+                        Text(store.item.title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .truncationMode(.tail)
+                            .padding(.leading, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding()
 
@@ -188,7 +195,7 @@ public struct PlayerView_iOS: View {
                                                     .foregroundColor(.white)
 
                                                 ForEach(store.audioTracks) { track in
-                                                    Button(action: { store.send(.selectAudioTrack(track)) }) {
+                                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.selectAudioTrack(track)) }) {
                                                         HStack {
                                                             Text(track.name)
                                                             Spacer()
@@ -213,7 +220,7 @@ public struct PlayerView_iOS: View {
                                                     .font(.headline)
                                                     .foregroundColor(.white)
 
-                                                Button(action: { store.send(.selectSubtitleTrack(nil)) }) {
+                                                Button(action: { HapticManager.shared.trigger(.light); store.send(.selectSubtitleTrack(nil)) }) {
                                                     HStack {
                                                         Text("Kapalı")
                                                         Spacer()
@@ -226,7 +233,7 @@ public struct PlayerView_iOS: View {
                                                 .padding(.vertical, 4)
 
                                                 ForEach(store.subtitleTracks) { track in
-                                                    Button(action: { store.send(.selectSubtitleTrack(track)) }) {
+                                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.selectSubtitleTrack(track)) }) {
                                                         HStack {
                                                             Text(track.name)
                                                             Spacer()
@@ -292,7 +299,7 @@ public struct PlayerView_iOS: View {
                     // Center Controls
                     HStack(spacing: 40) {
                         // Jump Backward
-                        Button(action: { store.send(.jumpBackward) }) {
+                        Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpBackward) }) {
                             Image(systemName: "gobackward.10")
                                 .font(.system(size: 32))
                                 .foregroundColor(.white)
@@ -316,7 +323,7 @@ public struct PlayerView_iOS: View {
                         }
 
                         // Jump Forward
-                        Button(action: { store.send(.jumpForward) }) {
+                        Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpForward) }) {
                             Image(systemName: "goforward.10")
                                 .font(.system(size: 32))
                                 .foregroundColor(.white)
@@ -347,12 +354,13 @@ public struct PlayerView_iOS: View {
                         }
 
                         // Timeline (only show if total time is valid, meaning it's not a live stream)
-                        if store.totalTime > .zero {
+                        if store.totalTime > .zero || store.item.config == nil {
                             HStack(spacing: 12) {
                                 // Calculate the display time based on dragging status
                                 let currentDisplayPosition = isDraggingSlider ? sliderDragValue : store.position
-                                let currentDisplaySeconds = Double(store.totalTime.components.seconds) * currentDisplayPosition
-                                let currentDisplayDuration = Duration.seconds(currentDisplaySeconds)
+                                let currentDisplayDuration = isDraggingSlider
+                                    ? Duration.seconds(Double(store.totalTime.components.seconds) * currentDisplayPosition)
+                                    : store.currentTime
 
                                 Text(formatDuration(currentDisplayDuration))
                                     .font(.caption.monospacedDigit())
@@ -367,9 +375,11 @@ public struct PlayerView_iOS: View {
                                     ),
                                     in: 0 ... 1,
                                     onEditingChanged: { editing in
-                                        isDraggingSlider = editing
-                                        if !editing {
-                                            store.send(.seek(sliderDragValue))
+                                        Task { @MainActor in
+                                            isDraggingSlider = editing
+                                            if !editing {
+                                                store.send(.seek(sliderDragValue))
+                                            }
                                         }
                                     }
                                 )
@@ -403,7 +413,7 @@ public struct PlayerView_iOS: View {
                     .padding(.vertical, 16)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     .transition(.scale.combined(with: .opacity))
-                    .animation(.easeInOut, value: store.gestureFeedback)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.gestureFeedback)
             }
         }
         .onDisappear {

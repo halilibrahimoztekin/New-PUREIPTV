@@ -167,7 +167,10 @@
         let action: () -> Void
 
         var body: some View {
-            Button(action: action) {
+            Button {
+                HapticManager.shared.trigger(.light)
+                action()
+            } label: {
                 Text(name)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
@@ -183,7 +186,7 @@
                     )
             }
             .buttonStyle(.plain)
-            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
     }
 #endif

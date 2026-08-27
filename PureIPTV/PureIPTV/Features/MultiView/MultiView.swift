@@ -229,59 +229,56 @@ private struct MultiViewPlayer: View {
                 Color.black
             }
         }
-        .onAppear {
-            setupPlayer()
+        .task(id: instanceID) {
+            await runPlayer()
         }
-        .onDisappear {
-            Task {
-                if let client = playerClient {
-                    try? await client.stop()
-                }
-            }
-        }
-        .onChange(of: isActiveAudio) { _, newValue in
-            Task {
-                try? await playerClient?.setVolume(newValue ? 100 : 0)
-            }
-        }
-        .onChange(of: instanceID) { _, _ in
-            setupPlayer() // Reboot player if instanceID changes
+        .task(id: isActiveAudio) {
+            try? await playerClient?.setVolume(isActiveAudio ? 100 : 0)
         }
     }
 
-    private func setupPlayer() {
+    private func runPlayer() async {
         @Dependency(\.playerFactoryClient) var factory
-        let client = factory.createPlayer()
-        playerClient = client
 
-        Task {
+        while !Task.isCancelled {
+            let client = factory.createPlayer()
+            playerClient = client
+
             if let url = item.streamURL {
                 try? await client.play(url)
                 try? await client.setVolume(isActiveAudio ? 100 : 0)
             }
 
+            var needsRecreate = false
             for await event in await client.events() {
+                if Task.isCancelled {
+                    break
+                }
                 switch event {
                 case let .stateChanged(state):
                     if state == PlayerState.stopped || state == PlayerState.error {
-                        // Reconnect after a short delay
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        if let url = item.streamURL {
-                            try? await client.play(url)
-                            try? await client.setVolume(isActiveAudio ? 100 : 0)
-                        }
+                        needsRecreate = true
                     }
                 case .encounteredError:
-                    // Reconnect on error event as well
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if let url = item.streamURL {
-                        try? await client.play(url)
-                        try? await client.setVolume(isActiveAudio ? 100 : 0)
-                    }
+                    needsRecreate = true
                 default:
                     break
                 }
+                if needsRecreate {
+                    break
+                }
             }
+
+            if Task.isCancelled {
+                break
+            }
+
+            // Clean up old client and retry after delay
+            try? await client.stop()
+            playerClient = nil
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
+
+        try? await playerClient?.stop()
     }
 }

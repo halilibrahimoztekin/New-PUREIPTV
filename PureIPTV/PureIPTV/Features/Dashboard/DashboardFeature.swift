@@ -38,6 +38,7 @@ public struct DashboardFeature {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
+            case playHistoryItem(WatchHistoryItem)
         }
     }
 
@@ -154,6 +155,10 @@ public struct DashboardFeature {
                 }
 
             case let .historySelected(hist):
+                if hist.streamURL != nil {
+                    return .send(.delegate(.playHistoryItem(hist)))
+                }
+
                 if hist.type == "episode" {
                     // Route to series details
                     guard let seriesID = hist.seriesID else {
@@ -174,7 +179,7 @@ public struct DashboardFeature {
                     let item = MediaModels.Item(
                         id: hist.id,
                         title: hist.title,
-                        streamURL: hist.streamURL.flatMap { URL(string: $0) },
+                        streamURL: nil,
                         coverURL: hist.coverURL.flatMap { URL(string: $0) },
                         categoryID: "hist",
                         type: .vod

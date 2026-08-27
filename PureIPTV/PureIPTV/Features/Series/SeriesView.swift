@@ -16,8 +16,7 @@ public struct SeriesView: View {
 
     public var body: some View {
         #if os(tvOS)
-            // SeriesView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
-            Color.black // Placeholder for tvOS
+            SeriesView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
         #else
             SeriesView_iOS(store: store, serverURL: serverURL, username: username, password: password)
         #endif

@@ -197,23 +197,26 @@
         let action: () -> Void
 
         var body: some View {
-            Button(action: action) {
+            Button {
+                HapticManager.shared.trigger(.light)
+                action()
+            } label: {
                 Text(name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
+                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? Color(hex: "#1F1F23") : Color(hex: "#C0C6D6"))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                     .background(
-                        Capsule()
-                            .fill(isSelected ? Color(hex: "#0A84FF") : Color(hex: "#1F1F23"))
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(isSelected ? Color(hex: "#0A84FF") : Color.white.opacity(0.05))
                             .overlay(
-                                Capsule()
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
                                     .stroke(Color.white.opacity(isSelected ? 0 : 0.08), lineWidth: 1)
                             )
                     )
             }
             .buttonStyle(.plain)
-            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
     }
 

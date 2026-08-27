@@ -74,6 +74,7 @@ public struct HomeFeature {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
+            case playHistoryItem(WatchHistoryItem)
         }
     }
 
@@ -113,6 +114,9 @@ public struct HomeFeature {
 
             case let .dashboard(.delegate(.didSelectSeries(series))):
                 return .send(.delegate(.didSelectSeries(series)))
+
+            case let .dashboard(.delegate(.playHistoryItem(item))):
+                return .send(.delegate(.playHistoryItem(item)))
 
             case .dashboard:
                 return .none

@@ -10,7 +10,7 @@ public struct SeriesDetailView: View {
 
     public var body: some View {
         #if os(tvOS)
-            Color.black // Placeholder for tvOS
+            SeriesDetailView_tvOS(store: store)
         #else
             SeriesDetailView_iOS(store: store)
         #endif

@@ -281,7 +281,7 @@
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(isFocused ? Color(hex: "#0A84FF") : Color(hex: "#C0C6D6").opacity(0.5))
                     .frame(width: 30)
-                    .animation(.easeInOut(duration: 0.2), value: isFocused)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
 
                 Group {
                     if isSecure {
@@ -308,7 +308,7 @@
                             )
                     )
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
         }
     }
 

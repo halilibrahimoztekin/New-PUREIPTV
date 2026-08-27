@@ -1,5 +1,6 @@
 #if os(tvOS)
     import ComposableArchitecture
+    import Kingfisher
     import SwiftUI
 
     // MARK: - tvOS Live TV View
@@ -203,14 +204,18 @@
 
                     // Logo
                     if let logoURL = channel.logoURL {
-                        AsyncImage(url: logoURL) { image in
-                            image.resizable().aspectRatio(contentMode: .fit).frame(maxWidth: 90, maxHeight: 60)
-                        } placeholder: {
-                            Image(systemName: "tv.fill")
-                                .font(.system(size: 32))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.2))
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        KFImage(logoURL)
+                            .placeholder {
+                                Image(systemName: "tv.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.2))
+                            }
+                            .downsampling(size: CGSize(width: 180, height: 120))
+                            .cacheOriginalImage()
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 90, maxHeight: 60)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         Image(systemName: "tv.fill")
                             .font(.system(size: 32))

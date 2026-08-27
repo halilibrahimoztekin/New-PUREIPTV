@@ -16,7 +16,7 @@ public enum PlaylistType: String, Codable, CaseIterable, Equatable {
 
 @Model
 public final class Playlist {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var name: String
     public var type: String // Stored as string for SwiftData compatibility
 

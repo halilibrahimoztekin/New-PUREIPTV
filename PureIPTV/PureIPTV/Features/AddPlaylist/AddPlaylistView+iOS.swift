@@ -278,8 +278,8 @@
             }
             .disabled(!store.canConnect || store.isLoading)
             .buttonStyle(.plain)
-            .animation(.easeInOut(duration: 0.2), value: store.canConnect)
-            .animation(.easeInOut(duration: 0.2), value: store.isLoading)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.canConnect)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.isLoading)
         }
 
         // MARK: – Layout helpers

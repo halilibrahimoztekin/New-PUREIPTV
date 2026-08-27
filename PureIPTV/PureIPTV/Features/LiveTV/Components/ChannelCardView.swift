@@ -1,3 +1,5 @@
+import Kingfisher
+import Shimmer
 import SwiftUI
 
 // MARK: - Channel Card View
@@ -18,6 +20,7 @@ public struct ChannelCardView: View {
 
     public var body: some View {
         Button {
+            HapticManager.shared.trigger(.light)
             onTap?()
         } label: {
             ZStack(alignment: .bottomLeading) {
@@ -38,15 +41,16 @@ public struct ChannelCardView: View {
 
                 // ── Logo ─────────────────────────────────────────────
                 if let logoURL = channel.coverURL {
-                    AsyncImage(url: logoURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(16)
-                    } placeholder: {
-                        ChannelLogoPlaceholder()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    KFImage(logoURL)
+                        .placeholder {
+                            ChannelLogoPlaceholder()
+                        }
+                        .downsampling(size: CGSize(width: 300, height: 200))
+                        .cacheOriginalImage()
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ChannelLogoPlaceholder()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -91,9 +95,15 @@ public struct ChannelCardView: View {
 
 private struct ChannelLogoPlaceholder: View {
     var body: some View {
-        Image(systemName: "tv.fill")
-            .font(.system(size: 22, weight: .light))
-            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+        ZStack {
+            Color(hex: "#2C2C30")
+            Image(systemName: "tv.fill")
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .shimmeringPlaceholder(isLoading: true)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -109,8 +119,8 @@ public struct LiveBadge: View {
             Circle()
                 .fill(Color(hex: "#FF453A"))
                 .frame(width: 5, height: 5)
-                .scaleEffect(isPulsing ? 1.3 : 0.8)
-                .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: isPulsing)
+                .scaleEffect(0.9)
+            // Removed repeatForever animation for scroll performance
 
             Text("CANLI")
                 .font(.system(size: 9, weight: .bold))
@@ -141,7 +151,10 @@ public struct CategoryRowView: View {
     }
 
     public var body: some View {
-        Button(action: action) {
+        Button {
+            HapticManager.shared.trigger(.light)
+            action()
+        } label: {
             HStack(spacing: 10) {
                 // Selection indicator
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -163,6 +176,6 @@ public struct CategoryRowView: View {
             )
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }

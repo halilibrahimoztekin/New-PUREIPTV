@@ -115,7 +115,7 @@
                                 )
                         }
                         .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
                     }
                 }
                 .padding(.horizontal, 60)

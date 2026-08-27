@@ -1,3 +1,5 @@
+import Kingfisher
+import Shimmer
 import SwiftUI
 
 public struct VODCardView: View {
@@ -13,6 +15,7 @@ public struct VODCardView: View {
 
     public var body: some View {
         Button {
+            HapticManager.shared.trigger(.light)
             onTap?()
         } label: {
             ZStack(alignment: .bottomLeading) {
@@ -31,15 +34,16 @@ public struct VODCardView: View {
 
                 // Poster
                 if let posterURL = vod.coverURL {
-                    AsyncImage(url: posterURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        VODPosterPlaceholder()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    KFImage(posterURL)
+                        .placeholder {
+                            VODPosterPlaceholder()
+                        }
+                        .downsampling(size: CGSize(width: 300, height: 450))
+                        .cacheOriginalImage()
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
                     VODPosterPlaceholder()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -81,14 +85,20 @@ public struct VODCardView: View {
             color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear,
             radius: 8, x: 0, y: 2
         )
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 
 private struct VODPosterPlaceholder: View {
     var body: some View {
-        Image(systemName: "film")
-            .font(.system(size: 32, weight: .light))
-            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+        ZStack {
+            Color(hex: "#2C2C30")
+            Image(systemName: "film")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .shimmeringPlaceholder(isLoading: true)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

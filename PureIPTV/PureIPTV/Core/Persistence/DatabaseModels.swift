@@ -4,7 +4,7 @@ import SwiftData
 /// Represents user preferences for a specific category (hidden status, custom sort order).
 @Model
 public final class CategoryPreference {
-    @Attribute(.unique) public var id: String // e.g. "live_123" (type_categoryID)
+    public var id: String // e.g. "live_123" (type_categoryID)
     public var type: String // "live", "vod", "series"
     public var categoryID: String
     public var isHidden: Bool
@@ -22,7 +22,7 @@ public final class CategoryPreference {
 /// Represents a media item (Live TV, VOD, Series) that the user has favorited.
 @Model
 public final class FavoriteItem {
-    @Attribute(.unique) public var id: String
+    public var id: String
     public var type: String // "live", "vod", "series"
     public var title: String
     public var coverURL: String?
@@ -52,7 +52,7 @@ public final class FavoriteItem {
 /// Represents the watch progress of a VOD or Episode.
 @Model
 public final class WatchHistoryItem {
-    @Attribute(.unique) public var id: String // The unique identifier of the playable item (stream ID or episode ID)
+    public var id: String // The unique identifier of the playable item (stream ID or episode ID)
     public var type: String // "vod", "episode"
     public var title: String
     public var seriesTitle: String?

@@ -16,8 +16,7 @@ public struct VODView: View {
 
     public var body: some View {
         #if os(tvOS)
-            // VODView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
-            Color.black // Placeholder for tvOS
+            VODView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
         #else
             VODView_iOS(store: store, serverURL: serverURL, username: username, password: password)
         #endif

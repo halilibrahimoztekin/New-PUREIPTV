@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import CoreGraphics
 import FactoryKit
 import Foundation
 import SwiftVLC
@@ -55,6 +56,8 @@ public struct PlayerFeature {
         public var position: Double = 0.0
         public var mediaInfo: MediaInfo?
         public var isInfoVisible: Bool = false
+        public var lastDragTranslation: CGSize = .zero
+        public var lastDragScreenWidth: CGFloat = 1.0
 
         // EPG
         public var epgListings: [EPGProgram] = []
@@ -154,11 +157,12 @@ public struct PlayerFeature {
                         try await playerClient.seek(position)
                     }
                     for await event in await playerClient.events() {
-                        await send(.playerEvent(event))
+                        await send(.handlePlayerEvent(event))
                     }
                 } catch: { error, _ in
                     print("Player error: \(error)")
                 }
+                .cancellable(id: "PlayerEventsCancelID")
 
             case .onDisappear:
                 return .merge(
@@ -234,8 +238,10 @@ public struct PlayerFeature {
 
             case let .dragGestureChanged(translation, screenWidth, _, _):
                 // Simple horizontal drag for seeking or zapping, vertical for volume/brightness
+                state.lastDragTranslation = translation
+                state.lastDragScreenWidth = screenWidth
                 if abs(translation.width) > abs(translation.height) {
-                    if state.totalTime.components.seconds == 0 {
+                    if state.item.config != nil && state.totalTime.components.seconds == 0 {
                         // Live TV: Zapping instead of seeking
                         if translation.width > 50 {
                             return .send(.showGestureFeedback("Önceki Kanal"))
@@ -246,12 +252,17 @@ public struct PlayerFeature {
                     } else {
                         // Seeking
                         let percentage = translation.width / screenWidth
-                        let secondsToSeek = percentage * Double(state.totalTime.components.seconds)
-                        let newTime = max(0, min(Double(state.totalTime.components.seconds), Double(state.currentTime.components.seconds) + secondsToSeek))
+                        if state.totalTime.components.seconds == 0 {
+                            let newPos = max(0.0, min(1.0, state.position + percentage))
+                            return .send(.showGestureFeedback(String(format: "%.0f%%", newPos * 100)))
+                        } else {
+                            let secondsToSeek = percentage * Double(state.totalTime.components.seconds)
+                            let newTime = max(0, min(Double(state.totalTime.components.seconds), Double(state.currentTime.components.seconds) + secondsToSeek))
 
-                        let newMins = Int(newTime) / 60
-                        let newSecs = Int(newTime) % 60
-                        return .send(.showGestureFeedback(String(format: "%02d:%02d", newMins, newSecs)))
+                            let newMins = Int(newTime) / 60
+                            let newSecs = Int(newTime) % 60
+                            return .send(.showGestureFeedback(String(format: "%02d:%02d", newMins, newSecs)))
+                        }
                     }
                 } else {
                     // Vertical swipe (volume/brightness)
@@ -259,7 +270,7 @@ public struct PlayerFeature {
                 }
 
             case .dragGestureEnded:
-                if state.totalTime.components.seconds == 0 {
+                if state.item.config != nil && state.totalTime.components.seconds == 0 {
                     // Live TV Zapping
                     let feedback = state.gestureFeedback
                     return .run { send in
@@ -271,7 +282,24 @@ public struct PlayerFeature {
                         }
                     }
                 } else {
-                    return .send(.hideGestureFeedback)
+                    // Seeking
+                    guard let feedback = state.gestureFeedback else { return .none }
+                    let translation = state.lastDragTranslation
+                    let percentage = translation.width / state.lastDragScreenWidth
+
+                    return .run { [totalTime = state.totalTime, currentTime = state.currentTime, position = state.position] send in
+                        await send(.hideGestureFeedback)
+
+                        if totalTime.components.seconds == 0 {
+                            let newPos = max(0.0, min(1.0, position + percentage))
+                            await send(.seek(newPos))
+                        } else {
+                            let secondsToSeek = percentage * Double(totalTime.components.seconds)
+                            let newTime = max(0, min(Double(totalTime.components.seconds), Double(currentTime.components.seconds) + secondsToSeek))
+                            let newPos = newTime / Double(totalTime.components.seconds)
+                            await send(.seek(newPos))
+                        }
+                    }
                 }
 
             case .jumpForward:
@@ -402,10 +430,18 @@ public struct PlayerFeature {
                     state.errorMessage = String(localized: "Yayın oynatılamıyor.")
                 case let .timeChanged(time):
                     state.currentTime = time
+                    if state.item.config == nil && state.totalTime.components.seconds == 0 && state.position > 0.001 && time.components.seconds > 0 {
+                        let totalSecs = Double(time.components.seconds) / state.position
+                        state.totalTime = Duration.seconds(totalSecs)
+                    }
                 case let .lengthChanged(length):
                     state.totalTime = length
                 case let .positionChanged(pos):
                     state.position = pos
+                    if state.item.config == nil && state.totalTime.components.seconds == 0 && pos > 0.001 && state.currentTime.components.seconds > 0 {
+                        let totalSecs = Double(state.currentTime.components.seconds) / pos
+                        state.totalTime = Duration.seconds(totalSecs)
+                    }
                 default:
                     break
                 }
@@ -417,7 +453,26 @@ public struct PlayerFeature {
             case .closeTapped:
                 return .merge(
                     .cancel(id: "PlayerEventsCancelID"),
-                    .run { send in
+                    .run { [state] send in
+                        // Save Watch History before stopping
+                        let progressSeconds = Double(state.currentTime.components.seconds)
+                        let durationSeconds = Double(state.totalTime.components.seconds)
+
+                        if progressSeconds > 10 { // Only save if watched for more than 10 seconds
+                            let type = state.item.title.contains("S") && state.item.title.contains("E") ? "episode" : "vod" // Basic detection
+                            let item = WatchHistoryItem(
+                                id: state.item.id,
+                                type: type,
+                                title: state.item.title,
+                                coverURL: state.item.coverURL?.absoluteString,
+                                streamURL: state.item.streamURL.absoluteString,
+                                progress: progressSeconds,
+                                duration: durationSeconds,
+                                seriesID: state.item.seriesID
+                            )
+                            try? await databaseClient.saveWatchProgress(item)
+                        }
+
                         try? await playerClient.stop()
                         await MainActor.run {
                             appCoordinator.trigger(.dismissPlayer)

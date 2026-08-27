@@ -165,6 +165,26 @@ public struct AppFeature {
                 }
                 return .none
 
+            case let .home(.delegate(.playHistoryItem(item))):
+                if let stream = item.streamURL, let streamURL = URL(string: stream), let homeState = state.home {
+                    guard let serverURL = URL(string: homeState.serverURL) else { return .none }
+                    let config = PlaylistConfig(type: .xtream, serverURL: serverURL, username: homeState.username, password: homeState.password)
+
+                    let playable = PlayerFeature.PlayableItem(
+                        id: item.id,
+                        title: item.title,
+                        streamURL: streamURL,
+                        coverURL: item.coverURL.flatMap { URL(string: $0) },
+                        startPosition: item.duration > 0 ? (item.progress / item.duration) : nil,
+                        config: config
+                    )
+                    state.player = PlayerFeature.State(item: playable)
+                    return .run { _ in
+                        await MainActor.run { appCoordinator.trigger(.player) }
+                    }
+                }
+                return .none
+
             case .home:
                 return .none
 

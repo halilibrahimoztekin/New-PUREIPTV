@@ -53,7 +53,9 @@ public struct NetworkClient {
         }
 
         do {
-            return try decoder.decode(T.self, from: data)
+            return try await Task.detached(priority: .userInitiated) {
+                try decoder.decode(T.self, from: data)
+            }.value
         } catch let DecodingError.dataCorrupted(context) {
             throw NetworkError.decodingFailed(description: "Data corrupted: \(context.debugDescription)")
         } catch let DecodingError.keyNotFound(key, context) {
