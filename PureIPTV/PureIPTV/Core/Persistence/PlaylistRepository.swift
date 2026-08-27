@@ -1,4 +1,4 @@
-import Factory
+import FactoryKit
 import Foundation
 
 public final class PlaylistRepository {

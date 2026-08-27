@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 import XCoordinator
 
@@ -100,13 +100,39 @@ public struct AppFeature {
                 return .none
 
             // ── Home ─────────────────────────────────────────────────
-            case let .home(.delegate(.didSelectChannel(channel))):
+            case let .home(.delegate(.didSelectChannel(channel, playlist))):
                 guard let streamURL = channel.streamURL else { return .none }
-                state.player = PlayerFeature.State(item: .init(
-                    id: channel.id,
-                    title: channel.title,
-                    streamURL: streamURL
-                ))
+                guard let homeState = state.home, let url = URL(string: homeState.serverURL) else { return .none }
+
+                let config = PlaylistConfig(type: .xtream, serverURL: url, username: homeState.username, password: homeState.password)
+
+                let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
+                    guard let itemStreamURL = item.streamURL else { return nil }
+                    return PlayerFeature.PlayableItem(
+                        id: item.id,
+                        title: item.title,
+                        streamURL: itemStreamURL,
+                        coverURL: item.coverURL,
+                        seriesID: nil,
+                        startPosition: nil,
+                        config: config,
+                        epgChannelID: item.epgChannelID
+                    )
+                }
+
+                state.player = PlayerFeature.State(
+                    item: .init(
+                        id: channel.id,
+                        title: channel.title,
+                        streamURL: streamURL,
+                        coverURL: channel.coverURL,
+                        seriesID: nil,
+                        startPosition: nil,
+                        config: config,
+                        epgChannelID: channel.epgChannelID
+                    ),
+                    playlist: playablePlaylist
+                )
                 return .run { _ in
                     await MainActor.run { appCoordinator.trigger(.player) }
                 }

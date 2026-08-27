@@ -1,6 +1,7 @@
 import AVFoundation
 import ComposableArchitecture
-import Factory
+import FactoryKit
+import SwiftData
 import SwiftUI
 import SwiftVLC
 
@@ -30,6 +31,7 @@ struct PureIPTVApp: App {
             CoordinatorRootView(coordinator: coordinator)
                 .preferredColorScheme(.dark)
                 .ignoresSafeArea()
+                .modelContainer(for: [FavoriteItem.self, WatchHistoryItem.self, CategoryPreference.self])
         }
     }
 }

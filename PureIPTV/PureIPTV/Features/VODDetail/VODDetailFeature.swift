@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 import OSLog
 import XCoordinator
@@ -20,6 +20,8 @@ public struct VODDetailFeature {
         // UI State
         public var isLoading = false
         public var isTMDBLoading = false
+        public var isFavorite = false
+        public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
         public init(vod: MediaModels.Item, serverURL: String, username: String, password: String) {
@@ -36,7 +38,11 @@ public struct VODDetailFeature {
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBMovieDetailsDTO, Error>)
         case playTapped
+        case resumeTapped
         case tmdbTimeout
+        case toggleFavorite
+        case favoriteStatusLoaded(Bool)
+        case historyStatusLoaded(WatchHistoryItem?)
         case delegate(Delegate)
         case closeTapped
 
@@ -48,6 +54,7 @@ public struct VODDetailFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
+    @Dependency(\.databaseClient) var databaseClient
     @Injected(\.appCoordinator) var appCoordinator
 
     public init() {}
@@ -68,25 +75,15 @@ public struct VODDetailFeature {
                 guard let url = URL(string: state.serverURL) else { return .none }
                 let config = PlaylistConfig(type: .xtream, serverURL: url, username: state.username, password: state.password)
                 let vodID = state.vod.id
+                let searchTitle = state.vod.title.cleanedForTMDBSearch()
 
-                return .run { send in
+                print("Fetching VOD Info and TMDB details for: \(searchTitle)")
+
+                let infoEffect: Effect<Action> = .run { send in
                     await send(.infoResponse(
                         Result { try await iptvClient.fetchVODInfo(config, vodID) }
                     ))
                 }
-
-            case let .infoResponse(.success(dto)):
-                state.info = dto
-                state.isLoading = false // Main UI ready
-
-                let timeoutEffect: Effect<Action> = .run { send in
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    await send(.tmdbTimeout)
-                }
-
-                // Fetch TMDB Info by searching title
-                let searchTitle = state.vod.title.cleanedForTMDBSearch()
-                print("TMDB search fallback for VOD: \(state.vod.title) -> cleaned: \(searchTitle)")
 
                 let tmdbEffect: Effect<Action> = .run { send in
                     await send(.tmdbSearchResponse(
@@ -94,7 +91,29 @@ public struct VODDetailFeature {
                     ))
                 }
 
-                return .merge(tmdbEffect, timeoutEffect)
+                let timeoutEffect: Effect<Action> = .run { send in
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    await send(.tmdbTimeout)
+                }
+
+                let favoriteEffect: Effect<Action> = .run { [id = state.vod.id] send in
+                    let isFav = (try? await databaseClient.isFavorite(id)) ?? false
+                    await send(.favoriteStatusLoaded(isFav))
+                }
+
+                let historyEffect: Effect<Action> = .run { [id = state.vod.id] send in
+                    let history = try? await databaseClient.getWatchProgress(id)
+                    await send(.historyStatusLoaded(history))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect)
+
+            case let .infoResponse(.success(dto)):
+                state.info = dto
+                if !state.isTMDBLoading {
+                    state.isLoading = false
+                }
+                return .none
 
             case let .tmdbSearchResponse(.success(response)):
                 if let firstResult = response.results?.first {
@@ -106,7 +125,10 @@ public struct VODDetailFeature {
                     }
                 } else {
                     print("TMDB search returned 0 results for VOD")
-                    state.isTMDBLoading = false // No TMDB result, we stop loading
+                    state.isTMDBLoading = false
+                    if state.info != nil {
+                        state.isLoading = false
+                    }
                     return .none
                 }
 
@@ -114,21 +136,31 @@ public struct VODDetailFeature {
                 print("TMDB details fetched for VOD: \(movieDetails.title ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbMovie = movieDetails
+                if state.info != nil {
+                    state.isLoading = false
+                }
                 return .none
 
             case let .tmdbSearchResponse(.failure(error)):
                 print("TMDB search failed: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                if state.info != nil {
+                    state.isLoading = false
+                }
                 return .none // Fail silently for tmdb search
 
             case let .tmdbDetailsResponse(.failure(error)):
                 print("TMDB fetch details failed: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                if state.info != nil {
+                    state.isLoading = false
+                }
                 return .none // Fail silently for tmdb details
 
             case .tmdbTimeout:
                 print("TMDB loading timed out after 4 seconds")
                 state.isTMDBLoading = false
+                state.isLoading = false
                 return .none
 
             case let .infoResponse(.failure(error)):
@@ -142,9 +174,43 @@ public struct VODDetailFeature {
                 let playable = PlayerFeature.PlayableItem(
                     id: state.vod.id,
                     title: state.vod.title,
-                    streamURL: streamURL
+                    streamURL: streamURL,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
+
+            case .resumeTapped:
+                guard let streamURL = state.vod.streamURL, let history = state.historyItem, history.duration > 0 else { return .none }
+                let startPosition = history.progress / history.duration
+                let playable = PlayerFeature.PlayableItem(
+                    id: state.vod.id,
+                    title: state.vod.title,
+                    streamURL: streamURL,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
+                    startPosition: startPosition
+                )
+                return .send(.delegate(.didSelectPlay(playable)))
+
+            case let .historyStatusLoaded(history):
+                state.historyItem = history
+                return .none
+
+            case let .favoriteStatusLoaded(isFav):
+                state.isFavorite = isFav
+                return .none
+
+            case .toggleFavorite:
+                let item = FavoriteItem(
+                    id: state.vod.id,
+                    type: "vod",
+                    title: state.vod.title,
+                    coverURL: state.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.vod.coverURL?.absoluteString,
+                    streamURL: state.vod.streamURL?.absoluteString
+                )
+                return .run { send in
+                    let isNowFav = (try? await databaseClient.toggleFavorite(item)) ?? false
+                    await send(.favoriteStatusLoaded(isNowFav))
+                }
 
             case .closeTapped:
                 return .run { send in

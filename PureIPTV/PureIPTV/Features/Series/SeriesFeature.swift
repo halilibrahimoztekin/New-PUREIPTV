@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 
 // MARK: - SeriesFeature
@@ -22,6 +22,9 @@ public struct SeriesFeature {
         public var isLoadingSeries = false
         public var errorMessage: String?
 
+        @Presents public var categoryManagement: CategoryManagementFeature.State?
+        @Presents public var parentalLock: ParentalLockFeature.State?
+
         // Computed: series for the currently selected category
         public var currentSeries: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
@@ -38,6 +41,11 @@ public struct SeriesFeature {
         case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
         case dismissError
+        case reloadCategories(config: PlaylistConfig)
+        case reloadPreferences
+        case editCategoriesTapped
+        case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
+        case parentalLock(PresentationAction<ParentalLockFeature.Action>)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -46,6 +54,8 @@ public struct SeriesFeature {
     }
 
     @Injected(\.iptvClient) var iptvClient
+    @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.settingsClient) var settingsClient
 
     public init() {}
 
@@ -58,15 +68,59 @@ public struct SeriesFeature {
                 guard !state.isLoadingCategories else { return .none }
                 guard state.categories.isEmpty else { return .none }
 
+                return .send(.reloadCategories(config: config))
+
+            case let .reloadCategories(config):
                 state.isLoadingCategories = true
-                state.errorMessage = nil
-
                 state.config = config
-
                 return .run { send in
-                    await send(.categoriesResponse(
-                        Result { try await iptvClient.fetchSeriesCategories(config) }
-                    ))
+                    async let categoriesResult = Result { try await iptvClient.fetchSeriesCategories(config) }
+                    async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue) }
+
+                    let categories = (try? await categoriesResult.get()) ?? []
+                    let prefs = (try? await prefsResult.get()) ?? []
+
+                    var dict: [String: CategoryPreferenceDTO] = [:]
+                    for pref in prefs {
+                        dict[pref.categoryID] = pref
+                    }
+
+                    // Filter and sort
+                    var finalCategories = categories.filter { !(dict[$0.id]?.isHidden ?? false) }
+                    finalCategories.sort { a, b in
+                        let orderA = dict[a.id]?.orderIndex ?? Int.max
+                        let orderB = dict[b.id]?.orderIndex ?? Int.max
+                        if orderA == orderB {
+                            return a.name < b.name
+                        }
+                        return orderA < orderB
+                    }
+
+                    await send(.categoriesResponse(.success(finalCategories)))
+                } catch: { error, send in
+                    await send(.categoriesResponse(.failure(error)))
+                }
+
+            case .reloadPreferences:
+                let currentCats = state.categories
+                return .run { send in
+                    let prefs = (try? await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue)) ?? []
+                    var dict: [String: CategoryPreferenceDTO] = [:]
+                    for pref in prefs {
+                        dict[pref.categoryID] = pref
+                    }
+
+                    var finalCategories = currentCats.filter { !(dict[$0.id]?.isHidden ?? false) }
+                    finalCategories.sort { a, b in
+                        let orderA = dict[a.id]?.orderIndex ?? Int.max
+                        let orderB = dict[b.id]?.orderIndex ?? Int.max
+                        if orderA == orderB {
+                            return a.name < b.name
+                        }
+                        return orderA < orderB
+                    }
+
+                    await send(.categoriesResponse(.success(finalCategories)))
                 }
 
             case let .categoriesResponse(.success(categories)):
@@ -85,6 +139,11 @@ public struct SeriesFeature {
                 return .none
 
             case let .categorySelected(category):
+                if settingsClient.isParentalControlEnabled() && settingsClient.isAdultContent(category.name) {
+                    state.parentalLock = ParentalLockFeature.State(category: category)
+                    return .none
+                }
+
                 state.selectedCategoryID = category.id
                 if state.seriesByCategory[category.id] != nil {
                     return .none
@@ -119,9 +178,60 @@ public struct SeriesFeature {
                 state.errorMessage = nil
                 return .none
 
+            case .editCategoriesTapped:
+                if let config = state.config {
+                    state.categoryManagement = CategoryManagementFeature.State(config: config, type: .series)
+                }
+                return .none
+
+            case .categoryManagement(.presented(.delegate(.categoriesUpdated))):
+                return .send(.reloadPreferences)
+
+            case .categoryManagement(.presented(.delegate(.close))):
+                state.categoryManagement = nil
+                return .none
+
+            case .categoryManagement:
+                return .none
+
+            case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
+                state.parentalLock = nil
+                if let category = category {
+                    state.selectedCategoryID = category.id
+                    if state.seriesByCategory[category.id] != nil {
+                        return .none
+                    }
+                    guard let config = state.config else { return .none }
+                    state.isLoadingSeries = true
+                    let categoryID = category.id
+                    return .run { send in
+                        await send(.seriesResponse(
+                            categoryID: categoryID,
+                            Result { try await iptvClient.fetchSeries(config, categoryID) }
+                        ))
+                    }
+                } else if let item = item {
+                    state.selectedSeries = item
+                    return .send(.delegate(.didSelectSeries(item)))
+                }
+                return .none
+
+            case .parentalLock(.presented(.delegate(.didCancel))):
+                state.parentalLock = nil
+                return .none
+
+            case .parentalLock:
+                return .none
+
             case .delegate:
                 return .none
             }
+        }
+        .ifLet(\.$categoryManagement, action: \.categoryManagement) {
+            CategoryManagementFeature()
+        }
+        .ifLet(\.$parentalLock, action: \.parentalLock) {
+            ParentalLockFeature()
         }
     }
 }

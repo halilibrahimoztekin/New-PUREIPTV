@@ -29,9 +29,53 @@
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    // ── Header Actions ─────────────────────────────────
+                    HStack {
+                        Text("Canlı TV")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+
+                        Spacer()
+
+                        HStack(spacing: 12) {
+                            Button {
+                                store.send(.epgGuideTapped)
+                            } label: {
+                                Image(systemName: "list.bullet.rectangle.portrait")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+
+                            Button {
+                                store.send(.openMultiViewTapped)
+                            } label: {
+                                Image(systemName: "square.split.2x2.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+
+                            Button {
+                                store.send(.editCategoriesTapped)
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+
                     // ── Category horizontal scroll ─────────────────────
                     categoryBar
-                        .padding(.top, 8)
                         .padding(.bottom, 12)
 
                     // ── Channel grid ───────────────────────────────────
@@ -48,6 +92,19 @@
                 if let url = URL(string: serverURL) {
                     store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
                 }
+            }
+            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
+                CategoryManagementView(store: store)
+            }
+            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
+                EPGGuideView_iOS(store: store)
+            }
+            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
+                ParentalLockView(store: store)
+                    .presentationDetents([.height(300)])
+            }
+            .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
+                MultiView(store: store)
             }
         }
 

@@ -43,6 +43,9 @@
                     store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
                 }
             }
+            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
+                ParentalLockView(store: store)
+            }
         }
 
         // MARK: – Category Column

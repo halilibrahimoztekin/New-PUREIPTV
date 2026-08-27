@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 
 // MARK: - SearchFeature
@@ -78,7 +78,7 @@ public struct SearchFeature {
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
-            case didSelectChannel(MediaModels.Item)
+            case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
         }
@@ -139,7 +139,14 @@ public struct SearchFeature {
                 return .none
 
             case let .channelSelected(channel):
-                return .send(.delegate(.didSelectChannel(channel)))
+                switch channel.type {
+                case .live:
+                    return .send(.delegate(.didSelectChannel(channel, playlist: state.liveResults)))
+                case .vod:
+                    return .send(.delegate(.didSelectVOD(channel)))
+                case .series:
+                    return .send(.delegate(.didSelectSeries(channel)))
+                }
 
             case let .vodSelected(vod):
                 return .send(.delegate(.didSelectVOD(vod)))

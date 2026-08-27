@@ -51,6 +51,7 @@ public struct HomeFeature {
         public var vod = VODFeature.State()
         public var series = SeriesFeature.State()
         public var search = SearchFeature.State()
+        public var settings = SettingsFeature.State()
 
         public init(serverURL: String, username: String, password: String) {
             self.serverURL = serverURL
@@ -66,10 +67,11 @@ public struct HomeFeature {
         case vod(VODFeature.Action)
         case series(SeriesFeature.Action)
         case search(SearchFeature.Action)
+        case settings(SettingsFeature.Action)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
-            case didSelectChannel(MediaModels.Item)
+            case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
         }
@@ -93,6 +95,9 @@ public struct HomeFeature {
         Scope(state: \.search, action: \.search) {
             SearchFeature()
         }
+        Scope(state: \.settings, action: \.settings) {
+            SettingsFeature()
+        }
 
         Reduce { state, action in
             switch action {
@@ -100,8 +105,8 @@ public struct HomeFeature {
                 state.selectedTab = tab
                 return .none
 
-            case let .dashboard(.delegate(.didSelectChannel(channel))):
-                return .send(.delegate(.didSelectChannel(channel)))
+            case let .dashboard(.delegate(.didSelectChannel(channel, playlist))):
+                return .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
 
             case let .dashboard(.delegate(.didSelectVOD(vod))):
                 return .send(.delegate(.didSelectVOD(vod)))
@@ -112,8 +117,8 @@ public struct HomeFeature {
             case .dashboard:
                 return .none
 
-            case let .liveTV(.delegate(.didSelectChannel(channel))):
-                return .send(.delegate(.didSelectChannel(channel)))
+            case let .liveTV(.delegate(.didSelectChannel(channel, playlist))):
+                return .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
 
             case .liveTV:
                 return .none
@@ -130,8 +135,8 @@ public struct HomeFeature {
             case .series:
                 return .none
 
-            case let .search(.delegate(.didSelectChannel(channel))):
-                return .send(.delegate(.didSelectChannel(channel)))
+            case let .search(.delegate(.didSelectChannel(channel, playlist))):
+                return .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
 
             case let .search(.delegate(.didSelectVOD(vod))):
                 return .send(.delegate(.didSelectVOD(vod)))
@@ -140,6 +145,9 @@ public struct HomeFeature {
                 return .send(.delegate(.didSelectSeries(series)))
 
             case .search:
+                return .none
+
+            case .settings:
                 return .none
 
             case .delegate:

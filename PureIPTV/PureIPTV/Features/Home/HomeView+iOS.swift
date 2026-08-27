@@ -83,7 +83,7 @@
                     password: store.password
                 )
             case .settings:
-                TabPlaceholder(tab: tab, icon: "gearshape.fill", color: Color(hex: "#C0C6D6"))
+                SettingsView(store: store.scope(state: \.settings, action: \.settings))
             }
         }
     }

@@ -9,6 +9,10 @@ public struct DashboardFeature {
         public var featuredChannels: [MediaModels.Item] = []
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
+
+        public var favoriteItems: [FavoriteItem] = []
+        public var watchHistoryItems: [WatchHistoryItem] = []
+
         public var errorMessage: String?
 
         public init() {}
@@ -17,21 +21,28 @@ public struct DashboardFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case loadFeaturedData(config: PlaylistConfig)
+        case loadLocalData
+        case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
         case dataLoaded(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
         case dataFailed(Error)
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
+
+        // Navigation from local items
+        case favoriteSelected(FavoriteItem)
+        case historySelected(WatchHistoryItem)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
-            case didSelectChannel(MediaModels.Item)
+            case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
         }
     }
 
     @Dependency(\.iptvClient) var iptvClient
+    @Dependency(\.databaseClient) var databaseClient
 
     public init() {}
 
@@ -39,8 +50,23 @@ public struct DashboardFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
-                guard state.featuredChannels.isEmpty, state.featuredVODs.isEmpty, state.featuredSeries.isEmpty else { return .none }
-                return .send(.loadFeaturedData(config: config))
+                let localEffect: Effect<Action> = .send(.loadLocalData)
+                let remoteEffect: Effect<Action> = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                    ? .send(.loadFeaturedData(config: config))
+                    : .none
+                return .merge(localEffect, remoteEffect)
+
+            case .loadLocalData:
+                return .run { send in
+                    let favorites = (try? await databaseClient.fetchFavorites()) ?? []
+                    let history = (try? await databaseClient.fetchWatchHistory()) ?? []
+                    await send(.localDataLoaded(favorites: favorites, history: history))
+                }
+
+            case let .localDataLoaded(favorites, history):
+                state.favoriteItems = favorites
+                state.watchHistoryItems = history
+                return .none
 
             case let .loadFeaturedData(config):
                 state.isLoading = true
@@ -64,15 +90,16 @@ public struct DashboardFeature {
                             channels = Array(streamList.prefix(10))
                         }
                     }
-                    if let firstVodCat = vodCat?.first {
-                        if let streamList = try? await iptvClient.fetchVODs(config, firstVodCat.id) {
-                            vods = Array(streamList.prefix(10))
-                        }
+
+                    // Fetch ALL VODs and Series to get global "Recently Added"
+                    if let allVODs = try? await iptvClient.fetchVODs(config, nil) {
+                        let sorted = allVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        vods = Array(sorted.prefix(10))
                     }
-                    if let firstSeriesCat = seriesCat?.first {
-                        if let streamList = try? await iptvClient.fetchSeries(config, firstSeriesCat.id) {
-                            series = Array(streamList.prefix(10))
-                        }
+
+                    if let allSeries = try? await iptvClient.fetchSeries(config, nil) {
+                        let sorted = allSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        series = Array(sorted.prefix(10))
                     }
 
                     await send(.dataLoaded(channels: channels, vods: vods, series: series))
@@ -93,13 +120,67 @@ public struct DashboardFeature {
                 return .none
 
             case let .channelSelected(channel):
-                return .send(.delegate(.didSelectChannel(channel)))
+                return .send(.delegate(.didSelectChannel(channel, playlist: state.featuredChannels)))
 
             case let .vodSelected(vod):
                 return .send(.delegate(.didSelectVOD(vod)))
 
             case let .seriesSelected(series):
                 return .send(.delegate(.didSelectSeries(series)))
+
+            case let .favoriteSelected(fav):
+                let itemType: MediaModels.ItemType = {
+                    switch fav.type {
+                    case "live": return .live
+                    case "series": return .series
+                    default: return .vod
+                    }
+                }()
+                let item = MediaModels.Item(
+                    id: fav.id,
+                    title: fav.title,
+                    streamURL: fav.streamURL.flatMap { URL(string: $0) },
+                    coverURL: fav.coverURL.flatMap { URL(string: $0) },
+                    categoryID: "fav",
+                    type: itemType
+                )
+                switch item.type {
+                case .live:
+                    return .send(.delegate(.didSelectChannel(item, playlist: state.featuredChannels)))
+                case .vod:
+                    return .send(.delegate(.didSelectVOD(item)))
+                case .series:
+                    return .send(.delegate(.didSelectSeries(item)))
+                }
+
+            case let .historySelected(hist):
+                if hist.type == "episode" {
+                    // Route to series details
+                    guard let seriesID = hist.seriesID else {
+                        // If no seriesID is saved, we cannot open series details.
+                        // Fallback or ignore.
+                        return .none
+                    }
+                    let item = MediaModels.Item(
+                        id: seriesID,
+                        title: hist.seriesTitle ?? hist.title,
+                        streamURL: nil, // Series don't have streamURL, episodes do
+                        coverURL: hist.coverURL.flatMap { URL(string: $0) },
+                        categoryID: "hist",
+                        type: .series
+                    )
+                    return .send(.delegate(.didSelectSeries(item)))
+                } else {
+                    let item = MediaModels.Item(
+                        id: hist.id,
+                        title: hist.title,
+                        streamURL: hist.streamURL.flatMap { URL(string: $0) },
+                        coverURL: hist.coverURL.flatMap { URL(string: $0) },
+                        categoryID: "hist",
+                        type: .vod
+                    )
+                    return .send(.delegate(.didSelectVOD(item)))
+                }
 
             case .delegate:
                 return .none

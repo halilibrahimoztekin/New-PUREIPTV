@@ -12,6 +12,7 @@ public struct IPTVClient {
     public var fetchSeries: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
+    public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
 }
 
 extension IPTVClient: DependencyKey {
@@ -45,7 +46,8 @@ extension IPTVClient: DependencyKey {
                         streamURL: streamURL,
                         coverURL: dto.streamIcon.flatMap { URL(string: $0) },
                         categoryID: dto.categoryId,
-                        type: .live
+                        type: .live,
+                        epgChannelID: dto.epgChannelId
                     )
                 }
             },
@@ -64,6 +66,7 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { dto in
                     let ext = dto.containerExtension ?? "mp4"
                     let streamURL = xtreamConfig.baseURL.appendingPathComponent("movie/\(xtreamConfig.username)/\(xtreamConfig.password)/\(dto.streamId).\(ext)")
+                    let addedDate = dto.added.flatMap { TimeInterval($0) }.map { Date(timeIntervalSince1970: $0) }
                     return MediaModels.Item(
                         id: String(dto.streamId),
                         title: dto.name,
@@ -71,7 +74,8 @@ extension IPTVClient: DependencyKey {
                         coverURL: dto.streamIcon.flatMap { URL(string: $0) },
                         categoryID: dto.categoryId,
                         type: .vod,
-                        rating: dto.rating5based ?? dto.rating
+                        rating: dto.rating5based ?? dto.rating,
+                        addedDate: addedDate
                     )
                 }
             },
@@ -88,7 +92,8 @@ extension IPTVClient: DependencyKey {
                 let url = try XtreamEndpoint.getSeries(categoryID: categoryID).url(with: xtreamConfig)
                 let dtos: [XtreamSeriesDTO] = try await networkClient.fetch(url: url)
                 return dtos.map { dto in
-                    MediaModels.Item(
+                    let addedDate = dto.lastModified.flatMap { TimeInterval($0) }.map { Date(timeIntervalSince1970: $0) }
+                    return MediaModels.Item(
                         id: String(dto.seriesId),
                         title: dto.name,
                         streamURL: nil,
@@ -96,7 +101,8 @@ extension IPTVClient: DependencyKey {
                         categoryID: dto.categoryId,
                         type: .series,
                         rating: dto.rating5based ?? Double(dto.rating ?? "0"),
-                        releaseDate: dto.releaseDate
+                        releaseDate: dto.releaseDate,
+                        addedDate: addedDate
                     )
                 }
             },
@@ -164,6 +170,30 @@ extension IPTVClient: DependencyKey {
                     rating: dto.info?.rating5based,
                     releaseDate: dto.info?.releaseDate
                 )
+            },
+            fetchShortEPG: { config, streamID, limit in
+                guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
+                let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
+                let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
+                let response: EPGResponseDTO = try await networkClient.fetch(url: url)
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "YYYY-MM-dd HH:mm:ss"
+                formatter.timeZone = TimeZone(identifier: "UTC")
+
+                return response.epgListings.compactMap { item in
+                    guard let start = formatter.date(from: item.start),
+                          let end = formatter.date(from: item.end) else { return nil }
+
+                    return EPGProgram(
+                        id: item.id,
+                        title: item.title,
+                        description: item.description,
+                        startTime: start,
+                        endTime: end,
+                        isPlayingNow: item.nowPlaying == 1
+                    )
+                }
             }
         )
     }()

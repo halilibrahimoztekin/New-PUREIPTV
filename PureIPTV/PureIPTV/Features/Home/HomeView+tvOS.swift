@@ -21,7 +21,7 @@
                 set: { store.send(.tabSelected($0)) }
             )) {
                 ForEach(HomeTab.allCases, id: \.self) { tab in
-                    TVTabContent(tab: tab)
+                    TVTabContentView(tab: tab, store: store)
                         .tabItem {
                             Label(tab.rawValue, systemImage: store.selectedTab == tab ? tab.selectedIcon : tab.icon)
                         }
@@ -34,7 +34,7 @@
 
     // MARK: - TV Tab Content Placeholder
 
-    private struct TVTabContent: View {
+    private struct TVTabPlaceholder: View {
         let tab: HomeTab
 
         @FocusState private var isFocused: Bool
@@ -71,6 +71,53 @@
             case .series: return Color(hex: "#30D158")
             case .search: return Color(hex: "#0A84FF")
             case .settings: return Color(hex: "#C0C6D6")
+            }
+        }
+    }
+
+    private struct TVTabContentView: View {
+        let tab: HomeTab
+        @Bindable var store: StoreOf<HomeFeature>
+
+        var body: some View {
+            switch tab {
+            case .dashboard:
+                DashboardView_tvOS(
+                    store: store.scope(state: \.dashboard, action: \.dashboard),
+                    serverURL: store.serverURL,
+                    username: store.username,
+                    password: store.password
+                )
+            case .liveTV:
+                LiveTVView(
+                    store: store.scope(state: \.liveTV, action: \.liveTV),
+                    serverURL: store.serverURL,
+                    username: store.username,
+                    password: store.password
+                )
+            case .movies:
+                VODView(
+                    store: store.scope(state: \.vod, action: \.vod),
+                    serverURL: store.serverURL,
+                    username: store.username,
+                    password: store.password
+                )
+            case .series:
+                SeriesView(
+                    store: store.scope(state: \.series, action: \.series),
+                    serverURL: store.serverURL,
+                    username: store.username,
+                    password: store.password
+                )
+            case .search:
+                SearchView_tvOS(
+                    store: store.scope(state: \.search, action: \.search),
+                    serverURL: store.serverURL,
+                    username: store.username,
+                    password: store.password
+                )
+            case .settings:
+                TVTabPlaceholder(tab: tab)
             }
         }
     }

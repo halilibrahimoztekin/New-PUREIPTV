@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 
 // PlaylistType is defined in Core/Models/Playlist.swift

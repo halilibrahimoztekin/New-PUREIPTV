@@ -1,6 +1,6 @@
 #if os(iOS)
     import ComposableArchitecture
-    import Factory
+    import FactoryKit
     import SwiftUI
 
     public struct DashboardView_iOS: View {
@@ -37,6 +37,24 @@
                                 .padding(.bottom, 16)
                             }
 
+                            if !store.watchHistoryItems.isEmpty {
+                                featuredSection(title: "Kaldığın Yerden İzle", items: store.watchHistoryItems) { hist in
+                                    WatchHistoryCardView(item: hist) {
+                                        store.send(.historySelected(hist))
+                                    }
+                                    .frame(width: 200)
+                                }
+                            }
+
+                            if !store.favoriteItems.isEmpty {
+                                featuredSection(title: "Favorilerim", items: store.favoriteItems) { fav in
+                                    FavoriteCardView(item: fav) {
+                                        store.send(.favoriteSelected(fav))
+                                    }
+                                    .frame(width: 140)
+                                }
+                            }
+
                             if !store.featuredChannels.isEmpty {
                                 featuredSection(title: "Canlı TV (Önerilen)", items: store.featuredChannels) { channel in
                                     ChannelCardView(channel: channel, isSelected: false) {
@@ -47,7 +65,7 @@
                             }
 
                             if store.featuredVODs.count > 1 {
-                                featuredSection(title: "Yeni Filmler", items: Array(store.featuredVODs.dropFirst())) { vod in
+                                featuredSection(title: "Yeni Eklenen Filmler", items: Array(store.featuredVODs.dropFirst())) { vod in
                                     VODCardView(vod: vod, isSelected: false) {
                                         store.send(.vodSelected(vod))
                                     }
@@ -56,7 +74,7 @@
                             }
 
                             if !store.featuredSeries.isEmpty {
-                                featuredSection(title: "Popüler Diziler", items: store.featuredSeries) { series in
+                                featuredSection(title: "Yeni Eklenen Diziler", items: store.featuredSeries) { series in
                                     SeriesCardView(series: series, isSelected: false) {
                                         store.send(.seriesSelected(series))
                                     }
@@ -202,6 +220,106 @@
                         .padding(.top, 8)
                     }
                     .padding(20)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    struct FavoriteCardView: View {
+        let item: FavoriteItem
+        let onTap: () -> Void
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let urlString = item.coverURL, let url = URL(string: urlString) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case let .success(image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Rectangle().fill(Color(hex: "#1F1F23"))
+                            }
+                        }
+                        .frame(width: 140, height: item.type == "live" ? 90 : 210)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(alignment: .topTrailing) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.red)
+                                .padding(8)
+                        }
+                    } else {
+                        Rectangle()
+                            .fill(Color(hex: "#1F1F23"))
+                            .frame(width: 140, height: item.type == "live" ? 90 : 210)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    Text(item.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    struct WatchHistoryCardView: View {
+        let item: WatchHistoryItem
+        let onTap: () -> Void
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ZStack(alignment: .bottomLeading) {
+                        if let urlString = item.coverURL, let url = URL(string: urlString) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case let .success(image):
+                                    image.resizable().scaledToFill()
+                                default:
+                                    Rectangle().fill(Color(hex: "#1F1F23"))
+                                }
+                            }
+                            .frame(width: 200, height: 110)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            Rectangle()
+                                .fill(Color(hex: "#1F1F23"))
+                                .frame(width: 200, height: 110)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        // Progress Bar overlay
+                        GeometryReader { proxy in
+                            let progressPercent = max(0, min(1, item.progress / item.duration))
+                            Rectangle()
+                                .fill(Color.white.opacity(0.3))
+                                .frame(height: 4)
+                                .overlay(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(Color.red)
+                                        .frame(width: proxy.size.width * CGFloat(progressPercent), height: 4)
+                                }
+                        }
+                        .frame(height: 4)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                    }
+
+                    Text(item.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    if let seriesTitle = item.seriesTitle {
+                        Text(seriesTitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.white.opacity(0.6))
+                            .lineLimit(1)
+                    }
                 }
             }
             .buttonStyle(.plain)

@@ -19,6 +19,8 @@ public enum MediaModels {
         public let rating: Double?
         public let releaseDate: String?
         public let duration: String?
+        public let addedDate: Date?
+        public let epgChannelID: String?
 
         public init(
             id: String,
@@ -29,7 +31,9 @@ public enum MediaModels {
             type: ItemType,
             rating: Double? = nil,
             releaseDate: String? = nil,
-            duration: String? = nil
+            duration: String? = nil,
+            addedDate: Date? = nil,
+            epgChannelID: String? = nil
         ) {
             self.id = id
             self.title = title
@@ -40,6 +44,8 @@ public enum MediaModels {
             self.rating = rating
             self.releaseDate = releaseDate
             self.duration = duration
+            self.addedDate = addedDate
+            self.epgChannelID = epgChannelID
         }
     }
 
@@ -79,5 +85,41 @@ public extension MediaModels.Item {
                 type: .vod
             )
         }
+    }
+
+    struct EPGProgram: Equatable, Identifiable {
+        public let id: String
+        public let title: String
+        public let description: String
+        public let startTime: Date
+        public let endTime: Date
+        public let isPlayingNow: Bool
+
+        public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool) {
+            self.id = id
+            self.title = title
+            self.description = description
+            self.startTime = startTime
+            self.endTime = endTime
+            self.isPlayingNow = isPlayingNow
+        }
+    }
+}
+
+public struct EPGProgram: Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let startTime: Date
+    public let endTime: Date
+    public let isPlayingNow: Bool
+
+    public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.startTime = startTime
+        self.endTime = endTime
+        self.isPlayingNow = isPlayingNow
     }
 }

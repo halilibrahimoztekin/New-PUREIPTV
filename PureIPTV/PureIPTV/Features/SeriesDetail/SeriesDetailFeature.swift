@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Factory
+import FactoryKit
 import Foundation
 import OSLog
 import XCoordinator
@@ -21,10 +21,11 @@ public struct SeriesDetailFeature {
         public var allEpisodes: [String: [DetailModels.Episode]] = [:] // Keyed by season number string
         public var tmdbTV: TMDBTVDetailsDTO?
 
-        // UI State
         public var selectedSeasonNumber: Int?
         public var isLoading = false
         public var isTMDBLoading = false
+        public var isFavorite = false
+        public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
         /// Computed
@@ -49,6 +50,10 @@ public struct SeriesDetailFeature {
         case seasonSelected(Int)
         case episodeSelected(DetailModels.Episode)
         case tmdbTimeout
+        case toggleFavorite
+        case favoriteStatusLoaded(Bool)
+        case historyStatusLoaded(WatchHistoryItem?)
+        case resumeTapped
         case delegate(Delegate)
         case closeTapped
 
@@ -60,6 +65,7 @@ public struct SeriesDetailFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
+    @Dependency(\.databaseClient) var databaseClient
     @Injected(\.appCoordinator) var appCoordinator
 
     public init() {}
@@ -80,12 +86,38 @@ public struct SeriesDetailFeature {
                 guard let url = URL(string: state.serverURL) else { return .none }
                 let config = PlaylistConfig(type: .xtream, serverURL: url, username: state.username, password: state.password)
                 let seriesID = state.series.id
+                let searchTitle = state.series.title.cleanedForTMDBSearch()
 
-                return .run { send in
+                print("Fetching Series Info and TMDB details for: \(searchTitle)")
+
+                let infoEffect: Effect<Action> = .run { send in
                     await send(.infoResponse(
                         Result { try await iptvClient.fetchSeriesInfo(config, seriesID) }
                     ))
                 }
+
+                let tmdbEffect: Effect<Action> = .run { send in
+                    await send(.tmdbSearchResponse(
+                        Result { try await tmdbClient.searchTV(searchTitle) }
+                    ))
+                }
+
+                let timeoutEffect: Effect<Action> = .run { send in
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    await send(.tmdbTimeout)
+                }
+
+                let favoriteEffect: Effect<Action> = .run { [id = state.series.id] send in
+                    let isFav = (try? await databaseClient.isFavorite(id)) ?? false
+                    await send(.favoriteStatusLoaded(isFav))
+                }
+
+                let historyEffect: Effect<Action> = .run { [id = state.series.id] send in
+                    let history = try? await databaseClient.getSeriesWatchProgress(id)
+                    await send(.historyStatusLoaded(history))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect)
 
             case let .infoResponse(.success(result)):
                 state.info = result.info
@@ -103,23 +135,6 @@ public struct SeriesDetailFeature {
                 }
                 state.allEpisodes = parsedEpisodes
 
-                state.isLoading = false // Show episodes immediately
-
-                // Fetch TMDB Info
-                let searchTitle = state.series.title.cleanedForTMDBSearch()
-                print("TMDB search fallback for Series: \(state.series.title) -> cleaned: \(searchTitle)")
-
-                let tmdbEffect: Effect<Action> = .run { send in
-                    await send(.tmdbSearchResponse(
-                        Result { try await tmdbClient.searchTV(searchTitle) }
-                    ))
-                }
-
-                let timeoutEffect: Effect<Action> = .run { send in
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    await send(.tmdbTimeout)
-                }
-
                 // Auto-select first season
                 if let firstSeason = state.seasons.first {
                     state.selectedSeasonNumber = firstSeason.seasonNumber
@@ -127,7 +142,11 @@ public struct SeriesDetailFeature {
                     state.selectedSeasonNumber = Int(firstKey)
                 }
 
-                return .merge(tmdbEffect, timeoutEffect)
+                if !state.isTMDBLoading {
+                    state.isLoading = false
+                }
+
+                return .none
 
             case let .tmdbSearchResponse(.success(response)):
                 if let firstResult = response.results?.first {
@@ -140,6 +159,9 @@ public struct SeriesDetailFeature {
                 } else {
                     print("TMDB search returned 0 results for TV")
                     state.isTMDBLoading = false
+                    if !state.seasons.isEmpty {
+                        state.isLoading = false
+                    }
                     return .none
                 }
 
@@ -147,21 +169,31 @@ public struct SeriesDetailFeature {
                 print("TMDB details fetched for TV: \(tvDetails.name ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbTV = tvDetails
+                if !state.seasons.isEmpty {
+                    state.isLoading = false
+                }
                 return .none
 
             case let .tmdbSearchResponse(.failure(error)):
                 print("TMDB search failed for TV: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                if !state.seasons.isEmpty {
+                    state.isLoading = false
+                }
                 return .none
 
             case let .tmdbDetailsResponse(.failure(error)):
                 print("TMDB fetch details failed for TV: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                if !state.seasons.isEmpty {
+                    state.isLoading = false
+                }
                 return .none
 
             case .tmdbTimeout:
                 print("TMDB loading timed out after 4 seconds")
                 state.isTMDBLoading = false
+                state.isLoading = false
                 return .none
 
             case let .infoResponse(.failure(error)):
@@ -179,9 +211,45 @@ public struct SeriesDetailFeature {
                 let playable = PlayerFeature.PlayableItem(
                     id: episode.id,
                     title: "\(state.series.title) - S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))",
-                    streamURL: streamURL
+                    streamURL: streamURL,
+                    coverURL: episode.coverURL ?? state.series.coverURL,
+                    seriesID: state.series.id
                 )
                 return .send(.delegate(.didSelectEpisode(playable)))
+
+            case .resumeTapped:
+                guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString), history.duration > 0 else { return .none }
+                let startPosition = history.progress / history.duration
+                let playable = PlayerFeature.PlayableItem(
+                    id: history.id,
+                    title: history.title,
+                    streamURL: streamURL,
+                    coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
+                    seriesID: state.series.id,
+                    startPosition: startPosition
+                )
+                return .send(.delegate(.didSelectEpisode(playable)))
+
+            case let .historyStatusLoaded(history):
+                state.historyItem = history
+                return .none
+
+            case let .favoriteStatusLoaded(isFav):
+                state.isFavorite = isFav
+                return .none
+
+            case .toggleFavorite:
+                let item = FavoriteItem(
+                    id: state.series.id,
+                    type: "series",
+                    title: state.series.title,
+                    coverURL: state.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.series.coverURL?.absoluteString,
+                    streamURL: nil
+                )
+                return .run { send in
+                    let isNowFav = (try? await databaseClient.toggleFavorite(item)) ?? false
+                    await send(.favoriteStatusLoaded(isNowFav))
+                }
 
             case .closeTapped:
                 return .run { send in

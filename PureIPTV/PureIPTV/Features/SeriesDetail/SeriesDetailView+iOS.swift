@@ -19,21 +19,19 @@ public struct SeriesDetailView_iOS: View {
                         contentView
                     }
                 }
-                .ignoresSafeArea(edges: .top)
             }
             .onAppear {
                 store.send(.onAppear)
             }
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         store.send(.closeTapped)
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Circle().fill(Color.black.opacity(0.4)))
                     }
                 }
 
@@ -42,14 +40,11 @@ public struct SeriesDetailView_iOS: View {
                         // Reload or Sync Action
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Circle().fill(Color.black.opacity(0.4)))
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
         }
     }
 
@@ -155,30 +150,76 @@ public struct SeriesDetailView_iOS: View {
                     .foregroundStyle(Color.white.opacity(0.8))
                     .lineLimit(1)
 
-                    // Play Button
-                    Button {
-                        // Play the first available episode or resume
-                        if let firstEp = store.currentEpisodes.first {
-                            store.send(.episodeSelected(firstEp))
+                    HStack(spacing: 12) {
+                        // Play / Resume Button
+                        if let history = store.historyItem, history.duration > 0 {
+                            let progressMins = Int(history.progress / 60)
+                            let durationMins = Int(history.duration / 60)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Button {
+                                    store.send(.resumeTapped)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "play.fill")
+                                        Text("Devam Et")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 8)
+                                    .background(Color.red)
+                                    .foregroundStyle(.white)
+                                    .clipShape(Capsule())
+                                }
+
+                                Text("\(progressMins) dk / \(durationMins) dk izlendi")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.white.opacity(0.7))
+                                    .padding(.leading, 4)
+                            }
+                        } else {
+                            Button {
+                                // Play the first available episode
+                                if let firstEp = store.currentEpisodes.first {
+                                    store.send(.episodeSelected(firstEp))
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("İzle")
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .background(Color.red)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                            }
                         }
-                    } label: {
-                        HStack {
-                            Image(systemName: "play.fill")
-                            Text("İzle")
-                                .fontWeight(.semibold)
+
+                        // Favorite Button
+                        Button {
+                            store.send(.toggleFavorite)
+                        } label: {
+                            Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                .font(.system(size: 20))
+                                .padding(8)
+                                .background(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                        .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
+                                )
+                                .foregroundStyle(store.isFavorite ? .red : .white)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(Color.red)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
                     }
                 }
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
-            .padding(.top, 140)
+            .padding(.top, 24)
         }
+        .redacted(reason: store.isLoading ? .placeholder : [])
+        .shimmeringPlaceholder(isLoading: store.isLoading)
     }
 
     private var contentView: some View {
@@ -255,6 +296,8 @@ public struct SeriesDetailView_iOS: View {
 
             Spacer().frame(height: 40)
         }
+        .redacted(reason: store.isLoading ? .placeholder : [])
+        .shimmeringPlaceholder(isLoading: store.isLoading)
     }
 
     private func episodeCard(_ episode: DetailModels.Episode) -> some View {

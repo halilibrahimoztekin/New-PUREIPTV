@@ -19,6 +19,18 @@ public struct PlayerView_tvOS: View {
                         .padding(.leading, 8)
 
                         Spacer()
+
+                        // EPG Button
+                        if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
+                            Button(action: { store.send(.toggleEPG, animation: .easeInOut) }) {
+                                Image(systemName: "list.bullet.rectangle")
+                                    .font(.title3)
+                                    .foregroundColor(.white)
+                                    .padding()
+                            }
+                            .buttonStyle(.plain)
+                            .background(store.isEPGVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(Color.white.opacity(0.2)), in: Circle())
+                        }
                     }
                     .padding()
 
@@ -59,6 +71,20 @@ public struct PlayerView_tvOS: View {
                 }
                 .background(Color.black.opacity(0.4))
                 .transition(.opacity)
+
+                // EPG Overlay
+                if store.isEPGVisible {
+                    HStack {
+                        Spacer()
+                        EPGListView(
+                            programs: store.epgListings,
+                            currentPosition: store.position,
+                            onClose: { store.send(.toggleEPG, animation: .easeInOut) }
+                        )
+                        .frame(width: 500)
+                        .padding(.trailing, 40)
+                    }
+                }
             }
         }
     }

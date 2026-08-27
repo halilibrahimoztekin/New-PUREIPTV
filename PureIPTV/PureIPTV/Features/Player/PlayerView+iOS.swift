@@ -4,6 +4,7 @@ import SwiftVLC
 
 public struct PlayerView_iOS: View {
     @Bindable var store: StoreOf<PlayerFeature>
+    @Binding var pipController: PiPController?
     @State private var isDraggingSlider: Bool = false
     @State private var sliderDragValue: Double = 0.0
     @Environment(\.scenePhase) private var scenePhase
@@ -30,22 +31,6 @@ public struct PlayerView_iOS: View {
                                 }
                             )
                         )
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    let delta = value.translation.height / geo.size.height
-                                    let currentBrightness = UIScreen.main.brightness
-                                    let newBrightness = max(0, min(1, currentBrightness - delta * 0.05))
-                                    UIScreen.main.brightness = newBrightness
-                                    store.send(.setBrightness(newBrightness))
-                                    store.send(.showGestureFeedback("☀️ %\(Int(newBrightness * 100))"))
-                                }
-                                .onEnded { _ in
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        store.send(.hideGestureFeedback)
-                                    }
-                                }
-                        )
 
                     // Right Half - Volume & Forward Jump
                     Color.clear
@@ -64,22 +49,21 @@ public struct PlayerView_iOS: View {
                                 }
                             )
                         )
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    let delta = value.translation.height / geo.size.height
-                                    let currentVolume = store.volume
-                                    let newVolume = max(0, min(100, currentVolume - Int32(delta * 10)))
-                                    store.send(.setVolume(newVolume))
-                                    store.send(.showGestureFeedback("🔊 %\(newVolume)"))
-                                }
-                                .onEnded { _ in
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                        store.send(.hideGestureFeedback)
-                                    }
-                                }
-                        )
                 }
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            store.send(.dragGestureChanged(
+                                translation: value.translation,
+                                screenWidth: geo.size.width,
+                                screenHeight: geo.size.height,
+                                startLocation: value.startLocation
+                            ))
+                        }
+                        .onEnded { _ in
+                            store.send(.dragGestureEnded)
+                        }
+                )
             }
             if store.isControlsVisible {
                 VStack {
@@ -102,10 +86,45 @@ public struct PlayerView_iOS: View {
 
                         Spacer()
 
+                        // PiP Button
+                        if pipController != nil {
+                            Button(action: {
+                                pipController?.start()
+                            }) {
+                                Image(systemName: "pip.enter")
+                                    .font(.title3)
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            }
+                        }
+
                         // AirPlay Button
                         AirPlayView()
                             .frame(width: 44, height: 44)
                             .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+
+                        // Channels Button (Zapping)
+                        if store.playlist != nil {
+                            Button(action: { store.send(.toggleChannelList, animation: .easeInOut) }) {
+                                Image(systemName: "list.dash")
+                                    .font(.title3)
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .background(store.isChannelListVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                            }
+                        }
+
+                        // EPG Button
+                        if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
+                            Button(action: { store.send(.toggleEPG, animation: .easeInOut) }) {
+                                Image(systemName: "list.bullet.rectangle")
+                                    .font(.title3)
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .background(store.isEPGVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                            }
+                        }
 
                         // Tracks Button
                         Button(action: { store.send(.toggleTracksMenu, animation: .easeInOut) }) {
@@ -235,6 +254,37 @@ public struct PlayerView_iOS: View {
                                 .padding(.trailing, 16)
                             }
                         }
+
+                        if store.isEPGVisible {
+                            HStack {
+                                Spacer()
+                                EPGListView(
+                                    programs: store.epgListings,
+                                    currentPosition: store.position,
+                                    onClose: { store.send(.toggleEPG, animation: .easeInOut) }
+                                )
+                                .frame(width: 350, height: 300)
+                                .padding(.trailing, 16)
+                            }
+                        }
+
+                        if store.isChannelListVisible, let playlist = store.playlist {
+                            HStack {
+                                Spacer()
+                                ChannelListOverlay(
+                                    playlist: playlist,
+                                    selectedItemID: store.item.id,
+                                    onSelect: { item in
+                                        store.send(.selectChannel(item), animation: .easeInOut)
+                                    },
+                                    onClose: {
+                                        store.send(.toggleChannelList, animation: .easeInOut)
+                                    }
+                                )
+                                .frame(width: 300, height: 350)
+                                .padding(.trailing, 16)
+                            }
+                        }
                     }
 
                     Spacer()
@@ -357,11 +407,11 @@ public struct PlayerView_iOS: View {
             }
         }
         .onDisappear {
-            store.send(.stop)
+            store.send(.onDisappear)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
-                store.send(.stop)
+                store.send(.onDisappear)
             }
         }
     }
@@ -407,4 +457,107 @@ private struct AirPlayView: UIViewRepresentable {
     }
 
     func updateUIView(_: AVRoutePickerView, context _: Context) {}
+}
+
+struct ChannelListOverlay: View {
+    let playlist: [PlayerFeature.PlayableItem]
+    let selectedItemID: String
+    let onSelect: (PlayerFeature.PlayableItem) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Kanallar")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+            .background(Color.black.opacity(0.6))
+
+            Divider().background(Color.white.opacity(0.2))
+
+            // List
+            ScrollView {
+                ScrollViewReader { proxy in
+                    LazyVStack(spacing: 8) {
+                        ForEach(playlist, id: \.id) { item in
+                            ChannelListRow(
+                                item: item,
+                                isSelected: item.id == selectedItemID,
+                                action: { onSelect(item) }
+                            )
+                            .id(item.id)
+                        }
+                    }
+                    .padding(12)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation {
+                                proxy.scrollTo(selectedItemID, anchor: .center)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .background(AnyShapeStyle(.ultraThinMaterial))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+struct ChannelListRow: View {
+    let item: PlayerFeature.PlayableItem
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if let cover = item.coverURL {
+                    AsyncImage(url: cover) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: .fit)
+                        } else {
+                            Image(systemName: "tv").foregroundColor(.gray)
+                        }
+                    }
+                    .frame(width: 40, height: 40)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(8)
+                } else {
+                    Image(systemName: "tv")
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.3))
+                        .cornerRadius(8)
+                        .foregroundColor(.gray)
+                }
+
+                Text(item.title)
+                    .font(.subheadline)
+                    .fontWeight(isSelected ? .bold : .regular)
+                    .foregroundColor(isSelected ? .accentColor : .white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Spacer()
+            }
+            .padding(8)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.white.opacity(0.05))
+            .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+    }
 }
