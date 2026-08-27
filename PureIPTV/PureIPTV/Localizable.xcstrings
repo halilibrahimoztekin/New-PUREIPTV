@@ -95,7 +95,13 @@
     "CANLI" : {
       "extractionState" : "manual"
     },
+    "Canlı TV" : {
+
+    },
     "Devam Et" : {
+
+    },
+    "Diziler" : {
 
     },
     "Ebeveyn Kontrolü" : {
@@ -108,6 +114,9 @@
     },
     "episodes" : {
       "extractionState" : "manual"
+    },
+    "Filmler" : {
+
     },
     "GÜVENLİK" : {
       "comment" : "A section title for parental control settings.",
