@@ -80,7 +80,7 @@ public struct VODCardView: View {
             }
             .aspectRatio(2 / 3, contentMode: .fit)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.fluidScale)
         .shadow(
             color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear,
             radius: 8, x: 0, y: 2

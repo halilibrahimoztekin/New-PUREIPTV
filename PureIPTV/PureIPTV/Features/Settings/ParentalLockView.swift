@@ -48,7 +48,9 @@ public struct ParentalLockView: View {
 
                 Spacer()
             }
+            #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("İptal") {

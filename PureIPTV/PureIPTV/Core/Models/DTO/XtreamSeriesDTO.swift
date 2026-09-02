@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XtreamSeriesDTO: Codable {
+public struct XtreamSeriesDTO: Codable, Sendable {
     public let num: Int?
     public let name: String
     public let seriesId: Int

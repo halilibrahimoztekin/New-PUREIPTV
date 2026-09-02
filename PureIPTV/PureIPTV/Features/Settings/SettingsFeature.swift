@@ -21,6 +21,13 @@ public struct SettingsFeature {
     }
 
     public enum Action: BindableAction {
+        case managePlaylistsTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case openManagePlaylists
+        }
+
         case onAppear
         case binding(BindingAction<State>)
         case toggleParentalControl(Bool)
@@ -39,6 +46,12 @@ public struct SettingsFeature {
             switch action {
             case .onAppear:
                 state.isParentalControlEnabled = settingsClient.isParentalControlEnabled()
+                return .none
+
+            case .managePlaylistsTapped:
+                return .send(.delegate(.openManagePlaylists))
+
+            case .delegate:
                 return .none
 
             case .binding:
@@ -63,7 +76,7 @@ public struct SettingsFeature {
                 }
 
             case let .pinInputChanged(input):
-                let filtered = input.filter { $0.isNumber }
+                let filtered = input.filter(\.isNumber)
                 if filtered.count <= 4 {
                     if state.step == .enterNew {
                         state.pinInput = filtered

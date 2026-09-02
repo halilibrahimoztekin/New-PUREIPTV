@@ -65,12 +65,12 @@
 
         private var tabColor: Color {
             switch tab {
-            case .dashboard: return Color(hex: "#FF9500")
-            case .liveTV: return Color(hex: "#FF453A")
-            case .movies: return Color(hex: "#BF5AF2")
-            case .series: return Color(hex: "#30D158")
-            case .search: return Color(hex: "#0A84FF")
-            case .settings: return Color(hex: "#C0C6D6")
+            case .dashboard: Color(hex: "#FF9500")
+            case .liveTV: Color(hex: "#FF453A")
+            case .movies: Color(hex: "#BF5AF2")
+            case .series: Color(hex: "#30D158")
+            case .search: Color(hex: "#0A84FF")
+            case .settings: Color(hex: "#C0C6D6")
             }
         }
     }

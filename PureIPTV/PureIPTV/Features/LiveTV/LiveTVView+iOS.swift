@@ -60,6 +60,16 @@
                             }
 
                             Button {
+                                store.send(.openEPGTimelineTapped)
+                            } label: {
+                                Image(systemName: "calendar.day.timeline.left")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+
+                            Button {
                                 store.send(.editCategoriesTapped)
                             } label: {
                                 Image(systemName: "slider.horizontal.3")
@@ -98,6 +108,9 @@
             }
             .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
                 EPGGuideView_iOS(store: store)
+            }
+            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
+                EPGTimelineView(store: store)
             }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
@@ -151,6 +164,17 @@
                                 isSelected: store.selectedChannel?.id == channel.id
                             ) {
                                 store.send(.channelSelected(channel))
+                            }
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(channel))
+                                } label: {
+                                    if store.favoriteIDs.contains(channel.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
                             }
                         }
                     }

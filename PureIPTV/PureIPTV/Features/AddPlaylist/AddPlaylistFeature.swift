@@ -28,11 +28,11 @@ public struct AddPlaylistFeature {
         public var canConnect: Bool {
             switch playlistType {
             case .xtream:
-                return !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                     !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                     !password.isEmpty
             case .m3u:
-                return !m3uURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                !m3uURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
         }
 
@@ -55,12 +55,13 @@ public struct AddPlaylistFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.playlistRepository) var playlistRepository
+    @Dependency(\.hapticClient) var hapticClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let iptvClient = self.iptvClient
-        let playlistRepository = self.playlistRepository
+        let iptvClient = iptvClient
+        let playlistRepository = playlistRepository
 
         BindingReducer()
 

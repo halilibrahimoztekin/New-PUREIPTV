@@ -23,7 +23,9 @@ public struct SeriesDetailView_iOS: View {
             .onAppear {
                 store.send(.onAppear)
             }
+            #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {

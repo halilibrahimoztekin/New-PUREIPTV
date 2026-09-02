@@ -32,8 +32,8 @@
                         Color.clear,
                     ],
                     center: .center,
-                    startRadiiFraction: .init(width: 0.1, height: 0.1),
-                    endRadiiFraction: .init(width: 0.7, height: 0.55)
+                    startRadiusFraction: 0.1,
+                    endRadiusFraction: 0.7
                 )
                 .ignoresSafeArea()
                 .opacity(store.logoOpacity)

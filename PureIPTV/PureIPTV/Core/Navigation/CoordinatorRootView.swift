@@ -12,7 +12,7 @@ public struct CoordinatorRootView: UIViewControllerRepresentable {
     }
 
     public func makeUIViewController(context _: Context) -> UINavigationController {
-        return coordinator.rootViewController
+        coordinator.rootViewController
     }
 
     public func updateUIViewController(_: UINavigationController, context _: Context) {

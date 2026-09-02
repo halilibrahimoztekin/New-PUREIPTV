@@ -1,6 +1,6 @@
-import Foundation
+@preconcurrency import Foundation
 
-public struct XtreamAuthResponseDTO: Codable {
+public struct XtreamAuthResponseDTO: Codable, Sendable {
     public let userInfo: UserInfo
     public let serverInfo: ServerInfo
 
@@ -9,7 +9,7 @@ public struct XtreamAuthResponseDTO: Codable {
         case serverInfo = "server_info"
     }
 
-    public struct UserInfo: Codable {
+    public struct UserInfo: Codable, Sendable {
         public let username: String?
         public let password: String?
         public let message: String?
@@ -31,7 +31,7 @@ public struct XtreamAuthResponseDTO: Codable {
         }
     }
 
-    public struct ServerInfo: Codable {
+    public struct ServerInfo: Codable, Sendable {
         public let url: String?
         public let port: String?
         public let httpsPort: String?

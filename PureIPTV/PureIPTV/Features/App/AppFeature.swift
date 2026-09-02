@@ -10,9 +10,13 @@ public struct AppFeature {
         public var splash = SplashFeature.State()
         public var addPlaylist = AddPlaylistFeature.State()
         public var home: HomeFeature.State?
-        @Presents public var player: PlayerFeature.State?
+        public var player: PlayerFeature.State?
+        public var isPlayerMini: Bool = false
         @Presents public var seriesDetail: SeriesDetailFeature.State?
         @Presents public var vodDetail: VODDetailFeature.State?
+        @Presents public var playlistManagement: PlaylistManagementFeature.State?
+        public var onboarding: OnboardingFeature.State?
+        public var profileSelection: ProfileSelectionFeature.State?
 
         public var splashIsActive = true
         public var isOnboarded = false
@@ -24,9 +28,13 @@ public struct AppFeature {
         case splash(SplashFeature.Action)
         case addPlaylist(AddPlaylistFeature.Action)
         case home(HomeFeature.Action)
-        case player(PresentationAction<PlayerFeature.Action>)
+        case player(PlayerFeature.Action)
+        case toggleMiniPlayer
         case seriesDetail(PresentationAction<SeriesDetailFeature.Action>)
         case vodDetail(PresentationAction<VODDetailFeature.Action>)
+        case playlistManagement(PresentationAction<PlaylistManagementFeature.Action>)
+        case onboarding(OnboardingFeature.Action)
+        case profileSelection(ProfileSelectionFeature.Action)
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -35,9 +43,6 @@ public struct AppFeature {
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let playlistRepository = self.playlistRepository
-        let appCoordinator = self.appCoordinator
-
         Scope(state: \.splash, action: \.splash) {
             SplashFeature()
         }
@@ -46,190 +51,338 @@ public struct AppFeature {
             AddPlaylistFeature()
         }
 
-        .ifLet(\.home, action: \.home) {
-            HomeFeature()
-        }
-
-        .ifLet(\.$player, action: \.player) {
-            PlayerFeature()
-        }
-
         Reduce { state, action in
-            switch action {
-            // ── Splash ───────────────────────────────────────────────
-            case .splash(.splashDidFinish):
-                state.splashIsActive = false
-
-                let savedPlaylists = playlistRepository.getPlaylists()
-                if let playlist = savedPlaylists.first, playlist.type == .xtream,
-                   let serverURL = playlist.serverURL,
-                   let username = playlist.username,
-                   let password = playlist.password
-                {
-                    state.home = HomeFeature.State(
-                        serverURL: serverURL,
-                        username: username,
-                        password: password
-                    )
-                    state.isOnboarded = true
-                    return .run { _ in
-                        await MainActor.run { appCoordinator.trigger(.home) }
-                    }
-                } else {
-                    return .run { _ in
-                        await MainActor.run { appCoordinator.trigger(.login) }
-                    }
-                }
-
-            case .splash:
-                return .none
-
-            // ── AddPlaylist ──────────────────────────────────────────
-            case let .addPlaylist(.delegate(.didConnect(serverURL, username, password))):
-                state.home = HomeFeature.State(
-                    serverURL: serverURL,
-                    username: username,
-                    password: password
-                )
-                state.isOnboarded = true
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.home) }
-                }
-
-            case .addPlaylist:
-                return .none
-
-            // ── Home ─────────────────────────────────────────────────
-            case let .home(.delegate(.didSelectChannel(channel, playlist))):
-                guard let streamURL = channel.streamURL else { return .none }
-                guard let homeState = state.home, let url = URL(string: homeState.serverURL) else { return .none }
-
-                let config = PlaylistConfig(type: .xtream, serverURL: url, username: homeState.username, password: homeState.password)
-
-                let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
-                    guard let itemStreamURL = item.streamURL else { return nil }
-                    return PlayerFeature.PlayableItem(
-                        id: item.id,
-                        title: item.title,
-                        streamURL: itemStreamURL,
-                        coverURL: item.coverURL,
-                        seriesID: nil,
-                        startPosition: nil,
-                        config: config,
-                        epgChannelID: item.epgChannelID
-                    )
-                }
-
-                state.player = PlayerFeature.State(
-                    item: .init(
-                        id: channel.id,
-                        title: channel.title,
-                        streamURL: streamURL,
-                        coverURL: channel.coverURL,
-                        seriesID: nil,
-                        startPosition: nil,
-                        config: config,
-                        epgChannelID: channel.epgChannelID
-                    ),
-                    playlist: playablePlaylist
-                )
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.player) }
-                }
-
-            case let .home(.delegate(.didSelectVOD(vod))):
-                if let homeState = state.home {
-                    state.vodDetail = VODDetailFeature.State(
-                        vod: vod,
-                        serverURL: homeState.serverURL,
-                        username: homeState.username,
-                        password: homeState.password
-                    )
-                    return .run { _ in
-                        await MainActor.run { appCoordinator.trigger(.vodDetail) }
-                    }
-                }
-                return .none
-
-            case let .home(.delegate(.didSelectSeries(series))):
-                if let homeState = state.home {
-                    state.seriesDetail = SeriesDetailFeature.State(
-                        series: series,
-                        serverURL: homeState.serverURL,
-                        username: homeState.username,
-                        password: homeState.password
-                    )
-                    return .run { _ in
-                        await MainActor.run { appCoordinator.trigger(.seriesDetail) }
-                    }
-                }
-                return .none
-
-            case let .home(.delegate(.playHistoryItem(item))):
-                if let stream = item.streamURL, let streamURL = URL(string: stream), let homeState = state.home {
-                    guard let serverURL = URL(string: homeState.serverURL) else { return .none }
-                    let config = PlaylistConfig(type: .xtream, serverURL: serverURL, username: homeState.username, password: homeState.password)
-
-                    let playable = PlayerFeature.PlayableItem(
-                        id: item.id,
-                        title: item.title,
-                        streamURL: streamURL,
-                        coverURL: item.coverURL.flatMap { URL(string: $0) },
-                        startPosition: item.duration > 0 ? (item.progress / item.duration) : nil,
-                        config: config
-                    )
-                    state.player = PlayerFeature.State(item: playable)
-                    return .run { _ in
-                        await MainActor.run { appCoordinator.trigger(.player) }
-                    }
-                }
-                return .none
-
-            case .home:
-                return .none
-
-            // ── Series Detail ─────────────────────────────────────────
-            case let .seriesDetail(.presented(.delegate(.didSelectEpisode(playable)))):
-                state.player = PlayerFeature.State(item: playable)
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.player) }
-                }
-
-            case .seriesDetail(.presented(.delegate(.close))):
-                state.seriesDetail = nil
-                return .none
-
-            case .seriesDetail:
-                return .none
-
-            // ── Player ───────────────────────────────────────────────
-            case .player(.presented(.delegate(.didClose))):
-                state.player = nil
-                return .none
-
-            case .player:
-                return .none
-
-            // ── VOD Detail ───────────────────────────────────────────
-            case let .vodDetail(.presented(.delegate(.didSelectPlay(playable)))):
-                state.player = PlayerFeature.State(item: playable)
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.player) }
-                }
-
-            case .vodDetail(.presented(.delegate(.close))):
-                state.vodDetail = nil
-                return .none
-
-            case .vodDetail:
-                return .none
-            }
-        }
-        .ifLet(\.$seriesDetail, action: \.seriesDetail) {
+            core(state: &state, action: action)
+        }.ifLet(\.$seriesDetail, action: \.seriesDetail) {
             SeriesDetailFeature()
         }
         .ifLet(\.$vodDetail, action: \.vodDetail) {
             VODDetailFeature()
         }
+        .ifLet(\.$playlistManagement, action: \.playlistManagement) {
+            PlaylistManagementFeature()
+        }
+        .ifLet(\.home, action: \.home) {
+            HomeFeature()
+        }
+        .ifLet(\.player, action: \.player) {
+            PlayerFeature()
+        }
+        .ifLet(\.onboarding, action: \.onboarding) {
+            OnboardingFeature()
+        }
+        .ifLet(\.profileSelection, action: \.profileSelection) {
+            ProfileSelectionFeature()
+        }
+    }
+
+    private func core(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let appCoordinator = appCoordinator
+
+        switch action {
+        // ── Splash ───────────────────────────────────────────────
+        case .splash(.splashDidFinish):
+            state.splashIsActive = false
+
+            let isWelcomeCompleted = UserDefaults.standard.bool(forKey: "isOnboardingCompleted")
+            if !isWelcomeCompleted {
+                state.onboarding = OnboardingFeature.State()
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.onboarding) }
+                }
+            }
+
+            let activePlaylist = playlistRepository.getActivePlaylist()
+            var hasValidPlaylist = false
+
+            if let playlist = activePlaylist {
+                if playlist.type == .xtream {
+                    if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
+                        hasValidPlaylist = true
+                    }
+                }
+            }
+
+            if hasValidPlaylist {
+                state.profileSelection = ProfileSelectionFeature.State()
+                state.isOnboarded = true
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.profileSelection) }
+                }
+            } else {
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.login) }
+                }
+            }
+
+        case .splash:
+            return .none
+
+        // ── Onboarding ───────────────────────────────────────────
+        case .onboarding(.delegate(.didCompleteOnboarding)):
+            state.onboarding = nil
+
+            let activePlaylist = playlistRepository.getActivePlaylist()
+            var hasValidPlaylist = false
+            if let playlist = activePlaylist, playlist.type == .xtream {
+                if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
+                    hasValidPlaylist = true
+                }
+            }
+            if hasValidPlaylist {
+                state.profileSelection = ProfileSelectionFeature.State()
+                state.isOnboarded = true
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.profileSelection) }
+                }
+            } else {
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.login) }
+                }
+            }
+
+        case .onboarding:
+            return .none
+
+        // ── Profile Selection ────────────────────────────────────
+        case .profileSelection(.delegate(.didSelectProfile)):
+            state.profileSelection = nil
+
+            let activePlaylist = playlistRepository.getActivePlaylist()
+            guard let playlist = activePlaylist else { return .none }
+            guard playlist.type == .xtream else { return .none }
+            guard let serverURL = playlist.serverURL else { return .none }
+            guard let username = playlist.username else { return .none }
+            guard let password = playlist.password else { return .none }
+
+            state.home = HomeFeature.State(
+                serverURL: serverURL,
+                username: username,
+                password: password
+            )
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.home) }
+            }
+
+        case .toggleMiniPlayer:
+            state.isPlayerMini.toggle()
+            return .none
+
+        case .profileSelection:
+            return .none
+
+        // ── AddPlaylist ──────────────────────────────────────────
+        case .addPlaylist(.delegate(.didConnect)):
+            state.profileSelection = ProfileSelectionFeature.State()
+            state.isOnboarded = true
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.profileSelection) }
+            }
+
+        case .addPlaylist:
+            return .none
+
+        // ── Home ─────────────────────────────────────────────────
+        case let .home(.delegate(.didSelectChannel(channel, playlist))):
+            guard let streamURL = channel.streamURL else { return .none }
+            guard let homeState = state.home, let url = URL(string: homeState.serverURL) else { return .none }
+
+            let config = PlaylistConfig(type: .xtream, serverURL: url, username: homeState.username, password: homeState.password)
+
+            let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
+                guard let itemStreamURL = item.streamURL else { return nil }
+                return PlayerFeature.PlayableItem(
+                    id: item.id,
+                    title: item.title,
+                    streamURL: itemStreamURL,
+                    coverURL: item.coverURL,
+                    seriesID: nil,
+                    startPosition: nil,
+                    config: config,
+                    epgChannelID: item.epgChannelID
+                )
+            }
+
+            state.player = PlayerFeature.State(
+                item: .init(
+                    id: channel.id,
+                    title: channel.title,
+                    streamURL: streamURL,
+                    coverURL: channel.coverURL,
+                    seriesID: nil,
+                    startPosition: nil,
+                    config: config,
+                    epgChannelID: channel.epgChannelID
+                ),
+                playlist: playablePlaylist
+            )
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+
+        case let .home(.delegate(.didSelectVOD(vod))):
+            if let homeState = state.home {
+                state.vodDetail = VODDetailFeature.State(
+                    vod: vod,
+                    serverURL: homeState.serverURL,
+                    username: homeState.username,
+                    password: homeState.password
+                )
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.vodDetail) }
+                }
+            }
+            return .none
+
+        case let .home(.delegate(.didSelectSeries(series))):
+            if let homeState = state.home {
+                state.seriesDetail = SeriesDetailFeature.State(
+                    series: series,
+                    serverURL: homeState.serverURL,
+                    username: homeState.username,
+                    password: homeState.password
+                )
+                return .run { _ in
+                    await MainActor.run { appCoordinator.trigger(.seriesDetail) }
+                }
+            }
+            return .none
+
+        case let .home(.delegate(.playHistoryItem(item))):
+            return playHistoryItem(item, state: &state)
+
+        case .home(.delegate(.openManagePlaylists)):
+            state.playlistManagement = PlaylistManagementFeature.State()
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.playlistManagement) }
+            }
+
+        case .home:
+            return .none
+
+        // ── Series Detail ─────────────────────────────────────────
+        case let .seriesDetail(.presented(.delegate(.didSelectEpisode(playable)))):
+            state.player = PlayerFeature.State(item: playable)
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+
+        case .seriesDetail(.presented(.delegate(.close))):
+            state.seriesDetail = nil
+            return .none
+
+        case .seriesDetail:
+            return .none
+
+        // ── Player ───────────────────────────────────────────────
+        case .player(.delegate(.didClose)):
+            state.player = nil
+            return .none
+
+        case .player:
+            return .none
+
+        // ── VOD Detail ───────────────────────────────────────────
+        case let .vodDetail(.presented(.delegate(.didSelectPlay(playable)))):
+            state.player = PlayerFeature.State(item: playable)
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+
+        case .vodDetail(.presented(.delegate(.close))):
+            state.vodDetail = nil
+            return .none
+
+        case .vodDetail:
+            return .none
+
+        // ── Playlist Management ──────────────────────────────────
+        case .playlistManagement(.presented(.delegate(.didChangeActivePlaylist))):
+            // Playlist değiştiğinde ana ekrana geri dön
+            state.playlistManagement = nil
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.dismissPlaylistManagement) }
+            }
+
+        case .playlistManagement(.presented(.delegate(.dismissed))):
+            state.playlistManagement = nil
+            return .none
+
+        case .playlistManagement:
+            return .none
+        }
+    }
+
+    private func playHistoryItem(_ item: WatchHistoryItem, state: inout State) -> Effect<Action> {
+        if let seriesID = item.seriesID, let homeState = state.home {
+            let dummySeries = MediaModels.Item(
+                id: seriesID,
+                title: item.seriesTitle ?? item.title,
+                coverURL: item.coverURL.flatMap { URL(string: $0) },
+                categoryID: "",
+                type: .series
+            )
+            state.seriesDetail = SeriesDetailFeature.State(
+                series: dummySeries,
+                serverURL: homeState.serverURL,
+                username: homeState.username,
+                password: homeState.password,
+                historyItem: item,
+                autoPlayOnLoad: true
+            )
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.seriesDetail) }
+            }
+        } else if item.type == "vod", let homeState = state.home {
+            let dummyVOD = MediaModels.Item(
+                id: item.id,
+                title: item.title,
+                streamURL: item.streamURL.flatMap { URL(string: $0) },
+                coverURL: item.coverURL.flatMap { URL(string: $0) },
+                categoryID: "",
+                type: .vod
+            )
+            state.vodDetail = VODDetailFeature.State(
+                vod: dummyVOD,
+                serverURL: homeState.serverURL,
+                username: homeState.username,
+                password: homeState.password,
+                historyItem: item,
+                autoPlayOnLoad: true
+            )
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.vodDetail) }
+            }
+        } else if let stream = item.streamURL, let streamURL = URL(string: stream), let homeState = state.home {
+            guard let serverURL = URL(string: homeState.serverURL) else { return .none }
+            let config = PlaylistConfig(type: .xtream, serverURL: serverURL, username: homeState.username, password: homeState.password)
+
+            let coverURL = item.coverURL.flatMap { URL(string: $0) }
+
+            let startPosition: Double? = if item.duration > 0 {
+                item.progress / item.duration
+            } else {
+                nil
+            }
+
+            let playable = PlayerFeature.PlayableItem(
+                id: item.id,
+                title: item.title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                seriesID: nil,
+                startPosition: startPosition,
+                config: config,
+                epgChannelID: nil,
+                tvArchive: nil
+            )
+
+            state.player = PlayerFeature.State(item: playable)
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+        }
+        return .none
     }
 }

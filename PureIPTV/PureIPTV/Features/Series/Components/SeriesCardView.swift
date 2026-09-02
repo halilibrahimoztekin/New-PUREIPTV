@@ -84,6 +84,7 @@ public struct SeriesCardView: View {
             color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear,
             radius: 8, x: 0, y: 2
         )
+        .buttonStyle(.fluidScale)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }

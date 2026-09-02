@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SavedPlaylist: Equatable, Codable, Identifiable {
+public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
     public let id: UUID
     public let name: String
     public let type: PlaylistType

@@ -11,6 +11,15 @@ public struct NetworkClient {
         // Also might need date decoding strategies depending on API format.
     }
 
+    public func fetchData(url: URL) async throws -> Data {
+        let (data, response) = try await session.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
+            throw NetworkError.invalidResponse
+        }
+        return data
+    }
+
+    @MainActor
     public func fetch<T: Decodable>(url: URL) async throws -> T {
         #if DEBUG
             print("🌐 [NETWORK REQUEST] -> \(url.absoluteString)")
@@ -53,9 +62,7 @@ public struct NetworkClient {
         }
 
         do {
-            return try await Task.detached(priority: .userInitiated) {
-                try decoder.decode(T.self, from: data)
-            }.value
+            return try decoder.decode(T.self, from: data)
         } catch let DecodingError.dataCorrupted(context) {
             throw NetworkError.decodingFailed(description: "Data corrupted: \(context.debugDescription)")
         } catch let DecodingError.keyNotFound(key, context) {

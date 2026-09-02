@@ -27,14 +27,14 @@ public enum XtreamEndpoint {
             queryItems.append(URLQueryItem(name: "action", value: "get_live_categories"))
         case let .getLiveStreams(categoryID):
             queryItems.append(URLQueryItem(name: "action", value: "get_live_streams"))
-            if let categoryID = categoryID {
+            if let categoryID {
                 queryItems.append(URLQueryItem(name: "category_id", value: categoryID))
             }
         case .getVODCategories:
             queryItems.append(URLQueryItem(name: "action", value: "get_vod_categories"))
         case let .getVODStreams(categoryID):
             queryItems.append(URLQueryItem(name: "action", value: "get_vod_streams"))
-            if let categoryID = categoryID {
+            if let categoryID {
                 queryItems.append(URLQueryItem(name: "category_id", value: categoryID))
             }
         case let .getVODInfo(vodID):
@@ -44,7 +44,7 @@ public enum XtreamEndpoint {
             queryItems.append(URLQueryItem(name: "action", value: "get_series_categories"))
         case let .getSeries(categoryID):
             queryItems.append(URLQueryItem(name: "action", value: "get_series"))
-            if let categoryID = categoryID {
+            if let categoryID {
                 queryItems.append(URLQueryItem(name: "category_id", value: categoryID))
             }
         case let .getSeriesInfo(seriesID):
@@ -53,7 +53,7 @@ public enum XtreamEndpoint {
         case let .getShortEPG(streamID, limit):
             queryItems.append(URLQueryItem(name: "action", value: "get_short_epg"))
             queryItems.append(URLQueryItem(name: "stream_id", value: streamID))
-            if let limit = limit {
+            if let limit {
                 queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
             }
         }

@@ -21,6 +21,8 @@ public enum MediaModels {
         public let duration: String?
         public let addedDate: Date?
         public let epgChannelID: String?
+        public let tvArchive: Int?
+        public let tvArchiveDuration: Int?
 
         public init(
             id: String,
@@ -33,7 +35,9 @@ public enum MediaModels {
             releaseDate: String? = nil,
             duration: String? = nil,
             addedDate: Date? = nil,
-            epgChannelID: String? = nil
+            epgChannelID: String? = nil,
+            tvArchive: Int? = nil,
+            tvArchiveDuration: Int? = nil
         ) {
             self.id = id
             self.title = title
@@ -46,6 +50,8 @@ public enum MediaModels {
             self.duration = duration
             self.addedDate = addedDate
             self.epgChannelID = epgChannelID
+            self.tvArchive = tvArchive
+            self.tvArchiveDuration = tvArchiveDuration
         }
     }
 

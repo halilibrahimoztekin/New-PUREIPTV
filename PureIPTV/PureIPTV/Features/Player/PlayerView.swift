@@ -13,6 +13,7 @@ public struct PlayerView: View {
     @Injected(\.playerClient) private var playerClient
     #if os(iOS)
         @State private var pipController: PiPController?
+        @Environment(\.scenePhase) private var scenePhase
     #endif
 
     public var body: some View {
@@ -26,9 +27,6 @@ public struct PlayerView: View {
             #else
                 VideoView(playerClient.vlcPlayer())
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        store.send(.toggleControls)
-                    }
             #endif
 
             // UI Overlay
@@ -42,5 +40,34 @@ public struct PlayerView: View {
         .onAppear {
             store.send(.onAppear)
         }
+        .onDisappear {
+            store.send(.onDisappear)
+        }
+        #if os(iOS)
+        .onChange(of: scenePhase) { newPhase in
+            // Uygulama arka plana geçince PiP otomatik başlat
+            if newPhase == .background, pipController?.isPossible == true {
+                _ = pipController?.start()
+            }
+        }
+        .task(id: ObjectIdentifier(pipController as AnyObject? ?? NSObject())) {
+            // PiP event akışını dinle
+            guard let controller = pipController else { return }
+            for await event in controller.pipEvents {
+                switch event {
+                case .willStart:
+                    store.send(.pipStarted)
+                case let .didStop(reason):
+                    store.send(.pipStopped)
+                    // Kullanıcı "Geri Dön" tıkladıysa full-screen'e restore et
+                    if reason == .restoreRequested {
+                        store.send(.pipRestoreUI)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        #endif
     }
 }

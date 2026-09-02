@@ -40,38 +40,55 @@ public struct MultiView: View {
 
                     Spacer()
 
-                    // Dummy view to center the title
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .opacity(0)
+                    Spacer()
+
+                    // PiP Button
+                    Button(action: {
+                        store.send(.togglePiP, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    }) {
+                        Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.white.opacity(0.8))
+                            .padding(.trailing, 8)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding()
 
                 // Grid
-                if columns == 2 {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 4) {
+                if let focusedID = store.focusedSlotID, let slot = store.slots.first(where: { $0.id == focusedID }) {
+                    slotView(for: slot)
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 4)
+                        .transition(.opacity.combined(with: .scale))
+                        .id("fullscreen_\(focusedID)")
+                } else {
+                    if columns == 2 {
+                        VStack(spacing: 4) {
+                            HStack(spacing: 4) {
+                                slotView(for: store.slots[0])
+                                slotView(for: store.slots[1])
+                            }
+                            HStack(spacing: 4) {
+                                slotView(for: store.slots[2])
+                                slotView(for: store.slots[3])
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 4)
+                        .transition(.opacity.combined(with: .scale))
+                    } else {
+                        VStack(spacing: 4) {
                             slotView(for: store.slots[0])
                             slotView(for: store.slots[1])
                         }
-                        HStack(spacing: 4) {
-                            slotView(for: store.slots[2])
-                            slotView(for: store.slots[3])
-                        }
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 4)
+                        .transition(.opacity.combined(with: .scale))
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 4)
-                } else {
-                    // Mobile Portrait: Just stack them vertically or show only 2?
-                    // Let's show 2 vertically to avoid them being too small.
-                    VStack(spacing: 4) {
-                        slotView(for: store.slots[0])
-                        slotView(for: store.slots[1])
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 4)
                 }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.focusedSlotID)
         }
         .background(Color.black.ignoresSafeArea())
         .sheet(
@@ -98,10 +115,14 @@ public struct MultiView: View {
                 MultiViewPlayer(
                     item: item,
                     isActiveAudio: store.activeAudioSlotID == slot.id,
+                    isPiPActive: store.isPiPActive && store.activeAudioSlotID == slot.id,
                     instanceID: slot.instanceID
                 )
-                .onTapGesture {
-                    store.send(.setAudioActive(slotID: slot.id))
+                .onTapGesture(count: 2) {
+                    store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
+                }
+                .onTapGesture(count: 1) {
+                    store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
                 }
 
                 // Overlays
@@ -162,7 +183,10 @@ public struct MultiView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : Color.clear, lineWidth: 2)
+                .shadow(color: store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF").opacity(0.5) : Color.clear, radius: 4)
         )
+        .scaleEffect(store.activeAudioSlotID == slot.id && store.focusedSlotID == nil ? 1.01 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.activeAudioSlotID)
         .clipped()
     }
 }
@@ -202,8 +226,10 @@ private struct ChannelSelectionSheet: View {
                 }
             }
             .navigationTitle("Kanal Seç")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Kanal ara...")
+            #if !os(tvOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+                .searchable(text: $searchText, prompt: "Kanal ara...")
         }
     }
 }
@@ -213,15 +239,19 @@ private struct ChannelSelectionSheet: View {
 private struct MultiViewPlayer: View {
     let item: MediaModels.Item
     let isActiveAudio: Bool
+    let isPiPActive: Bool
     let instanceID: UUID
 
     @State private var playerClient: PlayerClient?
+    #if os(iOS)
+        @State private var pipController: PiPController?
+    #endif
 
     var body: some View {
         Group {
             if let client = playerClient {
                 #if os(iOS)
-                    VideoView(client.vlcPlayer())
+                    PiPVideoView(client.vlcPlayer(), controller: $pipController)
                 #else
                     VideoView(client.vlcPlayer())
                 #endif
@@ -234,6 +264,15 @@ private struct MultiViewPlayer: View {
         }
         .task(id: isActiveAudio) {
             try? await playerClient?.setVolume(isActiveAudio ? 100 : 0)
+        }
+        .onChange(of: isPiPActive) { _, newValue in
+            #if os(iOS)
+                if newValue {
+                    pipController?.start()
+                } else {
+                    pipController?.stop()
+                }
+            #endif
         }
     }
 

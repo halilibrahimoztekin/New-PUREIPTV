@@ -1,6 +1,6 @@
-import Foundation
+@preconcurrency import Foundation
 
-public struct TMDBSearchResponseDTO: Codable, Equatable {
+public struct TMDBSearchResponseDTO: Codable, Equatable, Sendable {
     public let page: Int?
     public let results: [TMDBMovieSearchResultDTO]?
     public let totalPages: Int?
@@ -13,7 +13,7 @@ public struct TMDBSearchResponseDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBMovieSearchResultDTO: Codable, Equatable {
+public struct TMDBMovieSearchResultDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let title: String? // For movies
     public let name: String? // For TV
@@ -38,7 +38,7 @@ public struct TMDBMovieSearchResultDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBMovieDetailsDTO: Codable, Equatable {
+public struct TMDBMovieDetailsDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let title: String?
     public let overview: String?
@@ -67,17 +67,17 @@ public struct TMDBMovieDetailsDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBGenreDTO: Codable, Equatable {
+public struct TMDBGenreDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String
 }
 
-public struct TMDBCreditsDTO: Codable, Equatable {
+public struct TMDBCreditsDTO: Codable, Equatable, Sendable {
     public let cast: [TMDBCastMemberDTO]?
     public let crew: [TMDBCrewMemberDTO]?
 }
 
-public struct TMDBCastMemberDTO: Codable, Equatable {
+public struct TMDBCastMemberDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String?
     public let character: String?
@@ -89,14 +89,14 @@ public struct TMDBCastMemberDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBCrewMemberDTO: Codable, Equatable {
+public struct TMDBCrewMemberDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String?
     public let job: String?
     public let department: String?
 }
 
-public struct TMDBTVDetailsDTO: Codable, Equatable {
+public struct TMDBTVDetailsDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String?
     public let overview: String?
@@ -126,7 +126,7 @@ public struct TMDBTVDetailsDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBProductionCompanyDTO: Codable, Equatable {
+public struct TMDBProductionCompanyDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String
     public let logoPath: String?
@@ -139,7 +139,7 @@ public struct TMDBProductionCompanyDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBProductionCountryDTO: Codable, Equatable {
+public struct TMDBProductionCountryDTO: Codable, Equatable, Sendable {
     public let iso3166_1: String
     public let name: String
 
@@ -149,11 +149,11 @@ public struct TMDBProductionCountryDTO: Codable, Equatable {
     }
 }
 
-public struct TMDBSimilarResponseDTO: Codable, Equatable {
+public struct TMDBSimilarResponseDTO: Codable, Equatable, Sendable {
     public let results: [TMDBSimilarItemDTO]?
 }
 
-public struct TMDBSimilarItemDTO: Codable, Equatable {
+public struct TMDBSimilarItemDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let title: String? // Movie
     public let name: String? // TV

@@ -20,9 +20,9 @@ public struct CategoryManagementFeature {
 
             var title: String {
                 switch self {
-                case .live: return "Live TV"
-                case .vod: return "Movies"
-                case .series: return "Series"
+                case .live: "Live TV"
+                case .vod: "Movies"
+                case .series: "Series"
                 }
             }
         }
@@ -70,9 +70,9 @@ public struct CategoryManagementFeature {
                     // Fetch categories
                     async let categoriesResult: Result<[MediaModels.Category], Error> = Result {
                         switch type {
-                        case .live: return try await iptvClient.fetchLiveCategories(config)
-                        case .vod: return try await iptvClient.fetchVODCategories(config)
-                        case .series: return try await iptvClient.fetchSeriesCategories(config)
+                        case .live: try await iptvClient.fetchLiveCategories(config)
+                        case .vod: try await iptvClient.fetchVODCategories(config)
+                        case .series: try await iptvClient.fetchSeriesCategories(config)
                         }
                     }
                     // Fetch preferences

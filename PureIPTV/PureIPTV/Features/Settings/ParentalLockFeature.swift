@@ -50,7 +50,7 @@ public struct ParentalLockFeature {
                 return .none
 
             case let .pinInputChanged(input):
-                let filtered = input.filter { $0.isNumber }
+                let filtered = input.filter(\.isNumber)
                 if filtered.count <= 4 {
                     state.pinInput = filtered
                     if filtered.count == 4 {

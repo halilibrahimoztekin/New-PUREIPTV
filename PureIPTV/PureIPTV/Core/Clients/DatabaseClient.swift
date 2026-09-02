@@ -16,6 +16,10 @@ public struct DatabaseClient {
 
     public var fetchCategoryPreferences: @Sendable (_ type: String) async throws -> [CategoryPreferenceDTO]
     public var saveCategoryPreferences: @Sendable (_ preferences: [CategoryPreferenceDTO]) async throws -> Void
+
+    public var fetchSearchHistory: @Sendable () async throws -> [SearchHistoryItem]
+    public var saveSearchHistory: @Sendable (_ query: String) async throws -> Void
+    public var clearSearchHistory: @Sendable () async throws -> Void
 }
 
 public struct CategoryPreferenceDTO: Equatable, Sendable {
@@ -36,13 +40,8 @@ public struct CategoryPreferenceDTO: Equatable, Sendable {
 
 extension DatabaseClient: DependencyKey {
     public static let liveValue: DatabaseClient = {
-        // SwiftData Context Setup
-        let modelContainer: ModelContainer
-        do {
-            modelContainer = try ModelContainer(for: FavoriteItem.self, WatchHistoryItem.self, CategoryPreference.self)
-        } catch {
-            fatalError("Failed to initialize SwiftData ModelContainer: \(error.localizedDescription)")
-        }
+        // SwiftData Context Setup - Use shared container
+        let modelContainer = SharedDatabaseConfig.shared
 
         return DatabaseClient(
             fetchFavorites: {
@@ -169,11 +168,44 @@ extension DatabaseClient: DependencyKey {
                     }
                 }
                 try context.save()
+            },
+            fetchSearchHistory: {
+                let context = ModelContext(modelContainer)
+                let descriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+                return try context.fetch(descriptor)
+            },
+            saveSearchHistory: { query in
+                let context = ModelContext(modelContainer)
+                let descriptor = FetchDescriptor<SearchHistoryItem>(predicate: #Predicate { $0.query == query })
+                let existing = try context.fetch(descriptor)
+
+                if let first = existing.first {
+                    first.timestamp = Date()
+                } else {
+                    let newItem = SearchHistoryItem(query: query)
+                    context.insert(newItem)
+                }
+
+                // Keep only top 20
+                let allDescriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+                let allItems = try context.fetch(allDescriptor)
+                if allItems.count > 20 {
+                    for item in allItems.dropFirst(20) {
+                        context.delete(item)
+                    }
+                }
+
+                try context.save()
+            },
+            clearSearchHistory: {
+                let context = ModelContext(modelContainer)
+                try context.delete(model: SearchHistoryItem.self)
+                try context.save()
             }
         )
     }()
 
-    public static let testValue = DatabaseClient()
+    public nonisolated static let testValue = DatabaseClient()
 }
 
 public extension DependencyValues {

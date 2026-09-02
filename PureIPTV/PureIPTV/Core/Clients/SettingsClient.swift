@@ -1,15 +1,16 @@
 import ComposableArchitecture
 import Foundation
-import LocalAuthentication
+#if os(iOS)
+    import LocalAuthentication
+#endif
 
-@DependencyClient
 public struct SettingsClient: Sendable {
     public var isParentalControlEnabled: @Sendable () -> Bool = { false }
     public var getParentalPIN: @Sendable () -> String? = { nil }
-    public var setParentalControl: @Sendable (_ enabled: Bool, _ pin: String?) async throws -> Void
+    public var setParentalControl: @Sendable (_ enabled: Bool, _ pin: String?) async throws -> Void = { _, _ in }
     public var verifyPIN: @Sendable (_ pin: String) -> Bool = { _ in false }
     public var isAdultContent: @Sendable (_ text: String) -> Bool = { _ in false }
-    public var authenticateWithBiometrics: @Sendable (_ reason: String) async throws -> Bool
+    public var authenticateWithBiometrics: @Sendable (_ reason: String) async throws -> Bool = { _ in false }
 }
 
 extension SettingsClient: DependencyKey {
@@ -27,7 +28,7 @@ extension SettingsClient: DependencyKey {
             },
             setParentalControl: { enabled, pin in
                 defaults.set(enabled, forKey: enabledKey)
-                if let pin = pin, enabled {
+                if let pin, enabled {
                     defaults.set(pin, forKey: pinKey)
                 } else {
                     defaults.removeObject(forKey: pinKey)
@@ -47,24 +48,29 @@ extension SettingsClient: DependencyKey {
                 return adultKeywords.contains { lowercased.contains($0) }
             },
             authenticateWithBiometrics: { reason in
-                let context = LAContext()
-                var error: NSError?
+                #if os(tvOS)
+                    // LocalAuthentication (Biometrics/FaceID) is not available on Apple TV
+                    return false
+                #else
+                    let context = LAContext()
+                    var error: NSError?
 
-                if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-                    do {
-                        return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
-                    } catch {
-                        return false
+                    if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+                        do {
+                            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+                        } catch {
+                            return false
+                        }
+                    } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+                        // Fallback to passcode if biometrics are not available
+                        do {
+                            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
+                        } catch {
+                            return false
+                        }
                     }
-                } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
-                    // Fallback to passcode if biometrics are not available
-                    do {
-                        return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
-                    } catch {
-                        return false
-                    }
-                }
-                return false
+                    return false
+                #endif
             }
         )
     }()

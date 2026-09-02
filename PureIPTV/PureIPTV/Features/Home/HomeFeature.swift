@@ -13,23 +13,23 @@ public enum HomeTab: String, CaseIterable, Equatable {
 
     public var icon: String {
         switch self {
-        case .dashboard: return "house"
-        case .liveTV: return "tv"
-        case .movies: return "film"
-        case .series: return "rectangle.stack"
-        case .search: return "magnifyingglass"
-        case .settings: return "gearshape"
+        case .dashboard: "house"
+        case .liveTV: "tv"
+        case .movies: "film"
+        case .series: "rectangle.stack"
+        case .search: "magnifyingglass"
+        case .settings: "gearshape"
         }
     }
 
     public var selectedIcon: String {
         switch self {
-        case .dashboard: return "house.fill"
-        case .liveTV: return "tv.fill"
-        case .movies: return "film.fill"
-        case .series: return "rectangle.stack.fill"
-        case .search: return "magnifyingglass"
-        case .settings: return "gearshape.fill"
+        case .dashboard: "house.fill"
+        case .liveTV: "tv.fill"
+        case .movies: "film.fill"
+        case .series: "rectangle.stack.fill"
+        case .search: "magnifyingglass"
+        case .settings: "gearshape.fill"
         }
     }
 }
@@ -75,6 +75,7 @@ public struct HomeFeature {
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
+            case openManagePlaylists
         }
     }
 
@@ -150,6 +151,9 @@ public struct HomeFeature {
 
             case .search:
                 return .none
+
+            case .settings(.delegate(.openManagePlaylists)):
+                return .send(.delegate(.openManagePlaylists))
 
             case .settings:
                 return .none

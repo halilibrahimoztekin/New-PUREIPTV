@@ -10,12 +10,12 @@ public enum NetworkError: Error, Equatable {
 
     public var localizedDescription: String {
         switch self {
-        case .invalidURL: return "Geçersiz URL adresi."
-        case .invalidResponse: return "Sunucudan geçersiz yanıt alındı."
-        case .unauthorized: return "Kullanıcı adı veya şifre hatalı."
-        case let .serverError(code): return "Sunucu hatası (Kod: \(code))."
-        case let .decodingFailed(desc): return "Veri işlenemedi: \(desc)"
-        case let .underlying(desc): return "Bir hata oluştu: \(desc)"
+        case .invalidURL: "Geçersiz URL adresi."
+        case .invalidResponse: "Sunucudan geçersiz yanıt alındı."
+        case .unauthorized: "Kullanıcı adı veya şifre hatalı."
+        case let .serverError(code): "Sunucu hatası (Kod: \(code))."
+        case let .decodingFailed(desc): "Veri işlenemedi: \(desc)"
+        case let .underlying(desc): "Bir hata oluştu: \(desc)"
         }
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PlaylistConfig: Equatable {
+public struct PlaylistConfig: Equatable, Sendable {
     public let type: PlaylistType
 
     // Xtream
@@ -11,7 +11,7 @@ public struct PlaylistConfig: Equatable {
     /// M3U
     public let m3uURL: URL?
 
-    public init(
+    public nonisolated init(
         type: PlaylistType,
         serverURL: URL? = nil,
         username: String? = nil,

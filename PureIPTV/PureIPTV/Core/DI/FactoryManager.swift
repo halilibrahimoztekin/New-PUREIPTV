@@ -12,23 +12,23 @@ public final class FactoryManager {
 public extension Container {
     /// App Coordinator
     var appCoordinator: Factory<AppCoordinator> {
-        self { @MainActor in
+        self {
             AppCoordinator()
         }.singleton
     }
 
     /// IPTV Client
     var iptvClient: Factory<IPTVClient> {
-        self { IPTVClient.liveValue }
+        self { .liveValue }
     }
 
     /// Player Client (SwiftVLC)
     var playerClient: Factory<PlayerClient> {
-        self { PlayerClient.liveValue }.singleton
+        self { .liveValue }.singleton
     }
 
     /// TMDB Client
     var tmdbClient: Factory<TMDBClient> {
-        self { TMDBClient.liveValue }
+        self { .liveValue }
     }
 }

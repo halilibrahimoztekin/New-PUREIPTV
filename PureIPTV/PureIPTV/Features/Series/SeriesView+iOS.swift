@@ -122,6 +122,17 @@
                             ) {
                                 store.send(.seriesSelected(series))
                             }
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(series))
+                                } label: {
+                                    if store.favoriteIDs.contains(series.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 16)

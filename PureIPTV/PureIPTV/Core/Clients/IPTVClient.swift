@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Foundation
+@preconcurrency import Foundation
 
 @DependencyClient
 public struct IPTVClient {
@@ -16,7 +16,7 @@ public struct IPTVClient {
 }
 
 extension IPTVClient: DependencyKey {
-    public static let liveValue: IPTVClient = {
+    public nonisolated static let liveValue: IPTVClient = {
         let networkClient = NetworkClient()
 
         return IPTVClient(
@@ -24,7 +24,10 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
-                let _: XtreamAuthResponseDTO = try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                let _: XtreamAuthResponseDTO = try await MainActor.run {
+                    try JSONDecoder().decode(XtreamAuthResponseDTO.self, from: data)
+                }
             },
             fetchLiveCategories: { config in
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
@@ -47,7 +50,9 @@ extension IPTVClient: DependencyKey {
                         coverURL: dto.streamIcon.flatMap { URL(string: $0) },
                         categoryID: dto.categoryId,
                         type: .live,
-                        epgChannelID: dto.epgChannelId
+                        epgChannelID: dto.epgChannelId,
+                        tvArchive: dto.tvArchive,
+                        tvArchiveDuration: dto.tvArchiveDuration
                     )
                 }
             },
@@ -112,7 +117,8 @@ extension IPTVClient: DependencyKey {
                 }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesInfo(seriesID: seriesID).url(with: xtreamConfig)
-                let dto: XtreamSeriesInfoDTO = try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                let dto = try await MainActor.run { try JSONDecoder().decode(XtreamSeriesInfoDTO.self, from: data) }
 
                 let info = DetailModels.Info(
                     plot: dto.info?.plot,
@@ -158,7 +164,8 @@ extension IPTVClient: DependencyKey {
                 }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODInfo(vodID: vodID).url(with: xtreamConfig)
-                let dto: XtreamVODInfoDTO = try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                let dto = try await MainActor.run { try JSONDecoder().decode(XtreamVODInfoDTO.self, from: data) }
 
                 return DetailModels.Info(
                     plot: dto.info?.plot ?? dto.info?.description,
@@ -175,25 +182,73 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
-                let response: EPGResponseDTO = try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+
+                let response: [EPGItemDTO]
+                var debugError: String? = nil
+
+                do {
+                    let dto = try JSONDecoder().decode(EPGResponseDTO.self, from: data)
+                    response = dto.epgListings
+                } catch {
+                    if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
+                        response = array
+                    } else {
+                        // If data is empty or malformed
+                        let str = String(data: data, encoding: .utf8) ?? "unknown"
+                        debugError = "Dec Err: \(error.localizedDescription) DataPrefix: \(str.prefix(100))"
+                        response = []
+                    }
+                }
+
+                if let err = debugError {
+                    return [
+                        EPGProgram(id: "debug_1", title: err, description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
+                    ]
+                }
+
+                if response.isEmpty {
+                    return [
+                        EPGProgram(id: "debug_2", title: "API returned empty list", description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
+                    ]
+                }
 
                 let formatter = DateFormatter()
-                formatter.dateFormat = "YYYY-MM-dd HH:mm:ss"
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
                 formatter.timeZone = TimeZone(identifier: "UTC")
 
-                return response.epgListings.compactMap { item in
-                    guard let start = formatter.date(from: item.start),
-                          let end = formatter.date(from: item.end) else { return nil }
+                let result: [EPGProgram] = response.compactMap { (item: EPGItemDTO) -> EPGProgram? in
+                    var start: Date?
+                    var end: Date?
+
+                    if let startTS = item.startTimestamp, let endTS = item.stopTimestamp {
+                        start = Date(timeIntervalSince1970: TimeInterval(startTS))
+                        end = Date(timeIntervalSince1970: TimeInterval(endTS))
+                    } else {
+                        start = formatter.date(from: item.start)
+                        end = formatter.date(from: item.end)
+                    }
+
+                    guard let finalStart = start, let finalEnd = end else { return nil }
 
                     return EPGProgram(
                         id: item.id,
                         title: item.title,
                         description: item.description,
-                        startTime: start,
-                        endTime: end,
+                        startTime: finalStart,
+                        endTime: finalEnd,
                         isPlayingNow: item.nowPlaying == 1
                     )
                 }
+
+                if result.isEmpty {
+                    let firstItem = response.first
+                    return [
+                        EPGProgram(id: "debug_3", title: "Parsed 0 items. API count: \(response.count). First start: \(firstItem?.start ?? "nil"), startTS: \(firstItem?.startTimestamp.map(String.init) ?? "nil")", description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
+                    ]
+                }
+
+                return result
             }
         )
     }()

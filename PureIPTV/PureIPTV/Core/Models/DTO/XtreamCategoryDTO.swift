@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XtreamCategoryDTO: Codable {
+public struct XtreamCategoryDTO: Codable, Sendable {
     public let categoryId: String
     public let categoryName: String
     public let parentId: Int?

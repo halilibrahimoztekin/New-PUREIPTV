@@ -124,6 +124,17 @@
                                 VODCardView(vod: vod, isSelected: store.selectedVOD?.id == vod.id) {}
                             }
                             .buttonStyle(.card)
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(vod))
+                                } label: {
+                                    if store.favoriteIDs.contains(vod.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 48)

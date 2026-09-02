@@ -9,6 +9,7 @@ public struct DashboardFeature {
         public var featuredChannels: [MediaModels.Item] = []
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
+        public var recommendedVODs: [MediaModels.Item] = []
 
         public var favoriteItems: [FavoriteItem] = []
         public var watchHistoryItems: [WatchHistoryItem] = []
@@ -23,7 +24,7 @@ public struct DashboardFeature {
         case loadFeaturedData(config: PlaylistConfig)
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
+        case dataLoaded(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], recommendations: [MediaModels.Item])
         case dataFailed(Error)
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
@@ -59,8 +60,8 @@ public struct DashboardFeature {
 
             case .loadLocalData:
                 return .run { send in
-                    let favorites = (try? await databaseClient.fetchFavorites()) ?? []
-                    let history = (try? await databaseClient.fetchWatchHistory()) ?? []
+                    let favorites = await (try? databaseClient.fetchFavorites()) ?? []
+                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
                     await send(.localDataLoaded(favorites: favorites, history: history))
                 }
 
@@ -79,8 +80,8 @@ public struct DashboardFeature {
                     async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
 
                     let liveCat = await liveCategories
-                    let vodCat = await vodCategories
-                    let seriesCat = await seriesCategories
+                    _ = await vodCategories
+                    _ = await seriesCategories
 
                     var channels: [MediaModels.Item] = []
                     var vods: [MediaModels.Item] = []
@@ -103,16 +104,36 @@ public struct DashboardFeature {
                         series = Array(sorted.prefix(10))
                     }
 
-                    await send(.dataLoaded(channels: channels, vods: vods, series: series))
+                    // Smart Recommendations: Get favorites/history and filter
+                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
+                    var recommendations: [MediaModels.Item] = []
+
+                    if let allVODs = try? await iptvClient.fetchVODs(config, nil) {
+                        let sorted = allVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        vods = Array(sorted.prefix(10))
+
+                        // Recommendations logic: simple random sample or based on matching categories if history exists
+                        let vodHistory = history.filter { $0.type == "vod" }
+                        if !vodHistory.isEmpty {
+                            // Mock logic for recommendations
+                            let shuffled = allVODs.shuffled()
+                            recommendations = Array(shuffled.prefix(10))
+                        } else {
+                            recommendations = Array(sorted.dropFirst(10).prefix(10))
+                        }
+                    }
+
+                    await send(.dataLoaded(channels: channels, vods: vods, series: series, recommendations: recommendations))
                 } catch: { error, send in
                     await send(.dataFailed(error))
                 }
 
-            case let .dataLoaded(channels, vods, series):
+            case let .dataLoaded(channels, vods, series, recommendations):
                 state.isLoading = false
                 state.featuredChannels = channels
                 state.featuredVODs = vods
                 state.featuredSeries = series
+                state.recommendedVODs = recommendations
                 return .none
 
             case let .dataFailed(error):
@@ -130,13 +151,11 @@ public struct DashboardFeature {
                 return .send(.delegate(.didSelectSeries(series)))
 
             case let .favoriteSelected(fav):
-                let itemType: MediaModels.ItemType = {
-                    switch fav.type {
-                    case "live": return .live
-                    case "series": return .series
-                    default: return .vod
-                    }
-                }()
+                let itemType: MediaModels.ItemType = switch fav.type {
+                case "live": .live
+                case "series": .series
+                default: .vod
+                }
                 let item = MediaModels.Item(
                     id: fav.id,
                     title: fav.title,

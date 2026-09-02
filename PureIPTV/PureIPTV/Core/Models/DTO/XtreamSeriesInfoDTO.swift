@@ -1,12 +1,12 @@
 import Foundation
 
-public struct XtreamSeriesInfoDTO: Codable, Equatable {
+public struct XtreamSeriesInfoDTO: Codable, Equatable, Sendable {
     public let seasons: [XtreamSeasonDTO]?
     public let info: XtreamSeriesInfoDataDTO?
     public let episodes: [String: [XtreamEpisodeDTO]]?
 }
 
-public struct XtreamSeasonDTO: Codable, Equatable {
+public struct XtreamSeasonDTO: Codable, Equatable, Sendable {
     public let airDate: String?
     public let episodeCount: Int?
     public let id: Int?
@@ -28,7 +28,7 @@ public struct XtreamSeasonDTO: Codable, Equatable {
     }
 }
 
-public struct XtreamEpisodeDTO: Codable, Equatable {
+public struct XtreamEpisodeDTO: Codable, Equatable, Sendable {
     public let id: String
     public let episodeNum: Int?
     public let title: String
@@ -52,7 +52,7 @@ public struct XtreamEpisodeDTO: Codable, Equatable {
     }
 }
 
-public struct XtreamEpisodeInfoDTO: Codable, Equatable {
+public struct XtreamEpisodeInfoDTO: Codable, Equatable, Sendable {
     public let plot: String?
     public let duration: String?
     public let movieImage: String?
@@ -70,7 +70,7 @@ public struct XtreamEpisodeInfoDTO: Codable, Equatable {
     }
 }
 
-public struct XtreamSeriesInfoDataDTO: Codable, Equatable {
+public struct XtreamSeriesInfoDataDTO: Codable, Equatable, Sendable {
     public let name: String?
     public let cover: String?
     public let plot: String?

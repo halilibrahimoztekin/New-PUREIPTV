@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XtreamVODInfoDTO: Codable, Equatable {
+public struct XtreamVODInfoDTO: Codable, Equatable, Sendable {
     public let info: XtreamVODInfoDataDTO?
     public let movieData: XtreamVODMovieDataDTO?
 
@@ -10,7 +10,7 @@ public struct XtreamVODInfoDTO: Codable, Equatable {
     }
 }
 
-public struct XtreamVODInfoDataDTO: Codable, Equatable {
+public struct XtreamVODInfoDataDTO: Codable, Equatable, Sendable {
     public let tmdbId: String?
     public let name: String?
     public let movieImage: String?
@@ -79,7 +79,7 @@ public struct XtreamVODInfoDataDTO: Codable, Equatable {
     }
 }
 
-public struct XtreamVODMovieDataDTO: Codable, Equatable {
+public struct XtreamVODMovieDataDTO: Codable, Equatable, Sendable {
     public let streamId: Int
     public let name: String?
     public let containerExtension: String?

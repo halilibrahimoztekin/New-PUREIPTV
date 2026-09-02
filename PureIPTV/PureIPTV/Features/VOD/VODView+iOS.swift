@@ -122,6 +122,17 @@
                             ) {
                                 store.send(.vodSelected(vod))
                             }
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(vod))
+                                } label: {
+                                    if store.favoriteIDs.contains(vod.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 16)

@@ -147,10 +147,14 @@
                             .frame(height: 600)
                     }
 
-                    // Gradient
+                    // Premium Gradient
                     LinearGradient(
-                        colors: [.clear, .black.opacity(0.9)],
-                        startPoint: .center,
+                        stops: [
+                            .init(color: .black.opacity(0.0), location: 0.0),
+                            .init(color: .black.opacity(0.5), location: 0.6),
+                            .init(color: .black.opacity(0.95), location: 1.0),
+                        ],
+                        startPoint: .top,
                         endPoint: .bottom
                     )
 
@@ -158,9 +162,10 @@
                     VStack(alignment: .leading, spacing: 16) {
                         Text(vod.title)
                             .font(.system(size: 52, weight: .bold))
+                            .tracking(-1.0) // Optical sizing fix for tvOS large text
                             .foregroundColor(.white)
                             .lineLimit(2)
-                            .shadow(color: .black.opacity(0.8), radius: 8, x: 0, y: 4)
+                            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 4)
 
                         if let rating = vod.rating, rating > 0 {
                             HStack(spacing: 8) {
@@ -176,10 +181,11 @@
                             Text("Hemen İzle")
                         }
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 14)
-                        .background(Color.white)
+                        .background(.ultraThinMaterial)
+                        .background(Color.black.opacity(0.4))
                         .clipShape(Capsule())
                     }
                     .padding(60)

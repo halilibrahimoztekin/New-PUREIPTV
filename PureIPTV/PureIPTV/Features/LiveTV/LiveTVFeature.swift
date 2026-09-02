@@ -21,9 +21,11 @@ public struct LiveTVFeature {
         public var isLoadingCategories = false
         public var isLoadingChannels = false
         public var errorMessage: String?
+        public var favoriteIDs: Set<String> = []
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var epgGuide: EPGGuideFeature.State?
+        @Presents public var epgTimeline: EPGTimelineFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
         @Presents public var multiView: MultiViewFeature.State?
 
@@ -42,6 +44,8 @@ public struct LiveTVFeature {
         case categorySelected(MediaModels.Category)
         case channelsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case channelSelected(MediaModels.Item)
+        case toggleFavorite(MediaModels.Item)
+        case favoritesLoaded(Set<String>)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
@@ -49,9 +53,11 @@ public struct LiveTVFeature {
         case epgGuideTapped
         case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
         case epgGuide(PresentationAction<EPGGuideFeature.Action>)
+        case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
         case multiView(PresentationAction<MultiViewFeature.Action>)
         case openMultiViewTapped
+        case openEPGTimelineTapped
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -62,19 +68,25 @@ public struct LiveTVFeature {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.hapticClient) var hapticClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let iptvClient = self.iptvClient
+        let iptvClient = iptvClient
 
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
-                guard !state.isLoadingCategories else { return .none }
-                guard state.categories.isEmpty else { return .none } // Prevent re-fetching on view re-appear
+                let loadFavorites: Effect<Action> = .run { send in
+                    let favs = await (try? databaseClient.fetchFavoritesByType("live")) ?? []
+                    await send(.favoritesLoaded(Set(favs.map(\.id))))
+                }
 
-                return .send(.reloadCategories(config: config))
+                guard !state.isLoadingCategories else { return loadFavorites }
+                guard state.categories.isEmpty else { return loadFavorites } // Prevent re-fetching on view re-appear
+
+                return .merge(loadFavorites, .send(.reloadCategories(config: config)))
 
             case let .reloadCategories(config):
                 state.isLoadingCategories = true
@@ -86,8 +98,8 @@ public struct LiveTVFeature {
                     async let categoriesResult = Result { try await iptvClient.fetchLiveCategories(config) }
                     async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue) }
 
-                    let categories = (try? await categoriesResult.get()) ?? []
-                    let prefs = (try? await prefsResult.get()) ?? []
+                    let categories = await (try? categoriesResult.get()) ?? []
+                    let prefs = await (try? prefsResult.get()) ?? []
 
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
@@ -95,7 +107,22 @@ public struct LiveTVFeature {
                     }
 
                     // Filter and sort
-                    var finalCategories = categories.filter { !(dict[$0.id]?.isHidden ?? false) }
+
+                    let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
+                    let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+
+                    var finalCategories = categories.filter { category in
+                        if dict[category.id]?.isHidden ?? false {
+                            return false
+                        }
+
+                        if isKidsMode {
+                            let nameLower = category.name.lowercased()
+                            return kidsKeywords.contains { nameLower.contains($0) }
+                        }
+
+                        return true
+                    }
                     finalCategories.sort { a, b in
                         let orderA = dict[a.id]?.orderIndex ?? Int.max
                         let orderB = dict[b.id]?.orderIndex ?? Int.max
@@ -113,13 +140,27 @@ public struct LiveTVFeature {
             case .reloadPreferences:
                 let currentCats = state.categories
                 return .run { send in
-                    let prefs = (try? await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue)) ?? []
+                    let prefs = await (try? databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue)) ?? []
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
                     }
 
-                    var finalCategories = currentCats.filter { !(dict[$0.id]?.isHidden ?? false) }
+                    let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
+                    let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+
+                    var finalCategories = currentCats.filter { category in
+                        if dict[category.id]?.isHidden ?? false {
+                            return false
+                        }
+
+                        if isKidsMode {
+                            let nameLower = category.name.lowercased()
+                            return kidsKeywords.contains { nameLower.contains($0) }
+                        }
+
+                        return true
+                    }
                     finalCategories.sort { a, b in
                         let orderA = dict[a.id]?.orderIndex ?? Int.max
                         let orderB = dict[b.id]?.orderIndex ?? Int.max
@@ -148,7 +189,7 @@ public struct LiveTVFeature {
                 return .none
 
             case let .categorySelected(category):
-                if settingsClient.isParentalControlEnabled() && settingsClient.isAdultContent(category.name) {
+                if settingsClient.isParentalControlEnabled(), settingsClient.isAdultContent(category.name) {
                     // Check if already unlocked? For MVP, just prompt always or we can use a session variable.
                     // For now, always prompt on category select if adult.
                     state.parentalLock = ParentalLockFeature.State(category: category)
@@ -158,7 +199,7 @@ public struct LiveTVFeature {
                 state.selectedCategoryID = category.id
                 // If channels are already cached, skip fetching
                 if state.channelsByCategory[category.id] != nil {
-                    return .none
+                    return .run { _ in await hapticClient.selection() }
                 }
                 guard let config = state.config else { return .none }
 
@@ -166,6 +207,7 @@ public struct LiveTVFeature {
                 let categoryID = category.id
 
                 return .run { send in
+                    await hapticClient.selection()
                     await send(.channelsResponse(
                         categoryID: categoryID,
                         Result { try await iptvClient.fetchLiveChannels(config, categoryID) }
@@ -184,7 +226,33 @@ public struct LiveTVFeature {
 
             case let .channelSelected(channel):
                 state.selectedChannel = channel
-                return .send(.delegate(.didSelectChannel(channel, playlist: state.currentChannels)))
+                return .merge(
+                    .run { _ in await hapticClient.impact(.light) },
+                    .send(.delegate(.didSelectChannel(channel, playlist: state.currentChannels)))
+                )
+
+            case let .favoritesLoaded(favIDs):
+                state.favoriteIDs = favIDs
+                return .none
+
+            case let .toggleFavorite(item):
+                let favItem = FavoriteItem(
+                    id: item.id,
+                    type: "live",
+                    title: item.title,
+                    coverURL: item.coverURL?.absoluteString,
+                    streamURL: item.streamURL?.absoluteString
+                )
+                let isCurrentlyFav = state.favoriteIDs.contains(item.id)
+                if isCurrentlyFav {
+                    state.favoriteIDs.remove(item.id)
+                } else {
+                    state.favoriteIDs.insert(item.id)
+                }
+                return .run { _ in
+                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    await hapticClient.notification(.success)
+                }
 
             case .dismissError:
                 state.errorMessage = nil
@@ -227,9 +295,26 @@ public struct LiveTVFeature {
             case .epgGuide:
                 return .none
 
+            case .openEPGTimelineTapped:
+                if let config = state.config, !state.currentChannels.isEmpty {
+                    state.epgTimeline = EPGTimelineFeature.State(config: config, channels: state.currentChannels)
+                }
+                return .none
+
+            case .epgTimeline(.presented(.delegate(.close))):
+                state.epgTimeline = nil
+                return .none
+
+            case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
+                state.epgTimeline = nil
+                return .send(.channelSelected(channel))
+
+            case .epgTimeline:
+                return .none
+
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
-                if let category = category {
+                if let category {
                     // Proceed with category selection bypass
                     state.selectedCategoryID = category.id
                     if state.channelsByCategory[category.id] != nil {
@@ -244,7 +329,7 @@ public struct LiveTVFeature {
                             Result { try await iptvClient.fetchLiveChannels(config, categoryID) }
                         ))
                     }
-                } else if let item = item {
+                } else if let item {
                     state.selectedChannel = item
                     return .send(.delegate(.didSelectChannel(item, playlist: state.currentChannels)))
                 }
@@ -277,6 +362,9 @@ public struct LiveTVFeature {
         }
         .ifLet(\.$epgGuide, action: \.epgGuide) {
             EPGGuideFeature()
+        }
+        .ifLet(\.$epgTimeline, action: \.epgTimeline) {
+            EPGTimelineFeature()
         }
         .ifLet(\.$parentalLock, action: \.parentalLock) {
             ParentalLockFeature()

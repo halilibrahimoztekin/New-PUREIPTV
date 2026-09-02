@@ -121,6 +121,17 @@
                                 SeriesCardView(series: series, isSelected: store.selectedSeries?.id == series.id) {}
                             }
                             .buttonStyle(.card)
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(series))
+                                } label: {
+                                    if store.favoriteIDs.contains(series.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 48)

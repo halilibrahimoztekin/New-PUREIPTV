@@ -47,6 +47,9 @@
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
             }
+            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
+                EPGTimelineView(store: store)
+            }
         }
 
         // MARK: – Category Column
@@ -60,6 +63,14 @@
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                         Spacer()
+                        Button {
+                            store.send(.openEPGTimelineTapped)
+                        } label: {
+                            Image(systemName: "calendar.day.timeline.left")
+                                .font(.system(size: 20))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 48)
@@ -127,6 +138,17 @@
                                 isSelected: store.selectedChannel?.id == channel.id
                             ) {
                                 store.send(.channelSelected(channel))
+                            }
+                            .contextMenu {
+                                Button {
+                                    store.send(.toggleFavorite(channel))
+                                } label: {
+                                    if store.favoriteIDs.contains(channel.id) {
+                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                    } else {
+                                        Label("Favorilere Ekle", systemImage: "heart")
+                                    }
+                                }
                             }
                         }
                     }
@@ -203,7 +225,7 @@
                         )
 
                     // Logo
-                    if let logoURL = channel.logoURL {
+                    if let logoURL = channel.coverURL {
                         KFImage(logoURL)
                             .placeholder {
                                 Image(systemName: "tv.fill")
@@ -229,7 +251,7 @@
 
                     // Name + badge
                     HStack(alignment: .center, spacing: 8) {
-                        Text(channel.name)
+                        Text(channel.title)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                             .lineLimit(1)

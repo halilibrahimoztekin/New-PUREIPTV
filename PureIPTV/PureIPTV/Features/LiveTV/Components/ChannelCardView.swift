@@ -175,7 +175,7 @@ public struct CategoryRowView: View {
                     .fill(isSelected ? Color(hex: "#0A84FF").opacity(0.1) : Color.clear)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.fluidScale)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }

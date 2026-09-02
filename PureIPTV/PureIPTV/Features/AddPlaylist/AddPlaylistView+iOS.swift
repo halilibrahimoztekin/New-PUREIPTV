@@ -257,7 +257,7 @@
                 .frame(height: 54)
                 .background(
                     Group {
-                        if store.canConnect && !store.isLoading {
+                        if store.canConnect, !store.isLoading {
                             LinearGradient(
                                 colors: [Color(hex: "#0A84FF"), Color(hex: "#0060CC")],
                                 startPoint: .leading,

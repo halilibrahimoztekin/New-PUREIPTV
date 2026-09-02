@@ -15,6 +15,7 @@
 		8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7813303D6B6F00E02EB4 /* SwiftVLC */; };
 		8BCF7817303D6B8200E02EB4 /* XCoordinator in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7816303D6B8200E02EB4 /* XCoordinator */; };
 		8BCF781A303D6B9000E02EB4 /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7819303D6B9000E02EB4 /* Shimmer */; };
+		A1DB9941CB1E79DE68CBCB27 /* OnboardingKit in Frameworks */ = {isa = PBXBuildFile; productRef = A0FC5A1ED5C5EED8E65BAFDA /* OnboardingKit */; };
 		FECA3440445C9C1F8D8EFBC9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = ECDF2429A9FF03E2C6931483 /* Kingfisher */; };
 /* End PBXBuildFile section */
 
@@ -37,8 +38,8 @@
 
 /* Begin PBXFileReference section */
 		8BCF6C753035797400E02EB4 /* PureIPTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PureIPTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = PureIPTVTests.xctest; path = PureIPTV.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = PureIPTVUITests.xctest; path = PureIPTV.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -62,15 +63,11 @@
 		};
 		8BCF6C893035797500E02EB4 /* PureIPTVTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PureIPTVTests;
 			sourceTree = "<group>";
 		};
 		8BCF6C933035797500E02EB4 /* PureIPTVUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PureIPTVUITests;
 			sourceTree = "<group>";
 		};
@@ -90,6 +87,7 @@
 				7AC09EEFCEAA34B2DA3CD02B /* XCoordinator in Frameworks */,
 				2BCD5B67B86EBB0D7D5AFB9A /* FactoryKit in Frameworks */,
 				FECA3440445C9C1F8D8EFBC9 /* Kingfisher in Frameworks */,
+				A1DB9941CB1E79DE68CBCB27 /* OnboardingKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -160,6 +158,7 @@
 				384D4241DCB24F324C267767 /* XCoordinator */,
 				1ACC1B7879E41AC566C59AFD /* FactoryKit */,
 				ECDF2429A9FF03E2C6931483 /* Kingfisher */,
+				A0FC5A1ED5C5EED8E65BAFDA /* OnboardingKit */,
 			);
 			productName = PureIPTV;
 			productReference = 8BCF6C753035797400E02EB4 /* PureIPTV.app */;
@@ -250,6 +249,7 @@
 				B8D7F169AC891073F3EB6EA5 /* XCRemoteSwiftPackageReference "XCoordinator" */,
 				4C942A7E74EA5952CD3B0553 /* XCRemoteSwiftPackageReference "Factory" */,
 				62F66F6373CD00171EA4CEA7 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				7F948C44A64F87F362BDFF01 /* XCRemoteSwiftPackageReference "OnboardingKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8BCF6C763035797400E02EB4 /* Products */;
@@ -290,6 +290,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		AE7081399988FFC6CA6A88F6 /* SwiftFormat */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -353,6 +354,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -382,7 +384,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
 				TARGET_NAME = PureIPTV;
-				TVOS_DEPLOYMENT_TARGET = 17.6;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
 			};
 			name = Debug;
 		};
@@ -393,6 +395,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -422,7 +425,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
 				TARGET_NAME = PureIPTV;
-				TVOS_DEPLOYMENT_TARGET = 17.6;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
 			};
 			name = Release;
 		};
@@ -697,6 +700,14 @@
 				minimumVersion = 7.12.0;
 			};
 		};
+		7F948C44A64F87F362BDFF01 /* XCRemoteSwiftPackageReference "OnboardingKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/danielsaidi/OnboardingKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 		85199307F3BABDCB08BDEA6B /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
@@ -704,6 +715,8 @@
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.11.2;
 			};
+			traits = (
+			);
 		};
 		8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -798,6 +811,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8BCF7818303D6B9000E02EB4 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
 			productName = Shimmer;
+		};
+		A0FC5A1ED5C5EED8E65BAFDA /* OnboardingKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7F948C44A64F87F362BDFF01 /* XCRemoteSwiftPackageReference "OnboardingKit" */;
+			productName = OnboardingKit;
 		};
 		ECDF2429A9FF03E2C6931483 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;

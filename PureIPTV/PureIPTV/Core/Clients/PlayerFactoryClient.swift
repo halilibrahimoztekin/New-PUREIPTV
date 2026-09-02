@@ -3,9 +3,8 @@ import ComposableArchitecture
 import Foundation
 import SwiftVLC
 
-@DependencyClient
 public struct PlayerFactoryClient: Sendable {
-    public var createPlayer: @Sendable () -> PlayerClient = { .testValue }
+    public var createPlayer: @Sendable () -> PlayerClient
 }
 
 extension PlayerFactoryClient: DependencyKey {
@@ -77,12 +76,21 @@ extension PlayerFactoryClient: DependencyKey {
                 getSubtitleTracks: {
                     box.getPlayer().subtitleTracks
                 },
+                getSelectedAudioTrack: {
+                    box.getPlayer().selectedAudioTrack
+                },
+                getSelectedSubtitleTrack: {
+                    box.getPlayer().selectedSubtitleTrack
+                },
                 setAudioTrack: { track in
                     box.getPlayer().selectedAudioTrack = track
                 },
                 setSubtitleTrack: { track in
                     box.getPlayer().selectedSubtitleTrack = track
                 },
+                setAudioDelay: { _ in },
+                setSubtitleDelay: { _ in },
+                getStats: { nil },
                 events: {
                     let player = box.getPlayer()
                     return AsyncStream { continuation in
@@ -100,7 +108,7 @@ extension PlayerFactoryClient: DependencyKey {
         }
     )
 
-    public static let testValue = PlayerFactoryClient(
+    public nonisolated static let testValue = PlayerFactoryClient(
         createPlayer: { .testValue }
     )
 }

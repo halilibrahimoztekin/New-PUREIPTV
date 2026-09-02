@@ -93,10 +93,10 @@
             }
         }
 
-        private func featuredSection<T: Identifiable, Content: View>(
+        private func featuredSection<T: Identifiable>(
             title: String,
             items: [T],
-            @ViewBuilder content: @escaping (T) -> Content
+            @ViewBuilder content: @escaping (T) -> some View
         ) -> some View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(title)
@@ -183,10 +183,14 @@
                         Color(hex: "#1F1F23").frame(height: 450)
                     }
 
-                    // Gradient
+                    // Premium Gradient
                     LinearGradient(
-                        colors: [Color.black.opacity(0.0), Color.black],
-                        startPoint: .center,
+                        stops: [
+                            .init(color: .black.opacity(0.0), location: 0.0),
+                            .init(color: .black.opacity(0.4), location: 0.6),
+                            .init(color: .black.opacity(0.9), location: 1.0),
+                        ],
+                        startPoint: .top,
                         endPoint: .bottom
                     )
 
@@ -194,9 +198,10 @@
                     VStack(alignment: .leading, spacing: 8) {
                         Text(vod.title)
                             .font(.system(size: 28, weight: .bold))
+                            .tracking(-0.5) // Optical sizing fix for large text
                             .foregroundColor(.white)
                             .lineLimit(2)
-                            .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 2)
+                            .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 3)
 
                         if let rating = vod.rating, rating > 0 {
                             HStack(spacing: 4) {
@@ -212,17 +217,18 @@
                             Text("Hemen İzle")
                         }
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(Color.white)
+                        .background(.ultraThinMaterial)
+                        .background(Color.black.opacity(0.4))
                         .clipShape(Capsule())
                         .padding(.top, 8)
                     }
                     .padding(20)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.fluidScale)
         }
     }
 
@@ -262,7 +268,7 @@
                         .lineLimit(1)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.fluidScale)
         }
     }
 
@@ -322,7 +328,7 @@
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.fluidScale)
         }
     }
 #endif

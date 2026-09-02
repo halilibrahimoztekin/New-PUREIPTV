@@ -8,13 +8,13 @@ public enum KeychainError: Error {
     case decodingError
 }
 
-public final class KeychainManager {
+public final class KeychainManager: @unchecked Sendable {
     public static let shared = KeychainManager()
 
     private init() {}
 
     /// Saves a Codable object to Keychain securely and syncs via iCloud
-    public func save<T: Codable>(_ item: T, for key: String) throws {
+    public nonisolated func save(_ item: some Codable, for key: String) throws {
         let data = try JSONEncoder().encode(item)
 
         let query: [String: Any] = [
@@ -34,7 +34,7 @@ public final class KeychainManager {
     }
 
     /// Retrieves a Codable object from Keychain
-    public func retrieve<T: Codable>(for key: String, as type: T.Type) throws -> T {
+    public nonisolated func retrieve<T: Codable>(for key: String, as type: T.Type) throws -> T {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -62,7 +62,7 @@ public final class KeychainManager {
     }
 
     /// Deletes an item from Keychain
-    public func delete(for key: String) throws {
+    public nonisolated func delete(for key: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,

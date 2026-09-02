@@ -43,8 +43,12 @@
                         loadingView
                     } else if let error = store.errorMessage {
                         errorView(error)
-                    } else if store.hasLoaded && store.searchQuery.isEmpty {
-                        emptyStateView("Aramaya Başlayın", icon: "magnifyingglass")
+                    } else if store.hasLoaded, store.searchQuery.isEmpty {
+                        if store.recentSearches.isEmpty {
+                            emptyStateView("Aramaya Başlayın", icon: "magnifyingglass")
+                        } else {
+                            recentSearchesView
+                        }
                     } else if store.totalResultsCount == 0 {
                         emptyStateView("Sonuç Bulunamadı", icon: "doc.text.magnifyingglass")
                     } else {
@@ -171,7 +175,65 @@
             .scrollDismissesKeyboard(.interactively)
         }
 
-        private func resultSection<Content: View>(title: String, count: Int, @ViewBuilder content: () -> Content) -> some View {
+        private var recentSearchesView: some View {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Son Aramalar")
+                        .font(.title3.bold())
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button {
+                        store.send(.clearHistoryTapped)
+                    } label: {
+                        Text("Temizle")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: "#0A84FF"))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(store.recentSearches, id: \.id) { item in
+                            Button {
+                                store.send(.recentSearchTapped(item.query))
+                            } label: {
+                                HStack {
+                                    Image(systemName: "clock")
+                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
+                                    Text(item.query)
+                                        .font(.system(size: 16))
+                                        .foregroundColor(Color(hex: "#E4E1E7"))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(Color(hex: "#1F1F23").opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+
+                            if item.id != store.recentSearches.last?.id {
+                                Divider()
+                                    .background(Color.white.opacity(0.05))
+                                    .padding(.leading, 44)
+                            }
+                        }
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(hex: "#1F1F23"))
+                    )
+                    .padding(.horizontal, 16)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+
+        private func resultSection(title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .bottom) {
                     Text(title)

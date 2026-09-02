@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XtreamVODStreamDTO: Codable {
+public struct XtreamVODStreamDTO: Codable, Sendable {
     public let num: Int?
     public let name: String
     public let streamType: String?

@@ -1,15 +1,15 @@
 import Foundation
 import SwiftData
 
-public enum PlaylistType: String, Codable, CaseIterable, Equatable {
+public enum PlaylistType: String, Codable, CaseIterable, Equatable, Sendable {
     case xtream
     case m3u
 
     /// Human-readable display name used in the UI picker
     public var displayName: String {
         switch self {
-        case .xtream: return "Xtream Codes"
-        case .m3u: return "M3U URL"
+        case .xtream: "Xtream Codes"
+        case .m3u: "M3U URL"
         }
     }
 }

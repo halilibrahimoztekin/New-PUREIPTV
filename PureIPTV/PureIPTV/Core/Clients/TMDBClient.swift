@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import Foundation
+@preconcurrency import Foundation
 
 @DependencyClient
 public struct TMDBClient {
@@ -10,7 +10,7 @@ public struct TMDBClient {
 }
 
 extension TMDBClient: DependencyKey {
-    public static let liveValue: TMDBClient = {
+    public nonisolated static let liveValue: TMDBClient = {
         let networkClient = NetworkClient()
         let apiKey = "8265bd1679663a7ea12ac168da84d2e8"
         let baseURLString = "https://api.themoviedb.org/3"
@@ -28,7 +28,8 @@ extension TMDBClient: DependencyKey {
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
-                return try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBSearchResponseDTO.self, from: data) }
             },
             fetchMovieDetails: { movieID in
                 guard var components = URLComponents(string: "\(baseURLString)/movie/\(movieID)") else {
@@ -41,7 +42,8 @@ extension TMDBClient: DependencyKey {
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
-                return try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBMovieDetailsDTO.self, from: data) }
             },
             searchTV: { query in
                 guard var components = URLComponents(string: "\(baseURLString)/search/tv") else {
@@ -55,7 +57,8 @@ extension TMDBClient: DependencyKey {
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
-                return try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBSearchResponseDTO.self, from: data) }
             },
             fetchTVDetails: { tvID in
                 guard var components = URLComponents(string: "\(baseURLString)/tv/\(tvID)") else {
@@ -68,7 +71,8 @@ extension TMDBClient: DependencyKey {
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
-                return try await networkClient.fetch(url: url)
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBTVDetailsDTO.self, from: data) }
             }
         )
     }()

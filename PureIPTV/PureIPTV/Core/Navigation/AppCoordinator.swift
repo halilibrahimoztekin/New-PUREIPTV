@@ -11,14 +11,14 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
         }
     }
 
-    override public nonisolated init(rootViewController: UINavigationController = .init(), initialRoute: AppRoute? = nil) {
+    override public nonisolated init(rootViewController: UINavigationController, initialRoute: AppRoute? = nil) {
         super.init(rootViewController: rootViewController, initialRoute: initialRoute)
         MainActor.assumeIsolated {
             self.rootViewController.setNavigationBarHidden(true, animated: false)
         }
     }
 
-    override public nonisolated init(rootViewController: UINavigationController = .init(), root: Presentable) {
+    override public nonisolated init(rootViewController: UINavigationController, root: Presentable) {
         super.init(rootViewController: rootViewController, root: root)
         MainActor.assumeIsolated {
             self.rootViewController.setNavigationBarHidden(true, animated: false)
@@ -32,8 +32,12 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
         // Trigger initial route
         if store.splashIsActive {
             trigger(.splash)
+        } else if store.onboarding != nil {
+            trigger(.onboarding)
         } else if !store.isOnboarded {
             trigger(.login)
+        } else if store.profileSelection != nil {
+            trigger(.profileSelection)
         } else if store.home != nil {
             trigger(.home)
         }
@@ -47,6 +51,24 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
                 let vc = UIHostingController(rootView: splashView)
                 vc.view.backgroundColor = .black
                 return .set([vc])
+
+            case .onboarding:
+                if let onboardingStore = store.scope(state: \.onboarding, action: \.onboarding) {
+                    let view = OnboardingView(store: onboardingStore)
+                    let vc = UIHostingController(rootView: view)
+                    vc.view.backgroundColor = .black
+                    return .set([vc])
+                }
+                return .none()
+
+            case .profileSelection:
+                if let profileStore = store.scope(state: \.profileSelection, action: \.profileSelection) {
+                    let view = ProfileSelectionView(store: profileStore)
+                    let vc = UIHostingController(rootView: view)
+                    vc.view.backgroundColor = .black
+                    return .set([vc])
+                }
+                return .none()
 
             case .login:
                 let loginView = AddPlaylistView(store: store.scope(state: \.addPlaylist, action: \.addPlaylist))
@@ -64,7 +86,7 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
                 return .none()
 
             case .player:
-                if let playerStore = store.scope(state: \.player, action: \.player.presented) {
+                if let playerStore = store.scope(state: \.player, action: \.player) {
                     let playerView = PlayerView(store: playerStore)
                     let vc = UIHostingController(rootView: playerView)
                     vc.view.backgroundColor = .black
@@ -98,6 +120,18 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
                 return .none()
 
             case .dismissVodDetail:
+                return .pop()
+
+            case .playlistManagement:
+                if let playlistStore = store.scope(state: \.playlistManagement, action: \.playlistManagement.presented) {
+                    let playlistView = PlaylistManagementView(store: playlistStore)
+                    let vc = UIHostingController(rootView: playlistView)
+                    vc.view.backgroundColor = .black
+                    return .push(vc)
+                }
+                return .none()
+
+            case .dismissPlaylistManagement:
                 return .pop()
             }
         }

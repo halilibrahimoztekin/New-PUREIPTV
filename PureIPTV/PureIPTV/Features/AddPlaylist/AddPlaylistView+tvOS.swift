@@ -38,8 +38,8 @@
                         Color.clear,
                     ],
                     center: .init(x: 0.5, y: 0.2),
-                    startRadiiFraction: .init(width: 0.1, height: 0.1),
-                    endRadiiFraction: .init(width: 0.7, height: 0.5)
+                    startRadiusFraction: 0.1,
+                    endRadiusFraction: 0.7
                 )
                 .ignoresSafeArea()
 

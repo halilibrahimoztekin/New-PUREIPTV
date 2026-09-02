@@ -24,11 +24,15 @@ public struct VODDetailFeature {
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
-        public init(vod: MediaModels.Item, serverURL: String, username: String, password: String) {
+        public var autoPlayOnLoad: Bool = false
+
+        public init(vod: MediaModels.Item, serverURL: String, username: String, password: String, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
             self.vod = vod
             self.serverURL = serverURL
             self.username = username
             self.password = password
+            self.historyItem = historyItem
+            self.autoPlayOnLoad = autoPlayOnLoad
         }
     }
 
@@ -60,9 +64,9 @@ public struct VODDetailFeature {
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let iptvClient = self.iptvClient
-        let tmdbClient = self.tmdbClient
-        let appCoordinator = self.appCoordinator
+        let iptvClient = iptvClient
+        let tmdbClient = tmdbClient
+        let appCoordinator = appCoordinator
 
         Reduce { state, action in
             switch action {
@@ -97,7 +101,7 @@ public struct VODDetailFeature {
                 }
 
                 let favoriteEffect: Effect<Action> = .run { [id = state.vod.id] send in
-                    let isFav = (try? await databaseClient.isFavorite(id)) ?? false
+                    let isFav = await (try? databaseClient.isFavorite(id)) ?? false
                     await send(.favoriteStatusLoaded(isFav))
                 }
 
@@ -112,6 +116,11 @@ public struct VODDetailFeature {
                 state.info = dto
                 if !state.isTMDBLoading {
                     state.isLoading = false
+                }
+
+                if state.autoPlayOnLoad {
+                    state.autoPlayOnLoad = false
+                    return .send(.resumeTapped)
                 }
                 return .none
 
@@ -208,7 +217,7 @@ public struct VODDetailFeature {
                     streamURL: state.vod.streamURL?.absoluteString
                 )
                 return .run { send in
-                    let isNowFav = (try? await databaseClient.toggleFavorite(item)) ?? false
+                    let isNowFav = await (try? databaseClient.toggleFavorite(item)) ?? false
                     await send(.favoriteStatusLoaded(isNowFav))
                 }
 

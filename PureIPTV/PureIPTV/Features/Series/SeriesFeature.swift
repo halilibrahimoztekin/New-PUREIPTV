@@ -21,6 +21,7 @@ public struct SeriesFeature {
         public var isLoadingCategories = false
         public var isLoadingSeries = false
         public var errorMessage: String?
+        public var favoriteIDs: Set<String> = []
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
@@ -40,6 +41,8 @@ public struct SeriesFeature {
         case categorySelected(MediaModels.Category)
         case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
+        case toggleFavorite(MediaModels.Item)
+        case favoritesLoaded(Set<String>)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
@@ -56,19 +59,25 @@ public struct SeriesFeature {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.hapticClient) var hapticClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let iptvClient = self.iptvClient
+        let iptvClient = iptvClient
 
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
-                guard !state.isLoadingCategories else { return .none }
-                guard state.categories.isEmpty else { return .none }
+                let loadFavorites: Effect<Action> = .run { send in
+                    let favs = await (try? databaseClient.fetchFavoritesByType("series")) ?? []
+                    await send(.favoritesLoaded(Set(favs.map(\.id))))
+                }
 
-                return .send(.reloadCategories(config: config))
+                guard !state.isLoadingCategories else { return loadFavorites }
+                guard state.categories.isEmpty else { return loadFavorites }
+
+                return .merge(loadFavorites, .send(.reloadCategories(config: config)))
 
             case let .reloadCategories(config):
                 state.isLoadingCategories = true
@@ -77,8 +86,8 @@ public struct SeriesFeature {
                     async let categoriesResult = Result { try await iptvClient.fetchSeriesCategories(config) }
                     async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue) }
 
-                    let categories = (try? await categoriesResult.get()) ?? []
-                    let prefs = (try? await prefsResult.get()) ?? []
+                    let categories = await (try? categoriesResult.get()) ?? []
+                    let prefs = await (try? prefsResult.get()) ?? []
 
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
@@ -86,7 +95,22 @@ public struct SeriesFeature {
                     }
 
                     // Filter and sort
-                    var finalCategories = categories.filter { !(dict[$0.id]?.isHidden ?? false) }
+
+                    let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
+                    let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+
+                    var finalCategories = categories.filter { category in
+                        if dict[category.id]?.isHidden ?? false {
+                            return false
+                        }
+
+                        if isKidsMode {
+                            let nameLower = category.name.lowercased()
+                            return kidsKeywords.contains { nameLower.contains($0) }
+                        }
+
+                        return true
+                    }
                     finalCategories.sort { a, b in
                         let orderA = dict[a.id]?.orderIndex ?? Int.max
                         let orderB = dict[b.id]?.orderIndex ?? Int.max
@@ -104,13 +128,27 @@ public struct SeriesFeature {
             case .reloadPreferences:
                 let currentCats = state.categories
                 return .run { send in
-                    let prefs = (try? await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue)) ?? []
+                    let prefs = await (try? databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue)) ?? []
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
                     }
 
-                    var finalCategories = currentCats.filter { !(dict[$0.id]?.isHidden ?? false) }
+                    let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
+                    let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+
+                    var finalCategories = currentCats.filter { category in
+                        if dict[category.id]?.isHidden ?? false {
+                            return false
+                        }
+
+                        if isKidsMode {
+                            let nameLower = category.name.lowercased()
+                            return kidsKeywords.contains { nameLower.contains($0) }
+                        }
+
+                        return true
+                    }
                     finalCategories.sort { a, b in
                         let orderA = dict[a.id]?.orderIndex ?? Int.max
                         let orderB = dict[b.id]?.orderIndex ?? Int.max
@@ -139,14 +177,14 @@ public struct SeriesFeature {
                 return .none
 
             case let .categorySelected(category):
-                if settingsClient.isParentalControlEnabled() && settingsClient.isAdultContent(category.name) {
+                if settingsClient.isParentalControlEnabled(), settingsClient.isAdultContent(category.name) {
                     state.parentalLock = ParentalLockFeature.State(category: category)
                     return .none
                 }
 
                 state.selectedCategoryID = category.id
                 if state.seriesByCategory[category.id] != nil {
-                    return .none
+                    return .run { _ in await hapticClient.selection() }
                 }
                 guard let config = state.config else { return .none }
 
@@ -154,6 +192,7 @@ public struct SeriesFeature {
                 let categoryID = category.id
 
                 return .run { send in
+                    await hapticClient.selection()
                     await send(.seriesResponse(
                         categoryID: categoryID,
                         Result { try await iptvClient.fetchSeries(config, categoryID) }
@@ -172,7 +211,33 @@ public struct SeriesFeature {
 
             case let .seriesSelected(series):
                 state.selectedSeries = series
-                return .send(.delegate(.didSelectSeries(series)))
+                return .merge(
+                    .run { _ in await hapticClient.impact(.light) },
+                    .send(.delegate(.didSelectSeries(series)))
+                )
+
+            case let .favoritesLoaded(favIDs):
+                state.favoriteIDs = favIDs
+                return .none
+
+            case let .toggleFavorite(item):
+                let favItem = FavoriteItem(
+                    id: item.id,
+                    type: "series",
+                    title: item.title,
+                    coverURL: item.coverURL?.absoluteString,
+                    streamURL: item.streamURL?.absoluteString
+                )
+                let isCurrentlyFav = state.favoriteIDs.contains(item.id)
+                if isCurrentlyFav {
+                    state.favoriteIDs.remove(item.id)
+                } else {
+                    state.favoriteIDs.insert(item.id)
+                }
+                return .run { _ in
+                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    await hapticClient.notification(.success)
+                }
 
             case .dismissError:
                 state.errorMessage = nil
@@ -196,7 +261,7 @@ public struct SeriesFeature {
 
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
-                if let category = category {
+                if let category {
                     state.selectedCategoryID = category.id
                     if state.seriesByCategory[category.id] != nil {
                         return .none
@@ -210,7 +275,7 @@ public struct SeriesFeature {
                             Result { try await iptvClient.fetchSeries(config, categoryID) }
                         ))
                     }
-                } else if let item = item {
+                } else if let item {
                     state.selectedSeries = item
                     return .send(.delegate(.didSelectSeries(item)))
                 }

@@ -28,17 +28,21 @@ public struct SeriesDetailFeature {
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
+        public var autoPlayOnLoad: Bool = false
+
         /// Computed
         public var currentEpisodes: [DetailModels.Episode] {
             guard let seasonNum = selectedSeasonNumber else { return [] }
             return allEpisodes[String(seasonNum)] ?? []
         }
 
-        public init(series: MediaModels.Item, serverURL: String, username: String, password: String) {
+        public init(series: MediaModels.Item, serverURL: String, username: String, password: String, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
             self.series = series
             self.serverURL = serverURL
             self.username = username
             self.password = password
+            self.historyItem = historyItem
+            self.autoPlayOnLoad = autoPlayOnLoad
         }
     }
 
@@ -71,9 +75,9 @@ public struct SeriesDetailFeature {
     public init() {}
 
     public var body: some Reducer<State, Action> {
-        let iptvClient = self.iptvClient
-        let tmdbClient = self.tmdbClient
-        let appCoordinator = self.appCoordinator
+        let iptvClient = iptvClient
+        let tmdbClient = tmdbClient
+        let appCoordinator = appCoordinator
 
         Reduce { state, action in
             switch action {
@@ -108,7 +112,7 @@ public struct SeriesDetailFeature {
                 }
 
                 let favoriteEffect: Effect<Action> = .run { [id = state.series.id] send in
-                    let isFav = (try? await databaseClient.isFavorite(id)) ?? false
+                    let isFav = await (try? databaseClient.isFavorite(id)) ?? false
                     await send(.favoriteStatusLoaded(isFav))
                 }
 
@@ -144,6 +148,11 @@ public struct SeriesDetailFeature {
 
                 if !state.isTMDBLoading {
                     state.isLoading = false
+                }
+
+                if state.autoPlayOnLoad {
+                    state.autoPlayOnLoad = false
+                    return .send(.resumeTapped)
                 }
 
                 return .none
@@ -247,7 +256,7 @@ public struct SeriesDetailFeature {
                     streamURL: nil
                 )
                 return .run { send in
-                    let isNowFav = (try? await databaseClient.toggleFavorite(item)) ?? false
+                    let isNowFav = await (try? databaseClient.toggleFavorite(item)) ?? false
                     await send(.favoriteStatusLoaded(isNowFav))
                 }
 

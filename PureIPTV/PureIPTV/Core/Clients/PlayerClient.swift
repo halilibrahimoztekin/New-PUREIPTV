@@ -17,9 +17,8 @@ public struct MediaInfo: Equatable, Sendable {
     }
 }
 
-@DependencyClient
 public struct PlayerClient: Sendable {
-    public var vlcPlayer: @MainActor @Sendable () -> Player = { fatalError("Unimplemented") }
+    public var vlcPlayer: @MainActor @Sendable () -> Player
     public var play: @MainActor @Sendable (_ url: URL) async throws -> Void
     public var resume: @MainActor @Sendable () async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
@@ -28,15 +27,21 @@ public struct PlayerClient: Sendable {
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var getMediaInfo: @MainActor @Sendable () async -> MediaInfo?
-    public var getAudioTracks: @MainActor @Sendable () async -> [Track] = { [] }
-    public var getSubtitleTracks: @MainActor @Sendable () async -> [Track] = { [] }
-    public var setAudioTrack: @MainActor @Sendable (_ track: Track?) async -> Void = { _ in }
-    public var setSubtitleTrack: @MainActor @Sendable (_ track: Track?) async -> Void = { _ in }
-    public var events: @MainActor @Sendable () async -> AsyncStream<PlayerEvent> = { AsyncStream { $0.finish() } }
+    public var getAudioTracks: @MainActor @Sendable () async -> [Track]
+    public var getSubtitleTracks: @MainActor @Sendable () async -> [Track]
+    public var getSelectedAudioTrack: @MainActor @Sendable () async -> Track?
+    public var getSelectedSubtitleTrack: @MainActor @Sendable () async -> Track?
+    public var setAudioTrack: @MainActor @Sendable (_ track: Track?) async -> Void
+    public var setSubtitleTrack: @MainActor @Sendable (_ track: Track?) async -> Void
+    public var setAudioDelay: @MainActor @Sendable (_ delay: Int) async -> Void
+    public var setSubtitleDelay: @MainActor @Sendable (_ delay: Int) async -> Void
+    public var getStats: @MainActor @Sendable () async -> String?
+
+    public var events: @MainActor @Sendable () async -> AsyncStream<PlayerEvent>
 }
 
 extension PlayerClient: DependencyKey {
-    public static let liveValue: PlayerClient = {
+    public nonisolated static let liveValue: PlayerClient = {
         final class Box: @unchecked Sendable {
             @MainActor var player: Player?
             @MainActor func getPlayer() -> Player {
@@ -110,17 +115,30 @@ extension PlayerClient: DependencyKey {
             getSubtitleTracks: {
                 box.getPlayer().subtitleTracks
             },
+            getSelectedAudioTrack: {
+                box.getPlayer().selectedAudioTrack
+            },
+            getSelectedSubtitleTrack: {
+                box.getPlayer().selectedSubtitleTrack
+            },
             setAudioTrack: { track in
                 box.getPlayer().selectedAudioTrack = track
             },
             setSubtitleTrack: { track in
                 box.getPlayer().selectedSubtitleTrack = track
             },
+            setAudioDelay: { _ in },
+            setSubtitleDelay: { _ in },
+            getStats: { nil },
             events: {
                 let player = box.getPlayer()
                 return AsyncStream { continuation in
                     let task = Task {
                         for await event in player.events {
+                            // Filter out high-frequency unused events that flood TCA
+                            if case .bufferingProgress = event {
+                                continue
+                            }
                             continuation.yield(event)
                         }
                     }
@@ -132,7 +150,7 @@ extension PlayerClient: DependencyKey {
         )
     }()
 
-    public static let testValue = PlayerClient(
+    public nonisolated static let testValue = PlayerClient(
         vlcPlayer: { fatalError() },
         play: { _ in },
         resume: {},
@@ -144,8 +162,13 @@ extension PlayerClient: DependencyKey {
         getMediaInfo: { nil },
         getAudioTracks: { [] },
         getSubtitleTracks: { [] },
+        getSelectedAudioTrack: { nil },
+        getSelectedSubtitleTrack: { nil },
         setAudioTrack: { _ in },
         setSubtitleTrack: { _ in },
+        setAudioDelay: { _ in },
+        setSubtitleDelay: { _ in },
+        getStats: { nil },
         events: { AsyncStream { $0.finish() } }
     )
 }

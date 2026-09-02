@@ -1,14 +1,47 @@
 import FactoryKit
 import Foundation
 
-public final class PlaylistRepository {
+public final class PlaylistRepository: @unchecked Sendable {
     private let keychainKey = "com.pureiptv.savedPlaylists"
     private let keychainManager = KeychainManager.shared
 
-    public init() {}
+    public nonisolated init() {}
+
+    private let activePlaylistKey = "com.pureiptv.activePlaylistID"
+
+    /// Gets the currently active playlist ID, if any.
+    public nonisolated func getActivePlaylistID() -> UUID? {
+        if let idString = UserDefaults.standard.string(forKey: activePlaylistKey), let uuid = UUID(uuidString: idString) {
+            return uuid
+        }
+        return nil
+    }
+
+    /// Sets the currently active playlist ID.
+    public nonisolated func setActivePlaylistID(_ id: UUID?) {
+        if let id {
+            UserDefaults.standard.set(id.uuidString, forKey: activePlaylistKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: activePlaylistKey)
+        }
+    }
+
+    /// Retrieves the currently active playlist
+    public nonisolated func getActivePlaylist() -> SavedPlaylist? {
+        let playlists = getPlaylists()
+        if let activeID = getActivePlaylistID(), let playlist = playlists.first(where: { $0.id == activeID }) {
+            return playlist
+        }
+        // Fallback to first if active is not set
+        if let first = playlists.first {
+            setActivePlaylistID(first.id)
+            return first
+        }
+        return nil
+    }
 
     /// Retrieves all saved playlists from iCloud Keychain
-    public func getPlaylists() -> [SavedPlaylist] {
+    public nonisolated func getPlaylists() -> [SavedPlaylist] {
         do {
             return try keychainManager.retrieve(for: keychainKey, as: [SavedPlaylist].self)
         } catch {
@@ -17,12 +50,13 @@ public final class PlaylistRepository {
     }
 
     /// Adds a new playlist and saves it to iCloud Keychain
-    public func addPlaylist(_ playlist: SavedPlaylist) {
+    public nonisolated func addPlaylist(_ playlist: SavedPlaylist) {
         var current = getPlaylists()
         // Prevent exact duplicates
         if !current.contains(where: { $0.id == playlist.id }) {
             current.append(playlist)
             try? keychainManager.save(current, for: keychainKey)
+            setActivePlaylistID(playlist.id)
         }
     }
 

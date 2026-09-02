@@ -29,6 +29,10 @@ public struct MultiViewFeature {
 
         public var activeAudioSlotID: Int? = 0
 
+        // PiP & Fullscreen
+        public var focusedSlotID: Int?
+        public var isPiPActive: Bool = false
+
         // Playlist selection
         public var isSelectingChannelForSlotID: Int?
         public var channels: [MediaModels.Item] = []
@@ -45,6 +49,8 @@ public struct MultiViewFeature {
         case channelSelected(MediaModels.Item)
         case channelSelectionDismissed
         case removeChannelTapped(slotID: Int)
+        case toggleFullscreen(slotID: Int)
+        case togglePiP
 
         case delegate(Delegate)
         public enum Delegate: Equatable {
@@ -94,6 +100,18 @@ public struct MultiViewFeature {
                 if state.activeAudioSlotID == slotID {
                     state.activeAudioSlotID = state.slots.first(where: { $0.item != nil })?.id
                 }
+                return .none
+
+            case let .toggleFullscreen(slotID):
+                if state.focusedSlotID == slotID {
+                    state.focusedSlotID = nil // Exit fullscreen
+                } else {
+                    state.focusedSlotID = slotID // Enter fullscreen
+                }
+                return .none
+
+            case .togglePiP:
+                state.isPiPActive.toggle()
                 return .none
 
             case .delegate:
