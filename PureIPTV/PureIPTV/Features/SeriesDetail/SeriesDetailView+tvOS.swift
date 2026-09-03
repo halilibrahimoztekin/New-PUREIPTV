@@ -120,55 +120,20 @@
                         // Action Buttons
                         HStack(spacing: 20) {
                             if let history = store.historyItem, history.duration > 0 {
-                                Button {
+                                TVHeaderActionButton(title: "Devam Et", icon: "play.fill", isPrimary: true) {
                                     store.send(.resumeTapped)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "play.fill")
-                                        Text("Devam Et")
-                                    }
-                                    .font(.system(size: 22, weight: .bold))
-                                    .padding(.horizontal, 32)
-                                    .padding(.vertical, 14)
-                                    .background(Color.red)
-                                    .foregroundStyle(.white)
-                                    .clipShape(Capsule())
                                 }
-                                .buttonStyle(.plain)
                             } else {
-                                Button {
+                                TVHeaderActionButton(title: "İzle", icon: "play.fill", isPrimary: true) {
                                     if let firstEp = store.currentEpisodes.first {
                                         store.send(.episodeSelected(firstEp))
                                     }
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "play.fill")
-                                        Text("İzle")
-                                    }
-                                    .font(.system(size: 22, weight: .bold))
-                                    .padding(.horizontal, 32)
-                                    .padding(.vertical, 14)
-                                    .background(Color.red)
-                                    .foregroundStyle(.white)
-                                    .clipShape(Capsule())
                                 }
-                                .buttonStyle(.plain)
                             }
 
-                            Button {
+                            TVHeaderFavoriteButton(isFavorite: store.isFavorite) {
                                 store.send(.toggleFavorite)
-                            } label: {
-                                Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                                    .font(.system(size: 28))
-                                    .padding(14)
-                                    .background(
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                                            .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.3) : Color.clear))
-                                    )
-                                    .foregroundStyle(store.isFavorite ? .red : .white)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -204,22 +169,16 @@
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 16) {
                                 ForEach(store.seasons) { season in
-                                    let isSelected = store.selectedSeasonNumber == season.seasonNumber
-                                    Button {
+                                    TVSeasonButton(
+                                        season: season,
+                                        isSelected: store.selectedSeasonNumber == season.seasonNumber
+                                    ) {
                                         store.send(.seasonSelected(season.seasonNumber))
-                                    } label: {
-                                        Text(season.name)
-                                            .font(.system(size: 22, weight: .semibold))
-                                            .padding(.horizontal, 24)
-                                            .padding(.vertical, 12)
-                                            .background(isSelected ? Color.red : Color(hex: "#1A1A24"))
-                                            .foregroundStyle(.white)
-                                            .clipShape(Capsule())
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.horizontal, 80)
+                            .padding(.vertical, 8)
                         }
                     }
                 }
@@ -240,7 +199,9 @@
 
                         LazyVStack(spacing: 20) {
                             ForEach(store.currentEpisodes) { episode in
-                                tvEpisodeCard(episode)
+                                TVEpisodeRow(episode: episode) {
+                                    store.send(.episodeSelected(episode))
+                                }
                             }
                         }
                         .padding(.horizontal, 80)
@@ -251,12 +212,28 @@
             }
         }
 
-        // MARK: – Episode Card
+        // MARK: – Loading
 
-        private func tvEpisodeCard(_ episode: DetailModels.Episode) -> some View {
-            Button {
-                store.send(.episodeSelected(episode))
-            } label: {
+        private var loadingView: some View {
+            VStack(spacing: 32) {
+                ProgressView()
+                    .tint(Color(hex: "#0A84FF"))
+                    .scaleEffect(2.0)
+                Text("Dizi bilgileri yükleniyor…")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+            }
+        }
+    }
+
+    // MARK: - TV Episode Row (Smooth Focus without White Card Flash)
+
+    private struct TVEpisodeRow: View {
+        let episode: DetailModels.Episode
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
                 HStack(alignment: .top, spacing: 24) {
                     // Thumbnail
                     Group {
@@ -275,12 +252,12 @@
                     VStack(alignment: .leading, spacing: 12) {
                         Text(episode.title)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.white)
                             .lineLimit(2)
 
                         HStack(spacing: 16) {
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundStyle(Color(hex: "#0A84FF"))
 
                             if let rating = episode.rating, rating > 0 {
@@ -311,26 +288,65 @@
 
                     Spacer()
                 }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(hex: "#1A1A24"))
-                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TVEpisodeCardButtonStyle())
         }
+    }
 
-        // MARK: – Loading
+    // MARK: - TV Season Button
 
-        private var loadingView: some View {
-            VStack(spacing: 32) {
-                ProgressView()
-                    .tint(Color(hex: "#0A84FF"))
-                    .scaleEffect(2.0)
-                Text("Dizi bilgileri yükleniyor…")
-                    .font(.system(size: 28))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+    private struct TVSeasonButton: View {
+        let season: DetailModels.Season
+        let isSelected: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                Text(season.name)
+                    .font(.system(size: 22, weight: isSelected ? .bold : .semibold))
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
             }
+            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+        }
+    }
+
+    // MARK: - TV Header Action Button
+
+    private struct TVHeaderActionButton: View {
+        let title: String
+        let icon: String
+        let isPrimary: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                    Text(title)
+                }
+                .font(.system(size: 22, weight: .bold))
+                .padding(.horizontal, 32)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(TVCapsuleButtonStyle(isPrimary: isPrimary, isSelected: false))
+        }
+    }
+
+    // MARK: - TV Header Favorite Button
+
+    private struct TVHeaderFavoriteButton: View {
+        let isFavorite: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    .font(.system(size: 26))
+                    .padding(14)
+                    .foregroundStyle(isFavorite ? Color.red : Color.white)
+            }
+            .buttonStyle(TVCircleButtonStyle(isFavorite: isFavorite))
         }
     }
 #endif

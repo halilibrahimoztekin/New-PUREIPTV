@@ -31,8 +31,7 @@ public struct OnboardingView: View {
                             .padding()
                     }
                     #if os(tvOS)
-                    .buttonStyle(.plain)
-                    .focusable(true)
+                    .buttonStyle(TVCapsuleButtonStyle())
                     #endif
                 }
 

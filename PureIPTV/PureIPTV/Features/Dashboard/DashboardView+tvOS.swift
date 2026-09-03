@@ -65,7 +65,7 @@
                                         } label: {
                                             ChannelCardView(channel: channel, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
+                                        .buttonStyle(TVGridCardButtonStyle())
                                         .frame(width: 360)
                                     }
                                 }
@@ -80,7 +80,7 @@
                                         } label: {
                                             VODCardView(vod: vod, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
+                                        .buttonStyle(TVGridCardButtonStyle())
                                         .frame(width: 220)
                                     }
                                 }
@@ -95,7 +95,7 @@
                                         } label: {
                                             SeriesCardView(series: series, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
+                                        .buttonStyle(TVGridCardButtonStyle())
                                         .frame(width: 220)
                                     }
                                 }
@@ -191,7 +191,7 @@
                     .padding(60)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .scaleEffect(isFocused ? 1.02 : 1.0)
             .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.4) : .clear, radius: 20, x: 0, y: 8)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
@@ -280,7 +280,7 @@
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .scaleEffect(isFocused ? 1.06 : 1.0)
             .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.5) : .clear, radius: 14, x: 0, y: 4)
             .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
@@ -323,7 +323,7 @@
                         .frame(width: 220, alignment: .leading)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .scaleEffect(isFocused ? 1.06 : 1.0)
             .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.5) : .clear, radius: 14, x: 0, y: 4)
             .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)

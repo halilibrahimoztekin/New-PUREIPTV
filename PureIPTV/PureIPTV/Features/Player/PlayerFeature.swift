@@ -467,10 +467,38 @@ public struct PlayerFeature {
 
         case .fetchTracks:
             return .run { send in
-                let audio = await playerClient.getAudioTracks()
-                let subtitle = await playerClient.getSubtitleTracks()
-                let selAudio = await playerClient.getSelectedAudioTrack()
-                let selSubtitle = await playerClient.getSelectedSubtitleTrack()
+                var audio = await playerClient.getAudioTracks()
+                var subtitle = await playerClient.getSubtitleTracks()
+
+                // If tracks aren't ready immediately, give VLC a short delay to parse the streams
+                if audio.isEmpty, subtitle.isEmpty {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    audio = await playerClient.getAudioTracks()
+                    subtitle = await playerClient.getSubtitleTracks()
+                }
+
+                var selAudio = await playerClient.getSelectedAudioTrack()
+                var selSubtitle = await playerClient.getSelectedSubtitleTrack()
+
+                // 1. Auto-select user's saved preferred audio language if available
+                if let preferredAudio = UserDefaults.standard.string(forKey: "com.pureiptv.preferredAudioLanguage"),
+                   let matchedAudio = audio.first(where: { matchesLanguage(trackName: $0.name, preferredLanguage: preferredAudio) })
+                {
+                    await playerClient.setAudioTrack(matchedAudio)
+                    selAudio = matchedAudio
+                }
+
+                // 2. Auto-select user's saved preferred subtitle language if available
+                if let preferredSubtitle = UserDefaults.standard.string(forKey: "com.pureiptv.preferredSubtitleLanguage") {
+                    if preferredSubtitle == "off" {
+                        await playerClient.setSubtitleTrack(nil)
+                        selSubtitle = nil
+                    } else if let matchedSubtitle = subtitle.first(where: { matchesLanguage(trackName: $0.name, preferredLanguage: preferredSubtitle) }) {
+                        await playerClient.setSubtitleTrack(matchedSubtitle)
+                        selSubtitle = matchedSubtitle
+                    }
+                }
+
                 await send(.tracksResponse(audio: audio, subtitle: subtitle, selectedAudio: selAudio, selectedSubtitle: selSubtitle))
             }
 
@@ -484,14 +512,24 @@ public struct PlayerFeature {
         case let .selectAudioTrack(track):
             state.selectedAudioTrack = track
             state.isTracksMenuVisible = false
+            let trackName = track?.name
             return .run { _ in
+                if let trackName {
+                    UserDefaults.standard.set(trackName, forKey: "com.pureiptv.preferredAudioLanguage")
+                }
                 await playerClient.setAudioTrack(track)
             }
 
         case let .selectSubtitleTrack(track):
             state.selectedSubtitleTrack = track
             state.isTracksMenuVisible = false
+            let trackName = track?.name
             return .run { _ in
+                if let trackName {
+                    UserDefaults.standard.set(trackName, forKey: "com.pureiptv.preferredSubtitleLanguage")
+                } else {
+                    UserDefaults.standard.set("off", forKey: "com.pureiptv.preferredSubtitleLanguage")
+                }
                 await playerClient.setSubtitleTrack(track)
             }
 
@@ -591,5 +629,49 @@ public struct PlayerFeature {
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
         }
+    }
+
+    // MARK: - Language Matching Helper
+
+    private static func matchesLanguage(trackName: String, preferredLanguage: String) -> Bool {
+        let t = trackName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let p = preferredLanguage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if t == p {
+            return true
+        }
+        if t.contains(p) || p.contains(t) {
+            return true
+        }
+
+        let aliases: [Set<String>] = [
+            ["tr", "tur", "turkish", "türkçe", "turkce"],
+            ["en", "eng", "english", "ingilizce", "i̇ngilizce"],
+            ["de", "ger", "deu", "german", "almanca", "deutsch"],
+            ["fr", "fra", "fre", "french", "fransızca", "français", "francais"],
+            ["es", "spa", "spanish", "ispanyolca", "español", "espanol"],
+            ["it", "ita", "italian", "italyanca", "italiano"],
+            ["ru", "rus", "russian", "rusça", "rusca"],
+            ["ar", "ara", "arabic", "arapça", "arapca"],
+            ["pt", "por", "portuguese", "portekizce", "portugues", "português"],
+            ["nl", "nld", "dut", "dutch", "hollandaca", "nederlands"],
+            ["ja", "jpn", "japanese", "japonca"],
+            ["ko", "kor", "korean", "korece"],
+            ["zh", "zho", "chi", "chinese", "çince", "cince"],
+            ["az", "aze", "azerbaijani", "azerice", "azeri"],
+            ["pl", "pol", "polish", "lehçe", "lehce"],
+            ["uk", "ukr", "ukrainian", "ukraynaca"],
+            ["hi", "hin", "hindi", "hintçe", "hintce"],
+        ]
+
+        for group in aliases {
+            let matchesP = group.contains(where: { p.contains($0) || $0 == p })
+            let matchesT = group.contains(where: { t.contains($0) || $0 == t })
+            if matchesP, matchesT {
+                return true
+            }
+        }
+
+        return false
     }
 }

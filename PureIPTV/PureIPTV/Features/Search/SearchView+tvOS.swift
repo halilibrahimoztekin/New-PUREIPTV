@@ -80,9 +80,10 @@
                     Button(action: { store.send(.queryChanged("")) }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
-                            .font(.system(size: 32))
+                            .font(.system(size: 28))
+                            .padding(6)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TVCircleButtonStyle())
                 }
             }
             .padding(20)
@@ -106,20 +107,10 @@
                         } label: {
                             Text(filter.rawValue)
                                 .font(.system(size: 24, weight: isSelected ? .bold : .medium))
-                                .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
                                 .padding(.horizontal, 30)
                                 .padding(.vertical, 14)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? Color(hex: "#0A84FF") : Color(hex: "#1F1F23"))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color.white.opacity(isSelected ? 0 : 0.1), lineWidth: 2)
-                                        )
-                                )
                         }
-                        .buttonStyle(.plain)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
                     }
                 }
                 .padding(.horizontal, 60)
@@ -139,7 +130,7 @@
                                     } label: {
                                         ChannelCardView(channel: channel, isSelected: false) {}
                                     }
-                                    .buttonStyle(.card)
+                                    .buttonStyle(TVGridCardButtonStyle())
                                 }
                             }
                         }
@@ -153,25 +144,25 @@
                                     Button {
                                         store.send(.vodSelected(vod))
                                     } label: {
-                                        VODCardView(vod: vod, isSelected: false) {}
+                                        VODCardView(vod: vod) {}
                                     }
-                                    .buttonStyle(.card)
+                                    .buttonStyle(TVGridCardButtonStyle())
                                 }
                             }
                         }
                     }
 
-                    let seriesList = store.seriesResults
-                    if !seriesList.isEmpty {
-                        resultSection(title: "Diziler", count: seriesList.count) {
+                    let series = store.seriesResults
+                    if !series.isEmpty {
+                        resultSection(title: "Diziler", count: series.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
-                                ForEach(seriesList) { series in
+                                ForEach(series) { item in
                                     Button {
-                                        store.send(.seriesSelected(series))
+                                        store.send(.seriesSelected(item))
                                     } label: {
-                                        SeriesCardView(series: series, isSelected: false) {}
+                                        SeriesCardView(series: item) {}
                                     }
-                                    .buttonStyle(.card)
+                                    .buttonStyle(TVGridCardButtonStyle())
                                 }
                             }
                         }
@@ -193,10 +184,11 @@
                         store.send(.clearHistoryTapped)
                     } label: {
                         Text("Temizle")
-                            .font(.system(size: 24))
-                            .foregroundColor(Color(hex: "#0A84FF"))
+                            .font(.system(size: 20, weight: .semibold))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TVCapsuleButtonStyle())
                 }
                 .padding(.horizontal, 60)
 
@@ -222,7 +214,7 @@
                                 .padding(.vertical, 20)
                                 .background(Color(hex: "#1F1F23").opacity(0.5))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
 
                             if item.id != store.recentSearches.last?.id {
                                 Divider()

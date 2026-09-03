@@ -5,7 +5,7 @@
     // MARK: - tvOS VOD View
 
     // Layout: Left column = categories, right area = VOD poster grid.
-    // Focus Engine: Categories list and VOD cards are fully focusable.
+    // Focus Engine: Categories list and VOD cards are fully focusable with smooth glass styling.
 
     public struct VODView_tvOS: View {
         @Bindable var store: StoreOf<VODFeature>
@@ -26,7 +26,7 @@
             HStack(spacing: 0) {
                 // ── Left: Category list ───────────────────────────────
                 categoryColumn
-                    .frame(width: 280)
+                    .frame(width: 300)
 
                 // ── Divider ───────────────────────────────────────────
                 Rectangle()
@@ -51,10 +51,10 @@
 
         private var categoryColumn: some View {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     HStack {
                         Text("Filmler")
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                         Spacer()
                     }
@@ -114,8 +114,8 @@
             } else {
                 ScrollView {
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 30)],
-                        spacing: 30
+                        columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 32)],
+                        spacing: 32
                     ) {
                         ForEach(store.currentVODs) { vod in
                             Button {
@@ -123,7 +123,7 @@
                             } label: {
                                 VODCardView(vod: vod, isSelected: store.selectedVOD?.id == vod.id) {}
                             }
-                            .buttonStyle(.card)
+                            .buttonStyle(TVGridCardButtonStyle())
                             .contextMenu {
                                 Button {
                                     store.send(.toggleFavorite(vod))
@@ -151,8 +151,6 @@
         let isSelected: Bool
         let action: () -> Void
 
-        @Environment(\.isFocused) private var isFocused
-
         var body: some View {
             Button(action: action) {
                 HStack(spacing: 14) {
@@ -161,26 +159,14 @@
                         .frame(width: 4, height: 26)
 
                     Text(category.name)
-                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(
-                            isSelected
-                                ? Color(hex: "#E4E1E7")
-                                : Color(hex: "#C0C6D6").opacity(0.6)
-                        )
+                        .font(.system(size: 22, weight: isSelected ? .bold : .regular))
+                        .foregroundStyle(isSelected ? Color.white : Color(hex: "#C0C6D6").opacity(0.7))
                         .lineLimit(1)
 
                     Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isFocused || isSelected ? Color(hex: "#BF5AF2").opacity(0.12) : Color.clear)
-                )
-                .scaleEffect(isFocused ? 1.02 : 1.0)
-                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#BF5AF2"), isSelected: isSelected))
         }
     }
 #endif

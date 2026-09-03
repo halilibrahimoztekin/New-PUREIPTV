@@ -96,7 +96,7 @@
                             .opacity(store.indicatorOpacity)
                             .animation(.easeIn(duration: 0.5), value: store.indicatorOpacity)
                     }
-                    .buttonStyle(.plain) // Disable default tvOS button chrome
+                    .buttonStyle(.tvCapsule) // Use custom style instead of plain
                     .focused($isFocused)
                     .focusable()
                     .padding(.bottom, 80) // tvOS safe area

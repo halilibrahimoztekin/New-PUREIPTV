@@ -110,7 +110,7 @@
         // MARK: - Controller View (KSPlayer Layout)
 
         private func controllerView(playerWidth _: Double) -> some View {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 Spacer()
 
                 // Top part of controls: Title + Action Buttons
@@ -118,15 +118,11 @@
                     resetIdleTimer()
                 })
 
-                // Bottom part of controls: Scrubber + Time Display
+                // Bottom part of controls: Interactive Fluid Scrubber + Time Display
                 if isMaskShow {
-                    VideoTimeShowView(store: store)
-                        .onAppear {
-                            focusableField = .controller
-                        }
-                        .onDisappear {
-                            focusableField = .play
-                        }
+                    VideoTimeShowView(store: store, onInteraction: {
+                        resetIdleTimer()
+                    })
                 }
             }
             .padding(.horizontal, 80)
@@ -375,43 +371,204 @@
         }
     }
 
-    // MARK: - Video Time Show View (Scrubber & Duration)
+    // MARK: - Video Time Show View (Fluid Scrubber & Continuous Seeking)
 
     @available(tvOS 16.0, *)
     private struct VideoTimeShowView: View {
         @Bindable var store: StoreOf<PlayerFeature>
+        let onInteraction: () -> Void
+
+        @Environment(\.isFocused) private var isFocused
+        @State private var isScrubbing: Bool = false
+        @State private var scrubValue: Double = 0.0
+        @State private var lastMoveTime: Date = .init()
+        @State private var consecutiveMoveCount: Int = 0
+        @State private var commitTask: Task<Void, Never>?
 
         var body: some View {
             let durationDouble = Double(store.totalTime.components.seconds)
-            let currentDouble = Double(store.currentTime.components.seconds)
+            let isLive = durationDouble <= 0
 
-            HStack(spacing: 16) {
-                Text(formatTime(currentDouble))
-                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white)
-
-                GeometryReader { proxy in
-                    let progress = durationDouble > 0 ? CGFloat(store.position / durationDouble) : 0
-
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.25))
-                            .frame(height: 8)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(hex: "#0A84FF"))
-                            .frame(width: proxy.size.width * min(max(progress, 0), 1), height: 8)
-                    }
-                    .frame(height: 8)
-                    .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            if isLive {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("Canlı Yayın")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                    Spacer()
                 }
-                .frame(height: 8)
+                .padding(.vertical, 4)
+            } else {
+                let currentDisplayPos = isScrubbing ? scrubValue : store.position
+                let clampedProgress = min(max(currentDisplayPos, 0), 1)
+                let currentDisplaySeconds = isScrubbing ? (durationDouble * clampedProgress) : Double(store.currentTime.components.seconds)
 
-                Text(formatTime(durationDouble))
-                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                VStack(spacing: 8) {
+                    // Scrubber Bar & Timestamps
+                    HStack(spacing: 16) {
+                        Text(formatTime(currentDisplaySeconds))
+                            .font(.system(size: isFocused ? 20 : 18, weight: (isFocused || isScrubbing) ? .bold : .medium, design: .monospaced))
+                            .foregroundStyle((isFocused || isScrubbing) ? Color(hex: "#5AC8FA") : .white.opacity(0.85))
+                            .scaleEffect(isScrubbing ? 1.05 : 1.0)
+                            .animation(.easeOut(duration: 0.15), value: isScrubbing)
+
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                // Track background
+                                RoundedRectangle(cornerRadius: isFocused ? 7 : 4)
+                                    .fill(isFocused ? Color.white.opacity(0.35) : Color.white.opacity(0.2))
+                                    .frame(height: isFocused ? 14 : 8)
+
+                                // Active progress fill
+                                RoundedRectangle(cornerRadius: isFocused ? 7 : 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#5AC8FA")],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: proxy.size.width * clampedProgress, height: isFocused ? 14 : 8)
+
+                                // Glowing thumb indicator
+                                if isFocused || isScrubbing {
+                                    Circle()
+                                        .fill(Color.white)
+                                        .frame(width: isScrubbing ? 26 : 22, height: isScrubbing ? 26 : 22)
+                                        .shadow(color: Color(hex: "#0A84FF").opacity(0.9), radius: 10, x: 0, y: 0)
+                                        .position(x: proxy.size.width * clampedProgress, y: proxy.size.height / 2)
+                                }
+                            }
+                            .frame(height: isFocused ? 14 : 8)
+                            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                        }
+                        .frame(height: isFocused ? 24 : 12)
+
+                        Text(formatTime(durationDouble))
+                            .font(.system(size: isFocused ? 20 : 18, weight: isFocused ? .bold : .medium, design: .monospaced))
+                            .foregroundStyle(isFocused ? .white : Color.white.opacity(0.6))
+                    }
+
+                    // Scrubber Fluid Navigation Hint / Time Badge
+                    if isFocused {
+                        HStack(spacing: 12) {
+                            if isScrubbing {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "hand.tap.fill")
+                                    Text("Seçmek için Tıklayın veya Bırakın")
+                                }
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color(hex: "#5AC8FA"))
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Geri")
+                                }
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+
+                                Text("•")
+                                    .foregroundStyle(.white.opacity(0.4))
+
+                                Text("Kaydırarak Akıcı İleri / Geri Sarma")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#5AC8FA"))
+
+                                Text("•")
+                                    .foregroundStyle(.white.opacity(0.4))
+
+                                HStack(spacing: 4) {
+                                    Text("İleri")
+                                    Image(systemName: "chevron.right")
+                                }
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                            }
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(isFocused ? Color.white.opacity(0.12) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(isFocused ? Color.white.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                )
+                .scaleEffect(isFocused ? 1.02 : 1.0)
+                .focusable(true)
+                .onMoveCommand { direction in
+                    onInteraction()
+                    handleMove(direction: direction, duration: durationDouble)
+                }
+                .onTapGesture {
+                    onInteraction()
+                    commitSeek()
+                }
+                .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isScrubbing)
+                .onChange(of: isFocused) { _, focused in
+                    if !focused, isScrubbing {
+                        commitSeek()
+                    }
+                }
             }
-            .font(.system(.title3))
+        }
+
+        private func handleMove(direction: MoveCommandDirection, duration: Double) {
+            guard duration > 0 else { return }
+
+            let now = Date()
+            if now.timeIntervalSince(lastMoveTime) < 0.35 {
+                consecutiveMoveCount += 1
+            } else {
+                consecutiveMoveCount = 1
+            }
+            lastMoveTime = now
+
+            // Adaptive step calculation: starts fine (5s), dynamically accelerates on rapid movement
+            let baseStep: Double = duration > 3600 ? 10.0 : 5.0
+            let multiplier: Double = min(Double(consecutiveMoveCount), 8.0)
+            let stepSeconds = baseStep * multiplier
+            let stepFraction = stepSeconds / duration
+
+            if !isScrubbing {
+                isScrubbing = true
+                scrubValue = store.position
+            }
+
+            switch direction {
+            case .left:
+                scrubValue = max(0.0, scrubValue - stepFraction)
+            case .right:
+                scrubValue = min(1.0, scrubValue + stepFraction)
+            default:
+                break
+            }
+
+            // Debounce automatic seek after user pauses movement
+            commitTask?.cancel()
+            commitTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                if !Task.isCancelled {
+                    commitSeek()
+                }
+            }
+        }
+
+        private func commitSeek() {
+            commitTask?.cancel()
+            commitTask = nil
+            if isScrubbing {
+                store.send(.seek(scrubValue))
+                isScrubbing = false
+                consecutiveMoveCount = 0
+            }
         }
 
         private func formatTime(_ seconds: Double) -> String {

@@ -43,7 +43,7 @@ struct PureIPTVApp: App {
                     .tint(themeManager.accentColor)
                     .ignoresSafeArea()
                     .modelContainer(sharedModelContainer)
-                    .onChange(of: scenePhase) { newPhase in
+                    .onChange(of: scenePhase) { newPhase, _ in
                         if newPhase == .background {
                             appDelegate.scheduleAppRefresh()
                         }

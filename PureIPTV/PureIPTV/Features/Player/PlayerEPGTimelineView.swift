@@ -38,7 +38,11 @@ public struct PlayerEPGTimelineView: View {
                         .font(.title2)
                         .foregroundColor(.white.opacity(0.7))
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCircleButtonStyle())
+                #else
                 .buttonStyle(.plain)
+                #endif
             }
             .padding(16)
             .background(Color.black.opacity(0.4))
@@ -59,7 +63,11 @@ public struct PlayerEPGTimelineView: View {
                             }) {
                                 PlayerEPGTimelineCard(program: program, currentTime: currentTime)
                             }
+                            #if os(tvOS)
+                            .buttonStyle(TVGridCardButtonStyle())
+                            #else
                             .buttonStyle(.plain)
+                            #endif
                         }
                     }
                 }

@@ -68,8 +68,9 @@
                         } label: {
                             Image(systemName: "calendar.day.timeline.left")
                                 .font(.system(size: 20))
+                                .padding(8)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(TVCircleButtonStyle())
                         .padding(.trailing, 8)
                     }
                     .padding(.horizontal, 24)
@@ -166,8 +167,6 @@
         let isSelected: Bool
         let action: () -> Void
 
-        @Environment(\.isFocused) private var isFocused
-
         var body: some View {
             Button(action: action) {
                 HStack(spacing: 14) {
@@ -176,26 +175,14 @@
                         .frame(width: 4, height: 26)
 
                     Text(category.name)
-                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(
-                            isSelected
-                                ? Color(hex: "#E4E1E7")
-                                : Color(hex: "#C0C6D6").opacity(0.6)
-                        )
+                        .font(.system(size: 22, weight: isSelected ? .bold : .regular))
+                        .foregroundStyle(isSelected ? Color.white : Color(hex: "#C0C6D6").opacity(0.7))
                         .lineLimit(1)
 
                     Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isFocused || isSelected ? Color(hex: "#0A84FF").opacity(0.12) : Color.clear)
-                )
-                .scaleEffect(isFocused ? 1.02 : 1.0)
-                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: isSelected))
         }
     }
 
@@ -266,7 +253,7 @@
                 .scaleEffect(isFocused ? 1.08 : 1.0)
                 .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
         }
     }
 

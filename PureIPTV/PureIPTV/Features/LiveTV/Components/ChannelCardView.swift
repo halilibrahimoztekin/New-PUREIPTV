@@ -80,14 +80,18 @@ public struct ChannelCardView: View {
                 .padding(.bottom, 10)
             }
             .aspectRatio(16 / 9, contentMode: .fill)
+            #if os(tvOS)
+                .buttonStyle(TVGridCardButtonStyle())
+            #else
+                .buttonStyle(.plain)
+            #endif
+                .scaleEffect(isSelected ? 1.02 : 1.0)
+                .shadow(
+                    color: isSelected ? Color(hex: "#0A84FF").opacity(0.4) : .black.opacity(0.2),
+                    radius: isSelected ? 12 : 8, x: 0, y: 4
+                )
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
-        .buttonStyle(.plain)
-        .scaleEffect(isSelected ? 1.02 : 1.0)
-        .shadow(
-            color: isSelected ? Color(hex: "#0A84FF").opacity(0.4) : .black.opacity(0.2),
-            radius: isSelected ? 12 : 8, x: 0, y: 4
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 
@@ -104,36 +108,6 @@ private struct ChannelLogoPlaceholder: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .shimmeringPlaceholder(isLoading: true)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-// MARK: - Live Badge
-
-public struct LiveBadge: View {
-    @State private var isPulsing = false
-
-    public init() {}
-
-    public var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(Color(hex: "#FF453A"))
-                .frame(width: 5, height: 5)
-                .scaleEffect(0.9)
-            // Removed repeatForever animation for scroll performance
-
-            Text("CANLI")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
-                .tracking(0.5)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(Color(hex: "#FF453A").opacity(0.85))
-        )
-        .onAppear { isPulsing = true }
     }
 }
 

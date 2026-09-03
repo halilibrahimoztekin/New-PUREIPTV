@@ -375,7 +375,11 @@ public struct VODDetailView: View {
                                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
                         )
                     }
-                    .buttonStyle(.plain)
+                    #if os(tvOS)
+                    .buttonStyle(TVCapsuleButtonStyle())
+                    #else
+                    .buttonStyle(FluidScaleButtonStyle())
+                    #endif
                     .padding(.horizontal, 24)
                 }
 
