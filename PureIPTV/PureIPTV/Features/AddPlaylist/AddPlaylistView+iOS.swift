@@ -98,11 +98,11 @@
                         )
                 }
 
-                Text("Playlist Ekle")
+                Text(AppStrings.AddPlaylist.title)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Color(hex: "#E4E1E7"))
 
-                Text("Xtream Codes bilgilerinizi veya M3U adresinizi girin")
+                Text(AppStrings.AddPlaylist.connectWithIOS)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
                     .multilineTextAlignment(.center)
@@ -159,7 +159,7 @@
                 VStack(spacing: 12) {
                     GlassTextField(
                         icon: "server.rack",
-                        placeholder: "Sunucu URL (https://provider.net:8080)",
+                        placeholder: AppStrings.AddPlaylist.serverPlaceholder,
                         text: $store.serverURL,
                         keyboardType: .URL,
                         autocapitalization: .never
@@ -169,7 +169,7 @@
                     HStack(spacing: 12) {
                         GlassTextField(
                             icon: "person.fill",
-                            placeholder: "Kullanıcı Adı",
+                            placeholder: AppStrings.AddPlaylist.usernamePlaceholder,
                             text: $store.username,
                             autocapitalization: .never
                         )
@@ -177,7 +177,7 @@
 
                         GlassSecureField(
                             icon: "lock.fill",
-                            placeholder: "Şifre",
+                            placeholder: AppStrings.AddPlaylist.passwordPlaceholder,
                             text: $store.password,
                             isVisible: store.isPasswordVisible,
                             onToggle: { store.send(.togglePasswordVisibility) }
@@ -188,7 +188,7 @@
             } else {
                 GlassTextField(
                     icon: "link",
-                    placeholder: "M3U URL (http://...)",
+                    placeholder: AppStrings.AddPlaylist.m3uPlaceholder,
                     text: $store.m3uURL,
                     keyboardType: .URL,
                     autocapitalization: .never
@@ -248,7 +248,7 @@
                         HStack(spacing: 8) {
                             Image(systemName: "play.fill")
                                 .font(.system(size: 14, weight: .bold))
-                            Text("Bağlan")
+                            Text(AppStrings.AddPlaylist.connect)
                                 .font(.system(size: 17, weight: .bold))
                         }
                     }
@@ -293,7 +293,7 @@
 
     struct GlassTextField: View {
         let icon: String
-        let placeholder: String
+        let placeholder: LocalizedStringKey
         @Binding var text: String
         var keyboardType: UIKeyboardType = .default
         var autocapitalization: TextInputAutocapitalization = .sentences
@@ -330,7 +330,7 @@
 
     struct GlassSecureField: View {
         let icon: String
-        let placeholder: String
+        let placeholder: LocalizedStringKey
         @Binding var text: String
         let isVisible: Bool
         let onToggle: () -> Void
@@ -391,7 +391,7 @@
             store: Store(
                 initialState: {
                     var s = AddPlaylistFeature.State()
-                    s.errorMessage = String(localized: "Kullanıcı adı veya şifre hatalı.")
+                    s.errorMessage = AppStrings.Errors.unauthorized
                     s.serverURL = "http://example.com:8080"
                     s.username = "user"
                     s.password = "wrong"

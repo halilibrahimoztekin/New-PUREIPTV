@@ -50,7 +50,7 @@
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 6) {
                     HStack {
-                        Text("Diziler")
+                        Text(AppStrings.Series.title)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                         Spacer()
@@ -92,7 +92,7 @@
                         .progressViewStyle(.circular)
                         .tint(Color(hex: "#0A84FF"))
                         .scaleEffect(1.5)
-                    Text("Diziler yükleniyor…")
+                    Text(AppStrings.Series.loadingSeries)
                         .font(.system(size: 24))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                         .padding(.top, 16)
@@ -103,7 +103,7 @@
                     Image(systemName: "tv")
                         .font(.system(size: 60))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                    Text("Dizi bulunamadı")
+                    Text(AppStrings.Series.noSeries)
                         .font(.system(size: 28))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
                 }
@@ -126,9 +126,9 @@
                                     store.send(.toggleFavorite(series))
                                 } label: {
                                     if store.favoriteIDs.contains(series.id) {
-                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
-                                        Label("Favorilere Ekle", systemImage: "heart")
+                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
                                 }
                             }

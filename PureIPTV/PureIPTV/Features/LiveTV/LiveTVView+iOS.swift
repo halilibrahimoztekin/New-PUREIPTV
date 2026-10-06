@@ -31,7 +31,7 @@
                 VStack(spacing: 0) {
                     // ── Header Actions ─────────────────────────────────
                     HStack {
-                        Text("Canlı TV")
+                        Text(AppStrings.LiveTV.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
@@ -150,7 +150,7 @@
                         Image(systemName: "tv.slash")
                             .font(.system(size: 36))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                        Text("Bu kategoride kanal bulunamadı")
+                        Text(AppStrings.LiveTV.emptyCategoryLive)
                             .font(.system(size: 15))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
                     }
@@ -170,9 +170,9 @@
                                     store.send(.toggleFavorite(channel))
                                 } label: {
                                     if store.favoriteIDs.contains(channel.id) {
-                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
-                                        Label("Favorilere Ekle", systemImage: "heart")
+                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
                                 }
                             }
@@ -205,7 +205,7 @@
                 Image(systemName: "antenna.radiowaves.left.and.right.slash")
                     .font(.system(size: 40))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                Text("Kategori bulunamadı")
+                Text(AppStrings.Common.categoryNotFound)
                     .font(.system(size: 16))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }

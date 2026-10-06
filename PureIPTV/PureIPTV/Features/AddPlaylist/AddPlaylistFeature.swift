@@ -106,25 +106,36 @@ public struct AddPlaylistFeature {
                     }
 
                 case .m3u:
-                    // M3U support coming soon — show a friendly message for now
-                    state.isLoading = false
-                    state.errorMessage = String(localized: "M3U desteği çok yakında geliyor! Şimdilik Xtream Codes kullanın.")
-                    return .none
+                    let m3uURLString = state.m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return .run { send in
+                        do {
+                            guard let url = URL(string: m3uURLString) else {
+                                throw NetworkError.invalidURL
+                            }
+                            let config = PlaylistConfig(type: .m3u, m3uURL: url)
+                            try await iptvClient.authenticate(config)
+                            await send(.connectResponse(.success("M3U Playlist")))
+                        } catch {
+                            await send(.connectResponse(.failure(error)))
+                        }
+                    }
                 }
 
             case let .connectResponse(.success(message)):
                 state.isLoading = false
-                let rawURL = state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                let username = state.username.trimmingCharacters(in: .whitespacesAndNewlines)
-                let password = state.password
+                let rawURL = state.playlistType == .xtream ? state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+                let username = state.playlistType == .xtream ? state.username.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+                let password = state.playlistType == .xtream ? state.password : ""
+                let m3uURL = state.playlistType == .m3u ? state.m3uURL.trimmingCharacters(in: .whitespacesAndNewlines) : ""
 
                 // Save to iCloud Keychain
                 let playlist = SavedPlaylist(
                     name: message,
-                    type: .xtream,
-                    serverURL: rawURL,
-                    username: username,
-                    password: password
+                    type: state.playlistType,
+                    serverURL: rawURL.isEmpty ? nil : rawURL,
+                    username: username.isEmpty ? nil : username,
+                    password: password.isEmpty ? nil : password,
+                    m3uURL: m3uURL.isEmpty ? nil : m3uURL
                 )
 
                 return .run { send in

@@ -9,9 +9,7 @@ public struct VODDetailFeature {
     @ObservableState
     public struct State: Equatable {
         public let vod: MediaModels.Item
-        public let serverURL: String
-        public let username: String
-        public let password: String
+        public let config: PlaylistConfig
 
         // API Data
         public var info: DetailModels.Info?
@@ -26,11 +24,9 @@ public struct VODDetailFeature {
 
         public var autoPlayOnLoad: Bool = false
 
-        public init(vod: MediaModels.Item, serverURL: String, username: String, password: String, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
+        public init(vod: MediaModels.Item, config: PlaylistConfig, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
             self.vod = vod
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            self.config = config
             self.historyItem = historyItem
             self.autoPlayOnLoad = autoPlayOnLoad
         }
@@ -76,8 +72,7 @@ public struct VODDetailFeature {
                 state.isTMDBLoading = true
                 state.errorMessage = nil
 
-                guard let url = URL(string: state.serverURL) else { return .none }
-                let config = PlaylistConfig(type: .xtream, serverURL: url, username: state.username, password: state.password)
+                let config = state.config
                 let vodID = state.vod.id
                 let searchTitle = state.vod.title.cleanedForTMDBSearch()
 

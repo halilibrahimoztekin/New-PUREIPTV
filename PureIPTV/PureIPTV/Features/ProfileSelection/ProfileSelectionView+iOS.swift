@@ -18,7 +18,7 @@
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 40) {
-                    Text("Kim İzliyor?")
+                    Text(AppStrings.Profile.whoIsWatching)
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -86,7 +86,7 @@
                                 }
                                 .buttonStyle(.plain)
 
-                                Text("Ekle")
+                                Text(AppStrings.Common.add)
                                     .font(.headline)
                                     .foregroundColor(.white.opacity(0.85))
                             }
@@ -97,7 +97,7 @@
                     Button {
                         store.send(.toggleEditMode)
                     } label: {
-                        Text(store.isEditing ? "Bitti" : "Profilleri Düzenle")
+                        Text(store.isEditing ? AppStrings.Common.done : AppStrings.Profile.editProfiles)
                             .font(.headline)
                             .foregroundColor(.white.opacity(0.9))
                             .padding(.vertical, 10)
@@ -114,21 +114,21 @@
             .sheet(isPresented: $store.showingAddProfile) {
                 NavigationView {
                     Form {
-                        Section(header: Text("Profil Bilgileri")) {
-                            TextField("Profil Adı", text: $newProfileName)
-                            Toggle("Çocuk Profili (Sadece Çocuk İçerikleri)", isOn: $newProfileIsKids)
+                        Section(header: Text(AppStrings.Profile.profileInfo)) {
+                            TextField(AppStrings.Profile.profileName, text: $newProfileName)
+                            Toggle(AppStrings.Profile.kidsProfileInfo, isOn: $newProfileIsKids)
                         }
                     }
-                    .navigationTitle("Yeni Profil")
+                    .navigationTitle(AppStrings.Profile.newProfile)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("İptal") {
+                            Button(AppStrings.Common.cancel) {
                                 store.send(.binding(.set(\.showingAddProfile, false)))
                             }
                         }
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Ekle") {
+                            Button(AppStrings.Common.add) {
                                 store.send(.addProfile(name: newProfileName, isKidsMode: newProfileIsKids))
                                 newProfileName = ""
                                 newProfileIsKids = false

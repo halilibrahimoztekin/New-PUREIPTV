@@ -23,10 +23,10 @@ public struct PlayerEPGTimelineView: View {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Yayın Akışı")
+                    Text(AppStrings.Player.epg)
                         .font(.headline)
                         .foregroundColor(.white)
-                    Text("Zaman Çizelgesi")
+                    Text(AppStrings.Player.timeline)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.6))
                 }
@@ -53,7 +53,7 @@ public struct PlayerEPGTimelineView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     if programs.isEmpty {
-                        Text("EPG bilgisi bulunamadı.")
+                        Text(AppStrings.Player.epgNotFound)
                             .foregroundColor(.white.opacity(0.5))
                             .padding(.horizontal, 40)
                     } else {
@@ -115,7 +115,7 @@ public struct PlayerEPGTimelineCard: View {
                             .fill(Color.red)
                             .frame(width: 6, height: 6)
                             .symbolEffect(.pulse)
-                        Text("Canlı")
+                        Text(AppStrings.Player.liveLabelNormal)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.red)
                     }

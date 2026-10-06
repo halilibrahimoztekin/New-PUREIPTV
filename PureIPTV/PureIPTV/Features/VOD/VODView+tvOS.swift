@@ -53,7 +53,7 @@
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 6) {
                     HStack {
-                        Text("Filmler")
+                        Text(AppStrings.VOD.title)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                         Spacer()
@@ -95,7 +95,7 @@
                         .progressViewStyle(.circular)
                         .tint(Color(hex: "#0A84FF"))
                         .scaleEffect(1.5)
-                    Text("Filmler yükleniyor…")
+                    Text(AppStrings.VOD.loadingMovies)
                         .font(.system(size: 24))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                         .padding(.top, 16)
@@ -106,7 +106,7 @@
                     Image(systemName: "film")
                         .font(.system(size: 60))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                    Text("Film bulunamadı")
+                    Text(AppStrings.VOD.noMovies)
                         .font(.system(size: 28))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
                 }
@@ -129,9 +129,9 @@
                                     store.send(.toggleFavorite(vod))
                                 } label: {
                                     if store.favoriteIDs.contains(vod.id) {
-                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
-                                        Label("Favorilere Ekle", systemImage: "heart")
+                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
                                 }
                             }

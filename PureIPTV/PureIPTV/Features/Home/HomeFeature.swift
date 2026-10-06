@@ -41,9 +41,19 @@ public struct HomeFeature {
     @ObservableState
     public struct State: Equatable {
         public var selectedTab: HomeTab = .dashboard
-        public var serverURL: String
-        public var username: String
-        public var password: String
+        public var config: PlaylistConfig
+
+        public var serverURL: String {
+            config.serverURL?.absoluteString ?? config.m3uURL?.absoluteString ?? ""
+        }
+
+        public var username: String {
+            config.username ?? ""
+        }
+
+        public var password: String {
+            config.password ?? ""
+        }
 
         /// Child feature states
         public var dashboard = DashboardFeature.State()
@@ -53,10 +63,8 @@ public struct HomeFeature {
         public var search = SearchFeature.State()
         public var settings = SettingsFeature.State()
 
-        public init(serverURL: String, username: String, password: String) {
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+        public init(config: PlaylistConfig) {
+            self.config = config
         }
     }
 

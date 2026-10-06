@@ -16,7 +16,7 @@ public struct EPGListView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Yayın Akışı")
+                Text(AppStrings.Player.epg)
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
@@ -38,7 +38,7 @@ public struct EPGListView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if programs.isEmpty {
-                        Text("EPG bilgisi bulunamadı.")
+                        Text(AppStrings.Player.epgNotFound)
                             .foregroundColor(.white.opacity(0.5))
                             .padding(.top, 40)
                     } else {
@@ -96,7 +96,7 @@ public struct EPGProgramRow: View {
             Spacer()
 
             if program.isPlayingNow {
-                Text("Şu an")
+                Text(AppStrings.Player.nowPlaying)
                     .font(.caption2)
                     .fontWeight(.bold)
                     .padding(.horizontal, 6)

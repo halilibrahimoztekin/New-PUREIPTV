@@ -101,6 +101,10 @@ public struct AppFeature {
                     if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
                         hasValidPlaylist = true
                     }
+                } else if playlist.type == .m3u {
+                    if playlist.m3uURL != nil {
+                        hasValidPlaylist = true
+                    }
                 }
             }
 
@@ -125,9 +129,15 @@ public struct AppFeature {
 
             let activePlaylist = playlistRepository.getActivePlaylist()
             var hasValidPlaylist = false
-            if let playlist = activePlaylist, playlist.type == .xtream {
-                if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
-                    hasValidPlaylist = true
+            if let playlist = activePlaylist {
+                if playlist.type == .xtream {
+                    if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
+                        hasValidPlaylist = true
+                    }
+                } else if playlist.type == .m3u {
+                    if playlist.m3uURL != nil {
+                        hasValidPlaylist = true
+                    }
                 }
             }
             if hasValidPlaylist {
@@ -151,16 +161,20 @@ public struct AppFeature {
 
             let activePlaylist = playlistRepository.getActivePlaylist()
             guard let playlist = activePlaylist else { return .none }
-            guard playlist.type == .xtream else { return .none }
-            guard let serverURL = playlist.serverURL else { return .none }
-            guard let username = playlist.username else { return .none }
-            guard let password = playlist.password else { return .none }
 
-            state.home = HomeFeature.State(
-                serverURL: serverURL,
-                username: username,
-                password: password
-            )
+            let config: PlaylistConfig
+            if playlist.type == .xtream {
+                guard let serverURLStr = playlist.serverURL, let url = URL(string: serverURLStr),
+                      let username = playlist.username, let password = playlist.password else { return .none }
+                config = PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)
+            } else if playlist.type == .m3u {
+                guard let m3uURLStr = playlist.m3uURL, let url = URL(string: m3uURLStr) else { return .none }
+                config = PlaylistConfig(type: .m3u, m3uURL: url)
+            } else {
+                return .none
+            }
+
+            state.home = HomeFeature.State(config: config)
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.home) }
             }
@@ -186,9 +200,7 @@ public struct AppFeature {
         // ── Home ─────────────────────────────────────────────────
         case let .home(.delegate(.didSelectChannel(channel, playlist))):
             guard let streamURL = channel.streamURL else { return .none }
-            guard let homeState = state.home, let url = URL(string: homeState.serverURL) else { return .none }
-
-            let config = PlaylistConfig(type: .xtream, serverURL: url, username: homeState.username, password: homeState.password)
+            guard let config = state.home?.config else { return .none }
 
             let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
                 guard let itemStreamURL = item.streamURL else { return nil }
@@ -222,12 +234,10 @@ public struct AppFeature {
             }
 
         case let .home(.delegate(.didSelectVOD(vod))):
-            if let homeState = state.home {
+            if let config = state.home?.config {
                 state.vodDetail = VODDetailFeature.State(
                     vod: vod,
-                    serverURL: homeState.serverURL,
-                    username: homeState.username,
-                    password: homeState.password
+                    config: config
                 )
                 return .run { _ in
                     await MainActor.run { appCoordinator.trigger(.vodDetail) }
@@ -236,12 +246,10 @@ public struct AppFeature {
             return .none
 
         case let .home(.delegate(.didSelectSeries(series))):
-            if let homeState = state.home {
+            if let config = state.home?.config {
                 state.seriesDetail = SeriesDetailFeature.State(
                     series: series,
-                    serverURL: homeState.serverURL,
-                    username: homeState.username,
-                    password: homeState.password
+                    config: config
                 )
                 return .run { _ in
                     await MainActor.run { appCoordinator.trigger(.seriesDetail) }
@@ -315,7 +323,7 @@ public struct AppFeature {
     }
 
     private func playHistoryItem(_ item: WatchHistoryItem, state: inout State) -> Effect<Action> {
-        if let seriesID = item.seriesID, let homeState = state.home {
+        if let seriesID = item.seriesID, let config = state.home?.config {
             let dummySeries = MediaModels.Item(
                 id: seriesID,
                 title: item.seriesTitle ?? item.title,
@@ -325,16 +333,14 @@ public struct AppFeature {
             )
             state.seriesDetail = SeriesDetailFeature.State(
                 series: dummySeries,
-                serverURL: homeState.serverURL,
-                username: homeState.username,
-                password: homeState.password,
+                config: config,
                 historyItem: item,
                 autoPlayOnLoad: true
             )
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.seriesDetail) }
             }
-        } else if item.type == "vod", let homeState = state.home {
+        } else if item.type == "vod", let config = state.home?.config {
             let dummyVOD = MediaModels.Item(
                 id: item.id,
                 title: item.title,
@@ -345,19 +351,14 @@ public struct AppFeature {
             )
             state.vodDetail = VODDetailFeature.State(
                 vod: dummyVOD,
-                serverURL: homeState.serverURL,
-                username: homeState.username,
-                password: homeState.password,
+                config: config,
                 historyItem: item,
                 autoPlayOnLoad: true
             )
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.vodDetail) }
             }
-        } else if let stream = item.streamURL, let streamURL = URL(string: stream), let homeState = state.home {
-            guard let serverURL = URL(string: homeState.serverURL) else { return .none }
-            let config = PlaylistConfig(type: .xtream, serverURL: serverURL, username: homeState.username, password: homeState.password)
-
+        } else if let stream = item.streamURL, let streamURL = URL(string: stream), let config = state.home?.config {
             let coverURL = item.coverURL.flatMap { URL(string: $0) }
 
             let startPosition: Double? = if item.duration > 0 {

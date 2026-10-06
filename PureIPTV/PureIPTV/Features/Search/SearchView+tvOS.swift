@@ -44,12 +44,12 @@
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
                         if store.recentSearches.isEmpty {
-                            emptyStateView("Aramaya Başlayın", icon: "magnifyingglass")
+                            emptyStateView(AppStrings.Search.startSearch, icon: "magnifyingglass")
                         } else {
                             recentSearchesView
                         }
                     } else if store.totalResultsCount == 0 {
-                        emptyStateView("Sonuç Bulunamadı", icon: "doc.text.magnifyingglass")
+                        emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
                         resultsScrollView
                     }
@@ -70,7 +70,7 @@
                     .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
                     .font(.system(size: 32))
 
-                TextField("Kanal, film veya dizi ara...", text: $store.searchQuery.sending(\.queryChanged))
+                TextField(AppStrings.Search.searchPlaceholder, text: $store.searchQuery.sending(\.queryChanged))
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -122,7 +122,7 @@
                 VStack(spacing: 60) {
                     let live = store.liveResults
                     if !live.isEmpty {
-                        resultSection(title: "Canlı TV", count: live.count) {
+                        resultSection(title: AppStrings.Search.liveTV, count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 40) {
                                 ForEach(live) { channel in
                                     Button {
@@ -138,7 +138,7 @@
 
                     let vods = store.vodResults
                     if !vods.isEmpty {
-                        resultSection(title: "Filmler", count: vods.count) {
+                        resultSection(title: AppStrings.Search.movies, count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
                                 ForEach(vods) { vod in
                                     Button {
@@ -154,7 +154,7 @@
 
                     let series = store.seriesResults
                     if !series.isEmpty {
-                        resultSection(title: "Diziler", count: series.count) {
+                        resultSection(title: AppStrings.Search.series, count: series.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
                                 ForEach(series) { item in
                                     Button {
@@ -176,14 +176,14 @@
         private var recentSearchesView: some View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Text("Son Aramalar")
+                    Text(AppStrings.Search.recentSearches)
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(.white)
                     Spacer()
                     Button {
                         store.send(.clearHistoryTapped)
                     } label: {
-                        Text("Temizle")
+                        Text(AppStrings.Search.clear)
                             .font(.system(size: 20, weight: .semibold))
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
@@ -233,7 +233,7 @@
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
 
-        private func resultSection(title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
+        private func resultSection(title: LocalizedStringKey, count: Int, @ViewBuilder content: () -> some View) -> some View {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .bottom) {
                     Text(title)
@@ -254,7 +254,7 @@
                 ProgressView()
                     .tint(Color(hex: "#0A84FF"))
                     .scaleEffect(2.0)
-                Text("Arama altyapısı hazırlanıyor...\n(Bu işlem ilk girişte birkaç saniye sürebilir)")
+                Text(AppStrings.Search.loadingMessage)
                     .font(.system(size: 28))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
@@ -263,7 +263,7 @@
             .padding()
         }
 
-        private func emptyStateView(_ message: String, icon: String) -> some View {
+        private func emptyStateView(_ message: LocalizedStringKey, icon: String) -> some View {
             VStack(spacing: 24) {
                 Spacer()
                 Image(systemName: icon)

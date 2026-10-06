@@ -57,7 +57,7 @@ public struct ParentalLockFeature {
                         if settingsClient.verifyPIN(filtered) {
                             return .send(.unlockSuccess)
                         } else {
-                            state.errorMessage = "Hatalı PIN"
+                            state.errorMessage = AppStrings.Errors.incorrectPIN
                             state.pinInput = ""
                         }
                     }

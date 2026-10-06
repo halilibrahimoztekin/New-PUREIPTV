@@ -119,7 +119,7 @@
             VStack(spacing: 24) {
                 // Skeleton for Channels
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Yükleniyor...")
+                    Text(AppStrings.Common.loading)
                         .font(.title2.bold())
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -139,7 +139,7 @@
 
                 // Skeleton for VODs
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Yükleniyor...")
+                    Text(AppStrings.Common.loading)
                         .font(.title2.bold())
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -214,7 +214,7 @@
 
                         HStack {
                             Image(systemName: "play.fill")
-                            Text("Hemen İzle")
+                            Text(AppStrings.Common.watchNow)
                         }
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)

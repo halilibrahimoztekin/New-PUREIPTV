@@ -21,7 +21,7 @@ public struct EPGTimelineView: View {
                 if store.channels.isEmpty {
                     VStack {
                         Spacer()
-                        Text("Kanal bulunamadı.")
+                        Text(AppStrings.LiveTV.noChannels)
                             .foregroundColor(.gray)
                         Spacer()
                     }
@@ -30,13 +30,13 @@ public struct EPGTimelineView: View {
                     timelineGrid
                 }
             }
-            .navigationTitle("Zaman Çizelgesi")
+            .navigationTitle(AppStrings.Player.timeline)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Kapat") {
+                        Button(AppStrings.Common.close) {
                             store.send(.closeTapped)
                         }
                     }
@@ -174,7 +174,7 @@ public struct EPGTimelineView: View {
                     }
                 }
             } else {
-                Text("Kayıt yok")
+                Text(AppStrings.Player.noRecord)
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.3))
                     .frame(height: rowHeight)

@@ -38,8 +38,8 @@
 
 /* Begin PBXFileReference section */
 		8BCF6C753035797400E02EB4 /* PureIPTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PureIPTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = PureIPTVTests.xctest; path = PureIPTV.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = PureIPTVUITests.xctest; path = PureIPTV.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -181,6 +181,9 @@
 				8BCF6C893035797500E02EB4 /* PureIPTVTests */,
 			);
 			name = PureIPTVTests;
+			packageProductDependencies = (
+				8B9999993035797500E02EB4 /* SnapshotTesting */,
+			);
 			productName = PureIPTVTests;
 			productReference = 8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -235,6 +238,26 @@
 			knownRegions = (
 				en,
 				Base,
+				tr,
+				es,
+				fr,
+				de,
+				it,
+				"pt-BR",
+				"pt-PT",
+				ru,
+				"zh-Hans",
+				"zh-Hant",
+				ja,
+				ko,
+				ar,
+				hi,
+				nl,
+				sv,
+				pl,
+				id,
+				th,
+				vi,
 			);
 			mainGroup = 8BCF6C6C3035797400E02EB4;
 			minimizedProjectReferenceProxies = 1;
@@ -353,7 +376,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -369,7 +392,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 5.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV;
 				PRODUCT_NAME = PureIPTV;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -394,7 +417,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -410,7 +433,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 5.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV;
 				PRODUCT_NAME = PureIPTV;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -558,21 +581,24 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVTests;
-				PRODUCT_NAME = PureIPTV;
+				PRODUCT_NAME = PureIPTVTests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TARGET_NAME = PureIPTV;
+				TARGET_NAME = PureIPTVTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PureIPTV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PureIPTV";
-				TVOS_DEPLOYMENT_TARGET = 26.5;
+				TVOS_DEPLOYMENT_TARGET = 18.6;
 			};
 			name = Debug;
 		};
@@ -582,21 +608,24 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVTests;
-				PRODUCT_NAME = PureIPTV;
+				PRODUCT_NAME = PureIPTVTests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TARGET_NAME = PureIPTV;
+				TARGET_NAME = PureIPTVTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PureIPTV.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PureIPTV";
-				TVOS_DEPLOYMENT_TARGET = 26.5;
+				TVOS_DEPLOYMENT_TARGET = 18.6;
 			};
 			name = Release;
 		};
@@ -605,19 +634,23 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
-				PRODUCT_NAME = PureIPTV;
+				PRODUCT_NAME = PureIPTVUITests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TARGET_NAME = PureIPTV;
+				TARGET_NAME = PureIPTVUITests;
 				TEST_TARGET_NAME = PureIPTV;
+				TVOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 			};
 			name = Debug;
 		};
@@ -626,19 +659,23 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
-				PRODUCT_NAME = PureIPTV;
+				PRODUCT_NAME = PureIPTVUITests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
-				TARGET_NAME = PureIPTV;
+				TARGET_NAME = PureIPTVUITests;
 				TEST_TARGET_NAME = PureIPTV;
+				TVOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 			};
 			name = Release;
 		};
@@ -826,6 +863,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D5A10361DECBFEB207C7BF40 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
 			productName = Shimmer;
+		};
+		8B9999993035797500E02EB4 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

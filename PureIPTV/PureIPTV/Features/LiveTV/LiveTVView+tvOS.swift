@@ -59,7 +59,7 @@
                 VStack(spacing: 4) {
                     // Header
                     HStack {
-                        Text("Kategoriler")
+                        Text(AppStrings.LiveTV.categories)
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                         Spacer()
@@ -110,7 +110,7 @@
                         .progressViewStyle(.circular)
                         .tint(Color(hex: "#0A84FF"))
                         .scaleEffect(1.5)
-                    Text("Kanallar yükleniyor…")
+                    Text(AppStrings.LiveTV.loadingChannels)
                         .font(.system(size: 24))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                         .padding(.top, 16)
@@ -121,7 +121,7 @@
                     Image(systemName: "antenna.radiowaves.left.and.right.slash")
                         .font(.system(size: 60))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                    Text("Kanal bulunamadı")
+                    Text(AppStrings.LiveTV.noChannels)
                         .font(.system(size: 28))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
                 }
@@ -145,9 +145,9 @@
                                     store.send(.toggleFavorite(channel))
                                 } label: {
                                     if store.favoriteIDs.contains(channel.id) {
-                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
-                                        Label("Favorilere Ekle", systemImage: "heart")
+                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
                                 }
                             }

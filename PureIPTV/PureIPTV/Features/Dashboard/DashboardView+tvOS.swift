@@ -117,7 +117,7 @@
                 ProgressView()
                     .tint(Color(hex: "#0A84FF"))
                     .scaleEffect(2.0)
-                Text("Yükleniyor…")
+                Text(AppStrings.Common.loadingAlt)
                     .font(.system(size: 32))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }
@@ -178,7 +178,7 @@
 
                         HStack(spacing: 12) {
                             Image(systemName: "play.fill")
-                            Text("Hemen İzle")
+                            Text(AppStrings.Common.watchNow)
                         }
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)

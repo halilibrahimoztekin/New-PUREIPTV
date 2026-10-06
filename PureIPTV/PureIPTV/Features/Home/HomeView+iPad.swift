@@ -86,7 +86,7 @@
                         )
                 }
 
-                Text("PureIPTV")
+                Text(AppStrings.Common.appName)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Color(hex: "#E4E1E7"))
             }
@@ -151,7 +151,7 @@
             case .settings:
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    Text("Ayarlar yakında geliyor…")
+                    Text(AppStrings.Common.settingsComingSoon)
                         .font(.system(size: 20))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                 }
@@ -198,7 +198,7 @@
 
     #Preview("Home iPad") {
         HomeView_iPad(
-            store: Store(initialState: HomeFeature.State(serverURL: "http://provider.net:8080", username: "demo", password: "demo")) {
+            store: Store(initialState: HomeFeature.State(config: PlaylistConfig(type: .xtream, serverURL: URL(string: "http://example.com")!, username: "demo", password: "pwd"))) {
                 HomeFeature()
             }
         )

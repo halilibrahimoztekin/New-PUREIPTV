@@ -552,7 +552,7 @@ public struct PlayerFeature {
                     return .merge(actions)
                 }
             case .encounteredError:
-                state.errorMessage = String(localized: "Yayın oynatılamıyor.")
+                state.errorMessage = AppStrings.Errors.cannotPlayStream
             case let .timeChanged(time):
                 state.currentTime = time
                 if state.item.config == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
@@ -625,9 +625,7 @@ public struct PlayerFeature {
         case .pipRestoreUI:
             // PiP floating window'dan "geri dön" tıklandı → full-screen'e dön
             state.isPiPActive = false
-            return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.player) }
-            }
+            return .none
         }
     }
 

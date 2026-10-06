@@ -29,7 +29,7 @@
                 VStack(spacing: 0) {
                     // ── Header Actions ─────────────────────────────────
                     HStack {
-                        Text("Diziler")
+                        Text(AppStrings.Series.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
@@ -107,7 +107,7 @@
                         Image(systemName: "rectangle.stack")
                             .font(.system(size: 36))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                        Text("Bu kategoride dizi bulunamadı")
+                        Text(AppStrings.Series.emptyCategorySeries)
                             .font(.system(size: 15))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
                     }
@@ -127,9 +127,9 @@
                                     store.send(.toggleFavorite(series))
                                 } label: {
                                     if store.favoriteIDs.contains(series.id) {
-                                        Label("Favorilerden Çıkar", systemImage: "heart.slash")
+                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
-                                        Label("Favorilere Ekle", systemImage: "heart")
+                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
                                 }
                             }
@@ -162,7 +162,7 @@
                 Image(systemName: "rectangle.stack.badge.minus")
                     .font(.system(size: 40))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                Text("Kategori bulunamadı")
+                Text(AppStrings.Common.categoryNotFound)
                     .font(.system(size: 16))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }

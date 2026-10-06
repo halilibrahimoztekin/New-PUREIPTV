@@ -34,7 +34,7 @@ public struct MultiView: View {
 
                     Spacer()
 
-                    Text("Multi-view")
+                    Text(AppStrings.MultiView.title)
                         .font(.headline)
                         .foregroundStyle(.white)
 
@@ -168,7 +168,7 @@ public struct MultiView: View {
                         Image(systemName: "plus.circle")
                             .font(.system(size: 40))
                             .foregroundStyle(Color.white.opacity(0.4))
-                        Text("Kanal Ekle")
+                        Text(AppStrings.MultiView.addChannel)
                             .font(.caption)
                             .foregroundStyle(Color.white.opacity(0.4))
                             .padding(.top, 4)
@@ -225,11 +225,11 @@ private struct ChannelSelectionSheet: View {
                     }
                 }
             }
-            .navigationTitle("Kanal Seç")
+            .navigationTitle(AppStrings.MultiView.selectChannel)
             #if !os(tvOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-                .searchable(text: $searchText, prompt: "Kanal ara...")
+                .searchable(text: $searchText, prompt: AppStrings.Search.channelSearchPlaceholder)
         }
     }
 }

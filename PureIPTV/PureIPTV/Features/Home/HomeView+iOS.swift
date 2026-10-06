@@ -108,7 +108,7 @@
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(Color(hex: "#E4E1E7"))
 
-                    Text("Yakında geliyor…")
+                    Text(AppStrings.Common.comingSoon)
                         .font(.system(size: 15))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                 }
@@ -119,7 +119,7 @@
 
     #Preview("Home iOS") {
         HomeView_iOS(
-            store: Store(initialState: HomeFeature.State(serverURL: "http://example.com", username: "demo", password: "demo")) {
+            store: Store(initialState: HomeFeature.State(config: PlaylistConfig(type: .xtream, serverURL: URL(string: "http://example.com")!, username: "demo", password: "pwd"))) {
                 HomeFeature()
             }
         )

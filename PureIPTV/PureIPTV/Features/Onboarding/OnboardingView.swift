@@ -25,7 +25,7 @@ public struct OnboardingView: View {
                     Button {
                         store.send(.skipTapped)
                     } label: {
-                        Text("Atla")
+                        Text(AppStrings.Onboarding.skip)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white.opacity(0.7))
                             .padding()
@@ -43,22 +43,22 @@ public struct OnboardingView: View {
                     if tag == 0 {
                         onboardingPage(
                             icon: "tv.circle.fill",
-                            title: "PureIPTV'ye Hoşgeldiniz",
-                            description: "Apple ekosistemi için özenle tasarlanmış, akıcı ve reklamsız premium IPTV deneyimi.",
+                            title: AppStrings.Onboarding.page1Title,
+                            description: AppStrings.Onboarding.page1Desc,
                             tag: 0
                         )
                     } else if tag == 1 {
                         onboardingPage(
                             icon: "magnifyingglass.circle.fill",
-                            title: "Hızlı Arama & Geçmiş",
-                            description: "Gelişmiş arama altyapısı sayesinde binlerce kanal ve film arasında saniyeler içinde geçiş yapın.",
+                            title: AppStrings.Onboarding.page2Title,
+                            description: AppStrings.Onboarding.page2Desc,
                             tag: 1
                         )
                     } else if tag == 2 {
                         onboardingPage(
                             icon: "pip.enter",
-                            title: "Zengin Oynatıcı & PiP",
-                            description: "Picture in Picture desteği ve ses/altyazı kontrolüyle seyir zevkinizi üst seviyeye taşıyın.",
+                            title: AppStrings.Onboarding.page3Title,
+                            description: AppStrings.Onboarding.page3Desc,
                             tag: 2
                         )
                     } else {
@@ -69,12 +69,12 @@ public struct OnboardingView: View {
                                 .padding(.bottom, 16)
                                 .symbolEffect(.bounce, options: .repeating)
 
-                            Text("Nasıl Kullanılır?")
+                            Text(AppStrings.Onboarding.howToUse)
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.center)
 
-                            Text("Ana ekrandan '+' butonuna basarak Xtream Codes veya M3U bağlantılarınızı kolayca ekleyebilir ve izlemeye başlayabilirsiniz.")
+                            Text(AppStrings.Onboarding.description)
                                 .font(.system(size: 18))
                                 .foregroundColor(.white.opacity(0.8))
                                 .multilineTextAlignment(.center)
@@ -84,7 +84,7 @@ public struct OnboardingView: View {
                             Button {
                                 store.send(.startTapped)
                             } label: {
-                                Text("Hemen Başla")
+                                Text(AppStrings.Onboarding.startNow)
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
@@ -110,7 +110,7 @@ public struct OnboardingView: View {
         }
     }
 
-    private func onboardingPage(icon: String, title: String, description: String, tag: Int) -> some View {
+    private func onboardingPage(icon: String, title: LocalizedStringKey, description: LocalizedStringKey, tag: Int) -> some View {
         VStack(spacing: 24) {
             Image(systemName: icon)
                 .font(.system(size: 100))
@@ -133,7 +133,7 @@ public struct OnboardingView: View {
                 Button {
                     store.send(.nextPage, animation: .spring())
                 } label: {
-                    Text("İleri")
+                    Text(AppStrings.Onboarding.next)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 32)

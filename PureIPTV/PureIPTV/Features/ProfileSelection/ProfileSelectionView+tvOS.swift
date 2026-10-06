@@ -35,12 +35,12 @@
 
                     // ── Header Title ──────────────────────────────────
                     VStack(spacing: 12) {
-                        Text(store.isEditing ? "Profilleri Yönet" : "Kim İzliyor?")
+                        Text(store.isEditing ? AppStrings.Profile.manageProfiles : AppStrings.Profile.whoIsWatching)
                             .font(.system(size: 54, weight: .bold))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
 
-                        Text(store.isEditing ? "Silmek istediğiniz profilin üzerindeki çöp kutusunu seçin." : "İçeriklerinizi ve izleme geçmişinizi kişiselleştirin.")
+                        Text(store.isEditing ? AppStrings.Profile.deleteInstruction : AppStrings.Profile.personalizeDesc)
                             .font(.system(size: 22))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.65))
                     }
@@ -82,7 +82,7 @@
                         HStack(spacing: 10) {
                             Image(systemName: store.isEditing ? "checkmark" : "pencil")
                                 .font(.system(size: 18, weight: .bold))
-                            Text(store.isEditing ? "Bitti" : "Profilleri Yönet")
+                            Text(store.isEditing ? AppStrings.Common.done : AppStrings.Profile.manageProfiles)
                                 .font(.system(size: 20, weight: .semibold))
                         }
                         .padding(.horizontal, 28)
@@ -199,7 +199,7 @@
 
                         // Kids Badge
                         if profile.isKidsMode {
-                            Text("ÇOCUK")
+                            Text(AppStrings.Profile.kidsBadge)
                                 .font(.system(size: 13, weight: .black))
                                 .foregroundStyle(Color.white)
                                 .padding(.horizontal, 10)
@@ -317,7 +317,7 @@
                 }
                 .buttonStyle(.tvGridCard)
 
-                Text("Profil Ekle")
+                Text(AppStrings.Profile.addProfile)
                     .font(.system(size: 24, weight: isFocused ? .bold : .medium))
                     .foregroundStyle(labelColor)
                     .scaleEffect(labelScale)
@@ -416,34 +416,34 @@
                 Color(hex: "#101016").ignoresSafeArea()
 
                 VStack(spacing: 32) {
-                    Text("Yeni Profil Oluştur")
+                    Text(AppStrings.Profile.createProfile)
                         .font(.system(size: 36, weight: .bold))
                         .foregroundStyle(.white)
 
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Profil Adı")
+                        Text(AppStrings.Profile.profileName)
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.7))
 
-                        TextField("Profil Adı Girin", text: $name)
+                        TextField(AppStrings.Profile.enterProfileName, text: $name)
                             .font(.system(size: 22))
                             .padding()
                             .background(Color.white.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                        Toggle("Çocuk Profili (Sadece çocuk içerikleri)", isOn: $isKids)
+                        Toggle(AppStrings.Profile.kidsProfileDesc, isOn: $isKids)
                             .font(.system(size: 22))
                             .padding(.vertical, 8)
                     }
                     .frame(maxWidth: 600)
 
                     HStack(spacing: 24) {
-                        Button("İptal", action: onCancel)
+                        Button(AppStrings.Common.cancel, action: onCancel)
                             .font(.system(size: 22, weight: .semibold))
                             .padding(.horizontal, 32)
                             .padding(.vertical, 14)
 
-                        Button("Oluştur", action: onAdd)
+                        Button(AppStrings.Common.create, action: onAdd)
                             .font(.system(size: 22, weight: .bold))
                             .padding(.horizontal, 32)
                             .padding(.vertical, 14)

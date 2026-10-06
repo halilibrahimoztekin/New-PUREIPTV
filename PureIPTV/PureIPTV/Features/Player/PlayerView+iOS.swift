@@ -154,24 +154,6 @@
                                             .padding(10)
                                             .background(store.isInfoVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
                                     }
-
-                                    // PiP Button
-                                    if pipController?.isPossible == true {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.light)
-                                            if store.isPiPActive {
-                                                pipController?.stop()
-                                            } else {
-                                                _ = pipController?.start()
-                                            }
-                                        }) {
-                                            Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
-                                                .font(.title3)
-                                                .foregroundColor(.white)
-                                                .padding(10)
-                                                .background(store.isPiPActive ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                        }
-                                    }
                                 }
                             }
 
@@ -192,7 +174,7 @@
                                 HStack {
                                     Spacer()
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Media Info")
+                                        Text(AppStrings.Player.mediaInfo)
                                             .font(.headline)
                                             .foregroundColor(.white)
                                             .padding(.bottom, 4)
@@ -205,7 +187,7 @@
                                                 InfoRow(title: "Bitrate", value: "\(bitrate / 1000) kbps")
                                             }
                                         } else {
-                                            Text("Yükleniyor...")
+                                            Text(AppStrings.Common.loading)
                                                 .foregroundColor(.white.opacity(0.7))
                                                 .font(.caption)
                                         }
@@ -402,7 +384,7 @@
                     VStack(alignment: .leading, spacing: 16) {
                         if !store.audioTracks.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Ses İzleri")
+                                Text(AppStrings.Player.audioTracks)
                                     .font(.headline)
                                     .foregroundColor(.white)
 
@@ -429,7 +411,7 @@
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Altyazılar")
+                                Text(AppStrings.Player.subtitles)
                                     .font(.headline)
                                     .foregroundColor(.white)
 
@@ -437,7 +419,7 @@
 
                                 Button(action: { HapticManager.shared.trigger(.light); store.send(.selectSubtitleTrack(nil)) }) {
                                     HStack {
-                                        Text("Kapalı")
+                                        Text(AppStrings.Player.off)
                                         Spacer()
                                         if isSubtitlesOff {
                                             Image(systemName: "checkmark")
@@ -465,7 +447,7 @@
                         }
 
                         if store.audioTracks.isEmpty, store.subtitleTracks.isEmpty {
-                            Text("Seçenek bulunmuyor.")
+                            Text(AppStrings.Player.noOptions)
                                 .foregroundColor(.white.opacity(0.7))
                                 .font(.caption)
                         }
@@ -507,7 +489,7 @@
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("Kanallar")
+                    Text(AppStrings.LiveTV.channelsTitle)
                         .font(.headline)
                         .foregroundColor(.white)
                     Spacer()

@@ -12,14 +12,14 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             List {
-                Section(header: Text("HESAPLAR")) {
+                Section(header: Text(AppStrings.Settings.accounts)) {
                     Button(action: {
                         store.send(.managePlaylistsTapped)
                     }) {
                         HStack {
                             Image(systemName: "list.bullet.rectangle")
                                 .foregroundColor(.blue)
-                            Text("Hesap Yönetimi (Playlists)")
+                            Text(AppStrings.Settings.manageAccounts)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.gray)
@@ -29,7 +29,7 @@ public struct SettingsView: View {
                     .foregroundColor(.primary)
                 }
 
-                Section(header: Text("GÜVENLİK")) {
+                Section(header: Text(AppStrings.Settings.security)) {
                     Toggle(isOn: Binding(
                         get: { store.isParentalControlEnabled },
                         set: { store.send(.toggleParentalControl($0)) }
@@ -37,14 +37,14 @@ public struct SettingsView: View {
                         HStack {
                             Image(systemName: "lock.fill")
                                 .foregroundColor(.red)
-                            Text("Ebeveyn Kontrolü")
+                            Text(AppStrings.ParentalLock.title)
                         }
                     }
                     .tint(.red)
                 }
 
-                Section(header: Text("GÖRÜNÜM")) {
-                    Picker("Ana Renk", selection: $theme.themeColorHex) {
+                Section(header: Text(AppStrings.Settings.appearance)) {
+                    Picker(AppStrings.Settings.themeColor, selection: $theme.themeColorHex) {
                         ForEach(theme.availableColors, id: \.hex) { color in
                             HStack {
                                 Circle().fill(Color(hex: color.hex)).frame(width: 16, height: 16)
@@ -56,7 +56,7 @@ public struct SettingsView: View {
                         theme.setThemeColor(hex: newValue)
                     }
 
-                    Picker("Uygulama İkonu", selection: $theme.currentAppIconName) {
+                    Picker(AppStrings.Settings.appIcon, selection: $theme.currentAppIconName) {
                         ForEach(theme.availableIcons, id: \.name) { icon in
                             Text(icon.name).tag(icon.iconName ?? "AppIcon")
                         }
@@ -66,16 +66,16 @@ public struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("HAKKINDA"), footer: Text("PureIPTV v1.0.0")) {
+                Section(header: Text(AppStrings.Settings.about), footer: Text(AppStrings.Settings.appVersion)) {
                     HStack {
-                        Text("Sürüm")
+                        Text(AppStrings.Settings.version)
                         Spacer()
-                        Text("1.0.0")
+                        Text(AppStrings.Settings.versionNumber)
                             .foregroundColor(.gray)
                     }
                 }
             }
-            .navigationTitle("Ayarlar")
+            .navigationTitle(AppStrings.Settings.title)
             .onAppear {
                 store.send(.onAppear)
             }
@@ -96,10 +96,10 @@ struct PINSetupView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(store.step == .enterNew ? "Yeni PIN Belirleyin" : "PIN'i Doğrulayın")
+                Text(store.step == .enterNew ? AppStrings.Settings.setNewPIN : AppStrings.Settings.verifyPIN)
                     .font(.headline)
 
-                SecureField("PIN", text: Binding(
+                SecureField(AppStrings.ParentalLock.pin, text: Binding(
                     get: { store.step == .enterNew ? store.pinInput : store.pinConfirm },
                     set: { store.send(.pinInputChanged($0)) }
                 ))
@@ -120,13 +120,13 @@ struct PINSetupView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Ebeveyn Kontrolü")
+            .navigationTitle(AppStrings.ParentalLock.title)
             #if !os(tvOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("İptal") {
+                        Button(AppStrings.Common.cancel) {
                             store.send(.cancelPINSetup)
                         }
                     }

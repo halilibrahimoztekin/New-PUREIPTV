@@ -85,7 +85,23 @@ extension DatabaseClient: DependencyKey {
             fetchWatchHistory: {
                 let context = ModelContext(modelContainer)
                 let descriptor = FetchDescriptor<WatchHistoryItem>(sortBy: [SortDescriptor(\.lastWatchedAt, order: .reverse)])
-                return try context.fetch(descriptor)
+                let allItems = try context.fetch(descriptor)
+
+                var seenSeriesIDs = Set<String>()
+                var deduplicatedItems: [WatchHistoryItem] = []
+
+                for item in allItems {
+                    if let seriesID = item.seriesID, !seriesID.isEmpty {
+                        if !seenSeriesIDs.contains(seriesID) {
+                            seenSeriesIDs.insert(seriesID)
+                            deduplicatedItems.append(item)
+                        }
+                    } else {
+                        deduplicatedItems.append(item)
+                    }
+                }
+
+                return deduplicatedItems
             },
             saveWatchProgress: { item in
                 let context = ModelContext(modelContainer)

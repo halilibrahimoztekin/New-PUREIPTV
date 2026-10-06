@@ -107,7 +107,7 @@ public struct SettingsFeature {
                         try await settingsClient.setParentalControl(true, finalPIN)
                     }
                 } else {
-                    state.errorMessage = "PIN kodları eşleşmiyor. Tekrar deneyin."
+                    state.errorMessage = AppStrings.Errors.pinMismatch
                     state.pinConfirm = ""
                     state.step = .confirm
                     return .none

@@ -91,19 +91,11 @@
                 .onTapGesture {
                     showMask()
                 }
-                .onMoveCommand { direction in
-                    switch direction {
-                    case .left:
-                        store.send(.jumpBackward)
-                        showMask()
-                    case .right:
-                        store.send(.jumpForward)
-                        showMask()
-                    case .up, .down:
-                        showMask()
-                    @unknown default:
-                        showMask()
-                    }
+                .onMoveCommand { _ in
+                    showMask()
+                }
+                .onContinuousHover { _ in
+                    showMask()
                 }
         }
 
@@ -197,7 +189,7 @@
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 8, height: 8)
-                            Text("CANLI")
+                            Text(AppStrings.Player.liveLabel)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.red)
                         }
@@ -285,7 +277,7 @@
                                 store.send(.selectSubtitleTrack(nil))
                             } label: {
                                 HStack {
-                                    Text("Kapalı")
+                                    Text(AppStrings.Player.off)
                                     if store.selectedSubtitleTrack == nil {
                                         Image(systemName: "checkmark")
                                     }
@@ -394,7 +386,7 @@
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
-                    Text("Canlı Yayın")
+                    Text(AppStrings.Player.liveBroadcast)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.8))
                     Spacer()
@@ -457,14 +449,14 @@
                             if isScrubbing {
                                 HStack(spacing: 6) {
                                     Image(systemName: "hand.tap.fill")
-                                    Text("Seçmek için Tıklayın veya Bırakın")
+                                    Text(AppStrings.Player.scrubInstruction)
                                 }
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(Color(hex: "#5AC8FA"))
                             } else {
                                 HStack(spacing: 4) {
                                     Image(systemName: "chevron.left")
-                                    Text("Geri")
+                                    Text(AppStrings.Common.back)
                                 }
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.7))
@@ -472,7 +464,7 @@
                                 Text("•")
                                     .foregroundStyle(.white.opacity(0.4))
 
-                                Text("Kaydırarak Akıcı İleri / Geri Sarma")
+                                Text(AppStrings.Player.scrubSwipe)
                                     .font(.system(size: 15, weight: .bold))
                                     .foregroundStyle(Color(hex: "#5AC8FA"))
 
@@ -480,7 +472,7 @@
                                     .foregroundStyle(.white.opacity(0.4))
 
                                 HStack(spacing: 4) {
-                                    Text("İleri")
+                                    Text(AppStrings.Onboarding.next)
                                     Image(systemName: "chevron.right")
                                 }
                                 .font(.system(size: 14, weight: .semibold))

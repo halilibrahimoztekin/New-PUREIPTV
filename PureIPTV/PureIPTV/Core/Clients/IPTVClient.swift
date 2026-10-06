@@ -1,6 +1,52 @@
 import ComposableArchitecture
 @preconcurrency import Foundation
 
+actor M3UCache {
+    var items: [M3UItemDTO] = []
+
+    func update(items: [M3UItemDTO]) {
+        self.items = items
+    }
+
+    func getItems() -> [M3UItemDTO] {
+        items
+    }
+}
+
+private extension M3UItemDTO {
+    var resolvedMediaType: MediaModels.ItemType {
+        // 1. tvg-type
+        if let type = tvgType?.lowercased() {
+            if type.contains("movie") || type.contains("vod") {
+                return .vod
+            }
+            if type.contains("series") || type.contains("tv show") || type.contains("tv-show") {
+                return .series
+            }
+            if type.contains("live") || type.contains("tv") {
+                return .live
+            }
+        }
+
+        // 2. group-title
+        let group = groupTitle.lowercased()
+        if group.contains("movie") || group.contains("film") || group.contains("vod") {
+            return .vod
+        }
+        if group.contains("series") || group.contains("dizi") || group.contains("season") {
+            return .series
+        }
+
+        // 3. url extension
+        let path = streamURL.path.lowercased()
+        if path.hasSuffix(".mp4") || path.hasSuffix(".mkv") || path.hasSuffix(".avi") {
+            return .vod
+        }
+
+        return .live
+    }
+}
+
 @DependencyClient
 public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
@@ -18,9 +64,26 @@ public struct IPTVClient {
 extension IPTVClient: DependencyKey {
     public nonisolated static let liveValue: IPTVClient = {
         let networkClient = NetworkClient()
+        let m3uCache = M3UCache()
 
         return IPTVClient(
             authenticate: { config in
+                if config.type == .m3u {
+                    guard let m3uURL = config.m3uURL else {
+                        throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U configuration"])
+                    }
+                    let data = try await networkClient.fetchData(url: m3uURL)
+                    guard let m3uString = String(data: data, encoding: .utf8) else {
+                        throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Failed to parse M3U data"])
+                    }
+                    let parser = M3UParser()
+                    let parsedResult = await Task.detached(priority: .userInitiated) {
+                        parser.parse(m3uString: m3uString)
+                    }.value
+                    await m3uCache.update(items: parsedResult.items)
+                    return
+                }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
@@ -30,6 +93,12 @@ extension IPTVClient: DependencyKey {
                 }
             },
             fetchLiveCategories: { config in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .live }
+                    let groups = Array(Set(items.map(\.groupTitle))).sorted()
+                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveCategories.url(with: xtreamConfig)
@@ -37,6 +106,22 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchLiveChannels: { config, categoryID in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .live }
+                    let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
+                    return filtered.map { item in
+                        MediaModels.Item(
+                            id: item.id,
+                            title: item.title,
+                            streamURL: item.streamURL,
+                            coverURL: item.coverURL,
+                            categoryID: item.groupTitle,
+                            type: .live,
+                            epgChannelID: item.tvgID
+                        )
+                    }
+                }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveStreams(categoryID: categoryID).url(with: xtreamConfig)
@@ -57,6 +142,11 @@ extension IPTVClient: DependencyKey {
                 }
             },
             fetchVODCategories: { config in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .vod }
+                    let groups = Array(Set(items.map(\.groupTitle))).sorted()
+                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODCategories.url(with: xtreamConfig)
@@ -64,6 +154,21 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchVODs: { config, categoryID in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .vod }
+                    let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
+                    return filtered.map { item in
+                        MediaModels.Item(
+                            id: item.id,
+                            title: item.title,
+                            streamURL: item.streamURL,
+                            coverURL: item.coverURL,
+                            categoryID: item.groupTitle,
+                            type: .vod,
+                            epgChannelID: item.tvgID
+                        )
+                    }
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODStreams(categoryID: categoryID).url(with: xtreamConfig)
@@ -85,6 +190,11 @@ extension IPTVClient: DependencyKey {
                 }
             },
             fetchSeriesCategories: { config in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .series }
+                    let groups = Array(Set(items.map(\.groupTitle))).sorted()
+                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesCategories.url(with: xtreamConfig)
@@ -92,6 +202,21 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchSeries: { config, categoryID in
+                if config.type == .m3u {
+                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .series }
+                    let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
+                    return filtered.map { item in
+                        MediaModels.Item(
+                            id: item.id,
+                            title: item.title,
+                            streamURL: item.streamURL, // In MediaModels for Series, streamURL can be nil until an episode is selected, but here we only have the M3U item URL
+                            coverURL: item.coverURL,
+                            categoryID: item.groupTitle,
+                            type: .series,
+                            epgChannelID: item.tvgID
+                        )
+                    }
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeries(categoryID: categoryID).url(with: xtreamConfig)
@@ -112,6 +237,18 @@ extension IPTVClient: DependencyKey {
                 }
             },
             fetchSeriesInfo: { config, seriesID in
+                if config.type == .m3u {
+                    // Since M3U series items are flat, we just return a single episode pseudo-info
+                    // Find the item first
+                    let items = await m3uCache.getItems()
+                    if let item = items.first(where: { $0.id == seriesID }) {
+                        let info = DetailModels.Info(plot: nil, cast: nil, director: nil, genre: item.groupTitle)
+                        let seasons = [DetailModels.Season(id: "1", seasonNumber: 1, name: "Season 1", episodeCount: 1)]
+                        let episodes = [DetailModels.Episode(id: item.id, episodeNum: 1, title: item.title, streamURL: item.streamURL, coverURL: item.coverURL, season: 1)]
+                        return (info: info, seasons: seasons, episodes: episodes)
+                    }
+                    throw NSError(domain: "IPTVClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Series not found"])
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
                     throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid Xtream configuration"])
                 }
@@ -159,6 +296,14 @@ extension IPTVClient: DependencyKey {
                 return (info: info, seasons: seasons.sorted(by: { $0.seasonNumber < $1.seasonNumber }), episodes: episodes)
             },
             fetchVODInfo: { config, vodID in
+                if config.type == .m3u {
+                    // Find the item first
+                    let items = await m3uCache.getItems()
+                    if let item = items.first(where: { $0.id == vodID }) {
+                        return DetailModels.Info(plot: nil, cast: nil, director: nil, genre: item.groupTitle)
+                    }
+                    throw NSError(domain: "IPTVClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "VOD not found"])
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
                     throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid Xtream configuration"])
                 }
@@ -179,6 +324,9 @@ extension IPTVClient: DependencyKey {
                 )
             },
             fetchShortEPG: { config, streamID, limit in
+                if config.type == .m3u {
+                    return []
+                }
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
@@ -253,7 +401,18 @@ extension IPTVClient: DependencyKey {
         )
     }()
 
-    public static let testValue = IPTVClient()
+    public static let testValue = IPTVClient(
+        authenticate: { _ in },
+        fetchLiveCategories: { _ in [] },
+        fetchLiveChannels: { _, _ in [] },
+        fetchVODCategories: { _ in [] },
+        fetchVODs: { _, _ in [] },
+        fetchSeriesCategories: { _ in [] },
+        fetchSeries: { _, _ in [] },
+        fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
+        fetchVODInfo: { _, _ in DetailModels.Info() },
+        fetchShortEPG: { _, _, _ in [] }
+    )
 }
 
 public extension DependencyValues {

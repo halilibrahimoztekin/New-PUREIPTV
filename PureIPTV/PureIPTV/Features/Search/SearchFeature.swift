@@ -148,7 +148,7 @@ public struct SearchFeature: Sendable {
 
             case let .loadAllDataResponse(.failure(error)):
                 state.isLoading = false
-                state.errorMessage = String(localized: "Arama verileri yüklenemedi: \(error.localizedDescription)")
+                state.errorMessage = AppStrings.Errors.searchFailed(desc: error.localizedDescription)
                 return .none
 
             case let .queryChanged(query):

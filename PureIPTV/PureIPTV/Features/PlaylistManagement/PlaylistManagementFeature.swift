@@ -20,6 +20,7 @@ public struct PlaylistManagementFeature {
         case setActivePlaylist(UUID)
         case deletePlaylist(UUID)
         case addPlaylist(PresentationAction<AddPlaylistFeature.Action>)
+        case closeTapped
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -43,6 +44,9 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .viewDidDisappear:
+                return .none
+
+            case .closeTapped:
                 return .send(.delegate(.dismissed))
 
             case .binding:

@@ -74,11 +74,11 @@
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                             .tracking(-1)
 
-                        Text("Playlist Ekle")
+                        Text(AppStrings.AddPlaylist.title)
                             .font(.system(size: 32, weight: .semibold))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
 
-                        Text("Xtream Codes veya\nM3U URL ile bağlanın.")
+                        Text(AppStrings.AddPlaylist.connectWith)
                             .font(.system(size: 24, weight: .regular))
                             .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
                             .lineSpacing(4)
@@ -160,21 +160,21 @@
             VStack(spacing: 16) {
                 TVFormField(
                     icon: "server.rack",
-                    placeholder: "Sunucu URL  (https://provider.net:8080)",
+                    placeholder: AppStrings.AddPlaylist.serverPlaceholder,
                     text: $store.serverURL
                 )
                 .focused($focusedField, equals: .serverURL)
 
                 TVFormField(
                     icon: "person.fill",
-                    placeholder: "Kullanıcı Adı",
+                    placeholder: AppStrings.AddPlaylist.usernamePlaceholder,
                     text: $store.username
                 )
                 .focused($focusedField, equals: .username)
 
                 TVFormField(
                     icon: "lock.fill",
-                    placeholder: "Şifre",
+                    placeholder: AppStrings.AddPlaylist.passwordPlaceholder,
                     text: $store.password,
                     isSecure: !store.isPasswordVisible
                 )
@@ -187,7 +187,7 @@
         private var tvM3UField: some View {
             TVFormField(
                 icon: "link",
-                placeholder: "M3U URL  (http://...)",
+                placeholder: AppStrings.AddPlaylist.m3uPlaceholder,
                 text: $store.m3uURL
             )
             .focused($focusedField, equals: .m3uURL)
@@ -233,7 +233,7 @@
                         HStack(spacing: 12) {
                             Image(systemName: "play.fill")
                                 .font(.system(size: 20, weight: .bold))
-                            Text("Bağlan")
+                            Text(AppStrings.AddPlaylist.connect)
                                 .font(.system(size: 28, weight: .bold))
                         }
                         .foregroundStyle(.white)
@@ -269,7 +269,7 @@
 
     private struct TVFormField: View {
         let icon: String
-        let placeholder: String
+        let placeholder: LocalizedStringKey
         @Binding var text: String
         var isSecure: Bool = false
 
