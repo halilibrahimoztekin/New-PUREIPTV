@@ -27,6 +27,21 @@ public struct SettingsView: View {
                         }
                     }
                     .foregroundColor(.primary)
+
+                    Button(action: {
+                        store.send(.switchProfileTapped)
+                    }) {
+                        HStack {
+                            Image(systemName: "person.2.circle")
+                                .foregroundColor(.purple)
+                            Text("Profil Değiştir")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.caption)
+                        }
+                    }
+                    .foregroundColor(.primary)
                 }
 
                 Section(header: Text(AppStrings.Settings.security)) {

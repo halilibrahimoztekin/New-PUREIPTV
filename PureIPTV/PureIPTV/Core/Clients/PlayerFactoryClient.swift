@@ -40,6 +40,10 @@ extension PlayerFactoryClient: DependencyKey {
                 stop: {
                     box.getPlayer().stop()
                 },
+                release: {
+                    box.player?.stop()
+                    box.player = nil
+                },
                 setVolume: { volume in
                     try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
                 },

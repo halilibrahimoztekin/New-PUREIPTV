@@ -23,6 +23,7 @@ public struct PlayerClient: Sendable {
     public var resume: @MainActor @Sendable () async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
     public var stop: @MainActor @Sendable () async throws -> Void
+    public var release: @MainActor @Sendable () async -> Void
     public var setVolume: @MainActor @Sendable (_ volume: Int32) async throws -> Void
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
@@ -78,6 +79,10 @@ extension PlayerClient: DependencyKey {
             },
             stop: {
                 box.getPlayer().stop()
+            },
+            release: {
+                box.player?.stop()
+                box.player = nil
             },
             setVolume: { volume in
                 try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
@@ -156,6 +161,7 @@ extension PlayerClient: DependencyKey {
         resume: {},
         pause: {},
         stop: {},
+        release: {},
         setVolume: { _ in },
         jump: { _ in },
         seek: { _ in },

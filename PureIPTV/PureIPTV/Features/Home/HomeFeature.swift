@@ -95,6 +95,7 @@ public struct HomeFeature {
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
             case openManagePlaylists
+            case switchProfile
         }
     }
 
@@ -187,6 +188,9 @@ public struct HomeFeature {
 
             case .settings(.delegate(.openManagePlaylists)):
                 return .send(.delegate(.openManagePlaylists))
+
+            case .settings(.delegate(.switchProfile)):
+                return .send(.delegate(.switchProfile))
 
             case .settings:
                 return .none

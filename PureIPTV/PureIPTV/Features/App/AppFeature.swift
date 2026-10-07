@@ -286,6 +286,13 @@ public struct AppFeature {
                 await MainActor.run { appCoordinator.trigger(.playlistManagement) }
             }
 
+        case .home(.delegate(.switchProfile)):
+            state.home = nil
+            state.profileSelection = ProfileSelectionFeature.State()
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.profileSelection) }
+            }
+
         case .home:
             return .none
 

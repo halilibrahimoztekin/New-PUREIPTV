@@ -222,7 +222,7 @@ public struct PlayerFeature {
                     }
 
                     if !isPiPActive {
-                        try? await playerClient.stop()
+                        await playerClient.release()
                     }
                 }
             )

@@ -41,6 +41,7 @@ public struct SettingsFeature {
 
         public enum Delegate: Equatable {
             case openManagePlaylists
+            case switchProfile
         }
 
         case onAppear
@@ -68,6 +69,7 @@ public struct SettingsFeature {
         case restorePurchases
         case restorePurchasesResponse(TaskResult<RevenueCat.CustomerInfo>)
         case updatePremiumStatus(Bool)
+        case switchProfileTapped
     }
 
     @Dependency(\.settingsClient) var settingsClient
@@ -103,6 +105,9 @@ public struct SettingsFeature {
 
             case .managePlaylistsTapped:
                 return .send(.delegate(.openManagePlaylists))
+
+            case .switchProfileTapped:
+                return .send(.delegate(.switchProfile))
 
             case .delegate:
                 return .none

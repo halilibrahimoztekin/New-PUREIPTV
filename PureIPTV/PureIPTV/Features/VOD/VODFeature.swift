@@ -30,7 +30,18 @@ public struct VODFeature {
         // Computed: vods for the currently selected category
         public var currentVODs: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            return vodsByCategory[id] ?? []
+            let items = vodsByCategory[id] ?? []
+
+            switch lastSortMethod {
+            case .alphabetical:
+                return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            case .rating:
+                return items.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+            case .dateAdded:
+                return items.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
+            case .defaultOrder:
+                return items
+            }
         }
 
         public init() {}
@@ -178,11 +189,6 @@ public struct VODFeature {
                 let currentMethod = settingsClient.getVODSortMethod()
                 if state.lastSortMethod != currentMethod {
                     state.lastSortMethod = currentMethod
-                    state.vodsByCategory.removeAll()
-
-                    if let selectedID = state.selectedCategoryID, let cat = state.categories.first(where: { $0.id == selectedID }) {
-                        return .send(.categorySelected(cat))
-                    }
                 }
                 return .none
 
@@ -226,21 +232,7 @@ public struct VODFeature {
 
             case let .vodsResponse(categoryID, .success(vods)):
                 state.isLoadingVODs = false
-
-                let method = settingsClient.getVODSortMethod()
-                var sortedVODs = vods
-                switch method {
-                case .alphabetical:
-                    sortedVODs.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-                case .rating:
-                    sortedVODs.sort { ($0.rating ?? 0) > ($1.rating ?? 0) }
-                case .dateAdded:
-                    sortedVODs.sort { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
-                case .defaultOrder:
-                    break
-                }
-
-                state.vodsByCategory[categoryID] = sortedVODs
+                state.vodsByCategory[categoryID] = vods
                 return .none
 
             case let .vodsResponse(_, .failure(error)):

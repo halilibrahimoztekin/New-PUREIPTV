@@ -30,7 +30,18 @@ public struct SeriesFeature {
         // Computed: series for the currently selected category
         public var currentSeries: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            return seriesByCategory[id] ?? []
+            let items = seriesByCategory[id] ?? []
+
+            switch lastSortMethod {
+            case .alphabetical:
+                return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            case .rating:
+                return items.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+            case .dateAdded:
+                return items.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
+            case .defaultOrder:
+                return items
+            }
         }
 
         public init() {}
@@ -178,11 +189,6 @@ public struct SeriesFeature {
                 let currentMethod = settingsClient.getSeriesSortMethod()
                 if state.lastSortMethod != currentMethod {
                     state.lastSortMethod = currentMethod
-                    state.seriesByCategory.removeAll()
-
-                    if let selectedID = state.selectedCategoryID, let cat = state.categories.first(where: { $0.id == selectedID }) {
-                        return .send(.categorySelected(cat))
-                    }
                 }
                 return .none
 
@@ -226,21 +232,7 @@ public struct SeriesFeature {
 
             case let .seriesResponse(categoryID, .success(series)):
                 state.isLoadingSeries = false
-
-                let method = settingsClient.getSeriesSortMethod()
-                var sortedSeries = series
-                switch method {
-                case .alphabetical:
-                    sortedSeries.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-                case .rating:
-                    sortedSeries.sort { ($0.rating ?? 0) > ($1.rating ?? 0) }
-                case .dateAdded:
-                    sortedSeries.sort { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
-                case .defaultOrder:
-                    break
-                }
-
-                state.seriesByCategory[categoryID] = sortedSeries
+                state.seriesByCategory[categoryID] = series
                 return .none
 
             case let .seriesResponse(_, .failure(error)):
