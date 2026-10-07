@@ -365,16 +365,21 @@ extension IPTVClient: DependencyKey {
                 formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
                 formatter.timeZone = TimeZone(identifier: "UTC")
 
+                let epgShift = UserDefaults.standard.integer(forKey: "com.pureiptv.epgTimeShift")
+                let shiftInterval = TimeInterval(epgShift * 3600)
+
                 let result: [EPGProgram] = response.compactMap { (item: EPGItemDTO) -> EPGProgram? in
                     var start: Date?
                     var end: Date?
 
                     if let startTS = item.startTimestamp, let endTS = item.stopTimestamp {
-                        start = Date(timeIntervalSince1970: TimeInterval(startTS))
-                        end = Date(timeIntervalSince1970: TimeInterval(endTS))
+                        start = Date(timeIntervalSince1970: TimeInterval(startTS)).addingTimeInterval(shiftInterval)
+                        end = Date(timeIntervalSince1970: TimeInterval(endTS)).addingTimeInterval(shiftInterval)
                     } else {
-                        start = formatter.date(from: item.start)
-                        end = formatter.date(from: item.end)
+                        if let s = formatter.date(from: item.start), let e = formatter.date(from: item.end) {
+                            start = s.addingTimeInterval(shiftInterval)
+                            end = e.addingTimeInterval(shiftInterval)
+                        }
                     }
 
                     guard let finalStart = start, let finalEnd = end else { return nil }

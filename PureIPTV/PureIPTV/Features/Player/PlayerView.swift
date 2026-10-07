@@ -46,7 +46,7 @@ public struct PlayerView: View {
         #if os(iOS)
         .onChange(of: scenePhase) { newPhase in
             // Uygulama arka plana geçince PiP otomatik başlat
-            if newPhase == .background, pipController?.isPossible == true {
+            if newPhase == .background, pipController?.isPossible == true, store.playerState == .playing {
                 _ = pipController?.start()
             }
         }

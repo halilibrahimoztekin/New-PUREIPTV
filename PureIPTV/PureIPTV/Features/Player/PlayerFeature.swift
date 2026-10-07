@@ -157,6 +157,7 @@ public struct PlayerFeature {
     @Injected(\.appCoordinator) var appCoordinator
     @Dependency(\.databaseClient) var databaseClient
     @Injected(\.iptvClient) var iptvClient
+    @Dependency(\.settingsClient) var settingsClient
 
     public init() {}
 
@@ -164,20 +165,27 @@ public struct PlayerFeature {
         let playerClient = playerClient
         let appCoordinator = appCoordinator
         let databaseClient = databaseClient
-        let iptvClient = iptvClient
+        let settingsClient = settingsClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, appCoordinator: appCoordinator, databaseClient: databaseClient, iptvClient: iptvClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, appCoordinator: appCoordinator, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, appCoordinator: AppCoordinator, databaseClient: DatabaseClient, iptvClient: IPTVClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, appCoordinator: AppCoordinator, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             let url = state.item.streamURL
             let position = state.item.startPosition ?? 0.0
             return .run { send in
                 try await playerClient.play(url)
+                if settingsClient.startMuted() {
+                    try? await playerClient.setVolume(0)
+                }
+
+                // Hardware Acceleration check can be handled by VLC initialization if supported natively
+                // For now, we assume VLC defaults are handled elsewhere or via VLC configuration
+
                 if position > 0 {
                     try await Task.sleep(nanoseconds: 500_000_000)
                     try await playerClient.seek(position)
@@ -550,6 +558,18 @@ public struct PlayerFeature {
                         actions.append(.send(.fetchEPG))
                     }
                     return .merge(actions)
+                } else if newState == .stopped {
+                    // Auto Play Next Episode
+                    if settingsClient.autoPlayNextEpisode(), let playlist = state.playlist, let currentIdx = playlist.firstIndex(of: state.item) {
+                        let nextIdx = currentIdx + 1
+                        if nextIdx < playlist.count {
+                            // Only auto-play if it's a series episode
+                            let currentItem = state.item
+                            if currentItem.seriesID != nil || (currentItem.title.contains("S") && currentItem.title.contains("E")) {
+                                return .send(.selectChannel(playlist[nextIdx]))
+                            }
+                        }
+                    }
                 }
             case .encounteredError:
                 state.errorMessage = AppStrings.Errors.cannotPlayStream

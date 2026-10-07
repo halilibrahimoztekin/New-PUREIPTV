@@ -22,6 +22,7 @@ public struct VODFeature {
         public var isLoadingVODs = false
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
+        public var lastSortMethod: SortMethod = .defaultOrder
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
@@ -46,6 +47,7 @@ public struct VODFeature {
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
+        case applySortIfChanged
         case editCategoriesTapped
         case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
@@ -69,6 +71,7 @@ public struct VODFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                state.lastSortMethod = settingsClient.getVODSortMethod()
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("vod")) ?? []
                     await send(.favoritesLoaded(Set(favs.map(\.id))))
@@ -99,7 +102,12 @@ public struct VODFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
+                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = categories.filter { category in
+                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                            return false
+                        }
+
                         if dict[category.id]?.isHidden ?? false {
                             return false
                         }
@@ -137,7 +145,12 @@ public struct VODFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
+                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = currentCats.filter { category in
+                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                            return false
+                        }
+
                         if dict[category.id]?.isHidden ?? false {
                             return false
                         }
@@ -160,6 +173,18 @@ public struct VODFeature {
 
                     await send(.categoriesResponse(.success(finalCategories)))
                 }
+
+            case .applySortIfChanged:
+                let currentMethod = settingsClient.getVODSortMethod()
+                if state.lastSortMethod != currentMethod {
+                    state.lastSortMethod = currentMethod
+                    state.vodsByCategory.removeAll()
+
+                    if let selectedID = state.selectedCategoryID, let cat = state.categories.first(where: { $0.id == selectedID }) {
+                        return .send(.categorySelected(cat))
+                    }
+                }
+                return .none
 
             case let .categoriesResponse(.success(categories)):
                 state.isLoadingCategories = false
@@ -201,7 +226,21 @@ public struct VODFeature {
 
             case let .vodsResponse(categoryID, .success(vods)):
                 state.isLoadingVODs = false
-                state.vodsByCategory[categoryID] = vods
+
+                let method = settingsClient.getVODSortMethod()
+                var sortedVODs = vods
+                switch method {
+                case .alphabetical:
+                    sortedVODs.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                case .rating:
+                    sortedVODs.sort { ($0.rating ?? 0) > ($1.rating ?? 0) }
+                case .dateAdded:
+                    sortedVODs.sort { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
+                case .defaultOrder:
+                    break
+                }
+
+                state.vodsByCategory[categoryID] = sortedVODs
                 return .none
 
             case let .vodsResponse(_, .failure(error)):

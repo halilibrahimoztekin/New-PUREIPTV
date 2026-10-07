@@ -116,6 +116,10 @@
                     username: store.username,
                     password: store.password
                 )
+            case .downloads:
+                DownloadsView(
+                    store: store.scope(state: \.downloads, action: \.downloads)
+                )
             case .settings:
                 TVTabPlaceholder(tab: tab)
             }

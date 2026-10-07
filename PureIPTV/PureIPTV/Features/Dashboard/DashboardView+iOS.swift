@@ -29,12 +29,11 @@
                                 .foregroundColor(.red)
                                 .padding()
                         } else {
-                            // Hero Banner
                             if let heroVOD = store.featuredVODs.first {
                                 HeroBannerView(vod: heroVOD) {
                                     store.send(.vodSelected(heroVOD))
                                 }
-                                .padding(.bottom, 16)
+                                .padding(.bottom, 8)
                             }
 
                             if !store.watchHistoryItems.isEmpty {
@@ -175,57 +174,94 @@
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                         } placeholder: {
-                            Color(hex: "#1F1F23").shimmeringPlaceholder(isLoading: true)
+                            Color(hex: "#0F0F13").shimmeringPlaceholder(isLoading: true)
                         }
-                        .frame(height: 450)
+                        .frame(height: 520)
                         .clipped()
                     } else {
-                        Color(hex: "#1F1F23").frame(height: 450)
+                        Color(hex: "#0F0F13").frame(height: 520)
                     }
 
-                    // Premium Gradient
+                    // Premium Gradients for readability and fade
                     LinearGradient(
                         stops: [
-                            .init(color: .black.opacity(0.0), location: 0.0),
-                            .init(color: .black.opacity(0.4), location: 0.6),
-                            .init(color: .black.opacity(0.9), location: 1.0),
+                            .init(color: .black.opacity(0.0), location: 0.3),
+                            .init(color: .black.opacity(0.6), location: 0.7),
+                            .init(color: .black, location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
 
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(0.7), location: 0.0),
+                            .init(color: .clear, location: 1.0),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+
                     // Content
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text(vod.title)
-                            .font(.system(size: 28, weight: .bold))
-                            .tracking(-0.5) // Optical sizing fix for large text
+                            .font(.system(size: 34, weight: .heavy, design: .default))
+                            .lineSpacing(-2)
                             .foregroundColor(.white)
                             .lineLimit(2)
-                            .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 3)
+                            .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 4)
 
-                        if let rating = vod.rating, rating > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill").foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
+                        // Tags (Rating, Year, etc.)
+                        HStack(spacing: 12) {
+                            if let rating = vod.rating, rating > 0 {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "star.fill").foregroundColor(Color(hex: "#FFD700"))
+                                    Text(String(format: "%.1f", rating))
+                                        .fontWeight(.bold)
+                                }
                             }
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                        }
 
-                        HStack {
-                            Image(systemName: "play.fill")
-                            Text(AppStrings.Common.watchNow)
+                            Text("HD")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.5), lineWidth: 1))
+
+                            Text("Film")
+                                .fontWeight(.semibold)
                         }
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
-                        .background(Color.black.opacity(0.4))
-                        .clipShape(Capsule())
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.white.opacity(0.8))
+
+                        // Action Buttons
+                        HStack(spacing: 16) {
+                            HStack {
+                                Image(systemName: "play.fill")
+                                Text(AppStrings.Common.watchNow)
+                            }
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(Color.white)
+                            .clipShape(Capsule())
+                            .shadow(color: .white.opacity(0.3), radius: 10, x: 0, y: 4)
+
+                            HStack {
+                                Image(systemName: "info.circle")
+                                Text("Detaylar")
+                            }
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.2))
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                        }
                         .padding(.top, 8)
                     }
-                    .padding(20)
+                    .padding(24)
                 }
             }
             .buttonStyle(.fluidScale)

@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import FactoryKit
 import Foundation
+import RevenueCat
 import XCoordinator
 
 @Reducer
@@ -17,9 +18,11 @@ public struct AppFeature {
         @Presents public var playlistManagement: PlaylistManagementFeature.State?
         public var onboarding: OnboardingFeature.State?
         public var profileSelection: ProfileSelectionFeature.State?
+        @Presents public var paywall: PaywallFeature.State?
 
         public var splashIsActive = true
         public var isOnboarded = false
+        public var isPremium = false
 
         public init() {}
     }
@@ -35,10 +38,16 @@ public struct AppFeature {
         case playlistManagement(PresentationAction<PlaylistManagementFeature.Action>)
         case onboarding(OnboardingFeature.Action)
         case profileSelection(ProfileSelectionFeature.Action)
+        case paywall(PresentationAction<PaywallFeature.Action>)
+        case presentPaywall
+        case checkSubscriptionStatus
+        case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
+        case proceedToApp
     }
 
     @Injected(\.playlistRepository) var playlistRepository
     @Injected(\.appCoordinator) var appCoordinator
+    @Dependency(\.purchases) var purchases
 
     public init() {}
 
@@ -61,6 +70,9 @@ public struct AppFeature {
         }
         .ifLet(\.$playlistManagement, action: \.playlistManagement) {
             PlaylistManagementFeature()
+        }
+        .ifLet(\.$paywall, action: \.paywall) {
+            PaywallFeature()
         }
         .ifLet(\.home, action: \.home) {
             HomeFeature()
@@ -93,32 +105,7 @@ public struct AppFeature {
                 }
             }
 
-            let activePlaylist = playlistRepository.getActivePlaylist()
-            var hasValidPlaylist = false
-
-            if let playlist = activePlaylist {
-                if playlist.type == .xtream {
-                    if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
-                        hasValidPlaylist = true
-                    }
-                } else if playlist.type == .m3u {
-                    if playlist.m3uURL != nil {
-                        hasValidPlaylist = true
-                    }
-                }
-            }
-
-            if hasValidPlaylist {
-                state.profileSelection = ProfileSelectionFeature.State()
-                state.isOnboarded = true
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.profileSelection) }
-                }
-            } else {
-                return .run { _ in
-                    await MainActor.run { appCoordinator.trigger(.login) }
-                }
-            }
+            return .send(.proceedToApp)
 
         case .splash:
             return .none
@@ -126,9 +113,37 @@ public struct AppFeature {
         // ── Onboarding ───────────────────────────────────────────
         case .onboarding(.delegate(.didCompleteOnboarding)):
             state.onboarding = nil
+            return .send(.proceedToApp)
 
+        case .onboarding:
+            return .none
+
+        // ── Subscription Check ───────────────────────────────────
+        case .checkSubscriptionStatus:
+            return .run { send in
+                await send(.subscriptionStatusResponse(TaskResult {
+                    try await purchases.customerInfo()
+                }))
+            }
+
+        case let .subscriptionStatusResponse(.success(info)):
+            state.isPremium = !info.entitlements.active.isEmpty
+
+            if !state.isPremium {
+                // Abonelik yoksa Paywall göster
+                return .send(.presentPaywall)
+            }
+            return .none
+
+        case .subscriptionStatusResponse(.failure):
+            state.isPremium = false
+            // Hata olursa yine de paywall gösterilebilir
+            return .send(.presentPaywall)
+
+        case .proceedToApp:
             let activePlaylist = playlistRepository.getActivePlaylist()
             var hasValidPlaylist = false
+
             if let playlist = activePlaylist {
                 if playlist.type == .xtream {
                     if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
@@ -140,6 +155,7 @@ public struct AppFeature {
                     }
                 }
             }
+
             if hasValidPlaylist {
                 state.profileSelection = ProfileSelectionFeature.State()
                 state.isOnboarded = true
@@ -151,9 +167,6 @@ public struct AppFeature {
                     await MainActor.run { appCoordinator.trigger(.login) }
                 }
             }
-
-        case .onboarding:
-            return .none
 
         // ── Profile Selection ────────────────────────────────────
         case .profileSelection(.delegate(.didSelectProfile)):
@@ -175,8 +188,9 @@ public struct AppFeature {
             }
 
             state.home = HomeFeature.State(config: config)
-            return .run { _ in
+            return .run { send in
                 await MainActor.run { appCoordinator.trigger(.home) }
+                await send(.checkSubscriptionStatus)
             }
 
         case .toggleMiniPlayer:
@@ -234,6 +248,9 @@ public struct AppFeature {
             }
 
         case let .home(.delegate(.didSelectVOD(vod))):
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
             if let config = state.home?.config {
                 state.vodDetail = VODDetailFeature.State(
                     vod: vod,
@@ -246,6 +263,9 @@ public struct AppFeature {
             return .none
 
         case let .home(.delegate(.didSelectSeries(series))):
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
             if let config = state.home?.config {
                 state.seriesDetail = SeriesDetailFeature.State(
                     series: series,
@@ -277,6 +297,11 @@ public struct AppFeature {
             }
 
         case .seriesDetail(.presented(.delegate(.close))):
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.dismissSeriesDetail) }
+            }
+
+        case .seriesDetail(.presented(.viewDidDisappear)):
             state.seriesDetail = nil
             return .none
 
@@ -299,6 +324,11 @@ public struct AppFeature {
             }
 
         case .vodDetail(.presented(.delegate(.close))):
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.dismissVodDetail) }
+            }
+
+        case .vodDetail(.presented(.viewDidDisappear)):
             state.vodDetail = nil
             return .none
 
@@ -314,15 +344,42 @@ public struct AppFeature {
             }
 
         case .playlistManagement(.presented(.delegate(.dismissed))):
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.dismissPlaylistManagement) }
+            }
+
+        case .playlistManagement(.presented(.viewDidDisappear)):
             state.playlistManagement = nil
             return .none
 
         case .playlistManagement:
             return .none
+
+        case .presentPaywall:
+            state.paywall = PaywallFeature.State()
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.paywall) }
+            }
+
+        case .paywall(.presented(.dismiss)):
+            state.paywall = nil
+            return .run { send in
+                await MainActor.run { appCoordinator.trigger(.dismissPaywall) }
+                // Re-check subscription in case they purchased something
+                await send(.checkSubscriptionStatus)
+            }
+
+        case .paywall:
+            return .none
         }
     }
 
     private func playHistoryItem(_ item: WatchHistoryItem, state: inout State) -> Effect<Action> {
+        // Eğer VOD veya Dizi ise ve kullanıcı premium değilse engelle
+        if item.seriesID != nil || item.type == "vod", !state.isPremium {
+            return .send(.presentPaywall)
+        }
+
         if let seriesID = item.seriesID, let config = state.home?.config {
             let dummySeries = MediaModels.Item(
                 id: seriesID,

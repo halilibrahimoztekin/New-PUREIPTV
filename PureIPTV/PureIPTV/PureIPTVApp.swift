@@ -16,6 +16,9 @@ struct PureIPTVApp: App {
         VLCInstance.prewarmShared()
         coordinator.setup(store: store)
 
+        // Initialize RevenueCat
+        PurchasesClient.liveValue.configure("appl_bSAnxGvXpdPeSquSYsatWQrNwOG")
+
         do {
             #if os(tvOS)
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])

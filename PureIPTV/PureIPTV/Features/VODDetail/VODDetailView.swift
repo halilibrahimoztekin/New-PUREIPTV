@@ -11,8 +11,10 @@ public struct VODDetailView: View {
     public var body: some View {
         #if os(tvOS)
             VODDetailView_tvOS(store: store)
+                .onDisappear { store.send(.viewDidDisappear) }
         #else
             VODDetailView_iOS(store: store)
+                .onDisappear { store.send(.viewDidDisappear) }
         #endif
     }
 }
@@ -204,6 +206,20 @@ public struct VODDetailView: View {
                                             .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
                                     )
                                     .foregroundStyle(store.isFavorite ? .red : .white)
+                            }
+
+                            Button {
+                                store.send(.downloadTapped)
+                            } label: {
+                                Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                    .font(.system(size: 20))
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                            .background(Circle().fill(store.isDownloaded ? Color.green.opacity(0.2) : Color.clear))
+                                    )
+                                    .foregroundStyle(store.isDownloaded ? .green : .white)
                             }
                         }
 

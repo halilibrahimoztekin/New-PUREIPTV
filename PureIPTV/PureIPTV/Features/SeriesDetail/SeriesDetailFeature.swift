@@ -23,6 +23,7 @@ public struct SeriesDetailFeature {
         public var isLoading = false
         public var isTMDBLoading = false
         public var isFavorite = false
+        public var downloadedEpisodes: [String: Bool] = [:]
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
@@ -52,10 +53,13 @@ public struct SeriesDetailFeature {
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool)
+        case downloadedEpisodesLoaded([String: Bool])
+        case downloadEpisode(DetailModels.Episode)
         case historyStatusLoaded(WatchHistoryItem?)
         case resumeTapped
         case delegate(Delegate)
         case closeTapped
+        case viewDidDisappear
 
         public enum Delegate: Equatable {
             case didSelectEpisode(PlayerFeature.PlayableItem)
@@ -66,6 +70,7 @@ public struct SeriesDetailFeature {
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.downloadClient) var downloadClient
     @Injected(\.appCoordinator) var appCoordinator
 
     public init() {}
@@ -116,7 +121,13 @@ public struct SeriesDetailFeature {
                     await send(.historyStatusLoaded(history))
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect)
+                let downloadEffect: Effect<Action> = .run { send in
+                    let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
+                    let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                    await send(.downloadedEpisodesLoaded(dict))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect)
 
             case let .infoResponse(.success(result)):
                 state.info = result.info
@@ -242,6 +253,43 @@ public struct SeriesDetailFeature {
                 state.isFavorite = isFav
                 return .none
 
+            case let .downloadedEpisodesLoaded(dict):
+                state.downloadedEpisodes = dict
+                return .none
+
+            case let .downloadEpisode(episode):
+                if state.downloadedEpisodes[episode.id] == true {
+                    return .run { send in
+                        try? await downloadClient.deleteDownloadedMedia(episode.id)
+                        let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
+                        let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                        await send(.downloadedEpisodesLoaded(dict))
+                    }
+                } else {
+                    let streamURL = episode.streamURL
+
+                    let id = episode.id
+                    let title = "\(state.series.title) - S\(episode.season)E\(episode.episodeNum): \(episode.title)"
+
+                    let finalCoverURL: URL? = {
+                        if let url = episode.coverURL {
+                            return url
+                        } else if let poster = state.tmdbTV?.posterPath {
+                            return URL(string: "https://image.tmdb.org/t/p/w342\(poster)")
+                        } else if let url = state.series.coverURL {
+                            return url
+                        }
+                        return nil
+                    }()
+
+                    return .run { send in
+                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL)
+                        let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
+                        let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                        await send(.downloadedEpisodesLoaded(dict))
+                    }
+                }
+
             case .toggleFavorite:
                 let item = FavoriteItem(
                     id: state.series.id,
@@ -256,12 +304,10 @@ public struct SeriesDetailFeature {
                 }
 
             case .closeTapped:
-                return .run { send in
-                    await MainActor.run {
-                        appCoordinator.trigger(.dismissSeriesDetail)
-                    }
-                    await send(.delegate(.close))
-                }
+                return .send(.delegate(.close))
+
+            case .viewDidDisappear:
+                return .none
 
             case .delegate:
                 return .none

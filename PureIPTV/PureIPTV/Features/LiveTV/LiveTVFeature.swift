@@ -111,7 +111,12 @@ public struct LiveTVFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
+                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = categories.filter { category in
+                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                            return false
+                        }
+
                         if dict[category.id]?.isHidden ?? false {
                             return false
                         }
@@ -149,7 +154,12 @@ public struct LiveTVFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
+                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = currentCats.filter { category in
+                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                            return false
+                        }
+
                         if dict[category.id]?.isHidden ?? false {
                             return false
                         }

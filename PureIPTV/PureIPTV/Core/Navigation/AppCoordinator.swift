@@ -133,6 +133,19 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
 
             case .dismissPlaylistManagement:
                 return .pop()
+
+            case .paywall:
+                if let paywallStore = store.scope(state: \.paywall, action: \.paywall.presented) {
+                    let paywallView = PaywallView(store: paywallStore)
+                    let vc = UIHostingController(rootView: paywallView)
+                    vc.view.backgroundColor = .black
+                    vc.modalPresentationStyle = .fullScreen
+                    return .present(vc)
+                }
+                return .none()
+
+            case .dismissPaywall:
+                return .dismiss()
             }
         }
     }

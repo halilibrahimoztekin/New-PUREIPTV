@@ -56,37 +56,35 @@ public struct MultiView: View {
                 .padding()
 
                 // Grid
-                if let focusedID = store.focusedSlotID, let slot = store.slots.first(where: { $0.id == focusedID }) {
-                    slotView(for: slot)
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 4)
-                        .transition(.opacity.combined(with: .scale))
-                        .id("fullscreen_\(focusedID)")
-                } else {
-                    if columns == 2 {
-                        VStack(spacing: 4) {
-                            HStack(spacing: 4) {
-                                slotView(for: store.slots[0])
-                                slotView(for: store.slots[1])
-                            }
-                            HStack(spacing: 4) {
-                                slotView(for: store.slots[2])
-                                slotView(for: store.slots[3])
-                            }
+                GeometryReader { gridGeo in
+                    let w = gridGeo.size.width
+                    let h = gridGeo.size.height
+
+                    ZStack(alignment: .topLeading) {
+                        ForEach(store.slots) { slot in
+                            let isFocused = store.focusedSlotID == slot.id
+                            let isHidden = store.focusedSlotID != nil && !isFocused
+
+                            let idx = slot.id
+                            let row = columns == 2 ? idx / 2 : idx
+                            let col = columns == 2 ? idx % 2 : 0
+                            let itemW = columns == 2 ? (w - 4) / 2 : w
+                            let itemH = columns == 2 ? (h - 4) / 2 : (h - 4) / (columns == 2 ? 2 : CGFloat(store.slots.count))
+
+                            let xOffset = columns == 2 ? CGFloat(col) * (itemW + 4) : 0
+                            let yOffset = CGFloat(row) * (itemH + 4)
+
+                            slotView(for: slot)
+                                .frame(width: isFocused ? w : itemW, height: isFocused ? h : itemH)
+                                .offset(x: isFocused ? 0 : xOffset, y: isFocused ? 0 : yOffset)
+                                .opacity(isHidden ? 0 : 1)
+                                .zIndex(isFocused ? 10 : 1)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
                         }
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 4)
-                        .transition(.opacity.combined(with: .scale))
-                    } else {
-                        VStack(spacing: 4) {
-                            slotView(for: store.slots[0])
-                            slotView(for: store.slots[1])
-                        }
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 4)
-                        .transition(.opacity.combined(with: .scale))
                     }
                 }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 4)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.focusedSlotID)
         }

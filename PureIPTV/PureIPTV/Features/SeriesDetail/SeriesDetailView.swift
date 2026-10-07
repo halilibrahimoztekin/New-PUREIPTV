@@ -11,8 +11,10 @@ public struct SeriesDetailView: View {
     public var body: some View {
         #if os(tvOS)
             SeriesDetailView_tvOS(store: store)
+                .onDisappear { store.send(.viewDidDisappear) }
         #else
             SeriesDetailView_iOS(store: store)
+                .onDisappear { store.send(.viewDidDisappear) }
         #endif
     }
 }

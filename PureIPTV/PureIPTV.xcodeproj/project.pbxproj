@@ -11,6 +11,10 @@
 		2BCD5B67B86EBB0D7D5AFB9A /* FactoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1ACC1B7879E41AC566C59AFD /* FactoryKit */; };
 		708AE876E82687A841367079 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 0FFFBBD30FDF80E26C25F72D /* SwiftVLC */; };
 		7AC09EEFCEAA34B2DA3CD02B /* XCoordinator in Frameworks */ = {isa = PBXBuildFile; productRef = 384D4241DCB24F324C267767 /* XCoordinator */; };
+		8B5F1893307521DF00239BA7 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 8B9999993035797500E02EB4 /* SnapshotTesting */; };
+		8B6032073075285C00188D32 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 8B6032063075285C00188D32 /* RevenueCat */; };
+		8B6032093075285C00188D32 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 8B6032083075285C00188D32 /* RevenueCatUI */; };
+		8B603213307637FB00188D32 /* GoogleCastDynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 8B603212307637FB00188D32 /* GoogleCastDynamic */; };
 		8BCF6CF23035824C00E02EB4 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 8642BFB82234E9FB47DA5BF8 /* ComposableArchitecture */; };
 		8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7813303D6B6F00E02EB4 /* SwiftVLC */; };
 		8BCF7817303D6B8200E02EB4 /* XCoordinator in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7816303D6B8200E02EB4 /* XCoordinator */; };
@@ -79,12 +83,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				8BCF7817303D6B8200E02EB4 /* XCoordinator in Frameworks */,
+				8B603213307637FB00188D32 /* GoogleCastDynamic in Frameworks */,
 				8BCF781A303D6B9000E02EB4 /* Shimmer in Frameworks */,
 				8BCF6CF23035824C00E02EB4 /* ComposableArchitecture in Frameworks */,
 				8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */,
+				8B6032073075285C00188D32 /* RevenueCat in Frameworks */,
 				708AE876E82687A841367079 /* SwiftVLC in Frameworks */,
 				17D57DDEDD937193E18883B6 /* Shimmer in Frameworks */,
 				7AC09EEFCEAA34B2DA3CD02B /* XCoordinator in Frameworks */,
+				8B6032093075285C00188D32 /* RevenueCatUI in Frameworks */,
 				2BCD5B67B86EBB0D7D5AFB9A /* FactoryKit in Frameworks */,
 				FECA3440445C9C1F8D8EFBC9 /* Kingfisher in Frameworks */,
 				A1DB9941CB1E79DE68CBCB27 /* OnboardingKit in Frameworks */,
@@ -95,6 +102,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B5F1893307521DF00239BA7 /* SnapshotTesting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -159,6 +167,9 @@
 				1ACC1B7879E41AC566C59AFD /* FactoryKit */,
 				ECDF2429A9FF03E2C6931483 /* Kingfisher */,
 				A0FC5A1ED5C5EED8E65BAFDA /* OnboardingKit */,
+				8B6032063075285C00188D32 /* RevenueCat */,
+				8B6032083075285C00188D32 /* RevenueCatUI */,
+				8B603212307637FB00188D32 /* GoogleCastDynamic */,
 			);
 			productName = PureIPTV;
 			productReference = 8BCF6C753035797400E02EB4 /* PureIPTV.app */;
@@ -273,6 +284,8 @@
 				4C942A7E74EA5952CD3B0553 /* XCRemoteSwiftPackageReference "Factory" */,
 				62F66F6373CD00171EA4CEA7 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				7F948C44A64F87F362BDFF01 /* XCRemoteSwiftPackageReference "OnboardingKit" */,
+				8B6032053075285C00188D32 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+				8B603211307637FB00188D32 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8BCF6C763035797400E02EB4 /* Products */;
@@ -637,10 +650,12 @@
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
 				PRODUCT_NAME = PureIPTVUITests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -649,8 +664,6 @@
 				TARGET_NAME = PureIPTVUITests;
 				TEST_TARGET_NAME = PureIPTV;
 				TVOS_DEPLOYMENT_TARGET = 18.6;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 			};
 			name = Debug;
 		};
@@ -662,10 +675,12 @@
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PureIPTV;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTVUITests;
 				PRODUCT_NAME = PureIPTVUITests;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -674,8 +689,6 @@
 				TARGET_NAME = PureIPTVUITests;
 				TEST_TARGET_NAME = PureIPTV;
 				TVOS_DEPLOYMENT_TARGET = 18.6;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
-				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
 			};
 			name = Release;
 		};
@@ -752,8 +765,22 @@
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.11.2;
 			};
-			traits = (
-			);
+		};
+		8B6032053075285C00188D32 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.92.0;
+			};
+		};
+		8B603211307637FB00188D32 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlecast/google-cast-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.8.6;
+			};
 		};
 		8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -834,6 +861,26 @@
 			package = 85199307F3BABDCB08BDEA6B /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
 		};
+		8B6032063075285C00188D32 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B6032053075285C00188D32 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
+		};
+		8B6032083075285C00188D32 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B6032053075285C00188D32 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCatUI;
+		};
+		8B603212307637FB00188D32 /* GoogleCastDynamic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8B603211307637FB00188D32 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */;
+			productName = GoogleCastDynamic;
+		};
+		8B9999993035797500E02EB4 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
+		};
 		8BCF7813303D6B6F00E02EB4 /* SwiftVLC */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8BCF7812303D6B6F00E02EB4 /* XCRemoteSwiftPackageReference "SwiftVLC" */;
@@ -863,11 +910,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D5A10361DECBFEB207C7BF40 /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
 			productName = Shimmer;
-		};
-		8B9999993035797500E02EB4 /* SnapshotTesting */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
-			productName = SnapshotTesting;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

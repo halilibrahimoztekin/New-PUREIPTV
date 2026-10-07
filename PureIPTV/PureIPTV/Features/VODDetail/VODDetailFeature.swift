@@ -19,6 +19,7 @@ public struct VODDetailFeature {
         public var isLoading = false
         public var isTMDBLoading = false
         public var isFavorite = false
+        public var isDownloaded = false
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
@@ -42,9 +43,12 @@ public struct VODDetailFeature {
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool)
+        case downloadStatusLoaded(Bool)
+        case downloadTapped
         case historyStatusLoaded(WatchHistoryItem?)
         case delegate(Delegate)
         case closeTapped
+        case viewDidDisappear
 
         public enum Delegate: Equatable {
             case didSelectPlay(PlayerFeature.PlayableItem)
@@ -55,6 +59,7 @@ public struct VODDetailFeature {
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.downloadClient) var downloadClient
     @Injected(\.appCoordinator) var appCoordinator
 
     public init() {}
@@ -105,7 +110,12 @@ public struct VODDetailFeature {
                     await send(.historyStatusLoaded(history))
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect)
+                let downloadEffect: Effect<Action> = .run { [id = state.vod.id] send in
+                    let isDown = await (try? downloadClient.isDownloaded(id)) ?? false
+                    await send(.downloadStatusLoaded(isDown))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect)
 
             case let .infoResponse(.success(dto)):
                 state.info = dto
@@ -203,6 +213,36 @@ public struct VODDetailFeature {
                 state.isFavorite = isFav
                 return .none
 
+            case let .downloadStatusLoaded(isDown):
+                state.isDownloaded = isDown
+                return .none
+
+            case .downloadTapped:
+                if state.isDownloaded {
+                    return .run { [id = state.vod.id] send in
+                        try? await downloadClient.deleteDownloadedMedia(id)
+                        await send(.downloadStatusLoaded(false))
+                    }
+                } else {
+                    guard let streamURL = state.vod.streamURL else { return .none }
+                    let id = state.vod.id
+                    let title = state.vod.title
+
+                    let finalCoverURL: URL? = {
+                        if let posterPath = state.tmdbMovie?.posterPath {
+                            return URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")
+                        } else if let url = state.vod.coverURL {
+                            return url
+                        }
+                        return nil
+                    }()
+
+                    return .run { send in
+                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL)
+                        await send(.downloadStatusLoaded(true))
+                    }
+                }
+
             case .toggleFavorite:
                 let item = FavoriteItem(
                     id: state.vod.id,
@@ -217,12 +257,10 @@ public struct VODDetailFeature {
                 }
 
             case .closeTapped:
-                return .run { send in
-                    await MainActor.run {
-                        appCoordinator.trigger(.dismissVodDetail)
-                    }
-                    await send(.delegate(.close))
-                }
+                return .send(.delegate(.close))
+
+            case .viewDidDisappear:
+                return .none
 
             case .delegate:
                 return .none

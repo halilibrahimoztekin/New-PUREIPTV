@@ -15,4 +15,6 @@ public enum AppRoute: Route {
     case dismissSeriesDetail
     case dismissVodDetail
     case dismissPlaylistManagement
+    case paywall
+    case dismissPaywall
 }

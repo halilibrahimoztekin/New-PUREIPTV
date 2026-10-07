@@ -367,12 +367,15 @@ public struct SeriesDetailView_iOS: View {
 
                         Spacer()
 
-                        Button {} label: {
-                            Image(systemName: "heart")
+                        let isDownloaded = store.downloadedEpisodes[episode.id] == true
+                        Button {
+                            store.send(.downloadEpisode(episode))
+                        } label: {
+                            Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
                                 .font(.system(size: 16))
                                 .padding(8)
-                                .background(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
-                                .foregroundStyle(.white)
+                                .background(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1).background(Circle().fill(isDownloaded ? Color.green.opacity(0.2) : Color.clear)))
+                                .foregroundStyle(isDownloaded ? .green : .white)
                         }
                     }
                 }

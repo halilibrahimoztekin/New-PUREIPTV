@@ -41,6 +41,18 @@ public struct SettingsView: View {
                         }
                     }
                     .tint(.red)
+
+                    Toggle(isOn: Binding(
+                        get: { store.hideAdultContent },
+                        set: { store.send(.setHideAdultContent($0)) }
+                    )) {
+                        HStack {
+                            Image(systemName: "eye.slash.fill")
+                                .foregroundColor(.orange)
+                            Text("Yetişkin İçerikleri Tamamen Gizle")
+                        }
+                    }
+                    .tint(.orange)
                 }
 
                 Section(header: Text(AppStrings.Settings.appearance)) {
@@ -64,6 +76,106 @@ public struct SettingsView: View {
                     .onChange(of: theme.currentAppIconName) { _, newValue in
                         theme.setAppIcon(iconName: newValue == "AppIcon" ? nil : newValue)
                     }
+
+                    Picker("Başlangıç Ekranı", selection: Binding(
+                        get: { store.defaultStartupTab },
+                        set: { store.send(.setDefaultStartupTab($0)) }
+                    )) {
+                        Text("Keşfet").tag("Keşfet")
+                        Text("Canlı TV").tag("Canlı TV")
+                        Text("Filmler").tag("Filmler")
+                        Text("Diziler").tag("Diziler")
+                    }
+                }
+
+                Section(header: Text("İçerik Sıralaması")) {
+                    Picker("Filmler (VOD)", selection: Binding(
+                        get: { store.vodSortMethod },
+                        set: { store.send(.setVODSortMethod($0)) }
+                    )) {
+                        ForEach(SortMethod.allCases) { method in
+                            Text(method.rawValue).tag(method)
+                        }
+                    }
+
+                    Picker("Diziler", selection: Binding(
+                        get: { store.seriesSortMethod },
+                        set: { store.send(.setSeriesSortMethod($0)) }
+                    )) {
+                        ForEach(SortMethod.allCases) { method in
+                            Text(method.rawValue).tag(method)
+                        }
+                    }
+                }
+
+                Section(header: Text("Oynatıcı (Player) Ayarları")) {
+                    Toggle("Sonraki Bölüme Otomatik Geç", isOn: Binding(
+                        get: { store.autoPlayNextEpisode },
+                        set: { store.send(.setAutoPlayNextEpisode($0)) }
+                    ))
+
+                    Toggle("Kanalları Sessiz Başlat", isOn: Binding(
+                        get: { store.startMuted },
+                        set: { store.send(.setStartMuted($0)) }
+                    ))
+
+                    Toggle("Donanım Hızlandırma", isOn: Binding(
+                        get: { store.hardwareAcceleration },
+                        set: { store.send(.setHardwareAcceleration($0)) }
+                    ))
+                }
+
+                Section(header: Text("Yayın Akışı (EPG) Ayarları")) {
+                    Stepper(value: Binding(
+                        get: { store.epgTimeShift },
+                        set: { store.send(.setEpgTimeShift($0)) }
+                    ), in: -12 ... 12) {
+                        HStack {
+                            Text("Zaman Kaydırma (Time Shift)")
+                            Spacer()
+                            Text(store.epgTimeShift > 0 ? "+\(store.epgTimeShift) Saat" : "\(store.epgTimeShift) Saat")
+                                .foregroundColor(.gray)
+                        }
+                    }
+
+                    Toggle("Akışı Otomatik Güncelle", isOn: Binding(
+                        get: { store.autoUpdateEPG },
+                        set: { store.send(.setAutoUpdateEPG($0)) }
+                    ))
+                }
+
+                Section(header: Text("Abonelik & Depolama")) {
+                    HStack {
+                        Text("Abonelik Durumu")
+                        Spacer()
+                        if store.isPremium {
+                            Text("Premium 👑")
+                                .foregroundColor(.orange)
+                                .bold()
+                        } else {
+                            Text("Ücretsiz / Süresi Dolmuş")
+                                .foregroundColor(.gray)
+                        }
+                    }
+
+                    if !store.isPremium {
+                        Button("Satın Alımları Geri Yükle") {
+                            store.send(.restorePurchases)
+                        }
+                        .foregroundColor(.blue)
+                    }
+
+                    Button(action: {
+                        store.send(.clearCache)
+                    }) {
+                        HStack {
+                            Text("Önbelleği Temizle")
+                            Spacer()
+                            Text(store.cacheSize)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .foregroundColor(.red)
                 }
 
                 Section(header: Text(AppStrings.Settings.about), footer: Text(AppStrings.Settings.appVersion)) {
