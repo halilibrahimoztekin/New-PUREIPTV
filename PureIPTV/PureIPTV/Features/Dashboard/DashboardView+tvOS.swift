@@ -36,7 +36,7 @@
 
                             // Continue Watching
                             if !store.watchHistoryItems.isEmpty {
-                                TVShelfSection(title: "Kaldığın Yerden İzle") {
+                                TVShelfSection(title: String(localized: "Kaldığın Yerden İzle")) {
                                     ForEach(store.watchHistoryItems) { hist in
                                         TVWatchHistoryCard(item: hist) {
                                             store.send(.historySelected(hist))
@@ -47,7 +47,7 @@
 
                             // Favorites
                             if !store.favoriteItems.isEmpty {
-                                TVShelfSection(title: "Favorilerim") {
+                                TVShelfSection(title: String(localized: "Favorilerim")) {
                                     ForEach(store.favoriteItems) { fav in
                                         TVFavoriteCard(item: fav) {
                                             store.send(.favoriteSelected(fav))
@@ -58,14 +58,14 @@
 
                             // Live TV
                             if !store.featuredChannels.isEmpty {
-                                TVShelfSection(title: "Canlı TV (Önerilen)") {
+                                TVShelfSection(title: String(localized: "Canlı TV (Önerilen)")) {
                                     ForEach(store.featuredChannels) { channel in
                                         Button {
                                             store.send(.channelSelected(channel))
                                         } label: {
                                             ChannelCardView(channel: channel, isSelected: false) {}
                                         }
-                                        .buttonStyle(TVGridCardButtonStyle())
+                                        .buttonStyle(.card)
                                         .frame(width: 360)
                                     }
                                 }
@@ -73,14 +73,14 @@
 
                             // New Movies
                             if store.featuredVODs.count > 1 {
-                                TVShelfSection(title: "Yeni Eklenen Filmler") {
+                                TVShelfSection(title: String(localized: "Yeni Eklenen Filmler")) {
                                     ForEach(Array(store.featuredVODs.dropFirst())) { vod in
                                         Button {
                                             store.send(.vodSelected(vod))
                                         } label: {
                                             VODCardView(vod: vod, isSelected: false) {}
                                         }
-                                        .buttonStyle(TVGridCardButtonStyle())
+                                        .buttonStyle(.card)
                                         .frame(width: 220)
                                     }
                                 }
@@ -88,20 +88,22 @@
 
                             // New Series
                             if !store.featuredSeries.isEmpty {
-                                TVShelfSection(title: "Yeni Eklenen Diziler") {
+                                TVShelfSection(title: String(localized: "Yeni Eklenen Diziler")) {
                                     ForEach(store.featuredSeries) { series in
                                         Button {
                                             store.send(.seriesSelected(series))
                                         } label: {
                                             SeriesCardView(series: series, isSelected: false) {}
                                         }
-                                        .buttonStyle(TVGridCardButtonStyle())
+                                        .buttonStyle(.card)
                                         .frame(width: 220)
                                     }
                                 }
                             }
                         }
                         .padding(.bottom, 80)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: store.isLoading)
                     }
                 }
             }
@@ -118,9 +120,10 @@
                     .tint(Color(hex: "#0A84FF"))
                     .scaleEffect(2.0)
                 Text(AppStrings.Common.loadingAlt)
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
             }
+            .transition(.opacity)
         }
     }
 
@@ -191,10 +194,7 @@
                     .padding(60)
                 }
             }
-            .buttonStyle(.tvGridCard)
-            .scaleEffect(isFocused ? 1.02 : 1.0)
-            .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.4) : .clear, radius: 20, x: 0, y: 8)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+            .buttonStyle(.card)
         }
     }
 
@@ -205,9 +205,9 @@
         @ViewBuilder let content: () -> Content
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 20) {
                 Text(title)
-                    .font(.system(size: 38, weight: .bold))
+                    .font(.system(size: 38, weight: .bold)) // 10-foot UI size
                     .foregroundStyle(.white)
                     .padding(.horizontal, 60)
 
@@ -216,6 +216,7 @@
                         content()
                     }
                     .padding(.horizontal, 60)
+                    .padding(.vertical, 40)
                 }
             }
         }
@@ -280,10 +281,7 @@
                     }
                 }
             }
-            .buttonStyle(.tvGridCard)
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.5) : .clear, radius: 14, x: 0, y: 4)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            .buttonStyle(.card)
         }
     }
 
@@ -323,10 +321,7 @@
                         .frame(width: 220, alignment: .leading)
                 }
             }
-            .buttonStyle(.tvGridCard)
-            .scaleEffect(isFocused ? 1.06 : 1.0)
-            .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.5) : .clear, radius: 14, x: 0, y: 4)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            .buttonStyle(.card)
         }
     }
 #endif

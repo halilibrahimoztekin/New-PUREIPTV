@@ -130,7 +130,7 @@
                                     } label: {
                                         ChannelCardView(channel: channel, isSelected: false) {}
                                     }
-                                    .buttonStyle(TVGridCardButtonStyle())
+                                    .buttonStyle(.card)
                                 }
                             }
                         }
@@ -146,7 +146,7 @@
                                     } label: {
                                         VODCardView(vod: vod) {}
                                     }
-                                    .buttonStyle(TVGridCardButtonStyle())
+                                    .buttonStyle(.card)
                                 }
                             }
                         }
@@ -162,7 +162,7 @@
                                     } label: {
                                         SeriesCardView(series: item) {}
                                     }
-                                    .buttonStyle(TVGridCardButtonStyle())
+                                    .buttonStyle(.card)
                                 }
                             }
                         }
@@ -239,7 +239,7 @@
                     Text(title)
                         .font(.system(size: 38, weight: .bold))
                         .foregroundColor(.white)
-                    Text("\(count) sonuç")
+                    Text("\(count) \(AppStrings.Common.results)")
                         .font(.system(size: 24))
                         .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
                         .padding(.bottom, 4)

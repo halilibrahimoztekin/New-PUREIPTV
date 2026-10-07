@@ -123,7 +123,7 @@
                             } label: {
                                 VODCardView(vod: vod, isSelected: store.selectedVOD?.id == vod.id) {}
                             }
-                            .buttonStyle(TVGridCardButtonStyle())
+                            .buttonStyle(.card)
                             .contextMenu {
                                 Button {
                                     store.send(.toggleFavorite(vod))

@@ -70,6 +70,7 @@
             case .movies: Color(hex: "#BF5AF2")
             case .series: Color(hex: "#30D158")
             case .search: Color(hex: "#0A84FF")
+            case .downloads: Color(hex: "#5AC8FA") // Cyan for downloads
             case .settings: Color(hex: "#C0C6D6")
             }
         }
@@ -121,7 +122,9 @@
                     store: store.scope(state: \.downloads, action: \.downloads)
                 )
             case .settings:
-                TVTabPlaceholder(tab: tab)
+                SettingsView(
+                    store: store.scope(state: \.settings, action: \.settings)
+                )
             }
         }
     }

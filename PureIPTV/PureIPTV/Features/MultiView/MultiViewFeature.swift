@@ -20,6 +20,8 @@ public struct MultiViewSlot: Equatable, Identifiable {
 public struct MultiViewFeature {
     @ObservableState
     public struct State: Equatable {
+        public var layoutSize: Int = 4 // 2, 4, or 9
+
         public var slots: [MultiViewSlot] = [
             MultiViewSlot(id: 0),
             MultiViewSlot(id: 1),
@@ -49,6 +51,7 @@ public struct MultiViewFeature {
         case channelSelected(MediaModels.Item)
         case channelSelectionDismissed
         case removeChannelTapped(slotID: Int)
+        case changeLayout(Int)
         case toggleFullscreen(slotID: Int)
         case togglePiP
 
@@ -99,6 +102,25 @@ public struct MultiViewFeature {
                 }
                 if state.activeAudioSlotID == slotID {
                     state.activeAudioSlotID = state.slots.first(where: { $0.item != nil })?.id
+                }
+                return .none
+
+            case let .changeLayout(size):
+                state.layoutSize = size
+                // Adjust slots count
+                if state.slots.count < size {
+                    let diff = size - state.slots.count
+                    let startID = state.slots.count
+                    for i in 0 ..< diff {
+                        state.slots.append(MultiViewSlot(id: startID + i))
+                    }
+                } else if state.slots.count > size {
+                    // We need to keep only 'size' slots.
+                    state.slots = Array(state.slots.prefix(size))
+                    // If activeAudioSlotID is removed, set to 0
+                    if let active = state.activeAudioSlotID, active >= size {
+                        state.activeAudioSlotID = 0
+                    }
                 }
                 return .none
 

@@ -36,6 +36,7 @@ public struct EPGGuideFeature {
     }
 
     @Dependency(\.iptvClient) var iptvClient
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
@@ -74,7 +75,10 @@ public struct EPGGuideFeature {
                 return .none
 
             case .closeTapped:
-                return .send(.delegate(.close))
+                return .run { _ in
+                    @Dependency(\.dismiss) var dismiss
+                    await dismiss()
+                }
 
             case let .playTapped(channel):
                 return .send(.delegate(.playChannel(channel)))

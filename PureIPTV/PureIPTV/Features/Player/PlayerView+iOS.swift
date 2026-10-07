@@ -180,11 +180,11 @@
                                             .padding(.bottom, 4)
 
                                         if let info = store.mediaInfo {
-                                            InfoRow(title: "Resolution", value: info.resolution ?? "Unknown")
-                                            InfoRow(title: "Video Codec", value: info.videoCodec ?? "Unknown")
-                                            InfoRow(title: "Audio Codec", value: info.audioCodec ?? "Unknown")
+                                            InfoRow(title: String(localized: "Çözünürlük"), value: info.resolution ?? String(localized: "Bilinmiyor"))
+                                            InfoRow(title: String(localized: "Video Codec"), value: info.videoCodec ?? String(localized: "Bilinmiyor"))
+                                            InfoRow(title: String(localized: "Ses Codec"), value: info.audioCodec ?? String(localized: "Bilinmiyor"))
                                             if let bitrate = info.bitrate, bitrate > 0 {
-                                                InfoRow(title: "Bitrate", value: "\(bitrate / 1000) kbps")
+                                                InfoRow(title: String(localized: "Bit Hızı"), value: "\(bitrate / 1000) kbps")
                                             }
                                         } else {
                                             Text(AppStrings.Common.loading)

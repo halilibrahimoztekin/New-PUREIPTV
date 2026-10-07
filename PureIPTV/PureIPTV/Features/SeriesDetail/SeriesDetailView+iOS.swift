@@ -152,8 +152,9 @@ public struct SeriesDetailView_iOS: View {
                     .foregroundStyle(Color.white.opacity(0.8))
                     .lineLimit(1)
 
-                    HStack(spacing: 12) {
-                        // Play / Resume Button
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            // Play / Resume Button
                         if let history = store.historyItem, history.duration > 0 {
                             let progressMins = Int(history.progress / 60)
                             let durationMins = Int(history.duration / 60)
@@ -164,7 +165,7 @@ public struct SeriesDetailView_iOS: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "play.fill")
-                                        Text("Devam Et")
+                                        Text(AppStrings.SeriesDetail.continueWatching)
                                             .fontWeight(.semibold)
                                     }
                                     .padding(.horizontal, 20)
@@ -174,7 +175,7 @@ public struct SeriesDetailView_iOS: View {
                                     .clipShape(Capsule())
                                 }
 
-                                Text("\(progressMins) dk / \(durationMins) dk izlendi")
+                                Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
                                     .font(.caption)
                                     .foregroundStyle(Color.white.opacity(0.7))
                                     .padding(.leading, 4)
@@ -188,7 +189,7 @@ public struct SeriesDetailView_iOS: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "play.fill")
-                                    Text("İzle")
+                                    Text(AppStrings.SeriesDetail.watch)
                                         .fontWeight(.semibold)
                                 }
                                 .padding(.horizontal, 20)
@@ -213,7 +214,9 @@ public struct SeriesDetailView_iOS: View {
                                 )
                                 .foregroundStyle(store.isFavorite ? .red : .white)
                         }
+                        }
                     }
+                    .padding(.bottom, 8)
                 }
             }
             .padding(.horizontal, 24)
@@ -236,9 +239,9 @@ public struct SeriesDetailView_iOS: View {
                     .padding(.horizontal, 24)
             } else if store.isTMDBLoading {
                 VStack(spacing: 8) {
-                    Text("placeholder text line 1...")
-                    Text("placeholder text line 2...")
-                    Text("placeholder text line 3...")
+                    Text("")
+                    Text("")
+                    Text("")
                 }
                 .shimmeringPlaceholder(isLoading: true)
                 .padding(.horizontal, 24)
@@ -246,7 +249,7 @@ public struct SeriesDetailView_iOS: View {
 
             // Seasons Header
             if !store.seasons.isEmpty {
-                Text("Sezonlar")
+                Text(AppStrings.SeriesDetail.seasons)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
@@ -277,11 +280,11 @@ public struct SeriesDetailView_iOS: View {
             if !store.currentEpisodes.isEmpty {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text("episodes")
+                        Text(AppStrings.SeriesDetail.episodes)
                             .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(.white)
                         Spacer()
-                        Text("\(store.currentEpisodes.count) bölüm")
+                        Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
                             .font(.system(size: 14))
                             .foregroundStyle(Color.white.opacity(0.6))
                     }
@@ -355,7 +358,7 @@ public struct SeriesDetailView_iOS: View {
                         } label: {
                             HStack {
                                 Image(systemName: "play.fill")
-                                Text("İzle")
+                                Text(AppStrings.SeriesDetail.watch)
                             }
                             .font(.system(size: 13, weight: .semibold))
                             .padding(.horizontal, 12)

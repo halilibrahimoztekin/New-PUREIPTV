@@ -53,6 +53,7 @@ public struct CategoryManagementFeature {
 
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
@@ -170,8 +171,9 @@ public struct CategoryManagementFeature {
             case .saveResponse(.success):
                 state.hasUnsavedChanges = false
                 return .run { send in
+                    @Dependency(\.dismiss) var dismiss
                     await send(.delegate(.categoriesUpdated))
-                    await send(.delegate(.close))
+                    await dismiss()
                 }
 
             case let .saveResponse(.failure(error)):
@@ -179,7 +181,10 @@ public struct CategoryManagementFeature {
                 return .none
 
             case .closeTapped:
-                return .send(.delegate(.close))
+                return .run { _ in
+                    @Dependency(\.dismiss) var dismiss
+                    await dismiss()
+                }
 
             case .delegate:
                 return .none

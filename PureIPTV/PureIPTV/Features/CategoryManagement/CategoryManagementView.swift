@@ -14,7 +14,7 @@ public struct CategoryManagementView: View {
                 if store.isLoading {
                     ProgressView()
                 } else if store.categories.isEmpty {
-                    Text("No categories found.")
+                    Text(AppStrings.CategoryMgmt.noCategoriesFound)
                         .foregroundColor(.secondary)
                 } else {
                     List {
@@ -43,18 +43,18 @@ public struct CategoryManagementView: View {
                     #endif
                 }
             }
-            .navigationTitle("Manage \(store.type.title) Categories")
+            .navigationTitle(String(localized: "\(store.type.title) Kategorilerini Yönet"))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
+                        Button(AppStrings.Common.cancel) {
                             store.send(.closeTapped)
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
+                        Button(AppStrings.Common.save) {
                             store.send(.saveTapped)
                         }
                         .disabled(!store.hasUnsavedChanges)

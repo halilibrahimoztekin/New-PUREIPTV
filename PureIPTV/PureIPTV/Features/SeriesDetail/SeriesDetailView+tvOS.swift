@@ -111,7 +111,7 @@
                             }
 
                             if !store.seasons.isEmpty {
-                                Text("\(store.seasons.count) Sezon")
+                                Text("\(store.seasons.count) \(AppStrings.Common.season)")
                                     .font(.system(size: 18))
                                     .foregroundStyle(Color.white.opacity(0.7))
                             }
@@ -120,11 +120,11 @@
                         // Action Buttons
                         HStack(spacing: 20) {
                             if let history = store.historyItem, history.duration > 0 {
-                                TVHeaderActionButton(title: "Devam Et", icon: "play.fill", isPrimary: true) {
+                                TVHeaderActionButton(title: AppStrings.SeriesDetail.continueWatching, icon: "play.fill", isPrimary: true) {
                                     store.send(.resumeTapped)
                                 }
                             } else {
-                                TVHeaderActionButton(title: "İzle", icon: "play.fill", isPrimary: true) {
+                                TVHeaderActionButton(title: AppStrings.SeriesDetail.watch, icon: "play.fill", isPrimary: true) {
                                     if let firstEp = store.currentEpisodes.first {
                                         store.send(.episodeSelected(firstEp))
                                     }
@@ -161,7 +161,7 @@
                 // Seasons
                 if !store.seasons.isEmpty {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text("Sezonlar")
+                        Text(AppStrings.SeriesDetail.seasons)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 80)
@@ -187,11 +187,11 @@
                 if !store.currentEpisodes.isEmpty {
                     VStack(alignment: .leading, spacing: 24) {
                         HStack {
-                            Text("Bölümler")
+                            Text(AppStrings.SeriesDetail.episodes)
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundStyle(.white)
                             Spacer()
-                            Text("\(store.currentEpisodes.count) bölüm")
+                            Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
                                 .font(.system(size: 20))
                                 .foregroundStyle(Color.white.opacity(0.6))
                         }
@@ -219,7 +219,7 @@
                 ProgressView()
                     .tint(Color(hex: "#0A84FF"))
                     .scaleEffect(2.0)
-                Text("Dizi bilgileri yükleniyor…")
+                Text(AppStrings.SeriesDetail.loading)
                     .font(.system(size: 28))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }

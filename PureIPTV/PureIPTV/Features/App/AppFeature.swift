@@ -309,7 +309,9 @@ public struct AppFeature {
             }
 
         case .seriesDetail(.presented(.viewDidDisappear)):
-            state.seriesDetail = nil
+            if state.player == nil && state.paywall == nil {
+                state.seriesDetail = nil
+            }
             return .none
 
         case .seriesDetail:
@@ -336,7 +338,9 @@ public struct AppFeature {
             }
 
         case .vodDetail(.presented(.viewDidDisappear)):
-            state.vodDetail = nil
+            if state.player == nil && state.paywall == nil {
+                state.vodDetail = nil
+            }
             return .none
 
         case .vodDetail:

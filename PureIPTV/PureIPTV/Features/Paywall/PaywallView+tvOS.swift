@@ -1,5 +1,6 @@
 #if os(tvOS)
     import ComposableArchitecture
+    import RevenueCat
     import SwiftUI
 
     public struct PaywallView: View {
@@ -17,12 +18,12 @@
 
                     // Content
                     VStack(spacing: 40) {
-                        Text("Unlock Premium")
+                        Text(AppStrings.Paywall.unlockPremium)
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
 
-                        Text("Get full access to all features, live channels, and unlimited movies.")
+                        Text(AppStrings.Paywall.fullAccessDescription)
                             .font(.headline)
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -69,7 +70,7 @@
 
                         Spacer()
 
-                        Button("Restore Purchases") {
+                        Button(AppStrings.Paywall.restorePurchases) {
                             store.send(.restorePurchases)
                         }
                         .foregroundColor(.gray)

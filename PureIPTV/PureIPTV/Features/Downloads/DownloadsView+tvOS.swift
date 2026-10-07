@@ -13,15 +13,15 @@ import SwiftUI
         public var body: some View {
             Group {
                 if store.isLoading {
-                    ProgressView("İndirilenler yükleniyor...")
+                    ProgressView(AppStrings.Common.loading)
                 } else if store.downloadedItems.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "arrow.down.circle")
                             .font(.system(size: 80))
                             .foregroundStyle(.secondary)
-                        Text("Henüz indirilmiş içerik yok")
+                        Text(AppStrings.Downloads.empty)
                             .font(.title)
-                        Text("Filmleri veya dizileri indirerek internet bağlantınız olmadan da izleyebilirsiniz.")
+                        Text(AppStrings.Downloads.emptyDescription)
                             .font(.headline)
                             .foregroundStyle(.secondary)
                     }
@@ -62,7 +62,7 @@ import SwiftUI
                                     Button(role: .destructive) {
                                         store.send(.deleteDownload(item.id))
                                     } label: {
-                                        Label("Sil", systemImage: "trash")
+                                        Label(AppStrings.Common.delete, systemImage: "trash")
                                     }
                                 }
                             }

@@ -120,7 +120,7 @@
                             } label: {
                                 SeriesCardView(series: series, isSelected: store.selectedSeries?.id == series.id) {}
                             }
-                            .buttonStyle(TVGridCardButtonStyle())
+                            .buttonStyle(.card)
                             .contextMenu {
                                 Button {
                                     store.send(.toggleFavorite(series))

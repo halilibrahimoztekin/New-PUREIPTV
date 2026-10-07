@@ -23,6 +23,7 @@ public struct EPGTimelineFeature {
         case fetchEPG(streamID: String)
         case epgResponse(streamID: String, Result<[EPGProgram], Error>)
         case channelTapped(MediaModels.Item)
+        case programTapped(EPGProgram, MediaModels.Item)
         case updateCurrentTime
         case closeTapped
 
@@ -35,6 +36,7 @@ public struct EPGTimelineFeature {
 
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.continuousClock) var clock
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
@@ -78,9 +80,43 @@ public struct EPGTimelineFeature {
 
             case let .channelTapped(channel):
                 return .send(.delegate(.playChannel(channel)))
+                
+            case let .programTapped(program, channel):
+                if program.endTime < Date(), channel.tvArchive == 1 {
+                    let config = state.config
+                    guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return .none }
+                    let startUnix = Int(program.startTime.timeIntervalSince1970)
+                    let durationMins = max(1, Int(program.endTime.timeIntervalSince(program.startTime) / 60))
+                    
+                    var components = URLComponents(url: serverURL.appendingPathComponent("streaming/timeshift.php"), resolvingAgainstBaseURL: false)
+                    components?.queryItems = [
+                        URLQueryItem(name: "username", value: username),
+                        URLQueryItem(name: "password", value: password),
+                        URLQueryItem(name: "stream", value: channel.id),
+                        URLQueryItem(name: "start", value: String(startUnix)),
+                        URLQueryItem(name: "duration", value: String(durationMins))
+                    ]
+                    
+                    if let finalURL = components?.url {
+                        let catchupItem = MediaModels.Item(
+                            id: "\(channel.id)_catchup_\(startUnix)",
+                            title: "\(channel.title) (Tekrar: \(program.title))",
+                            streamURL: finalURL,
+                            coverURL: channel.coverURL,
+                            categoryID: channel.categoryID,
+                            type: .live,
+                            epgChannelID: channel.epgChannelID
+                        )
+                        return .send(.delegate(.playChannel(catchupItem)))
+                    }
+                }
+                return .none
 
             case .closeTapped:
-                return .send(.delegate(.close))
+                return .run { _ in
+                    @Dependency(\.dismiss) var dismiss
+                    await dismiss()
+                }
 
             case .delegate:
                 return .none

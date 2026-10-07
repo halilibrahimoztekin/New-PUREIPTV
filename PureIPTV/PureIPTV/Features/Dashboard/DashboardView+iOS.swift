@@ -37,7 +37,7 @@
                             }
 
                             if !store.watchHistoryItems.isEmpty {
-                                featuredSection(title: "Kaldığın Yerden İzle", items: store.watchHistoryItems) { hist in
+                                featuredSection(title: String(localized: "Kaldığın Yerden İzle"), items: store.watchHistoryItems) { hist in
                                     WatchHistoryCardView(item: hist) {
                                         store.send(.historySelected(hist))
                                     }
@@ -46,7 +46,7 @@
                             }
 
                             if !store.favoriteItems.isEmpty {
-                                featuredSection(title: "Favorilerim", items: store.favoriteItems) { fav in
+                                featuredSection(title: String(localized: "Favorilerim"), items: store.favoriteItems) { fav in
                                     FavoriteCardView(item: fav) {
                                         store.send(.favoriteSelected(fav))
                                     }
@@ -55,7 +55,7 @@
                             }
 
                             if !store.featuredChannels.isEmpty {
-                                featuredSection(title: "Canlı TV (Önerilen)", items: store.featuredChannels) { channel in
+                                featuredSection(title: String(localized: "Canlı TV (Önerilen)"), items: store.featuredChannels) { channel in
                                     ChannelCardView(channel: channel, isSelected: false) {
                                         store.send(.channelSelected(channel))
                                     }
@@ -64,7 +64,7 @@
                             }
 
                             if store.featuredVODs.count > 1 {
-                                featuredSection(title: "Yeni Eklenen Filmler", items: Array(store.featuredVODs.dropFirst())) { vod in
+                                featuredSection(title: String(localized: "Yeni Eklenen Filmler"), items: Array(store.featuredVODs.dropFirst())) { vod in
                                     VODCardView(vod: vod, isSelected: false) {
                                         store.send(.vodSelected(vod))
                                     }
@@ -73,7 +73,7 @@
                             }
 
                             if !store.featuredSeries.isEmpty {
-                                featuredSection(title: "Yeni Eklenen Diziler", items: store.featuredSeries) { series in
+                                featuredSection(title: String(localized: "Yeni Eklenen Diziler"), items: store.featuredSeries) { series in
                                     SeriesCardView(series: series, isSelected: false) {
                                         store.send(.seriesSelected(series))
                                     }
@@ -221,13 +221,13 @@
                                 }
                             }
 
-                            Text("HD")
+                            Text(AppStrings.Dashboard.hdBadge)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.5), lineWidth: 1))
 
-                            Text("Film")
+                            Text(AppStrings.Dashboard.movieBadge)
                                 .fontWeight(.semibold)
                         }
                         .font(.system(size: 14))
@@ -249,7 +249,7 @@
 
                             HStack {
                                 Image(systemName: "info.circle")
-                                Text("Detaylar")
+                                Text(AppStrings.Dashboard.details)
                             }
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)

@@ -37,7 +37,7 @@ public struct PlaylistManagementView: View {
                             Button(role: .destructive) {
                                 store.send(.deletePlaylist(playlist.id))
                             } label: {
-                                Label("Sil", systemImage: "trash")
+                                Label(AppStrings.Common.delete, systemImage: "trash")
                             }
                         }
                         #else
@@ -45,18 +45,18 @@ public struct PlaylistManagementView: View {
                                     Button(role: .destructive) {
                                         store.send(.deletePlaylist(playlist.id))
                                     } label: {
-                                        Label("Sil", systemImage: "trash")
+                                        Label(AppStrings.Common.delete, systemImage: "trash")
                                     }
                                 }
                         #endif
                     }
                 } header: {
-                    Text("Kayıtlı Hesaplar")
+                    Text(AppStrings.PlaylistMgmt.savedAccounts)
                 } footer: {
-                    Text("Hesaplar arasında geçiş yaptığınızda uygulama yeni hesaba ait verileri yükleyecektir.")
+                    Text(AppStrings.PlaylistMgmt.switchNote)
                 }
             }
-            .navigationTitle("Hesap Yönetimi")
+            .navigationTitle(AppStrings.PlaylistMgmt.accountManagement)
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

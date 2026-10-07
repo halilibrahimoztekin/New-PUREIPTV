@@ -25,6 +25,12 @@ public enum AppStrings {
         public static let addToFavorites = LocalizedStringKey("Favorilere Ekle")
         public static let removeFromFavorites = LocalizedStringKey("Favorilerden Çıkar")
         public static let categoryNotFound = LocalizedStringKey("Kategori bulunamadı")
+        public static let results = LocalizedStringKey("sonuç")
+        public static let hour = LocalizedStringKey("saat")
+        public static let minute = LocalizedStringKey("dakika")
+        public static let minAbbr = LocalizedStringKey("dk")
+        public static let watched = LocalizedStringKey("izlendi")
+        public static let season = LocalizedStringKey("Sezon")
     }
 
     // MARK: - VOD (Movies)
@@ -199,5 +205,98 @@ public enum AppStrings {
         public static let title = LocalizedStringKey("Ebeveyn Kontrolü")
         public static let description = LocalizedStringKey("Bu içeriğe erişmek için PIN girin veya FaceID/TouchID kullanın.")
         public static let pin = LocalizedStringKey("PIN")
+    }
+
+    // MARK: - Dashboard
+
+    public enum Dashboard {
+        public static let continueWatching = LocalizedStringKey("Kaldığın Yerden İzle")
+        public static let myFavorites = LocalizedStringKey("Favorilerim")
+        public static let featuredLiveTV = LocalizedStringKey("Canlı TV (Önerilen)")
+        public static let newMovies = LocalizedStringKey("Yeni Eklenen Filmler")
+        public static let newSeries = LocalizedStringKey("Yeni Eklenen Diziler")
+        public static let hdBadge = LocalizedStringKey("HD")
+        public static let movieBadge = LocalizedStringKey("Film")
+        public static let details = LocalizedStringKey("Detaylar")
+    }
+
+    // MARK: - Downloads
+
+    public enum Downloads {
+        public static let title = LocalizedStringKey("İndirilenler")
+        public static let empty = LocalizedStringKey("Henüz indirilmiş içerik yok")
+        public static let emptyDescription = LocalizedStringKey("Filmleri veya dizileri indirerek internet bağlantınız olmadan da izleyebilirsiniz.")
+    }
+
+    // MARK: - VOD Detail
+
+    public enum VODDetail {
+        public static let watch = LocalizedStringKey("İzle")
+        public static let continueWatching = LocalizedStringKey("Devam Et")
+        public static let download = LocalizedStringKey("İndir")
+        public static let downloading = LocalizedStringKey("İndiriliyor")
+        public static let downloaded = LocalizedStringKey("İndirildi")
+        public static let cast = LocalizedStringKey("Yayınla")
+        public static let trailer = LocalizedStringKey("Fragman")
+        public static let similarMovies = LocalizedStringKey("Benzer Filmler")
+        public static let loading = LocalizedStringKey("Film bilgileri yükleniyor…")
+    }
+
+    // MARK: - Series Detail
+
+    public enum SeriesDetail {
+        public static let watch = LocalizedStringKey("İzle")
+        public static let continueWatching = LocalizedStringKey("Devam Et")
+        public static let seasons = LocalizedStringKey("Sezonlar")
+        public static let episodes = LocalizedStringKey("Bölümler")
+        public static let loading = LocalizedStringKey("Dizi bilgileri yükleniyor…")
+        public static let episodeCount = LocalizedStringKey("bölüm")
+    }
+
+    // MARK: - Paywall
+
+    public enum Paywall {
+        public static let unlockPremium = LocalizedStringKey("Premium'u Aç")
+        public static let fullAccessDescription = LocalizedStringKey("Tüm özelliklere, canlı kanallara ve sınırsız filmlere tam erişim sağlayın.")
+        public static let subscribe = LocalizedStringKey("Abone Ol")
+        public static let restorePurchases = LocalizedStringKey("Satın Alımları Geri Yükle")
+        public static let termsOfService = LocalizedStringKey("Kullanım Koşulları")
+        public static let privacyPolicy = LocalizedStringKey("Gizlilik Politikası")
+    }
+
+    // MARK: - Category Management
+
+    public enum CategoryMgmt {
+        public static let noCategoriesFound = LocalizedStringKey("Kategori bulunamadı.")
+        public static func manageTitle(for type: String) -> LocalizedStringKey {
+            LocalizedStringKey("\(type) Kategorilerini Yönet")
+        }
+    }
+
+    // MARK: - Playlist Management
+
+    public enum PlaylistMgmt {
+        public static let savedAccounts = LocalizedStringKey("Kayıtlı Hesaplar")
+        public static let switchNote = LocalizedStringKey("Hesaplar arasında geçiş yaptığınızda uygulama yeni hesaba ait verileri yükleyecektir.")
+        public static let accountManagement = LocalizedStringKey("Hesap Yönetimi")
+    }
+
+    // MARK: - Player Media Info
+
+    public enum MediaInfo {
+        public static let resolution = LocalizedStringKey("Çözünürlük")
+        public static let videoCodec = LocalizedStringKey("Video Codec")
+        public static let audioCodec = LocalizedStringKey("Ses Codec")
+        public static let bitrate = LocalizedStringKey("Bit Hızı")
+        public static let unknown = LocalizedStringKey("Bilinmiyor")
+    }
+
+    // MARK: - EPG
+
+    public enum EPG {
+        public static let guide = LocalizedStringKey("Yayın Akışı")
+        public static let watch = LocalizedStringKey("İzle")
+        public static let error = LocalizedStringKey("Hata: ")
+        public static let noData = LocalizedStringKey("Bu kanal için EPG verisi bulunamadı.")
     }
 }

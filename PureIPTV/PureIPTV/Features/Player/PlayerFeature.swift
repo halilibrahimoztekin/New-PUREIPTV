@@ -11,6 +11,7 @@ public struct PlayerFeature {
     public enum CancelID {
         public static let playerEvents = "PlayerFeature.playerEvents"
         public static let statsTimer = "PlayerFeature.statsTimer"
+        public static let sleepTimer = "PlayerFeature.sleepTimer"
     }
 
     public struct PlayableItem: Equatable {
@@ -80,6 +81,12 @@ public struct PlayerFeature {
         /// PiP
         public var isPiPActive: Bool = false
 
+        /// Auto-Reconnect
+        public var retryCount: Int = 0
+
+        /// Sleep Timer
+        public var sleepTimerSeconds: Int?
+
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
             self.playlist = playlist
@@ -92,6 +99,7 @@ public struct PlayerFeature {
         case play
         case pause
         case stop
+        case retryPlayback
         case toggleControls
         case hideControls
 
@@ -108,6 +116,11 @@ public struct PlayerFeature {
         case hideGestureFeedback
         case dragGestureChanged(translation: CGSize, screenWidth: CGFloat, screenHeight: CGFloat, startLocation: CGPoint)
         case dragGestureEnded
+
+        // Sleep Timer
+        case setSleepTimer(Int?)
+        case sleepTimerTick
+        case sleepTimerEnded
 
         // New actions for video features
         case jumpForward
@@ -158,6 +171,7 @@ public struct PlayerFeature {
     @Dependency(\.databaseClient) var databaseClient
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
@@ -272,6 +286,19 @@ public struct PlayerFeature {
                 try await playerClient.stop()
             }
 
+        case .retryPlayback:
+            let url = state.item.streamURL
+            let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
+            return .run { _ in
+                try await playerClient.play(url)
+                if position > 0 {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    try await playerClient.seek(position)
+                }
+            } catch: { error, _ in
+                print("Player retry error: \(error)")
+            }
+
         case .toggleControls:
             state.isControlsVisible.toggle()
             return .none
@@ -300,6 +327,43 @@ public struct PlayerFeature {
         case .hideGestureFeedback:
             state.gestureFeedback = nil
             return .none
+
+        case let .setSleepTimer(minutes):
+            if let minutes {
+                state.sleepTimerSeconds = minutes * 60
+                state.gestureFeedback = "Uyku Zamanlayıcısı: \(minutes) dk"
+                return .run { send in
+                    try await Task.sleep(nanoseconds: 2_000_000_000)
+                    await send(.hideGestureFeedback)
+                    while !Task.isCancelled {
+                        try await Task.sleep(nanoseconds: 1_000_000_000)
+                        await send(.sleepTimerTick)
+                    }
+                }
+                .cancellable(id: CancelID.sleepTimer, cancelInFlight: true)
+            } else {
+                state.sleepTimerSeconds = nil
+                state.gestureFeedback = "Uyku Zamanlayıcısı Kapatıldı"
+                return .merge(
+                    .cancel(id: CancelID.sleepTimer),
+                    .run { send in
+                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        await send(.hideGestureFeedback)
+                    }
+                )
+            }
+
+        case .sleepTimerTick:
+            if let current = state.sleepTimerSeconds, current > 0 {
+                state.sleepTimerSeconds = current - 1
+                if current - 1 == 0 {
+                    return .send(.sleepTimerEnded)
+                }
+            }
+            return .none
+
+        case .sleepTimerEnded:
+            return .send(.closeTapped)
 
         case let .dragGestureChanged(translation, screenWidth, _, _):
             state.lastDragTranslation = translation
@@ -547,6 +611,7 @@ public struct PlayerFeature {
             case let .stateChanged(newState):
                 state.playerState = newState
                 if newState == .playing {
+                    state.retryCount = 0 // Reset on successful play
                     var actions: [Effect<Action>] = []
                     if state.mediaInfo == nil {
                         actions.append(.send(.fetchMediaInfo))
@@ -572,7 +637,16 @@ public struct PlayerFeature {
                     }
                 }
             case .encounteredError:
-                state.errorMessage = AppStrings.Errors.cannotPlayStream
+                if state.retryCount < 3 {
+                    state.retryCount += 1
+                    state.errorMessage = "Bağlantı koptu, yeniden bağlanılıyor... (\(state.retryCount)/3)"
+                    return .run { send in
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        await send(.retryPlayback)
+                    }
+                } else {
+                    state.errorMessage = AppStrings.Errors.cannotPlayStream
+                }
             case let .timeChanged(time):
                 state.currentTime = time
                 if state.item.config == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
@@ -601,7 +675,8 @@ public struct PlayerFeature {
             let item = state.item
             return .merge(
                 .cancel(id: CancelID.playerEvents),
-                .run { send in
+                .run { _ in
+                    @Dependency(\.dismiss) var dismiss
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod" // Basic detection
@@ -622,7 +697,7 @@ public struct PlayerFeature {
                     await MainActor.run {
                         appCoordinator.trigger(.dismissPlayer)
                     }
-                    await send(.delegate(.didClose))
+                    await dismiss()
                 }
             )
 

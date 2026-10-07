@@ -72,6 +72,7 @@ public struct SeriesDetailFeature {
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.downloadClient) var downloadClient
     @Injected(\.appCoordinator) var appCoordinator
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 

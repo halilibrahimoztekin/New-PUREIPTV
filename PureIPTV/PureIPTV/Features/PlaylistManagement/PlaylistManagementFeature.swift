@@ -31,6 +31,7 @@ public struct PlaylistManagementFeature {
     }
 
     @Injected(\.playlistRepository) var playlistRepository
+    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 

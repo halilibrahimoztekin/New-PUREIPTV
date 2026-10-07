@@ -64,7 +64,7 @@ public struct PlayerEPGTimelineView: View {
                                 PlayerEPGTimelineCard(program: program, currentTime: currentTime)
                             }
                             #if os(tvOS)
-                            .buttonStyle(TVGridCardButtonStyle())
+                            .buttonStyle(.card)
                             #else
                             .buttonStyle(.plain)
                             #endif

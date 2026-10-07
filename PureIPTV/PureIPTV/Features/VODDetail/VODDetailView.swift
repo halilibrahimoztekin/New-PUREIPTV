@@ -134,19 +134,20 @@ public struct VODDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         // Buttons
-                        HStack(spacing: 12) {
-                            if let history = store.historyItem, history.duration > 0 {
-                                let progressMins = Int(history.progress / 60)
-                                let durationMins = Int(history.duration / 60)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                if let history = store.historyItem, history.duration > 0 {
+                                    let progressMins = Int(history.progress / 60)
+                                    let durationMins = Int(history.duration / 60)
 
-                                VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: 4) {
                                     VStack(spacing: 12) {
                                         Button {
                                             store.send(.resumeTapped)
                                         } label: {
                                             HStack {
                                                 Image(systemName: "play.fill")
-                                                Text("Devam Et")
+                                                Text(AppStrings.VODDetail.continueWatching)
                                                     .fontWeight(.semibold)
                                             }
                                             .padding(.horizontal, 16)
@@ -161,7 +162,7 @@ public struct VODDetailView: View {
                                         } label: {
                                             HStack {
                                                 Image(systemName: "arrow.counterclockwise")
-                                                Text("Baştan")
+                                                Text(String(localized: "Baştan"))
                                                     .fontWeight(.semibold)
                                             }
                                             .padding(.horizontal, 16)
@@ -172,7 +173,7 @@ public struct VODDetailView: View {
                                         }
                                     }
 
-                                    Text("\(progressMins) dk / \(durationMins) dk izlendi")
+                                    Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
                                         .font(.caption)
                                         .foregroundStyle(Color.white.opacity(0.7))
                                         .padding(.leading, 4)
@@ -183,7 +184,7 @@ public struct VODDetailView: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "play.fill")
-                                        Text("Şimdi İzle")
+                                        Text(AppStrings.Common.watchNow)
                                             .fontWeight(.semibold)
                                     }
                                     .padding(.horizontal, 16)
@@ -222,6 +223,8 @@ public struct VODDetailView: View {
                                     .foregroundStyle(store.isDownloaded ? .green : .white)
                             }
                         }
+                        }
+                        .padding(.bottom, 8)
 
                         // Rating
                         if let rating = store.tmdbMovie?.voteAverage ?? store.info?.rating, rating > 0 {
@@ -249,7 +252,7 @@ public struct VODDetailView: View {
 
                             if let runtime = store.tmdbMovie?.runtime {
                                 Text(verbatim: "•")
-                                Text("\(runtime / 60) saat \(runtime % 60) dakika")
+                                Text("\(runtime / 60) \(AppStrings.Common.hour) \(runtime % 60) \(AppStrings.Common.minute)")
                             } else if let duration = store.info?.duration {
                                 Text(verbatim: "•")
                                 Text(duration)
@@ -287,7 +290,7 @@ public struct VODDetailView: View {
                 let genres = store.tmdbMovie?.genres?.map(\.name) ?? store.info?.genre?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                 if !genres.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Türler")
+                        Text(String(localized: "Türler"))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -312,7 +315,7 @@ public struct VODDetailView: View {
                 let plot = store.tmdbMovie?.overview ?? store.info?.plot
                 if let plotText = plot, !plotText.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Overview")
+                        Text(String(localized: "Konusu"))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -327,7 +330,7 @@ public struct VODDetailView: View {
                 // Production Countries
                 if let countries = store.tmdbMovie?.productionCountries, !countries.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Yapım Ülkeleri")
+                        Text(String(localized: "Yapım Ülkeleri"))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -352,7 +355,7 @@ public struct VODDetailView: View {
                 // Production Companies
                 if let companies = store.tmdbMovie?.productionCompanies, !companies.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Yapım Şirketleri")
+                        Text(String(localized: "Yapım Şirketleri"))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -378,7 +381,7 @@ public struct VODDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: "link")
-                            Text("IMDb'de Görüntüle")
+                            Text(String(localized: "IMDb'de Görüntüle"))
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -402,7 +405,7 @@ public struct VODDetailView: View {
                 // Similar Content
                 if let similar = store.tmdbMovie?.similar?.results, !similar.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Benzer İçerikler")
+                        Text(AppStrings.VODDetail.similarMovies)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 24)
@@ -438,9 +441,11 @@ public struct VODDetailView: View {
                                             .frame(width: 110, alignment: .leading)
                                     }
                                 }
+                                }
                             }
                         }
                     }
+                    .padding(.bottom, 8)
                 }
 
                 Spacer().frame(height: 40)
@@ -535,7 +540,7 @@ public struct VODDetailView: View {
                                 }
 
                                 if let duration = store.tmdbMovie?.runtime, duration > 0 {
-                                    Text("\(duration) dk")
+                                    Text("\(duration) \(AppStrings.Common.minAbbr)")
                                         .font(.title3)
                                         .foregroundStyle(.white.opacity(0.7))
                                 } else if let dur = store.vod.duration, !dur.isEmpty {

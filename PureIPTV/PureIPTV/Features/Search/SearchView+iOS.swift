@@ -132,7 +132,7 @@
                 VStack(spacing: 24) {
                     let live = store.liveResults
                     if !live.isEmpty {
-                        resultSection(title: "Canlı TV", count: live.count) {
+                        resultSection(title: String(localized: "Canlı TV"), count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 12) {
                                 ForEach(live) { channel in
                                     ChannelCardView(channel: channel) {
@@ -145,7 +145,7 @@
 
                     let vods = store.vodResults
                     if !vods.isEmpty {
-                        resultSection(title: "Filmler", count: vods.count) {
+                        resultSection(title: String(localized: "Filmler"), count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
                                 ForEach(vods) { vod in
                                     VODCardView(vod: vod) {
@@ -158,7 +158,7 @@
 
                     let seriesList = store.seriesResults
                     if !seriesList.isEmpty {
-                        resultSection(title: "Diziler", count: seriesList.count) {
+                        resultSection(title: String(localized: "Diziler"), count: seriesList.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
                                 ForEach(seriesList) { series in
                                     SeriesCardView(series: series) {
@@ -178,14 +178,14 @@
         private var recentSearchesView: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Son Aramalar")
+                    Text(AppStrings.Search.recentSearches)
                         .font(.title3.bold())
                         .foregroundColor(.white)
                     Spacer()
                     Button {
                         store.send(.clearHistoryTapped)
                     } label: {
-                        Text("Temizle")
+                        Text(AppStrings.Search.clear)
                             .font(.system(size: 14))
                             .foregroundColor(Color(hex: "#0A84FF"))
                     }
@@ -239,7 +239,7 @@
                     Text(title)
                         .font(.title3.bold())
                         .foregroundColor(.white)
-                    Text("\(count) sonuç")
+                    Text("\(count) \(AppStrings.Common.results)")
                         .font(.caption)
                         .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
                         .padding(.bottom, 2)
@@ -254,7 +254,7 @@
                 ProgressView()
                     .tint(Color(hex: "#0A84FF"))
                     .scaleEffect(1.2)
-                Text("Arama altyapısı hazırlanıyor...\n(Bu işlem ilk girişte birkaç saniye sürebilir)")
+                Text(AppStrings.Search.loadingMessage)
                     .font(.system(size: 14))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))

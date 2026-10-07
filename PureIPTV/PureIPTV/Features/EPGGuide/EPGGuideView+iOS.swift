@@ -183,7 +183,7 @@ import SwiftUI
                         VStack(alignment: .leading, spacing: 4) {
                             Text(selected.title)
                                 .font(.headline)
-                            Text("Yayın Akışı")
+                            Text(AppStrings.EPG.guide)
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.6))
                         }
@@ -193,7 +193,7 @@ import SwiftUI
                         } label: {
                             HStack {
                                 Image(systemName: "play.fill")
-                                Text("İzle")
+                                Text(AppStrings.EPG.watch)
                             }
                             .font(.subheadline.bold())
                             .foregroundColor(.white)
@@ -215,7 +215,7 @@ import SwiftUI
                     Spacer()
                 } else if let error = store.errorMessage {
                     Spacer()
-                    Text("Hata: \(error)")
+                    Text("\(AppStrings.EPG.error)\(error)")
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
                         .padding()
@@ -226,7 +226,7 @@ import SwiftUI
                         Image(systemName: "calendar.badge.exclamationmark")
                             .font(.system(size: 40))
                             .foregroundColor(.white.opacity(0.3))
-                        Text("Bu kanal için EPG verisi bulunamadı.")
+                        Text(AppStrings.EPG.noData)
                             .foregroundColor(.white.opacity(0.5))
                     }
                     Spacer()
@@ -284,7 +284,7 @@ import SwiftUI
 
                         if program.isPlayingNow {
                             Spacer()
-                            Text("ŞU AN")
+                            Text(AppStrings.Player.nowPlaying)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)

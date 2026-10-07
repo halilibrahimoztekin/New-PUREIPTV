@@ -17,11 +17,11 @@ public struct ParentalLockView: View {
                     .foregroundColor(.red)
                     .padding(.top, 40)
 
-                Text("Ebeveyn Kontrolü")
+                Text(AppStrings.ParentalLock.title)
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text("Bu içeriğe erişmek için PIN girin veya FaceID/TouchID kullanın.")
+                Text(AppStrings.ParentalLock.description)
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)

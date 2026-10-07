@@ -249,11 +249,8 @@
                     .padding(.bottom, 10)
                 }
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .shadow(color: isFocused ? Color(hex: "#0A84FF").opacity(0.5) : .clear, radius: 16, x: 0, y: 4)
-                .scaleEffect(isFocused ? 1.08 : 1.0)
-                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
             }
-            .buttonStyle(.tvGridCard)
+            .buttonStyle(.card)
         }
     }
 
