@@ -6,6 +6,7 @@ public struct DownloadsFeature {
     @ObservableState
     public struct State: Equatable {
         public var downloadedItems: [OfflineMedia] = []
+        public var activeDownloads: [DownloadProgressItem] = []
         public var isLoading = false
         public var errorMessage: String?
 
@@ -16,6 +17,9 @@ public struct DownloadsFeature {
         case onAppear
         case loadDownloads
         case downloadsLoaded([OfflineMedia])
+        case activeDownloadsLoaded([DownloadProgressItem])
+        case downloadProgressUpdated(DownloadProgressItem)
+        case cancelActiveDownload(String)
         case deleteDownload(String)
         case playDownload(OfflineMedia)
         case delegate(Delegate)
@@ -33,19 +37,51 @@ public struct DownloadsFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
-                return .send(.loadDownloads)
+                return .merge(
+                    .send(.loadDownloads),
+                    .run { send in
+                        for await update in downloadClient.observeDownloads() {
+                            await send(.downloadProgressUpdated(update))
+                        }
+                    }
+                )
 
             case .loadDownloads:
                 state.isLoading = true
                 return .run { send in
                     let items = await (try? downloadClient.getDownloadedMedia()) ?? []
+                    let active = await downloadClient.getActiveDownloads()
                     await send(.downloadsLoaded(items))
+                    await send(.activeDownloadsLoaded(active))
                 }
 
             case let .downloadsLoaded(items):
                 state.isLoading = false
                 state.downloadedItems = items
                 return .none
+
+            case let .activeDownloadsLoaded(active):
+                state.activeDownloads = active
+                return .none
+
+            case let .downloadProgressUpdated(update):
+                if update.isCompleted {
+                    state.activeDownloads.removeAll { $0.id == update.id }
+                    return .send(.loadDownloads)
+                } else {
+                    if let index = state.activeDownloads.firstIndex(where: { $0.id == update.id }) {
+                        state.activeDownloads[index] = update
+                    } else {
+                        state.activeDownloads.append(update)
+                    }
+                    return .none
+                }
+
+            case let .cancelActiveDownload(id):
+                state.activeDownloads.removeAll { $0.id == id }
+                return .run { _ in
+                    try? await downloadClient.cancelDownload(id)
+                }
 
             case let .deleteDownload(id):
                 return .run { send in

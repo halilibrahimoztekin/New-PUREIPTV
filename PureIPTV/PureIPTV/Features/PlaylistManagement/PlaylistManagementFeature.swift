@@ -26,6 +26,7 @@ public struct PlaylistManagementFeature {
         public enum Delegate: Equatable {
             case didChangeActivePlaylist
             case addPlaylistTapped
+            case addPlaylistDidConnect
             case dismissed
         }
     }
@@ -69,11 +70,11 @@ public struct PlaylistManagementFeature {
                 }
                 return .none
 
-            case .addPlaylist(.presented(.connectResponse(.success))):
+            case .addPlaylist(.presented(.delegate(.didConnect))):
                 state.playlists = playlistRepository.getPlaylists()
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
                 state.addPlaylist = nil
-                return .none
+                return .send(.delegate(.addPlaylistDidConnect))
 
             case .addPlaylist:
                 return .none

@@ -62,7 +62,7 @@
                         connectButton
                             .padding(.horizontal, horizontalPadding)
                             .padding(.top, 32)
-                            .padding(.bottom, 48)
+                            .padding(.bottom, 16)
                     }
                 }
             }
@@ -78,25 +78,7 @@
         private var header: some View {
             VStack(spacing: 12) {
                 // Logo icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                        )
-                        .frame(width: 72, height: 72)
-
-                    Image(systemName: "play.tv.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#BF5AF2")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                PureMaterialLogo(size: 72, showGlow: true)
 
                 Text(AppStrings.AddPlaylist.title)
                     .font(.system(size: 28, weight: .bold))
@@ -293,7 +275,7 @@
 
     struct GlassTextField: View {
         let icon: String
-        let placeholder: LocalizedStringKey
+        let placeholder: String
         @Binding var text: String
         var keyboardType: UIKeyboardType = .default
         var autocapitalization: TextInputAutocapitalization = .sentences
@@ -330,7 +312,7 @@
 
     struct GlassSecureField: View {
         let icon: String
-        let placeholder: LocalizedStringKey
+        let placeholder: String
         @Binding var text: String
         let isVisible: Bool
         let onToggle: () -> Void

@@ -57,12 +57,13 @@ public struct SeriesDetailFeature {
         case downloadEpisode(DetailModels.Episode)
         case historyStatusLoaded(WatchHistoryItem?)
         case resumeTapped
+        case restartTapped
         case delegate(Delegate)
         case closeTapped
         case viewDidDisappear
 
         public enum Delegate: Equatable {
-            case didSelectEpisode(PlayerFeature.PlayableItem)
+            case didSelectEpisode(PlayerFeature.PlayableItem, playlist: [PlayerFeature.PlayableItem]?)
             case close
         }
     }
@@ -231,20 +232,67 @@ public struct SeriesDetailFeature {
                     coverURL: episode.coverURL ?? state.series.coverURL,
                     seriesID: state.series.id
                 )
-                return .send(.delegate(.didSelectEpisode(playable)))
+                let playlist = state.currentEpisodes.map { ep in
+                    PlayerFeature.PlayableItem(
+                        id: ep.id,
+                        title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                        streamURL: ep.streamURL,
+                        coverURL: ep.coverURL ?? state.series.coverURL,
+                        seriesID: state.series.id
+                    )
+                }
+                return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
 
             case .resumeTapped:
-                guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString), history.duration > 0 else { return .none }
-                let startPosition = history.progress / history.duration
+                guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) else {
+                    return .send(.restartTapped)
+                }
+                let startPosition = history.duration > 0 ? (history.progress / history.duration) : 0.0
                 let playable = PlayerFeature.PlayableItem(
                     id: history.id,
                     title: history.title,
                     streamURL: streamURL,
                     coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                     seriesID: state.series.id,
-                    startPosition: startPosition
+                    startPosition: startPosition,
+                    initialDuration: history.duration > 0 ? history.duration : nil,
+                    initialProgress: history.progress > 0 ? history.progress : nil
                 )
-                return .send(.delegate(.didSelectEpisode(playable)))
+                let playlist = state.currentEpisodes.isEmpty ? nil : state.currentEpisodes.map { ep in
+                    PlayerFeature.PlayableItem(
+                        id: ep.id,
+                        title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                        streamURL: ep.streamURL,
+                        coverURL: ep.coverURL ?? state.series.coverURL,
+                        seriesID: state.series.id
+                    )
+                }
+                return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
+
+            case .restartTapped:
+                if let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) {
+                    let playable = PlayerFeature.PlayableItem(
+                        id: history.id,
+                        title: history.title,
+                        streamURL: streamURL,
+                        coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
+                        seriesID: state.series.id,
+                        startPosition: 0.0
+                    )
+                    let playlist = state.currentEpisodes.isEmpty ? nil : state.currentEpisodes.map { ep in
+                        PlayerFeature.PlayableItem(
+                            id: ep.id,
+                            title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                            streamURL: ep.streamURL,
+                            coverURL: ep.coverURL ?? state.series.coverURL,
+                            seriesID: state.series.id
+                        )
+                    }
+                    return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
+                } else if let firstEp = state.currentEpisodes.first ?? state.allEpisodes.values.first?.first {
+                    return .send(.episodeSelected(firstEp))
+                }
+                return .none
 
             case let .historyStatusLoaded(history):
                 state.historyItem = history

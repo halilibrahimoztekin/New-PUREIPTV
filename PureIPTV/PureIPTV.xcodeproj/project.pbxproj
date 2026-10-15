@@ -66,15 +66,11 @@
 		};
 		8BCF6C893035797500E02EB4 /* PureIPTVTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PureIPTVTests;
 			sourceTree = "<group>";
 		};
 		8BCF6C933035797500E02EB4 /* PureIPTVUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PureIPTVUITests;
 			sourceTree = "<group>";
 		};
@@ -774,14 +770,6 @@
 				minimumVersion = 5.92.0;
 			};
 		};
-		8B603211307637FB00188D32 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/googlecast/google-cast-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.8.6;
-			};
-		};
 		8BCF6DE13036C4FF00E02EB4 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing";
@@ -870,11 +858,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8B6032053075285C00188D32 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
 			productName = RevenueCatUI;
-		};
-		8B603212307637FB00188D32 /* GoogleCastDynamic */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8B603211307637FB00188D32 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */;
-			productName = GoogleCastDynamic;
 		};
 		8B9999993035797500E02EB4 /* SnapshotTesting */ = {
 			isa = XCSwiftPackageProductDependency;

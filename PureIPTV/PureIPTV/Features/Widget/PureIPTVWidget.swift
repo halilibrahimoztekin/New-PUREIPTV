@@ -28,7 +28,7 @@
             // For brevity and safe cross-process data reading:
             let entry = PureIPTVEntry(
                 date: Date(),
-                lastWatchedTitle: "Kaldığın Yerden Devam Et",
+                lastWatchedTitle: AppStrings.Dashboard.continueWatching,
                 lastWatchedCoverURL: nil,
                 favoriteChannels: ["Favori 1", "Favori 2"]
             )
@@ -43,7 +43,7 @@
 
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
-                Text("PureIPTV")
+                Text(AppStrings.Splash.appName)
                     .font(.headline)
                     .foregroundColor(.accentColor)
 
@@ -52,7 +52,7 @@
                         .font(.subheadline)
                         .lineLimit(2)
                 } else {
-                    Text("İzlemeye Başla")
+                    Text(AppStrings.Widget.startWatching)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -72,8 +72,8 @@
             StaticConfiguration(kind: kind, provider: PureIPTVProvider()) { entry in
                 PureIPTVWidgetEntryView(entry: entry)
             }
-            .configurationDisplayName("PureIPTV")
-            .description("Kaldığınız yerden devam edin veya favorilerinize hızlıca ulaşın.")
+            .configurationDisplayName(AppStrings.Splash.appName)
+            .description(AppStrings.Widget.description)
             .supportedFamilies([.systemSmall, .systemMedium])
         }
     }

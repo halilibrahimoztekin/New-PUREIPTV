@@ -58,7 +58,7 @@
                     Spacer().frame(height: 36)
 
                     // Wordmark — Display Large for TV
-                    Text("PureIPTV")
+                    Text(AppStrings.Splash.appName)
                         .font(.system(size: 72, weight: .heavy, design: .default))
                         .foregroundStyle(
                             LinearGradient(
@@ -74,7 +74,7 @@
                     Spacer().frame(height: 16)
 
                     // Tagline
-                    Text("Pure. Premium. IPTV.")
+                    Text(AppStrings.Splash.tagline)
                         .font(.system(size: 28, weight: .medium, design: .default))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.65))
                         .tracking(3)
@@ -113,64 +113,8 @@
     // MARK: - TV Logo Badge
 
     private struct TVLogoBadge: View {
-        @State private var isBreathing = false
-
         var body: some View {
-            ZStack {
-                // Outer breathing glow — signature tvOS effect
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(hex: "#0A84FF").opacity(isBreathing ? 0.35 : 0.15),
-                                Color.clear,
-                            ],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 130
-                        )
-                    )
-                    .frame(width: 260, height: 260)
-                    .animation(
-                        .easeInOut(duration: 2.5).repeatForever(autoreverses: true),
-                        value: isBreathing
-                    )
-
-                // Border ring
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: "#0A84FF").opacity(0.5), Color(hex: "#BF5AF2").opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
-                    .frame(width: 200, height: 200)
-
-                // Glass background
-                RoundedRectangle(cornerRadius: 50, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 50, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1.5)
-                    )
-                    .frame(width: 180, height: 180)
-
-                // Icon — large for TV
-                Image(systemName: "play.tv.fill")
-                    .font(.system(size: 80, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: "#0A84FF"), Color(hex: "#BF5AF2")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .onAppear {
-                isBreathing = true
-            }
+            PureMaterialLogo(size: 180, showGlow: true)
         }
     }
 

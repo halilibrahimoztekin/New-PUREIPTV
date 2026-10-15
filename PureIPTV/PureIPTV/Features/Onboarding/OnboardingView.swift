@@ -110,7 +110,7 @@ public struct OnboardingView: View {
         }
     }
 
-    private func onboardingPage(icon: String, title: LocalizedStringKey, description: LocalizedStringKey, tag: Int) -> some View {
+    private func onboardingPage(icon: String, title: String, description: String, tag: Int) -> some View {
         VStack(spacing: 24) {
             Image(systemName: icon)
                 .font(.system(size: 100))

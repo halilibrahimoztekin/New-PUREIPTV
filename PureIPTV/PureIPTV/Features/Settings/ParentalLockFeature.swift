@@ -42,7 +42,7 @@ public struct ParentalLockFeature {
             case .onAppear:
                 return .run { send in
                     // Try FaceID first
-                    let success = try await settingsClient.authenticateWithBiometrics("Yetişkin içeriğine erişmek için doğrulama gerekiyor")
+                    let success = try await settingsClient.authenticateWithBiometrics(AppStrings.ParentalLock.biometricReason)
                     await send(.authenticateWithBiometricsResult(success))
                 }
 

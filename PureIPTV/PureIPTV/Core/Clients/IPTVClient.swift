@@ -3,13 +3,28 @@ import ComposableArchitecture
 
 actor M3UCache {
     var items: [M3UItemDTO] = []
+    var epgURL: URL?
+    var xmltvData: XMLTVData?
 
-    func update(items: [M3UItemDTO]) {
+    func update(items: [M3UItemDTO], epgURL: URL?) {
         self.items = items
+        self.epgURL = epgURL
     }
 
     func getItems() -> [M3UItemDTO] {
         items
+    }
+
+    func getEpgURL() -> URL? {
+        epgURL
+    }
+
+    func getXmltvData() -> XMLTVData? {
+        xmltvData
+    }
+
+    func setXmltvData(_ data: XMLTVData) {
+        xmltvData = data
     }
 }
 
@@ -66,6 +81,22 @@ extension IPTVClient: DependencyKey {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
 
+        let ensureM3UCache: @Sendable (PlaylistConfig) async -> [M3UItemDTO] = { config in
+            let existing = await m3uCache.getItems()
+            if !existing.isEmpty {
+                return existing
+            }
+            guard let url = config.m3uURL else { return [] }
+            guard let data = try? await networkClient.fetchData(url: url) else { return [] }
+            guard let str = String(data: data, encoding: .utf8) else { return [] }
+            let parser = M3UParser()
+            let parsedResult = await Task.detached(priority: .userInitiated) {
+                parser.parse(m3uString: str)
+            }.value
+            await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL)
+            return parsedResult.items
+        }
+
         return IPTVClient(
             authenticate: { config in
                 if config.type == .m3u {
@@ -80,21 +111,19 @@ extension IPTVClient: DependencyKey {
                     let parsedResult = await Task.detached(priority: .userInitiated) {
                         parser.parse(m3uString: m3uString)
                     }.value
-                    await m3uCache.update(items: parsedResult.items)
+                    await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL)
                     return
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return }
+
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
-                let data = try await networkClient.fetchData(url: url)
-                let _: XtreamAuthResponseDTO = try await MainActor.run {
-                    try JSONDecoder().decode(XtreamAuthResponseDTO.self, from: data)
-                }
+                // _ = try await networkClient.fetch(url: url)
             },
             fetchLiveCategories: { config in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .live }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
                     return groups.map { MediaModels.Category(id: $0, name: $0) }
                 }
@@ -107,7 +136,7 @@ extension IPTVClient: DependencyKey {
             },
             fetchLiveChannels: { config, categoryID in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .live }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
                     return filtered.map { item in
                         MediaModels.Item(
@@ -143,10 +172,11 @@ extension IPTVClient: DependencyKey {
             },
             fetchVODCategories: { config in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .vod }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .vod }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
                     return groups.map { MediaModels.Category(id: $0, name: $0) }
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODCategories.url(with: xtreamConfig)
@@ -155,7 +185,7 @@ extension IPTVClient: DependencyKey {
             },
             fetchVODs: { config, categoryID in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .vod }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .vod }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
                     return filtered.map { item in
                         MediaModels.Item(
@@ -169,6 +199,7 @@ extension IPTVClient: DependencyKey {
                         )
                     }
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODStreams(categoryID: categoryID).url(with: xtreamConfig)
@@ -191,10 +222,11 @@ extension IPTVClient: DependencyKey {
             },
             fetchSeriesCategories: { config in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .series }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .series }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
                     return groups.map { MediaModels.Category(id: $0, name: $0) }
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesCategories.url(with: xtreamConfig)
@@ -203,7 +235,7 @@ extension IPTVClient: DependencyKey {
             },
             fetchSeries: { config, categoryID in
                 if config.type == .m3u {
-                    let items = await m3uCache.getItems().filter { $0.resolvedMediaType == .series }
+                    let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .series }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
                     return filtered.map { item in
                         MediaModels.Item(
@@ -217,6 +249,7 @@ extension IPTVClient: DependencyKey {
                         )
                     }
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeries(categoryID: categoryID).url(with: xtreamConfig)
@@ -240,7 +273,7 @@ extension IPTVClient: DependencyKey {
                 if config.type == .m3u {
                     // Since M3U series items are flat, we just return a single episode pseudo-info
                     // Find the item first
-                    let items = await m3uCache.getItems()
+                    let items = await ensureM3UCache(config)
                     if let item = items.first(where: { $0.id == seriesID }) {
                         let info = DetailModels.Info(plot: nil, cast: nil, director: nil, genre: item.groupTitle)
                         let seasons = [DetailModels.Season(id: "1", seasonNumber: 1, name: "Season 1", episodeCount: 1)]
@@ -249,6 +282,7 @@ extension IPTVClient: DependencyKey {
                     }
                     throw NSError(domain: "IPTVClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Series not found"])
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
                     throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid Xtream configuration"])
                 }
@@ -298,12 +332,13 @@ extension IPTVClient: DependencyKey {
             fetchVODInfo: { config, vodID in
                 if config.type == .m3u {
                     // Find the item first
-                    let items = await m3uCache.getItems()
+                    let items = await ensureM3UCache(config)
                     if let item = items.first(where: { $0.id == vodID }) {
                         return DetailModels.Info(plot: nil, cast: nil, director: nil, genre: item.groupTitle)
                     }
                     throw NSError(domain: "IPTVClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "VOD not found"])
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
                     throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid Xtream configuration"])
                 }
@@ -324,9 +359,34 @@ extension IPTVClient: DependencyKey {
                 )
             },
             fetchShortEPG: { config, streamID, limit in
+                @Dependency(\.xmltvParser) var xmltvParser
                 if config.type == .m3u {
-                    return []
+                    _ = await ensureM3UCache(config)
+                    guard let epgURL = await m3uCache.getEpgURL() else { return [] }
+                    var currentXMLTV = await m3uCache.getXmltvData()
+                    if currentXMLTV == nil {
+                        let data = try await networkClient.fetchData(url: epgURL)
+                        currentXMLTV = try await xmltvParser.parse(data)
+                        if let parsed = currentXMLTV {
+                            await m3uCache.setXmltvData(parsed)
+                        }
+                    }
+                    guard let xmlData = currentXMLTV else { return [] }
+
+                    let now = Date()
+                    let programmes = xmlData.programmes[streamID] ?? []
+                    return programmes.map { p in
+                        EPGProgram(
+                            id: UUID().uuidString,
+                            title: p.title,
+                            description: p.description,
+                            startTime: p.start,
+                            endTime: p.end,
+                            isPlayingNow: p.start <= now && p.end >= now
+                        )
+                    }
                 }
+
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
@@ -361,9 +421,30 @@ extension IPTVClient: DependencyKey {
                     ]
                 }
 
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-                formatter.timeZone = TimeZone(identifier: "UTC")
+                let formatStrings = [
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd HH:mm",
+                    "yyyyMMddHHmmss Z",
+                    "yyyyMMddHHmmss",
+                    "yyyy-MM-dd'T'HH:mm:ssZ",
+                ]
+                let formatters: [DateFormatter] = formatStrings.map { fmt in
+                    let f = DateFormatter()
+                    f.dateFormat = fmt
+                    f.locale = Locale(identifier: "en_US_POSIX")
+                    f.timeZone = TimeZone(identifier: "UTC")
+                    return f
+                }
+
+                let parseEPGDate: (String) -> Date? = { str in
+                    let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                    for f in formatters {
+                        if let d = f.date(from: trimmed) {
+                            return d
+                        }
+                    }
+                    return nil
+                }
 
                 let epgShift = UserDefaults.standard.integer(forKey: "com.pureiptv.epgTimeShift")
                 let shiftInterval = TimeInterval(epgShift * 3600)
@@ -376,7 +457,7 @@ extension IPTVClient: DependencyKey {
                         start = Date(timeIntervalSince1970: TimeInterval(startTS)).addingTimeInterval(shiftInterval)
                         end = Date(timeIntervalSince1970: TimeInterval(endTS)).addingTimeInterval(shiftInterval)
                     } else {
-                        if let s = formatter.date(from: item.start), let e = formatter.date(from: item.end) {
+                        if let s = parseEPGDate(item.start), let e = parseEPGDate(item.end) {
                             start = s.addingTimeInterval(shiftInterval)
                             end = e.addingTimeInterval(shiftInterval)
                         }

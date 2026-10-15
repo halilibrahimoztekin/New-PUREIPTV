@@ -74,53 +74,36 @@ public struct DashboardFeature {
                 state.isLoading = true
                 state.errorMessage = nil
                 return .run { send in
-                    // Fetch categories to get some content
-                    async let liveCategories = try? iptvClient.fetchLiveCategories(config)
-                    async let vodCategories = try? iptvClient.fetchVODCategories(config)
-                    async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
-
-                    let liveCat = await liveCategories
-                    _ = await vodCategories
-                    _ = await seriesCategories
+                    async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
+                    async let allVODs = try? iptvClient.fetchVODs(config, nil)
+                    async let allSeries = try? iptvClient.fetchSeries(config, nil)
+                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
 
                     var channels: [MediaModels.Item] = []
                     var vods: [MediaModels.Item] = []
                     var series: [MediaModels.Item] = []
-
-                    if let firstLiveCat = liveCat?.first {
-                        if let streamList = try? await iptvClient.fetchLiveChannels(config, firstLiveCat.id) {
-                            channels = Array(streamList.prefix(10))
-                        }
-                    }
-
-                    // Fetch ALL VODs and Series to get global "Recently Added"
-                    if let allVODs = try? await iptvClient.fetchVODs(config, nil) {
-                        let sorted = allVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
-                        vods = Array(sorted.prefix(10))
-                    }
-
-                    if let allSeries = try? await iptvClient.fetchSeries(config, nil) {
-                        let sorted = allSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
-                        series = Array(sorted.prefix(10))
-                    }
-
-                    // Smart Recommendations: Get favorites/history and filter
-                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
                     var recommendations: [MediaModels.Item] = []
 
-                    if let allVODs = try? await iptvClient.fetchVODs(config, nil) {
-                        let sorted = allVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                    if let fetchedChannels = await liveStreams {
+                        channels = Array(fetchedChannels.prefix(10))
+                    }
+
+                    if let fetchedVODs = await allVODs {
+                        let sorted = fetchedVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         vods = Array(sorted.prefix(10))
 
-                        // Recommendations logic: simple random sample or based on matching categories if history exists
                         let vodHistory = history.filter { $0.type == "vod" }
                         if !vodHistory.isEmpty {
-                            // Mock logic for recommendations
-                            let shuffled = allVODs.shuffled()
+                            let shuffled = fetchedVODs.shuffled()
                             recommendations = Array(shuffled.prefix(10))
                         } else {
                             recommendations = Array(sorted.dropFirst(10).prefix(10))
                         }
+                    }
+
+                    if let fetchedSeries = await allSeries {
+                        let sorted = fetchedSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        series = Array(sorted.prefix(10))
                     }
 
                     await send(.dataLoaded(channels: channels, vods: vods, series: series, recommendations: recommendations))

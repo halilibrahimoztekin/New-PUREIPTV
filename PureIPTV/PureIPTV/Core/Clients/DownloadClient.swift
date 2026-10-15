@@ -9,6 +9,8 @@ public struct DownloadClient {
     public var getDownloadedMedia: @Sendable () async throws -> [OfflineMedia]
     public var deleteDownloadedMedia: @Sendable (_ id: String) async throws -> Void
     public var isDownloaded: @Sendable (_ id: String) async throws -> Bool
+    public var getActiveDownloads: @Sendable () async -> [DownloadProgressItem] = { [] }
+    public var observeDownloads: @Sendable () -> AsyncStream<DownloadProgressItem> = { .finished }
 }
 
 extension DownloadClient: DependencyKey {
@@ -38,6 +40,19 @@ extension DownloadClient: DependencyKey {
         isDownloaded: { id in
             let downloaded = try await DownloadManager.shared.getDownloadedMedia()
             return downloaded.contains(where: { $0.id == id })
+        },
+        getActiveDownloads: {
+            await DownloadManager.shared.getActiveDownloads()
+        },
+        observeDownloads: {
+            AsyncStream { continuation in
+                Task {
+                    let stream = await DownloadManager.shared.observeDownloads()
+                    for await item in stream {
+                        continuation.yield(item)
+                    }
+                }
+            }
         }
     )
 }

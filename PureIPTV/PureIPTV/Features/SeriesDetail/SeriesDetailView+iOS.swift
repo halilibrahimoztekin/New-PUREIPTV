@@ -155,65 +155,108 @@ public struct SeriesDetailView_iOS: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             // Play / Resume Button
-                        if let history = store.historyItem, history.duration > 0 {
-                            let progressMins = Int(history.progress / 60)
-                            let durationMins = Int(history.duration / 60)
+                            if let history = store.historyItem, history.duration > 0 {
+                                let progressMins = Int(history.progress / 60)
+                                let durationMins = Int(history.duration / 60)
 
-                            VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(spacing: 10) {
+                                        Button {
+                                            store.send(.resumeTapped)
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "play.fill")
+                                                Text(AppStrings.SeriesDetail.continueWatching)
+                                                    .fontWeight(.semibold)
+                                            }
+                                            .font(.system(size: 15))
+                                            .padding(.horizontal, 18)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                LinearGradient(
+                                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .foregroundStyle(.white)
+                                            .clipShape(Capsule())
+                                            .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
+                                        }
+
+                                        Button {
+                                            store.send(.restartTapped)
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "arrow.counterclockwise")
+                                                Text(AppStrings.SeriesDetail.restart)
+                                                    .fontWeight(.medium)
+                                            }
+                                            .font(.system(size: 15))
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 10)
+                                            .background(.ultraThinMaterial)
+                                            .overlay(
+                                                Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                            )
+                                            .foregroundStyle(.white)
+                                            .clipShape(Capsule())
+                                        }
+                                    }
+
+                                    HStack(spacing: 6) {
+                                        ProgressView(value: min(1.0, max(0.0, history.progress / history.duration)))
+                                            .progressViewStyle(LinearProgressViewStyle(tint: Color(hex: "#0A84FF")))
+                                            .frame(width: 80)
+
+                                        Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
+                                            .font(.caption2)
+                                            .foregroundStyle(Color.white.opacity(0.7))
+                                    }
+                                    .padding(.leading, 4)
+                                }
+                            } else {
                                 Button {
-                                    store.send(.resumeTapped)
+                                    // Play the first available episode
+                                    if let firstEp = store.currentEpisodes.first {
+                                        store.send(.episodeSelected(firstEp))
+                                    }
                                 } label: {
-                                    HStack {
+                                    HStack(spacing: 6) {
                                         Image(systemName: "play.fill")
-                                        Text(AppStrings.SeriesDetail.continueWatching)
+                                        Text(AppStrings.SeriesDetail.watch)
                                             .fontWeight(.semibold)
                                     }
+                                    .font(.system(size: 15))
                                     .padding(.horizontal, 20)
-                                    .padding(.vertical, 8)
-                                    .background(Color.red)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
                                     .foregroundStyle(.white)
                                     .clipShape(Capsule())
+                                    .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
                                 }
-
-                                Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.white.opacity(0.7))
-                                    .padding(.leading, 4)
                             }
-                        } else {
+
+                            // Favorite Button
                             Button {
-                                // Play the first available episode
-                                if let firstEp = store.currentEpisodes.first {
-                                    store.send(.episodeSelected(firstEp))
-                                }
+                                store.send(.toggleFavorite)
                             } label: {
-                                HStack {
-                                    Image(systemName: "play.fill")
-                                    Text(AppStrings.SeriesDetail.watch)
-                                        .fontWeight(.semibold)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                                .background(Color.red)
-                                .foregroundStyle(.white)
-                                .clipShape(Capsule())
+                                Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                    .font(.system(size: 20))
+                                    .padding(8)
+                                    .background(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                            .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
+                                    )
+                                    .foregroundStyle(store.isFavorite ? .red : .white)
                             }
-                        }
-
-                        // Favorite Button
-                        Button {
-                            store.send(.toggleFavorite)
-                        } label: {
-                            Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                                .font(.system(size: 20))
-                                .padding(8)
-                                .background(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                        .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
-                                )
-                                .foregroundStyle(store.isFavorite ? .red : .white)
-                        }
                         }
                     }
                     .padding(.bottom, 8)

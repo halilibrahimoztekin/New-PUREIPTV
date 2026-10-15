@@ -27,6 +27,7 @@ public struct PlayerClient: Sendable {
     public var setVolume: @MainActor @Sendable (_ volume: Int32) async throws -> Void
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
+    public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
     public var getMediaInfo: @MainActor @Sendable () async -> MediaInfo?
     public var getAudioTracks: @MainActor @Sendable () async -> [Track]
     public var getSubtitleTracks: @MainActor @Sendable () async -> [Track]
@@ -88,10 +89,64 @@ extension PlayerClient: DependencyKey {
                 try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
             },
             jump: { offset in
-                _ = box.getPlayer().jump(by: .seconds(offset))
+                let player = box.getPlayer()
+                let offsetDuration = Duration.seconds(offset)
+
+                // Strategy 1: Attempt strict relative seek (uses VLC set_time under the hood)
+                if (try? player.seek(by: offsetDuration, fast: true)) != nil {
+                    return
+                }
+
+                // Strategy 2: Calculate target absolute time from current time
+                let targetDuration = max(.zero, player.currentTime + offsetDuration)
+                if (try? player.seek(to: targetDuration, fast: true)) != nil {
+                    return
+                }
+
+                if let duration = player.duration {
+                    let totalSecs = Double(duration.components.seconds)
+                    if totalSecs > 0 {
+                        let targetSecs = Double(targetDuration.components.seconds)
+                        let targetPos = targetSecs / totalSecs
+                        _ = player.seek(toPosition: PlaybackPosition(targetPos), fast: true)
+                        return
+                    }
+                }
+
+                // Strategy 3: Fallback to native jump_time
+                _ = player.jump(by: offsetDuration)
             },
             seek: { position in
-                _ = box.getPlayer().seek(toPosition: PlaybackPosition(position))
+                let player = box.getPlayer()
+                let clamped = max(0.0, min(1.0, position))
+                if clamped == 0.0 {
+                    _ = try? player.seek(to: Duration.zero, fast: false)
+                    _ = player.seek(toPosition: PlaybackPosition(0.0), fast: false)
+                    return
+                }
+                if let duration = player.duration {
+                    let totalSecs = Double(duration.components.seconds)
+                    if totalSecs > 0 {
+                        let targetDuration = Duration.seconds(clamped * totalSecs)
+                        if (try? player.seek(to: targetDuration, fast: false)) != nil {
+                            return
+                        }
+                    }
+                }
+                _ = player.seek(toPosition: PlaybackPosition(clamped), fast: false)
+            },
+            seekToTime: { time in
+                let player = box.getPlayer()
+                if (try? player.seek(to: time, fast: false)) != nil {
+                    return
+                }
+                if let duration = player.duration {
+                    let totalSecs = Double(duration.components.seconds)
+                    if totalSecs > 0 {
+                        let targetPos = Double(time.components.seconds) / totalSecs
+                        _ = player.seek(toPosition: PlaybackPosition(targetPos), fast: false)
+                    }
+                }
             },
             getMediaInfo: {
                 var info = MediaInfo()
@@ -165,6 +220,7 @@ extension PlayerClient: DependencyKey {
         setVolume: { _ in },
         jump: { _ in },
         seek: { _ in },
+        seekToTime: { _ in },
         getMediaInfo: { nil },
         getAudioTracks: { [] },
         getSubtitleTracks: { [] },

@@ -5,6 +5,9 @@ import SwiftVLC
 
 public struct MultiView: View {
     @Bindable var store: StoreOf<MultiViewFeature>
+    #if os(tvOS)
+        @FocusState private var tvFocusedSlotID: Int?
+    #endif
 
     public init(store: StoreOf<MultiViewFeature>) {
         self.store = store
@@ -89,74 +92,95 @@ public struct MultiView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.focusedSlotID)
         }
         .background(Color.black.ignoresSafeArea())
-        .sheet(
-            isPresented: Binding(
-                get: { store.isSelectingChannelForSlotID != nil },
-                set: {
-                    if !$0 {
-                        store.send(.channelSelectionDismissed)
-                    }
+        #if os(tvOS)
+            .onExitCommand {
+                if let focused = store.focusedSlotID {
+                    store.send(.toggleFullscreen(slotID: focused), animation: .spring(response: 0.3, dampingFraction: 0.7))
+                } else {
+                    store.send(.delegate(.close))
                 }
-            )
-        ) {
-            ChannelSelectionSheet(
-                channels: store.channels,
-                onSelect: { store.send(.channelSelected($0)) }
-            )
-            .presentationDetents([.medium, .large])
-        }
+            }
+        #endif
+            .sheet(
+                isPresented: Binding(
+                    get: { store.isSelectingChannelForSlotID != nil },
+                    set: {
+                        if !$0 {
+                            store.send(.channelSelectionDismissed)
+                        }
+                    }
+                )
+            ) {
+                ChannelSelectionSheet(
+                    channels: store.channels,
+                    onSelect: { store.send(.channelSelected($0)) }
+                )
+                .presentationDetents([.medium, .large])
+            }
     }
 
     private func slotView(for slot: MultiViewSlot) -> some View {
-        ZStack {
+        Group {
             if let item = slot.item {
-                MultiViewPlayer(
-                    item: item,
-                    isActiveAudio: store.activeAudioSlotID == slot.id,
-                    isPiPActive: store.isPiPActive && store.activeAudioSlotID == slot.id,
-                    instanceID: slot.instanceID
-                )
-                .onTapGesture(count: 2) {
-                    store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
-                }
-                .onTapGesture(count: 1) {
+                Button {
                     store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
-                }
-
-                // Overlays
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            store.send(.removeChannelTapped(slotID: slot.id))
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white.opacity(0.8))
-                                .padding(8)
+                } label: {
+                    ZStack {
+                        MultiViewPlayer(
+                            item: item,
+                            isActiveAudio: store.activeAudioSlotID == slot.id,
+                            isPiPActive: store.isPiPActive && store.activeAudioSlotID == slot.id,
+                            instanceID: slot.instanceID
+                        )
+                        .onTapGesture(count: 2) {
+                            store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
                         }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer()
-                    HStack {
-                        Text(item.title)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6).cornerRadius(4))
-                            .padding(8)
+                        .onTapGesture(count: 1) {
+                            store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
+                        }
 
-                        Spacer()
+                        // Overlays
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    store.send(.removeChannelTapped(slotID: slot.id))
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .padding(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Spacer()
+                            HStack {
+                                Text(item.title)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.6).cornerRadius(4))
+                                    .padding(8)
 
-                        Image(systemName: store.activeAudioSlotID == slot.id ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : .white.opacity(0.5))
-                            .padding(8)
+                                Spacer()
+
+                                Image(systemName: store.activeAudioSlotID == slot.id ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : .white.opacity(0.5))
+                                    .padding(8)
+                            }
+                        }
                     }
                 }
-
+                .buttonStyle(.plain)
+                #if os(tvOS)
+                    .focused($tvFocusedSlotID, equals: slot.id)
+                    .onPlayPauseCommand {
+                        store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    }
+                #endif
             } else {
                 // Empty state
                 Button(action: {
@@ -175,17 +199,32 @@ public struct MultiView: View {
                     .background(Color(hex: "#1F1F23"))
                 }
                 .buttonStyle(.plain)
+                #if os(tvOS)
+                    .focused($tvFocusedSlotID, equals: slot.id)
+                #endif
             }
         }
         .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : Color.clear, lineWidth: 2)
-                .shadow(color: store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF").opacity(0.5) : Color.clear, radius: 4)
-        )
-        .scaleEffect(store.activeAudioSlotID == slot.id && store.focusedSlotID == nil ? 1.01 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.activeAudioSlotID)
-        .clipped()
+        #if os(tvOS)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        tvFocusedSlotID == slot.id ? Color.white : (store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : Color.clear),
+                        lineWidth: tvFocusedSlotID == slot.id ? 4 : 2
+                    )
+                    .shadow(color: tvFocusedSlotID == slot.id ? Color.white.opacity(0.8) : (store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF").opacity(0.5) : Color.clear), radius: 6)
+            )
+            .scaleEffect(tvFocusedSlotID == slot.id ? 1.03 : (store.activeAudioSlotID == slot.id && store.focusedSlotID == nil ? 1.01 : 1.0))
+        #else
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF") : Color.clear, lineWidth: 2)
+                    .shadow(color: store.activeAudioSlotID == slot.id ? Color(hex: "#0A84FF").opacity(0.5) : Color.clear, radius: 4)
+            )
+            .scaleEffect(store.activeAudioSlotID == slot.id && store.focusedSlotID == nil ? 1.01 : 1.0)
+        #endif
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.activeAudioSlotID)
+            .clipped()
     }
 }
 

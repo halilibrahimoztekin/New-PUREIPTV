@@ -140,89 +140,115 @@ public struct VODDetailView: View {
                                     let progressMins = Int(history.progress / 60)
                                     let durationMins = Int(history.duration / 60)
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                    VStack(spacing: 12) {
-                                        Button {
-                                            store.send(.resumeTapped)
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: "play.fill")
-                                                Text(AppStrings.VODDetail.continueWatching)
-                                                    .fontWeight(.semibold)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack(spacing: 10) {
+                                            Button {
+                                                store.send(.resumeTapped)
+                                            } label: {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "play.fill")
+                                                    Text(AppStrings.VODDetail.continueWatching)
+                                                        .fontWeight(.semibold)
+                                                }
+                                                .font(.system(size: 15))
+                                                .padding(.horizontal, 18)
+                                                .padding(.vertical, 10)
+                                                .background(
+                                                    LinearGradient(
+                                                        colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
+                                                .foregroundStyle(.white)
+                                                .clipShape(Capsule())
+                                                .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
                                             }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            .background(Color.red)
-                                            .foregroundStyle(.white)
-                                            .clipShape(Capsule())
+
+                                            Button {
+                                                store.send(.restartTapped)
+                                            } label: {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "arrow.counterclockwise")
+                                                    Text(AppStrings.VODDetail.restart)
+                                                        .fontWeight(.medium)
+                                                }
+                                                .font(.system(size: 15))
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 10)
+                                                .background(.ultraThinMaterial)
+                                                .overlay(
+                                                    Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                                )
+                                                .foregroundStyle(.white)
+                                                .clipShape(Capsule())
+                                            }
                                         }
 
-                                        Button {
-                                            store.send(.playTapped)
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: "arrow.counterclockwise")
-                                                Text(String(localized: "Baştan"))
-                                                    .fontWeight(.semibold)
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            .background(Color.white.opacity(0.2))
-                                            .foregroundStyle(.white)
-                                            .clipShape(Capsule())
-                                        }
-                                    }
+                                        HStack(spacing: 6) {
+                                            ProgressView(value: min(1.0, max(0.0, history.progress / history.duration)))
+                                                .progressViewStyle(LinearProgressViewStyle(tint: Color(hex: "#0A84FF")))
+                                                .frame(width: 80)
 
-                                    Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
-                                        .font(.caption)
-                                        .foregroundStyle(Color.white.opacity(0.7))
+                                            Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
+                                                .font(.caption2)
+                                                .foregroundStyle(Color.white.opacity(0.7))
+                                        }
                                         .padding(.leading, 4)
-                                }
-                            } else {
-                                Button {
-                                    store.send(.playTapped)
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "play.fill")
-                                        Text(AppStrings.Common.watchNow)
-                                            .fontWeight(.semibold)
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 10)
-                                    .background(Color.red)
-                                    .foregroundStyle(.white)
-                                    .clipShape(Capsule())
+                                } else {
+                                    Button {
+                                        store.send(.playTapped)
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "play.fill")
+                                            Text(AppStrings.Common.watchNow)
+                                                .fontWeight(.semibold)
+                                        }
+                                        .font(.system(size: 15))
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            LinearGradient(
+                                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .foregroundStyle(.white)
+                                        .clipShape(Capsule())
+                                        .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
+                                    }
+                                }
+
+                                Button {
+                                    store.send(.toggleFavorite)
+                                } label: {
+                                    Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                        .font(.system(size: 20))
+                                        .padding(10)
+                                        .background(
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                                .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
+                                        )
+                                        .foregroundStyle(store.isFavorite ? .red : .white)
+                                }
+
+                                Button {
+                                    store.send(.downloadTapped)
+                                } label: {
+                                    Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                        .font(.system(size: 20))
+                                        .padding(10)
+                                        .background(
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                                .background(Circle().fill(store.isDownloaded ? Color.green.opacity(0.2) : Color.clear))
+                                        )
+                                        .foregroundStyle(store.isDownloaded ? .green : .white)
                                 }
                             }
-
-                            Button {
-                                store.send(.toggleFavorite)
-                            } label: {
-                                Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                                    .font(.system(size: 20))
-                                    .padding(10)
-                                    .background(
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                            .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
-                                    )
-                                    .foregroundStyle(store.isFavorite ? .red : .white)
-                            }
-
-                            Button {
-                                store.send(.downloadTapped)
-                            } label: {
-                                Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                    .font(.system(size: 20))
-                                    .padding(10)
-                                    .background(
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                            .background(Circle().fill(store.isDownloaded ? Color.green.opacity(0.2) : Color.clear))
-                                    )
-                                    .foregroundStyle(store.isDownloaded ? .green : .white)
-                            }
-                        }
                         }
                         .padding(.bottom, 8)
 
@@ -290,7 +316,7 @@ public struct VODDetailView: View {
                 let genres = store.tmdbMovie?.genres?.map(\.name) ?? store.info?.genre?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
                 if !genres.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(String(localized: "Türler"))
+                        Text(AppStrings.VODDetail.genres)
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -315,7 +341,7 @@ public struct VODDetailView: View {
                 let plot = store.tmdbMovie?.overview ?? store.info?.plot
                 if let plotText = plot, !plotText.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(String(localized: "Konusu"))
+                        Text(AppStrings.VODDetail.overview)
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -330,7 +356,7 @@ public struct VODDetailView: View {
                 // Production Countries
                 if let countries = store.tmdbMovie?.productionCountries, !countries.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(String(localized: "Yapım Ülkeleri"))
+                        Text(AppStrings.VODDetail.productionCountries)
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -355,7 +381,7 @@ public struct VODDetailView: View {
                 // Production Companies
                 if let companies = store.tmdbMovie?.productionCompanies, !companies.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(String(localized: "Yapım Şirketleri"))
+                        Text(AppStrings.VODDetail.productionCompanies)
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(.white)
 
@@ -381,7 +407,7 @@ public struct VODDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: "link")
-                            Text(String(localized: "IMDb'de Görüntüle"))
+                            Text(AppStrings.VODDetail.viewOnIMDb)
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -440,7 +466,6 @@ public struct VODDetailView: View {
                                             .lineLimit(2)
                                             .frame(width: 110, alignment: .leading)
                                     }
-                                }
                                 }
                             }
                         }
@@ -562,23 +587,46 @@ public struct VODDetailView: View {
                             Spacer().frame(height: 20)
 
                             // Actions
-                            HStack(spacing: 32) {
-                                Button {
-                                    if store.historyItem != nil {
+                            HStack(spacing: 24) {
+                                if store.historyItem != nil {
+                                    Button {
                                         store.send(.resumeTapped)
-                                    } else {
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "play.fill")
+                                            Text(AppStrings.VODDetail.continueWatching)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 32)
+                                        .padding(.vertical, 16)
+                                    }
+                                    .focused($isPlayButtonFocused)
+
+                                    Button {
+                                        store.send(.restartTapped)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "arrow.counterclockwise")
+                                            Text(AppStrings.VODDetail.restart)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 16)
+                                    }
+                                } else {
+                                    Button {
                                         store.send(.playTapped)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "play.fill")
+                                            Text(AppStrings.Common.watchNow)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 32)
+                                        .padding(.vertical, 16)
                                     }
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "play.fill")
-                                        Text(store.historyItem != nil ? "Devam Et" : "Oynat")
-                                            .fontWeight(.bold)
-                                    }
-                                    .padding(.horizontal, 32)
-                                    .padding(.vertical, 16)
+                                    .focused($isPlayButtonFocused)
                                 }
-                                .focused($isPlayButtonFocused)
 
                                 Button {
                                     store.send(.toggleFavorite)

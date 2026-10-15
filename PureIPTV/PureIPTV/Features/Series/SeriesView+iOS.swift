@@ -6,20 +6,21 @@
 
     public struct SeriesView_iOS: View {
         @Bindable var store: StoreOf<SeriesFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
 
         /// For Series, we usually show 3 columns on iPhone
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 12),
         ]
 
+        public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
+
         public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -65,9 +66,7 @@
                 }
             }
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
             .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
                 CategoryManagementView(store: store)

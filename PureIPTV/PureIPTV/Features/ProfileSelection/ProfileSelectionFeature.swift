@@ -106,8 +106,8 @@ public struct ProfileSelectionFeature: Sendable {
 
     private func createDefaultProfiles() async throws {
         let context = ModelContext(SharedDatabaseConfig.shared)
-        context.insert(UserProfile(id: UUID(), name: "Yetişkin", avatarIcon: "person.crop.circle.fill", isKidsMode: false))
-        context.insert(UserProfile(id: UUID(), name: "Çocuk", avatarIcon: "face.smiling.fill", isKidsMode: true))
+        context.insert(UserProfile(id: UUID(), name: AppStrings.Profile.defaultAdultProfile, avatarIcon: "person.crop.circle.fill", isKidsMode: false))
+        context.insert(UserProfile(id: UUID(), name: AppStrings.Profile.defaultKidsProfile, avatarIcon: "face.smiling.fill", isKidsMode: true))
         try context.save()
     }
 

@@ -180,11 +180,11 @@
                                             .padding(.bottom, 4)
 
                                         if let info = store.mediaInfo {
-                                            InfoRow(title: String(localized: "Çözünürlük"), value: info.resolution ?? String(localized: "Bilinmiyor"))
-                                            InfoRow(title: String(localized: "Video Codec"), value: info.videoCodec ?? String(localized: "Bilinmiyor"))
-                                            InfoRow(title: String(localized: "Ses Codec"), value: info.audioCodec ?? String(localized: "Bilinmiyor"))
+                                            InfoRow(title: AppStrings.MediaInfo.resolution, value: info.resolution ?? AppStrings.MediaInfo.unknown)
+                                            InfoRow(title: AppStrings.MediaInfo.videoCodec, value: info.videoCodec ?? AppStrings.MediaInfo.unknown)
+                                            InfoRow(title: AppStrings.MediaInfo.audioCodec, value: info.audioCodec ?? AppStrings.MediaInfo.unknown)
                                             if let bitrate = info.bitrate, bitrate > 0 {
-                                                InfoRow(title: String(localized: "Bit Hızı"), value: "\(bitrate / 1000) kbps")
+                                                InfoRow(title: AppStrings.MediaInfo.bitrate, value: "\(bitrate / 1000) kbps")
                                             }
                                         } else {
                                             Text(AppStrings.Common.loading)
@@ -238,11 +238,25 @@
                         Spacer()
 
                         // Center Controls
-                        HStack(spacing: 40) {
+                        HStack(spacing: 28) {
+                            // Restart Button (Baştan Başlat)
+                            if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
+                                Button(action: {
+                                    HapticManager.shared.trigger(.medium)
+                                    store.send(.restartPlayback)
+                                }) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(14)
+                                        .background(.ultraThinMaterial, in: Circle())
+                                }
+                            }
+
                             // Jump Backward
                             Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpBackward) }) {
                                 Image(systemName: "gobackward.10")
-                                    .font(.system(size: 32))
+                                    .font(.system(size: 28))
                                     .foregroundColor(.white)
                                     .padding(16)
                                     .background(.ultraThinMaterial, in: Circle())
@@ -257,16 +271,16 @@
                                 }
                             }) {
                                 Image(systemName: store.playerState == .playing ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 44))
+                                    .font(.system(size: 40))
                                     .foregroundColor(.white)
-                                    .padding(24)
+                                    .padding(22)
                                     .background(.ultraThinMaterial, in: Circle())
                             }
 
                             // Jump Forward
                             Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpForward) }) {
                                 Image(systemName: "goforward.10")
-                                    .font(.system(size: 32))
+                                    .font(.system(size: 28))
                                     .foregroundColor(.white)
                                     .padding(16)
                                     .background(.ultraThinMaterial, in: Circle())
@@ -275,27 +289,10 @@
 
                         Spacer()
 
-                        // Error message
-                        if let error = store.errorMessage {
-                            Text(error)
-                                .foregroundColor(.red)
-                                .padding()
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        }
-
-                        // Bottom Bar (Timeline & Loading)
+                        // Bottom Bar (Timeline)
                         VStack {
-                            if store.playerState == .buffering {
-                                HStack {
-                                    Spacer()
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    Spacer()
-                                }
-                            }
-
                             // Timeline (only show if total time is valid, meaning it's not a live stream)
-                            if store.totalTime > .zero || store.item.config == nil {
+                            if store.totalTime > .zero || !store.item.isLive {
                                 HStack(spacing: 12) {
                                     // Calculate the display time based on dragging status
                                     let currentDisplayPosition = isDraggingSlider ? sliderDragValue : store.position
@@ -343,6 +340,45 @@
                             }
                     )
                     .transition(.opacity)
+                }
+
+                // Global Buffering Indicator (visible whether controls are active or hidden)
+                if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.3)
+                        .padding(16)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+
+                // Global Error Overlay with Retry (visible whether controls are active or hidden)
+                if let error = store.errorMessage {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.yellow)
+                        Text(error)
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        Button {
+                            HapticManager.shared.trigger(.medium)
+                            store.send(.retryPlayback)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.clockwise")
+                                Text(AppStrings.Common.retry)
+                            }
+                            .font(.caption.bold())
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.2), in: Capsule())
+                            .foregroundColor(.white)
+                        }
+                    }
+                    .padding(20)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(radius: 10)
                 }
 
                 // Gesture Feedback Overlay

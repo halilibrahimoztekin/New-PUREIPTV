@@ -3,22 +3,23 @@ import SwiftUI
 
 public struct VODView: View {
     let store: StoreOf<VODFeature>
-    let serverURL: String
-    let username: String
-    let password: String
+    let config: PlaylistConfig
+
+    public init(store: StoreOf<VODFeature>, config: PlaylistConfig) {
+        self.store = store
+        self.config = config
+    }
 
     public init(store: StoreOf<VODFeature>, serverURL: String, username: String, password: String) {
         self.store = store
-        self.serverURL = serverURL
-        self.username = username
-        self.password = password
+        config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
     }
 
     public var body: some View {
         #if os(tvOS)
-            VODView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
+            VODView_tvOS(store: store, config: config)
         #else
-            VODView_iOS(store: store, serverURL: serverURL, username: username, password: password)
+            VODView_iOS(store: store, config: config)
         #endif
     }
 }

@@ -30,6 +30,67 @@
                     controllerView(playerWidth: proxy.size.width)
                         .ignoresSafeArea()
 
+                    // Buffering Indicator
+                    if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.6)
+                            Text(AppStrings.Common.loading)
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .padding(32)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+
+                    // Error Overlay
+                    if let errorMessage = store.errorMessage {
+                        VStack(spacing: 24) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 56))
+                                .foregroundStyle(.yellow)
+
+                            Text(errorMessage)
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 600)
+
+                            HStack(spacing: 32) {
+                                Button {
+                                    store.send(.retryPlayback)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text(AppStrings.Common.retry)
+                                    }
+                                    .font(.system(size: 22, weight: .bold))
+                                    .padding(.horizontal, 28)
+                                    .padding(.vertical, 14)
+                                }
+                                .buttonStyle(.card)
+
+                                Button {
+                                    store.send(.closeTapped)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "xmark")
+                                        Text(AppStrings.Common.close)
+                                    }
+                                    .font(.system(size: 22, weight: .bold))
+                                    .padding(.horizontal, 28)
+                                    .padding(.vertical, 14)
+                                }
+                                .buttonStyle(.card)
+                            }
+                        }
+                        .padding(48)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+
                     // EPG Overlay
                     if store.isEPGVisible {
                         VStack {
@@ -67,6 +128,8 @@
                 if store.isEPGVisible {
                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                     resetIdleTimer()
+                } else if store.errorMessage != nil {
+                    store.send(.closeTapped)
                 } else if isMaskShow {
                     hideMask()
                 } else {
@@ -212,6 +275,18 @@
 
                 // Buttons Group (KSPlayer Style with Custom Smooth Glass Highlight)
                 HStack(spacing: 18) {
+                    // Restart (Baştan Başlat)
+                    if store.totalTime > .zero || store.position > 0 || store.item.epgChannelID == nil {
+                        Button {
+                            onInteraction()
+                            store.send(.restartPlayback)
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 22, weight: .semibold))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
+
                     // Jump Backward
                     Button {
                         onInteraction()
@@ -379,7 +454,7 @@
 
         var body: some View {
             let durationDouble = Double(store.totalTime.components.seconds)
-            let isLive = durationDouble <= 0
+            let isLive = store.item.isLive
 
             if isLive {
                 HStack(spacing: 8) {

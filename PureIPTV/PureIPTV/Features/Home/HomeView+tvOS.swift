@@ -85,37 +85,27 @@
             case .dashboard:
                 DashboardView_tvOS(
                     store: store.scope(state: \.dashboard, action: \.dashboard),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .liveTV:
                 LiveTVView(
                     store: store.scope(state: \.liveTV, action: \.liveTV),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .movies:
                 VODView(
                     store: store.scope(state: \.vod, action: \.vod),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .series:
                 SeriesView(
                     store: store.scope(state: \.series, action: \.series),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .search:
                 SearchView_tvOS(
                     store: store.scope(state: \.search, action: \.search),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .downloads:
                 DownloadsView(

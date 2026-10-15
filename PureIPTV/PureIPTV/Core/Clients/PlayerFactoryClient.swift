@@ -48,10 +48,57 @@ extension PlayerFactoryClient: DependencyKey {
                     try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
                 },
                 jump: { offset in
-                    _ = box.getPlayer().jump(by: .seconds(offset))
+                    let player = box.getPlayer()
+                    let offsetDuration = Duration.seconds(offset)
+                    if (try? player.seek(by: offsetDuration, fast: true)) != nil {
+                        return
+                    }
+                    let targetDuration = max(.zero, player.currentTime + offsetDuration)
+                    if (try? player.seek(to: targetDuration, fast: true)) != nil {
+                        return
+                    }
+                    if let duration = player.duration {
+                        let totalSecs = Double(duration.components.seconds)
+                        if totalSecs > 0 {
+                            let targetSecs = Double(targetDuration.components.seconds)
+                            let targetPos = targetSecs / totalSecs
+                            _ = player.seek(toPosition: PlaybackPosition(targetPos), fast: true)
+                            return
+                        }
+                    }
+                    _ = player.jump(by: offsetDuration)
                 },
                 seek: { position in
-                    _ = box.getPlayer().seek(toPosition: PlaybackPosition(position))
+                    let player = box.getPlayer()
+                    let clamped = max(0.0, min(1.0, position))
+                    if clamped == 0.0 {
+                        _ = try? player.seek(to: Duration.zero, fast: false)
+                        _ = player.seek(toPosition: PlaybackPosition(0.0), fast: false)
+                        return
+                    }
+                    if let duration = player.duration {
+                        let totalSecs = Double(duration.components.seconds)
+                        if totalSecs > 0 {
+                            let targetDuration = Duration.seconds(clamped * totalSecs)
+                            if (try? player.seek(to: targetDuration, fast: false)) != nil {
+                                return
+                            }
+                        }
+                    }
+                    _ = player.seek(toPosition: PlaybackPosition(clamped), fast: false)
+                },
+                seekToTime: { time in
+                    let player = box.getPlayer()
+                    if (try? player.seek(to: time, fast: false)) != nil {
+                        return
+                    }
+                    if let duration = player.duration {
+                        let totalSecs = Double(duration.components.seconds)
+                        if totalSecs > 0 {
+                            let targetPos = Double(time.components.seconds) / totalSecs
+                            _ = player.seek(toPosition: PlaybackPosition(targetPos), fast: false)
+                        }
+                    }
                 },
                 getMediaInfo: {
                     var info = MediaInfo()

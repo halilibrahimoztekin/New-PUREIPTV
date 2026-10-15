@@ -70,21 +70,7 @@
 
         private var sidebarHeader: some View {
             HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 36, height: 36)
-
-                    Image(systemName: "play.tv.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#BF5AF2")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                PureMaterialLogo(size: 36, showGlow: false)
 
                 Text(AppStrings.Common.appName)
                     .font(.system(size: 18, weight: .bold))
@@ -116,49 +102,36 @@
             case .dashboard:
                 DashboardView_iOS(
                     store: store.scope(state: \.dashboard, action: \.dashboard),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .liveTV:
                 LiveTVView(
                     store: store.scope(state: \.liveTV, action: \.liveTV),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .movies:
                 VODView(
                     store: store.scope(state: \.vod, action: \.vod),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .series:
                 SeriesView(
                     store: store.scope(state: \.series, action: \.series),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .search:
                 SearchView(
                     store: store.scope(state: \.search, action: \.search),
-                    serverURL: store.serverURL,
-                    username: store.username,
-                    password: store.password
+                    config: store.config
                 )
             case .downloads:
                 DownloadsView(
                     store: store.scope(state: \.downloads, action: \.downloads)
                 )
             case .settings:
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    Text(AppStrings.Common.settingsComingSoon)
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
-                }
+                SettingsView(
+                    store: store.scope(state: \.settings, action: \.settings)
+                )
             }
         }
     }

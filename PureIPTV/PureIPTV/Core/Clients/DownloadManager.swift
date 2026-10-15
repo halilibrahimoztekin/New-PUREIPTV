@@ -11,7 +11,9 @@ actor DownloadManager {
     static let shared = DownloadManager()
 
     private var tasks: [String: URLSessionDownloadTask] = [:]
+    private var activeDownloads: [String: DownloadProgressItem] = [:]
     private var progressContinuations: [String: AsyncStream<Double>.Continuation] = [:]
+    private var progressBroadcasters: [UUID: AsyncStream<DownloadProgressItem>.Continuation] = [:]
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.pureiptv.downloads")
@@ -29,11 +31,62 @@ actor DownloadManager {
         }
 
         tasks[id] = task
+        let item = DownloadProgressItem(id: id, title: title, coverURL: coverURL?.absoluteString, progress: 0.0, isCompleted: false)
+        activeDownloads[id] = item
+        broadcast(item)
         task.resume()
     }
 
     func cancelDownload(id: String) {
         tasks[id]?.cancel()
+        tasks.removeValue(forKey: id)
+        activeDownloads.removeValue(forKey: id)
+        progressContinuations[id]?.finish()
+        progressContinuations.removeValue(forKey: id)
+    }
+
+    func getActiveDownloads() -> [DownloadProgressItem] {
+        Array(activeDownloads.values)
+    }
+
+    func observeDownloads() -> AsyncStream<DownloadProgressItem> {
+        let observerID = UUID()
+        return AsyncStream { continuation in
+            continuation.onTermination = { [weak self] _ in
+                Task { [weak self] in
+                    await self?.removeBroadcaster(observerID)
+                }
+            }
+            self.progressBroadcasters[observerID] = continuation
+        }
+    }
+
+    private func removeBroadcaster(_ id: UUID) {
+        progressBroadcasters.removeValue(forKey: id)
+    }
+
+    private func broadcast(_ item: DownloadProgressItem) {
+        for continuation in progressBroadcasters.values {
+            continuation.yield(item)
+        }
+    }
+
+    func updateProgress(id: String, progress: Double) {
+        if var item = activeDownloads[id] {
+            item.progress = progress
+            activeDownloads[id] = item
+            broadcast(item)
+        }
+        progressContinuations[id]?.yield(progress)
+    }
+
+    func completeDownload(id: String) {
+        if var item = activeDownloads[id] {
+            item.progress = 1.0
+            item.isCompleted = true
+            broadcast(item)
+        }
+        activeDownloads.removeValue(forKey: id)
         tasks.removeValue(forKey: id)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
@@ -105,6 +158,9 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
             try context.save()
 
             progressCallbacks[metadata.id]?(1.0)
+            Task {
+                await DownloadManager.shared.completeDownload(id: metadata.id)
+            }
 
         } catch {
             print("File error: \(error)")
@@ -115,8 +171,11 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didWriteData _: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let metadata = decodeMetadata(from: downloadTask) else { return }
-        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        let progress = totalBytesExpectedToWrite > 0 ? (Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)) : 0.0
         progressCallbacks[metadata.id]?(progress)
+        Task {
+            await DownloadManager.shared.updateProgress(id: metadata.id, progress: progress)
+        }
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession _: URLSession) {

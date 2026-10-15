@@ -49,27 +49,9 @@
                     VStack(alignment: .leading, spacing: 24) {
                         Spacer()
 
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 36, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 36, style: .continuous)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1.5)
-                                )
-                                .frame(width: 120, height: 120)
+                        PureMaterialLogo(size: 120, showGlow: true)
 
-                            Image(systemName: "play.tv.fill")
-                                .font(.system(size: 52, weight: .semibold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [Color(hex: "#0A84FF"), Color(hex: "#BF5AF2")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-
-                        Text("PureIPTV")
+                        Text(AppStrings.Splash.appName)
                             .font(.system(size: 52, weight: .heavy))
                             .foregroundStyle(Color(hex: "#E4E1E7"))
                             .tracking(-1)
@@ -269,7 +251,7 @@
 
     private struct TVFormField: View {
         let icon: String
-        let placeholder: LocalizedStringKey
+        let placeholder: String
         @Binding var text: String
         var isSecure: Bool = false
 

@@ -4,9 +4,7 @@
 
     public struct SearchView_iOS: View {
         @Bindable var store: StoreOf<SearchFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
 
         /// Columns for grids
         private let channelColumns: [GridItem] = [
@@ -16,11 +14,14 @@
             GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 12),
         ]
 
+        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
+
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -45,21 +46,19 @@
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
                         if store.recentSearches.isEmpty {
-                            emptyStateView("Aramaya Başlayın", icon: "magnifyingglass")
+                            emptyStateView(AppStrings.Search.startSearch, icon: "magnifyingglass")
                         } else {
                             recentSearchesView
                         }
                     } else if store.totalResultsCount == 0 {
-                        emptyStateView("Sonuç Bulunamadı", icon: "doc.text.magnifyingglass")
+                        emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
                         resultsScrollView
                     }
                 }
             }
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
             // Dismiss keyboard when scrolling
             .onTapGesture {
@@ -74,7 +73,7 @@
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
 
-                TextField("Kanal, film veya dizi ara...", text: $store.searchQuery.sending(\.queryChanged))
+                TextField(AppStrings.Search.searchPlaceholder, text: $store.searchQuery.sending(\.queryChanged))
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
@@ -105,7 +104,7 @@
                         Button {
                             store.send(.filterChanged(filter))
                         } label: {
-                            Text(filter.rawValue)
+                            Text(filter.title)
                                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
                                 .padding(.horizontal, 14)
@@ -132,7 +131,7 @@
                 VStack(spacing: 24) {
                     let live = store.liveResults
                     if !live.isEmpty {
-                        resultSection(title: String(localized: "Canlı TV"), count: live.count) {
+                        resultSection(title: AppStrings.Search.liveTV, count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 12) {
                                 ForEach(live) { channel in
                                     ChannelCardView(channel: channel) {
@@ -145,7 +144,7 @@
 
                     let vods = store.vodResults
                     if !vods.isEmpty {
-                        resultSection(title: String(localized: "Filmler"), count: vods.count) {
+                        resultSection(title: AppStrings.Search.movies, count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
                                 ForEach(vods) { vod in
                                     VODCardView(vod: vod) {
@@ -158,7 +157,7 @@
 
                     let seriesList = store.seriesResults
                     if !seriesList.isEmpty {
-                        resultSection(title: String(localized: "Diziler"), count: seriesList.count) {
+                        resultSection(title: AppStrings.Search.series, count: seriesList.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
                                 ForEach(seriesList) { series in
                                     SeriesCardView(series: series) {

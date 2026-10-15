@@ -7,15 +7,16 @@
 
     public struct DashboardView_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
+
+        public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
 
         public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -36,7 +37,7 @@
 
                             // Continue Watching
                             if !store.watchHistoryItems.isEmpty {
-                                TVShelfSection(title: String(localized: "Kaldığın Yerden İzle")) {
+                                TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
                                     ForEach(store.watchHistoryItems) { hist in
                                         TVWatchHistoryCard(item: hist) {
                                             store.send(.historySelected(hist))
@@ -47,7 +48,7 @@
 
                             // Favorites
                             if !store.favoriteItems.isEmpty {
-                                TVShelfSection(title: String(localized: "Favorilerim")) {
+                                TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
                                     ForEach(store.favoriteItems) { fav in
                                         TVFavoriteCard(item: fav) {
                                             store.send(.favoriteSelected(fav))
@@ -58,7 +59,7 @@
 
                             // Live TV
                             if !store.featuredChannels.isEmpty {
-                                TVShelfSection(title: String(localized: "Canlı TV (Önerilen)")) {
+                                TVShelfSection(title: AppStrings.Dashboard.featuredLiveTV) {
                                     ForEach(store.featuredChannels) { channel in
                                         Button {
                                             store.send(.channelSelected(channel))
@@ -73,7 +74,7 @@
 
                             // New Movies
                             if store.featuredVODs.count > 1 {
-                                TVShelfSection(title: String(localized: "Yeni Eklenen Filmler")) {
+                                TVShelfSection(title: AppStrings.Dashboard.newMovies) {
                                     ForEach(Array(store.featuredVODs.dropFirst())) { vod in
                                         Button {
                                             store.send(.vodSelected(vod))
@@ -88,7 +89,7 @@
 
                             // New Series
                             if !store.featuredSeries.isEmpty {
-                                TVShelfSection(title: String(localized: "Yeni Eklenen Diziler")) {
+                                TVShelfSection(title: AppStrings.Dashboard.newSeries) {
                                     ForEach(store.featuredSeries) { series in
                                         Button {
                                             store.send(.seriesSelected(series))
@@ -108,9 +109,7 @@
                 }
             }
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
         }
 

@@ -43,7 +43,7 @@ public struct CategoryManagementView: View {
                     #endif
                 }
             }
-            .navigationTitle(String(localized: "\(store.type.title) Kategorilerini Yönet"))
+            .navigationTitle(AppStrings.CategoryMgmt.manageTitle(for: store.type.title))
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

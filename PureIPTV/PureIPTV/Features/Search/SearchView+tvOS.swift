@@ -4,9 +4,7 @@
 
     public struct SearchView_tvOS: View {
         @Bindable var store: StoreOf<SearchFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
 
         /// Columns for grids (wider for tvOS)
         private let channelColumns: [GridItem] = [
@@ -16,11 +14,14 @@
             GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 40),
         ]
 
+        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
+
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -56,9 +57,7 @@
                 }
             }
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
         }
 
@@ -105,7 +104,7 @@
                         Button {
                             store.send(.filterChanged(filter))
                         } label: {
-                            Text(filter.rawValue)
+                            Text(filter.title)
                                 .font(.system(size: 24, weight: isSelected ? .bold : .medium))
                                 .padding(.horizontal, 30)
                                 .padding(.vertical, 14)
@@ -233,7 +232,7 @@
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
 
-        private func resultSection(title: LocalizedStringKey, count: Int, @ViewBuilder content: () -> some View) -> some View {
+        private func resultSection(title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .bottom) {
                     Text(title)
@@ -263,7 +262,7 @@
             .padding()
         }
 
-        private func emptyStateView(_ message: LocalizedStringKey, icon: String) -> some View {
+        private func emptyStateView(_ message: String, icon: String) -> some View {
             VStack(spacing: 24) {
                 Spacer()
                 Image(systemName: icon)

@@ -93,6 +93,8 @@ public struct LiveTVFeature {
                 state.errorMessage = nil
 
                 state.config = config
+                let hideAdult = settingsClient.hideAdultContent()
+                let isAdultContent = settingsClient.isAdultContent
 
                 return .run { send in
                     async let categoriesResult = Result { try await iptvClient.fetchLiveCategories(config) }
@@ -111,9 +113,8 @@ public struct LiveTVFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
-                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = categories.filter { category in
-                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                        if hideAdult, isAdultContent(category.name) {
                             return false
                         }
 
@@ -144,6 +145,8 @@ public struct LiveTVFeature {
 
             case .reloadPreferences:
                 let currentCats = state.categories
+                let hideAdult = settingsClient.hideAdultContent()
+                let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
                     let prefs = await (try? databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue)) ?? []
                     var dict: [String: CategoryPreferenceDTO] = [:]
@@ -154,9 +157,8 @@ public struct LiveTVFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
-                    let hideAdult = settingsClient.hideAdultContent()
                     var finalCategories = currentCats.filter { category in
-                        if hideAdult, settingsClient.isAdultContent(category.name) {
+                        if hideAdult, isAdultContent(category.name) {
                             return false
                         }
 
@@ -186,8 +188,10 @@ public struct LiveTVFeature {
             case let .categoriesResponse(.success(categories)):
                 state.isLoadingCategories = false
                 state.categories = categories
-                // Auto-select first category
-                if let first = categories.first {
+                // Auto-select first category if current selection is invalid or nil
+                if let currentID = state.selectedCategoryID, let current = categories.first(where: { $0.id == currentID }) {
+                    return .send(.categorySelected(current))
+                } else if let first = categories.first {
                     state.selectedCategoryID = first.id
                     return .send(.categorySelected(first))
                 }

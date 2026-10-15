@@ -20,9 +20,9 @@ public struct CategoryManagementFeature {
 
             var title: String {
                 switch self {
-                case .live: "Live TV"
-                case .vod: "Movies"
-                case .series: "Series"
+                case .live: AppStrings.Common.liveTV
+                case .vod: AppStrings.VOD.title
+                case .series: AppStrings.Series.title
                 }
             }
         }

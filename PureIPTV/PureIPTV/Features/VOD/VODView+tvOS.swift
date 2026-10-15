@@ -9,17 +9,18 @@
 
     public struct VODView_tvOS: View {
         @Bindable var store: StoreOf<VODFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
 
         @FocusState private var focusedCategory: String?
 
+        public init(store: StoreOf<VODFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
+
         public init(store: StoreOf<VODFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -38,9 +39,7 @@
             }
             .background(Color.black.ignoresSafeArea())
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)

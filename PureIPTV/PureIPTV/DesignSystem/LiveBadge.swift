@@ -11,7 +11,7 @@ public struct LiveBadge: View {
                 .fill(Color(hex: "#FF453A"))
                 .frame(width: 6, height: 6)
 
-            Text("CANLI")
+            Text(AppStrings.Player.liveLabel)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white)
                 .tracking(0.5)

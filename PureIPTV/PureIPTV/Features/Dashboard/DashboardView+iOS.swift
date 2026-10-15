@@ -5,15 +5,16 @@
 
     public struct DashboardView_iOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
-        let serverURL: String
-        let username: String
-        let password: String
+        let config: PlaylistConfig
+
+        public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
+            self.store = store
+            self.config = config
+        }
 
         public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
+            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
 
         public var body: some View {
@@ -37,7 +38,7 @@
                             }
 
                             if !store.watchHistoryItems.isEmpty {
-                                featuredSection(title: String(localized: "Kaldığın Yerden İzle"), items: store.watchHistoryItems) { hist in
+                                featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.watchHistoryItems) { hist in
                                     WatchHistoryCardView(item: hist) {
                                         store.send(.historySelected(hist))
                                     }
@@ -46,7 +47,7 @@
                             }
 
                             if !store.favoriteItems.isEmpty {
-                                featuredSection(title: String(localized: "Favorilerim"), items: store.favoriteItems) { fav in
+                                featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { fav in
                                     FavoriteCardView(item: fav) {
                                         store.send(.favoriteSelected(fav))
                                     }
@@ -55,7 +56,7 @@
                             }
 
                             if !store.featuredChannels.isEmpty {
-                                featuredSection(title: String(localized: "Canlı TV (Önerilen)"), items: store.featuredChannels) { channel in
+                                featuredSection(title: AppStrings.Dashboard.featuredLiveTV, items: store.featuredChannels) { channel in
                                     ChannelCardView(channel: channel, isSelected: false) {
                                         store.send(.channelSelected(channel))
                                     }
@@ -64,7 +65,7 @@
                             }
 
                             if store.featuredVODs.count > 1 {
-                                featuredSection(title: String(localized: "Yeni Eklenen Filmler"), items: Array(store.featuredVODs.dropFirst())) { vod in
+                                featuredSection(title: AppStrings.Dashboard.newMovies, items: Array(store.featuredVODs.dropFirst())) { vod in
                                     VODCardView(vod: vod, isSelected: false) {
                                         store.send(.vodSelected(vod))
                                     }
@@ -73,7 +74,7 @@
                             }
 
                             if !store.featuredSeries.isEmpty {
-                                featuredSection(title: String(localized: "Yeni Eklenen Diziler"), items: store.featuredSeries) { series in
+                                featuredSection(title: AppStrings.Dashboard.newSeries, items: store.featuredSeries) { series in
                                     SeriesCardView(series: series, isSelected: false) {
                                         store.send(.seriesSelected(series))
                                     }
@@ -86,9 +87,7 @@
                 }
             }
             .onAppear {
-                if let url = URL(string: serverURL) {
-                    store.send(.onAppear(config: PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)))
-                }
+                store.send(.onAppear(config: config))
             }
         }
 

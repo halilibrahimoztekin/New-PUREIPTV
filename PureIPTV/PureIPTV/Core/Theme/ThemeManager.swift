@@ -11,19 +11,23 @@ public final class ThemeManager: ObservableObject {
         Color(hex: themeColorHex)
     }
 
-    public let availableColors: [(name: String, hex: String)] = [
-        ("Pure Kırmızı", "#FF2D55"),
-        ("Apple Mavi", "#007AFF"),
-        ("Neon Mor", "#AF52DE"),
-        ("Doğa Yeşili", "#34C759"),
-        ("Turuncu", "#FF9500"),
-    ]
+    public var availableColors: [(name: String, hex: String)] {
+        [
+            ("Pure Kırmızı".localized, "#FF2D55"),
+            ("Apple Mavi".localized, "#007AFF"),
+            ("Neon Mor".localized, "#AF52DE"),
+            ("Doğa Yeşili".localized, "#34C759"),
+            ("Turuncu".localized, "#FF9500"),
+        ]
+    }
 
-    public let availableIcons: [(name: String, iconName: String?)] = [
-        ("Varsayılan (Dark)", nil),
-        ("Aydınlık (Light)", "AppIconLight"),
-        ("Neon (Mor)", "AppIconNeon"),
-    ]
+    public var availableIcons: [(name: String, iconName: String?)] {
+        [
+            ("Varsayılan (Dark)".localized, nil),
+            ("Aydınlık (Light)".localized, "AppIconLight"),
+            ("Neon (Mor)".localized, "AppIconNeon"),
+        ]
+    }
 
     private init() {}
 

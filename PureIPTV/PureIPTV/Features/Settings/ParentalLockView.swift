@@ -27,7 +27,7 @@ public struct ParentalLockView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                SecureField("PIN", text: Binding(
+                SecureField(AppStrings.ParentalLock.pin, text: Binding(
                     get: { store.pinInput },
                     set: { store.send(.pinInputChanged($0)) }
                 ))
@@ -53,7 +53,7 @@ public struct ParentalLockView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("İptal") {
+                    Button(AppStrings.Common.cancel) {
                         store.send(.cancelTapped)
                     }
                 }

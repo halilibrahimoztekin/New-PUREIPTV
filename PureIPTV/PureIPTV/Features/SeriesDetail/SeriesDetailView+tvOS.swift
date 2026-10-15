@@ -111,9 +111,12 @@
                             }
 
                             if !store.seasons.isEmpty {
-                                Text("\(store.seasons.count) \(AppStrings.Common.season)")
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(Color.white.opacity(0.7))
+                                HStack(spacing: 4) {
+                                    Text("\(store.seasons.count)")
+                                    Text(AppStrings.Common.season)
+                                }
+                                .font(.system(size: 18))
+                                .foregroundStyle(Color.white.opacity(0.7))
                             }
                         }
 
@@ -122,6 +125,9 @@
                             if let history = store.historyItem, history.duration > 0 {
                                 TVHeaderActionButton(title: AppStrings.SeriesDetail.continueWatching, icon: "play.fill", isPrimary: true) {
                                     store.send(.resumeTapped)
+                                }
+                                TVHeaderActionButton(title: AppStrings.SeriesDetail.restart, icon: "arrow.counterclockwise", isPrimary: false) {
+                                    store.send(.restartTapped)
                                 }
                             } else {
                                 TVHeaderActionButton(title: AppStrings.SeriesDetail.watch, icon: "play.fill", isPrimary: true) {
@@ -191,9 +197,12 @@
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundStyle(.white)
                             Spacer()
-                            Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
-                                .font(.system(size: 20))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                            HStack(spacing: 4) {
+                                Text("\(store.currentEpisodes.count)")
+                                Text(AppStrings.SeriesDetail.episodeCount)
+                            }
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.white.opacity(0.6))
                         }
                         .padding(.horizontal, 80)
 

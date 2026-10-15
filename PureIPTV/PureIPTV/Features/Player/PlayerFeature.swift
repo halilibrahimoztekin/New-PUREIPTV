@@ -12,26 +12,49 @@ public struct PlayerFeature {
         public static let playerEvents = "PlayerFeature.playerEvents"
         public static let statsTimer = "PlayerFeature.statsTimer"
         public static let sleepTimer = "PlayerFeature.sleepTimer"
+        public static let seriesPlaylist = "PlayerFeature.seriesPlaylist"
     }
 
     public struct PlayableItem: Equatable {
         public let id: String
         public let title: String
+        public let seriesTitle: String?
         public let streamURL: URL
         public let coverURL: URL?
         public let seriesID: String?
         public let startPosition: Double? // 0.0 to 1.0
+        public let initialDuration: Double?
+        public let initialProgress: Double?
+        public let isLive: Bool
         public let config: PlaylistConfig?
         public let epgChannelID: String?
         public let tvArchive: Int?
 
-        public init(id: String, title: String, streamURL: URL, coverURL: URL? = nil, seriesID: String? = nil, startPosition: Double? = nil, config: PlaylistConfig? = nil, epgChannelID: String? = nil, tvArchive: Int? = nil) {
+        public init(
+            id: String,
+            title: String,
+            seriesTitle: String? = nil,
+            streamURL: URL,
+            coverURL: URL? = nil,
+            seriesID: String? = nil,
+            startPosition: Double? = nil,
+            initialDuration: Double? = nil,
+            initialProgress: Double? = nil,
+            isLive: Bool = false,
+            config: PlaylistConfig? = nil,
+            epgChannelID: String? = nil,
+            tvArchive: Int? = nil
+        ) {
             self.id = id
             self.title = title
+            self.seriesTitle = seriesTitle
             self.streamURL = streamURL
             self.coverURL = coverURL
             self.seriesID = seriesID
             self.startPosition = startPosition
+            self.initialDuration = initialDuration
+            self.initialProgress = initialProgress
+            self.isLive = isLive
             self.config = config
             self.epgChannelID = epgChannelID
             self.tvArchive = tvArchive
@@ -87,9 +110,21 @@ public struct PlayerFeature {
         /// Sleep Timer
         public var sleepTimerSeconds: Int?
 
+        /// Track whether initial seek was applied
+        public var hasAppliedInitialSeek: Bool = false
+
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
             self.playlist = playlist
+            if let startPos = item.startPosition, startPos > 0 {
+                position = min(1.0, max(0.0, startPos))
+            }
+            if let dur = item.initialDuration, dur > 0 {
+                totalTime = Duration.seconds(dur)
+            }
+            if let prog = item.initialProgress, prog > 0 {
+                currentTime = Duration.seconds(prog)
+            }
         }
     }
 
@@ -125,7 +160,9 @@ public struct PlayerFeature {
         // New actions for video features
         case jumpForward
         case jumpBackward
+        case restartPlayback
         case seek(Double)
+        case seekToTime(Duration)
         case toggleInfo
         case toggleEPG
 
@@ -150,6 +187,10 @@ public struct PlayerFeature {
         case tracksResponse(audio: [Track], subtitle: [Track], selectedAudio: Track?, selectedSubtitle: Track?)
         case selectAudioTrack(Track?)
         case selectSubtitleTrack(Track?)
+
+        // Series Playlist
+        case loadSeriesPlaylist
+        case seriesPlaylistResponse(Result<[PlayableItem], Error>)
 
         case playerEvent(PlayerEvent)
         case handlePlayerEvent(PlayerEvent)
@@ -191,24 +232,37 @@ public struct PlayerFeature {
         case .onAppear:
             let url = state.item.streamURL
             let position = state.item.startPosition ?? 0.0
+            let seriesID = state.item.seriesID
+            let config = state.item.config
+            let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
+
             return .run { send in
+                if needsPlaylist {
+                    await send(.loadSeriesPlaylist)
+                }
+
+                // Listen to events immediately without waiting so no lifecycle events are missed
+                let eventsStream = await playerClient.events()
+                let eventTask = Task {
+                    for await event in eventsStream {
+                        await send(.handlePlayerEvent(event))
+                    }
+                }
+
                 try await playerClient.play(url)
                 if settingsClient.startMuted() {
                     try? await playerClient.setVolume(0)
                 }
 
-                // Hardware Acceleration check can be handled by VLC initialization if supported natively
-                // For now, we assume VLC defaults are handled elsewhere or via VLC configuration
-
                 if position > 0 {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    try await playerClient.seek(position)
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    try? await playerClient.seek(position)
                 }
-                for await event in await playerClient.events() {
-                    await send(.handlePlayerEvent(event))
-                }
-            } catch: { error, _ in
+
+                _ = await eventTask.value
+            } catch: { error, send in
                 print("Player error: \(error)")
+                await send(.handlePlayerEvent(.encounteredError))
             }
             .cancellable(id: CancelID.playerEvents)
 
@@ -219,6 +273,7 @@ public struct PlayerFeature {
             let isPiPActive = state.isPiPActive
             return .merge(
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.seriesPlaylist),
                 .run { _ in
                     if currentSecs > 10 {
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod"
@@ -287,17 +342,26 @@ public struct PlayerFeature {
             }
 
         case .retryPlayback:
+            if state.errorMessage == AppStrings.Errors.cannotPlayStream {
+                state.retryCount = 0
+            }
+            state.errorMessage = nil
             let url = state.item.streamURL
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
-            return .run { _ in
+            return .run { send in
                 try await playerClient.play(url)
                 if position > 0 {
                     try await Task.sleep(nanoseconds: 500_000_000)
                     try await playerClient.seek(position)
                 }
-            } catch: { error, _ in
+                for await event in await playerClient.events() {
+                    await send(.handlePlayerEvent(event))
+                }
+            } catch: { error, send in
                 print("Player retry error: \(error)")
+                await send(.handlePlayerEvent(.encounteredError))
             }
+            .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
 
         case .toggleControls:
             state.isControlsVisible.toggle()
@@ -331,7 +395,7 @@ public struct PlayerFeature {
         case let .setSleepTimer(minutes):
             if let minutes {
                 state.sleepTimerSeconds = minutes * 60
-                state.gestureFeedback = "Uyku Zamanlayıcısı: \(minutes) dk"
+                state.gestureFeedback = AppStrings.Player.sleepTimerMinutes(minutes)
                 return .run { send in
                     try await Task.sleep(nanoseconds: 2_000_000_000)
                     await send(.hideGestureFeedback)
@@ -343,7 +407,7 @@ public struct PlayerFeature {
                 .cancellable(id: CancelID.sleepTimer, cancelInFlight: true)
             } else {
                 state.sleepTimerSeconds = nil
-                state.gestureFeedback = "Uyku Zamanlayıcısı Kapatıldı"
+                state.gestureFeedback = AppStrings.Player.sleepTimerDisabled
                 return .merge(
                     .cancel(id: CancelID.sleepTimer),
                     .run { send in
@@ -369,11 +433,11 @@ public struct PlayerFeature {
             state.lastDragTranslation = translation
             state.lastDragScreenWidth = screenWidth
             if abs(translation.width) > abs(translation.height) {
-                if state.item.config != nil, state.totalTime.components.seconds == 0 {
+                if state.item.isLive, state.totalTime.components.seconds == 0 {
                     if translation.width > 50 {
-                        return .send(.showGestureFeedback("Önceki Kanal"))
+                        return .send(.showGestureFeedback(AppStrings.Player.previousChannel))
                     } else if translation.width < -50 {
-                        return .send(.showGestureFeedback("Sonraki Kanal"))
+                        return .send(.showGestureFeedback(AppStrings.Player.nextChannel))
                     }
                     return .none
                 } else {
@@ -395,13 +459,15 @@ public struct PlayerFeature {
             }
 
         case .dragGestureEnded:
-            if state.item.config != nil, state.totalTime.components.seconds == 0 {
+            if state.item.isLive, state.totalTime.components.seconds == 0 {
                 let feedback = state.gestureFeedback
+                let nextChannelStr = AppStrings.Player.nextChannel
+                let prevChannelStr = AppStrings.Player.previousChannel
                 return .run { send in
                     await send(.hideGestureFeedback)
-                    if feedback == "Sonraki Kanal" {
+                    if feedback == nextChannelStr {
                         await send(.nextChannel)
-                    } else if feedback == "Önceki Kanal" {
+                    } else if feedback == prevChannelStr {
                         await send(.previousChannel)
                     }
                 }
@@ -426,13 +492,56 @@ public struct PlayerFeature {
             }
 
         case .jumpForward:
-            return .run { _ in try await playerClient.jump(10) }
+            let offset: Int64 = 10
+            let currentSecs = Double(state.currentTime.components.seconds)
+            let totalSecs = Double(state.totalTime.components.seconds)
+            let targetSecs = currentSecs + Double(offset)
+            if totalSecs > 0 {
+                let clampedSecs = min(totalSecs, max(0, targetSecs))
+                state.currentTime = Duration.seconds(clampedSecs)
+                state.position = clampedSecs / totalSecs
+            } else {
+                state.currentTime = Duration.seconds(max(0, targetSecs))
+            }
+            return .run { _ in try await playerClient.jump(offset) }
 
         case .jumpBackward:
-            return .run { _ in try await playerClient.jump(-10) }
+            let offset: Int64 = -10
+            let currentSecs = Double(state.currentTime.components.seconds)
+            let totalSecs = Double(state.totalTime.components.seconds)
+            let targetSecs = currentSecs + Double(offset)
+            if totalSecs > 0 {
+                let clampedSecs = min(totalSecs, max(0, targetSecs))
+                state.currentTime = Duration.seconds(clampedSecs)
+                state.position = clampedSecs / totalSecs
+            } else {
+                state.currentTime = Duration.seconds(max(0, targetSecs))
+            }
+            return .run { _ in try await playerClient.jump(offset) }
+
+        case .restartPlayback:
+            state.currentTime = .zero
+            state.position = 0.0
+            return .run { send in
+                await send(.seek(0.0))
+                await send(.seekToTime(.zero))
+                await send(.play)
+            }
 
         case let .seek(position):
-            return .run { _ in try await playerClient.seek(position) }
+            let clamped = max(0.0, min(1.0, position))
+            state.position = clamped
+            if state.totalTime.components.seconds > 0 {
+                state.currentTime = Duration.seconds(Double(state.totalTime.components.seconds) * clamped)
+            }
+            return .run { _ in try await playerClient.seek(clamped) }
+
+        case let .seekToTime(time):
+            state.currentTime = time
+            if state.totalTime.components.seconds > 0 {
+                state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
+            }
+            return .run { _ in try await playerClient.seekToTime(time) }
 
         case .toggleChannelList:
             state.isChannelListVisible.toggle()
@@ -446,6 +555,7 @@ public struct PlayerFeature {
             state.currentTime = .zero
             state.totalTime = .zero
             state.position = 0.0
+            state.hasAppliedInitialSeek = false
 
             return .run { send in
                 try await playerClient.stop()
@@ -454,12 +564,12 @@ public struct PlayerFeature {
             }
 
         case .nextChannel:
-            guard let playlist = state.playlist, let currentIndex = playlist.firstIndex(of: state.item) else { return .none }
+            guard let playlist = state.playlist, let currentIndex = playlist.firstIndex(where: { $0.id == state.item.id }) else { return .none }
             let nextIndex = (currentIndex + 1) % playlist.count
             return .send(.selectChannel(playlist[nextIndex]))
 
         case .previousChannel:
-            guard let playlist = state.playlist, let currentIndex = playlist.firstIndex(of: state.item) else { return .none }
+            guard let playlist = state.playlist, let currentIndex = playlist.firstIndex(where: { $0.id == state.item.id }) else { return .none }
             let prevIndex = (currentIndex - 1 + playlist.count) % playlist.count
             return .send(.selectChannel(playlist[prevIndex]))
 
@@ -488,6 +598,49 @@ public struct PlayerFeature {
         case let .fetchEPGResponse(.failure(error)):
             print("EPG Fetch error: \(error)")
             state.isEPGLoading = false
+            return .none
+
+        case .loadSeriesPlaylist:
+            guard let seriesID = state.item.seriesID, let config = state.item.config else { return .none }
+            let currentItem = state.item
+            let seriesTitle = currentItem.seriesTitle ?? currentItem.title
+            let coverURL = currentItem.coverURL
+
+            return .run { send in
+                await send(.seriesPlaylistResponse(Result {
+                    let result = try await iptvClient.fetchSeriesInfo(config, seriesID)
+                    let currentEp = result.episodes.first(where: { $0.id == currentItem.id })
+                    let targetSeason = currentEp?.season
+
+                    let episodesInSeason = targetSeason != nil
+                        ? result.episodes.filter { $0.season == targetSeason }
+                        : result.episodes
+
+                    let sorted = episodesInSeason.sorted { $0.episodeNum < $1.episodeNum }
+
+                    return sorted.map { ep in
+                        PlayableItem(
+                            id: ep.id,
+                            title: "\(seriesTitle) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                            seriesTitle: seriesTitle,
+                            streamURL: ep.streamURL,
+                            coverURL: ep.coverURL ?? coverURL,
+                            seriesID: seriesID,
+                            isLive: false,
+                            config: config
+                        )
+                    }
+                }))
+            }
+            .cancellable(id: CancelID.seriesPlaylist, cancelInFlight: true)
+
+        case let .seriesPlaylistResponse(.success(playlist)):
+            if !playlist.isEmpty {
+                state.playlist = playlist
+            }
+            return .none
+
+        case .seriesPlaylistResponse(.failure):
             return .none
 
         case let .playArchive(program):
@@ -612,7 +765,19 @@ public struct PlayerFeature {
                 state.playerState = newState
                 if newState == .playing {
                     state.retryCount = 0 // Reset on successful play
+                    state.errorMessage = nil
                     var actions: [Effect<Action>] = []
+
+                    // Apply initial progress / seek if not yet applied
+                    if !state.hasAppliedInitialSeek {
+                        state.hasAppliedInitialSeek = true
+                        if let startPosition = state.item.startPosition, startPosition > 0.005 {
+                            actions.append(.send(.seek(startPosition)))
+                        } else if let progress = state.item.initialProgress, progress > 1 {
+                            actions.append(.send(.seekToTime(Duration.seconds(progress))))
+                        }
+                    }
+
                     if state.mediaInfo == nil {
                         actions.append(.send(.fetchMediaInfo))
                     }
@@ -625,7 +790,7 @@ public struct PlayerFeature {
                     return .merge(actions)
                 } else if newState == .stopped {
                     // Auto Play Next Episode
-                    if settingsClient.autoPlayNextEpisode(), let playlist = state.playlist, let currentIdx = playlist.firstIndex(of: state.item) {
+                    if settingsClient.autoPlayNextEpisode(), let playlist = state.playlist, let currentIdx = playlist.firstIndex(where: { $0.id == state.item.id }) {
                         let nextIdx = currentIdx + 1
                         if nextIdx < playlist.count {
                             // Only auto-play if it's a series episode
@@ -639,7 +804,7 @@ public struct PlayerFeature {
             case .encounteredError:
                 if state.retryCount < 3 {
                     state.retryCount += 1
-                    state.errorMessage = "Bağlantı koptu, yeniden bağlanılıyor... (\(state.retryCount)/3)"
+                    state.errorMessage = AppStrings.Player.reconnecting(state.retryCount)
                     return .run { send in
                         try? await Task.sleep(nanoseconds: 2_000_000_000)
                         await send(.retryPlayback)
@@ -649,7 +814,7 @@ public struct PlayerFeature {
                 }
             case let .timeChanged(time):
                 state.currentTime = time
-                if state.item.config == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
+                if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
                     let totalSecs = Double(time.components.seconds) / state.position
                     state.totalTime = Duration.seconds(totalSecs)
                 }
@@ -657,7 +822,7 @@ public struct PlayerFeature {
                 state.totalTime = length
             case let .positionChanged(pos):
                 state.position = pos
-                if state.item.config == nil, state.totalTime.components.seconds == 0, pos > 0.001, state.currentTime.components.seconds > 0 {
+                if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, pos > 0.001, state.currentTime.components.seconds > 0 {
                     let totalSecs = Double(state.currentTime.components.seconds) / pos
                     state.totalTime = Duration.seconds(totalSecs)
                 }
@@ -675,7 +840,7 @@ public struct PlayerFeature {
             let item = state.item
             return .merge(
                 .cancel(id: CancelID.playerEvents),
-                .run { _ in
+                .run { send in
                     @Dependency(\.dismiss) var dismiss
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
@@ -694,6 +859,7 @@ public struct PlayerFeature {
                     }
 
                     try? await playerClient.stop()
+                    await send(.delegate(.didClose))
                     await MainActor.run {
                         appCoordinator.trigger(.dismissPlayer)
                     }
@@ -726,7 +892,7 @@ public struct PlayerFeature {
 
     // MARK: - Language Matching Helper
 
-    private static func matchesLanguage(trackName: String, preferredLanguage: String) -> Bool {
+    private nonisolated static func matchesLanguage(trackName: String, preferredLanguage: String) -> Bool {
         let t = trackName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let p = preferredLanguage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 

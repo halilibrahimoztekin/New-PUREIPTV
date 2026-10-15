@@ -40,6 +40,7 @@ public struct VODDetailFeature {
         case tmdbDetailsResponse(Result<TMDBMovieDetailsDTO, Error>)
         case playTapped
         case resumeTapped
+        case restartTapped
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool)
@@ -185,24 +186,53 @@ public struct VODDetailFeature {
                 return .none
 
             case .playTapped:
-                guard let streamURL = state.vod.streamURL else { return .none }
+                let streamURL: URL? = {
+                    if let url = state.vod.streamURL {
+                        return url
+                    }
+                    if let serverURL = state.config.serverURL, let username = state.config.username, let password = state.config.password {
+                        return serverURL.appendingPathComponent("movie/\(username)/\(password)/\(state.vod.id).mp4")
+                    }
+                    return nil
+                }()
+                guard let finalStreamURL = streamURL else { return .none }
                 let playable = PlayerFeature.PlayableItem(
                     id: state.vod.id,
                     title: state.vod.title,
-                    streamURL: streamURL,
-                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL
+                    streamURL: finalStreamURL,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
+                    startPosition: 0.0
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
 
+            case .restartTapped:
+                return .send(.playTapped)
+
             case .resumeTapped:
-                guard let streamURL = state.vod.streamURL, let history = state.historyItem, history.duration > 0 else { return .none }
+                let streamURL: URL? = {
+                    if let url = state.vod.streamURL {
+                        return url
+                    }
+                    if let history = state.historyItem, let s = history.streamURL, let u = URL(string: s) {
+                        return u
+                    }
+                    if let serverURL = state.config.serverURL, let username = state.config.username, let password = state.config.password {
+                        return serverURL.appendingPathComponent("movie/\(username)/\(password)/\(state.vod.id).mp4")
+                    }
+                    return nil
+                }()
+                guard let finalStreamURL = streamURL, let history = state.historyItem, history.duration > 0 else {
+                    return .send(.playTapped)
+                }
                 let startPosition = history.progress / history.duration
                 let playable = PlayerFeature.PlayableItem(
                     id: state.vod.id,
                     title: state.vod.title,
-                    streamURL: streamURL,
+                    streamURL: finalStreamURL,
                     coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
-                    startPosition: startPosition
+                    startPosition: startPosition,
+                    initialDuration: history.duration,
+                    initialProgress: history.progress
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
 

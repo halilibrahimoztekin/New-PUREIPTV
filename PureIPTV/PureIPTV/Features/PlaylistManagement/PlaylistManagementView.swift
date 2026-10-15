@@ -42,12 +42,12 @@ public struct PlaylistManagementView: View {
                         }
                         #else
                         .contextMenu {
-                                    Button(role: .destructive) {
-                                        store.send(.deletePlaylist(playlist.id))
-                                    } label: {
-                                        Label(AppStrings.Common.delete, systemImage: "trash")
-                                    }
-                                }
+                            Button(role: .destructive) {
+                                store.send(.deletePlaylist(playlist.id))
+                            } label: {
+                                Label(AppStrings.Common.delete, systemImage: "trash")
+                            }
+                        }
                         #endif
                     }
                 } header: {

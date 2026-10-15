@@ -43,11 +43,11 @@ import SwiftUI
                         }
                     }
                 }
-                .navigationTitle("TV Guide")
+                .navigationTitle(AppStrings.EPG.guide)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Kapat") {
+                        Button(AppStrings.Common.close) {
                             store.send(.closeTapped)
                         }
                     }

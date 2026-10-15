@@ -34,7 +34,7 @@ public struct SettingsView: View {
                         HStack {
                             Image(systemName: "person.2.circle")
                                 .foregroundColor(.purple)
-                            Text(String(localized: "Profil Değiştir"))
+                            Text(AppStrings.Settings.switchProfile)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.gray)
@@ -64,7 +64,7 @@ public struct SettingsView: View {
                         HStack {
                             Image(systemName: "eye.slash.fill")
                                 .foregroundColor(.orange)
-                            Text(String(localized: "Yetişkin İçerikleri Tamamen Gizle"))
+                            Text(AppStrings.Settings.hideAdultContent)
                         }
                     }
                     .tint(.orange)
@@ -92,61 +92,61 @@ public struct SettingsView: View {
                         theme.setAppIcon(iconName: newValue == "AppIcon" ? nil : newValue)
                     }
 
-                    Picker(String(localized: "Başlangıç Ekranı"), selection: Binding(
+                    Picker(AppStrings.Settings.startupScreen, selection: Binding(
                         get: { store.defaultStartupTab },
                         set: { store.send(.setDefaultStartupTab($0)) }
                     )) {
-                        Text(String(localized: "Keşfet")).tag("Keşfet")
-                        Text(String(localized: "Canlı TV")).tag("Canlı TV")
-                        Text(String(localized: "Filmler")).tag("Filmler")
-                        Text(String(localized: "Diziler")).tag("Diziler")
+                        Text(AppStrings.Settings.discover).tag("Keşfet")
+                        Text(AppStrings.LiveTV.title).tag("Canlı TV")
+                        Text(AppStrings.VOD.title).tag("Filmler")
+                        Text(AppStrings.Series.title).tag("Diziler")
                     }
                 }
 
-                Section(header: Text(String(localized: "İçerik Sıralaması"))) {
-                    Picker(String(localized: "Filmler (VOD)"), selection: Binding(
+                Section(header: Text(AppStrings.Settings.contentSorting)) {
+                    Picker(AppStrings.Settings.vodSorting, selection: Binding(
                         get: { store.vodSortMethod },
                         set: { store.send(.setVODSortMethod($0)) }
                     )) {
                         ForEach(SortMethod.allCases) { method in
-                            Text(method.rawValue).tag(method)
+                            Text(method.title).tag(method)
                         }
                     }
 
-                    Picker(String(localized: "Diziler"), selection: Binding(
+                    Picker(AppStrings.Series.title, selection: Binding(
                         get: { store.seriesSortMethod },
                         set: { store.send(.setSeriesSortMethod($0)) }
                     )) {
                         ForEach(SortMethod.allCases) { method in
-                            Text(method.rawValue).tag(method)
+                            Text(method.title).tag(method)
                         }
                     }
                 }
 
-                Section(header: Text(String(localized: "Oynatıcı (Player) Ayarları"))) {
-                    Toggle(String(localized: "Sonraki Bölüme Otomatik Geç"), isOn: Binding(
+                Section(header: Text(AppStrings.Settings.playerSettings)) {
+                    Toggle(AppStrings.Settings.autoPlayNextEpisode, isOn: Binding(
                         get: { store.autoPlayNextEpisode },
                         set: { store.send(.setAutoPlayNextEpisode($0)) }
                     ))
 
-                    Toggle(String(localized: "Kanalları Sessiz Başlat"), isOn: Binding(
+                    Toggle(AppStrings.Settings.startMuted, isOn: Binding(
                         get: { store.startMuted },
                         set: { store.send(.setStartMuted($0)) }
                     ))
 
-                    Toggle(String(localized: "Donanım Hızlandırma"), isOn: Binding(
+                    Toggle(AppStrings.Settings.hardwareAcceleration, isOn: Binding(
                         get: { store.hardwareAcceleration },
                         set: { store.send(.setHardwareAcceleration($0)) }
                     ))
                 }
 
-                Section(header: Text(String(localized: "Yayın Akışı (EPG) Ayarları"))) {
+                Section(header: Text(AppStrings.Settings.epgSettings)) {
                     #if os(tvOS)
                         HStack {
-                            Text(String(localized: "Zaman Kaydırma (Time Shift)"))
+                            Text(AppStrings.Settings.timeShift)
                             Spacer()
                             Button("-") { store.send(.setEpgTimeShift(max(-12, store.epgTimeShift - 1))) }
-                            Text(store.epgTimeShift > 0 ? "+\(store.epgTimeShift) Saat" : "\(store.epgTimeShift) Saat")
+                            Text(AppStrings.Settings.timeShiftHours(store.epgTimeShift))
                                 .foregroundColor(.gray)
                             Button("+") { store.send(.setEpgTimeShift(min(12, store.epgTimeShift + 1))) }
                         }
@@ -156,30 +156,30 @@ public struct SettingsView: View {
                             set: { store.send(.setEpgTimeShift($0)) }
                         ), in: -12 ... 12) {
                             HStack {
-                                Text(String(localized: "Zaman Kaydırma (Time Shift)"))
+                                Text(AppStrings.Settings.timeShift)
                                 Spacer()
-                                Text(store.epgTimeShift > 0 ? "+\(store.epgTimeShift) Saat" : "\(store.epgTimeShift) Saat")
+                                Text(AppStrings.Settings.timeShiftHours(store.epgTimeShift))
                                     .foregroundColor(.gray)
                             }
                         }
                     #endif
 
-                    Toggle(String(localized: "Akışı Otomatik Güncelle"), isOn: Binding(
+                    Toggle(AppStrings.Settings.autoUpdateEPG, isOn: Binding(
                         get: { store.autoUpdateEPG },
                         set: { store.send(.setAutoUpdateEPG($0)) }
                     ))
                 }
 
-                Section(header: Text(String(localized: "Abonelik & Depolama"))) {
+                Section(header: Text(AppStrings.Settings.subscriptionAndStorage)) {
                     HStack {
-                        Text(String(localized: "Abonelik Durumu"))
+                        Text(AppStrings.Settings.subscriptionStatus)
                         Spacer()
                         if store.isPremium {
-                            Text(String(localized: "Premium 👑"))
+                            Text(AppStrings.Settings.premiumStatus)
                                 .foregroundColor(.orange)
                                 .bold()
                         } else {
-                            Text(String(localized: "Ücretsiz / Süresi Dolmuş"))
+                            Text(AppStrings.Settings.freeStatus)
                                 .foregroundColor(.gray)
                         }
                     }
@@ -195,7 +195,7 @@ public struct SettingsView: View {
                         store.send(.clearCache)
                     }) {
                         HStack {
-                            Text(String(localized: "Önbelleği Temizle"))
+                            Text(AppStrings.Settings.clearCache)
                             Spacer()
                             Text(store.cacheSize)
                                 .foregroundColor(.gray)

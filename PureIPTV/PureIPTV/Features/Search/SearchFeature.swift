@@ -15,6 +15,15 @@ public struct SearchFeature: Sendable {
         case live = "Canlı TV"
         case vod = "Filmler"
         case series = "Diziler"
+
+        public var title: String {
+            switch self {
+            case .all: AppStrings.Search.all
+            case .live: AppStrings.Search.liveTV
+            case .vod: AppStrings.Search.movies
+            case .series: AppStrings.Search.series
+            }
+        }
     }
 
     @ObservableState
@@ -34,40 +43,39 @@ public struct SearchFeature: Sendable {
         public var isLoading = false
         public var hasLoaded = false
         public var errorMessage: String?
+        public var lastLoadedConfig: PlaylistConfig?
 
-        /// Computed Results
-        public var liveResults: [MediaModels.Item] {
-            if debouncedQuery.isEmpty {
-                return []
-            }
-            if filter != .all, filter != .live {
-                return []
-            }
-            return allChannels.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
-        }
-
-        public var vodResults: [MediaModels.Item] {
-            if debouncedQuery.isEmpty {
-                return []
-            }
-            if filter != .all, filter != .vod {
-                return []
-            }
-            return allVODs.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
-        }
-
-        public var seriesResults: [MediaModels.Item] {
-            if debouncedQuery.isEmpty {
-                return []
-            }
-            if filter != .all, filter != .series {
-                return []
-            }
-            return allSeries.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
-        }
+        /// Stored Results (avoid recomputing over 50,000 items on every view render)
+        public var liveResults: [MediaModels.Item] = []
+        public var vodResults: [MediaModels.Item] = []
+        public var seriesResults: [MediaModels.Item] = []
 
         public var totalResultsCount: Int {
             liveResults.count + vodResults.count + seriesResults.count
+        }
+
+        public mutating func updateResults() {
+            guard !debouncedQuery.isEmpty else {
+                liveResults = []
+                vodResults = []
+                seriesResults = []
+                return
+            }
+            if filter == .all || filter == .live {
+                liveResults = allChannels.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+            } else {
+                liveResults = []
+            }
+            if filter == .all || filter == .vod {
+                vodResults = allVODs.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+            } else {
+                vodResults = []
+            }
+            if filter == .all || filter == .series {
+                seriesResults = allSeries.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+            } else {
+                seriesResults = []
+            }
         }
 
         public init() {}
@@ -111,6 +119,17 @@ public struct SearchFeature: Sendable {
                     await send(.loadRecentSearchesResponse(history))
                 }
 
+                if state.lastLoadedConfig != config {
+                    state.hasLoaded = false
+                    state.allChannels = []
+                    state.allVODs = []
+                    state.allSeries = []
+                    state.liveResults = []
+                    state.vodResults = []
+                    state.seriesResults = []
+                    state.lastLoadedConfig = config
+                }
+
                 guard !state.hasLoaded, !state.isLoading else { return loadHistory }
                 state.isLoading = true
                 state.errorMessage = nil
@@ -144,6 +163,7 @@ public struct SearchFeature: Sendable {
                 state.allChannels = data.channels
                 state.allVODs = data.vods
                 state.allSeries = data.series
+                state.updateResults()
                 return .none
 
             case let .loadAllDataResponse(.failure(error)):
@@ -161,10 +181,12 @@ public struct SearchFeature: Sendable {
 
             case let .performSearch(query):
                 state.debouncedQuery = query
+                state.updateResults()
                 return .none
 
             case let .filterChanged(filter):
                 state.filter = filter
+                state.updateResults()
                 return .none
 
             case let .channelSelected(channel):
@@ -201,7 +223,10 @@ public struct SearchFeature: Sendable {
                 }
 
             case let .recentSearchTapped(query):
-                return .send(.queryChanged(query))
+                state.searchQuery = query
+                state.debouncedQuery = query
+                state.updateResults()
+                return .none
 
             case .delegate:
                 return .none

@@ -70,16 +70,43 @@
 
                         Spacer()
 
-                        Button(AppStrings.Paywall.restorePurchases) {
-                            store.send(.restorePurchases)
+                        HStack(spacing: 40) {
+                            Button(AppStrings.Paywall.restorePurchases) {
+                                store.send(.restorePurchases)
+                            }
+                            .foregroundColor(.gray)
+
+                            Button(AppStrings.Common.cancel) {
+                                store.send(.closeButtonTapped)
+                            }
+                            .foregroundColor(.gray)
                         }
-                        .foregroundColor(.gray)
                         .padding()
                     }
                     .padding(60)
+
+                    // Top-Right Close Button
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button {
+                                store.send(.closeButtonTapped)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(Color.white.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(40)
+                        }
+                        Spacer()
+                    }
                 }
                 .onAppear {
                     store.send(.onAppear)
+                }
+                .onExitCommand {
+                    store.send(.closeButtonTapped)
                 }
             }
         }

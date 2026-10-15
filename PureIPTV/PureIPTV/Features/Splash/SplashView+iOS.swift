@@ -50,7 +50,7 @@
                     Spacer().frame(height: 20)
 
                     // Wordmark
-                    Text("PureIPTV")
+                    Text(AppStrings.Splash.appName)
                         .font(.system(size: 34, weight: .heavy, design: .default))
                         .foregroundStyle(
                             LinearGradient(
@@ -66,7 +66,7 @@
                     Spacer().frame(height: 8)
 
                     // Tagline
-                    Text("Pure. Premium. IPTV.")
+                    Text(AppStrings.Splash.tagline)
                         .font(.system(size: 15, weight: .medium, design: .default))
                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
                         .tracking(1.5)
@@ -93,40 +93,7 @@
 
     private struct LogoBadge: View {
         var body: some View {
-            ZStack {
-                // Outer glow ring
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: "#0A84FF").opacity(0.6), Color(hex: "#BF5AF2").opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-                    .frame(width: 100, height: 100)
-                    .blur(radius: 2)
-
-                // Glass pill background
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
-                    .frame(width: 90, height: 90)
-
-                // Icon
-                Image(systemName: "play.tv.fill")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: "#0A84FF"), Color(hex: "#BF5AF2")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+            PureMaterialLogo(size: 96, showGlow: true)
         }
     }
 

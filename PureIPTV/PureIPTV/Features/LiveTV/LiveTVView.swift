@@ -5,22 +5,23 @@ import SwiftUI
 
 public struct LiveTVView: View {
     let store: StoreOf<LiveTVFeature>
-    let serverURL: String
-    let username: String
-    let password: String
+    let config: PlaylistConfig
+
+    public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
+        self.store = store
+        self.config = config
+    }
 
     public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String) {
         self.store = store
-        self.serverURL = serverURL
-        self.username = username
-        self.password = password
+        config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
     }
 
     public var body: some View {
         #if os(tvOS)
-            LiveTVView_tvOS(store: store, serverURL: serverURL, username: username, password: password)
+            LiveTVView_tvOS(store: store, config: config)
         #else
-            LiveTVView_iOS(store: store, serverURL: serverURL, username: username, password: password)
+            LiveTVView_iOS(store: store, config: config)
         #endif
     }
 }

@@ -13,6 +13,15 @@ public enum SortMethod: String, CaseIterable, Equatable, Identifiable {
     public var id: String {
         rawValue
     }
+
+    public var title: String {
+        switch self {
+        case .defaultOrder: AppStrings.Settings.defaultSort
+        case .alphabetical: AppStrings.Settings.alphabeticalSort
+        case .rating: AppStrings.Settings.ratingSort
+        case .dateAdded: AppStrings.Settings.dateAddedSort
+        }
+    }
 }
 
 public struct SettingsClient: Sendable {
@@ -81,21 +90,34 @@ extension SettingsClient: DependencyKey {
                 defaults.bool(forKey: enabledKey)
             },
             getParentalPIN: {
-                defaults.string(forKey: pinKey)
+                if let pin = try? KeychainManager.shared.retrieve(for: pinKey, as: String.self) {
+                    return pin
+                }
+                // Fallback & Migration: Check legacy UserDefaults
+                if let legacyPin = defaults.string(forKey: pinKey) {
+                    try? KeychainManager.shared.save(legacyPin, for: pinKey)
+                    defaults.removeObject(forKey: pinKey)
+                    return legacyPin
+                }
+                return nil
             },
             setParentalControl: { enabled, pin in
                 defaults.set(enabled, forKey: enabledKey)
                 if let pin, enabled {
-                    defaults.set(pin, forKey: pinKey)
+                    try? KeychainManager.shared.save(pin, for: pinKey)
+                    defaults.removeObject(forKey: pinKey)
                 } else {
+                    try? KeychainManager.shared.delete(for: pinKey)
                     defaults.removeObject(forKey: pinKey)
                 }
             },
             verifyPIN: { inputPin in
-                guard defaults.bool(forKey: enabledKey),
-                      let savedPin = defaults.string(forKey: pinKey)
-                else {
+                guard defaults.bool(forKey: enabledKey) else {
                     return true // If not enabled, always verify
+                }
+                let savedPin = (try? KeychainManager.shared.retrieve(for: pinKey, as: String.self)) ?? defaults.string(forKey: pinKey)
+                guard let savedPin else {
+                    return true
                 }
                 return savedPin == inputPin
             },

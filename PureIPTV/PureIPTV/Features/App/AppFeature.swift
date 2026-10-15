@@ -202,10 +202,12 @@ public struct AppFeature {
 
         // ── AddPlaylist ──────────────────────────────────────────
         case .addPlaylist(.delegate(.didConnect)):
-            state.profileSelection = ProfileSelectionFeature.State()
+            state.addPlaylist = AddPlaylistFeature.State() // reset it
+            state.splash = SplashFeature.State()
+            state.splashIsActive = true
             state.isOnboarded = true
             return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.profileSelection) }
+                await MainActor.run { appCoordinator.trigger(.splash) }
             }
 
         case .addPlaylist:
@@ -225,6 +227,7 @@ public struct AppFeature {
                     coverURL: item.coverURL,
                     seriesID: nil,
                     startPosition: nil,
+                    isLive: true,
                     config: config,
                     epgChannelID: item.epgChannelID
                 )
@@ -238,6 +241,7 @@ public struct AppFeature {
                     coverURL: channel.coverURL,
                     seriesID: nil,
                     startPosition: nil,
+                    isLive: true,
                     config: config,
                     epgChannelID: channel.epgChannelID
                 ),
@@ -297,8 +301,8 @@ public struct AppFeature {
             return .none
 
         // ── Series Detail ─────────────────────────────────────────
-        case let .seriesDetail(.presented(.delegate(.didSelectEpisode(playable)))):
-            state.player = PlayerFeature.State(item: playable)
+        case let .seriesDetail(.presented(.delegate(.didSelectEpisode(playable, playlist)))):
+            state.player = PlayerFeature.State(item: playable, playlist: playlist)
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
@@ -309,7 +313,7 @@ public struct AppFeature {
             }
 
         case .seriesDetail(.presented(.viewDidDisappear)):
-            if state.player == nil && state.paywall == nil {
+            if state.player == nil, state.paywall == nil {
                 state.seriesDetail = nil
             }
             return .none
@@ -338,7 +342,7 @@ public struct AppFeature {
             }
 
         case .vodDetail(.presented(.viewDidDisappear)):
-            if state.player == nil && state.paywall == nil {
+            if state.player == nil, state.paywall == nil {
                 state.vodDetail = nil
             }
             return .none
@@ -352,6 +356,15 @@ public struct AppFeature {
             state.playlistManagement = nil
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissPlaylistManagement) }
+            }
+
+        case .playlistManagement(.presented(.delegate(.addPlaylistDidConnect))):
+            state.playlistManagement = nil
+            state.splash = SplashFeature.State()
+            state.splashIsActive = true
+            state.isOnboarded = true
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.splash) }
             }
 
         case .playlistManagement(.presented(.delegate(.dismissed))):
@@ -387,71 +400,49 @@ public struct AppFeature {
 
     private func playHistoryItem(_ item: WatchHistoryItem, state: inout State) -> Effect<Action> {
         // Eğer VOD veya Dizi ise ve kullanıcı premium değilse engelle
-        if item.seriesID != nil || item.type == "vod", !state.isPremium {
+        if item.seriesID != nil || item.type == "vod" || item.type == "episode", !state.isPremium {
             return .send(.presentPaywall)
         }
 
-        if let seriesID = item.seriesID, let config = state.home?.config {
-            let dummySeries = MediaModels.Item(
-                id: seriesID,
-                title: item.seriesTitle ?? item.title,
-                coverURL: item.coverURL.flatMap { URL(string: $0) },
-                categoryID: "",
-                type: .series
-            )
-            state.seriesDetail = SeriesDetailFeature.State(
-                series: dummySeries,
-                config: config,
-                historyItem: item,
-                autoPlayOnLoad: true
-            )
-            return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.seriesDetail) }
-            }
-        } else if item.type == "vod", let config = state.home?.config {
-            let dummyVOD = MediaModels.Item(
-                id: item.id,
-                title: item.title,
-                streamURL: item.streamURL.flatMap { URL(string: $0) },
-                coverURL: item.coverURL.flatMap { URL(string: $0) },
-                categoryID: "",
-                type: .vod
-            )
-            state.vodDetail = VODDetailFeature.State(
-                vod: dummyVOD,
-                config: config,
-                historyItem: item,
-                autoPlayOnLoad: true
-            )
-            return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.vodDetail) }
-            }
-        } else if let stream = item.streamURL, let streamURL = URL(string: stream), let config = state.home?.config {
-            let coverURL = item.coverURL.flatMap { URL(string: $0) }
+        guard let config = state.home?.config else { return .none }
 
-            let startPosition: Double? = if item.duration > 0 {
-                item.progress / item.duration
-            } else {
-                nil
-            }
-
-            let playable = PlayerFeature.PlayableItem(
-                id: item.id,
-                title: item.title,
-                streamURL: streamURL,
-                coverURL: coverURL,
-                seriesID: nil,
-                startPosition: startPosition,
-                config: config,
-                epgChannelID: nil,
-                tvArchive: nil
-            )
-
-            state.player = PlayerFeature.State(item: playable)
-            return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.player) }
-            }
+        var streamURL: URL? = item.streamURL.flatMap { URL(string: $0) }
+        if streamURL == nil, item.type == "vod",
+           let serverURL = config.serverURL, let username = config.username, let password = config.password
+        {
+            streamURL = serverURL.appendingPathComponent("movie/\(username)/\(password)/\(item.id).mp4")
         }
-        return .none
+
+        guard let finalStreamURL = streamURL else { return .none }
+
+        let coverURL = item.coverURL.flatMap { URL(string: $0) }
+        let startPosition: Double? = if item.duration > 0 {
+            item.progress / item.duration
+        } else {
+            nil
+        }
+
+        let isLive = item.type == "live"
+
+        let playable = PlayerFeature.PlayableItem(
+            id: item.id,
+            title: item.title,
+            seriesTitle: item.seriesTitle,
+            streamURL: finalStreamURL,
+            coverURL: coverURL,
+            seriesID: item.seriesID,
+            startPosition: startPosition,
+            initialDuration: item.duration > 0 ? item.duration : nil,
+            initialProgress: item.progress > 0 ? item.progress : nil,
+            isLive: isLive,
+            config: config,
+            epgChannelID: isLive ? item.id : nil,
+            tvArchive: nil
+        )
+
+        state.player = PlayerFeature.State(item: playable)
+        return .run { _ in
+            await MainActor.run { appCoordinator.trigger(.player) }
+        }
     }
 }

@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import Kingfisher
 import RevenueCat
 
 @Reducer
@@ -24,7 +25,7 @@ public struct SettingsFeature {
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
 
-        public var cacheSize: String = "Hesaplanıyor..."
+        public var cacheSize: String = AppStrings.Settings.calculating
         public var isPremium: Bool = false
 
         public enum PINStep: Equatable {
@@ -213,8 +214,23 @@ public struct SettingsFeature {
 
             case .calculateCacheSize:
                 return .run { send in
-                    // Dummy calculation or actual URLCache / Kingfisher size
-                    let sizeStr = "124 MB" // Replace with real logic if needed
+                    let kingfisherBytes: Int64 = await withCheckedContinuation { continuation in
+                        ImageCache.default.calculateDiskStorageSize { result in
+                            switch result {
+                            case let .success(size):
+                                continuation.resume(returning: Int64(size))
+                            case .failure:
+                                continuation.resume(returning: 0)
+                            }
+                        }
+                    }
+                    let urlCacheBytes = Int64(URLCache.shared.currentDiskUsage)
+                    let totalBytes = kingfisherBytes + urlCacheBytes
+
+                    let formatter = ByteCountFormatter()
+                    formatter.countStyle = .file
+                    formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
+                    let sizeStr = formatter.string(fromByteCount: totalBytes)
                     await send(.cacheSizeCalculated(sizeStr))
                 }
 
@@ -223,15 +239,19 @@ public struct SettingsFeature {
                 return .none
 
             case .clearCache:
-                state.cacheSize = "Temizleniyor..."
+                state.cacheSize = AppStrings.Settings.clearing
                 return .run { send in
                     URLCache.shared.removeAllCachedResponses()
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    await send(.clearCacheCompleted)
+                    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                        ImageCache.default.clearDiskCache {
+                            ImageCache.default.clearMemoryCache()
+                            continuation.resume()
+                        }
+                    }
+                    await send(.calculateCacheSize)
                 }
 
             case .clearCacheCompleted:
-                state.cacheSize = "0 MB"
                 return .none
 
             case .restorePurchases:

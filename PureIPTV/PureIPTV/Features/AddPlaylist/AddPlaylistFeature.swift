@@ -46,6 +46,7 @@ public struct AddPlaylistFeature {
         case connectResponse(Result<String, Error>)
         case dismissError
         case togglePasswordVisibility
+
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
