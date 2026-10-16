@@ -222,6 +222,37 @@
                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
                         .zIndex(96)
                     }
+                    // Nerd Stats Technical Diagnostics Overlay (Madde #33)
+                    if store.isShowingStats {
+                        VStack {
+                            HStack {
+                                NerdStatsHUDView(
+                                    item: store.item,
+                                    mediaInfo: store.mediaInfo,
+                                    playerState: store.playerState,
+                                    audioDelay: store.audioDelay,
+                                    subtitleDelay: store.subtitleDelay,
+                                    playbackRate: store.playbackRate,
+                                    aspectRatioMode: store.videoAspectRatioMode,
+                                    selectedAudioTrack: store.selectedAudioTrack,
+                                    selectedSubtitleTrack: store.selectedSubtitleTrack,
+                                    currentAudioRoute: store.currentAudioRoute,
+                                    playerStats: store.playerStats,
+                                    onClose: {
+                                        store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                                    }
+                                )
+                                .padding(.leading, 80)
+                                .padding(.top, 60)
+
+                                Spacer()
+                            }
+                            Spacer()
+                        }
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: store.isShowingStats)
+                        .zIndex(110)
+                    }
                 }
             }
             .preferredColorScheme(.dark)
@@ -237,7 +268,9 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isChannelOSDVisible {
+                if store.isShowingStats {
+                    store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                } else if store.isChannelOSDVisible {
                     store.send(.hideChannelOSD)
                 } else if store.isChannelListVisible {
                     store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
@@ -656,6 +689,17 @@
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
+
+                    // Nerd Stats Technical Diagnostics Button (Madde #33)
+                    Button {
+                        onInteraction()
+                        store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    } label: {
+                        Image(systemName: "chart.xyaxis.line")
+                            .font(.system(size: 24))
+                            .foregroundStyle(store.isShowingStats ? Color(hex: "#00F5D4") : .white)
+                    }
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
                 }
             }
         }

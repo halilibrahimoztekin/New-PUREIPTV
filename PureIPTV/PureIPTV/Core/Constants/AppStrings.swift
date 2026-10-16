@@ -88,6 +88,14 @@ public enum AppStrings {
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
         public static let mediaInfo = "Media Info".localized
+        public static let nerdStats = "Yayın İstatistikleri (Nerd Stats)".localized
+        public static let nerdStatsShort = "Teknik Bilgi".localized
+        public static let videoCodec = "Video Kod Çözücü".localized
+        public static let audioCodec = "Ses Kod Çözücü".localized
+        public static let resolution = "Çözünürlük".localized
+        public static let bitrate = "Bit Hızı (Bitrate)".localized
+        public static let bufferHealth = "Tampon Durumu".localized
+        public static let streamProtocol = "Protokol / Format".localized
         public static let audioTracks = "Ses İzleri".localized
         public static let subtitles = "Altyazılar".localized
         public static let noOptions = "Seçenek bulunmuyor.".localized

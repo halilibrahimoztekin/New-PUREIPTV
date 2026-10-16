@@ -425,6 +425,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.audioRoute),
                 .cancel(id: CancelID.audioRouteHUD),
                 .cancel(id: CancelID.upNextCountdown),
+                .cancel(id: CancelID.statsTimer),
                 .run { send in
                     if currentSecs > 10 {
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod"
@@ -473,13 +474,15 @@ public struct PlayerFeature {
         case .toggleStats:
             state.isShowingStats.toggle()
             if state.isShowingStats {
-                return .run { send in
+                let fetchInfoEffect: Effect<Action> = .send(.fetchMediaInfo)
+                let timerEffect: Effect<Action> = .run { send in
                     while !Task.isCancelled {
                         let stats = await playerClient.getStats()
                         await send(.updateStats(stats ?? ""))
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
                 }.cancellable(id: CancelID.statsTimer, cancelInFlight: true)
+                return .merge(fetchInfoEffect, timerEffect)
             } else {
                 return .cancel(id: CancelID.statsTimer)
             }
@@ -963,6 +966,9 @@ public struct PlayerFeature {
 
         case .toggleInfo:
             state.isInfoVisible.toggle()
+            if state.isInfoVisible {
+                return .send(.fetchMediaInfo)
+            }
             return .none
 
         case .toggleEPG:
@@ -1319,6 +1325,7 @@ public struct PlayerFeature {
             return .merge(
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.channelOSD),
+                .cancel(id: CancelID.statsTimer),
                 .run { send in
                     @Dependency(\.dismiss) var dismiss
                     // Save Watch History before stopping

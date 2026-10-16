@@ -356,29 +356,25 @@
                             if store.isInfoVisible {
                                 HStack {
                                     Spacer()
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(AppStrings.Player.mediaInfo)
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                            .padding(.bottom, 4)
-
-                                        if let info = store.mediaInfo {
-                                            InfoRow(title: AppStrings.MediaInfo.resolution, value: info.resolution ?? AppStrings.MediaInfo.unknown)
-                                            InfoRow(title: AppStrings.MediaInfo.videoCodec, value: info.videoCodec ?? AppStrings.MediaInfo.unknown)
-                                            InfoRow(title: AppStrings.MediaInfo.audioCodec, value: info.audioCodec ?? AppStrings.MediaInfo.unknown)
-                                            if let bitrate = info.bitrate, bitrate > 0 {
-                                                InfoRow(title: AppStrings.MediaInfo.bitrate, value: "\(bitrate / 1000) kbps")
-                                            }
-                                        } else {
-                                            Text(AppStrings.Common.loading)
-                                                .foregroundColor(.white.opacity(0.7))
-                                                .font(.caption)
+                                    NerdStatsHUDView(
+                                        item: store.item,
+                                        mediaInfo: store.mediaInfo,
+                                        playerState: store.playerState,
+                                        audioDelay: store.audioDelay,
+                                        subtitleDelay: store.subtitleDelay,
+                                        playbackRate: store.playbackRate,
+                                        aspectRatioMode: store.videoAspectRatioMode,
+                                        selectedAudioTrack: store.selectedAudioTrack,
+                                        selectedSubtitleTrack: store.selectedSubtitleTrack,
+                                        currentAudioRoute: store.currentAudioRoute,
+                                        playerStats: store.playerStats,
+                                        onClose: {
+                                            store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                         }
-                                    }
-                                    .padding()
-                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    )
                                     .padding(.trailing, 16)
                                 }
+                                .transition(.scale(scale: 0.92).combined(with: .opacity))
                             }
 
                             if store.isTracksMenuVisible {
