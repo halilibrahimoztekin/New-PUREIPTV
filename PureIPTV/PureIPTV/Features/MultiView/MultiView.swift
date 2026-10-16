@@ -33,15 +33,17 @@ public struct MultiView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(Color.white.opacity(0.8))
                     }
+                    #if os(tvOS)
+                    .buttonStyle(TVCircleButtonStyle())
+                    #else
                     .buttonStyle(.plain)
+                    #endif
 
                     Spacer()
 
                     Text(AppStrings.MultiView.title)
                         .font(.headline)
                         .foregroundStyle(.white)
-
-                    Spacer()
 
                     Spacer()
 
@@ -54,7 +56,11 @@ public struct MultiView: View {
                             .foregroundStyle(Color.white.opacity(0.8))
                             .padding(.trailing, 8)
                     }
+                    #if os(tvOS)
+                    .buttonStyle(TVCircleButtonStyle())
+                    #else
                     .buttonStyle(.plain)
+                    #endif
                 }
                 .padding()
 
@@ -118,7 +124,8 @@ public struct MultiView: View {
             ) {
                 ChannelSelectionSheet(
                     channels: store.channels,
-                    onSelect: { store.send(.channelSelected($0)) }
+                    onSelect: { store.send(.channelSelected($0)) },
+                    onDismiss: { store.send(.channelSelectionDismissed) }
                 )
                 .presentationDetents([.medium, .large])
             }
@@ -238,14 +245,16 @@ public struct MultiView: View {
 private struct ChannelSelectionSheet: View {
     let channels: [MediaModels.Item]
     let onSelect: (MediaModels.Item) -> Void
+    let onDismiss: () -> Void
 
     @State private var searchText = ""
 
     var filteredChannels: [MediaModels.Item] {
-        if searchText.isEmpty {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
             return channels
         }
-        return channels.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        return FuzzySearchEngine.searchItems(channels, query: trimmed, limit: 100)
     }
 
     var body: some View {
@@ -271,7 +280,19 @@ private struct ChannelSelectionSheet: View {
             #if !os(tvOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(AppStrings.Common.cancel) {
+                            onDismiss()
+                        }
+                    }
+                }
                 .searchable(text: $searchText, prompt: AppStrings.Search.channelSearchPlaceholder)
+            #if os(tvOS)
+                .onExitCommand {
+                    onDismiss()
+                }
+            #endif
         }
     }
 }
