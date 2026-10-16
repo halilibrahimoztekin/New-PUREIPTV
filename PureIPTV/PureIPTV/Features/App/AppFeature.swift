@@ -176,19 +176,7 @@ public struct AppFeature {
             state.profileSelection = nil
 
             let activePlaylist = playlistRepository.getActivePlaylist()
-            guard let playlist = activePlaylist else { return .none }
-
-            let config: PlaylistConfig
-            if playlist.type == .xtream {
-                guard let serverURLStr = playlist.serverURL, let url = URL(string: serverURLStr),
-                      let username = playlist.username, let password = playlist.password else { return .none }
-                config = PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)
-            } else if playlist.type == .m3u {
-                guard let m3uURLStr = playlist.m3uURL, let url = URL(string: m3uURLStr) else { return .none }
-                config = PlaylistConfig(type: .m3u, m3uURL: url)
-            } else {
-                return .none
-            }
+            guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
 
             state.home = HomeFeature.State(config: config)
             return .run { send in
@@ -379,8 +367,22 @@ public struct AppFeature {
 
         // ── Playlist Management ──────────────────────────────────
         case .playlistManagement(.presented(.delegate(.didChangeActivePlaylist))):
-            // Playlist değiştiğinde ana ekrana geri dön
+            // Playlist değiştiğinde ana ekrana geri dön ve yeni playlist ile yükle
             state.playlistManagement = nil
+            state.player = nil
+            state.isPlayerMini = false
+            state.vodDetail = nil
+            state.seriesDetail = nil
+
+            if let activePlaylist = playlistRepository.getActivePlaylist(),
+               let config = activePlaylist.toPlaylistConfig()
+            {
+                state.home = HomeFeature.State(config: config)
+            } else {
+                state.home = nil
+                state.isOnboarded = false
+            }
+
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissPlaylistManagement) }
             }

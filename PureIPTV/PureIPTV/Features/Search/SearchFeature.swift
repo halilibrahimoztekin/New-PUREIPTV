@@ -69,6 +69,7 @@ public struct SearchFeature: Sendable {
 
         // UI state
         public var isLoading = false
+        public var isSearching = false
         public var hasLoaded = false
         public var errorMessage: String?
         public var lastLoadedConfig: PlaylistConfig?
@@ -83,24 +84,28 @@ public struct SearchFeature: Sendable {
         }
 
         public mutating func updateResults() {
-            guard !debouncedQuery.isEmpty else {
+            let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else {
                 liveResults = []
                 vodResults = []
                 seriesResults = []
                 return
             }
+
             if filter == .all || filter == .live {
-                liveResults = allChannels.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+                liveResults = FuzzySearchEngine.searchItems(allChannels, query: query, limit: 100)
             } else {
                 liveResults = []
             }
+
             if filter == .all || filter == .vod {
-                vodResults = allVODs.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+                vodResults = FuzzySearchEngine.searchItems(allVODs, query: query, limit: 80)
             } else {
                 vodResults = []
             }
+
             if filter == .all || filter == .series {
-                seriesResults = allSeries.filter { $0.title.localizedCaseInsensitiveContains(debouncedQuery) }
+                seriesResults = FuzzySearchEngine.searchItems(allSeries, query: query, limit: 80)
             } else {
                 seriesResults = []
             }
@@ -115,7 +120,9 @@ public struct SearchFeature: Sendable {
         case loadAllDataResponse(Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item]), Error>)
         case queryChanged(String)
         case performSearch(String)
+        case searchCompleted(query: String, filter: SearchFilter, live: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
         case filterChanged(SearchFilter)
+        case resetCache
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
@@ -156,6 +163,9 @@ public struct SearchFeature: Sendable {
                     state.liveResults = []
                     state.vodResults = []
                     state.seriesResults = []
+                    state.searchQuery = ""
+                    state.debouncedQuery = ""
+                    state.isSearching = false
                     state.lastLoadedConfig = config
                 }
 
@@ -192,7 +202,9 @@ public struct SearchFeature: Sendable {
                 state.allChannels = data.channels
                 state.allVODs = data.vods
                 state.allSeries = data.series
-                state.updateResults()
+                if !state.debouncedQuery.isEmpty {
+                    return .send(.performSearch(state.debouncedQuery))
+                }
                 return .none
 
             case let .loadAllDataResponse(.failure(error)):
@@ -202,21 +214,105 @@ public struct SearchFeature: Sendable {
 
             case let .queryChanged(query):
                 state.searchQuery = query
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    state.debouncedQuery = ""
+                    state.isSearching = false
+                    state.liveResults = []
+                    state.vodResults = []
+                    state.seriesResults = []
+                    return .cancel(id: searchCancelID)
+                }
+
+                state.isSearching = true
                 return .run { send in
-                    try await clock.sleep(for: .milliseconds(300))
+                    try await clock.sleep(for: .milliseconds(250))
                     await send(.performSearch(query))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
 
             case let .performSearch(query):
                 state.debouncedQuery = query
-                state.updateResults()
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    state.isSearching = false
+                    state.liveResults = []
+                    state.vodResults = []
+                    state.seriesResults = []
+                    return .none
+                }
+
+                state.isSearching = true
+                let channels = state.allChannels
+                let vods = state.allVODs
+                let series = state.allSeries
+                let filter = state.filter
+
+                return .run { send in
+                    let (live, vodResults, seriesResults) = await Task.detached(priority: .userInitiated) {
+                        let liveMatches: [MediaModels.Item] = if filter == .all || filter == .live {
+                            FuzzySearchEngine.searchItems(channels, query: trimmed, limit: 100)
+                        } else {
+                            []
+                        }
+
+                        let vodMatches: [MediaModels.Item] = if filter == .all || filter == .vod {
+                            FuzzySearchEngine.searchItems(vods, query: trimmed, limit: 80)
+                        } else {
+                            []
+                        }
+
+                        let seriesMatches: [MediaModels.Item] = if filter == .all || filter == .series {
+                            FuzzySearchEngine.searchItems(series, query: trimmed, limit: 80)
+                        } else {
+                            []
+                        }
+
+                        return (liveMatches, vodMatches, seriesMatches)
+                    }.value
+
+                    await send(.searchCompleted(
+                        query: query,
+                        filter: filter,
+                        live: live,
+                        vods: vodResults,
+                        series: seriesResults
+                    ))
+                }
+                .cancellable(id: searchCancelID, cancelInFlight: true)
+
+            case let .searchCompleted(query, filter, live, vods, series):
+                // Verify that query and filter are still the latest requested
+                guard state.debouncedQuery == query, state.filter == filter else {
+                    return .none
+                }
+                state.isSearching = false
+                state.liveResults = live
+                state.vodResults = vods
+                state.seriesResults = series
                 return .none
 
             case let .filterChanged(filter):
                 state.filter = filter
-                state.updateResults()
+                if !state.debouncedQuery.isEmpty {
+                    return .send(.performSearch(state.debouncedQuery))
+                }
                 return .none
+
+            case .resetCache:
+                state.hasLoaded = false
+                state.isLoading = false
+                state.isSearching = false
+                state.allChannels = []
+                state.allVODs = []
+                state.allSeries = []
+                state.liveResults = []
+                state.vodResults = []
+                state.seriesResults = []
+                state.searchQuery = ""
+                state.debouncedQuery = ""
+                state.lastLoadedConfig = nil
+                return .cancel(id: searchCancelID)
 
             case let .channelSelected(channel):
                 let query = state.debouncedQuery
@@ -254,14 +350,12 @@ public struct SearchFeature: Sendable {
             case let .recentSearchTapped(query):
                 state.searchQuery = query
                 state.debouncedQuery = query
-                state.updateResults()
-                return .none
+                return .send(.performSearch(query))
 
             case let .tagSelected(tag):
                 state.searchQuery = tag.title
                 state.debouncedQuery = tag.title
-                state.updateResults()
-                return .none
+                return .send(.performSearch(tag.title))
 
             case .delegate:
                 return .none

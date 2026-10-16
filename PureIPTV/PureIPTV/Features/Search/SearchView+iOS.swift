@@ -50,6 +50,8 @@
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
                         emptySearchDiscoveryView
+                    } else if store.isSearching, store.totalResultsCount == 0 {
+                        searchingView
                     } else if store.totalResultsCount == 0 {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
@@ -77,6 +79,13 @@
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+
+                if store.isSearching {
+                    ProgressView()
+                        .tint(Color(hex: "#0A84FF"))
+                        .scaleEffect(0.8)
+                        .padding(.trailing, 4)
+                }
 
                 if !store.searchQuery.isEmpty {
                     Button(action: { store.send(.queryChanged("")) }) {
@@ -317,6 +326,20 @@
                 Spacer()
             }
             .padding()
+        }
+
+        private var searchingView: some View {
+            VStack(spacing: 14) {
+                Spacer()
+                ProgressView()
+                    .tint(Color(hex: "#0A84FF"))
+                    .scaleEffect(1.1)
+                Text(AppStrings.Common.loading)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
 
         private func emptyStateView(_ message: String, icon: String) -> some View {

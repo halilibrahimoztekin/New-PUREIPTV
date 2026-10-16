@@ -30,4 +30,26 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.password = password
         self.m3uURL = m3uURL
     }
+
+    /// Converts SavedPlaylist to an active PlaylistConfig instance if valid credentials exist.
+    public func toPlaylistConfig() -> PlaylistConfig? {
+        if type == .xtream {
+            guard let serverURLStr = serverURL,
+                  let url = URL(string: serverURLStr),
+                  let username,
+                  let password
+            else {
+                return nil
+            }
+            return PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)
+        } else if type == .m3u {
+            guard let m3uURLStr = m3uURL,
+                  let url = URL(string: m3uURLStr)
+            else {
+                return nil
+            }
+            return PlaylistConfig(type: .m3u, m3uURL: url)
+        }
+        return nil
+    }
 }

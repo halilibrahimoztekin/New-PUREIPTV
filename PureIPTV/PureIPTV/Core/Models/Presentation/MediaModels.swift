@@ -1,13 +1,13 @@
 import Foundation
 
-public enum MediaModels {
-    public enum ItemType: String, Equatable {
+public enum MediaModels: Sendable {
+    public enum ItemType: String, Equatable, Sendable {
         case live
         case vod
         case series
     }
 
-    public struct Item: Equatable, Identifiable {
+    public struct Item: Equatable, Identifiable, Sendable {
         public let id: String
         public let title: String
         public let streamURL: URL? // Nil for Series until an episode is selected
@@ -55,7 +55,7 @@ public enum MediaModels {
         }
     }
 
-    public struct Category: Equatable, Identifiable {
+    public struct Category: Equatable, Identifiable, Sendable {
         public let id: String
         public let name: String
 
@@ -93,7 +93,7 @@ public extension MediaModels.Item {
         }
     }
 
-    struct EPGProgram: Equatable, Identifiable {
+    struct EPGProgram: Equatable, Identifiable, Sendable {
         public let id: String
         public let title: String
         public let description: String
@@ -112,7 +112,7 @@ public extension MediaModels.Item {
     }
 }
 
-public struct EPGProgram: Equatable, Identifiable {
+public struct EPGProgram: Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let description: String
