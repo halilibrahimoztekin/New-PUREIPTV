@@ -83,11 +83,15 @@ public struct M3UParser: Sendable {
             } else if !trimmed.hasPrefix("#") {
                 // This should be the URL
                 if let url = URL(string: trimmed) {
+                    let processed = SmartChannelProcessingEngine.process(
+                        rawTitle: currentTitle,
+                        groupTitle: currentGroupTitle
+                    )
                     let item = M3UItemDTO(
-                        title: currentTitle,
+                        title: processed.cleanTitle,
                         streamURL: url,
                         coverURL: currentTvgLogo.flatMap { URL(string: $0) },
-                        groupTitle: currentGroupTitle ?? "Uncategorized",
+                        groupTitle: processed.inferredCategory,
                         tvgID: currentTvgID,
                         tvgName: currentTvgName,
                         tvgLogo: currentTvgLogo,
