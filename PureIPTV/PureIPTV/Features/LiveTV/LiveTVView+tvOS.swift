@@ -320,7 +320,11 @@
                     .overlay(
                         TVAlphabetScrubberOverlay(
                             currentLetter: currentScrubLetter,
-                            isVisible: isScrubOverlayVisible
+                            isVisible: isScrubOverlayVisible,
+                            availableLetters: Set(store.currentChannels.compactMap {
+                                let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
+                                return ("A" ... "Z").contains(c) ? c : "#"
+                            })
                         )
                     )
                 }
