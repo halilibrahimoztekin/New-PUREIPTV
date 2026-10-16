@@ -112,6 +112,15 @@
                                 }
                             }
 
+                            if !store.recommendedVODs.isEmpty {
+                                featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
+                                    VODCardView(vod: vod, isSelected: false) {
+                                        store.send(.vodSelected(vod))
+                                    }
+                                    .frame(width: 140)
+                                }
+                            }
+
                             if store.featuredVODs.count > 1 {
                                 featuredSection(title: AppStrings.Dashboard.newMovies, items: Array(store.featuredVODs.dropFirst())) { vod in
                                     VODCardView(vod: vod, isSelected: false) {

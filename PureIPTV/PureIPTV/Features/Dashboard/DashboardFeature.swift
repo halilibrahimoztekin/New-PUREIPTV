@@ -116,7 +116,11 @@ public struct DashboardFeature {
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
                     async let allVODs = try? iptvClient.fetchVODs(config, nil)
                     async let allSeries = try? iptvClient.fetchSeries(config, nil)
-                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
+                    async let historyReq = (try? databaseClient.fetchWatchHistory()) ?? []
+                    async let favoritesReq = (try? databaseClient.fetchFavorites()) ?? []
+
+                    let history = await historyReq
+                    let favorites = await favoritesReq
 
                     var channels: [MediaModels.Item] = []
                     var vods: [MediaModels.Item] = []
@@ -133,13 +137,13 @@ public struct DashboardFeature {
                         let sorted = safeVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         vods = Array(sorted.prefix(10))
 
-                        let vodHistory = history.filter { $0.type == "vod" }
-                        if !vodHistory.isEmpty {
-                            let shuffled = safeVODs.shuffled()
-                            recommendations = Array(shuffled.prefix(10))
-                        } else {
-                            recommendations = Array(sorted.dropFirst(10).prefix(10))
-                        }
+                        // Smart Content-based and collaborative recommendations (Madde #8 & #42)
+                        recommendations = SmartRecommendationEngine.recommendVODs(
+                            from: safeVODs,
+                            history: history,
+                            favorites: favorites,
+                            limit: 12
+                        )
                     }
 
                     if let fetchedSeries = await allSeries {

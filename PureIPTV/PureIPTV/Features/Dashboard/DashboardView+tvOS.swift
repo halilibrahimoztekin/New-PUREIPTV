@@ -142,6 +142,35 @@
                                 }
                             }
 
+                            // Smart Recommendations (Madde #8 & #42)
+                            if !store.recommendedVODs.isEmpty {
+                                TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
+                                    ForEach(store.recommendedVODs) { vod in
+                                        TVVODCard(vod: vod, isSelected: false) {
+                                            store.send(.vodSelected(vod))
+                                        }
+                                        .frame(width: 220)
+                                        .contextMenu {
+                                            Button {
+                                                store.send(.toggleFavorite(item: vod, type: "vod"))
+                                            } label: {
+                                                if store.favoriteIDs.contains(vod.id) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.vodSelected(vod))
+                                            } label: {
+                                                Label("Detayları Gör", systemImage: "info.circle")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // New Movies
                             if store.featuredVODs.count > 1 {
                                 TVShelfSection(title: AppStrings.Dashboard.newMovies) {
