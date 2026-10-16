@@ -78,6 +78,7 @@ public struct SearchFeature: Sendable {
         public var liveResults: [MediaModels.Item] = []
         public var vodResults: [MediaModels.Item] = []
         public var seriesResults: [MediaModels.Item] = []
+        public var favoriteIDs: Set<String> = []
 
         public var totalResultsCount: Int {
             liveResults.count + vodResults.count + seriesResults.count
@@ -129,6 +130,8 @@ public struct SearchFeature: Sendable {
         case clearHistoryTapped
         case recentSearchTapped(String)
         case tagSelected(QuickSearchTag)
+        case loadFavoritesResponse([FavoriteItem])
+        case toggleFavorite(item: MediaModels.Item, type: String)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -155,6 +158,11 @@ public struct SearchFeature: Sendable {
                     await send(.loadRecentSearchesResponse(history))
                 }
 
+                let loadFavs: Effect<Action> = .run { send in
+                    let favs = await (try? databaseClient.fetchFavorites()) ?? []
+                    await send(.loadFavoritesResponse(favs))
+                }
+
                 if state.lastLoadedConfig != config {
                     state.hasLoaded = false
                     state.allChannels = []
@@ -169,11 +177,11 @@ public struct SearchFeature: Sendable {
                     state.lastLoadedConfig = config
                 }
 
-                guard !state.hasLoaded, !state.isLoading else { return loadHistory }
+                guard !state.hasLoaded, !state.isLoading else { return .merge(loadHistory, loadFavs) }
                 state.isLoading = true
                 state.errorMessage = nil
 
-                return .merge(loadHistory, .run { send in
+                return .merge(loadHistory, loadFavs, .run { send in
                     async let channelsReq = try? iptvClient.fetchLiveChannels(config, nil)
                     async let vodsReq = try? iptvClient.fetchVODs(config, nil)
                     async let seriesReq = try? iptvClient.fetchSeries(config, nil)
@@ -356,6 +364,27 @@ public struct SearchFeature: Sendable {
                 state.searchQuery = tag.title
                 state.debouncedQuery = tag.title
                 return .send(.performSearch(tag.title))
+
+            case let .loadFavoritesResponse(favs):
+                state.favoriteIDs = Set(favs.map(\.id))
+                return .none
+
+            case let .toggleFavorite(item, type):
+                let favItem = FavoriteItem(
+                    id: item.id,
+                    type: type,
+                    title: item.title,
+                    coverURL: item.coverURL?.absoluteString,
+                    streamURL: item.streamURL?.absoluteString
+                )
+                if state.favoriteIDs.contains(item.id) {
+                    state.favoriteIDs.remove(item.id)
+                } else {
+                    state.favoriteIDs.insert(item.id)
+                }
+                return .run { _ in
+                    _ = try? await databaseClient.toggleFavorite(favItem)
+                }
 
             case .delegate:
                 return .none

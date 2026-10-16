@@ -136,6 +136,23 @@
                                     TVChannelCard(channel: channel, isSelected: false) {
                                         store.send(.channelSelected(channel))
                                     }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: channel, type: "live"))
+                                        } label: {
+                                            if store.favoriteIDs.contains(channel.id) {
+                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                            } else {
+                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                            }
+                                        }
+
+                                        Button {
+                                            store.send(.channelSelected(channel))
+                                        } label: {
+                                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -149,6 +166,23 @@
                                     TVVODCard(vod: vod, isSelected: false) {
                                         store.send(.vodSelected(vod))
                                     }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: vod, type: "vod"))
+                                        } label: {
+                                            if store.favoriteIDs.contains(vod.id) {
+                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                            } else {
+                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                            }
+                                        }
+
+                                        Button {
+                                            store.send(.vodSelected(vod))
+                                        } label: {
+                                            Label("Detayları Gör", systemImage: "info.circle")
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -161,6 +195,23 @@
                                 ForEach(series) { item in
                                     TVSeriesCard(series: item, isSelected: false) {
                                         store.send(.seriesSelected(item))
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: item, type: "series"))
+                                        } label: {
+                                            if store.favoriteIDs.contains(item.id) {
+                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                            } else {
+                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                            }
+                                        }
+
+                                        Button {
+                                            store.send(.seriesSelected(item))
+                                        } label: {
+                                            Label("Bölümleri Gör", systemImage: "list.number")
+                                        }
                                     }
                                 }
                             }

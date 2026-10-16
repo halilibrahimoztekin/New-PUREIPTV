@@ -245,6 +245,12 @@
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                             }
                                         }
+
+                                        Button {
+                                            store.send(.vodSelected(vod))
+                                        } label: {
+                                            Label("Detayları Gör", systemImage: "info.circle")
+                                        }
                                     }
                                 }
                             }

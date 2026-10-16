@@ -242,6 +242,12 @@
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                             }
                                         }
+
+                                        Button {
+                                            store.send(.seriesSelected(series))
+                                        } label: {
+                                            Label("Bölümleri & Sezonları Gör", systemImage: "list.number")
+                                        }
                                     }
                                 }
                             }

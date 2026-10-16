@@ -16,6 +16,10 @@ public struct DashboardFeature {
         public var favoriteItems: [FavoriteItem] = []
         public var watchHistoryItems: [WatchHistoryItem] = []
 
+        public var favoriteIDs: Set<String> {
+            Set(favoriteItems.map(\.id))
+        }
+
         public var errorMessage: String?
 
         public init() {}
@@ -35,6 +39,8 @@ public struct DashboardFeature {
 
         // Navigation from local items
         case favoriteSelected(FavoriteItem)
+        case toggleFavorite(item: MediaModels.Item, type: String)
+        case deleteFavorite(FavoriteItem)
         case historySelected(WatchHistoryItem)
         case restartHistorySelected(WatchHistoryItem)
         case deleteHistorySelected(WatchHistoryItem)
@@ -180,6 +186,31 @@ public struct DashboardFeature {
                     return .send(.delegate(.didSelectVOD(item)))
                 case .series:
                     return .send(.delegate(.didSelectSeries(item)))
+                }
+
+            case let .toggleFavorite(item, type):
+                let favItem = FavoriteItem(
+                    id: item.id,
+                    type: type,
+                    title: item.title,
+                    coverURL: item.coverURL?.absoluteString,
+                    streamURL: item.streamURL?.absoluteString
+                )
+                if let index = state.favoriteItems.firstIndex(where: { $0.id == item.id }) {
+                    state.favoriteItems.remove(at: index)
+                } else {
+                    state.favoriteItems.insert(favItem, at: 0)
+                }
+                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
+                return .run { _ in
+                    _ = try? await databaseClient.toggleFavorite(favItem)
+                }
+
+            case let .deleteFavorite(fav):
+                state.favoriteItems.removeAll { $0.id == fav.id }
+                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
+                return .run { _ in
+                    _ = try? await databaseClient.toggleFavorite(fav)
                 }
 
             case let .historySelected(hist):

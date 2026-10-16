@@ -96,6 +96,19 @@
                                             store.send(.favoriteSelected(fav))
                                         }
                                         .frame(width: fav.type.lowercased() == "live" ? 340 : 220)
+                                        .contextMenu {
+                                            Button {
+                                                store.send(.favoriteSelected(fav))
+                                            } label: {
+                                                Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                            }
+
+                                            Button(role: .destructive) {
+                                                store.send(.deleteFavorite(fav))
+                                            } label: {
+                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -108,6 +121,23 @@
                                             store.send(.channelSelected(channel))
                                         }
                                         .frame(width: 340)
+                                        .contextMenu {
+                                            Button {
+                                                store.send(.toggleFavorite(item: channel, type: "live"))
+                                            } label: {
+                                                if store.favoriteIDs.contains(channel.id) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.channelSelected(channel))
+                                            } label: {
+                                                Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -120,6 +150,23 @@
                                             store.send(.vodSelected(vod))
                                         }
                                         .frame(width: 220)
+                                        .contextMenu {
+                                            Button {
+                                                store.send(.toggleFavorite(item: vod, type: "vod"))
+                                            } label: {
+                                                if store.favoriteIDs.contains(vod.id) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.vodSelected(vod))
+                                            } label: {
+                                                Label("Detayları Gör", systemImage: "info.circle")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -132,6 +179,23 @@
                                             store.send(.seriesSelected(series))
                                         }
                                         .frame(width: 220)
+                                        .contextMenu {
+                                            Button {
+                                                store.send(.toggleFavorite(item: series, type: "series"))
+                                            } label: {
+                                                if store.favoriteIDs.contains(series.id) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.seriesSelected(series))
+                                            } label: {
+                                                Label("Bölümleri Gör", systemImage: "list.number")
+                                            }
+                                        }
                                     }
                                 }
                             }
