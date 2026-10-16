@@ -21,6 +21,7 @@ public struct PlayerFeature {
         public static let upNextCountdown = "PlayerFeature.upNextCountdown"
         public static let aspectFeedback = "PlayerFeature.aspectFeedback"
         public static let channelOSD = "PlayerFeature.channelOSD"
+        public static let lockPill = "PlayerFeature.lockPill"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -77,6 +78,7 @@ public struct PlayerFeature {
         public var item: PlayableItem
         public var playlist: [PlayableItem]?
         public var isChannelListVisible: Bool = false
+        public var isMinimized: Bool = false
 
         public var playerState: PlayerState = .stopped
         public var isControlsVisible: Bool = true
@@ -374,15 +376,24 @@ public struct PlayerFeature {
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, appCoordinator: AppCoordinator, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient) -> Effect<Action> {
         switch action {
         case .onAppear:
+            state.isMinimized = false
             let url = state.item.streamURL
             let position = state.item.startPosition ?? 0.0
             let seriesID = state.item.seriesID
             let config = state.item.config
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
+            let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
 
             return .merge(
                 state.item.isLive ? .send(.showChannelOSD) : .none,
                 .send(.startOLEDDimTimer),
+                .run { _ in
+                    #if os(iOS)
+                        await MainActor.run {
+                            OrientationManager.shared.lockLandscape()
+                        }
+                    #endif
+                },
                 .run { send in
                     for await route in await AudioRouteManager.shared.routeStream() {
                         await send(.audioRouteUpdated(route))
@@ -394,30 +405,37 @@ public struct PlayerFeature {
                         await send(.loadSeriesPlaylist)
                     }
 
-                    // Listen to events immediately without waiting so no lifecycle events are missed
+                    // Structured concurrency: event stream and playback run inside a task group
+                    // so cooperative cancellation immediately cancels the event stream listener!
                     let eventsStream = await playerClient.events()
-                    let eventTask = Task {
-                        for await event in eventsStream {
-                            await send(.handlePlayerEvent(event))
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask {
+                            for await event in eventsStream {
+                                await send(.handlePlayerEvent(event))
+                            }
+                        }
+
+                        group.addTask {
+                            if !isAlreadyPlaying {
+                                do {
+                                    try await playerClient.play(url)
+                                    if settingsClient.startMuted() {
+                                        try? await playerClient.setVolume(0)
+                                    }
+
+                                    if position > 0 {
+                                        try? await Task.sleep(nanoseconds: 600_000_000)
+                                        try? await playerClient.seek(position)
+                                    }
+                                } catch {
+                                    print("Player error: \(error)")
+                                    await send(.handlePlayerEvent(.encounteredError))
+                                }
+                            }
                         }
                     }
-
-                    try await playerClient.play(url)
-                    if settingsClient.startMuted() {
-                        try? await playerClient.setVolume(0)
-                    }
-
-                    if position > 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                        try? await playerClient.seek(position)
-                    }
-
-                    _ = await eventTask.value
-                } catch: { error, send in
-                    print("Player error: \(error)")
-                    await send(.handlePlayerEvent(.encounteredError))
                 }
-                .cancellable(id: CancelID.playerEvents)
+                .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
             )
 
         case .onDisappear:
@@ -425,6 +443,13 @@ public struct PlayerFeature {
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
             let isPiPActive = state.isPiPActive
+            let isMinimized = state.isMinimized
+
+            // If transitioning to In-App MiniPlayer, keep player alive and active!
+            if isMinimized {
+                return .none
+            }
+
             return .merge(
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.seriesPlaylist),
@@ -434,6 +459,11 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.upNextCountdown),
                 .cancel(id: CancelID.statsTimer),
                 .run { send in
+                    #if os(iOS)
+                        await MainActor.run {
+                            OrientationManager.shared.unlockPortrait()
+                        }
+                    #endif
                     if currentSecs > 10 {
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod"
                         let historyItem = WatchHistoryItem(
@@ -454,6 +484,7 @@ public struct PlayerFeature {
                     }
 
                     if !isPiPActive {
+                        try? await playerClient.stop()
                         await playerClient.release()
                         await send(.delegate(.didClose))
                     }
@@ -530,26 +561,30 @@ public struct PlayerFeature {
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
             let currentRate = state.playbackRate
             return .run { send in
-                // Subscribe to events immediately to avoid missing opening or buffering events
                 let eventsStream = await playerClient.events()
-                let eventTask = Task {
-                    for await event in eventsStream {
-                        await send(.handlePlayerEvent(event))
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        for await event in eventsStream {
+                            await send(.handlePlayerEvent(event))
+                        }
+                    }
+
+                    group.addTask {
+                        do {
+                            try await playerClient.play(url)
+                            if position > 0 {
+                                try? await Task.sleep(nanoseconds: 500_000_000)
+                                try? await playerClient.seek(position)
+                            }
+                            if currentRate != 1.0 {
+                                try? await playerClient.setPlaybackRate(currentRate)
+                            }
+                        } catch {
+                            print("Player retry error: \(error)")
+                            await send(.handlePlayerEvent(.encounteredError))
+                        }
                     }
                 }
-
-                try await playerClient.play(url)
-                if position > 0 {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    try await playerClient.seek(position)
-                }
-                if currentRate != 1.0 {
-                    try? await playerClient.setPlaybackRate(currentRate)
-                }
-                _ = await eventTask.value
-            } catch: { error, send in
-                print("Player retry error: \(error)")
-                await send(.handlePlayerEvent(.encounteredError))
             }
             .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
 
@@ -598,6 +633,7 @@ public struct PlayerFeature {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 await send(.hideLockPill)
             }
+            .cancellable(id: CancelID.lockPill, cancelInFlight: true)
 
         case .hideLockPill:
             state.isLockPillVisible = false
@@ -1376,12 +1412,15 @@ public struct PlayerFeature {
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
+            let isPiPActive = state.isPiPActive
             return .merge(
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
-                .run { send in
+                .run { _ in
+                    @Dependency(\.isPresented) var isPresented
                     @Dependency(\.dismiss) var dismiss
+
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod" // Basic detection
@@ -1402,17 +1441,23 @@ public struct PlayerFeature {
                         }
                     }
 
+                    if !isPiPActive {
+                        try? await playerClient.stop()
+                    }
+
                     await MainActor.run {
                         LiveStreamActivityManager.shared.endStreamActivity()
                         StreamHandoffManager.shared.invalidateActivity()
                         CompanionModeManager.shared.clearPlayback()
+                        #if os(iOS)
+                            OrientationManager.shared.unlockPortrait()
+                        #endif
                         appCoordinator.trigger(.dismissPlayer)
                     }
 
-                    try? await playerClient.stop()
-                    await playerClient.release()
-                    await send(.delegate(.didClose))
-                    await dismiss()
+                    if isPresented {
+                        await dismiss()
+                    }
                 }
             )
 
@@ -1420,9 +1465,13 @@ public struct PlayerFeature {
             return .none
 
         case .minimizeTapped:
+            state.isMinimized = true
             return .run { send in
                 await send(.delegate(.didRequestMinimize))
                 await MainActor.run {
+                    #if os(iOS)
+                        OrientationManager.shared.unlockPortrait()
+                    #endif
                     appCoordinator.trigger(.dismissPlayer)
                 }
             }

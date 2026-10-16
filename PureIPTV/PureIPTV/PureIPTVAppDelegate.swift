@@ -10,6 +10,10 @@ import SwiftUI
             return true
         }
 
+        func application(_: UIApplication, supportedInterfaceOrientationsFor _: UIWindow?) -> UIInterfaceOrientationMask {
+            OrientationManager.shared.supportedOrientations
+        }
+
         func application(_: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
             if identifier == "com.pureiptv.downloads" {
                 DownloadDelegate.shared.backgroundCompletionHandler = completionHandler

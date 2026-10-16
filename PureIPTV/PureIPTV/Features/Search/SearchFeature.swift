@@ -264,34 +264,35 @@ public struct SearchFeature: Sendable {
                 let filter = state.filter
 
                 return .run { send in
-                    let (live, vodResults, seriesResults) = await Task.detached(priority: .userInitiated) {
-                        let liveMatches: [MediaModels.Item] = if filter == .all || filter == .live {
-                            FuzzySearchEngine.searchItems(channels, query: trimmed, limit: 100)
-                        } else {
-                            []
-                        }
+                    guard !Task.isCancelled else { return }
 
-                        let vodMatches: [MediaModels.Item] = if filter == .all || filter == .vod {
-                            FuzzySearchEngine.searchItems(vods, query: trimmed, limit: 80)
-                        } else {
-                            []
-                        }
+                    let liveMatches: [MediaModels.Item] = if filter == .all || filter == .live {
+                        FuzzySearchEngine.searchItems(channels, query: trimmed, limit: 100)
+                    } else {
+                        []
+                    }
+                    guard !Task.isCancelled else { return }
 
-                        let seriesMatches: [MediaModels.Item] = if filter == .all || filter == .series {
-                            FuzzySearchEngine.searchItems(series, query: trimmed, limit: 80)
-                        } else {
-                            []
-                        }
+                    let vodMatches: [MediaModels.Item] = if filter == .all || filter == .vod {
+                        FuzzySearchEngine.searchItems(vods, query: trimmed, limit: 80)
+                    } else {
+                        []
+                    }
+                    guard !Task.isCancelled else { return }
 
-                        return (liveMatches, vodMatches, seriesMatches)
-                    }.value
+                    let seriesMatches: [MediaModels.Item] = if filter == .all || filter == .series {
+                        FuzzySearchEngine.searchItems(series, query: trimmed, limit: 80)
+                    } else {
+                        []
+                    }
+                    guard !Task.isCancelled else { return }
 
                     await send(.searchCompleted(
                         query: query,
                         filter: filter,
-                        live: live,
-                        vods: vodResults,
-                        series: seriesResults
+                        live: liveMatches,
+                        vods: vodMatches,
+                        series: seriesMatches
                     ))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)

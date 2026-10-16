@@ -225,14 +225,16 @@ public struct VODDetailView: View {
                                     .foregroundStyle(.white.opacity(0.7))
                             }
                         }
-
-                        // Play / Resume Actions
-                        actionButtonsRow
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, -10)
+
+                // Primary & Secondary Action Section (Zero-Friction "Don't Make Me Think")
+                actionSection
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
             }
         }
 
@@ -246,110 +248,115 @@ public struct VODDetailView: View {
                 .overlay(Capsule().stroke(color.opacity(0.35), lineWidth: 0.8))
         }
 
-        // MARK: - Action Buttons Row
+        // MARK: - Action Section (Zero-Friction "Don't Make Me Think")
 
-        private var actionButtonsRow: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    if let history = store.historyItem, history.duration > 0 {
-                        Button {
-                            HapticManager.shared.trigger(.medium)
-                            store.send(.resumeTapped)
-                        } label: {
-                            HStack(spacing: 8) {
-                                CircularProgressRing(
-                                    progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
-                                    lineWidth: 2.5,
-                                    size: 20,
-                                    gradientColors: [Color(hex: "#00F5D4"), Color(hex: "#FFFFFF")],
-                                    trackColor: Color.white.opacity(0.3)
-                                ) {
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-
-                                Text(AppStrings.VODDetail.continueWatching)
-                                    .fontWeight(.semibold)
-
-                                let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
-                                Text("%\(percent)")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.white.opacity(0.2), in: Capsule())
+        private var actionSection: some View {
+            VStack(spacing: 12) {
+                // 1. Primary Full-Width CTA
+                if let history = store.historyItem, history.duration > 0 {
+                    Button {
+                        HapticManager.shared.trigger(.medium)
+                        store.send(.resumeTapped)
+                    } label: {
+                        HStack(spacing: 10) {
+                            CircularProgressRing(
+                                progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
+                                lineWidth: 2.5,
+                                size: 22,
+                                gradientColors: [Color(hex: "#00F5D4"), Color(hex: "#FFFFFF")],
+                                trackColor: Color.white.opacity(0.3)
+                            ) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
                             }
-                            .font(.system(size: 14))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
-                        }
 
+                            Text(AppStrings.VODDetail.continueWatching)
+                                .font(.system(size: 16, weight: .semibold))
+
+                            let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
+                            Text("%\(percent)")
+                                .font(.system(size: 12, weight: .bold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Color.white.opacity(0.2), in: Capsule())
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                    }
+                } else {
+                    Button {
+                        HapticManager.shared.trigger(.medium)
+                        store.send(.playTapped)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(AppStrings.Common.watchNow)
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                    }
+                }
+
+                // 2. Secondary Symmetrical Action Row (Zero-Scroll Above-the-Fold)
+                HStack(spacing: 8) {
+                    if let history = store.historyItem, history.duration > 0 {
                         Button {
                             HapticManager.shared.trigger(.light)
                             store.send(.restartTapped)
                         } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 14))
-                                .padding(9)
-                                .background(.ultraThinMaterial)
-                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                .foregroundStyle(.white)
-                                .clipShape(Circle())
-                        }
-                    } else {
-                        Button {
-                            HapticManager.shared.trigger(.medium)
-                            store.send(.playTapped)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "play.fill")
-                                Text(AppStrings.Common.watchNow)
-                                    .fontWeight(.semibold)
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text(AppStrings.VODDetail.restart)
+                                    .font(.system(size: 10, weight: .medium))
                             }
-                            .font(.system(size: 14))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
                             .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
                         }
                     }
 
-                    // Fragman Button
                     if store.resolvedTrailerKey != nil {
                         Button {
                             HapticManager.shared.trigger(.light)
                             store.send(.trailerTapped)
                         } label: {
-                            HStack(spacing: 5) {
+                            VStack(spacing: 4) {
                                 Image(systemName: "film.fill")
+                                    .font(.system(size: 16, weight: .medium))
                                 Text(AppStrings.VODDetail.trailer)
-                                    .fontWeight(.medium)
+                                    .font(.system(size: 10, weight: .medium))
                             }
-                            .font(.system(size: 14))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(.ultraThinMaterial)
-                            .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
                             .foregroundStyle(.white)
-                            .clipShape(Capsule())
                         }
                     }
 
@@ -357,15 +364,21 @@ public struct VODDetailView: View {
                         HapticManager.shared.trigger(.medium)
                         store.send(.toggleFavorite)
                     } label: {
-                        Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                            .font(.system(size: 16))
-                            .padding(9)
-                            .background(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                    .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
-                            )
-                            .foregroundStyle(store.isFavorite ? .red : .white)
+                        VStack(spacing: 4) {
+                            Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                            Text(store.isFavorite ? AppStrings.Common.favorited : AppStrings.Common.favorite)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            store.isFavorite ? Color.red.opacity(0.15) : Color.white.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isFavorite ? Color.red.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
                     }
 
                     #if os(iOS)
@@ -373,20 +386,25 @@ public struct VODDetailView: View {
                             HapticManager.shared.trigger(.light)
                             store.send(.downloadTapped)
                         } label: {
-                            Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                .font(.system(size: 16))
-                                .padding(9)
-                                .background(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                        .background(Circle().fill(store.isDownloaded ? Color.green.opacity(0.2) : Color.clear))
-                                )
-                                .foregroundStyle(store.isDownloaded ? .green : .white)
+                            VStack(spacing: 4) {
+                                Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
+                                Text(store.isDownloaded ? AppStrings.Common.downloaded : AppStrings.Common.download)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                store.isDownloaded ? Color.green.opacity(0.15) : Color.white.opacity(0.08),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isDownloaded ? Color.green.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
                         }
                     #endif
                 }
             }
-            .padding(.top, 4)
         }
 
         // MARK: - Content View

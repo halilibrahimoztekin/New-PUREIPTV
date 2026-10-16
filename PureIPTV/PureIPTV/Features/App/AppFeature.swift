@@ -6,13 +6,24 @@ import XCoordinator
 
 @Reducer
 public struct AppFeature {
+    public enum PlayerDisplayMode: Equatable, Sendable {
+        case fullScreen
+        case miniPlayer
+        case hidden
+    }
+
     @ObservableState
     public struct State: Equatable {
         public var splash = SplashFeature.State()
         public var addPlaylist = AddPlaylistFeature.State()
         public var home: HomeFeature.State?
         public var player: PlayerFeature.State?
-        public var isPlayerMini: Bool = false
+        public var playerDisplayMode: PlayerDisplayMode = .hidden
+        public var isPlayerMini: Bool {
+            get { playerDisplayMode == .miniPlayer }
+            set { playerDisplayMode = newValue ? .miniPlayer : .fullScreen }
+        }
+
         @Presents public var seriesDetail: SeriesDetailFeature.State?
         @Presents public var vodDetail: VODDetailFeature.State?
         @Presents public var playlistManagement: PlaylistManagementFeature.State?
@@ -240,6 +251,7 @@ public struct AppFeature {
                 ),
                 playlist: playablePlaylist
             )
+            state.playerDisplayMode = .fullScreen
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
@@ -299,14 +311,12 @@ public struct AppFeature {
         // ── Series Detail ─────────────────────────────────────────
         case let .seriesDetail(.presented(.delegate(.didSelectEpisode(playable, playlist)))):
             state.player = PlayerFeature.State(item: playable, playlist: playlist)
+            state.playerDisplayMode = .fullScreen
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
 
         case .seriesDetail(.presented(.delegate(.close))):
-            if state.player == nil {
-                state.seriesDetail = nil
-            }
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissSeriesDetail) }
             }
@@ -323,22 +333,44 @@ public struct AppFeature {
         // ── Player ───────────────────────────────────────────────
         case .player(.delegate(.didClose)):
             state.player = nil
-            state.isPlayerMini = false
-            return .none
+            state.playerDisplayMode = .hidden
+            return .run { _ in
+                #if os(iOS)
+                    await MainActor.run {
+                        OrientationManager.shared.unlockPortrait()
+                    }
+                #endif
+            }
 
         case .player(.delegate(.didRequestMinimize)):
-            state.isPlayerMini = true
+            state.playerDisplayMode = .miniPlayer
             return .none
 
         case .expandPlayer:
-            state.isPlayerMini = false
+            state.playerDisplayMode = .fullScreen
+            state.player?.isMinimized = false
             return .run { _ in
-                await MainActor.run { appCoordinator.trigger(.player) }
+                await MainActor.run {
+                    #if os(iOS)
+                        OrientationManager.shared.lockLandscape()
+                    #endif
+                    appCoordinator.trigger(.player)
+                }
             }
 
         case .closeMiniPlayer:
-            state.isPlayerMini = false
-            return .send(.player(.closeTapped))
+            state.playerDisplayMode = .hidden
+            state.player = nil
+            return .run { _ in
+                @Injected(\.playerClient) var playerClient
+                #if os(iOS)
+                    await MainActor.run {
+                        OrientationManager.shared.unlockPortrait()
+                    }
+                #endif
+                try? await playerClient.stop()
+                await playerClient.release()
+            }
 
         case .player:
             return .none
@@ -346,6 +378,7 @@ public struct AppFeature {
         // ── VOD Detail ───────────────────────────────────────────
         case let .vodDetail(.presented(.delegate(.didSelectPlay(playable)))):
             state.player = PlayerFeature.State(item: playable)
+            state.playerDisplayMode = .fullScreen
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
@@ -355,9 +388,6 @@ public struct AppFeature {
             return .none
 
         case .vodDetail(.presented(.delegate(.close))):
-            if state.player == nil {
-                state.vodDetail = nil
-            }
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissVodDetail) }
             }
@@ -463,6 +493,7 @@ public struct AppFeature {
             )
 
             state.player = PlayerFeature.State(item: item)
+            state.playerDisplayMode = .fullScreen
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
@@ -517,6 +548,7 @@ public struct AppFeature {
         )
 
         state.player = PlayerFeature.State(item: playable)
+        state.playerDisplayMode = .fullScreen
         return .run { _ in
             await MainActor.run { appCoordinator.trigger(.player) }
         }

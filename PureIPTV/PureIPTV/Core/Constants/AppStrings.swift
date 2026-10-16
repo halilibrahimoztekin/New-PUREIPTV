@@ -25,6 +25,10 @@ public enum AppStrings {
         public static let addToFavorites = "Favorilere Ekle".localized
         public static let removeFromFavorites = "Favorilerden Çıkar".localized
         public static let favorites = "Favoriler".localized
+        public static let favorite = "Favori".localized
+        public static let favorited = "Favorilerde".localized
+        public static let download = "İndir".localized
+        public static let downloaded = "İndirildi".localized
         public static let categoryNotFound = "Kategori bulunamadı".localized
         public static let results = "sonuç".localized
         public static let hour = "saat".localized
@@ -98,6 +102,7 @@ public enum AppStrings {
         public static let streamProtocol = "Protokol / Format".localized
         public static let audioTracks = "Ses İzleri".localized
         public static let subtitles = "Altyazılar".localized
+        public static let tracks = "Ses ve Altyazı".localized
         public static let noOptions = "Seçenek bulunmuyor.".localized
         public static let noRecord = "Kayıt yok".localized
         public static let restart = "Baştan Başlat".localized
@@ -113,7 +118,11 @@ public enum AppStrings {
             "Uyku Zamanlayıcısı: %lld dk".localized(Int64(minutes))
         }
 
+        public static let sleepTimer = "Uyku Zamanlayıcısı".localized
         public static let sleepTimerDisabled = "Uyku Zamanlayıcısı Kapatıldı".localized
+        public static let openInExternalPlayer = "Harici Oynatıcı".localized
+        public static let technicalDetails = "Teknik Bilgi".localized
+        public static let hideTechnicalDetails = "Teknik Bilgiyi Gizle".localized
         public static let oledDarkRoomMode = "Karanlık Oda Koruması".localized
         public static let minimize = "Küçült".localized
         public static let miniPlayer = "Mini Oynatıcı".localized

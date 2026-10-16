@@ -167,14 +167,19 @@
                     VStack {
                         // Top Bar
                         VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                HStack(spacing: 8) {
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.closeTapped) }) {
+                            HStack(alignment: .center) {
+                                // Primary Window Controls (Close & Minimize)
+                                HStack(spacing: 10) {
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.closeTapped)
+                                    }) {
                                         Image(systemName: "xmark")
-                                            .font(.title3)
+                                            .font(.system(size: 15, weight: .bold))
                                             .foregroundColor(.white)
-                                            .padding(12)
+                                            .frame(width: 40, height: 40)
                                             .background(.ultraThinMaterial, in: Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
 
                                     Button(action: {
@@ -182,17 +187,48 @@
                                         store.send(.minimizeTapped)
                                     }) {
                                         Image(systemName: "chevron.down")
-                                            .font(.title3)
+                                            .font(.system(size: 15, weight: .bold))
                                             .foregroundColor(.white)
-                                            .padding(12)
+                                            .frame(width: 40, height: 40)
                                             .background(.ultraThinMaterial, in: Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
                                 }
 
                                 Spacer()
 
-                                // Action Buttons grouped
-                                HStack(spacing: 8) {
+                                // Primary Quick Actions + Consolidated Settings Menu
+                                HStack(spacing: 10) {
+                                    // Live Channels Drawer Button (Zapping)
+                                    if store.playlist != nil {
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleChannelList, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                        }) {
+                                            Image(systemName: "list.dash")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .frame(width: 38, height: 38)
+                                                .background(store.isChannelListVisible ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                                        }
+                                    }
+
+                                    // EPG Quick Button (if program data is present)
+                                    if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                        }) {
+                                            Image(systemName: "list.bullet.rectangle")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .frame(width: 38, height: 38)
+                                                .background(store.isEPGVisible ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                                        }
+                                    }
+
                                     // PiP Button
                                     if pipController?.isPossible == true {
                                         Button(action: {
@@ -204,156 +240,127 @@
                                             }
                                         }) {
                                             Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
-                                                .font(.title3)
+                                                .font(.system(size: 15, weight: .semibold))
                                                 .foregroundColor(.white)
-                                                .padding(10)
-                                                .background(store.isPiPActive ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                                .frame(width: 38, height: 38)
+                                                .background(store.isPiPActive ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                         }
                                     }
 
-                                    // SharePlay Button
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.sharePlayTapped, animation: .spring(response: 0.3, dampingFraction: 0.7)) }) {
-                                        Image(systemName: "shareplay")
-                                            .font(.title3)
-                                            .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                    }
-
-                                    // AirPlay & Audio Route Router Button (Madde #20)
-                                    GlassAudioRouteButton(currentRoute: store.currentAudioRoute)
-
-                                    // Last Channel Recall Button
-                                    if let prev = store.previousChannel {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.medium)
-                                            store.send(.recallLastChannel)
-                                        }) {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                                    .font(.subheadline.bold())
-                                                Text(prev.title)
-                                                    .font(.caption.weight(.semibold))
-                                                    .lineLimit(1)
-                                                    .frame(maxWidth: 110)
-                                            }
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 8)
-                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Capsule())
-                                        }
-                                    }
-
-                                    // Channels Button (Zapping)
-                                    if store.playlist != nil {
-                                        Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleChannelList, animation: .spring(response: 0.3, dampingFraction: 0.7)) }) {
-                                            Image(systemName: "list.dash")
-                                                .font(.title3)
-                                                .foregroundColor(.white)
-                                                .padding(10)
-                                                .background(store.isChannelListVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                        }
-                                    }
-
-                                    // EPG Button
-                                    if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
-                                        Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7)) }) {
-                                            Image(systemName: "list.bullet.rectangle")
-                                                .font(.title3)
-                                                .foregroundColor(.white)
-                                                .padding(10)
-                                                .background(store.isEPGVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                        }
-                                    }
-
-                                    // Tracks Button
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7)) }) {
-                                        Image(systemName: "captions.bubble")
-                                            .font(.title3)
-                                            .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(store.isTracksMenuVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                    }
-
-                                    // Info Button
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7)) }) {
-                                        Image(systemName: "info.circle")
-                                            .font(.title3)
-                                            .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(store.isInfoVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                    }
-
-                                    // Aspect Ratio / Zoom Button (Madde #14)
+                                    // Screen Lock Button (Prevent accidental touches)
                                     Button(action: {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.toggleAspectRatioMode)
-                                        triggerAspectFeedback()
+                                        HapticManager.shared.trigger(.medium)
+                                        store.send(.toggleScreenLock)
                                     }) {
-                                        Image(systemName: store.videoAspectRatioMode.systemIcon)
-                                            .font(.title3)
+                                        Image(systemName: store.isScreenLocked ? "lock.fill" : "lock.open.fill")
+                                            .font(.system(size: 15, weight: .semibold))
                                             .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                            .frame(width: 38, height: 38)
+                                            .background(store.isScreenLocked ? AnyShapeStyle(Color.accentColor.opacity(0.9)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
 
-                                    // Playback Speed Menu (Madde #43 - VOD & Series)
-                                    if !store.item.isLive {
+                                    // Consolidated Player Settings Menu (Zero Friction - Don't Make Me Think)
+                                    Menu {
+                                        // 1. Tracks (Audio & Subtitles)
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                        } label: {
+                                            Label(AppStrings.Player.tracks, systemImage: "captions.bubble")
+                                        }
+
+                                        // 2. Playback Speed (VOD & Series)
+                                        if !store.item.isLive {
+                                            Menu {
+                                                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                                                    Button {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setPlaybackRate(Float(speed)))
+                                                    } label: {
+                                                        HStack {
+                                                            Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
+                                                            if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                                                Image(systemName: "checkmark")
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } label: {
+                                                Label("\(AppStrings.Player.playbackSpeed) (\(String(format: "%.2gx", store.playbackRate)))", systemImage: "gauge.with.dots.needle.50percent")
+                                            }
+                                        }
+
+                                        // 3. Aspect Ratio / Zoom Mode
                                         Menu {
-                                            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                                            ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
                                                 Button {
                                                     HapticManager.shared.trigger(.light)
-                                                    store.send(.setPlaybackRate(Float(speed)))
+                                                    store.send(.setVideoAspectRatioMode(mode))
+                                                    triggerAspectFeedback()
                                                 } label: {
                                                     HStack {
-                                                        Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
-                                                        if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                                        Text(mode.title)
+                                                        if store.videoAspectRatioMode == mode {
                                                             Image(systemName: "checkmark")
                                                         }
                                                     }
                                                 }
                                             }
                                         } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "gauge.with.dots.needle.50percent")
-                                                    .font(.caption2.bold())
-                                                Text(String(format: "%.2gx", store.playbackRate))
-                                                    .font(.caption.monospacedDigit().weight(.semibold))
-                                            }
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 8)
-                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Capsule())
+                                            Label(store.videoAspectRatioMode.title, systemImage: store.videoAspectRatioMode.systemIcon)
                                         }
-                                    }
 
-                                    // Screen Lock Button (Madde #19)
-                                    Button(action: {
-                                        HapticManager.shared.trigger(.medium)
-                                        store.send(.toggleScreenLock)
-                                    }) {
-                                        Image(systemName: store.isScreenLocked ? "lock.fill" : "lock.open.fill")
-                                            .font(.title3)
-                                            .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(store.isScreenLocked ? AnyShapeStyle(Color.accentColor.opacity(0.8)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                    }
-
-                                    // External Player Launcher (Madde #86)
-                                    Menu {
-                                        ForEach(ExternalPlayer.allCases) { player in
-                                            Button {
-                                                store.send(.openInExternalPlayer(player))
-                                            } label: {
-                                                Label(player.rawValue, systemImage: player.iconName)
+                                        // 4. Sleep Timer
+                                        Menu {
+                                            Button(AppStrings.Player.sleepTimerDisabled) {
+                                                store.send(.setSleepTimer(nil))
                                             }
+                                            ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
+                                                Button("\(mins) \(AppStrings.Common.minAbbr)") {
+                                                    store.send(.setSleepTimer(mins))
+                                                }
+                                            }
+                                        } label: {
+                                            Label(store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer, systemImage: "moon.stars")
+                                        }
+
+                                        // 5. External Player Launcher
+                                        Menu {
+                                            ForEach(ExternalPlayer.allCases) { player in
+                                                Button {
+                                                    store.send(.openInExternalPlayer(player))
+                                                } label: {
+                                                    Label(player.rawValue, systemImage: player.iconName)
+                                                }
+                                            }
+                                        } label: {
+                                            Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")
+                                        }
+
+                                        // 6. Technical Diagnostics (Nerd Stats)
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                        } label: {
+                                            Label(store.isInfoVisible ? AppStrings.Player.hideTechnicalDetails : AppStrings.Player.technicalDetails, systemImage: "info.circle")
+                                        }
+
+                                        // 7. SharePlay
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.sharePlayTapped)
+                                        } label: {
+                                            Label("SharePlay", systemImage: "shareplay")
                                         }
                                     } label: {
-                                        Image(systemName: "arrow.up.right.video")
-                                            .font(.title3)
+                                        Image(systemName: "ellipsis")
+                                            .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(.white)
-                                            .padding(10)
-                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                            .frame(width: 38, height: 38)
+                                            .background(.ultraThinMaterial, in: Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
                                 }
                             }

@@ -101,228 +101,223 @@
                     endPoint: .bottom
                 )
 
-                // Content (Poster + Info side by side)
-                HStack(alignment: .bottom, spacing: 16) {
-                    // Poster
-                    let cover = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
+                // Content (Poster + Info side by side, plus Action Section)
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .bottom, spacing: 16) {
+                        // Poster
+                        let cover = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
 
-                    if let urlString = cover, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case let .success(image):
-                                image.resizable().scaledToFill()
-                            case .empty:
-                                Rectangle().fill(Color(hex: "#2A2A30")).shimmeringPlaceholder(isLoading: true)
-                            case .failure:
-                                Rectangle().fill(Color(hex: "#2A2A30"))
-                            @unknown default:
-                                Rectangle().fill(Color(hex: "#2A2A30"))
+                        if let urlString = cover, let url = URL(string: urlString) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case let .success(image):
+                                    image.resizable().scaledToFill()
+                                case .empty:
+                                    Rectangle().fill(Color(hex: "#2A2A30")).shimmeringPlaceholder(isLoading: true)
+                                case .failure:
+                                    Rectangle().fill(Color(hex: "#2A2A30"))
+                                @unknown default:
+                                    Rectangle().fill(Color(hex: "#2A2A30"))
+                                }
                             }
-                        }
-                        .frame(width: 120, height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
-                    } else if store.isTMDBLoading {
-                        Rectangle()
-                            .fill(Color(hex: "#2A2A30"))
                             .frame(width: 120, height: 180)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .shimmeringPlaceholder(isLoading: true)
-                    }
-
-                    // Info block
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(store.tmdbTV?.name ?? store.series.title)
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        // Rating and Status
-                        HStack(spacing: 8) {
-                            if let rating = store.tmdbTV?.voteAverage ?? store.info?.rating, rating > 0 {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .foregroundStyle(.yellow)
-                                        .font(.system(size: 12))
-                                    Text(String(format: "%.1f", rating))
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-
-                            if let status = store.tmdbTV?.status ?? store.info?.status {
-                                Text(status)
-                                    .font(.system(size: 10, weight: .bold))
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.white.opacity(0.1))
-                                    .foregroundStyle(.white)
-                                    .clipShape(Capsule())
-                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
+                        } else if store.isTMDBLoading {
+                            Rectangle()
+                                .fill(Color(hex: "#2A2A30"))
+                                .frame(width: 120, height: 180)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .shimmeringPlaceholder(isLoading: true)
                         }
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.8))
-                        .lineLimit(1)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                // Play / Resume Button
-                                if let history = store.historyItem, history.duration > 0 {
-                                    let progressMins = Int(history.progress / 60)
-                                    let durationMins = Int(history.duration / 60)
+                        // Info block
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(store.tmdbTV?.name ?? store.series.title)
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack(spacing: 10) {
-                                            Button {
-                                                store.send(.resumeTapped)
-                                            } label: {
-                                                HStack(spacing: 8) {
-                                                    CircularProgressRing(
-                                                        progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
-                                                        lineWidth: 2.5,
-                                                        size: 20,
-                                                        gradientColors: [Color(hex: "#00F5D4"), Color.white],
-                                                        trackColor: Color.white.opacity(0.3)
-                                                    ) {
-                                                        Image(systemName: "play.fill")
-                                                            .font(.system(size: 8, weight: .bold))
-                                                            .foregroundStyle(.white)
-                                                    }
-
-                                                    Text(AppStrings.SeriesDetail.continueWatching)
-                                                        .fontWeight(.semibold)
-
-                                                    let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
-                                                    Text("%\(percent)")
-                                                        .font(.system(size: 11, weight: .bold))
-                                                        .padding(.horizontal, 6)
-                                                        .padding(.vertical, 2)
-                                                        .background(Color.white.opacity(0.2), in: Capsule())
-                                                }
-                                                .font(.system(size: 15))
-                                                .padding(.horizontal, 18)
-                                                .padding(.vertical, 10)
-                                                .background(
-                                                    LinearGradient(
-                                                        colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                )
-                                                .foregroundStyle(.white)
-                                                .clipShape(Capsule())
-                                                .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
-                                            }
-
-                                            Button {
-                                                store.send(.restartTapped)
-                                            } label: {
-                                                HStack(spacing: 6) {
-                                                    Image(systemName: "arrow.counterclockwise")
-                                                    Text(AppStrings.SeriesDetail.restart)
-                                                        .fontWeight(.medium)
-                                                }
-                                                .font(.system(size: 15))
-                                                .padding(.horizontal, 16)
-                                                .padding(.vertical, 10)
-                                                .background(.ultraThinMaterial)
-                                                .overlay(
-                                                    Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                                )
-                                                .foregroundStyle(.white)
-                                                .clipShape(Capsule())
-                                            }
-                                        }
-
-                                        HStack(spacing: 6) {
-                                            ProgressView(value: min(1.0, max(0.0, history.progress / history.duration)))
-                                                .progressViewStyle(LinearProgressViewStyle(tint: Color(hex: "#0A84FF")))
-                                                .frame(width: 80)
-
-                                            Text("\(progressMins) \(AppStrings.Common.minAbbr) / \(durationMins) \(AppStrings.Common.minAbbr) \(AppStrings.Common.watched)")
-                                                .font(.caption2)
-                                                .foregroundStyle(Color.white.opacity(0.7))
-                                        }
-                                        .padding(.leading, 4)
+                            // Rating and Status
+                            HStack(spacing: 8) {
+                                if let rating = store.tmdbTV?.voteAverage ?? store.info?.rating, rating > 0 {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill")
+                                            .foregroundStyle(.yellow)
+                                            .font(.system(size: 12))
+                                        Text(String(format: "%.1f", rating))
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
                                     }
-                                } else {
-                                    Button {
-                                        // Play the first available episode
-                                        if let firstEp = store.currentEpisodes.first {
-                                            store.send(.episodeSelected(firstEp))
-                                        }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "play.fill")
-                                            Text(AppStrings.SeriesDetail.watch)
-                                                .fontWeight(.semibold)
-                                        }
-                                        .font(.system(size: 15))
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            LinearGradient(
-                                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                }
+
+                                if let status = store.tmdbTV?.status ?? store.info?.status {
+                                    Text(status)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.white.opacity(0.1))
                                         .foregroundStyle(.white)
                                         .clipShape(Capsule())
-                                        .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 6, y: 2)
-                                    }
-                                }
-
-                                // Watch Trailer Button
-                                if store.resolvedTrailerKey != nil {
-                                    Button {
-                                        store.send(.trailerTapped)
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "play.rectangle.fill")
-                                            Text(AppStrings.VODDetail.trailer)
-                                                .fontWeight(.medium)
-                                        }
-                                        .font(.system(size: 15))
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 10)
-                                        .background(.ultraThinMaterial)
-                                        .overlay(
-                                            Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                        )
-                                        .foregroundStyle(.white)
-                                        .clipShape(Capsule())
-                                    }
-                                }
-
-                                // Favorite Button
-                                Button {
-                                    store.send(.toggleFavorite)
-                                } label: {
-                                    Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                                        .font(.system(size: 20))
-                                        .padding(8)
-                                        .background(
-                                            Circle()
-                                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                                .background(Circle().fill(store.isFavorite ? Color.red.opacity(0.2) : Color.clear))
-                                        )
-                                        .foregroundStyle(store.isFavorite ? .red : .white)
                                 }
                             }
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.white.opacity(0.8))
+                            .lineLimit(1)
                         }
-                        .padding(.bottom, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+
+                    // Zero-Friction Action Section (Don't Make Me Think)
+                    actionSection
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+                .padding(.top, 20)
             }
             .redacted(reason: store.isLoading ? .placeholder : [])
             .shimmeringPlaceholder(isLoading: store.isLoading)
+        }
+
+        // MARK: - Action Section (Zero-Friction "Don't Make Me Think")
+
+        private var actionSection: some View {
+            VStack(spacing: 12) {
+                // 1. Primary Full-Width CTA
+                if let history = store.historyItem, history.duration > 0 {
+                    Button {
+                        HapticManager.shared.trigger(.medium)
+                        store.send(.resumeTapped)
+                    } label: {
+                        HStack(spacing: 10) {
+                            CircularProgressRing(
+                                progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
+                                lineWidth: 2.5,
+                                size: 22,
+                                gradientColors: [Color(hex: "#00F5D4"), Color.white],
+                                trackColor: Color.white.opacity(0.3)
+                            ) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+
+                            Text(AppStrings.SeriesDetail.continueWatching)
+                                .font(.system(size: 16, weight: .semibold))
+
+                            let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
+                            Text("%\(percent)")
+                                .font(.system(size: 12, weight: .bold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Color.white.opacity(0.2), in: Capsule())
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                    }
+                } else {
+                    Button {
+                        HapticManager.shared.trigger(.medium)
+                        if let firstEp = store.currentEpisodes.first {
+                            store.send(.episodeSelected(firstEp))
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(AppStrings.SeriesDetail.watch)
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                    }
+                }
+
+                // 2. Secondary Symmetrical Action Row (Zero-Scroll Above-the-Fold)
+                HStack(spacing: 8) {
+                    if let history = store.historyItem, history.duration > 0 {
+                        Button {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.restartTapped)
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text(AppStrings.SeriesDetail.restart)
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
+                            .foregroundStyle(.white)
+                        }
+                    }
+
+                    if store.resolvedTrailerKey != nil {
+                        Button {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.trailerTapped)
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "film.fill")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text(AppStrings.VODDetail.trailer)
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
+                            .foregroundStyle(.white)
+                        }
+                    }
+
+                    Button {
+                        HapticManager.shared.trigger(.medium)
+                        store.send(.toggleFavorite)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                            Text(store.isFavorite ? AppStrings.Common.favorited : AppStrings.Common.favorite)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            store.isFavorite ? Color.red.opacity(0.15) : Color.white.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isFavorite ? Color.red.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
+                    }
+                }
+            }
         }
 
         private var contentView: some View {
