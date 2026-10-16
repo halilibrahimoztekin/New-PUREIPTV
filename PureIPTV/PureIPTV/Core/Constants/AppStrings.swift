@@ -466,6 +466,19 @@ public enum AppStrings {
         public static func manageTitle(for type: String) -> String {
             "%@ Kategorilerini Yönet".localized(type)
         }
+
+        public static let showAll = "Tümünü Göster".localized
+        public static let hideAll = "Tümünü Gizle".localized
+        public static let invert = "Tersine Çevir".localized
+        public static let filterAll = "Tümü".localized
+        public static let filterVisible = "Görünenler".localized
+        public static let filterHidden = "Gizlenenler".localized
+        public static let searchPlaceholder = "Kategori ara...".localized
+        public static let resetOrder = "Sıralamayı Sıfırla".localized
+        public static let bulkActions = "Toplu İşlemler".localized
+        public static func visibleCountInfo(visible: Int, total: Int) -> String {
+            "%lld / %lld kategori aktif".localized(Int64(visible), Int64(total))
+        }
     }
 
     // MARK: - Playlist Management

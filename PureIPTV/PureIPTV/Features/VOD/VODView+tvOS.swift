@@ -67,6 +67,9 @@
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
             }
+            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
+                CategoryManagementView(store: store)
+            }
         }
 
         private var focusedVOD: MediaModels.Item? {
@@ -87,6 +90,14 @@
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
+                            Button {
+                                store.send(.editCategoriesTapped)
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 18))
+                                    .padding(8)
+                            }
+                            .buttonStyle(TVCircleButtonStyle())
                         }
                         .padding(.horizontal, 24)
                         .padding(.top, 48)

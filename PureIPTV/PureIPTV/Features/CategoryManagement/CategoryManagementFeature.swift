@@ -10,10 +10,27 @@ public struct CategoryManagementFeature {
         public var type: CategoryType
         public var isLoading = false
         public var categories: [MediaModels.Category] = []
+        public var originalCategories: [MediaModels.Category] = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:] // key: categoryID
         public var hasUnsavedChanges = false
+        public var searchQuery: String = ""
+        public var filterMode: FilterMode = .all
 
-        public enum CategoryType: String, Equatable, CaseIterable {
+        public enum FilterMode: String, Equatable, CaseIterable, Sendable {
+            case all
+            case visible
+            case hidden
+
+            public var title: String {
+                switch self {
+                case .all: AppStrings.CategoryMgmt.filterAll
+                case .visible: AppStrings.CategoryMgmt.filterVisible
+                case .hidden: AppStrings.CategoryMgmt.filterHidden
+                }
+            }
+        }
+
+        public enum CategoryType: String, Equatable, CaseIterable, Sendable {
             case live
             case vod
             case series
@@ -27,19 +44,53 @@ public struct CategoryManagementFeature {
             }
         }
 
+        public var totalCount: Int {
+            categories.count
+        }
+
+        public var visibleCount: Int {
+            categories.filter { !(categoryPreferences[$0.id]?.isHidden ?? false) }.count
+        }
+
+        public var hiddenCount: Int {
+            categories.filter { categoryPreferences[$0.id]?.isHidden ?? false }.count
+        }
+
+        public var filteredCategories: [MediaModels.Category] {
+            let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            return categories.filter { category in
+                if !query.isEmpty, !category.name.localizedCaseInsensitiveContains(query) {
+                    return false
+                }
+                let isHidden = categoryPreferences[category.id]?.isHidden ?? false
+                switch filterMode {
+                case .all: return true
+                case .visible: return !isHidden
+                case .hidden: return isHidden
+                }
+            }
+        }
+
         public init(config: PlaylistConfig, type: CategoryType) {
             self.config = config
             self.type = type
         }
     }
 
-    public enum Action {
+    public enum Action: BindableAction {
+        case binding(BindingAction<State>)
         case onAppear
         case loadData
         case categoriesResponse(Result<[MediaModels.Category], Error>)
         case preferencesLoaded([CategoryPreferenceDTO])
         case toggleVisibility(categoryID: String)
         case moveCategory(from: IndexSet, to: Int)
+        case setSearchQuery(String)
+        case setFilterMode(State.FilterMode)
+        case showAllTapped
+        case hideAllTapped
+        case invertVisibilityTapped
+        case resetOrderTapped
         case saveTapped
         case saveResponse(Result<Void, Error>)
         case closeTapped
@@ -58,8 +109,12 @@ public struct CategoryManagementFeature {
     public init() {}
 
     public var body: some Reducer<State, Action> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
+            case .binding:
+                return .none
+
             case .onAppear:
                 return .send(.loadData)
 
@@ -95,6 +150,7 @@ public struct CategoryManagementFeature {
 
             case let .categoriesResponse(.success(categories)):
                 state.isLoading = false
+                state.originalCategories = categories
 
                 // Sort categories based on preferences
                 var sortedCategories = categories
@@ -116,6 +172,14 @@ public struct CategoryManagementFeature {
                 state.isLoading = false
                 return .none
 
+            case let .setSearchQuery(query):
+                state.searchQuery = query
+                return .none
+
+            case let .setFilterMode(mode):
+                state.filterMode = mode
+                return .none
+
             case let .toggleVisibility(categoryID):
                 state.hasUnsavedChanges = true
                 if let pref = state.categoryPreferences[categoryID] {
@@ -131,6 +195,81 @@ public struct CategoryManagementFeature {
                         orderIndex: Int.max
                     )
                     state.categoryPreferences[categoryID] = pref
+                }
+                return .none
+
+            case .showAllTapped:
+                state.hasUnsavedChanges = true
+                let targetCategories = state.filteredCategories
+                for category in targetCategories {
+                    if let pref = state.categoryPreferences[category.id] {
+                        var updated = pref
+                        updated.isHidden = false
+                        state.categoryPreferences[category.id] = updated
+                    } else {
+                        let pref = CategoryPreferenceDTO(
+                            id: "\(state.type.rawValue)_\(category.id)",
+                            type: state.type.rawValue,
+                            categoryID: category.id,
+                            isHidden: false,
+                            orderIndex: Int.max
+                        )
+                        state.categoryPreferences[category.id] = pref
+                    }
+                }
+                return .none
+
+            case .hideAllTapped:
+                state.hasUnsavedChanges = true
+                let targetCategories = state.filteredCategories
+                for category in targetCategories {
+                    if let pref = state.categoryPreferences[category.id] {
+                        var updated = pref
+                        updated.isHidden = true
+                        state.categoryPreferences[category.id] = updated
+                    } else {
+                        let pref = CategoryPreferenceDTO(
+                            id: "\(state.type.rawValue)_\(category.id)",
+                            type: state.type.rawValue,
+                            categoryID: category.id,
+                            isHidden: true,
+                            orderIndex: Int.max
+                        )
+                        state.categoryPreferences[category.id] = pref
+                    }
+                }
+                return .none
+
+            case .invertVisibilityTapped:
+                state.hasUnsavedChanges = true
+                let targetCategories = state.filteredCategories
+                for category in targetCategories {
+                    if let pref = state.categoryPreferences[category.id] {
+                        var updated = pref
+                        updated.isHidden.toggle()
+                        state.categoryPreferences[category.id] = updated
+                    } else {
+                        let pref = CategoryPreferenceDTO(
+                            id: "\(state.type.rawValue)_\(category.id)",
+                            type: state.type.rawValue,
+                            categoryID: category.id,
+                            isHidden: true,
+                            orderIndex: Int.max
+                        )
+                        state.categoryPreferences[category.id] = pref
+                    }
+                }
+                return .none
+
+            case .resetOrderTapped:
+                state.hasUnsavedChanges = true
+                state.categories = state.originalCategories
+                for (index, category) in state.categories.enumerated() {
+                    if let pref = state.categoryPreferences[category.id] {
+                        var updated = pref
+                        updated.orderIndex = index
+                        state.categoryPreferences[category.id] = updated
+                    }
                 }
                 return .none
 
