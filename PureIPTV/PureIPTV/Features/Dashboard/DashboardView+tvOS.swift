@@ -92,9 +92,10 @@
                             if !store.favoriteItems.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
                                     ForEach(store.favoriteItems) { fav in
-                                        TVFavoriteCard(item: fav) {
+                                        TVFavoriteMediaCard(item: fav) {
                                             store.send(.favoriteSelected(fav))
                                         }
+                                        .frame(width: fav.type.lowercased() == "live" ? 340 : 220)
                                     }
                                 }
                             }
@@ -103,13 +104,10 @@
                             if !store.featuredChannels.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.featuredLiveTV) {
                                     ForEach(store.featuredChannels) { channel in
-                                        Button {
+                                        TVChannelCard(channel: channel, isSelected: false) {
                                             store.send(.channelSelected(channel))
-                                        } label: {
-                                            ChannelCardView(channel: channel, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
-                                        .frame(width: 360)
+                                        .frame(width: 340)
                                     }
                                 }
                             }
@@ -118,12 +116,9 @@
                             if store.featuredVODs.count > 1 {
                                 TVShelfSection(title: AppStrings.Dashboard.newMovies) {
                                     ForEach(Array(store.featuredVODs.dropFirst())) { vod in
-                                        Button {
+                                        TVVODCard(vod: vod, isSelected: false) {
                                             store.send(.vodSelected(vod))
-                                        } label: {
-                                            VODCardView(vod: vod, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
                                         .frame(width: 220)
                                     }
                                 }
@@ -133,12 +128,9 @@
                             if !store.featuredSeries.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.newSeries) {
                                     ForEach(store.featuredSeries) { series in
-                                        Button {
+                                        TVSeriesCard(series: series, isSelected: false) {
                                             store.send(.seriesSelected(series))
-                                        } label: {
-                                            SeriesCardView(series: series, isSelected: false) {}
                                         }
-                                        .buttonStyle(.card)
                                         .frame(width: 220)
                                     }
                                 }
@@ -328,43 +320,4 @@
         }
     }
 
-    // MARK: - TV Favorite Card
-
-    private struct TVFavoriteCard: View {
-        let item: FavoriteItem
-        let onTap: () -> Void
-
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        KFImage(url)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 220, height: item.type == "live" ? 140 : 330)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(alignment: .topTrailing) {
-                                Image(systemName: "heart.fill")
-                                    .foregroundStyle(.red)
-                                    .font(.system(size: 20))
-                                    .padding(10)
-                            }
-                    } else {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(hex: "#1F1F23"))
-                            .frame(width: 220, height: item.type == "live" ? 140 : 330)
-                    }
-
-                    Text(item.title)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .frame(width: 220, alignment: .leading)
-                }
-            }
-            .buttonStyle(.card)
-        }
-    }
 #endif

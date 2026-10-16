@@ -133,12 +133,9 @@
                         resultSection(title: AppStrings.Search.liveTV, count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 40) {
                                 ForEach(live) { channel in
-                                    Button {
+                                    TVChannelCard(channel: channel, isSelected: false) {
                                         store.send(.channelSelected(channel))
-                                    } label: {
-                                        ChannelCardView(channel: channel, isSelected: false) {}
                                     }
-                                    .buttonStyle(.card)
                                 }
                             }
                         }
@@ -149,12 +146,9 @@
                         resultSection(title: AppStrings.Search.movies, count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
                                 ForEach(vods) { vod in
-                                    Button {
+                                    TVVODCard(vod: vod, isSelected: false) {
                                         store.send(.vodSelected(vod))
-                                    } label: {
-                                        VODCardView(vod: vod) {}
                                     }
-                                    .buttonStyle(.card)
                                 }
                             }
                         }
@@ -165,12 +159,9 @@
                         resultSection(title: AppStrings.Search.series, count: series.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
                                 ForEach(series) { item in
-                                    Button {
+                                    TVSeriesCard(series: item, isSelected: false) {
                                         store.send(.seriesSelected(item))
-                                    } label: {
-                                        SeriesCardView(series: item) {}
                                     }
-                                    .buttonStyle(.card)
                                 }
                             }
                         }
