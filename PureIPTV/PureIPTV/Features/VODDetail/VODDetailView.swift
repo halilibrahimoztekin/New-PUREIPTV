@@ -106,70 +106,28 @@ public struct VODDetailView: View {
 
         private var headerView: some View {
             VStack(spacing: 0) {
-                // Edge-to-edge Cinematic Backdrop
-                ZStack(alignment: .bottomLeading) {
-                    let backdropURLString = store.tmdbMovie?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
-                        store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
-                        store.vod.coverURL?.absoluteString
+                // Edge-to-edge Cinematic Backdrop / Auto-Play Trailer (Madde #46)
+                let backdropURLString = store.tmdbMovie?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
+                    store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
+                    store.vod.coverURL?.absoluteString
+                let backdropURL = backdropURLString.flatMap { URL(string: $0) }
 
-                    GeometryReader { proxy in
-                        if let urlString = backdropURLString, let url = URL(string: urlString) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case let .success(image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: proxy.size.width, height: 260)
-                                        .clipped()
-                                case .empty:
-                                    Rectangle().fill(Color(hex: "#1A1A24")).shimmeringPlaceholder(isLoading: true)
-                                case .failure:
-                                    Rectangle().fill(Color(hex: "#1A1A24"))
-                                @unknown default:
-                                    Rectangle().fill(Color(hex: "#1A1A24"))
-                                }
-                            }
-                        } else {
-                            Rectangle().fill(Color(hex: "#1A1A24"))
-                        }
-                    }
-                    .frame(height: 260)
-
-                    // Cinematic Vignette & Bottom Gradient Fading to Screen Background
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black.opacity(0.35), location: 0),
-                            .init(color: .clear, location: 0.35),
-                            .init(color: Color(hex: "#0F0F13").opacity(0.75), location: 0.75),
-                            .init(color: Color(hex: "#0F0F13"), location: 1.0),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-
-                    // Watch Trailer Action floating on backdrop
-                    if store.resolvedTrailerKey != nil {
-                        Button {
-                            HapticManager.shared.trigger(.medium)
+                ZStack(alignment: .topTrailing) {
+                    InlineTrailerHeroView(
+                        backdropURL: backdropURL,
+                        trailerKey: store.resolvedTrailerKey,
+                        isAutoPlayActive: store.isAutoPlayTrailerActive,
+                        isMuted: store.isTrailerMuted,
+                        onToggleMute: {
+                            store.send(.toggleTrailerMute)
+                        },
+                        onExpandTrailer: {
+                            store.send(.expandTrailer)
+                        },
+                        onOpenTrailerSheet: {
                             store.send(.trailerTapped)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 15, weight: .bold))
-                                Text(AppStrings.VODDetail.watchTrailer)
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 0.8))
                         }
-                        .padding(.leading, 16)
-                        .padding(.top, 16)
-                        .frame(maxHeight: .infinity, alignment: .topLeading)
-                    }
+                    )
 
                     // Quality Badges at Top Trailing
                     HStack {

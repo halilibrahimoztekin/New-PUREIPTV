@@ -30,6 +30,9 @@ public struct VODDetailFeature {
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
         public var trailerTitle: String?
+        public var isAutoPlayTrailerActive: Bool = false
+        public var isTrailerMuted: Bool = true
+        public var isAutoPlayTrailerEnabled: Bool = true
 
         // Similar Movies Intelligent Matching
         public var catalogVODs: [MediaModels.Item] = []
@@ -91,6 +94,10 @@ public struct VODDetailFeature {
         case dismissActorDetails
         case trailerTapped
         case dismissTrailer
+        case startInlineTrailer
+        case toggleTrailerMute
+        case stopInlineTrailer
+        case expandTrailer
         case similarMovieTapped(TMDBSimilarItemDTO)
         case dismissUnmatchedMovie
         case delegate(Delegate)
@@ -102,6 +109,10 @@ public struct VODDetailFeature {
             case didSelectVOD(MediaModels.Item)
             case close
         }
+    }
+
+    private nonisolated enum CancelID: Hashable, Sendable {
+        case autoPlayTrailer
     }
 
     @Injected(\.iptvClient) var iptvClient
@@ -279,6 +290,15 @@ public struct VODDetailFeature {
                 if state.info != nil {
                     state.isLoading = false
                 }
+                if state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled {
+                    return .run { send in
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        if !Task.isCancelled {
+                            await send(.startInlineTrailer)
+                        }
+                    }
+                    .cancellable(id: CancelID.autoPlayTrailer, cancelInFlight: true)
+                }
                 return .none
 
             case let .tmdbSearchResponse(.failure(error)):
@@ -335,17 +355,38 @@ public struct VODDetailFeature {
                 return .none
 
             case .trailerTapped:
+                state.isAutoPlayTrailerActive = false
                 guard let key = state.resolvedTrailerKey else { return .none }
                 state.trailerVideoKey = key
                 state.trailerTitle = "\(state.tmdbMovie?.title ?? state.vod.title) - \(AppStrings.VODDetail.trailer)"
                 state.isTrailerPresented = true
-                return .none
+                return .cancel(id: CancelID.autoPlayTrailer)
 
             case .dismissTrailer:
                 state.isTrailerPresented = false
                 state.trailerVideoKey = nil
                 state.trailerTitle = nil
                 return .none
+
+            case .startInlineTrailer:
+                guard state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled else { return .none }
+                state.isAutoPlayTrailerActive = true
+                return .none
+
+            case .toggleTrailerMute:
+                state.isTrailerMuted.toggle()
+                return .none
+
+            case .stopInlineTrailer:
+                state.isAutoPlayTrailerActive = false
+                return .cancel(id: CancelID.autoPlayTrailer)
+
+            case .expandTrailer:
+                state.isAutoPlayTrailerActive = false
+                return .merge(
+                    .cancel(id: CancelID.autoPlayTrailer),
+                    .send(.trailerTapped)
+                )
 
             case let .similarMovieTapped(movie):
                 if let matched = state.matchedVODsByTMDBId[movie.id] {
@@ -369,6 +410,7 @@ public struct VODDetailFeature {
                 return .none
 
             case .playTapped:
+                state.isAutoPlayTrailerActive = false
                 let streamURL: URL? = {
                     if let url = state.vod.streamURL {
                         return url
@@ -386,7 +428,10 @@ public struct VODDetailFeature {
                     coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
                     startPosition: 0.0
                 )
-                return .send(.delegate(.didSelectPlay(playable)))
+                return .merge(
+                    .cancel(id: CancelID.autoPlayTrailer),
+                    .send(.delegate(.didSelectPlay(playable)))
+                )
 
             case .restartTapped:
                 return .send(.playTapped)
@@ -471,10 +516,15 @@ public struct VODDetailFeature {
                 }
 
             case .closeTapped:
-                return .send(.delegate(.close))
+                state.isAutoPlayTrailerActive = false
+                return .merge(
+                    .cancel(id: CancelID.autoPlayTrailer),
+                    .send(.delegate(.close))
+                )
 
             case .viewDidDisappear:
-                return .none
+                state.isAutoPlayTrailerActive = false
+                return .cancel(id: CancelID.autoPlayTrailer)
 
             case .delegate:
                 return .none

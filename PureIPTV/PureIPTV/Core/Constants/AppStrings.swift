@@ -414,6 +414,10 @@ public enum AppStrings {
         public static let inLibrary = "Kütüphanenizde".localized
         public static let notInLibrary = "Listenizde Bulunamadı".localized
         public static let notInLibraryDesc = "Bu içerik mevcut IPTV çalma listenizde bulunamadı. TMDB özet bilgisi aşağıdadır.".localized
+        public static let unmuteTrailer = "Sesi Aç".localized
+        public static let muteTrailer = "Sesi Kapat".localized
+        public static let expandTrailer = "Tam Ekran Fragman".localized
+        public static let autoPlayTrailer = "Fragmanı Otomatik Oynat".localized
     }
 
     // MARK: - Series Detail
