@@ -46,6 +46,10 @@ public struct DashboardFeature {
         }
     }
 
+    private nonisolated enum CancelID: Hashable, Sendable {
+        case watchHistoryObserver
+    }
+
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
 
@@ -59,7 +63,13 @@ public struct DashboardFeature {
                 let remoteEffect: Effect<Action> = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
                     ? .send(.loadFeaturedData(config: config))
                     : .none
-                return .merge(localEffect, remoteEffect)
+                let notificationEffect: Effect<Action> = .run { send in
+                    for await _ in NotificationCenter.default.notifications(named: .watchHistoryDidChange) {
+                        await send(.loadLocalData)
+                    }
+                }
+                .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
+                return .merge(localEffect, remoteEffect, notificationEffect)
 
             case .loadLocalData:
                 return .run { send in

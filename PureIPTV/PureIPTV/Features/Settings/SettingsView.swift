@@ -206,6 +206,20 @@ public struct SettingsView: View {
                     ))
                 }
 
+                Section(header: Text(AppStrings.Settings.cloudSyncSection), footer: Text(AppStrings.Settings.iCloudSyncDesc)) {
+                    Toggle(isOn: Binding(
+                        get: { store.isICloudSyncEnabled },
+                        set: { store.send(.setICloudSyncEnabled($0)) }
+                    )) {
+                        Label {
+                            Text(AppStrings.Settings.iCloudSync)
+                        } icon: {
+                            Image(systemName: "icloud.fill")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+
                 Section(header: Text(AppStrings.Settings.subscriptionAndStorage)) {
                     HStack {
                         Text(AppStrings.Settings.subscriptionStatus)

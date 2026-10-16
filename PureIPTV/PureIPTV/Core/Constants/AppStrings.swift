@@ -314,6 +314,9 @@ public enum AppStrings {
         public static let defaultSubtitleLanguage = "Varsayılan Altyazı Dili".localized
         public static let rememberTrackPreferences = "Akıllı Tercih Belleği".localized
         public static let rememberTrackPreferencesDesc = "İzlenen her içerik için son seçilen ses ve altyazı otomatik hatırlanır.".localized
+        public static let cloudSyncSection = "BULUT & EŞZAMANLAMA".localized
+        public static let iCloudSync = "iCloud Eşzamanlama".localized
+        public static let iCloudSyncDesc = "Kaldığınız yer ve izleme geçmişi Apple TV, iPhone ve iPad arasında otomatik eşitlenir.".localized
     }
 
     // MARK: - Search

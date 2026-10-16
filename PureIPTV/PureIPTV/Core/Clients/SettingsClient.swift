@@ -69,6 +69,9 @@ public struct SettingsClient: Sendable {
 
     public var rememberMediaTrackPreferences: @Sendable () -> Bool = { true }
     public var setRememberMediaTrackPreferences: @Sendable (Bool) -> Void = { _ in }
+
+    public var isICloudSyncEnabled: @Sendable () -> Bool = { true }
+    public var setIsICloudSyncEnabled: @Sendable (Bool) -> Void = { _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -88,6 +91,7 @@ extension SettingsClient: DependencyKey {
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
         let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
         let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
+        let iCloudSyncKey = "com.pureiptv.isICloudSyncEnabled"
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -98,6 +102,7 @@ extension SettingsClient: DependencyKey {
             preferredAudioKey: "tr",
             preferredSubtitleKey: "off",
             rememberTracksKey: true,
+            iCloudSyncKey: true,
         ])
 
         return SettingsClient(
@@ -203,7 +208,9 @@ extension SettingsClient: DependencyKey {
             preferredSubtitleLanguage: { defaults.string(forKey: preferredSubtitleKey) ?? "off" },
             setPreferredSubtitleLanguage: { defaults.set($0, forKey: preferredSubtitleKey) },
             rememberMediaTrackPreferences: { defaults.bool(forKey: rememberTracksKey) },
-            setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) }
+            setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) },
+            isICloudSyncEnabled: { defaults.bool(forKey: iCloudSyncKey) },
+            setIsICloudSyncEnabled: { defaults.set($0, forKey: iCloudSyncKey) }
         )
     }()
 }

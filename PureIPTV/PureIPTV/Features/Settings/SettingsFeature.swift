@@ -29,6 +29,7 @@ public struct SettingsFeature {
         public var preferredAudioLanguage: String = "tr"
         public var preferredSubtitleLanguage: String = "off"
         public var rememberMediaTrackPreferences: Bool = true
+        public var isICloudSyncEnabled: Bool = true
 
         public var cacheSize: String = AppStrings.Settings.calculating
         public var isShowingClearCacheConfirmation: Bool = false
@@ -72,6 +73,7 @@ public struct SettingsFeature {
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
         case setRememberMediaTrackPreferences(Bool)
+        case setICloudSyncEnabled(Bool)
 
         case calculateCacheSize
         case cacheSizeCalculated(String)
@@ -111,6 +113,7 @@ public struct SettingsFeature {
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
+                state.isICloudSyncEnabled = settingsClient.isICloudSyncEnabled()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -240,6 +243,12 @@ public struct SettingsFeature {
             case let .setRememberMediaTrackPreferences(val):
                 state.rememberMediaTrackPreferences = val
                 return .run { _ in settingsClient.setRememberMediaTrackPreferences(val) }
+
+            case let .setICloudSyncEnabled(val):
+                state.isICloudSyncEnabled = val
+                return .run { _ in
+                    settingsClient.setIsICloudSyncEnabled(val)
+                }
 
             case .calculateCacheSize:
                 return .run { send in

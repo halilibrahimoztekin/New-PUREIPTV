@@ -132,6 +132,9 @@ extension DatabaseClient: DependencyKey {
                     context.insert(item)
                 }
                 try context.save()
+                Task.detached(priority: .utility) {
+                    try? await WatchProgressSyncClient.liveValue.syncItem(item)
+                }
             },
             deleteWatchProgress: { id in
                 let context = ModelContext(modelContainer)

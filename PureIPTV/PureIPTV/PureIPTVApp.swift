@@ -29,6 +29,11 @@ struct PureIPTVApp: App {
         } catch {
             print("Failed to set audio session category: \(error)")
         }
+
+        // Cross-device iCloud watch progress sync (Madde #43)
+        Task.detached(priority: .utility) {
+            _ = try? await WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()
+        }
     }
 
     /// The single store that drives the entire app logic
