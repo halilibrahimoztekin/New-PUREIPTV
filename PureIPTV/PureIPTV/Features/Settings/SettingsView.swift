@@ -3,7 +3,14 @@ import SwiftUI
 
 public struct SettingsView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var accountInfoManager = AccountInfoManager.shared
+    @ObservedObject private var userAgentManager = UserAgentManager.shared
     @Bindable var store: StoreOf<SettingsFeature>
+
+    @State private var isShowingSpeedTest: Bool = false
+    @State private var backupExportURL: URL? = nil
+    @State private var backupAlertMessage: String? = nil
+    @State private var isShowingBackupAlert: Bool = false
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
@@ -42,6 +49,32 @@ public struct SettingsView: View {
                         }
                     }
                     .foregroundColor(.primary)
+
+                    // Madde #75 & #76: Xtream Account Expiration & Connection Limit
+                    if let info = accountInfoManager.accountInfo {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label("Abonelik Bitişi", systemImage: "calendar.badge.clock")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(info.formattedExpiration)
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(info.isExpiringSoon ? .orange : .primary)
+                            }
+
+                            HStack {
+                                Label("Bağlantı Limiti", systemImage: "network.badge.shield.half.filled")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(info.connectionsDescription)
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(info.isLimitReached ? .red : .primary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
 
                 Section(header: Text(AppStrings.Settings.security)) {
@@ -262,6 +295,72 @@ public struct SettingsView: View {
                     .foregroundColor(.red)
                 }
 
+                Section(header: Text("Ağ, Hız & Oynatıcı Teşhisi")) {
+                    Button(action: {
+                        isShowingSpeedTest = true
+                    }) {
+                        HStack {
+                            Image(systemName: "speedometer")
+                                .foregroundColor(.cyan)
+                            Text("Sunucu Hız ve Ping Testi")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.caption)
+                        }
+                    }
+                    .foregroundColor(.primary)
+
+                    Picker("Özel User-Agent", selection: $userAgentManager.currentPreset) {
+                        ForEach(UserAgentPreset.allCases) { preset in
+                            Text(preset.rawValue).tag(preset)
+                        }
+                    }
+
+                    if userAgentManager.currentPreset == .custom {
+                        TextField("User-Agent Dizgisi", text: $userAgentManager.customUserAgentString)
+                            .font(.caption)
+                    }
+                }
+
+                Section(header: Text("Yedekleme & Geri Bildirim")) {
+                    Button(action: {
+                        do {
+                            let url = try BackupManager.shared.createBackupFile()
+                            backupExportURL = url
+                            backupAlertMessage = "Yedek dosyası başarıyla oluşturuldu:\n\(url.lastPathComponent)"
+                            isShowingBackupAlert = true
+                        } catch {
+                            backupAlertMessage = "Yedekleme oluşturulamadı: \(error.localizedDescription)"
+                            isShowingBackupAlert = true
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.down.doc.fill")
+                                .foregroundColor(.green)
+                            Text("Ayarları Yedekle (.iptvbackup)")
+                        }
+                    }
+                    .foregroundColor(.primary)
+
+                    Button(action: {
+                        Task {
+                            if let reportURL = await FeedbackReportManager.shared.generateDiagnosticReport() {
+                                backupExportURL = reportURL
+                                backupAlertMessage = "Hata teşhis raporu oluşturuldu:\n\(reportURL.lastPathComponent)"
+                                isShowingBackupAlert = true
+                            }
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "envelope.badge.fill")
+                                .foregroundColor(.indigo)
+                            Text("Hata Günlüğü Raporla (OSLog)")
+                        }
+                    }
+                    .foregroundColor(.primary)
+                }
+
                 Section(header: Text(AppStrings.Settings.about), footer: Text(AppStrings.Settings.appVersion)) {
                     HStack {
                         Text(AppStrings.Settings.version)
@@ -303,6 +402,20 @@ public struct SettingsView: View {
                 #if os(iOS)
                     .presentationDetents([.height(300)])
                 #endif
+            }
+            .sheet(isPresented: $isShowingSpeedTest) {
+                StreamSpeedTestView()
+                #if os(iOS)
+                    .presentationDetents([.medium, .large])
+                #endif
+            }
+            .alert(
+                "PureIPTV Bildirimi",
+                isPresented: $isShowingBackupAlert
+            ) {
+                Button(AppStrings.Common.ok, role: .cancel) {}
+            } message: {
+                Text(backupAlertMessage ?? "")
             }
         }
     }

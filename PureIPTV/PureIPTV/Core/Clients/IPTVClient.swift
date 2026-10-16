@@ -124,7 +124,9 @@ extension IPTVClient: DependencyKey {
 
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
-                // _ = try await networkClient.fetch(url: url)
+                if let authDTO: XtreamAuthResponseDTO = try? await networkClient.fetch(url: url) {
+                    await AccountInfoManager.shared.update(from: authDTO)
+                }
             },
             fetchLiveCategories: { config in
                 if config.type == .m3u {

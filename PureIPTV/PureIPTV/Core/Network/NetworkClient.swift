@@ -12,7 +12,9 @@ public struct NetworkClient {
     }
 
     public func fetchData(url: URL) async throws -> Data {
-        let (data, response) = try await session.data(from: url)
+        var request = URLRequest(url: url)
+        UserAgentManager.shared.applyHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
             throw NetworkError.invalidResponse
         }
@@ -26,7 +28,9 @@ public struct NetworkClient {
             let startTime = CFAbsoluteTimeGetCurrent()
         #endif
 
-        let (data, response) = try await session.data(from: url)
+        var request = URLRequest(url: url)
+        UserAgentManager.shared.applyHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
 
         #if DEBUG
             let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime

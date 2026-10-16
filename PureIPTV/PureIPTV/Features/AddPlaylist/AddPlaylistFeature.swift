@@ -1,6 +1,9 @@
 import ComposableArchitecture
 import FactoryKit
 import Foundation
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 // PlaylistType is defined in Core/Models/Playlist.swift
 
@@ -18,6 +21,10 @@ public struct AddPlaylistFeature {
 
         /// M3U field
         public var m3uURL: String = ""
+
+        // Smart Paste (Madde #77)
+        public var detectedClipboardURL: String?
+        public var isShowingClipboardBanner: Bool = false
 
         // UI state
         public var isLoading: Bool = false
@@ -40,6 +47,12 @@ public struct AddPlaylistFeature {
     }
 
     public enum Action: BindableAction {
+        case onAppear
+        case checkClipboard
+        case clipboardURLDetected(String)
+        case applyClipboardURL
+        case dismissClipboardBanner
+
         case binding(BindingAction<State>)
         case playlistTypeChanged(PlaylistType)
         case connectTapped
@@ -68,6 +81,47 @@ public struct AddPlaylistFeature {
 
         Reduce { state, action in
             switch action {
+            case .onAppear, .checkClipboard:
+                #if os(iOS)
+                    return .run { send in
+                        await MainActor.run {
+                            if UIPasteboard.general.hasStrings, let string = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                                if string.lowercased().hasPrefix("http"),
+                                   string.lowercased().contains(".m3u") ||
+                                   string.lowercased().contains(".m3u8") ||
+                                   string.lowercased().contains("get.php") ||
+                                   string.lowercased().contains("player_api.php")
+                                {
+                                    Task { @MainActor in
+                                        send(.clipboardURLDetected(string))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                #else
+                    return .none
+                #endif
+
+            case let .clipboardURLDetected(url):
+                state.detectedClipboardURL = url
+                state.isShowingClipboardBanner = true
+                return .none
+
+            case .applyClipboardURL:
+                if let url = state.detectedClipboardURL {
+                    state.m3uURL = url
+                    state.playlistType = .m3u
+                    state.isShowingClipboardBanner = false
+                    state.detectedClipboardURL = nil
+                }
+                return .none
+
+            case .dismissClipboardBanner:
+                state.isShowingClipboardBanner = false
+                state.detectedClipboardURL = nil
+                return .none
+
             case .binding:
                 // Clear error on any field change
                 state.errorMessage = nil

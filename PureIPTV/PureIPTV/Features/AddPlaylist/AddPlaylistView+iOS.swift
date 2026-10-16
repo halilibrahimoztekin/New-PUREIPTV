@@ -39,7 +39,19 @@
                         // Header
                         header
                             .padding(.top, 56)
-                            .padding(.bottom, 40)
+                            .padding(.bottom, 32)
+
+                        // Smart Paste Banner (Madde #77)
+                        if store.isShowingClipboardBanner, let detectedURL = store.detectedClipboardURL {
+                            SmartPasteBannerView(
+                                detectedURL: detectedURL,
+                                onApply: { _ in store.send(.applyClipboardURL) },
+                                onDismiss: { store.send(.dismissClipboardBanner) }
+                            )
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.bottom, 24)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
 
                         // Type picker
                         typePicker
@@ -70,6 +82,9 @@
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.playlistType)
             .onTapGesture {
                 focusedField = nil
+            }
+            .onAppear {
+                store.send(.onAppear)
             }
         }
 

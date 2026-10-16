@@ -337,6 +337,23 @@
                                             .padding(10)
                                             .background(store.isScreenLocked ? AnyShapeStyle(Color.accentColor.opacity(0.8)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
                                     }
+
+                                    // External Player Launcher (Madde #86)
+                                    Menu {
+                                        ForEach(ExternalPlayer.allCases) { player in
+                                            Button {
+                                                store.send(.openInExternalPlayer(player))
+                                            } label: {
+                                                Label(player.rawValue, systemImage: player.iconName)
+                                            }
+                                        }
+                                    } label: {
+                                        Image(systemName: "arrow.up.right.video")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    }
                                 }
                             }
 
@@ -506,6 +523,18 @@
 
                                     if store.playlist != nil {
                                         HStack(spacing: 12) {
+                                            // Category Jump (Madde #97)
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.jumpToPreviousCategory)
+                                            }) {
+                                                Image(systemName: "chevron.left.2")
+                                                    .font(.subheadline.bold())
+                                                    .foregroundColor(.white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+
                                             Button(action: {
                                                 HapticManager.shared.trigger(.light)
                                                 store.send(.previousChannel)
@@ -523,6 +552,18 @@
                                             }) {
                                                 Image(systemName: "chevron.down")
                                                     .font(.headline)
+                                                    .foregroundColor(.white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+
+                                            // Category Jump (Madde #97)
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.jumpToNextCategory)
+                                            }) {
+                                                Image(systemName: "chevron.right.2")
+                                                    .font(.subheadline.bold())
                                                     .foregroundColor(.white)
                                                     .padding(10)
                                                     .background(.ultraThinMaterial, in: Circle())
@@ -740,6 +781,28 @@
                     .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
                     .zIndex(96)
                 }
+
+                // MARK: - Keyboard Shortcuts (Madde #68: iPad Magic Keyboard)
+
+                Group {
+                    Button("") { store.send(store.playerState == .playing ? .pause : .play) }
+                        .keyboardShortcut(.space, modifiers: [])
+                    Button("") { store.send(.toggleAspectRatioMode) }
+                        .keyboardShortcut("f", modifiers: [])
+                    Button("") { store.send(.jumpBackward) }
+                        .keyboardShortcut(.leftArrow, modifiers: [])
+                    Button("") { store.send(.jumpForward) }
+                        .keyboardShortcut(.rightArrow, modifiers: [])
+                    Button("") { store.send(.previousChannel) }
+                        .keyboardShortcut(.upArrow, modifiers: [])
+                    Button("") { store.send(.nextChannel) }
+                        .keyboardShortcut(.downArrow, modifiers: [])
+                    Button("") { store.send(.closeTapped) }
+                        .keyboardShortcut(.escape, modifiers: [])
+                }
+                .opacity(0.001)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background {

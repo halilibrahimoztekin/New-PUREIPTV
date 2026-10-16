@@ -338,6 +338,13 @@ public struct PlayerFeature {
         case playNextEpisode
         case upNextCountdownTick
 
+        /// External Player (Madde #86)
+        case openInExternalPlayer(ExternalPlayer)
+
+        // Category Jump (Madde #97)
+        case jumpToNextCategory
+        case jumpToPreviousCategory
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -1422,6 +1429,36 @@ public struct PlayerFeature {
                 state.upNextCountdownSeconds = 0
                 return .send(.playNextEpisode)
             }
+
+        case let .openInExternalPlayer(player):
+            #if canImport(UIKit)
+                let url = state.item.streamURL
+                _ = ExternalPlayerManager.shared.openStream(url, in: player)
+            #endif
+            return .none
+
+        case .jumpToNextCategory:
+            guard let playlist = state.playlist, !playlist.isEmpty else { return .none }
+            let categories = Array(Set(playlist.compactMap(\.categoryID))).sorted()
+            guard categories.count > 1, let currentCat = state.item.categoryID,
+                  let currentIdx = categories.firstIndex(of: currentCat) else { return .none }
+            let nextCat = categories[(currentIdx + 1) % categories.count]
+            if let firstInNext = playlist.first(where: { $0.categoryID == nextCat }) {
+                return .send(.selectChannel(firstInNext))
+            }
+            return .none
+
+        case .jumpToPreviousCategory:
+            guard let playlist = state.playlist, !playlist.isEmpty else { return .none }
+            let categories = Array(Set(playlist.compactMap(\.categoryID))).sorted()
+            guard categories.count > 1, let currentCat = state.item.categoryID,
+                  let currentIdx = categories.firstIndex(of: currentCat) else { return .none }
+            let prevIdx = (currentIdx - 1 + categories.count) % categories.count
+            let prevCat = categories[prevIdx]
+            if let firstInPrev = playlist.first(where: { $0.categoryID == prevCat }) {
+                return .send(.selectChannel(firstInPrev))
+            }
+            return .none
         }
     }
 
