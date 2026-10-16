@@ -126,7 +126,20 @@
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
                         focusedCategory = newCatID
+                        TVFocusMemory.shared.lastSelectedSeriesCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
+                    }
+                }
+                .onChange(of: focusedCategory) { _, newCatID in
+                    if let newCatID {
+                        TVFocusMemory.shared.lastSelectedSeriesCategoryID = newCatID
+                    }
+                }
+                .onAppear {
+                    let targetCatID = store.selectedCategoryID ?? TVFocusMemory.shared.lastSelectedSeriesCategoryID ?? store.categories.first?.id
+                    if let targetCatID {
+                        focusedCategory = targetCatID
+                        withAnimation { catProxy.scrollTo(targetCatID, anchor: .center) }
                     }
                 }
             }
@@ -237,20 +250,39 @@
                         }
                         .onChange(of: store.selectedSeries) { _, newSeries in
                             if let seriesID = newSeries?.id {
+                                TVFocusMemory.shared.recordSeries(seriesID, in: store.selectedCategoryID)
                                 focusedSeriesID = seriesID
                                 withAnimation { seriesProxy.scrollTo(seriesID, anchor: .center) }
                             }
                         }
-                        .onAppear {
-                            if let lastSelectedID = store.selectedSeries?.id {
-                                focusedSeriesID = lastSelectedID
+                        .onChange(of: store.selectedCategoryID) { _, newCatID in
+                            let targetID = TVFocusMemory.shared.lastSeries(
+                                in: newCatID,
+                                fallback: store.currentSeries.first?.id
+                            )
+                            if let targetID {
+                                focusedSeriesID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation { seriesProxy.scrollTo(lastSelectedID, anchor: .center) }
+                                    withAnimation { seriesProxy.scrollTo(targetID, anchor: .center) }
+                                }
+                            }
+                        }
+                        .onAppear {
+                            let targetID = TVFocusMemory.shared.lastSeries(
+                                in: store.selectedCategoryID,
+                                fallback: store.selectedSeries?.id ?? store.currentSeries.first?.id
+                            )
+                            if let targetID {
+                                focusedSeriesID = targetID
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation { seriesProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onChange(of: focusedSeriesID) { _, newID in
-                            guard let newID, let series = store.currentSeries.first(where: { $0.id == newID }) else { return }
+                            guard let newID else { return }
+                            TVFocusMemory.shared.recordSeries(newID, in: store.selectedCategoryID)
+                            guard let series = store.currentSeries.first(where: { $0.id == newID }) else { return }
                             let firstChar = String(series.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
                             if !firstChar.isEmpty, firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar

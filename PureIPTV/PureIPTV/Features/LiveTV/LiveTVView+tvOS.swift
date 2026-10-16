@@ -161,7 +161,20 @@
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
                         focusedCategory = newCatID
+                        TVFocusMemory.shared.lastSelectedLiveCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
+                    }
+                }
+                .onChange(of: focusedCategory) { _, newCatID in
+                    if let newCatID {
+                        TVFocusMemory.shared.lastSelectedLiveCategoryID = newCatID
+                    }
+                }
+                .onAppear {
+                    let targetCatID = store.selectedCategoryID ?? TVFocusMemory.shared.lastSelectedLiveCategoryID ?? store.categories.first?.id
+                    if let targetCatID {
+                        focusedCategory = targetCatID
+                        withAnimation { catProxy.scrollTo(targetCatID, anchor: .center) }
                     }
                 }
             }
@@ -252,21 +265,40 @@
                     }
                     .onChange(of: store.selectedChannel) { _, newChannel in
                         if let channelID = newChannel?.id {
+                            TVFocusMemory.shared.recordChannel(channelID, in: store.selectedCategoryID)
                             focusedChannelID = channelID
                             withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
                         }
                     }
-                    .onAppear {
-                        // Focus Memory: return focus to last selected channel when coming back from player
-                        if let lastSelectedID = store.selectedChannel?.id {
-                            focusedChannelID = lastSelectedID
+                    .onChange(of: store.selectedCategoryID) { _, newCatID in
+                        let targetID = TVFocusMemory.shared.lastChannel(
+                            in: newCatID,
+                            fallback: store.currentChannels.first?.id
+                        )
+                        if let targetID {
+                            focusedChannelID = targetID
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { channelProxy.scrollTo(lastSelectedID, anchor: .center) }
+                                withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
+                            }
+                        }
+                    }
+                    .onAppear {
+                        // Focus Memory: return focus to last selected channel or category memory
+                        let targetID = TVFocusMemory.shared.lastChannel(
+                            in: store.selectedCategoryID,
+                            fallback: store.selectedChannel?.id ?? store.currentChannels.first?.id
+                        )
+                        if let targetID {
+                            focusedChannelID = targetID
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
                             }
                         }
                     }
                     .onChange(of: focusedChannelID) { _, newID in
-                        guard let newID, let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
+                        guard let newID else { return }
+                        TVFocusMemory.shared.recordChannel(newID, in: store.selectedCategoryID)
+                        guard let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
                         let firstChar = String(ch.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
                         if !firstChar.isEmpty, firstChar != currentScrubLetter {
                             currentScrubLetter = firstChar

@@ -129,7 +129,20 @@
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
                         focusedCategory = newCatID
+                        TVFocusMemory.shared.lastSelectedVODCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
+                    }
+                }
+                .onChange(of: focusedCategory) { _, newCatID in
+                    if let newCatID {
+                        TVFocusMemory.shared.lastSelectedVODCategoryID = newCatID
+                    }
+                }
+                .onAppear {
+                    let targetCatID = store.selectedCategoryID ?? TVFocusMemory.shared.lastSelectedVODCategoryID ?? store.categories.first?.id
+                    if let targetCatID {
+                        focusedCategory = targetCatID
+                        withAnimation { catProxy.scrollTo(targetCatID, anchor: .center) }
                     }
                 }
             }
@@ -240,20 +253,39 @@
                         }
                         .onChange(of: store.selectedVOD) { _, newVOD in
                             if let vodID = newVOD?.id {
+                                TVFocusMemory.shared.recordVOD(vodID, in: store.selectedCategoryID)
                                 focusedVODID = vodID
                                 withAnimation { vodProxy.scrollTo(vodID, anchor: .center) }
                             }
                         }
-                        .onAppear {
-                            if let lastSelectedID = store.selectedVOD?.id {
-                                focusedVODID = lastSelectedID
+                        .onChange(of: store.selectedCategoryID) { _, newCatID in
+                            let targetID = TVFocusMemory.shared.lastVOD(
+                                in: newCatID,
+                                fallback: store.currentVODs.first?.id
+                            )
+                            if let targetID {
+                                focusedVODID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation { vodProxy.scrollTo(lastSelectedID, anchor: .center) }
+                                    withAnimation { vodProxy.scrollTo(targetID, anchor: .center) }
+                                }
+                            }
+                        }
+                        .onAppear {
+                            let targetID = TVFocusMemory.shared.lastVOD(
+                                in: store.selectedCategoryID,
+                                fallback: store.selectedVOD?.id ?? store.currentVODs.first?.id
+                            )
+                            if let targetID {
+                                focusedVODID = targetID
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation { vodProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onChange(of: focusedVODID) { _, newID in
-                            guard let newID, let vod = store.currentVODs.first(where: { $0.id == newID }) else { return }
+                            guard let newID else { return }
+                            TVFocusMemory.shared.recordVOD(newID, in: store.selectedCategoryID)
+                            guard let vod = store.currentVODs.first(where: { $0.id == newID }) else { return }
                             let firstChar = String(vod.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
                             if !firstChar.isEmpty, firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar
