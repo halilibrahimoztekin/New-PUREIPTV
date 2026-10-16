@@ -111,6 +111,17 @@ public struct EPGTimelineView: View {
                             .padding(.bottom, 24)
                             .transition(.scale.combined(with: .opacity))
                     }
+
+                    // PiP-in-EPG Mini Preview Floating Card (Madde #25)
+                    if let previewChannel = store.activePreviewChannel {
+                        VStack {
+                            pipInEPGCard(channel: previewChannel)
+                                .padding(.top, 48)
+                                .padding(.trailing, 16)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            Spacer()
+                        }
+                    }
                 }
                 .onAppear {
                     store.send(.onAppear)
@@ -781,6 +792,8 @@ public struct EPGTimelineView: View {
         let isSearchMatch = isProgramMatchingSearch(program)
         let isFallback = program.id.hasPrefix("fallback_") || program.id.hasPrefix("gap_")
 
+        let genre = genrePastelColor(for: program)
+
         return Button {
             HapticManager.shared.trigger(.light)
             if isNow {
@@ -792,7 +805,7 @@ public struct EPGTimelineView: View {
             }
         } label: {
             ZStack(alignment: .bottomLeading) {
-                // Card Background
+                // Card Background (Madde #28: Renk Kodlu EPG Kategorileri)
                 RoundedRectangle(cornerRadius: 6)
                     .fill(
                         isSearchMatch
@@ -805,7 +818,11 @@ public struct EPGTimelineView: View {
                                         ? Color.yellow.opacity(0.12)
                                         : (isFallback
                                             ? Color.white.opacity(0.035)
-                                            : Color.white.opacity(0.06)))))
+                                            : genre.background))))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(genre.border.opacity(genre.badgeText != nil ? 0.5 : 0.0), lineWidth: 1)
                     )
 
                 // Live Progress bar fill for on-air program
@@ -822,6 +839,15 @@ public struct EPGTimelineView: View {
                 // Content
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
+                        if let badge = genre.badgeText {
+                            Text(badge)
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(genre.border)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(genre.border.opacity(0.15), in: Capsule())
+                        }
+
                         if isNow {
                             Circle()
                                 .fill(Color.red)
@@ -1398,5 +1424,83 @@ public struct EPGTimelineView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d"
         return formatter.string(from: date)
+    }
+
+    // MARK: - Renk Kodlu EPG Kategorileri (Madde #28)
+
+    private func genrePastelColor(for program: EPGProgram) -> (background: Color, border: Color, badgeText: String?) {
+        let text = (program.title + " " + program.description).lowercased()
+        if text.contains("spor") || text.contains("sport") || text.contains("futbol") || text.contains("basket") || text.contains("lig") || text.contains("match") {
+            return (Color.orange.opacity(0.18), Color.orange.opacity(0.5), "SPOR")
+        } else if text.contains("haber") || text.contains("news") || text.contains("bülten") || text.contains("gündem") {
+            return (Color.blue.opacity(0.18), Color.blue.opacity(0.5), "HABER")
+        } else if text.contains("sinema") || text.contains("film") || text.contains("movie") || text.contains("dizi") || text.contains("cinema") {
+            return (Color.purple.opacity(0.18), Color.purple.opacity(0.5), "SİNEMA")
+        } else if text.contains("çocuk") || text.contains("cocuk") || text.contains("cartoon") || text.contains("animasyon") || text.contains("kids") {
+            return (Color.yellow.opacity(0.18), Color.yellow.opacity(0.5), "ÇOCUK")
+        } else {
+            return (Color.white.opacity(0.06), Color.white.opacity(0.12), nil)
+        }
+    }
+
+    // MARK: - PiP-in-EPG Canlı Mini Önizleme (Madde #25)
+
+    private func pipInEPGCard(channel: MediaModels.Item) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Color.black
+                Image(systemName: "tv.fill")
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .frame(width: 72, height: 42)
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Circle().fill(Color.red).frame(width: 5, height: 5)
+                    Text("CANLI ÖNİZLEME")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundColor(.red)
+                }
+                Text(channel.title)
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+
+            Button {
+                store.send(.channelTapped(channel))
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Color.white.opacity(0.15), in: Circle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                store.send(.closePiPPreview)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 26, height: 26)
+                    .background(Color.white.opacity(0.1), in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 10)
     }
 }

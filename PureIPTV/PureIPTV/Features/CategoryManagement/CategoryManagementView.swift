@@ -205,6 +205,22 @@ public struct CategoryManagementView: View {
                         .padding(.vertical, 6)
                         .background(Color.orange.opacity(0.14), in: Capsule())
                 }
+                // Country Presets (Madde #52)
+                Menu {
+                    Button("Sadece Türkiye (TR) Gruplarını Bırak") {
+                        store.send(.bulkKeepOnlyPrefixes(["tr", "türk", "turk", "turkey"]))
+                    }
+                    Button("Sadece TR / UK / US Gruplarını Bırak") {
+                        store.send(.bulkKeepOnlyPrefixes(["tr", "türk", "turk", "uk", "us", "usa"]))
+                    }
+                } label: {
+                    Label("Hızlı Ülke Filtresi", systemImage: "globe")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.cyan)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.cyan.opacity(0.14), in: Capsule())
+                }
                 .buttonStyle(.plain)
 
                 Spacer()

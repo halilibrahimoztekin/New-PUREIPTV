@@ -65,6 +65,11 @@ public struct PlayerSidebarDrawer: View {
         .onAppear {
             focusedItemID = store.item.id
         }
+        .onChange(of: focusedItemID) { _, newID in
+            if let newID, let ch = store.playlist?.first(where: { $0.id == newID }) {
+                PrebufferingManager.shared.prepareChannel(url: ch.streamURL)
+            }
+        }
         #if os(tvOS)
         .onExitCommand {
             onClose()

@@ -34,6 +34,7 @@
         // Aspect Ratio & Zoom State (Madde #14)
         @State private var pinchStartScale: CGFloat? = nil
         @State private var aspectDismissWorkItem: DispatchWorkItem? = nil
+        @State private var isShowingSpeedTest: Bool = false
 
         // Channel Zapping State (Madde #16)
         @State private var interactiveZappingDirection: ZappingDirection? = nil
@@ -597,34 +598,23 @@
                         .background(.ultraThinMaterial, in: Circle())
                 }
 
-                // Global Error Overlay with Retry (visible whether controls are active or hidden)
+                // Global Error Overlay with Diagnostic Support (Madde #89)
                 if let error = store.errorMessage {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.yellow)
-                        Text(error)
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                        Button {
+                    PlayerFriendlyErrorView(
+                        errorMessage: error,
+                        onRetry: {
                             HapticManager.shared.trigger(.medium)
                             store.send(.retryPlayback)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.clockwise")
-                                Text(AppStrings.Common.retry)
-                            }
-                            .font(.caption.bold())
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.2), in: Capsule())
-                            .foregroundColor(.white)
+                        },
+                        onOpenSpeedTest: {
+                            isShowingSpeedTest = true
+                        },
+                        onDismiss: {
+                            store.send(.closeTapped)
                         }
-                    }
-                    .padding(20)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .shadow(radius: 10)
+                    )
+                    .padding(24)
+                    .transition(.scale.combined(with: .opacity))
                 }
 
                 // Gesture Feedback Overlay
@@ -808,6 +798,9 @@
                 if newPhase == .background {
                     store.send(.onDisappear)
                 }
+            }
+            .sheet(isPresented: $isShowingSpeedTest) {
+                StreamSpeedTestView()
             }
         }
 

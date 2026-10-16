@@ -51,49 +51,19 @@
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
-                    // Error Overlay
+                    // Error Overlay (Madde #89)
                     if let errorMessage = store.errorMessage {
-                        VStack(spacing: 24) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 56))
-                                .foregroundStyle(.yellow)
-
-                            Text(errorMessage)
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: 600)
-
-                            HStack(spacing: 32) {
-                                Button {
-                                    store.send(.retryPlayback)
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "arrow.clockwise")
-                                        Text(AppStrings.Common.retry)
-                                    }
-                                    .font(.system(size: 22, weight: .bold))
-                                    .padding(.horizontal, 28)
-                                    .padding(.vertical, 14)
-                                }
-                                .buttonStyle(.card)
-
-                                Button {
-                                    store.send(.closeTapped)
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "xmark")
-                                        Text(AppStrings.Common.close)
-                                    }
-                                    .font(.system(size: 22, weight: .bold))
-                                    .padding(.horizontal, 28)
-                                    .padding(.vertical, 14)
-                                }
-                                .buttonStyle(.card)
+                        PlayerFriendlyErrorView(
+                            errorMessage: errorMessage,
+                            onRetry: {
+                                store.send(.retryPlayback)
+                            },
+                            onOpenSpeedTest: nil,
+                            onDismiss: {
+                                store.send(.closeTapped)
                             }
-                        }
+                        )
                         .padding(48)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 

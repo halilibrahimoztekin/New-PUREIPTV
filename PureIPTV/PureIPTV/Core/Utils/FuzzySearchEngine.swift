@@ -2,7 +2,7 @@ import Foundation
 
 /// Fast, thread-safe fuzzy search and relevance ranking engine.
 /// Optimized for large catalogs (10,000 - 50,000+ items) without blocking the MainActor.
-public enum FuzzySearchEngine: Sendable {
+public nonisolated enum FuzzySearchEngine: Sendable {
     /// Normalizes a string for fast case-insensitive, diacritic-insensitive matching across all locales.
     public static func normalize(_ text: String) -> String {
         var str = text.lowercased()
@@ -103,7 +103,51 @@ public enum FuzzySearchEngine: Sendable {
             return 200
         }
 
+        // 6. tvOS Voice Dictation / Levenshtein Distance Match (Madde #62)
+        // Helps catch phonetic dictation errors (e.g. "bein" vs "beyin", "spor" vs "spo")
+        if query.count >= 3 {
+            let maxAllowedDistance = query.count <= 4 ? 1 : 2
+            let dist = levenshteinDistance(between: query, and: target)
+            if dist <= maxAllowedDistance {
+                return 180 - (dist * 40)
+            }
+
+            // Word-level Levenshtein check
+            for tToken in targetTokens where abs(tToken.count - query.count) <= maxAllowedDistance {
+                let tokenDist = levenshteinDistance(between: query, and: tToken)
+                if tokenDist <= maxAllowedDistance {
+                    return 160 - (tokenDist * 30)
+                }
+            }
+        }
+
         return nil
+    }
+
+    /// Computes Levenshtein Distance for typo and dictation tolerance (Madde #62)
+    public static func levenshteinDistance(between s1: String, and s2: String) -> Int {
+        let a = Array(s1)
+        let b = Array(s2)
+        let (m, n) = (a.count, b.count)
+        guard m > 0 else { return n }
+        guard n > 0 else { return m }
+
+        var prev = Array(0 ... n)
+        var curr = [Int](repeating: 0, count: n + 1)
+
+        for i in 1 ... m {
+            curr[0] = i
+            for j in 1 ... n {
+                let cost = a[i - 1] == b[j - 1] ? 0 : 1
+                curr[j] = min(
+                    prev[j] + 1,
+                    curr[j - 1] + 1,
+                    prev[j - 1] + cost
+                )
+            }
+            prev = curr
+        }
+        return prev[n]
     }
 
     /// Generic fuzzy search on any collection of items with a title keypath, ranking by relevance.

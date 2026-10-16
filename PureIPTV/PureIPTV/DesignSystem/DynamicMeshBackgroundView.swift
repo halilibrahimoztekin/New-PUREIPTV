@@ -13,7 +13,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
     public let accent: Color
     public let background: Color
 
-    public init(
+    public nonisolated init(
         primary: Color,
         secondary: Color,
         accent: Color,
@@ -25,7 +25,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
         self.background = background
     }
 
-    public static let `default` = DynamicMeshPalette(
+    public nonisolated static let `default` = DynamicMeshPalette(
         primary: Color(hex: "#0A84FF").opacity(0.38),
         secondary: Color(hex: "#5E5CE6").opacity(0.28),
         accent: Color(hex: "#30D158").opacity(0.20),
@@ -33,7 +33,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
     )
 
     /// Deterministic fallback palette from string (e.g. channel or movie title)
-    public static func fromSeed(_ seed: String) -> DynamicMeshPalette {
+    public nonisolated static func fromSeed(_ seed: String) -> DynamicMeshPalette {
         let hash = abs(seed.hashValue)
         let hue1 = Double(hash % 360) / 360.0
         let hue2 = Double((hash / 360) % 360) / 360.0

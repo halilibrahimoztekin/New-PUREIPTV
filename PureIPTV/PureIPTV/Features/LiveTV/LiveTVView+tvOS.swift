@@ -207,127 +207,143 @@
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Channel grid with Focus Memory
-                ScrollViewReader { channelProxy in
-                    ScrollView {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
-                            spacing: 24
-                        ) {
-                            ForEach(store.currentChannels) { channel in
-                                TVChannelCard(
-                                    channel: channel,
-                                    isSelected: store.selectedChannel?.id == channel.id
-                                ) {
-                                    store.send(.channelSelected(channel))
-                                }
-                                .focused($focusedChannelID, equals: channel.id)
-                                .id(channel.id)
-                                .contextMenu {
-                                    Button {
-                                        store.send(.toggleFavorite(channel))
-                                    } label: {
-                                        if store.favoriteIDs.contains(channel.id) {
-                                            Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                        } else {
-                                            Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                        }
-                                    }
+                channelScrollView
+            }
+        }
 
-                                    Button {
-                                        store.send(.sendToMultiView(channel))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
-                                    }
-
-                                    Button {
-                                        store.send(.openChannelGuide(channel))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
-                                    }
-
-                                    Button {
-                                        store.send(.openChannelEPG(channel))
-                                    } label: {
-                                        Label("Zaman Çizelgesi (Timeline)".localized, systemImage: "calendar.day.timeline.left")
-                                    }
-
-                                    Button(role: .destructive) {
-                                        store.send(.hideChannel(channel))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 48)
-                        .padding(.vertical, 48)
-                    }
-                    .onChange(of: store.selectedChannel) { _, newChannel in
-                        if let channelID = newChannel?.id {
-                            TVFocusMemory.shared.recordChannel(channelID, in: store.selectedCategoryID)
-                            focusedChannelID = channelID
-                            withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
-                        }
-                    }
-                    .onChange(of: store.selectedCategoryID) { _, newCatID in
-                        let targetID = TVFocusMemory.shared.lastChannel(
-                            in: newCatID,
-                            fallback: store.currentChannels.first?.id
-                        )
-                        if let targetID {
-                            focusedChannelID = targetID
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
-                            }
-                        }
-                    }
-                    .onAppear {
-                        // Focus Memory: return focus to last selected channel or category memory
-                        let targetID = TVFocusMemory.shared.lastChannel(
-                            in: store.selectedCategoryID,
-                            fallback: store.selectedChannel?.id ?? store.currentChannels.first?.id
-                        )
-                        if let targetID {
-                            focusedChannelID = targetID
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
-                            }
-                        }
-                    }
-                    .onChange(of: focusedChannelID) { _, newID in
-                        guard let newID else { return }
-                        TVFocusMemory.shared.recordChannel(newID, in: store.selectedCategoryID)
-                        guard let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
-                        let firstChar = String(ch.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                        if !firstChar.isEmpty, firstChar != currentScrubLetter {
-                            currentScrubLetter = firstChar
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                isScrubOverlayVisible = true
-                            }
-                            hideScrubTask?.cancel()
-                            hideScrubTask = Task {
-                                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                                guard !Task.isCancelled else { return }
-                                await MainActor.run {
-                                    withAnimation(.easeOut(duration: 0.35)) {
-                                        isScrubOverlayVisible = false
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .overlay(
-                        TVAlphabetScrubberOverlay(
-                            currentLetter: currentScrubLetter,
-                            isVisible: isScrubOverlayVisible,
-                            availableLetters: Set(store.currentChannels.compactMap {
-                                let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                                return ("A" ... "Z").contains(c) ? c : "#"
-                            })
-                        )
-                    )
+        private var channelScrollView: some View {
+            ScrollViewReader { channelProxy in
+                ScrollView {
+                    channelGrid
                 }
+                .onChange(of: store.selectedChannel) { _, newChannel in
+                    if let channelID = newChannel?.id {
+                        TVFocusMemory.shared.recordChannel(channelID, in: store.selectedCategoryID)
+                        focusedChannelID = channelID
+                        withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
+                    }
+                }
+                .onChange(of: store.selectedCategoryID) { _, newCatID in
+                    let targetID = TVFocusMemory.shared.lastChannel(
+                        in: newCatID,
+                        fallback: store.currentChannels.first?.id
+                    )
+                    if let targetID {
+                        focusedChannelID = targetID
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
+                        }
+                    }
+                }
+                .onAppear {
+                    let targetID = TVFocusMemory.shared.lastChannel(
+                        in: store.selectedCategoryID,
+                        fallback: store.selectedChannel?.id ?? store.currentChannels.first?.id
+                    )
+                    if let targetID {
+                        focusedChannelID = targetID
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation { channelProxy.scrollTo(targetID, anchor: .center) }
+                        }
+                    }
+                }
+                .onChange(of: focusedChannelID) { _, newID in
+                    handleFocusChange(newID)
+                }
+                .overlay(
+                    TVAlphabetScrubberOverlay(
+                        currentLetter: currentScrubLetter,
+                        isVisible: isScrubOverlayVisible,
+                        availableLetters: Set(store.currentChannels.compactMap {
+                            let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
+                            return ("A" ... "Z").contains(c) ? c : "#"
+                        })
+                    )
+                )
+            }
+        }
+
+        private var channelGrid: some View {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
+                spacing: 24
+            ) {
+                ForEach(store.currentChannels) { channel in
+                    TVChannelCard(
+                        channel: channel,
+                        isSelected: store.selectedChannel?.id == channel.id
+                    ) {
+                        store.send(.channelSelected(channel))
+                    }
+                    .focused($focusedChannelID, equals: channel.id)
+                    .id(channel.id)
+                    .contextMenu {
+                        channelContextMenu(for: channel)
+                    }
+                }
+            }
+            .padding(.horizontal, 48)
+            .padding(.vertical, 48)
+        }
+
+        private func handleFocusChange(_ newID: String?) {
+            guard let newID else { return }
+            TVFocusMemory.shared.recordChannel(newID, in: store.selectedCategoryID)
+            guard let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
+            PrebufferingManager.shared.prepareChannel(url: ch.streamURL)
+            let firstChar = String(ch.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
+            if !firstChar.isEmpty, firstChar != currentScrubLetter {
+                currentScrubLetter = firstChar
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    isScrubOverlayVisible = true
+                }
+                hideScrubTask?.cancel()
+                hideScrubTask = Task {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        withAnimation(.easeOut(duration: 0.35)) {
+                            isScrubOverlayVisible = false
+                        }
+                    }
+                }
+            }
+        }
+
+        @ViewBuilder
+        private func channelContextMenu(for channel: MediaModels.Item) -> some View {
+            Button {
+                store.send(.toggleFavorite(channel))
+            } label: {
+                if store.favoriteIDs.contains(channel.id) {
+                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                } else {
+                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                }
+            }
+
+            Button {
+                store.send(.sendToMultiView(channel))
+            } label: {
+                Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+            }
+
+            Button {
+                store.send(.openChannelGuide(channel))
+            } label: {
+                Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+            }
+
+            Button {
+                store.send(.openChannelEPG(channel))
+            } label: {
+                Label("Zaman Çizelgesi (Timeline)".localized, systemImage: "calendar.day.timeline.left")
+            }
+
+            Button(role: .destructive) {
+                store.send(.hideChannel(channel))
+            } label: {
+                Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
             }
         }
     }
@@ -368,7 +384,6 @@
                     }
                 }
             }
-            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: isSelected))
         }
     }
 

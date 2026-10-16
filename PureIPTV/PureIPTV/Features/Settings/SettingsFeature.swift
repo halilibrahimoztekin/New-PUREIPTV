@@ -3,6 +3,20 @@ import Foundation
 import Kingfisher
 import RevenueCat
 
+public enum BufferProfile: String, CaseIterable, Sendable, Equatable {
+    case lowLatency = "Düşük Gecikme (1s)"
+    case balanced = "Dengeli (3s)"
+    case smooth = "Kesintisiz / Yüksek Arabellek (8s)"
+
+    public var seconds: Double {
+        switch self {
+        case .lowLatency: 1.0
+        case .balanced: 3.0
+        case .smooth: 8.0
+        }
+    }
+}
+
 @Reducer
 public struct SettingsFeature {
     @ObservableState
@@ -30,6 +44,15 @@ public struct SettingsFeature {
         public var preferredSubtitleLanguage: String = "off"
         public var rememberMediaTrackPreferences: Bool = true
         public var isICloudSyncEnabled: Bool = true
+
+        /// Frame Rate and Dynamic Range Matching (Madde #38)
+        public var tvOSMatchContent: Bool = true
+
+        /// Buffer Profile (Madde #39)
+        public var bufferProfile: BufferProfile = .balanced
+
+        /// Compliance Demo Mode (Madde #88)
+        public var isComplianceDemoMode: Bool = false
 
         public var cacheSize: String = AppStrings.Settings.calculating
         public var isShowingClearCacheConfirmation: Bool = false
@@ -74,6 +97,9 @@ public struct SettingsFeature {
         case setPreferredSubtitleLanguage(String)
         case setRememberMediaTrackPreferences(Bool)
         case setICloudSyncEnabled(Bool)
+        case setTvOSMatchContent(Bool)
+        case setBufferProfile(BufferProfile)
+        case setComplianceDemoMode(Bool)
 
         case calculateCacheSize
         case cacheSizeCalculated(String)
@@ -249,6 +275,21 @@ public struct SettingsFeature {
                 return .run { _ in
                     settingsClient.setIsICloudSyncEnabled(val)
                 }
+
+            case let .setTvOSMatchContent(enabled):
+                state.tvOSMatchContent = enabled
+                UserDefaults.standard.set(enabled, forKey: "pureiptv_match_content")
+                return .none
+
+            case let .setBufferProfile(profile):
+                state.bufferProfile = profile
+                UserDefaults.standard.set(profile.rawValue, forKey: "pureiptv_buffer_profile")
+                return .none
+
+            case let .setComplianceDemoMode(enabled):
+                state.isComplianceDemoMode = enabled
+                ComplianceModeManager.shared.isComplianceModeActive = enabled
+                return .none
 
             case .calculateCacheSize:
                 return .run { send in

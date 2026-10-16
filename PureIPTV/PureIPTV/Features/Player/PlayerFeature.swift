@@ -446,7 +446,11 @@ public struct PlayerFeature {
                             duration: totalSecs,
                             seriesID: item.seriesID
                         )
-                        try? await databaseClient.saveWatchProgress(historyItem)
+                        if totalSecs > 0, currentSecs / totalSecs >= 0.90 {
+                            try? await databaseClient.deleteWatchProgress(item.id)
+                        } else {
+                            try? await databaseClient.saveWatchProgress(historyItem)
+                        }
                     }
 
                     if !isPiPActive {
@@ -1252,6 +1256,26 @@ public struct PlayerFeature {
                     state.errorMessage = nil
                     var actions: [Effect<Action>] = []
 
+                    LiveStreamActivityManager.shared.startStreamActivity(
+                        channelTitle: state.item.title,
+                        programTitle: state.currentEPGProgram?.title,
+                        categoryName: state.item.seriesTitle
+                    )
+                    StreamHandoffManager.shared.updatePlaybackActivity(
+                        channelTitle: state.item.title,
+                        streamURL: state.item.streamURL,
+                        playbackPosition: state.position,
+                        isLive: state.item.isLive
+                    )
+                    CompanionModeManager.shared.broadcastPlayback(
+                        info: CompanionPlaybackInfo(
+                            channelID: state.item.id,
+                            channelTitle: state.item.title,
+                            programTitle: state.currentEPGProgram?.title,
+                            isPlaying: true
+                        )
+                    )
+
                     // Apply initial progress / seek if not yet applied
                     if !state.hasAppliedInitialSeek {
                         state.hasAppliedInitialSeek = true
@@ -1294,7 +1318,30 @@ public struct PlayerFeature {
                         await send(.retryPlayback)
                     }
                 } else {
-                    state.errorMessage = AppStrings.Errors.cannotPlayStream
+                    // Automatic failover source search (Madde #34)
+                    let currentTitle = state.item.title.lowercased()
+                    let baseCleanTitle = currentTitle
+                        .replacingOccurrences(of: "fhd", with: "")
+                        .replacingOccurrences(of: "hd", with: "")
+                        .replacingOccurrences(of: "4k", with: "")
+                        .replacingOccurrences(of: "sd", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    if let failoverItem = state.playlist?.first(where: {
+                        $0.id != state.item.id &&
+                            $0.title.lowercased()
+                            .replacingOccurrences(of: "fhd", with: "")
+                            .replacingOccurrences(of: "hd", with: "")
+                            .replacingOccurrences(of: "4k", with: "")
+                            .replacingOccurrences(of: "sd", with: "")
+                            .trimmingCharacters(in: .whitespacesAndNewlines) == baseCleanTitle
+                    }) {
+                        state.retryCount = 0
+                        state.errorMessage = "Yedek kaynağa geçiliyor: \(failoverItem.title)..."
+                        return .send(.selectChannel(failoverItem))
+                    } else {
+                        state.errorMessage = AppStrings.Errors.cannotPlayStream
+                    }
                 }
             case let .timeChanged(time):
                 state.currentTime = time
@@ -1348,15 +1395,23 @@ public struct PlayerFeature {
                             duration: totalSecs,
                             seriesID: item.seriesID
                         )
-                        try? await databaseClient.saveWatchProgress(historyItem)
+                        if totalSecs > 0, currentSecs / totalSecs >= 0.90 {
+                            try? await databaseClient.deleteWatchProgress(item.id)
+                        } else {
+                            try? await databaseClient.saveWatchProgress(historyItem)
+                        }
+                    }
+
+                    await MainActor.run {
+                        LiveStreamActivityManager.shared.endStreamActivity()
+                        StreamHandoffManager.shared.invalidateActivity()
+                        CompanionModeManager.shared.clearPlayback()
+                        appCoordinator.trigger(.dismissPlayer)
                     }
 
                     try? await playerClient.stop()
                     await playerClient.release()
                     await send(.delegate(.didClose))
-                    await MainActor.run {
-                        appCoordinator.trigger(.dismissPlayer)
-                    }
                     await dismiss()
                 }
             )

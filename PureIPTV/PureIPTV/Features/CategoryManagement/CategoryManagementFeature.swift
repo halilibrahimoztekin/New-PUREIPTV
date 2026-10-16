@@ -91,6 +91,7 @@ public struct CategoryManagementFeature {
         case showAllTapped
         case hideAllTapped
         case invertVisibilityTapped
+        case bulkKeepOnlyPrefixes([String])
         case resetOrderTapped
         case saveTapped
         case saveResponse(Result<Void, Error>)
@@ -274,6 +275,30 @@ public struct CategoryManagementFeature {
                             type: state.type.rawValue,
                             categoryID: category.id,
                             isHidden: true,
+                            orderIndex: Int.max
+                        )
+                        state.categoryPreferences[category.id] = pref
+                    }
+                }
+                return .none
+
+            case let .bulkKeepOnlyPrefixes(prefixes):
+                state.hasUnsavedChanges = true
+                let lowerPrefixes = prefixes.map { $0.lowercased() }
+                for category in state.categories {
+                    let catName = category.name.lowercased()
+                    let shouldKeep = lowerPrefixes.contains { catName.contains($0) }
+                    let newHidden = !shouldKeep
+                    if let pref = state.categoryPreferences[category.id] {
+                        var updated = pref
+                        updated.isHidden = newHidden
+                        state.categoryPreferences[category.id] = updated
+                    } else {
+                        let pref = CategoryPreferenceDTO(
+                            id: "\(state.type.rawValue)_\(category.id)",
+                            type: state.type.rawValue,
+                            categoryID: category.id,
+                            isHidden: newHidden,
                             orderIndex: Int.max
                         )
                         state.categoryPreferences[category.id] = pref

@@ -24,6 +24,10 @@ public struct EPGTimelineFeature {
         public var lastSyncTimestamp: Date?
         public var syncStatusMessage: String?
 
+        // PiP-in-EPG Live Mini-Preview (Madde #25)
+        public var activePreviewChannel: MediaModels.Item?
+        public var isPiPActive: Bool = false
+
         public var lastSyncFormatted: String? {
             guard let lastSyncTimestamp else { return nil }
             let formatter = DateFormatter()
@@ -140,6 +144,8 @@ public struct EPGTimelineFeature {
         case syncCompleted(Date)
         case clearSyncStatusMessage
         case closeTapped
+        case togglePiPPreview(MediaModels.Item?)
+        case closePiPPreview
 
         case delegate(Delegate)
         public enum Delegate: Equatable {
@@ -381,6 +387,21 @@ public struct EPGTimelineFeature {
                         await dismiss()
                     }
                 )
+
+            case let .togglePiPPreview(channel):
+                if state.activePreviewChannel?.id == channel?.id {
+                    state.activePreviewChannel = nil
+                    state.isPiPActive = false
+                } else {
+                    state.activePreviewChannel = channel
+                    state.isPiPActive = channel != nil
+                }
+                return .none
+
+            case .closePiPPreview:
+                state.activePreviewChannel = nil
+                state.isPiPActive = false
+                return .none
 
             case .delegate:
                 return .none
