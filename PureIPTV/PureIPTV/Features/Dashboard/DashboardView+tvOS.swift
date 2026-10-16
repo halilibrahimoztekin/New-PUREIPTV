@@ -36,8 +36,9 @@
                     ScrollView {
                         VStack(alignment: .leading, spacing: 50) {
                             // Top Bar: Active Playlist Fast Switcher
-                            HStack {
+                            HStack(spacing: 20) {
                                 Spacer()
+                                VPNStatusBadge(compact: false)
                                 Button {
                                     store.send(.openManagePlaylistsTapped)
                                 } label: {

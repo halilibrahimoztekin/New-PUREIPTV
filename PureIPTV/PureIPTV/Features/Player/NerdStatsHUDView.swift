@@ -151,6 +151,22 @@ public struct NerdStatsHUDView: View {
                     value: streamFormatString,
                     accentColor: Color(hex: "#64D2FF")
                 )
+
+                // VPN Status (Madde #93)
+                StatCard(
+                    icon: VPNMonitor.shared.isConnected ? "lock.shield.fill" : "shield",
+                    title: "Ağ & VPN",
+                    value: VPNMonitor.shared.isConnected ? "VPN Tüneli Aktif" : "Doğrudan ISP",
+                    accentColor: VPNMonitor.shared.isConnected ? Color.green : Color.white.opacity(0.7)
+                )
+
+                // Stream Type / Live Mode
+                StatCard(
+                    icon: item.isLive ? "antenna.radiowaves.left.and.right" : "film.fill",
+                    title: "Yayın Tipi",
+                    value: item.isLive ? "Canlı TV (Live)" : "İsteğe Bağlı (VOD)",
+                    accentColor: Color(hex: "#FFD60A")
+                )
             }
 
             // ── Raw Stats Output (if present from native engine) ──────

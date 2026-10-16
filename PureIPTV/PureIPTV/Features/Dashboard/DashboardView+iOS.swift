@@ -28,12 +28,14 @@
                 ScrollView {
                     VStack(spacing: 24) {
                         // Top Switcher Bar
-                        HStack {
+                        HStack(spacing: 8) {
                             Text(AppStrings.Dashboard.title)
                                 .font(.title2.bold())
                                 .foregroundStyle(.white)
 
                             Spacer()
+
+                            VPNStatusBadge(compact: true)
 
                             Button {
                                 store.send(.openManagePlaylistsTapped)
