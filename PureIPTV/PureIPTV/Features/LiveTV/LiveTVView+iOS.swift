@@ -22,10 +22,45 @@
 
         public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
+        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
         public var body: some View {
+            Group {
+                if horizontalSizeClass == .regular {
+                    LiveTVSplitView_iPad(store: store, config: config)
+                } else {
+                    phoneLayout
+                }
+            }
+            .onAppear {
+                store.send(.onAppear(config: config))
+            }
+            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
+                CategoryManagementView(store: store)
+            }
+            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
+                EPGGuideView_iOS(store: store)
+            }
+            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
+                EPGTimelineView(store: store)
+            }
+            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
+                ParentalLockView(store: store)
+                    .presentationDetents([.height(300)])
+            }
+            .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
+                MultiView(store: store)
+            }
+        }
+
+        private var phoneLayout: some View {
             ZStack(alignment: .top) {
                 Color.black.ignoresSafeArea()
 
@@ -99,25 +134,6 @@
                     }
                 }
             }
-            .onAppear {
-                store.send(.onAppear(config: config))
-            }
-            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
-                CategoryManagementView(store: store)
-            }
-            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
-                EPGGuideView_iOS(store: store)
-            }
-            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
-                EPGTimelineView(store: store)
-            }
-            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
-                ParentalLockView(store: store)
-                    .presentationDetents([.height(300)])
-            }
-            .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
-                MultiView(store: store)
-            }
         }
 
         // MARK: – Category Bar
@@ -173,6 +189,24 @@
                                     } else {
                                         Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                     }
+                                }
+
+                                Button {
+                                    store.send(.sendToMultiView(channel))
+                                } label: {
+                                    Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+                                }
+
+                                Button {
+                                    store.send(.openChannelEPG(channel))
+                                } label: {
+                                    Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+                                }
+
+                                Button(role: .destructive) {
+                                    store.send(.hideChannel(channel))
+                                } label: {
+                                    Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
                                 }
                             }
                         }

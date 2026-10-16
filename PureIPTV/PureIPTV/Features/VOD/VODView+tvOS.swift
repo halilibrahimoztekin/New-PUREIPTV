@@ -1,5 +1,6 @@
 #if os(tvOS)
     import ComposableArchitecture
+    import Kingfisher
     import SwiftUI
 
     // MARK: - tvOS VOD View
@@ -12,6 +13,11 @@
         let config: PlaylistConfig
 
         @FocusState private var focusedCategory: String?
+        @FocusState private var focusedVODID: String?
+
+        @State private var currentScrubLetter: String = ""
+        @State private var isScrubOverlayVisible: Bool = false
+        @State private var hideScrubTask: Task<Void, Never>?
 
         public init(store: StoreOf<VODFeature>, config: PlaylistConfig) {
             self.store = store
@@ -20,7 +26,11 @@
 
         public init(store: StoreOf<VODFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -28,16 +38,29 @@
                 // ── Left: Category list ───────────────────────────────
                 categoryColumn
                     .frame(width: 300)
+                    .focusSection()
+                    .focusGuideBoundary()
 
-                // ── Divider ───────────────────────────────────────────
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(width: 1)
+                // ── Divider with Focus Guide Bridge ───────────────────
+                ZStack {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 1)
+                    TVFocusGuideBridge()
+                        .frame(width: 24)
+                }
 
                 // ── Right: VOD grid ──────────────────────────────────
                 vodArea
+                    .focusSection()
+                    .focusGuideBoundary()
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(
+                DynamicMeshBackgroundView(
+                    imageURL: focusedVOD?.coverURL,
+                    titleSeed: focusedVOD?.title ?? "VOD"
+                )
+            )
             .onAppear {
                 store.send(.onAppear(config: config))
             }
@@ -46,98 +69,204 @@
             }
         }
 
+        private var focusedVOD: MediaModels.Item? {
+            if let focusedVODID {
+                return store.currentVODs.first(where: { $0.id == focusedVODID })
+            }
+            return store.selectedVOD ?? store.currentVODs.first
+        }
+
         // MARK: – Category Column
 
         private var categoryColumn: some View {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 6) {
-                    HStack {
-                        Text(AppStrings.VOD.title)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(Color(hex: "#E4E1E7"))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 48)
-                    .padding(.bottom, 16)
+            ScrollViewReader { catProxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 6) {
+                        HStack {
+                            Text(AppStrings.VOD.title)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(Color(hex: "#E4E1E7"))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 48)
+                        .padding(.bottom, 16)
 
-                    if store.isLoadingCategories {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(Color(hex: "#0A84FF"))
-                            .padding(.top, 40)
-                    } else {
-                        ForEach(store.categories) { category in
-                            TVVODCategoryRow(
-                                category: category,
-                                isSelected: store.selectedCategoryID == category.id
-                            ) {
-                                store.send(.categorySelected(category))
+                        if store.isLoadingCategories {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(Color(hex: "#0A84FF"))
+                                .padding(.top, 40)
+                        } else {
+                            ForEach(store.categories) { category in
+                                TVVODCategoryRow(
+                                    category: category,
+                                    isSelected: store.selectedCategoryID == category.id
+                                ) {
+                                    store.send(.categorySelected(category))
+                                }
+                                .padding(.horizontal, 16)
+                                .focused($focusedCategory, equals: category.id)
+                                .id(category.id)
                             }
-                            .padding(.horizontal, 16)
-                            .focused($focusedCategory, equals: category.id)
                         }
                     }
+                    .padding(.bottom, 48)
                 }
-                .padding(.bottom, 48)
+                .background(Color(hex: "#0C0C10"))
+                .onChange(of: store.selectedCategoryID) { _, newCatID in
+                    if let newCatID {
+                        focusedCategory = newCatID
+                        withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
+                    }
+                }
             }
-            .background(Color(hex: "#0C0C10"))
         }
 
         // MARK: – VOD Area
 
-        @ViewBuilder
         private var vodArea: some View {
-            if store.isLoadingVODs {
-                VStack {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(Color(hex: "#0A84FF"))
-                        .scaleEffect(1.5)
-                    Text(AppStrings.VOD.loadingMovies)
-                        .font(.system(size: 24))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
-                        .padding(.top, 16)
+            VStack(alignment: .leading, spacing: 0) {
+                // Header Bar with Title & MediaLanguageFilterBar
+                if !store.categories.isEmpty {
+                    HStack(alignment: .center) {
+                        if let cat = store.categories.first(where: { $0.id == store.selectedCategoryID }) {
+                            Text(cat.name)
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundStyle(Color.white)
+                        }
+
+                        Spacer()
+
+                        MediaLanguageFilterBar(
+                            availableFilters: store.availableLanguageFilters,
+                            selectedFilter: store.selectedLanguageFilter,
+                            counts: store.languageFilterCounts
+                        ) { filter in
+                            store.send(.setLanguageFilter(filter))
+                        }
+                    }
+                    .padding(.horizontal, 48)
+                    .padding(.top, 40)
+                    .padding(.bottom, 12)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if store.currentVODs.isEmpty {
-                VStack(spacing: 20) {
-                    Image(systemName: "film")
-                        .font(.system(size: 60))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                    Text(AppStrings.VOD.noMovies)
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 32)],
-                        spacing: 32
-                    ) {
-                        ForEach(store.currentVODs) { vod in
+
+                // Grid or Empty State
+                if store.isLoadingVODs {
+                    VStack {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(Color(hex: "#0A84FF"))
+                            .scaleEffect(1.5)
+                        Text(AppStrings.VOD.loadingMovies)
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                            .padding(.top, 16)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if store.currentVODs.isEmpty {
+                    VStack(spacing: 20) {
+                        if !store.rawVODs.isEmpty, store.selectedLanguageFilter != .all {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 64))
+                                .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                            Text(AppStrings.MediaFilter.noMatchingResults)
+                                .font(.system(size: 26))
+                                .foregroundStyle(Color.white.opacity(0.8))
+
                             Button {
-                                store.send(.vodSelected(vod))
+                                store.send(.setLanguageFilter(.all))
                             } label: {
-                                VODCardView(vod: vod, isSelected: store.selectedVOD?.id == vod.id) {}
+                                Text(AppStrings.MediaFilter.all)
+                                    .font(.system(size: 20, weight: .bold))
+                                    .padding(.horizontal, 28)
+                                    .padding(.vertical, 12)
                             }
-                            .buttonStyle(.card)
-                            .contextMenu {
-                                Button {
-                                    store.send(.toggleFavorite(vod))
-                                } label: {
-                                    if store.favoriteIDs.contains(vod.id) {
-                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                    } else {
-                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+                            .padding(.top, 12)
+                        } else {
+                            Image(systemName: "film")
+                                .font(.system(size: 60))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                            Text(AppStrings.VOD.noMovies)
+                                .font(.system(size: 28))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollViewReader { vodProxy in
+                        ScrollView {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 32)],
+                                spacing: 32
+                            ) {
+                                ForEach(store.currentVODs) { vod in
+                                    TVVODCard(
+                                        vod: vod,
+                                        isSelected: store.selectedVOD?.id == vod.id
+                                    ) {
+                                        store.send(.vodSelected(vod))
+                                    }
+                                    .focused($focusedVODID, equals: vod.id)
+                                    .id(vod.id)
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(vod))
+                                        } label: {
+                                            if store.favoriteIDs.contains(vod.id) {
+                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                            } else {
+                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 48)
+                            .padding(.vertical, 32)
+                        }
+                        .onChange(of: store.selectedVOD) { _, newVOD in
+                            if let vodID = newVOD?.id {
+                                focusedVODID = vodID
+                                withAnimation { vodProxy.scrollTo(vodID, anchor: .center) }
+                            }
+                        }
+                        .onAppear {
+                            if let lastSelectedID = store.selectedVOD?.id {
+                                focusedVODID = lastSelectedID
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation { vodProxy.scrollTo(lastSelectedID, anchor: .center) }
+                                }
+                            }
+                        }
+                        .onChange(of: focusedVODID) { _, newID in
+                            guard let newID, let vod = store.currentVODs.first(where: { $0.id == newID }) else { return }
+                            let firstChar = String(vod.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
+                            if !firstChar.isEmpty, firstChar != currentScrubLetter {
+                                currentScrubLetter = firstChar
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    isScrubOverlayVisible = true
+                                }
+                                hideScrubTask?.cancel()
+                                hideScrubTask = Task {
+                                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                                    guard !Task.isCancelled else { return }
+                                    await MainActor.run {
+                                        withAnimation(.easeOut(duration: 0.35)) {
+                                            isScrubOverlayVisible = false
+                                        }
                                     }
                                 }
                             }
                         }
+                        .overlay(
+                            TVAlphabetScrubberOverlay(
+                                currentLetter: currentScrubLetter,
+                                isVisible: isScrubOverlayVisible
+                            )
+                        )
                     }
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 48)
                 }
             }
         }
@@ -166,6 +295,103 @@
                 }
             }
             .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#BF5AF2"), isSelected: isSelected))
+        }
+    }
+
+    // MARK: - TV VOD Parallax Card
+
+    private struct TVVODCard: View {
+        let vod: MediaModels.Item
+        let isSelected: Bool
+        let action: () -> Void
+
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            Button(action: action) {
+                TVParallaxCardContainer(
+                    isFocused: isFocused,
+                    isSelected: isSelected,
+                    cornerRadius: 16,
+                    accentColor: Color(hex: "#BF5AF2")
+                ) {
+                    // Layer 1: Background Poster
+                    ZStack {
+                        if let posterURL = vod.coverURL {
+                            KFImage(posterURL)
+                                .placeholder {
+                                    ZStack {
+                                        Color(hex: "#2C2C30")
+                                        Image(systemName: "film")
+                                            .font(.system(size: 38))
+                                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                    }
+                                }
+                                .downsampling(size: CGSize(width: 300, height: 450))
+                                .cacheOriginalImage()
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            ZStack {
+                                Color(hex: "#2C2C30")
+                                Image(systemName: "film")
+                                    .font(.system(size: 38))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                            }
+                        }
+
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.85)],
+                            startPoint: .center,
+                            endPoint: .bottom
+                        )
+                    }
+                } floatingContent: {
+                    // Layer 3: Floating Language Badge, Title & Rating
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let tag = MediaLanguageDetector.primaryTag(from: vod.title) {
+                            HStack {
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    Image(systemName: tag.systemIcon)
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text(tag.label)
+                                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                }
+                                .foregroundColor(tag.color)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.8), in: Capsule())
+                                .overlay(Capsule().stroke(tag.color.opacity(0.7), lineWidth: 1))
+                                .shadow(color: Color.black.opacity(0.6), radius: 4, y: 1)
+                                .padding(10)
+                            }
+                        }
+
+                        Spacer()
+                        Text(vod.title)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .shadow(color: .black.opacity(0.8), radius: 6, x: 0, y: 2)
+
+                        if let rating = vod.rating, rating > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.yellow)
+                                Text(String(format: "%.1f", rating))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 12)
+                }
+                .aspectRatio(2 / 3, contentMode: .fit)
+            }
+            .buttonStyle(.plain)
         }
     }
 #endif

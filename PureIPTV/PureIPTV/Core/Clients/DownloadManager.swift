@@ -14,6 +14,8 @@ actor DownloadManager {
     private var activeDownloads: [String: DownloadProgressItem] = [:]
     private var progressContinuations: [String: AsyncStream<Double>.Continuation] = [:]
     private var progressBroadcasters: [UUID: AsyncStream<DownloadProgressItem>.Continuation] = [:]
+    private var lastSpeedCalculationTimes: [String: Date] = [:]
+    private var lastBytesWritten: [String: Int64] = [:]
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.pureiptv.downloads")
@@ -33,6 +35,8 @@ actor DownloadManager {
         tasks[id] = task
         let item = DownloadProgressItem(id: id, title: title, coverURL: coverURL?.absoluteString, progress: 0.0, isCompleted: false)
         activeDownloads[id] = item
+        lastSpeedCalculationTimes[id] = Date()
+        lastBytesWritten[id] = 0
         broadcast(item)
         task.resume()
     }
@@ -41,6 +45,8 @@ actor DownloadManager {
         tasks[id]?.cancel()
         tasks.removeValue(forKey: id)
         activeDownloads.removeValue(forKey: id)
+        lastSpeedCalculationTimes.removeValue(forKey: id)
+        lastBytesWritten.removeValue(forKey: id)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
     }
@@ -71,9 +77,29 @@ actor DownloadManager {
         }
     }
 
-    func updateProgress(id: String, progress: Double) {
+    func updateProgress(id: String, progress: Double, bytesWritten: Int64 = 0, totalBytesExpected: Int64 = 0) {
+        let now = Date()
+        var speed = 0.0
+        if let lastTime = lastSpeedCalculationTimes[id], let lastBytes = lastBytesWritten[id] {
+            let timeDiff = now.timeIntervalSince(lastTime)
+            if timeDiff >= 0.4 {
+                let bytesDiff = bytesWritten - lastBytes
+                speed = max(0, Double(bytesDiff) / timeDiff)
+                lastSpeedCalculationTimes[id] = now
+                lastBytesWritten[id] = bytesWritten
+            } else if let existingItem = activeDownloads[id] {
+                speed = existingItem.speedBytesPerSecond
+            }
+        } else {
+            lastSpeedCalculationTimes[id] = now
+            lastBytesWritten[id] = bytesWritten
+        }
+
         if var item = activeDownloads[id] {
             item.progress = progress
+            item.bytesWritten = bytesWritten
+            item.totalBytesExpected = totalBytesExpected
+            item.speedBytesPerSecond = speed
             activeDownloads[id] = item
             broadcast(item)
         }
@@ -88,6 +114,8 @@ actor DownloadManager {
         }
         activeDownloads.removeValue(forKey: id)
         tasks.removeValue(forKey: id)
+        lastSpeedCalculationTimes.removeValue(forKey: id)
+        lastBytesWritten.removeValue(forKey: id)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
     }
@@ -174,7 +202,12 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         let progress = totalBytesExpectedToWrite > 0 ? (Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)) : 0.0
         progressCallbacks[metadata.id]?(progress)
         Task {
-            await DownloadManager.shared.updateProgress(id: metadata.id, progress: progress)
+            await DownloadManager.shared.updateProgress(
+                id: metadata.id,
+                progress: progress,
+                bytesWritten: totalBytesWritten,
+                totalBytesExpected: totalBytesExpectedToWrite
+            )
         }
     }
 

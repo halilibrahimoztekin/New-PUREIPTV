@@ -52,27 +52,32 @@ struct PureIPTVApp: App {
                         }
                     }
 
-                if let playerStore = store.scope(state: \.player, action: \.player) {
-                    if store.isPlayerMini {
-                        VStack {
-                            Spacer()
-                            HStack {
+                #if os(iOS)
+                    if let playerStore = store.scope(state: \.player, action: \.player) {
+                        if store.isPlayerMini {
+                            VStack {
                                 Spacer()
-                                #if os(iOS)
-                                    // Mini player — küçük pencere olarak gösterilir, PiP full PlayerView'dan yönetilir
-                                    PlayerView(store: playerStore)
-                                        .frame(width: 200, height: 112) // 16:9 ratio
-                                        .cornerRadius(12)
-                                        .shadow(radius: 10)
-                                        .padding()
-                                        .onTapGesture {
-                                            store.send(.toggleMiniPlayer)
-                                        }
-                                #endif
+                                DockedMiniPlayerView(
+                                    store: playerStore,
+                                    onExpand: {
+                                        store.send(.expandPlayer)
+                                    },
+                                    onClose: {
+                                        store.send(.closeMiniPlayer)
+                                    }
+                                )
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 64)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
+                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isPlayerMini)
+                            .zIndex(999)
                         }
                     }
-                }
+                #endif
+            }
+            .onOpenURL { url in
+                store.send(.handleDeepLink(url))
             }
         }
     }

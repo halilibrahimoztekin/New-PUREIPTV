@@ -57,6 +57,29 @@ public struct VODCardView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
+                // Language / Audio Badge
+                if let tag = MediaLanguageDetector.primaryTag(from: vod.title) {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            HStack(spacing: 3) {
+                                Image(systemName: tag.systemIcon)
+                                    .font(.system(size: 8, weight: .bold))
+                                Text(tag.label)
+                                    .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                            }
+                            .foregroundColor(tag.color)
+                            .padding(.horizontal, 5.5)
+                            .padding(.vertical, 2.5)
+                            .background(Color.black.opacity(0.75), in: Capsule())
+                            .overlay(Capsule().stroke(tag.color.opacity(0.6), lineWidth: 0.8))
+                            .shadow(color: Color.black.opacity(0.5), radius: 3, y: 1)
+                            .padding(6)
+                        }
+                        Spacer()
+                    }
+                }
+
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
                     Text(vod.title)

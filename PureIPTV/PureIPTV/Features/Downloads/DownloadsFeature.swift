@@ -37,10 +37,11 @@ public struct DownloadsFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                let updates = downloadClient.observeDownloads()
                 return .merge(
                     .send(.loadDownloads),
                     .run { send in
-                        for await update in downloadClient.observeDownloads() {
+                        for await update in updates {
                             await send(.downloadProgressUpdated(update))
                         }
                     }

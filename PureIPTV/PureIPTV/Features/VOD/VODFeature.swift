@@ -27,20 +27,39 @@ public struct VODFeature {
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
 
-        // Computed: vods for the currently selected category
-        public var currentVODs: [MediaModels.Item] {
+        /// Language & Audio Filter
+        public var selectedLanguageFilter: MediaLanguageFilter = .all
+
+        public var rawVODs: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            let items = vodsByCategory[id] ?? []
+            return vodsByCategory[id] ?? []
+        }
+
+        public var availableLanguageFilters: [MediaLanguageFilter] {
+            MediaLanguageDetector.availableFilters(for: rawVODs)
+        }
+
+        public var languageFilterCounts: [MediaLanguageFilter: Int] {
+            var counts: [MediaLanguageFilter: Int] = [:]
+            for filter in MediaLanguageFilter.allCases {
+                counts[filter] = MediaLanguageDetector.count(for: filter, in: rawVODs)
+            }
+            return counts
+        }
+
+        // Computed: vods for the currently selected category and language filter
+        public var currentVODs: [MediaModels.Item] {
+            let filtered = rawVODs.filter { MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter) }
 
             switch lastSortMethod {
             case .alphabetical:
-                return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
             case .rating:
-                return items.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+                return filtered.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
             case .dateAdded:
-                return items.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
+                return filtered.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
             case .defaultOrder:
-                return items
+                return filtered
             }
         }
 
@@ -53,6 +72,7 @@ public struct VODFeature {
         case categorySelected(MediaModels.Category)
         case vodsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case vodSelected(MediaModels.Item)
+        case setLanguageFilter(MediaLanguageFilter)
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>)
         case dismissError
@@ -218,6 +238,9 @@ public struct VODFeature {
                 }
 
                 state.selectedCategoryID = category.id
+                if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
+                    state.selectedLanguageFilter = .all
+                }
                 if state.vodsByCategory[category.id] != nil {
                     return .run { _ in await hapticClient.selection() }
                 }
@@ -233,6 +256,10 @@ public struct VODFeature {
                         Result { try await iptvClient.fetchVODs(config, categoryID) }
                     ))
                 }
+
+            case let .setLanguageFilter(filter):
+                state.selectedLanguageFilter = filter
+                return .run { _ in await hapticClient.selection() }
 
             case let .vodsResponse(categoryID, .success(vods)):
                 state.isLoadingVODs = false

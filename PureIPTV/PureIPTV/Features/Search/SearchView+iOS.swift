@@ -21,7 +21,11 @@
 
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -45,11 +49,7 @@
                     } else if let error = store.errorMessage {
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
-                        if store.recentSearches.isEmpty {
-                            emptyStateView(AppStrings.Search.startSearch, icon: "magnifyingglass")
-                        } else {
-                            recentSearchesView
-                        }
+                        emptySearchDiscoveryView
                     } else if store.totalResultsCount == 0 {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
@@ -174,62 +174,119 @@
             .scrollDismissesKeyboard(.interactively)
         }
 
-        private var recentSearchesView: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(AppStrings.Search.recentSearches)
-                        .font(.title3.bold())
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button {
-                        store.send(.clearHistoryTapped)
-                    } label: {
-                        Text(AppStrings.Search.clear)
-                            .font(.system(size: 14))
-                            .foregroundColor(Color(hex: "#0A84FF"))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(store.recentSearches, id: \.id) { item in
-                            Button {
-                                store.send(.recentSearchTapped(item.query))
-                            } label: {
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
-                                    Text(item.query)
-                                        .font(.system(size: 16))
-                                        .foregroundColor(Color(hex: "#E4E1E7"))
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+        private var emptySearchDiscoveryView: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    // Recent Searches Section
+                    if !store.recentSearches.isEmpty {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Button {
+                                    store.send(.clearHistoryTapped)
+                                } label: {
+                                    Text(AppStrings.Search.clear)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(Color(hex: "#0A84FF"))
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                                .background(Color(hex: "#1F1F23").opacity(0.5))
                             }
-                            .buttonStyle(.plain)
 
-                            if item.id != store.recentSearches.last?.id {
-                                Divider()
-                                    .background(Color.white.opacity(0.05))
-                                    .padding(.leading, 44)
+                            VStack(spacing: 0) {
+                                ForEach(store.recentSearches.prefix(6), id: \.id) { item in
+                                    Button {
+                                        store.send(.recentSearchTapped(item.query))
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "clock")
+                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
+                                                .font(.system(size: 14))
+                                            Text(item.query)
+                                                .font(.system(size: 15))
+                                                .foregroundColor(Color(hex: "#E4E1E7"))
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                        .background(Color(hex: "#1F1F23").opacity(0.5))
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if item.id != store.recentSearches.prefix(6).last?.id {
+                                        Divider()
+                                            .background(Color.white.opacity(0.05))
+                                            .padding(.leading, 40)
+                                    }
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(hex: "#1F1F23"))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                    )
+                            )
+                        }
+                    }
+
+                    // Quick Discovery Categories & Tags
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label(AppStrings.Search.quickTags, systemImage: "sparkles")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12)], spacing: 12) {
+                            ForEach(store.quickTags) { tag in
+                                Button {
+                                    store.send(.tagSelected(tag))
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .fill(Color(hex: tag.hexColor).opacity(0.18))
+                                                .frame(width: 36, height: 36)
+                                            Image(systemName: tag.icon)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(Color(hex: tag.hexColor))
+                                        }
+
+                                        Text(tag.title)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(.white)
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(Color(hex: "#18181D"))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(hex: "#1F1F23"))
-                    )
-                    .padding(.horizontal, 16)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .scrollDismissesKeyboard(.interactively)
         }
 
         private func resultSection(title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {

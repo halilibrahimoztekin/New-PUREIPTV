@@ -33,6 +33,8 @@ public struct DashboardFeature {
         // Navigation from local items
         case favoriteSelected(FavoriteItem)
         case historySelected(WatchHistoryItem)
+        case restartHistorySelected(WatchHistoryItem)
+        case deleteHistorySelected(WatchHistoryItem)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -40,6 +42,7 @@ public struct DashboardFeature {
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
+            case restartHistoryItem(WatchHistoryItem)
         }
     }
 
@@ -68,6 +71,7 @@ public struct DashboardFeature {
             case let .localDataLoaded(favorites, history):
                 state.favoriteItems = favorites
                 state.watchHistoryItems = history
+                Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
                 return .none
 
             case let .loadFeaturedData(config):
@@ -117,6 +121,7 @@ public struct DashboardFeature {
                 state.featuredVODs = vods
                 state.featuredSeries = series
                 state.recommendedVODs = recommendations
+                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: vods)
                 return .none
 
             case let .dataFailed(error):
@@ -189,9 +194,93 @@ public struct DashboardFeature {
                     return .send(.delegate(.didSelectVOD(item)))
                 }
 
+            case let .restartHistorySelected(hist):
+                return .send(.delegate(.restartHistoryItem(hist)))
+
+            case let .deleteHistorySelected(hist):
+                state.watchHistoryItems.removeAll { $0.id == hist.id }
+                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
+                return .run { [id = hist.id] _ in
+                    try? await databaseClient.deleteWatchProgress(id)
+                }
+
             case .delegate:
                 return .none
             }
         }
+    }
+
+    private static func syncTopShelf(
+        history: [WatchHistoryItem],
+        favorites: [FavoriteItem],
+        vods: [MediaModels.Item]
+    ) {
+        let continueWatching = history.prefix(10).map { item in
+            let prog = item.duration > 0 ? (item.progress / item.duration) : nil
+            let link = TopShelfService.makeDeepLink(
+                id: item.id,
+                type: item.type,
+                title: item.title,
+                streamURL: item.streamURL ?? "",
+                coverURL: item.coverURL,
+                startPosition: item.progress
+            )
+            return TopShelfItemDTO(
+                id: item.id,
+                title: item.title,
+                subtitle: item.seriesTitle,
+                imageURL: item.coverURL,
+                deepLinkURL: link,
+                progress: prog,
+                duration: item.duration > 0 ? item.duration : nil,
+                isLive: false
+            )
+        }
+
+        let favoriteChannels = favorites.filter { $0.type == "live" }.prefix(10).map { fav in
+            let link = TopShelfService.makeDeepLink(
+                id: fav.id,
+                type: "live",
+                title: fav.title,
+                streamURL: fav.streamURL ?? "",
+                coverURL: fav.coverURL
+            )
+            return TopShelfItemDTO(
+                id: fav.id,
+                title: fav.title,
+                subtitle: nil,
+                imageURL: fav.coverURL,
+                deepLinkURL: link,
+                progress: nil,
+                duration: nil,
+                isLive: true
+            )
+        }
+
+        let recentMovies = vods.prefix(10).map { vod in
+            let link = TopShelfService.makeDeepLink(
+                id: vod.id,
+                type: "vod",
+                title: vod.title,
+                streamURL: vod.streamURL?.absoluteString ?? "",
+                coverURL: vod.coverURL?.absoluteString
+            )
+            return TopShelfItemDTO(
+                id: vod.id,
+                title: vod.title,
+                subtitle: nil,
+                imageURL: vod.coverURL?.absoluteString,
+                deepLinkURL: link,
+                progress: nil,
+                duration: nil,
+                isLive: false
+            )
+        }
+
+        TopShelfService.shared.updateTopShelfData(
+            continueWatching: Array(continueWatching),
+            favoriteChannels: Array(favoriteChannels),
+            recentMovies: Array(recentMovies)
+        )
     }
 }

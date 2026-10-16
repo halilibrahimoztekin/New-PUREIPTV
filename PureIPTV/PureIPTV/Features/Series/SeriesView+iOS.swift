@@ -20,7 +20,11 @@
 
         public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -53,7 +57,17 @@
 
                     // ── Category horizontal scroll ─────────────────────
                     categoryBar
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 6)
+
+                    // ── Audio & Subtitle Language Filter Bar ───────────
+                    MediaLanguageFilterBar(
+                        availableFilters: store.availableLanguageFilters,
+                        selectedFilter: store.selectedLanguageFilter,
+                        counts: store.languageFilterCounts
+                    ) { filter in
+                        store.send(.setLanguageFilter(filter))
+                    }
+                    .padding(.bottom, 10)
 
                     // Series grid
                     if store.isLoadingCategories {
@@ -102,13 +116,35 @@
                 if store.isLoadingSeries {
                     loadingView
                 } else if store.currentSeries.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "rectangle.stack")
-                            .font(.system(size: 36))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                        Text(AppStrings.Series.emptyCategorySeries)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    VStack(spacing: 14) {
+                        if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 38))
+                                .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                            Text(AppStrings.MediaFilter.noMatchingResults)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color.white.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                            Button {
+                                store.send(.setLanguageFilter(.all))
+                            } label: {
+                                Text(AppStrings.MediaFilter.all)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 8)
+                                    .background(Color(hex: "#0A84FF"), in: Capsule())
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.top, 4)
+                        } else {
+                            Image(systemName: "rectangle.stack")
+                                .font(.system(size: 36))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                            Text(AppStrings.Series.emptyCategorySeries)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 80)

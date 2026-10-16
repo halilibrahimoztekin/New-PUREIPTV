@@ -21,7 +21,11 @@
 
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -44,11 +48,7 @@
                     } else if let error = store.errorMessage {
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
-                        if store.recentSearches.isEmpty {
-                            emptyStateView(AppStrings.Search.startSearch, icon: "magnifyingglass")
-                        } else {
-                            recentSearchesView
-                        }
+                        emptySearchDiscoveryView
                     } else if store.totalResultsCount == 0 {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
@@ -172,64 +172,107 @@
             }
         }
 
-        private var recentSearchesView: some View {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Text(AppStrings.Search.recentSearches)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button {
-                        store.send(.clearHistoryTapped)
-                    } label: {
-                        Text(AppStrings.Search.clear)
-                            .font(.system(size: 20, weight: .semibold))
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(TVCapsuleButtonStyle())
-                }
-                .padding(.horizontal, 60)
-
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(store.recentSearches, id: \.id) { item in
-                            Button {
-                                store.send(.recentSearchTapped(item.query))
-                            } label: {
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
-                                    Text(item.query)
-                                        .font(.system(size: 28))
-                                        .foregroundColor(Color(hex: "#E4E1E7"))
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+        private var emptySearchDiscoveryView: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 48) {
+                    // Recent Searches (if available)
+                    if !store.recentSearches.isEmpty {
+                        VStack(alignment: .leading, spacing: 24) {
+                            HStack {
+                                Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Button {
+                                    store.send(.clearHistoryTapped)
+                                } label: {
+                                    Text(AppStrings.Search.clear)
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 8)
                                 }
-                                .padding(.horizontal, 30)
-                                .padding(.vertical, 20)
-                                .background(Color(hex: "#1F1F23").opacity(0.5))
+                                .buttonStyle(TVCapsuleButtonStyle())
                             }
-                            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
 
-                            if item.id != store.recentSearches.last?.id {
-                                Divider()
-                                    .background(Color.white.opacity(0.05))
-                                    .padding(.leading, 70)
+                            VStack(spacing: 0) {
+                                ForEach(store.recentSearches.prefix(5), id: \.id) { item in
+                                    Button {
+                                        store.send(.recentSearchTapped(item.query))
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "clock")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
+                                            Text(item.query)
+                                                .font(.system(size: 28))
+                                                .foregroundColor(Color(hex: "#E4E1E7"))
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+                                        }
+                                        .padding(.horizontal, 30)
+                                        .padding(.vertical, 20)
+                                        .background(Color(hex: "#1F1F23").opacity(0.5))
+                                    }
+                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+
+                                    if item.id != store.recentSearches.prefix(5).last?.id {
+                                        Divider()
+                                            .background(Color.white.opacity(0.05))
+                                            .padding(.leading, 70)
+                                    }
+                                }
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(hex: "#1F1F23"))
+                            )
+                        }
+                    }
+
+                    // Quick Discovery Categories & Tags
+                    VStack(alignment: .leading, spacing: 28) {
+                        Label(AppStrings.Search.quickTags, systemImage: "sparkles")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.white)
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 30)], spacing: 30) {
+                            ForEach(store.quickTags) { tag in
+                                Button {
+                                    store.send(.tagSelected(tag))
+                                } label: {
+                                    HStack(spacing: 20) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .fill(Color(hex: tag.hexColor).opacity(0.2))
+                                                .frame(width: 56, height: 56)
+                                            Image(systemName: tag.icon)
+                                                .font(.system(size: 28, weight: .semibold))
+                                                .foregroundColor(Color(hex: tag.hexColor))
+                                        }
+
+                                        Text(tag.title)
+                                            .font(.system(size: 26, weight: .semibold))
+                                            .foregroundColor(.white)
+
+                                        Spacer()
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.4))
+                                    }
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 20)
+                                }
+                                .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: tag.hexColor), isSelected: false))
                             }
                         }
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(hex: "#1F1F23"))
-                    )
-                    .padding(.horizontal, 60)
                 }
+                .padding(.horizontal, 60)
+                .padding(.bottom, 60)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
 
         private func resultSection(title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {

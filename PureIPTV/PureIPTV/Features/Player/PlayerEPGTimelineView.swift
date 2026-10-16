@@ -5,15 +5,17 @@ import SwiftUI
 public struct PlayerEPGTimelineView: View {
     let programs: [EPGProgram]
     let currentPosition: Double
+    let hasArchive: Bool
     let onClose: () -> Void
     let onSelect: (EPGProgram) -> Void
 
     @State private var currentTime = Date()
     private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    public init(programs: [EPGProgram], currentPosition: Double, onClose: @escaping () -> Void, onSelect: @escaping (EPGProgram) -> Void) {
+    public init(programs: [EPGProgram], currentPosition: Double, hasArchive: Bool = false, onClose: @escaping () -> Void, onSelect: @escaping (EPGProgram) -> Void) {
         self.programs = programs
         self.currentPosition = currentPosition
+        self.hasArchive = hasArchive
         self.onClose = onClose
         self.onSelect = onSelect
     }
@@ -61,7 +63,7 @@ public struct PlayerEPGTimelineView: View {
                             Button(action: {
                                 onSelect(program)
                             }) {
-                                PlayerEPGTimelineCard(program: program, currentTime: currentTime)
+                                PlayerEPGTimelineCard(program: program, currentTime: currentTime, hasArchive: hasArchive)
                             }
                             #if os(tvOS)
                             .buttonStyle(.card)
@@ -89,6 +91,13 @@ public struct PlayerEPGTimelineView: View {
 public struct PlayerEPGTimelineCard: View {
     let program: EPGProgram
     let currentTime: Date
+    let hasArchive: Bool
+
+    public init(program: EPGProgram, currentTime: Date, hasArchive: Bool = false) {
+        self.program = program
+        self.currentTime = currentTime
+        self.hasArchive = hasArchive
+    }
 
     private var progress: Double {
         let total = program.endTime.timeIntervalSince(program.startTime)
@@ -123,6 +132,8 @@ public struct PlayerEPGTimelineCard: View {
                     .padding(.vertical, 2)
                     .background(Color.red.opacity(0.2))
                     .clipShape(Capsule())
+                } else if hasArchive, program.endTime < currentTime {
+                    CatchUpBadge(isCompact: true)
                 }
             }
 

@@ -33,6 +33,8 @@ public struct AppFeature {
         case home(HomeFeature.Action)
         case player(PlayerFeature.Action)
         case toggleMiniPlayer
+        case expandPlayer
+        case closeMiniPlayer
         case seriesDetail(PresentationAction<SeriesDetailFeature.Action>)
         case vodDetail(PresentationAction<VODDetailFeature.Action>)
         case playlistManagement(PresentationAction<PlaylistManagementFeature.Action>)
@@ -43,6 +45,7 @@ public struct AppFeature {
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case proceedToApp
+        case handleDeepLink(URL)
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -229,7 +232,8 @@ public struct AppFeature {
                     startPosition: nil,
                     isLive: true,
                     config: config,
-                    epgChannelID: item.epgChannelID
+                    epgChannelID: item.epgChannelID,
+                    categoryID: item.categoryID
                 )
             }
 
@@ -243,7 +247,8 @@ public struct AppFeature {
                     startPosition: nil,
                     isLive: true,
                     config: config,
-                    epgChannelID: channel.epgChannelID
+                    epgChannelID: channel.epgChannelID,
+                    categoryID: channel.categoryID
                 ),
                 playlist: playablePlaylist
             )
@@ -282,7 +287,10 @@ public struct AppFeature {
             return .none
 
         case let .home(.delegate(.playHistoryItem(item))):
-            return playHistoryItem(item, state: &state)
+            return playHistoryItem(item, state: &state, forceRestart: false)
+
+        case let .home(.delegate(.restartHistoryItem(item))):
+            return playHistoryItem(item, state: &state, forceRestart: true)
 
         case .home(.delegate(.openManagePlaylists)):
             state.playlistManagement = PlaylistManagementFeature.State()
@@ -324,7 +332,22 @@ public struct AppFeature {
         // ── Player ───────────────────────────────────────────────
         case .player(.delegate(.didClose)):
             state.player = nil
+            state.isPlayerMini = false
             return .none
+
+        case .player(.delegate(.didRequestMinimize)):
+            state.isPlayerMini = true
+            return .none
+
+        case .expandPlayer:
+            state.isPlayerMini = false
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+
+        case .closeMiniPlayer:
+            state.isPlayerMini = false
+            return .send(.player(.closeTapped))
 
         case .player:
             return .none
@@ -335,6 +358,10 @@ public struct AppFeature {
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.player) }
             }
+
+        case .vodDetail(.presented(.delegate(.didSelectVOD))):
+            // VOD detail handles transition internally, delegate kept for coordinator awareness
+            return .none
 
         case .vodDetail(.presented(.delegate(.close))):
             return .run { _ in
@@ -393,12 +420,51 @@ public struct AppFeature {
                 await send(.checkSubscriptionStatus)
             }
 
+        case let .handleDeepLink(url):
+            guard url.scheme == "pureiptv" else { return .none }
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return .none }
+            guard let host = components.host, host == "play" || host == "channel" else { return .none }
+            let queryItems = components.queryItems ?? []
+            guard let id = queryItems.first(where: { $0.name == "id" })?.value,
+                  let streamURLStr = queryItems.first(where: { $0.name == "streamURL" })?.value,
+                  let streamURL = URL(string: streamURLStr)
+            else {
+                return .none
+            }
+
+            let title = queryItems.first(where: { $0.name == "title" })?.value ?? "Yayın"
+            let type = queryItems.first(where: { $0.name == "type" })?.value ?? "live"
+            let coverURL = queryItems.first(where: { $0.name == "coverURL" })?.value.flatMap { URL(string: $0) }
+            let startPosition = queryItems.first(where: { $0.name == "startPosition" })?.value.flatMap { Double($0) }
+            let isLive = type == "live" || host == "channel"
+
+            let item = PlayerFeature.PlayableItem(
+                id: id,
+                title: title,
+                seriesTitle: nil,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                seriesID: nil,
+                startPosition: startPosition,
+                initialDuration: nil,
+                initialProgress: nil,
+                isLive: isLive,
+                config: state.home?.config,
+                epgChannelID: isLive ? id : nil,
+                tvArchive: nil
+            )
+
+            state.player = PlayerFeature.State(item: item)
+            return .run { _ in
+                await MainActor.run { appCoordinator.trigger(.player) }
+            }
+
         case .paywall:
             return .none
         }
     }
 
-    private func playHistoryItem(_ item: WatchHistoryItem, state: inout State) -> Effect<Action> {
+    private func playHistoryItem(_ item: WatchHistoryItem, state: inout State, forceRestart: Bool = false) -> Effect<Action> {
         // Eğer VOD veya Dizi ise ve kullanıcı premium değilse engelle
         if item.seriesID != nil || item.type == "vod" || item.type == "episode", !state.isPremium {
             return .send(.presentPaywall)
@@ -416,7 +482,9 @@ public struct AppFeature {
         guard let finalStreamURL = streamURL else { return .none }
 
         let coverURL = item.coverURL.flatMap { URL(string: $0) }
-        let startPosition: Double? = if item.duration > 0 {
+        let startPosition: Double? = if forceRestart {
+            0.0
+        } else if item.duration > 0 {
             item.progress / item.duration
         } else {
             nil
@@ -433,7 +501,7 @@ public struct AppFeature {
             seriesID: item.seriesID,
             startPosition: startPosition,
             initialDuration: item.duration > 0 ? item.duration : nil,
-            initialProgress: item.progress > 0 ? item.progress : nil,
+            initialProgress: forceRestart ? 0.0 : (item.progress > 0 ? item.progress : nil),
             isLive: isLive,
             config: config,
             epgChannelID: isLive ? item.id : nil,

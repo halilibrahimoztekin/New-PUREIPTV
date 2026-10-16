@@ -27,6 +27,12 @@
                 GeometryReader { proxy in
                     playView
 
+                    // OLED Dimmer & Anti-Burn-in Protection
+                    OLEDDimmerOverlay(
+                        dimLevel: store.oledDimLevel,
+                        isDeepDimmed: store.isDeepDimmed
+                    )
+
                     controllerView(playerWidth: proxy.size.width)
                         .ignoresSafeArea()
 
@@ -91,6 +97,25 @@
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
+                    // Channel Zapping HUD Overlay (Madde #16)
+                    if store.isZappingHUDVisible, let zappingItem = store.zappingHUDItem {
+                        let direction = store.zappingHUDDirection ?? .next
+                        VStack {
+                            ChannelZappingHUDView(
+                                item: zappingItem,
+                                direction: direction,
+                                currentIndex: store.currentChannelIndex,
+                                totalChannels: store.playlist?.count,
+                                isCommitted: store.item.id == zappingItem.id
+                            )
+                            .padding(.top, 60)
+                            Spacer()
+                        }
+                        .transition(.move(edge: direction == .next ? .top : .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isZappingHUDVisible)
+                        .zIndex(85)
+                    }
+
                     // EPG Overlay
                     if store.isEPGVisible {
                         VStack {
@@ -98,6 +123,7 @@
                             PlayerEPGTimelineView(
                                 programs: store.epgListings,
                                 currentPosition: store.position,
+                                hasArchive: store.item.tvArchive == 1,
                                 onClose: {
                                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                     resetIdleTimer()
@@ -109,14 +135,67 @@
                             )
                             .padding(.horizontal, 60)
                             .padding(.bottom, 60)
+                            .opacity(store.isDeepDimmed ? 0.35 : 1.0)
+                            .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
                         }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    // Edge-Swipe Channel Sidebar Drawer
+                    if store.isChannelListVisible {
+                        PlayerSidebarDrawer(store: store) {
+                            store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                            resetIdleTimer()
+                        }
+                        .zIndex(100)
+                    }
+
+                    // Track Selection HUD Overlay (Madde #34)
+                    if store.isTrackHUDVisible, let message = store.trackHUDMessage {
+                        VStack {
+                            TrackHUDView(
+                                message: message,
+                                iconName: store.trackHUDIcon ?? "waveform.circle.fill"
+                            )
+                            .padding(.top, 60)
+
+                            Spacer()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isTrackHUDVisible)
+                        .zIndex(99)
+                    }
+
+                    // Up Next Episode Countdown Overlay (Madde #42 / #48)
+                    if store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                UpNextCountdownOverlayView(
+                                    item: nextItem,
+                                    countdownSeconds: store.upNextCountdownSeconds,
+                                    onPlayNow: {
+                                        store.send(.playNextEpisode)
+                                    },
+                                    onDismiss: {
+                                        store.send(.dismissUpNext)
+                                    }
+                                )
+                                .padding(.trailing, 60)
+                                .padding(.bottom, 60)
+                            }
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
+                        .zIndex(96)
                     }
                 }
             }
             .preferredColorScheme(.dark)
             .tint(.white)
             .onPlayPauseCommand {
+                store.send(.userInteracted)
                 if store.playerState == .playing {
                     store.send(.pause)
                 } else {
@@ -125,7 +204,11 @@
                 showMask()
             }
             .onExitCommand {
-                if store.isEPGVisible {
+                store.send(.userInteracted)
+                if store.isChannelListVisible {
+                    store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    resetIdleTimer()
+                } else if store.isEPGVisible {
                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                     resetIdleTimer()
                 } else if store.errorMessage != nil {
@@ -152,12 +235,27 @@
                 .focusable(!isMaskShow)
                 .focused($focusableField, equals: .play)
                 .onTapGesture {
+                    store.send(.userInteracted)
                     showMask()
                 }
-                .onMoveCommand { _ in
-                    showMask()
+                .onMoveCommand { direction in
+                    store.send(.userInteracted)
+                    if direction == .up, store.item.isLive, store.playlist != nil {
+                        store.send(.nextChannel)
+                    } else if direction == .down, store.item.isLive, store.playlist != nil {
+                        if store.previousChannel != nil || !store.zappingHistory.isEmpty {
+                            store.send(.recallLastChannel)
+                        } else {
+                            store.send(.previousChannel)
+                        }
+                    } else if direction == .left, store.item.isLive, store.playlist != nil {
+                        store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    } else {
+                        showMask()
+                    }
                 }
                 .onContinuousHover { _ in
+                    store.send(.userInteracted)
                     showMask()
                 }
         }
@@ -184,7 +282,8 @@
             .padding(.bottom, 60)
             .background(overlayGradient)
             .focused($focusableField, equals: .controller)
-            .opacity(isMaskShow ? 1 : 0)
+            .opacity(isMaskShow ? (store.isDeepDimmed ? 0.35 : 1) : 0)
+            .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
             .animation(.easeInOut(duration: 0.25), value: isMaskShow)
         }
 
@@ -203,6 +302,7 @@
         // MARK: - Timer & Visibility Helpers
 
         private func showMask() {
+            store.send(.userInteracted)
             withAnimation(.easeInOut(duration: 0.25)) {
                 isMaskShow = true
             }
@@ -219,6 +319,7 @@
         }
 
         private func resetIdleTimer() {
+            store.send(.userInteracted)
             idleTimer?.invalidate()
             idleTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
                 Task { @MainActor in
@@ -275,6 +376,25 @@
 
                 // Buttons Group (KSPlayer Style with Custom Smooth Glass Highlight)
                 HStack(spacing: 18) {
+                    // Last Channel Recall (Önceki Kanal)
+                    if let prev = store.previousChannel {
+                        Button {
+                            onInteraction()
+                            store.send(.recallLastChannel)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                    .font(.system(size: 22, weight: .semibold))
+                                Text(prev.title)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlayerCapsuleButtonStyle())
+                    }
+
                     // Restart (Baştan Başlat)
                     if store.totalTime > .zero || store.position > 0 || store.item.epgChannelID == nil {
                         Button {
@@ -325,12 +445,13 @@
                     if !store.audioTracks.isEmpty {
                         Menu {
                             ForEach(store.audioTracks) { track in
+                                let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
                                 Button {
                                     onInteraction()
                                     store.send(.selectAudioTrack(track))
                                 } label: {
                                     HStack {
-                                        Text(track.name)
+                                        Text(formatted.titleWithFlag)
                                         if store.selectedAudioTrack?.id == track.id {
                                             Image(systemName: "checkmark")
                                         }
@@ -360,15 +481,41 @@
                             }
 
                             ForEach(store.subtitleTracks) { track in
+                                let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
                                 Button {
                                     onInteraction()
                                     store.send(.selectSubtitleTrack(track))
                                 } label: {
                                     HStack {
-                                        Text(track.name)
+                                        Text(formatted.titleWithFlag)
                                         if store.selectedSubtitleTrack?.id == track.id {
                                             Image(systemName: "checkmark")
                                         }
+                                    }
+                                }
+                            }
+
+                            if store.selectedSubtitleTrack != nil {
+                                Section(AppStrings.Player.subtitleSync) {
+                                    Button("+500 ms") {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(store.subtitleDelay + 500_000))
+                                    }
+                                    Button("+250 ms") {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(store.subtitleDelay + 250_000))
+                                    }
+                                    Button(AppStrings.Player.resetSubtitleDelay) {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(0))
+                                    }
+                                    Button("-250 ms") {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(store.subtitleDelay - 250_000))
+                                    }
+                                    Button("-500 ms") {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(store.subtitleDelay - 500_000))
                                     }
                                 }
                             }
@@ -379,6 +526,35 @@
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
+                    // Playback Speed Menu (Madde #43 - VOD & Series)
+                    if store.item.epgChannelID == nil {
+                        Menu {
+                            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                                Button {
+                                    onInteraction()
+                                    store.send(.setPlaybackRate(Float(speed)))
+                                } label: {
+                                    HStack {
+                                        Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
+                                        if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "gauge.with.dots.needle.50percent")
+                                    .font(.system(size: 20))
+                                Text(String(format: "%.2gx", store.playbackRate))
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlayerCapsuleButtonStyle())
+                    }
+
                     // EPG Button (Live TV)
                     if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
                         Button {
@@ -386,6 +562,18 @@
                             store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                         } label: {
                             Image(systemName: "list.bullet.rectangle")
+                                .font(.system(size: 24))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
+
+                    // Channels Sidebar Button (Live TV)
+                    if store.playlist != nil {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "sidebar.leading")
                                 .font(.system(size: 24))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
@@ -432,6 +620,43 @@
                         y: 0
                     )
                     .scaleEffect(isFocused ? 1.15 : (configuration.isPressed ? 0.94 : 1.0))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
+                    .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            }
+        }
+    }
+
+    @available(tvOS 16.0, *)
+    private struct PlayerCapsuleButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            PlayerCapsuleButtonBody(configuration: configuration)
+        }
+
+        private struct PlayerCapsuleButtonBody: View {
+            let configuration: Configuration
+            @Environment(\.isFocused) private var isFocused
+
+            var body: some View {
+                configuration.label
+                    .foregroundStyle(isFocused ? .white : Color.white.opacity(0.85))
+                    .background(
+                        Capsule()
+                            .fill(isFocused ? Color.white.opacity(0.35) : Color.white.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                isFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.15),
+                                lineWidth: isFocused ? 2.5 : 1
+                            )
+                    )
+                    .shadow(
+                        color: isFocused ? Color(hex: "#0A84FF").opacity(0.55) : Color.clear,
+                        radius: 12,
+                        x: 0,
+                        y: 0
+                    )
+                    .scaleEffect(isFocused ? 1.08 : (configuration.isPressed ? 0.95 : 1.0))
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
             }

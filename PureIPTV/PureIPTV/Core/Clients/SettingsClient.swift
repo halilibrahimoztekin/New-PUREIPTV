@@ -60,6 +60,15 @@ public struct SettingsClient: Sendable {
 
     public var defaultStartupTab: @Sendable () -> String = { "Keşfet" }
     public var setDefaultStartupTab: @Sendable (String) -> Void = { _ in }
+
+    public var preferredAudioLanguage: @Sendable () -> String = { "tr" }
+    public var setPreferredAudioLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var preferredSubtitleLanguage: @Sendable () -> String = { "off" }
+    public var setPreferredSubtitleLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var rememberMediaTrackPreferences: @Sendable () -> Bool = { true }
+    public var setRememberMediaTrackPreferences: @Sendable (Bool) -> Void = { _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -76,6 +85,9 @@ extension SettingsClient: DependencyKey {
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
+        let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
+        let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
+        let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -83,6 +95,9 @@ extension SettingsClient: DependencyKey {
             hwAccelKey: true,
             autoUpdateEpgKey: true,
             startupTabKey: "Keşfet",
+            preferredAudioKey: "tr",
+            preferredSubtitleKey: "off",
+            rememberTracksKey: true,
         ])
 
         return SettingsClient(
@@ -182,7 +197,13 @@ extension SettingsClient: DependencyKey {
             hideAdultContent: { defaults.bool(forKey: hideAdultKey) },
             setHideAdultContent: { defaults.set($0, forKey: hideAdultKey) },
             defaultStartupTab: { defaults.string(forKey: startupTabKey) ?? "Keşfet" },
-            setDefaultStartupTab: { defaults.set($0, forKey: startupTabKey) }
+            setDefaultStartupTab: { defaults.set($0, forKey: startupTabKey) },
+            preferredAudioLanguage: { defaults.string(forKey: preferredAudioKey) ?? "tr" },
+            setPreferredAudioLanguage: { defaults.set($0, forKey: preferredAudioKey) },
+            preferredSubtitleLanguage: { defaults.string(forKey: preferredSubtitleKey) ?? "off" },
+            setPreferredSubtitleLanguage: { defaults.set($0, forKey: preferredSubtitleKey) },
+            rememberMediaTrackPreferences: { defaults.bool(forKey: rememberTracksKey) },
+            setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) }
         )
     }()
 }

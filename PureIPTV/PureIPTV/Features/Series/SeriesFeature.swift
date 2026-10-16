@@ -27,20 +27,39 @@ public struct SeriesFeature {
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
 
-        // Computed: series for the currently selected category
-        public var currentSeries: [MediaModels.Item] {
+        /// Language & Audio Filter
+        public var selectedLanguageFilter: MediaLanguageFilter = .all
+
+        public var rawSeries: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            let items = seriesByCategory[id] ?? []
+            return seriesByCategory[id] ?? []
+        }
+
+        public var availableLanguageFilters: [MediaLanguageFilter] {
+            MediaLanguageDetector.availableFilters(for: rawSeries)
+        }
+
+        public var languageFilterCounts: [MediaLanguageFilter: Int] {
+            var counts: [MediaLanguageFilter: Int] = [:]
+            for filter in MediaLanguageFilter.allCases {
+                counts[filter] = MediaLanguageDetector.count(for: filter, in: rawSeries)
+            }
+            return counts
+        }
+
+        // Computed: series for the currently selected category and language filter
+        public var currentSeries: [MediaModels.Item] {
+            let filtered = rawSeries.filter { MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter) }
 
             switch lastSortMethod {
             case .alphabetical:
-                return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
             case .rating:
-                return items.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+                return filtered.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
             case .dateAdded:
-                return items.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
+                return filtered.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
             case .defaultOrder:
-                return items
+                return filtered
             }
         }
 
@@ -53,6 +72,7 @@ public struct SeriesFeature {
         case categorySelected(MediaModels.Category)
         case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
+        case setLanguageFilter(MediaLanguageFilter)
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>)
         case dismissError
@@ -218,6 +238,9 @@ public struct SeriesFeature {
                 }
 
                 state.selectedCategoryID = category.id
+                if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
+                    state.selectedLanguageFilter = .all
+                }
                 if state.seriesByCategory[category.id] != nil {
                     return .run { _ in await hapticClient.selection() }
                 }
@@ -233,6 +256,10 @@ public struct SeriesFeature {
                         Result { try await iptvClient.fetchSeries(config, categoryID) }
                     ))
                 }
+
+            case let .setLanguageFilter(filter):
+                state.selectedLanguageFilter = filter
+                return .run { _ in await hapticClient.selection() }
 
             case let .seriesResponse(categoryID, .success(series)):
                 state.isLoadingSeries = false

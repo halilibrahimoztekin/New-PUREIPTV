@@ -26,6 +26,10 @@ actor M3UCache {
     func setXmltvData(_ data: XMLTVData) {
         xmltvData = data
     }
+
+    func clearXmltvData() {
+        xmltvData = nil
+    }
 }
 
 private extension M3UItemDTO {
@@ -74,6 +78,7 @@ public struct IPTVClient {
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
     public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
+    public var clearEPGCache: @Sendable () async -> Void = {}
 }
 
 extension IPTVClient: DependencyKey {
@@ -355,7 +360,8 @@ extension IPTVClient: DependencyKey {
                     duration: dto.info?.duration,
                     tmdbId: dto.info?.tmdbId.flatMap(Int.init),
                     rating: dto.info?.rating5based,
-                    releaseDate: dto.info?.releaseDate
+                    releaseDate: dto.info?.releaseDate,
+                    youtubeTrailer: dto.info?.youtubeTrailer
                 )
             },
             fetchShortEPG: { config, streamID, limit in
@@ -410,23 +416,25 @@ extension IPTVClient: DependencyKey {
                 }
 
                 if let err = debugError {
-                    return [
-                        EPGProgram(id: "debug_1", title: err, description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
-                    ]
+                    print("EPG fetch error: \(err)")
+                    return []
                 }
 
                 if response.isEmpty {
-                    return [
-                        EPGProgram(id: "debug_2", title: "API returned empty list", description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
-                    ]
+                    return []
                 }
 
                 let formatStrings = [
                     "yyyy-MM-dd HH:mm:ss",
                     "yyyy-MM-dd HH:mm",
                     "yyyyMMddHHmmss Z",
+                    "yyyyMMddHHmmss zzz",
                     "yyyyMMddHHmmss",
+                    "yyyyMMddHHmm Z",
+                    "yyyyMMddHHmm",
                     "yyyy-MM-dd'T'HH:mm:ssZ",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+                    "yyyy-MM-dd'T'HH:mm:ssXXXXX",
                 ]
                 let formatters: [DateFormatter] = formatStrings.map { fmt in
                     let f = DateFormatter()
@@ -438,6 +446,10 @@ extension IPTVClient: DependencyKey {
 
                 let parseEPGDate: (String) -> Date? = { str in
                     let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return nil }
+                    if let ts = Double(trimmed), ts > 1_000_000_000, ts < 2_500_000_000 {
+                        return Date(timeIntervalSince1970: ts)
+                    }
                     for f in formatters {
                         if let d = f.date(from: trimmed) {
                             return d
@@ -475,14 +487,10 @@ extension IPTVClient: DependencyKey {
                     )
                 }
 
-                if result.isEmpty {
-                    let firstItem = response.first
-                    return [
-                        EPGProgram(id: "debug_3", title: "Parsed 0 items. API count: \(response.count). First start: \(firstItem?.start ?? "nil"), startTS: \(firstItem?.startTimestamp.map(String.init) ?? "nil")", description: "", startTime: Date().addingTimeInterval(-3600), endTime: Date().addingTimeInterval(3600), isPlayingNow: true),
-                    ]
-                }
-
                 return result
+            },
+            clearEPGCache: {
+                await m3uCache.clearXmltvData()
             }
         )
     }()
@@ -497,7 +505,8 @@ extension IPTVClient: DependencyKey {
         fetchSeries: { _, _ in [] },
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
-        fetchShortEPG: { _, _, _ in [] }
+        fetchShortEPG: { _, _, _ in [] },
+        clearEPGCache: {}
     )
 }
 

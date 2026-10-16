@@ -30,6 +30,18 @@
             .onAppear {
                 store.send(.onAppear)
             }
+            .sheet(isPresented: Binding(
+                get: { store.isTrailerPresented },
+                set: {
+                    if !$0 {
+                        store.send(.dismissTrailer)
+                    }
+                }
+            )) {
+                if let title = store.trailerTitle {
+                    tvOSTrailerSheet(title: title)
+                }
+            }
         }
 
         // MARK: – Header
@@ -123,15 +135,41 @@
                         // Action Buttons
                         HStack(spacing: 20) {
                             if let history = store.historyItem, history.duration > 0 {
-                                TVHeaderActionButton(title: AppStrings.SeriesDetail.continueWatching, icon: "play.fill", isPrimary: true) {
+                                let ratio = WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration)
+                                let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
+
+                                Button {
                                     store.send(.resumeTapped)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        CircularProgressRing(
+                                            progress: ratio,
+                                            lineWidth: 3.5,
+                                            size: 26,
+                                            gradientColors: [Color(hex: "#00F5D4"), Color.white],
+                                            trackColor: Color.white.opacity(0.3)
+                                        ) {
+                                            Image(systemName: "play.fill")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+
+                                        Text("\(AppStrings.SeriesDetail.continueWatching) (%\(percent))")
+                                            .font(.system(size: 22, weight: .bold))
+                                    }
+                                    .padding(.horizontal, 32)
+                                    .padding(.vertical, 14)
                                 }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+
                                 TVHeaderActionButton(title: AppStrings.SeriesDetail.restart, icon: "arrow.counterclockwise", isPrimary: false) {
                                     store.send(.restartTapped)
                                 }
                             } else {
                                 TVHeaderActionButton(title: AppStrings.SeriesDetail.watch, icon: "play.fill", isPrimary: true) {
-                                    if let firstEp = store.currentEpisodes.first {
+                                    if let nextEp = store.nextUpEpisode {
+                                        store.send(.episodeSelected(nextEp))
+                                    } else if let firstEp = store.currentEpisodes.first {
                                         store.send(.episodeSelected(firstEp))
                                     }
                                 }
@@ -139,6 +177,12 @@
 
                             TVHeaderFavoriteButton(isFavorite: store.isFavorite) {
                                 store.send(.toggleFavorite)
+                            }
+
+                            if store.resolvedTrailerKey != nil {
+                                TVHeaderActionButton(title: AppStrings.VODDetail.trailer, icon: "play.rectangle.fill", isPrimary: false) {
+                                    store.send(.trailerTapped)
+                                }
                             }
                         }
                     }
@@ -164,6 +208,24 @@
                         .lineLimit(4)
                 }
 
+                // Next Up Episode Auto-Cue Banner (if available)
+                if let nextEp = store.nextUpEpisode {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(AppStrings.SeriesDetail.nextEpisode)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        NextUpEpisodeBannerView(
+                            episode: nextEp,
+                            seriesTitle: store.series.title,
+                            progressItem: store.episodeProgressMap[nextEp.id]
+                        ) {
+                            store.send(.playNextEpisodeTapped)
+                        }
+                    }
+                    .padding(.horizontal, 80)
+                }
+
                 // Seasons
                 if !store.seasons.isEmpty {
                     VStack(alignment: .leading, spacing: 20) {
@@ -175,8 +237,10 @@
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 16) {
                                 ForEach(store.seasons) { season in
+                                    let count = store.allEpisodes[String(season.seasonNumber)]?.count ?? season.episodeCount ?? 0
                                     TVSeasonButton(
                                         season: season,
+                                        episodeCount: count,
                                         isSelected: store.selectedSeasonNumber == season.seasonNumber
                                     ) {
                                         store.send(.seasonSelected(season.seasonNumber))
@@ -197,23 +261,55 @@
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundStyle(.white)
                             Spacer()
-                            HStack(spacing: 4) {
-                                Text("\(store.currentEpisodes.count)")
-                                Text(AppStrings.SeriesDetail.episodeCount)
+                            HStack(spacing: 20) {
+                                HStack(spacing: 4) {
+                                    Text("\(store.currentEpisodes.count)")
+                                    Text(AppStrings.SeriesDetail.episodeCount)
+                                }
+                                .font(.system(size: 20))
+                                .foregroundStyle(Color.white.opacity(0.6))
+
+                                Button {
+                                    store.send(.toggleLayoutMode)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "list.bullet")
+                                        Text(store.episodeLayoutMode == .list ? AppStrings.SeriesDetail.gridView : AppStrings.SeriesDetail.listView)
+                                    }
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 10)
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                             }
-                            .font(.system(size: 20))
-                            .foregroundStyle(Color.white.opacity(0.6))
                         }
                         .padding(.horizontal, 80)
 
-                        LazyVStack(spacing: 20) {
-                            ForEach(store.currentEpisodes) { episode in
-                                TVEpisodeRow(episode: episode) {
-                                    store.send(.episodeSelected(episode))
+                        if store.episodeLayoutMode == .list {
+                            LazyVStack(spacing: 20) {
+                                ForEach(store.currentEpisodes) { episode in
+                                    TVEpisodeRow(
+                                        episode: episode,
+                                        progressItem: store.episodeProgressMap[episode.id]
+                                    ) {
+                                        store.send(.episodeSelected(episode))
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 80)
+                        } else {
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 32), GridItem(.flexible(), spacing: 32)], spacing: 32) {
+                                ForEach(store.currentEpisodes) { episode in
+                                    TVEpisodeGridCard(
+                                        episode: episode,
+                                        progressItem: store.episodeProgressMap[episode.id]
+                                    ) {
+                                        store.send(.episodeSelected(episode))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 80)
                         }
-                        .padding(.horizontal, 80)
                     }
                 }
 
@@ -233,70 +329,282 @@
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }
         }
+
+        // MARK: - tvOS Trailer Sheet
+
+        private func tvOSTrailerSheet(title: String) -> some View {
+            ZStack {
+                Color(hex: "#0F0F13").ignoresSafeArea()
+
+                VStack(spacing: 30) {
+                    Text(title)
+                        .font(.largeTitle.bold())
+                        .foregroundColor(.white)
+
+                    Text(AppStrings.VODDetail.watchTrailer)
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.7))
+
+                    if let key = store.trailerVideoKey, let youtubeURL = URL(string: "https://www.youtube.com/watch?v=\(key)") {
+                        Button {
+                            UIApplication.shared.open(youtubeURL)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "play.rectangle.fill")
+                                Text(AppStrings.VODDetail.watchTrailer)
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 36)
+                            .padding(.vertical, 18)
+                        }
+                        .buttonStyle(.card)
+                    }
+
+                    Button(AppStrings.Common.close) {
+                        store.send(.dismissTrailer)
+                    }
+                    .buttonStyle(.card)
+                }
+                .padding(60)
+            }
+        }
     }
 
     // MARK: - TV Episode Row (Smooth Focus without White Card Flash)
 
     private struct TVEpisodeRow: View {
         let episode: DetailModels.Episode
+        let progressItem: WatchHistoryItem?
         let action: () -> Void
+
+        private var ratio: Double {
+            guard let p = progressItem, p.duration > 0 else { return 0.0 }
+            return WatchProgressFormatter.progressRatio(progress: p.progress, duration: p.duration)
+        }
+
+        private var percent: Int {
+            guard let p = progressItem, p.duration > 0 else { return 0 }
+            return WatchProgressFormatter.percentage(progress: p.progress, duration: p.duration)
+        }
+
+        private var isWatched: Bool {
+            ratio >= 0.90
+        }
+
+        private var isInProgress: Bool {
+            ratio > 0.02 && ratio < 0.90
+        }
 
         var body: some View {
             Button(action: action) {
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .top, spacing: 28) {
                     // Thumbnail
-                    Group {
-                        if let url = episode.coverURL {
-                            KFImage(url)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            Rectangle().fill(Color(hex: "#2A2A30"))
+                    ZStack(alignment: .bottomLeading) {
+                        Group {
+                            if let url = episode.coverURL {
+                                KFImage(url)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Rectangle().fill(Color(hex: "#2A2A30"))
+                            }
+                        }
+                        .frame(width: 260, height: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.8)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+
+                        if isWatched {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                Text(AppStrings.SeriesDetail.watched)
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color(hex: "#00BA88"), in: Capsule())
+                            .padding(10)
+                        } else if isInProgress {
+                            GeometryReader { proxy in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
+                                    Capsule().fill(Color(hex: "#00F5D4")).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
+                                }
+                            }
+                            .frame(height: 5)
+                            .padding(.horizontal, 10)
+                            .padding(.bottom, 10)
                         }
                     }
-                    .frame(width: 240, height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .frame(width: 260, height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                     // Info
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(episode.title)
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                            .lineLimit(2)
+                        HStack {
+                            Text(episode.title)
+                                .font(.system(size: 26, weight: .semibold))
+                                .foregroundStyle(Color.white)
+                                .lineLimit(2)
 
-                        HStack(spacing: 16) {
+                            Spacer()
+
+                            if isInProgress {
+                                Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#00F5D4"))
+                            }
+                        }
+
+                        HStack(spacing: 18) {
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(.system(size: 20, weight: .bold))
                                 .foregroundStyle(Color(hex: "#0A84FF"))
 
                             if let rating = episode.rating, rating > 0 {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 5) {
                                     Image(systemName: "star.fill").foregroundStyle(.yellow)
                                     Text(String(format: "%.1f", rating)).foregroundStyle(.white)
                                 }
-                                .font(.system(size: 16))
+                                .font(.system(size: 18))
                             }
 
                             if let duration = episode.duration {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 5) {
                                     Image(systemName: "clock")
                                     Text(duration)
                                 }
-                                .font(.system(size: 16))
+                                .font(.system(size: 18))
                                 .foregroundStyle(Color.white.opacity(0.6))
                             }
                         }
 
                         if let plot = episode.plot, !plot.isEmpty {
                             Text(plot)
-                                .font(.system(size: 18))
-                                .foregroundStyle(Color.white.opacity(0.65))
-                                .lineLimit(2)
+                                .font(.system(size: 20))
+                                .foregroundStyle(Color.white.opacity(0.7))
+                                .lineLimit(3)
+                                .lineSpacing(4)
                         }
                     }
 
                     Spacer()
                 }
+                .padding(12)
+            }
+            .buttonStyle(TVEpisodeCardButtonStyle())
+        }
+    }
+
+    // MARK: - TV Episode Grid Card
+
+    private struct TVEpisodeGridCard: View {
+        let episode: DetailModels.Episode
+        let progressItem: WatchHistoryItem?
+        let action: () -> Void
+
+        private var ratio: Double {
+            guard let p = progressItem, p.duration > 0 else { return 0.0 }
+            return WatchProgressFormatter.progressRatio(progress: p.progress, duration: p.duration)
+        }
+
+        private var percent: Int {
+            guard let p = progressItem, p.duration > 0 else { return 0 }
+            return WatchProgressFormatter.percentage(progress: p.progress, duration: p.duration)
+        }
+
+        private var isWatched: Bool {
+            ratio >= 0.90
+        }
+
+        private var isInProgress: Bool {
+            ratio > 0.02 && ratio < 0.90
+        }
+
+        var body: some View {
+            Button(action: action) {
+                VStack(alignment: .leading, spacing: 14) {
+                    ZStack(alignment: .bottomLeading) {
+                        Group {
+                            if let url = episode.coverURL {
+                                KFImage(url)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Rectangle().fill(Color(hex: "#2A2A30"))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 200)
+                        .clipped()
+
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.8)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+
+                        if isWatched {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 13))
+                                Text(AppStrings.SeriesDetail.watched)
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color(hex: "#00BA88"), in: Capsule())
+                            .padding(12)
+                        } else if isInProgress {
+                            GeometryReader { proxy in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
+                                    Capsule().fill(Color(hex: "#00F5D4")).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
+                                }
+                            }
+                            .frame(height: 5)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                        }
+                    }
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(episode.title)
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(Color(hex: "#0A84FF"))
+                        }
+
+                        if isInProgress {
+                            Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color(hex: "#00F5D4"))
+                        } else if let duration = episode.duration {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                Text(duration)
+                            }
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.white.opacity(0.6))
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .padding(12)
             }
             .buttonStyle(TVEpisodeCardButtonStyle())
         }
@@ -306,15 +614,21 @@
 
     private struct TVSeasonButton: View {
         let season: DetailModels.Season
+        let episodeCount: Int
         let isSelected: Bool
         let action: () -> Void
 
         var body: some View {
             Button(action: action) {
-                Text(season.name)
-                    .font(.system(size: 22, weight: isSelected ? .bold : .semibold))
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                HStack(spacing: 8) {
+                    Text(season.name)
+                        .font(.system(size: 22, weight: isSelected ? .bold : .semibold))
+                    Text("(\(episodeCount))")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
             }
             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
         }

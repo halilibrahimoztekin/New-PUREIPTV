@@ -235,8 +235,17 @@ import SwiftUI
                         ScrollViewReader { proxy in
                             LazyVStack(spacing: 0) {
                                 ForEach(store.epgListings) { program in
-                                    EPGGuideRow(program: program)
-                                        .id(program.id)
+                                    let hasArchive = store.selectedChannel?.tvArchive == 1
+                                    EPGGuideRow(
+                                        program: program,
+                                        hasArchive: hasArchive,
+                                        onCatchUp: {
+                                            if let channel = store.selectedChannel {
+                                                store.send(.playCatchUp(program, channel))
+                                            }
+                                        }
+                                    )
+                                    .id(program.id)
                                     Divider().background(Color.white.opacity(0.05))
                                 }
                             }
@@ -259,9 +268,13 @@ import SwiftUI
 
     public struct EPGGuideRow: View {
         let program: EPGProgram
+        let hasArchive: Bool
+        var onCatchUp: (() -> Void)?
 
-        public init(program: EPGProgram) {
+        public init(program: EPGProgram, hasArchive: Bool = false, onCatchUp: (() -> Void)? = nil) {
             self.program = program
+            self.hasArchive = hasArchive
+            self.onCatchUp = onCatchUp
         }
 
         public var body: some View {
@@ -291,6 +304,23 @@ import SwiftUI
                                 .background(Color.accentColor.opacity(0.2))
                                 .foregroundColor(.accentColor)
                                 .cornerRadius(4)
+                        } else if hasArchive, program.endTime < Date() {
+                            Spacer()
+                            Button {
+                                onCatchUp?()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text(AppStrings.Player.watchCatchUp)
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.purple.opacity(0.2), in: Capsule())
+                                .foregroundColor(.purple)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 

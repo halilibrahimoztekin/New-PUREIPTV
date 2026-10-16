@@ -24,3 +24,44 @@ public struct LiveBadge: View {
         )
     }
 }
+
+// MARK: - Catch-Up Badge (Shared Component for iOS & tvOS)
+
+public struct CatchUpBadge: View {
+    public var isCompact: Bool
+
+    public init(isCompact: Bool = false) {
+        self.isCompact = isCompact
+    }
+
+    public var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: isCompact ? 8 : 9, weight: .bold))
+
+            if !isCompact {
+                Text(AppStrings.Player.catchUp)
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.3)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, isCompact ? 5 : 6)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "#AF52DE"), Color(hex: "#5856D6")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 0.6)
+                )
+        )
+        .shadow(color: Color(hex: "#AF52DE").opacity(0.4), radius: 3)
+    }
+}

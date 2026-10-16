@@ -27,6 +27,7 @@ public struct EPGGuideFeature {
         case epgResponse(Result<[EPGProgram], Error>)
         case closeTapped
         case playTapped(MediaModels.Item)
+        case playCatchUp(EPGProgram, MediaModels.Item)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -82,6 +83,35 @@ public struct EPGGuideFeature {
 
             case let .playTapped(channel):
                 return .send(.delegate(.playChannel(channel)))
+
+            case let .playCatchUp(program, channel):
+                let config = state.config
+                guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return .none }
+                let startUnix = Int(program.startTime.timeIntervalSince1970)
+                let durationMins = max(1, Int(program.endTime.timeIntervalSince(program.startTime) / 60))
+
+                var components = URLComponents(url: serverURL.appendingPathComponent("streaming/timeshift.php"), resolvingAgainstBaseURL: false)
+                components?.queryItems = [
+                    URLQueryItem(name: "username", value: username),
+                    URLQueryItem(name: "password", value: password),
+                    URLQueryItem(name: "stream", value: channel.id),
+                    URLQueryItem(name: "start", value: String(startUnix)),
+                    URLQueryItem(name: "duration", value: String(durationMins)),
+                ]
+
+                if let finalURL = components?.url {
+                    let catchupItem = MediaModels.Item(
+                        id: "\(channel.id)_catchup_\(startUnix)",
+                        title: "\(channel.title) (Tekrar: \(program.title))",
+                        streamURL: finalURL,
+                        coverURL: channel.coverURL,
+                        categoryID: channel.categoryID,
+                        type: .live,
+                        epgChannelID: channel.epgChannelID
+                    )
+                    return .send(.delegate(.playChannel(catchupItem)))
+                }
+                return .none
 
             case .delegate:
                 return .none

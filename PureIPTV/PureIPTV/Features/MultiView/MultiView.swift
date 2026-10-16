@@ -100,6 +100,11 @@ public struct MultiView: View {
                     store.send(.delegate(.close))
                 }
             }
+            .onChange(of: tvFocusedSlotID) { _, newID in
+                if let id = newID {
+                    store.send(.setAudioActive(slotID: id), animation: .spring(response: 0.3, dampingFraction: 0.7))
+                }
+            }
         #endif
             .sheet(
                 isPresented: Binding(

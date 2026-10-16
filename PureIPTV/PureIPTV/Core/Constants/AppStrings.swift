@@ -24,6 +24,7 @@ public enum AppStrings {
         public static let error = "Hata: %@".localized
         public static let addToFavorites = "Favorilere Ekle".localized
         public static let removeFromFavorites = "Favorilerden Çıkar".localized
+        public static let favorites = "Favoriler".localized
         public static let categoryNotFound = "Kategori bulunamadı".localized
         public static let results = "sonuç".localized
         public static let hour = "saat".localized
@@ -34,6 +35,9 @@ public enum AppStrings {
         public static let restart = "Baştan Başlat".localized
         public static let liveTV = "Canlı TV".localized
         public static let retry = "Tekrar Dene".localized
+        public static let play = "Oynat".localized
+        public static let search = "Ara".localized
+        public static let channels = "Kanallar".localized
     }
 
     // MARK: - VOD (Movies)
@@ -63,6 +67,9 @@ public enum AppStrings {
         public static let emptyCategoryLive = "Bu kategoride kanal bulunamadı".localized
         public static let loadingChannels = "Kanallar yükleniyor…".localized
         public static let noChannels = "Kanal bulunamadı.".localized
+        public static let hideChannel = "Kanalı Gizle".localized
+        public static let sendToMultiView = "Çoklu Ekran'a Gönder".localized
+        public static let channelGuide = "Yayın Akışı (EPG)".localized
     }
 
     // MARK: - Player & EPG
@@ -71,6 +78,8 @@ public enum AppStrings {
         public static let liveLabel = "CANLI".localized
         public static let liveLabelNormal = "Canlı".localized
         public static let liveBroadcast = "Canlı Yayın".localized
+        public static let playbackSpeed = "Oynatma Hızı".localized
+        public static let normalSpeed = "Normal (1.0x)".localized
         public static let off = "Kapalı".localized
         public static let scrubInstruction = "Seçmek için Tıklayın veya Bırakın".localized
         public static let scrubSwipe = "Kaydırarak Akıcı İleri / Geri Sarma".localized
@@ -86,13 +95,91 @@ public enum AppStrings {
         public static let restart = "Baştan Başlat".localized
         public static let previousChannel = "Önceki Kanal".localized
         public static let nextChannel = "Sonraki Kanal".localized
+        public static let recallLastChannel = "Son İzlenen Kanal".localized
+        public static let noPreviousChannel = "Geçmiş Kanal Yok".localized
+        public static func recalledChannel(_ name: String) -> String {
+            "Geri Dönüldü: %@".localized(name)
+        }
+
         public static func sleepTimerMinutes(_ minutes: Int) -> String {
             "Uyku Zamanlayıcısı: %lld dk".localized(Int64(minutes))
         }
 
         public static let sleepTimerDisabled = "Uyku Zamanlayıcısı Kapatıldı".localized
+        public static let oledDarkRoomMode = "Karanlık Oda Koruması".localized
+        public static let minimize = "Küçült".localized
+        public static let miniPlayer = "Mini Oynatıcı".localized
+        public static let screenLocked = "Ekran Kilitlendi".localized
+        public static let screenUnlocked = "Ekran Kilidi Açıldı".localized
+        public static let tapToUnlock = "Kilidi Açmak için Dokunun".localized
+        public static let lockScreen = "Ekranı Kilitle".localized
+        public static let unlock = "Kilidi Aç".localized
+        public static let audioRoute = "Ses Çıkışı".localized
+        public static let audioConnected = "Bağlandı".localized
+        public static let airplay = "AirPlay".localized
+        public static let bluetooth = "Bluetooth".localized
+        public static let speaker = "Hoparlör".localized
+        public static let jumpToNow = "Şu Ana Git".localized
+        public static let catchUp = "Geriye Dönük".localized
+        public static let watchCatchUp = "Tekrarı İzle".localized
+        public static let programDetails = "Program Detayı".localized
+        public static let setReminder = "Hatırlatıcı Ekle".localized
+        public static let reminderSet = "Hatırlatıcı Eklendi".localized
+        public static let removeReminder = "Hatırlatıcıyı Kaldır".localized
+        public static let reminderRemoved = "Hatırlatıcı Kaldırıldı".localized
+        public static let reminderNotificationTitle = "Program Başlıyor".localized
+        public static func reminderNotificationBody(_ program: String, _ channel: String, _ mins: Int) -> String {
+            "\"%@\", %@ kanalında %lld dakika sonra başlayacak!".localized(program, channel, Int64(mins))
+        }
+
+        public static let allCategories = "Tümü".localized
+        public static let searchChannelOrProgram = "Kanal veya program ara...".localized
+        public static let matchingProgram = "Eşleşen Program".localized
+        public static let openChannel = "Kanalı Aç".localized
+        public static let share = "Paylaş".localized
+        public static let completed = "tamamlandı".localized
+        public static let today = "Bugün".localized
+        public static let yesterday = "Dün".localized
+        public static let returnToToday = "Bugüne Dön".localized
+        public static let catchUpArchive = "Geriye Dönük Arşiv".localized
+        public static let refreshEPG = "Yayın Akışını Yenile".localized
+        public static let syncing = "Senkronize ediliyor...".localized
+        public static let epgUpdated = "Yayın akışı güncellendi".localized
+        public static func lastSynced(_ timeString: String) -> String {
+            "Son güncelleme: %@".localized(timeString)
+        }
+
+        public static let automaticBroadcast = "Canlı Yayın".localized
+        public static let broadcastIntermission = "Yayın Arası".localized
+        public static let epgFallbackDescription = "Yayın akışı sağlayıcı tarafından iletilmediğinde otomatik olarak oluşturulan yayın kuşağı.".localized
+        public static let morningBroadcast = "Sabah Yayını Kuşağı".localized
+        public static let dayBroadcast = "Gündüz Yayını Kuşağı".localized
+        public static let primeBroadcast = "Akşam Yayını Kuşağı".localized
+        public static let nightBroadcast = "Gece Kuşağı Yayını".localized
+        public static let preparingGuide = "Yayın Akışı Hazırlanıyor".localized
         public static func reconnecting(_ retryCount: Int) -> String {
             "Bağlantı koptu, yeniden bağlanılıyor... (%lld/3)".localized(Int64(retryCount))
+        }
+
+        public static let subtitleSync = "Altyazı Senkronizasyonu".localized
+        public static let resetSubtitleDelay = "Sıfırla".localized
+        public static func subtitleDelayMs(_ ms: Int) -> String {
+            ms > 0 ? "+%lld ms".localized(Int64(ms)) : "%lld ms".localized(Int64(ms))
+        }
+
+        public static func audioTrackChanged(_ name: String) -> String {
+            "Ses: %@".localized(name)
+        }
+
+        public static func subtitleTrackChanged(_ name: String) -> String {
+            "Altyazı: %@".localized(name)
+        }
+
+        public static let upNext = "Sonraki Bölüm".localized
+        public static let playNow = "Hemen Oynat".localized
+        public static let cancel = "İptal".localized
+        public static func upNextPlayingInSeconds(_ seconds: Int) -> String {
+            "%lld saniye içinde oynatılacak".localized(Int64(seconds))
         }
     }
 
@@ -212,12 +299,21 @@ public enum AppStrings {
         public static let premiumStatus = "Premium 👑".localized
         public static let freeStatus = "Ücretsiz / Süresi Dolmuş".localized
         public static let clearCache = "Önbelleği Temizle".localized
+        public static let clearCacheTitle = "Önbelleği Temizle".localized
+        public static let clearCacheMessage = "Önbelleğe alınan posterler, kapak resimleri ve ağ verileri silinecektir. İndirilen içerikleriniz ve ayarlarınız korunur.".localized
+        public static let clearCacheConfirm = "Önbelleği Boşalt".localized
+        public static let clearCacheSuccess = "Önbellek başarıyla temizlendi.".localized
         public static let clearing = "Temizleniyor...".localized
         public static let calculating = "Hesaplanıyor...".localized
         public static let defaultSort = "Varsayılan".localized
         public static let alphabeticalSort = "A-Z (Alfabetik)".localized
         public static let ratingSort = "IMDb Puanı".localized
         public static let dateAddedSort = "Eklenme Tarihi".localized
+        public static let audioAndSubtitleSettings = "Ses ve Altyazı Ayarları".localized
+        public static let defaultAudioLanguage = "Varsayılan Ses Dili".localized
+        public static let defaultSubtitleLanguage = "Varsayılan Altyazı Dili".localized
+        public static let rememberTrackPreferences = "Akıllı Tercih Belleği".localized
+        public static let rememberTrackPreferencesDesc = "İzlenen her içerik için son seçilen ses ve altyazı otomatik hatırlanır.".localized
     }
 
     // MARK: - Search
@@ -231,6 +327,8 @@ public enum AppStrings {
         public static let movies = "Filmler".localized
         public static let series = "Diziler".localized
         public static let recentSearches = "Son Aramalar".localized
+        public static let quickTags = "Popüler Kategoriler & Etiketler".localized
+        public static let discoverSuggestions = "Öne Çıkan Aramalar".localized
         public static let clear = "Temizle".localized
         public static let loadingMessage = "Arama altyapısı hazırlanıyor...\n(Bu işlem ilk girişte birkaç saniye sürebilir)".localized
         public static let all = "Tümü".localized
@@ -272,6 +370,11 @@ public enum AppStrings {
         public static let title = "İndirilenler".localized
         public static let empty = "Henüz indirilmiş içerik yok".localized
         public static let emptyDescription = "Filmleri veya dizileri indirerek internet bağlantınız olmadan da izleyebilirsiniz.".localized
+        public static let activeDownloads = "Aktif İndirmeler".localized
+        public static let completedDownloads = "İndirilen İçerikler".localized
+        public static let totalStorage = "Kullanılan Alan".localized
+        public static let downloadSpeed = "Hız".localized
+        public static let tvOSNotice = "Çevrimdışı indirme özelliği Apple TV kısıtlamaları nedeniyle yalnızca iOS ve iPadOS cihazlarında desteklenmektedir.".localized
     }
 
     // MARK: - VOD Detail
@@ -292,6 +395,22 @@ public enum AppStrings {
         public static let productionCountries = "Yapım Ülkeleri".localized
         public static let productionCompanies = "Yapım Şirketleri".localized
         public static let viewOnIMDb = "IMDb'de Görüntüle".localized
+        public static let castCrew = "Oyuncu Kadrosu".localized
+        public static let biography = "Biyografi".localized
+        public static let born = "Doğum".localized
+        public static let birthplace = "Doğum Yeri".localized
+        public static let character = "Karakter".localized
+        public static let noBiography = "Bu oyuncu için henüz biyografi bilgisi eklenmemiştir.".localized
+        public static let uhdQualityBadge = "4K UHD".localized
+        public static let hdrBadge = "HDR10".localized
+        public static let audio51Badge = "5.1 Surround".localized
+        public static let imdbRating = "IMDb".localized
+        public static let watchTrailer = "Fragmanı İzle".localized
+        public static let startMovieNow = "Filmi Şimdi Başlat".localized
+        public static let trailerNotAvailable = "Bu film için fragman bulunamadı.".localized
+        public static let inLibrary = "Kütüphanenizde".localized
+        public static let notInLibrary = "Listenizde Bulunamadı".localized
+        public static let notInLibraryDesc = "Bu içerik mevcut IPTV çalma listenizde bulunamadı. TMDB özet bilgisi aşağıdadır.".localized
     }
 
     // MARK: - Series Detail
@@ -304,6 +423,20 @@ public enum AppStrings {
         public static let episodes = "Bölümler".localized
         public static let loading = "Dizi bilgileri yükleniyor…".localized
         public static let episodeCount = "bölüm".localized
+        public static let nextEpisode = "Sıradaki Bölüm".localized
+        public static let playNextEpisode = "Sıradaki Bölümü İzle".localized
+        public static let watched = "İzlendi".localized
+        public static let unwatched = "İzlenmedi".localized
+        public static let listView = "Liste".localized
+        public static let gridView = "Izgara".localized
+        public static let selectSeason = "Sezon Seç".localized
+        public static func seasonFormat(_ num: Int) -> String {
+            "%lld. Sezon".localized(Int64(num))
+        }
+
+        public static func seasonEpisodeCount(_ num: Int, _ count: Int) -> String {
+            "%lld. Sezon (%lld Bölüm)".localized(Int64(num), Int64(count))
+        }
     }
 
     // MARK: - Paywall
@@ -365,5 +498,17 @@ public enum AppStrings {
     public enum Widget {
         public static let startWatching = "İzlemeye Başla".localized
         public static let description = "Kaldığınız yerden devam edin veya favorilerinize hızlıca ulaşın.".localized
+    }
+
+    // MARK: - Media Filter
+
+    public enum MediaFilter {
+        public static let all = "Tümü".localized
+        public static let turkishDubbed = "Türkçe Dublaj".localized
+        public static let turkishSubtitled = "Türkçe Altyazılı".localized
+        public static let dualAudio = "Çift Ses (Multi)".localized
+        public static let originalAudio = "Orijinal / EN".localized
+        public static let filterTitle = "Ses & Dil Filtresi".localized
+        public static let noMatchingResults = "Seçilen dil filtresine uygun içerik bulunamadı.".localized
     }
 }

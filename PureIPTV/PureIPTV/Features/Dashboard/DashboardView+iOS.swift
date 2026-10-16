@@ -14,7 +14,11 @@
 
         public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -39,10 +43,18 @@
 
                             if !store.watchHistoryItems.isEmpty {
                                 featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.watchHistoryItems) { hist in
-                                    WatchHistoryCardView(item: hist) {
-                                        store.send(.historySelected(hist))
-                                    }
-                                    .frame(width: 200)
+                                    ResumeWatchingCardView(
+                                        item: hist,
+                                        onResume: {
+                                            store.send(.historySelected(hist))
+                                        },
+                                        onRestart: {
+                                            store.send(.restartHistorySelected(hist))
+                                        },
+                                        onDelete: {
+                                            store.send(.deleteHistorySelected(hist))
+                                        }
+                                    )
                                 }
                             }
 

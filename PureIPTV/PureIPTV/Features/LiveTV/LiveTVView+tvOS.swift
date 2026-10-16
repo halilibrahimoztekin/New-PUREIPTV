@@ -14,6 +14,11 @@
         let config: PlaylistConfig
 
         @FocusState private var focusedCategory: String?
+        @FocusState private var focusedChannelID: String?
+
+        @State private var currentScrubLetter: String = ""
+        @State private var isScrubOverlayVisible: Bool = false
+        @State private var hideScrubTask: Task<Void, Never>?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -22,7 +27,11 @@
 
         public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
@@ -30,16 +39,29 @@
                 // ── Left: Category list ───────────────────────────────
                 categoryColumn
                     .frame(width: 280)
+                    .focusSection()
+                    .focusGuideBoundary()
 
-                // ── Divider ───────────────────────────────────────────
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(width: 1)
+                // ── Divider with Focus Guide Bridge ───────────────────
+                ZStack {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 1)
+                    TVFocusGuideBridge()
+                        .frame(width: 24)
+                }
 
                 // ── Right: Channel shelf ──────────────────────────────
                 channelArea
+                    .focusSection()
+                    .focusGuideBoundary()
             }
-            .background(Color.black.ignoresSafeArea())
+            .background(
+                DynamicMeshBackgroundView(
+                    imageURL: focusedChannel?.coverURL,
+                    titleSeed: focusedChannel?.title ?? "LiveTV"
+                )
+            )
             .onAppear {
                 store.send(.onAppear(config: config))
             }
@@ -49,54 +71,73 @@
             .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
                 EPGTimelineView(store: store)
             }
+            .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
+                MultiView(store: store)
+            }
+        }
+
+        private var focusedChannel: MediaModels.Item? {
+            if let focusedChannelID {
+                return store.currentChannels.first(where: { $0.id == focusedChannelID })
+            }
+            return store.selectedChannel ?? store.currentChannels.first
         }
 
         // MARK: – Category Column
 
         private var categoryColumn: some View {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 4) {
-                    // Header
-                    HStack {
-                        Text(AppStrings.LiveTV.categories)
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(Color(hex: "#E4E1E7"))
-                        Spacer()
-                        Button {
-                            store.send(.openEPGTimelineTapped)
-                        } label: {
-                            Image(systemName: "calendar.day.timeline.left")
-                                .font(.system(size: 20))
-                                .padding(8)
-                        }
-                        .buttonStyle(TVCircleButtonStyle())
-                        .padding(.trailing, 8)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 48)
-                    .padding(.bottom, 16)
-
-                    if store.isLoadingCategories {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(Color(hex: "#0A84FF"))
-                            .padding(.top, 40)
-                    } else {
-                        ForEach(store.categories) { category in
-                            TVCategoryRow(
-                                category: category,
-                                isSelected: store.selectedCategoryID == category.id
-                            ) {
-                                store.send(.categorySelected(category))
+            ScrollViewReader { catProxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        // Header
+                        HStack {
+                            Text(AppStrings.LiveTV.categories)
+                                .font(.system(size: 26, weight: .bold))
+                                .foregroundStyle(Color(hex: "#E4E1E7"))
+                            Spacer()
+                            Button {
+                                store.send(.openEPGTimelineTapped)
+                            } label: {
+                                Image(systemName: "calendar.day.timeline.left")
+                                    .font(.system(size: 20))
+                                    .padding(8)
                             }
-                            .padding(.horizontal, 16)
-                            .focused($focusedCategory, equals: category.id)
+                            .buttonStyle(TVCircleButtonStyle())
+                            .padding(.trailing, 8)
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 48)
+                        .padding(.bottom, 16)
+
+                        if store.isLoadingCategories {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(Color(hex: "#0A84FF"))
+                                .padding(.top, 40)
+                        } else {
+                            ForEach(store.categories) { category in
+                                TVCategoryRow(
+                                    category: category,
+                                    isSelected: store.selectedCategoryID == category.id
+                                ) {
+                                    store.send(.categorySelected(category))
+                                }
+                                .padding(.horizontal, 16)
+                                .focused($focusedCategory, equals: category.id)
+                                .id(category.id)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 48)
+                }
+                .background(Color(hex: "#0C0C10"))
+                .onChange(of: store.selectedCategoryID) { _, newCatID in
+                    if let newCatID {
+                        focusedCategory = newCatID
+                        withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
                     }
                 }
-                .padding(.bottom, 48)
             }
-            .background(Color(hex: "#0C0C10"))
         }
 
         // MARK: – Channel Area
@@ -126,34 +167,97 @@
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Channel grid
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
-                        spacing: 24
-                    ) {
-                        ForEach(store.currentChannels) { channel in
-                            TVChannelCard(
-                                channel: channel,
-                                isSelected: store.selectedChannel?.id == channel.id
-                            ) {
-                                store.send(.channelSelected(channel))
+                // Channel grid with Focus Memory
+                ScrollViewReader { channelProxy in
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
+                            spacing: 24
+                        ) {
+                            ForEach(store.currentChannels) { channel in
+                                TVChannelCard(
+                                    channel: channel,
+                                    isSelected: store.selectedChannel?.id == channel.id
+                                ) {
+                                    store.send(.channelSelected(channel))
+                                }
+                                .focused($focusedChannelID, equals: channel.id)
+                                .id(channel.id)
+                                .contextMenu {
+                                    Button {
+                                        store.send(.toggleFavorite(channel))
+                                    } label: {
+                                        if store.favoriteIDs.contains(channel.id) {
+                                            Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                        } else {
+                                            Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                        }
+                                    }
+
+                                    Button {
+                                        store.send(.sendToMultiView(channel))
+                                    } label: {
+                                        Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+                                    }
+
+                                    Button {
+                                        store.send(.openChannelEPG(channel))
+                                    } label: {
+                                        Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        store.send(.hideChannel(channel))
+                                    } label: {
+                                        Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
+                                    }
+                                }
                             }
-                            .contextMenu {
-                                Button {
-                                    store.send(.toggleFavorite(channel))
-                                } label: {
-                                    if store.favoriteIDs.contains(channel.id) {
-                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                    } else {
-                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                        }
+                        .padding(.horizontal, 48)
+                        .padding(.vertical, 48)
+                    }
+                    .onChange(of: store.selectedChannel) { _, newChannel in
+                        if let channelID = newChannel?.id {
+                            focusedChannelID = channelID
+                            withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
+                        }
+                    }
+                    .onAppear {
+                        // Focus Memory: return focus to last selected channel when coming back from player
+                        if let lastSelectedID = store.selectedChannel?.id {
+                            focusedChannelID = lastSelectedID
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation { channelProxy.scrollTo(lastSelectedID, anchor: .center) }
+                            }
+                        }
+                    }
+                    .onChange(of: focusedChannelID) { _, newID in
+                        guard let newID, let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
+                        let firstChar = String(ch.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
+                        if !firstChar.isEmpty, firstChar != currentScrubLetter {
+                            currentScrubLetter = firstChar
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isScrubOverlayVisible = true
+                            }
+                            hideScrubTask?.cancel()
+                            hideScrubTask = Task {
+                                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                                guard !Task.isCancelled else { return }
+                                await MainActor.run {
+                                    withAnimation(.easeOut(duration: 0.35)) {
+                                        isScrubOverlayVisible = false
                                     }
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 48)
+                    .overlay(
+                        TVAlphabetScrubberOverlay(
+                            currentLetter: currentScrubLetter,
+                            isVisible: isScrubOverlayVisible
+                        )
+                    )
                 }
             }
         }
@@ -196,60 +300,61 @@
 
         var body: some View {
             Button(action: action) {
-                ZStack(alignment: .bottomLeading) {
-                    // Card background
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(hex: "#1F1F23"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(
-                                    isFocused
-                                        ? Color(hex: "#0A84FF")
-                                        : isSelected ? Color(hex: "#0A84FF").opacity(0.4) : Color.white.opacity(0.07),
-                                    lineWidth: isFocused ? 3 : 1
-                                )
+                TVParallaxCardContainer(
+                    isFocused: isFocused,
+                    isSelected: isSelected,
+                    cornerRadius: 16,
+                    accentColor: Color(hex: "#0A84FF")
+                ) {
+                    // Layer 1: Background & gradient
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(hex: "#1F1F23"))
+
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.85)],
+                            startPoint: .center,
+                            endPoint: .bottom
                         )
-
-                    // Logo
-                    if let logoURL = channel.coverURL {
-                        KFImage(logoURL)
-                            .placeholder {
-                                Image(systemName: "tv.fill")
-                                    .font(.system(size: 32))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.2))
-                            }
-                            .downsampling(size: CGSize(width: 180, height: 120))
-                            .cacheOriginalImage()
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: 90, maxHeight: 60)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        Image(systemName: "tv.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.2))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                } floatingContent: {
+                    // Layer 3: Floating Parallax Logo & Badge
+                    ZStack(alignment: .bottomLeading) {
+                        if let logoURL = channel.coverURL {
+                            KFImage(logoURL)
+                                .placeholder {
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 34))
+                                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                }
+                                .downsampling(size: CGSize(width: 200, height: 140))
+                                .cacheOriginalImage()
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: 100, maxHeight: 68)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            Image(systemName: "tv.fill")
+                                .font(.system(size: 34))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
 
-                    // Bottom gradient
-                    LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                    // Name + badge
-                    HStack(alignment: .center, spacing: 8) {
-                        Text(channel.title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#E4E1E7"))
-                            .lineLimit(1)
-                        Spacer()
-                        LiveBadge()
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(channel.title)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Spacer()
+                            LiveBadge()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
                 }
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
-            .buttonStyle(.card)
+            .buttonStyle(.plain)
         }
     }
 

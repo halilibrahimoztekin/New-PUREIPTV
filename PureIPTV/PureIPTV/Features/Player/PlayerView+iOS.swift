@@ -10,73 +10,182 @@
         @State private var sliderDragValue: Double = 0.0
         @Environment(\.scenePhase) private var scenePhase
 
+        // Smart Double-Tap Seek State
+        @State private var smartSeekDirection: SmartSeekDirection? = nil
+        @State private var isLiveWarningVisible: Bool = false
+        @State private var seekDismissWorkItem: DispatchWorkItem? = nil
+        @State private var singleTapWorkItem: DispatchWorkItem? = nil
+        @State private var cumulativeSeekSeconds: Int = 0
+        @State private var activeSeekSide: ActiveSeekSide? = nil
+
+        // Vertical Drag OSD State (Madde #12)
+        @State private var activeVerticalOSD: VerticalOSDType? = nil
+        @State private var dragGestureMode: DragGestureMode? = nil
+        @State private var dragInitialBrightness: Double = 1.0
+        @State private var dragInitialVolume: Double = 100.0
+        @State private var lastHapticThreshold: Int = -1
+        @State private var osdDismissWorkItem: DispatchWorkItem? = nil
+
+        // Horizontal Scrubbing State (Madde #13)
+        @State private var horizontalScrubState: HorizontalScrubState? = nil
+        @State private var dragInitialScrubPosition: Double = 0.0
+        @State private var lastScrubHapticInterval: Int = -1
+
+        // Aspect Ratio & Zoom State (Madde #14)
+        @State private var pinchStartScale: CGFloat? = nil
+        @State private var aspectDismissWorkItem: DispatchWorkItem? = nil
+
+        // Channel Zapping State (Madde #16)
+        @State private var interactiveZappingDirection: ZappingDirection? = nil
+        @State private var hasTriggeredZappingThresholdHaptic: Bool = false
+
+        private enum ActiveSeekSide {
+            case left
+            case right
+        }
+
+        private enum DragGestureMode {
+            case brightness
+            case volume
+            case horizontal
+            case miniEPG
+            case channelZapping
+            case swipeToMiniPlayer
+        }
+
         public var body: some View {
             ZStack {
                 // Gesture Areas
                 GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        // Left Half - Brightness & Backward Jump
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(
-                                ExclusiveGesture(
-                                    TapGesture(count: 2).onEnded {
-                                        store.send(.jumpBackward)
-                                        store.send(.showGestureFeedback("10s ⏪"))
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                            store.send(.hideGestureFeedback)
-                                        }
-                                    },
-                                    TapGesture(count: 1).onEnded {
-                                        store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            SpatialTapGesture()
+                                .onEnded { value in
+                                    handleTap(at: value.location, in: geo.size)
+                                }
+                        )
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 15)
+                                .onChanged { value in
+                                    singleTapWorkItem?.cancel()
+                                    store.send(.userInteracted)
+                                    handleDragChanged(value: value, geo: geo)
+                                }
+                                .onEnded { value in
+                                    handleDragEnded(value: value)
+                                }
+                        )
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { scale in
+                                    if store.isScreenLocked {
+                                        store.send(.showLockPill)
+                                        return
                                     }
-                                )
-                            )
-
-                        // Right Half - Volume & Forward Jump
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(
-                                ExclusiveGesture(
-                                    TapGesture(count: 2).onEnded {
-                                        store.send(.jumpForward)
-                                        store.send(.showGestureFeedback("⏩ 10s"))
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                            store.send(.hideGestureFeedback)
-                                        }
-                                    },
-                                    TapGesture(count: 1).onEnded {
-                                        store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                    singleTapWorkItem?.cancel()
+                                    store.send(.userInteracted)
+                                    if pinchStartScale == nil {
+                                        pinchStartScale = store.videoZoomScale
                                     }
-                                )
-                            )
-                    }
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                store.send(.dragGestureChanged(
-                                    translation: value.translation,
-                                    screenWidth: geo.size.width,
-                                    screenHeight: geo.size.height,
-                                    startLocation: value.startLocation
-                                ))
-                            }
-                            .onEnded { _ in
-                                store.send(.dragGestureEnded)
-                            }
-                    )
+                                    let base = pinchStartScale ?? 1.0
+                                    let targetScale = max(1.0, min(3.0, base * scale))
+                                    store.send(.setVideoZoomScale(targetScale))
+                                    triggerAspectFeedback()
+                                }
+                                .onEnded { _ in
+                                    guard !store.isScreenLocked else { return }
+                                    pinchStartScale = nil
+                                    if store.videoZoomScale <= 1.05 {
+                                        store.send(.setVideoAspectRatioMode(.fit))
+                                        HapticManager.shared.trigger(.light)
+                                    } else if store.videoZoomScale >= 2.95 {
+                                        HapticManager.shared.trigger(.medium)
+                                    }
+                                    triggerAspectFeedback()
+                                }
+                        )
                 }
+
+                // Smart Double-Tap Seek Ripple & Chevrons Overlay
+                SmartDoubleTapSeekOverlay(
+                    direction: smartSeekDirection,
+                    isLiveWarning: isLiveWarningVisible
+                )
+
+                // Vertical Drag Volume & Brightness OSD Overlay (Madde #12)
+                if let osd = activeVerticalOSD {
+                    HStack {
+                        if !osd.isVolume {
+                            VerticalControlOSDView(osdType: osd)
+                                .padding(.leading, 36)
+                            Spacer()
+                        } else {
+                            Spacer()
+                            VerticalControlOSDView(osdType: osd)
+                                .padding(.trailing, 36)
+                        }
+                    }
+                    .transition(.scale(scale: 0.88).combined(with: .opacity))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: activeVerticalOSD)
+                }
+
+                // Horizontal Pan Scrubbing HUD Overlay (Madde #13)
+                if let scrub = horizontalScrubState {
+                    HorizontalScrubHUDView(state: scrub)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: scrub)
+                }
+
+                // Aspect Ratio & Pinch-to-Zoom HUD Overlay (Madde #14)
+                if store.isAspectFeedbackVisible {
+                    AspectScaleHUDView(
+                        mode: store.videoAspectRatioMode,
+                        scale: store.videoZoomScale
+                    )
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: store.isAspectFeedbackVisible)
+                }
+
+                // OLED & Dark Room Dimming Overlay
+                OLEDDimmerOverlay(
+                    dimLevel: store.oledDimLevel,
+                    isDeepDimmed: store.isDeepDimmed
+                )
+
+                if store.isDeepDimmed {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            store.send(.userInteracted)
+                        }
+                }
+
                 if store.isControlsVisible {
                     VStack {
                         // Top Bar
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Button(action: { HapticManager.shared.trigger(.light); store.send(.closeTapped) }) {
-                                    Image(systemName: "xmark")
-                                        .font(.title3)
-                                        .foregroundColor(.white)
-                                        .padding(12)
-                                        .background(.ultraThinMaterial, in: Circle())
+                                HStack(spacing: 8) {
+                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.closeTapped) }) {
+                                        Image(systemName: "xmark")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(12)
+                                            .background(.ultraThinMaterial, in: Circle())
+                                    }
+
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.medium)
+                                        store.send(.minimizeTapped)
+                                    }) {
+                                        Image(systemName: "chevron.down")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(12)
+                                            .background(.ultraThinMaterial, in: Circle())
+                                    }
                                 }
 
                                 Spacer()
@@ -110,10 +219,29 @@
                                             .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
                                     }
 
-                                    // AirPlay Button
-                                    AirPlayView()
-                                        .frame(width: 40, height: 40)
-                                        .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    // AirPlay & Audio Route Router Button (Madde #20)
+                                    GlassAudioRouteButton(currentRoute: store.currentAudioRoute)
+
+                                    // Last Channel Recall Button
+                                    if let prev = store.previousChannel {
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.medium)
+                                            store.send(.recallLastChannel)
+                                        }) {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                                    .font(.subheadline.bold())
+                                                Text(prev.title)
+                                                    .font(.caption.weight(.semibold))
+                                                    .lineLimit(1)
+                                                    .frame(maxWidth: 110)
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 8)
+                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Capsule())
+                                        }
+                                    }
 
                                     // Channels Button (Zapping)
                                     if store.playlist != nil {
@@ -153,6 +281,61 @@
                                             .foregroundColor(.white)
                                             .padding(10)
                                             .background(store.isInfoVisible ? AnyShapeStyle(Color.white.opacity(0.3)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    }
+
+                                    // Aspect Ratio / Zoom Button (Madde #14)
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.toggleAspectRatioMode)
+                                        triggerAspectFeedback()
+                                    }) {
+                                        Image(systemName: store.videoAspectRatioMode.systemIcon)
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Circle())
+                                    }
+
+                                    // Playback Speed Menu (Madde #43 - VOD & Series)
+                                    if !store.item.isLive {
+                                        Menu {
+                                            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                                                Button {
+                                                    HapticManager.shared.trigger(.light)
+                                                    store.send(.setPlaybackRate(Float(speed)))
+                                                } label: {
+                                                    HStack {
+                                                        Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
+                                                        if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                                            Image(systemName: "checkmark")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "gauge.with.dots.needle.50percent")
+                                                    .font(.caption2.bold())
+                                                Text(String(format: "%.2gx", store.playbackRate))
+                                                    .font(.caption.monospacedDigit().weight(.semibold))
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 8)
+                                            .background(AnyShapeStyle(.ultraThinMaterial), in: Capsule())
+                                        }
+                                    }
+
+                                    // Screen Lock Button (Madde #19)
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.medium)
+                                        store.send(.toggleScreenLock)
+                                    }) {
+                                        Image(systemName: store.isScreenLocked ? "lock.fill" : "lock.open.fill")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(store.isScreenLocked ? AnyShapeStyle(Color.accentColor.opacity(0.8)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
                                     }
                                 }
                             }
@@ -200,38 +383,6 @@
 
                             if store.isTracksMenuVisible {
                                 tracksMenuOverlay
-                            }
-
-                            if store.isEPGVisible {
-                                VStack {
-                                    Spacer()
-                                    PlayerEPGTimelineView(
-                                        programs: store.epgListings,
-                                        currentPosition: store.position,
-                                        onClose: { store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7)) },
-                                        onSelect: { program in store.send(.playArchive(program)) }
-                                    )
-                                    .padding(.horizontal, 16)
-                                    .padding(.bottom, 24)
-                                }
-                            }
-
-                            if store.isChannelListVisible, let playlist = store.playlist {
-                                HStack {
-                                    Spacer()
-                                    ChannelListOverlay(
-                                        playlist: playlist,
-                                        selectedItemID: store.item.id,
-                                        onSelect: { item in
-                                            store.send(.selectChannel(item), animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        },
-                                        onClose: {
-                                            store.send(.toggleChannelList, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        }
-                                    )
-                                    .frame(width: 300, height: 350)
-                                    .padding(.trailing, 16)
-                                }
                             }
                         }
 
@@ -289,7 +440,7 @@
 
                         Spacer()
 
-                        // Bottom Bar (Timeline)
+                        // Bottom Bar (Timeline or Live Controls)
                         VStack {
                             // Timeline (only show if total time is valid, meaning it's not a live stream)
                             if store.totalTime > .zero || !store.item.isLive {
@@ -328,6 +479,62 @@
                                         .foregroundColor(.white)
                                 }
                                 .padding(.horizontal)
+                            } else if store.item.isLive {
+                                // Live TV Quick Zapping & Recall Bar
+                                HStack {
+                                    if let prev = store.previousChannel {
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.medium)
+                                            store.send(.recallLastChannel)
+                                        }) {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                                    .font(.title3)
+                                                VStack(alignment: .leading, spacing: 1) {
+                                                    Text(AppStrings.Player.recallLastChannel)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.white.opacity(0.8))
+                                                    Text(prev.title)
+                                                        .font(.subheadline.bold())
+                                                        .foregroundColor(.white)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(.ultraThinMaterial, in: Capsule())
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    if store.playlist != nil {
+                                        HStack(spacing: 12) {
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.previousChannel)
+                                            }) {
+                                                Image(systemName: "chevron.up")
+                                                    .font(.headline)
+                                                    .foregroundColor(.white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.nextChannel)
+                                            }) {
+                                                Image(systemName: "chevron.down")
+                                                    .font(.headline)
+                                                    .foregroundColor(.white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal)
                             }
                         }
                         .padding(.bottom, 24)
@@ -339,6 +546,8 @@
                                 store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
                             }
                     )
+                    .opacity(store.isDeepDimmed ? 0.35 : 1.0)
+                    .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
                     .transition(.opacity)
                 }
 
@@ -392,6 +601,130 @@
                         .transition(.scale.combined(with: .opacity))
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.gestureFeedback)
                 }
+
+                // Channel Zapping HUD Overlay (Madde #16)
+                if store.isZappingHUDVisible, let zappingItem = store.zappingHUDItem {
+                    let direction = store.zappingHUDDirection ?? interactiveZappingDirection ?? .next
+                    VStack {
+                        ChannelZappingHUDView(
+                            item: zappingItem,
+                            direction: direction,
+                            currentIndex: store.currentChannelIndex,
+                            totalChannels: store.playlist?.count,
+                            isCommitted: store.item.id == zappingItem.id
+                        )
+                        .padding(.top, 36)
+                        Spacer()
+                    }
+                    .transition(.move(edge: direction == .next ? .top : .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isZappingHUDVisible)
+                    .zIndex(85)
+                }
+
+                // Mini EPG Overlay (Madde #15: Swipe Down / Up for Mini EPG)
+                if store.isEPGVisible {
+                    ZStack(alignment: .bottom) {
+                        Color.black.opacity(0.35)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.toggleEPG, animation: .spring(response: 0.35, dampingFraction: 0.75))
+                            }
+
+                        PlayerEPGTimelineView(
+                            programs: store.epgListings,
+                            currentPosition: store.position,
+                            hasArchive: store.item.tvArchive == 1,
+                            onClose: {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.toggleEPG, animation: .spring(response: 0.35, dampingFraction: 0.75))
+                            },
+                            onSelect: { program in
+                                store.send(.playArchive(program))
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    .transition(.opacity)
+                    .zIndex(90)
+                }
+
+                // Edge-Swipe Channel Sidebar Drawer
+                if store.isChannelListVisible {
+                    PlayerSidebarDrawer(store: store) {
+                        store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    }
+                    .zIndex(100)
+                }
+
+                // Touch / Screen Lock Pill Overlay (Madde #19)
+                TouchLockOverlayView(
+                    isLocked: store.isScreenLocked,
+                    isPillVisible: store.isLockPillVisible,
+                    onUnlock: {
+                        store.send(.toggleScreenLock)
+                    }
+                )
+                .zIndex(105)
+
+                // Audio Route HUD Feedback (Madde #20)
+                if store.isAudioRouteHUDVisible {
+                    VStack {
+                        AudioRouteHUDView(
+                            routeInfo: store.currentAudioRoute,
+                            isPlaying: store.playerState == .playing
+                        )
+                        .padding(.top, 40)
+
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isAudioRouteHUDVisible)
+                    .zIndex(98)
+                }
+
+                // Track Selection HUD Overlay (Madde #34)
+                if store.isTrackHUDVisible, let message = store.trackHUDMessage {
+                    VStack {
+                        TrackHUDView(
+                            message: message,
+                            iconName: store.trackHUDIcon ?? "waveform.circle.fill"
+                        )
+                        .padding(.top, 40)
+
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isTrackHUDVisible)
+                    .zIndex(99)
+                }
+
+                // Up Next Episode Countdown Overlay (Madde #42 / #48)
+                if store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            UpNextCountdownOverlayView(
+                                item: nextItem,
+                                countdownSeconds: store.upNextCountdownSeconds,
+                                onPlayNow: {
+                                    store.send(.playNextEpisode)
+                                },
+                                onDismiss: {
+                                    store.send(.dismissUpNext)
+                                }
+                            )
+                            .padding(.trailing, 24)
+                            .padding(.bottom, 28)
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
+                    .zIndex(96)
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background {
@@ -420,18 +753,36 @@
                     VStack(alignment: .leading, spacing: 16) {
                         if !store.audioTracks.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(AppStrings.Player.audioTracks)
+                                Label(AppStrings.Player.audioTracks, systemImage: "waveform.circle.fill")
                                     .font(.headline)
                                     .foregroundColor(.white)
 
                                 ForEach(store.audioTracks) { track in
+                                    let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
                                     let isSelected = store.selectedAudioTrack?.id == track.id
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.selectAudioTrack(track)) }) {
-                                        HStack {
-                                            Text(track.name)
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.selectAudioTrack(track))
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            if let flag = formatted.flag {
+                                                Text(flag)
+                                                    .font(.body)
+                                            }
+                                            Text(formatted.displayName)
+                                                .font(.subheadline)
+                                            if let detail = formatted.formatDetail {
+                                                Text(detail)
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white.opacity(0.85))
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.white.opacity(0.18), in: Capsule())
+                                            }
                                             Spacer()
                                             if isSelected {
                                                 Image(systemName: "checkmark")
+                                                    .font(.subheadline.bold())
                                             }
                                         }
                                         .foregroundColor(isSelected ? .accentColor : .white)
@@ -447,18 +798,23 @@
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(AppStrings.Player.subtitles)
+                                Label(AppStrings.Player.subtitles, systemImage: "captions.bubble.fill")
                                     .font(.headline)
                                     .foregroundColor(.white)
 
                                 let isSubtitlesOff = store.selectedSubtitleTrack == nil || store.subtitleTracks.isEmpty || (store.selectedSubtitleTrack?.id == "-1")
 
-                                Button(action: { HapticManager.shared.trigger(.light); store.send(.selectSubtitleTrack(nil)) }) {
+                                Button(action: {
+                                    HapticManager.shared.trigger(.light)
+                                    store.send(.selectSubtitleTrack(nil))
+                                }) {
                                     HStack {
                                         Text(AppStrings.Player.off)
+                                            .font(.subheadline)
                                         Spacer()
                                         if isSubtitlesOff {
                                             Image(systemName: "checkmark")
+                                                .font(.subheadline.bold())
                                         }
                                     }
                                     .foregroundColor(isSubtitlesOff ? .accentColor : .white)
@@ -466,18 +822,79 @@
                                 .padding(.vertical, 4)
 
                                 ForEach(store.subtitleTracks) { track in
+                                    let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
                                     let isSelected = store.selectedSubtitleTrack?.id == track.id
-                                    Button(action: { HapticManager.shared.trigger(.light); store.send(.selectSubtitleTrack(track)) }) {
-                                        HStack {
-                                            Text(track.name)
+                                    Button(action: {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.selectSubtitleTrack(track))
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            if let flag = formatted.flag {
+                                                Text(flag)
+                                                    .font(.body)
+                                            }
+                                            Text(formatted.displayName)
+                                                .font(.subheadline)
+                                            if let detail = formatted.formatDetail {
+                                                Text(detail)
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white.opacity(0.85))
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.white.opacity(0.18), in: Capsule())
+                                            }
                                             Spacer()
                                             if isSelected {
                                                 Image(systemName: "checkmark")
+                                                    .font(.subheadline.bold())
                                             }
                                         }
                                         .foregroundColor(isSelected ? .accentColor : .white)
                                     }
                                     .padding(.vertical, 4)
+                                }
+
+                                if store.selectedSubtitleTrack != nil, !isSubtitlesOff {
+                                    Divider().background(Color.white.opacity(0.2))
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(AppStrings.Player.subtitleSync)
+                                            .font(.caption.bold())
+                                            .foregroundColor(.white.opacity(0.8))
+                                        HStack(spacing: 8) {
+                                            Button("-250ms") {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.setSubtitleDelay(store.subtitleDelay - 250_000))
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.white.opacity(0.15), in: Capsule())
+
+                                            Button(AppStrings.Player.resetSubtitleDelay) {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.setSubtitleDelay(0))
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.white.opacity(0.15), in: Capsule())
+
+                                            Button("+250ms") {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.setSubtitleDelay(store.subtitleDelay + 250_000))
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.white.opacity(0.15), in: Capsule())
+
+                                            Spacer()
+                                            Text(AppStrings.Player.subtitleDelayMs(store.subtitleDelay / 1000))
+                                                .font(.caption2.monospacedDigit())
+                                                .foregroundColor(.accentColor)
+                                        }
+                                    }
+                                    .padding(.top, 4)
                                 }
                             }
                         }
@@ -490,10 +907,361 @@
                     }
                     .padding()
                 }
-                .frame(maxHeight: 250)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: 320, maxHeight: 340)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .padding(.trailing, 16)
             }
+        }
+
+        // MARK: - Smart Double-Tap Seek Handlers
+
+        private func handleTap(at location: CGPoint, in size: CGSize) {
+            if store.isScreenLocked {
+                store.send(.showLockPill)
+                return
+            }
+            store.send(.userInteracted)
+            let width = size.width
+            let leftBoundary = width * 0.40
+            let rightBoundary = width * 0.60
+
+            let isLeft = location.x < leftBoundary
+            let isRight = location.x > rightBoundary
+            let isCenter = !isLeft && !isRight
+
+            if isCenter {
+                singleTapWorkItem?.cancel()
+                singleTapWorkItem = nil
+                seekDismissWorkItem?.cancel()
+                withAnimation(.easeOut(duration: 0.2)) {
+                    smartSeekDirection = nil
+                }
+                activeSeekSide = nil
+                cumulativeSeekSeconds = 0
+
+                store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                return
+            }
+
+            let tappedSide: ActiveSeekSide = isLeft ? .left : .right
+
+            if let currentSide = activeSeekSide, currentSide == tappedSide {
+                singleTapWorkItem?.cancel()
+                singleTapWorkItem = nil
+                seekDismissWorkItem?.cancel()
+
+                if isRight && store.item.isLive {
+                    HapticManager.shared.trigger(.warning)
+                    triggerLiveWarning()
+                    return
+                }
+
+                cumulativeSeekSeconds += 10
+                let offset: Int64 = isLeft ? -10 : 10
+                HapticManager.shared.trigger(.light)
+
+                if isLeft {
+                    smartSeekDirection = .backward(seconds: cumulativeSeekSeconds)
+                } else {
+                    smartSeekDirection = .forward(seconds: cumulativeSeekSeconds)
+                }
+
+                store.send(.jumpBySeconds(offset))
+                scheduleSeekDismissal()
+            } else if activeSeekSide == nil, singleTapWorkItem != nil {
+                singleTapWorkItem?.cancel()
+                singleTapWorkItem = nil
+
+                if isRight && store.item.isLive {
+                    HapticManager.shared.trigger(.warning)
+                    triggerLiveWarning()
+                    return
+                }
+
+                activeSeekSide = tappedSide
+                cumulativeSeekSeconds = 10
+                let offset: Int64 = isLeft ? -10 : 10
+                HapticManager.shared.trigger(.medium)
+
+                if isLeft {
+                    smartSeekDirection = .backward(seconds: 10)
+                } else {
+                    smartSeekDirection = .forward(seconds: 10)
+                }
+
+                store.send(.jumpBySeconds(offset))
+                scheduleSeekDismissal()
+            } else {
+                singleTapWorkItem?.cancel()
+                activeSeekSide = nil
+
+                let work = DispatchWorkItem {
+                    store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    singleTapWorkItem = nil
+                    activeSeekSide = nil
+                    cumulativeSeekSeconds = 0
+                }
+                singleTapWorkItem = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
+            }
+        }
+
+        private func scheduleSeekDismissal() {
+            seekDismissWorkItem?.cancel()
+            let work = DispatchWorkItem {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    smartSeekDirection = nil
+                }
+                activeSeekSide = nil
+                cumulativeSeekSeconds = 0
+                seekDismissWorkItem = nil
+            }
+            seekDismissWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75, execute: work)
+        }
+
+        private func triggerLiveWarning() {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isLiveWarningVisible = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    isLiveWarningVisible = false
+                }
+            }
+        }
+
+        // MARK: - Vertical Drag (Volume & Brightness) Handlers
+
+        private func handleDragChanged(value: DragGesture.Value, geo: GeometryProxy) {
+            if store.isScreenLocked {
+                store.send(.showLockPill)
+                return
+            }
+            let translation = value.translation
+            let startLocation = value.startLocation
+            let width = geo.size.width
+            let height = geo.size.height
+
+            if dragGestureMode == nil {
+                if startLocation.y < 90, translation.height > 20, abs(translation.height) >= abs(translation.width) {
+                    dragGestureMode = .swipeToMiniPlayer
+                } else if abs(translation.height) >= abs(translation.width) {
+                    if store.item.isLive, startLocation.x >= width * 0.25, startLocation.x <= width * 0.75 {
+                        if startLocation.y < height * 0.35 {
+                            dragGestureMode = .miniEPG
+                        } else {
+                            dragGestureMode = .channelZapping
+                            hasTriggeredZappingThresholdHaptic = false
+                        }
+                    } else if startLocation.x < width * 0.5 {
+                        dragGestureMode = .brightness
+                        #if !os(tvOS)
+                            dragInitialBrightness = Double(UIScreen.main.brightness)
+                        #else
+                            dragInitialBrightness = store.brightness
+                        #endif
+                        lastHapticThreshold = Int(round(dragInitialBrightness * 10))
+                        activeVerticalOSD = .brightness(dragInitialBrightness)
+                        osdDismissWorkItem?.cancel()
+                    } else {
+                        dragGestureMode = .volume
+                        dragInitialVolume = Double(store.volume)
+                        lastHapticThreshold = Int(round(dragInitialVolume / 10))
+                        activeVerticalOSD = .volume(store.volume)
+                        osdDismissWorkItem?.cancel()
+                    }
+                } else {
+                    dragGestureMode = .horizontal
+                    dragInitialScrubPosition = store.position
+                    lastScrubHapticInterval = -1
+                }
+            }
+
+            switch dragGestureMode {
+            case .swipeToMiniPlayer:
+                break
+
+            case .miniEPG:
+                break
+
+            case .channelZapping:
+                if translation.height < -30 {
+                    if interactiveZappingDirection != .next {
+                        interactiveZappingDirection = .next
+                        if let nextItem = store.nextChannelItem {
+                            store.send(.showZappingHUD(item: nextItem, direction: .next))
+                        }
+                    }
+                } else if translation.height > 30 {
+                    if interactiveZappingDirection != .previous {
+                        interactiveZappingDirection = .previous
+                        if let prevItem = store.previousChannelItem {
+                            store.send(.showZappingHUD(item: prevItem, direction: .previous))
+                        }
+                    }
+                } else {
+                    interactiveZappingDirection = nil
+                    if !store.isZappingHUDVisible || store.zappingHUDItem?.id != store.item.id {
+                        store.send(.hideZappingHUD)
+                    }
+                }
+
+                let isPastThreshold = abs(translation.height) >= 60
+                if isPastThreshold, !hasTriggeredZappingThresholdHaptic {
+                    hasTriggeredZappingThresholdHaptic = true
+                    HapticManager.shared.trigger(.medium)
+                } else if !isPastThreshold, hasTriggeredZappingThresholdHaptic {
+                    hasTriggeredZappingThresholdHaptic = false
+                    HapticManager.shared.trigger(.light)
+                }
+
+            case .brightness:
+                let sensitivity = max(150.0, height * 0.55)
+                let delta = -Double(translation.height / sensitivity)
+                let newBrightness = max(0.01, min(1.0, dragInitialBrightness + delta))
+
+                #if !os(tvOS)
+                    UIScreen.main.brightness = CGFloat(newBrightness)
+                #endif
+                store.send(.setBrightness(newBrightness))
+                activeVerticalOSD = .brightness(newBrightness)
+
+                let step = Int(round(newBrightness * 10))
+                if step != lastHapticThreshold {
+                    lastHapticThreshold = step
+                    if step == 0 || step == 10 {
+                        HapticManager.shared.trigger(.medium)
+                    } else {
+                        HapticManager.shared.trigger(.light)
+                    }
+                }
+
+            case .volume:
+                let sensitivity = max(150.0, height * 0.55)
+                let delta = -Double(translation.height / sensitivity)
+                let newVolume = max(0, min(100, Int32(round(dragInitialVolume + delta * 100))))
+
+                store.send(.setVolume(newVolume))
+                activeVerticalOSD = .volume(newVolume)
+
+                let step = Int(newVolume / 10)
+                if step != lastHapticThreshold {
+                    lastHapticThreshold = step
+                    if newVolume == 0 || newVolume == 100 {
+                        HapticManager.shared.trigger(.medium)
+                    } else {
+                        HapticManager.shared.trigger(.light)
+                    }
+                }
+
+            case .horizontal:
+                if store.totalTime > .zero || !store.item.isLive {
+                    let totalSeconds = Double(store.totalTime.components.seconds)
+                    let sensitivity = max(150.0, width * 0.95)
+                    let progressDelta = Double(translation.width / sensitivity)
+                    let targetPos = max(0.0, min(1.0, dragInitialScrubPosition + progressDelta))
+                    let targetSecs = targetPos * totalSeconds
+                    let initialSecs = dragInitialScrubPosition * totalSeconds
+                    let offsetSecs = Int(targetSecs - initialSecs)
+
+                    let scrub = HorizontalScrubState(
+                        targetTime: Duration.seconds(targetSecs),
+                        totalTime: store.totalTime,
+                        offsetSeconds: offsetSecs,
+                        targetPosition: targetPos,
+                        initialPosition: dragInitialScrubPosition
+                    )
+                    withAnimation(.interactiveSpring(response: 0.15, dampingFraction: 0.85)) {
+                        horizontalScrubState = scrub
+                    }
+
+                    // Haptic pulse when crossing 30-second milestone intervals
+                    let interval = abs(offsetSecs) / 30
+                    if interval != lastScrubHapticInterval {
+                        lastScrubHapticInterval = interval
+                        HapticManager.shared.trigger(.light)
+                    }
+                } else {
+                    store.send(.dragGestureChanged(
+                        translation: translation,
+                        screenWidth: width,
+                        screenHeight: height,
+                        startLocation: startLocation
+                    ))
+                }
+
+            case .none:
+                break
+            }
+        }
+
+        private func handleDragEnded(value: DragGesture.Value) {
+            if store.isScreenLocked {
+                dragGestureMode = nil
+                return
+            }
+            let translation = value.translation
+            if dragGestureMode == .brightness || dragGestureMode == .volume {
+                osdDismissWorkItem?.cancel()
+                let work = DispatchWorkItem {
+                    withAnimation(.easeOut(duration: 0.35)) {
+                        activeVerticalOSD = nil
+                    }
+                    osdDismissWorkItem = nil
+                }
+                osdDismissWorkItem = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+            } else if dragGestureMode == .horizontal {
+                if let scrub = horizontalScrubState {
+                    HapticManager.shared.trigger(.medium)
+                    store.send(.seek(scrub.targetPosition))
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        horizontalScrubState = nil
+                    }
+                } else {
+                    store.send(.dragGestureEnded)
+                }
+            } else if dragGestureMode == .miniEPG {
+                if abs(translation.height) > 40 {
+                    HapticManager.shared.trigger(.medium)
+                    store.send(.toggleEPG, animation: .spring(response: 0.35, dampingFraction: 0.75))
+                    if store.epgListings.isEmpty {
+                        store.send(.fetchEPG)
+                    }
+                }
+            } else if dragGestureMode == .channelZapping {
+                if abs(translation.height) >= 60 {
+                    HapticManager.shared.trigger(.heavy)
+                    if translation.height < 0 {
+                        store.send(.nextChannel)
+                    } else {
+                        store.send(.previousChannel)
+                    }
+                } else {
+                    store.send(.hideZappingHUD)
+                }
+                interactiveZappingDirection = nil
+                hasTriggeredZappingThresholdHaptic = false
+            } else if dragGestureMode == .swipeToMiniPlayer {
+                if translation.height > 60 {
+                    HapticManager.shared.trigger(.medium)
+                    store.send(.minimizeTapped)
+                }
+            }
+            dragGestureMode = nil
+            lastHapticThreshold = -1
+            lastScrubHapticInterval = -1
+        }
+
+        private func triggerAspectFeedback() {
+            aspectDismissWorkItem?.cancel()
+            let work = DispatchWorkItem {
+                store.send(.hideAspectFeedback, animation: .easeOut(duration: 0.3))
+                aspectDismissWorkItem = nil
+            }
+            aspectDismissWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
         }
     }
 
@@ -513,108 +1281,4 @@
         }
     }
 
-    import AVKit
-
-    struct ChannelListOverlay: View {
-        let playlist: [PlayerFeature.PlayableItem]
-        let selectedItemID: String
-        let onSelect: (PlayerFeature.PlayableItem) -> Void
-        let onClose: () -> Void
-
-        var body: some View {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text(AppStrings.LiveTV.channelsTitle)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(16)
-                .background(Color.black.opacity(0.6))
-
-                Divider().background(Color.white.opacity(0.2))
-
-                // List
-                ScrollView {
-                    ScrollViewReader { proxy in
-                        LazyVStack(spacing: 8) {
-                            ForEach(playlist, id: \.id) { item in
-                                ChannelListRow(
-                                    item: item,
-                                    isSelected: item.id == selectedItemID,
-                                    action: { onSelect(item) }
-                                )
-                                .id(item.id)
-                            }
-                        }
-                        .padding(12)
-                        .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation {
-                                    proxy.scrollTo(selectedItemID, anchor: .center)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .background(AnyShapeStyle(.ultraThinMaterial))
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-        }
-    }
-
-    struct ChannelListRow: View {
-        let item: PlayerFeature.PlayableItem
-        let isSelected: Bool
-        let action: () -> Void
-
-        var body: some View {
-            Button(action: action) {
-                HStack(spacing: 12) {
-                    if let cover = item.coverURL {
-                        AsyncImage(url: cover) { phase in
-                            if let image = phase.image {
-                                image.resizable().aspectRatio(contentMode: .fit)
-                            } else {
-                                Image(systemName: "tv").foregroundColor(.gray)
-                            }
-                        }
-                        .frame(width: 40, height: 40)
-                        .background(Color.black.opacity(0.3))
-                        .cornerRadius(8)
-                    } else {
-                        Image(systemName: "tv")
-                            .frame(width: 40, height: 40)
-                            .background(Color.black.opacity(0.3))
-                            .cornerRadius(8)
-                            .foregroundColor(.gray)
-                    }
-
-                    Text(item.title)
-                        .font(.subheadline)
-                        .fontWeight(isSelected ? .bold : .regular)
-                        .foregroundColor(isSelected ? .accentColor : .white)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer()
-                }
-                .padding(8)
-                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.white.opacity(0.05))
-                .cornerRadius(10)
-            }
-            .buttonStyle(.plain)
-        }
-    }
 #endif

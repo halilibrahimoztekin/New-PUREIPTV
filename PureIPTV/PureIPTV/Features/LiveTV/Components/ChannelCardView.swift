@@ -74,6 +74,10 @@ public struct ChannelCardView: View {
 
                     Spacer(minLength: 4)
 
+                    if channel.tvArchive == 1 {
+                        CatchUpBadge(isCompact: true)
+                    }
+
                     LiveBadge()
                 }
                 .padding(.horizontal, 10)

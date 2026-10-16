@@ -47,6 +47,9 @@ extension PlayerFactoryClient: DependencyKey {
                 setVolume: { volume in
                     try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
                 },
+                setPlaybackRate: { rate in
+                    try box.getPlayer().setPlaybackRate(PlaybackRate(rate))
+                },
                 jump: { offset in
                     let player = box.getPlayer()
                     let offsetDuration = Duration.seconds(offset)

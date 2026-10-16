@@ -9,7 +9,7 @@ public enum KeychainError: Error {
 }
 
 public final class KeychainManager: @unchecked Sendable {
-    public static let shared = KeychainManager()
+    public nonisolated static let shared = KeychainManager()
 
     private init() {}
 

@@ -19,7 +19,7 @@ public struct XMLTVData: Sendable {
     public let programmes: [String: [XMLTVProgramme]] // Grouped by channel ID
 }
 
-final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
+final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var channels: [String: XMLTVChannel] = [:]
     private var programmes: [String: [XMLTVProgramme]] = [:]
 
@@ -37,10 +37,15 @@ final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
     private static let formatters: [DateFormatter] = {
         let formats = [
             "yyyyMMddHHmmss Z",
+            "yyyyMMddHHmmss zzz",
             "yyyyMMddHHmmss",
+            "yyyyMMddHHmm Z",
+            "yyyyMMddHHmm",
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm",
             "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
         ]
         return formats.map { fmt in
             let f = DateFormatter()
@@ -53,6 +58,10 @@ final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
 
     private func parseDate(_ string: String) -> Date? {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let ts = Double(trimmed), ts > 1_000_000_000, ts < 2_500_000_000 {
+            return Date(timeIntervalSince1970: ts)
+        }
         for formatter in Self.formatters {
             if let date = formatter.date(from: trimmed) {
                 return date
@@ -61,11 +70,15 @@ final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
         return nil
     }
 
-    func getParsedData() -> XMLTVData {
+    override nonisolated init() {
+        super.init()
+    }
+
+    nonisolated func getParsedData() -> XMLTVData {
         XMLTVData(channels: channels, programmes: programmes)
     }
 
-    func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+    nonisolated func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
         currentElement = elementName
 
         if elementName == "channel" {
@@ -87,7 +100,7 @@ final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
         }
     }
 
-    func parser(_: XMLParser, foundCharacters string: String) {
+    nonisolated func parser(_: XMLParser, foundCharacters string: String) {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -109,7 +122,7 @@ final class XMLTVParserDelegate: NSObject, XMLParserDelegate {
         }
     }
 
-    func parser(_: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
+    nonisolated func parser(_: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
         if elementName == "channel" {
             if let id = currentChannelID {
                 let name = currentChannelName.trimmingCharacters(in: .whitespacesAndNewlines)

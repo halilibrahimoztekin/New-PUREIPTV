@@ -140,6 +140,42 @@ public struct SettingsView: View {
                     ))
                 }
 
+                Section(header: Text(AppStrings.Settings.audioAndSubtitleSettings)) {
+                    Picker(AppStrings.Settings.defaultAudioLanguage, selection: Binding(
+                        get: { store.preferredAudioLanguage },
+                        set: { store.send(.setPreferredAudioLanguage($0)) }
+                    )) {
+                        Text("🇹🇷 Türkçe").tag("tr")
+                        Text("🇬🇧 English").tag("en")
+                        Text("🇩🇪 Deutsch").tag("de")
+                        Text("🇫🇷 Français").tag("fr")
+                        Text("🇪🇸 Español").tag("es")
+                        Text("🇮🇹 Italiano").tag("it")
+                        Text("🇷🇺 Русский").tag("ru")
+                        Text("🇸🇦 العربية").tag("ar")
+                        Text("Orijinal").tag("und")
+                    }
+
+                    Picker(AppStrings.Settings.defaultSubtitleLanguage, selection: Binding(
+                        get: { store.preferredSubtitleLanguage },
+                        set: { store.send(.setPreferredSubtitleLanguage($0)) }
+                    )) {
+                        Text(AppStrings.Player.off).tag("off")
+                        Text("🇹🇷 Türkçe").tag("tr")
+                        Text("🇬🇧 English").tag("en")
+                        Text("🇩🇪 Deutsch").tag("de")
+                        Text("🇫🇷 Français").tag("fr")
+                        Text("🇪🇸 Español").tag("es")
+                        Text("🇷🇺 Русский").tag("ru")
+                        Text("🇸🇦 العربية").tag("ar")
+                    }
+
+                    Toggle(AppStrings.Settings.rememberTrackPreferences, isOn: Binding(
+                        get: { store.rememberMediaTrackPreferences },
+                        set: { store.send(.setRememberMediaTrackPreferences($0)) }
+                    ))
+                }
+
                 Section(header: Text(AppStrings.Settings.epgSettings)) {
                     #if os(tvOS)
                         HStack {
@@ -191,14 +227,22 @@ public struct SettingsView: View {
                         .foregroundColor(.blue)
                     }
 
-                    Button(action: {
-                        store.send(.clearCache)
-                    }) {
+                    Button(role: .destructive) {
+                        #if os(iOS)
+                            HapticManager.shared.trigger(.light)
+                        #endif
+                        store.send(.clearCacheTapped)
+                    } label: {
                         HStack {
-                            Text(AppStrings.Settings.clearCache)
+                            Label(AppStrings.Settings.clearCache, systemImage: "trash")
                             Spacer()
+                            if store.cacheSize == AppStrings.Settings.calculating || store.cacheSize == AppStrings.Settings.clearing {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .padding(.trailing, 4)
+                            }
                             Text(store.cacheSize)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                         }
                     }
                     .foregroundColor(.red)
@@ -216,6 +260,29 @@ public struct SettingsView: View {
             .navigationTitle(AppStrings.Settings.title)
             .onAppear {
                 store.send(.onAppear)
+            }
+            .alert(
+                AppStrings.Settings.clearCacheTitle,
+                isPresented: $store.isShowingClearCacheConfirmation
+            ) {
+                Button(AppStrings.Settings.clearCacheConfirm, role: .destructive) {
+                    store.send(.confirmClearCache)
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    store.send(.cancelClearCache)
+                }
+            } message: {
+                Text(AppStrings.Settings.clearCacheMessage)
+            }
+            .alert(
+                AppStrings.Settings.clearCacheTitle,
+                isPresented: $store.isShowingClearCacheSuccess
+            ) {
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    store.send(.clearCacheSuccessDismissed)
+                }
+            } message: {
+                Text(AppStrings.Settings.clearCacheSuccess)
             }
             .sheet(isPresented: $store.isShowingPINSetup) {
                 PINSetupView(store: store)

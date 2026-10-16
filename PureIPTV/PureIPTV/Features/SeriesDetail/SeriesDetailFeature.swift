@@ -25,14 +25,65 @@ public struct SeriesDetailFeature {
         public var isFavorite = false
         public var downloadedEpisodes: [String: Bool] = [:]
         public var historyItem: WatchHistoryItem?
+        public var episodeProgressMap: [String: WatchHistoryItem] = [:]
+        public var episodeLayoutMode: EpisodeLayoutMode = .list
         public var errorMessage: String?
 
         public var autoPlayOnLoad: Bool = false
+        public var isTrailerPresented: Bool = false
+        public var trailerVideoKey: String?
+        public var trailerTitle: String?
+
+        public var resolvedTrailerKey: String? {
+            if let videos = tmdbTV?.videos?.results {
+                if let officialTrailer = videos.first(where: { ($0.type == "Trailer" || $0.type == "Teaser") && $0.site?.lowercased() == "youtube" }) {
+                    return officialTrailer.key
+                }
+                if let firstVideo = videos.first(where: { $0.site?.lowercased() == "youtube" }) {
+                    return firstVideo.key
+                }
+            }
+            if let yt = info?.youtubeTrailer, !yt.isEmpty {
+                if yt.contains("v=") {
+                    return URLComponents(string: yt)?.queryItems?.first(where: { $0.name == "v" })?.value
+                } else if yt.contains("youtu.be/") {
+                    return yt.components(separatedBy: "youtu.be/").last?.components(separatedBy: "?").first
+                }
+                return yt
+            }
+            return nil
+        }
+
+        public enum EpisodeLayoutMode: String, CaseIterable, Sendable, Equatable {
+            case list
+            case grid
+        }
 
         /// Computed
         public var currentEpisodes: [DetailModels.Episode] {
             guard let seasonNum = selectedSeasonNumber else { return [] }
             return allEpisodes[String(seasonNum)] ?? []
+        }
+
+        public var nextUpEpisode: DetailModels.Episode? {
+            let allEps = allEpisodes.values.flatMap(\.self).sorted {
+                if $0.season != $1.season {
+                    return $0.season < $1.season
+                }
+                return $0.episodeNum < $1.episodeNum
+            }
+            if let history = historyItem, let currentIndex = allEps.firstIndex(where: { $0.id == history.id }) {
+                let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
+                if isFinished {
+                    let nextIndex = allEps.index(after: currentIndex)
+                    if nextIndex < allEps.endIndex {
+                        return allEps[nextIndex]
+                    }
+                } else {
+                    return allEps[currentIndex]
+                }
+            }
+            return currentEpisodes.first ?? allEps.first
         }
 
         public init(series: MediaModels.Item, config: PlaylistConfig, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
@@ -50,14 +101,19 @@ public struct SeriesDetailFeature {
         case tmdbDetailsResponse(Result<TMDBTVDetailsDTO, Error>)
         case seasonSelected(Int)
         case episodeSelected(DetailModels.Episode)
+        case toggleLayoutMode
+        case playNextEpisodeTapped
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool)
         case downloadedEpisodesLoaded([String: Bool])
+        case episodeProgressLoaded([WatchHistoryItem])
         case downloadEpisode(DetailModels.Episode)
         case historyStatusLoaded(WatchHistoryItem?)
         case resumeTapped
         case restartTapped
+        case trailerTapped
+        case dismissTrailer
         case delegate(Delegate)
         case closeTapped
         case viewDidDisappear
@@ -72,7 +128,6 @@ public struct SeriesDetailFeature {
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.downloadClient) var downloadClient
-    @Injected(\.appCoordinator) var appCoordinator
     @Dependency(\.dismiss) var dismiss
 
     public init() {}
@@ -80,7 +135,6 @@ public struct SeriesDetailFeature {
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
         let tmdbClient = tmdbClient
-        let appCoordinator = appCoordinator
 
         Reduce { state, action in
             switch action {
@@ -129,7 +183,12 @@ public struct SeriesDetailFeature {
                     await send(.downloadedEpisodesLoaded(dict))
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect)
+                let episodesHistoryEffect: Effect<Action> = .run { [id = state.series.id] send in
+                    let items = await (try? databaseClient.fetchSeriesEpisodesWatchHistory(id)) ?? []
+                    await send(.episodeProgressLoaded(items))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, episodesHistoryEffect)
 
             case let .infoResponse(.success(result)):
                 state.info = result.info
@@ -223,19 +282,56 @@ public struct SeriesDetailFeature {
                 state.selectedSeasonNumber = seasonNum
                 return .none
 
+            case .toggleLayoutMode:
+                state.episodeLayoutMode = state.episodeLayoutMode == .list ? .grid : .list
+                return .none
+
+            case .playNextEpisodeTapped:
+                if let nextEp = state.nextUpEpisode {
+                    return .send(.episodeSelected(nextEp))
+                }
+                return .none
+
+            case let .episodeProgressLoaded(items):
+                state.episodeProgressMap = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+                return .none
+
             case let .episodeSelected(episode):
+                // Ensure selectedSeasonNumber matches the played episode's season
+                if state.selectedSeasonNumber != episode.season {
+                    state.selectedSeasonNumber = episode.season
+                }
+
                 let streamURL = episode.streamURL
+                let history = state.episodeProgressMap[episode.id]
+                let startPosition: Double? = if let h = history, h.duration > 0 {
+                    (h.progress / h.duration) < 0.92 ? (h.progress / h.duration) : 0.0
+                } else {
+                    nil
+                }
+                let initialProgress: Double? = if let h = history, h.duration > 0, (h.progress / h.duration) < 0.92 {
+                    h.progress
+                } else {
+                    nil
+                }
+
                 let playable = PlayerFeature.PlayableItem(
                     id: episode.id,
                     title: "\(state.series.title) - S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))",
+                    seriesTitle: state.series.title,
                     streamURL: streamURL,
                     coverURL: episode.coverURL ?? state.series.coverURL,
-                    seriesID: state.series.id
+                    seriesID: state.series.id,
+                    startPosition: startPosition,
+                    initialDuration: history?.duration,
+                    initialProgress: initialProgress
                 )
-                let playlist = state.currentEpisodes.map { ep in
+                let seasonEpisodes = state.allEpisodes[String(episode.season)] ?? state.currentEpisodes
+                let playlist = seasonEpisodes.isEmpty ? nil : seasonEpisodes.map { ep in
                     PlayerFeature.PlayableItem(
                         id: ep.id,
                         title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                        seriesTitle: state.series.title,
                         streamURL: ep.streamURL,
                         coverURL: ep.coverURL ?? state.series.coverURL,
                         seriesID: state.series.id
@@ -247,10 +343,22 @@ public struct SeriesDetailFeature {
                 guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) else {
                     return .send(.restartTapped)
                 }
+
+                // Locate episode in allEpisodes to resolve accurate season
+                let allEpsList = state.allEpisodes.values.flatMap(\.self)
+                let matchingEpisode = allEpsList.first(where: { $0.id == history.id })
+                if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
+                    state.selectedSeasonNumber = ep.season
+                }
+
+                let seasonNumber = matchingEpisode?.season ?? state.selectedSeasonNumber
+                let targetEpisodes = seasonNumber != nil ? (state.allEpisodes[String(seasonNumber!)] ?? state.currentEpisodes) : state.currentEpisodes
+
                 let startPosition = history.duration > 0 ? (history.progress / history.duration) : 0.0
                 let playable = PlayerFeature.PlayableItem(
                     id: history.id,
                     title: history.title,
+                    seriesTitle: state.series.title,
                     streamURL: streamURL,
                     coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                     seriesID: state.series.id,
@@ -258,10 +366,11 @@ public struct SeriesDetailFeature {
                     initialDuration: history.duration > 0 ? history.duration : nil,
                     initialProgress: history.progress > 0 ? history.progress : nil
                 )
-                let playlist = state.currentEpisodes.isEmpty ? nil : state.currentEpisodes.map { ep in
+                let playlist = targetEpisodes.isEmpty ? nil : targetEpisodes.map { ep in
                     PlayerFeature.PlayableItem(
                         id: ep.id,
                         title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                        seriesTitle: state.series.title,
                         streamURL: ep.streamURL,
                         coverURL: ep.coverURL ?? state.series.coverURL,
                         seriesID: state.series.id
@@ -271,18 +380,28 @@ public struct SeriesDetailFeature {
 
             case .restartTapped:
                 if let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) {
+                    let allEpsList = state.allEpisodes.values.flatMap(\.self)
+                    let matchingEpisode = allEpsList.first(where: { $0.id == history.id })
+                    if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
+                        state.selectedSeasonNumber = ep.season
+                    }
+                    let seasonNumber = matchingEpisode?.season ?? state.selectedSeasonNumber
+                    let targetEpisodes = seasonNumber != nil ? (state.allEpisodes[String(seasonNumber!)] ?? state.currentEpisodes) : state.currentEpisodes
+
                     let playable = PlayerFeature.PlayableItem(
                         id: history.id,
                         title: history.title,
+                        seriesTitle: state.series.title,
                         streamURL: streamURL,
                         coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                         seriesID: state.series.id,
                         startPosition: 0.0
                     )
-                    let playlist = state.currentEpisodes.isEmpty ? nil : state.currentEpisodes.map { ep in
+                    let playlist = targetEpisodes.isEmpty ? nil : targetEpisodes.map { ep in
                         PlayerFeature.PlayableItem(
                             id: ep.id,
                             title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                            seriesTitle: state.series.title,
                             streamURL: ep.streamURL,
                             coverURL: ep.coverURL ?? state.series.coverURL,
                             seriesID: state.series.id
@@ -292,6 +411,19 @@ public struct SeriesDetailFeature {
                 } else if let firstEp = state.currentEpisodes.first ?? state.allEpisodes.values.first?.first {
                     return .send(.episodeSelected(firstEp))
                 }
+                return .none
+
+            case .trailerTapped:
+                guard let key = state.resolvedTrailerKey else { return .none }
+                state.trailerVideoKey = key
+                state.trailerTitle = "\(state.tmdbTV?.name ?? state.series.title) - \(AppStrings.VODDetail.trailer)"
+                state.isTrailerPresented = true
+                return .none
+
+            case .dismissTrailer:
+                state.isTrailerPresented = false
+                state.trailerVideoKey = nil
+                state.trailerTitle = nil
                 return .none
 
             case let .historyStatusLoaded(history):

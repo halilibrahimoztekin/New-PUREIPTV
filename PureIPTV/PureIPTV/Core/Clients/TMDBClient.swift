@@ -7,6 +7,7 @@ public struct TMDBClient {
     public var fetchMovieDetails: @Sendable (_ movieID: Int) async throws -> TMDBMovieDetailsDTO
     public var searchTV: @Sendable (_ query: String) async throws -> TMDBSearchResponseDTO // Reusing search response DTO, we can add a new one if fields differ significantly, but TMDB search tv returns similar structure
     public var fetchTVDetails: @Sendable (_ tvID: Int) async throws -> TMDBTVDetailsDTO
+    public var fetchPersonDetails: @Sendable (_ personID: Int) async throws -> TMDBPersonDetailsDTO
 }
 
 extension TMDBClient: DependencyKey {
@@ -38,7 +39,7 @@ extension TMDBClient: DependencyKey {
                 components.queryItems = [
                     URLQueryItem(name: "api_key", value: apiKey),
                     URLQueryItem(name: "language", value: "tr-TR"),
-                    URLQueryItem(name: "append_to_response", value: "credits,similar"),
+                    URLQueryItem(name: "append_to_response", value: "credits,similar,videos"),
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
@@ -67,12 +68,25 @@ extension TMDBClient: DependencyKey {
                 components.queryItems = [
                     URLQueryItem(name: "api_key", value: apiKey),
                     URLQueryItem(name: "language", value: "tr-TR"),
-                    URLQueryItem(name: "append_to_response", value: "credits,similar"),
+                    URLQueryItem(name: "append_to_response", value: "credits,similar,videos"),
                 ]
 
                 guard let url = components.url else { throw NetworkError.invalidURL }
                 let data = try await networkClient.fetchData(url: url)
                 return try await MainActor.run { try JSONDecoder().decode(TMDBTVDetailsDTO.self, from: data) }
+            },
+            fetchPersonDetails: { personID in
+                guard var components = URLComponents(string: "\(baseURLString)/person/\(personID)") else {
+                    throw NetworkError.invalidURL
+                }
+                components.queryItems = [
+                    URLQueryItem(name: "api_key", value: apiKey),
+                    URLQueryItem(name: "language", value: "tr-TR"),
+                ]
+
+                guard let url = components.url else { throw NetworkError.invalidURL }
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBPersonDetailsDTO.self, from: data) }
             }
         )
     }()

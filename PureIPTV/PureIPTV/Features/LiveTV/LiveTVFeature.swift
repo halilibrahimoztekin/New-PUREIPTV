@@ -22,6 +22,9 @@ public struct LiveTVFeature {
         public var isLoadingChannels = false
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
+        public var hiddenChannelIDs: Set<String> = []
+        public var selectedChannelEPG: [EPGProgram] = []
+        public var isLoadingChannelEPG: Bool = false
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var epgGuide: EPGGuideFeature.State?
@@ -32,7 +35,8 @@ public struct LiveTVFeature {
         // Computed: channels for the currently selected category
         public var currentChannels: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            return channelsByCategory[id] ?? []
+            let all = channelsByCategory[id] ?? []
+            return all.filter { !hiddenChannelIDs.contains($0.id) }
         }
 
         public init() {}
@@ -44,8 +48,14 @@ public struct LiveTVFeature {
         case categorySelected(MediaModels.Category)
         case channelsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case channelSelected(MediaModels.Item)
+        case selectChannelPreview(MediaModels.Item)
+        case channelEPGResponse(Result<[EPGProgram], Error>)
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>)
+        case hideChannel(MediaModels.Item)
+        case unhideAllChannels
+        case sendToMultiView(MediaModels.Item)
+        case openChannelEPG(MediaModels.Item)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
@@ -78,6 +88,10 @@ public struct LiveTVFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                if let savedHidden = UserDefaults.standard.stringArray(forKey: "PureIPTV.hiddenChannelIDs") {
+                    state.hiddenChannelIDs = Set(savedHidden)
+                }
+
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("live")) ?? []
                     await send(.favoritesLoaded(Set(favs.map(\.id))))
@@ -245,6 +259,31 @@ public struct LiveTVFeature {
                     .send(.delegate(.didSelectChannel(channel, playlist: state.currentChannels)))
                 )
 
+            case let .selectChannelPreview(channel):
+                state.selectedChannel = channel
+                state.selectedChannelEPG = []
+                guard let config = state.config, let epgID = channel.epgChannelID else {
+                    return .run { _ in await hapticClient.impact(.light) }
+                }
+                state.isLoadingChannelEPG = true
+                return .merge(
+                    .run { _ in await hapticClient.impact(.light) },
+                    .run { send in
+                        await send(.channelEPGResponse(Result {
+                            try await iptvClient.fetchShortEPG(config, epgID, 12)
+                        }))
+                    }
+                )
+
+            case let .channelEPGResponse(.success(listings)):
+                state.isLoadingChannelEPG = false
+                state.selectedChannelEPG = listings
+                return .none
+
+            case .channelEPGResponse(.failure):
+                state.isLoadingChannelEPG = false
+                return .none
+
             case let .favoritesLoaded(favIDs):
                 state.favoriteIDs = favIDs
                 return .none
@@ -267,6 +306,44 @@ public struct LiveTVFeature {
                     _ = try? await databaseClient.toggleFavorite(favItem)
                     await hapticClient.notification(.success)
                 }
+
+            case let .hideChannel(channel):
+                state.hiddenChannelIDs.insert(channel.id)
+                let hiddenIDs = Array(state.hiddenChannelIDs)
+                return .run { _ in
+                    UserDefaults.standard.set(hiddenIDs, forKey: "PureIPTV.hiddenChannelIDs")
+                    await hapticClient.notification(.warning)
+                }
+
+            case .unhideAllChannels:
+                state.hiddenChannelIDs.removeAll()
+                return .run { _ in
+                    UserDefaults.standard.removeObject(forKey: "PureIPTV.hiddenChannelIDs")
+                    await hapticClient.notification(.success)
+                }
+
+            case let .sendToMultiView(channel):
+                var mvState = MultiViewFeature.State(channels: state.currentChannels)
+                if !mvState.slots.isEmpty {
+                    mvState.slots[0].item = channel
+                }
+                state.multiView = mvState
+                return .run { _ in
+                    await hapticClient.notification(.success)
+                }
+
+            case let .openChannelEPG(channel):
+                if let config = state.config {
+                    let reordered = [channel] + state.currentChannels.filter { $0.id != channel.id }
+                    state.epgTimeline = EPGTimelineFeature.State(
+                        config: config,
+                        channels: reordered,
+                        categories: state.categories,
+                        selectedCategoryID: channel.categoryID,
+                        favoriteIDs: state.favoriteIDs
+                    )
+                }
+                return .none
 
             case .dismissError:
                 state.errorMessage = nil
@@ -310,8 +387,18 @@ public struct LiveTVFeature {
                 return .none
 
             case .openEPGTimelineTapped:
-                if let config = state.config, !state.currentChannels.isEmpty {
-                    state.epgTimeline = EPGTimelineFeature.State(config: config, channels: state.currentChannels)
+                if let config = state.config {
+                    let allLoadedChannels = Array(state.channelsByCategory.values.joined())
+                    let channelsToUse = allLoadedChannels.isEmpty ? state.currentChannels : allLoadedChannels
+                    if !channelsToUse.isEmpty {
+                        state.epgTimeline = EPGTimelineFeature.State(
+                            config: config,
+                            channels: channelsToUse,
+                            categories: state.categories,
+                            selectedCategoryID: state.selectedCategoryID,
+                            favoriteIDs: state.favoriteIDs
+                        )
+                    }
                 }
                 return .none
 

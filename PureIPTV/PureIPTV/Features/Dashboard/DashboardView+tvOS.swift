@@ -16,32 +16,49 @@
 
         public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String) {
             self.store = store
-            config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
+                config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
+            } else {
+                config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
+            }
         }
 
         public var body: some View {
             ZStack {
-                Color.black.ignoresSafeArea()
+                DynamicMeshBackgroundView(
+                    imageURL: store.featuredVODs.first?.coverURL,
+                    titleSeed: store.featuredVODs.first?.title ?? "PureIPTV"
+                )
 
                 if store.isLoading {
                     tvLoadingView
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 60) {
-                            // Hero Banner
+                            // Hero Banner with Focus Guide Boundary
                             if let heroVOD = store.featuredVODs.first {
                                 TVHeroBanner(vod: heroVOD) {
                                     store.send(.vodSelected(heroVOD))
                                 }
+                                .focusGuideBoundary()
                             }
 
                             // Continue Watching
                             if !store.watchHistoryItems.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
                                     ForEach(store.watchHistoryItems) { hist in
-                                        TVWatchHistoryCard(item: hist) {
-                                            store.send(.historySelected(hist))
-                                        }
+                                        ResumeWatchingCardView(
+                                            item: hist,
+                                            onResume: {
+                                                store.send(.historySelected(hist))
+                                            },
+                                            onRestart: {
+                                                store.send(.restartHistorySelected(hist))
+                                            },
+                                            onDelete: {
+                                                store.send(.deleteHistorySelected(hist))
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -217,6 +234,8 @@
                     .padding(.horizontal, 60)
                     .padding(.vertical, 40)
                 }
+                .focusSection()
+                .focusGuideBoundary()
             }
         }
     }

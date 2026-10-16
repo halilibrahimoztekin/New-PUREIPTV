@@ -21,9 +21,11 @@ import SwiftUI
                             .foregroundStyle(.secondary)
                         Text(AppStrings.Downloads.empty)
                             .font(.title)
-                        Text(AppStrings.Downloads.emptyDescription)
+                        Text(AppStrings.Downloads.tvOSNotice)
                             .font(.headline)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 80)
                     }
                 } else {
                     ScrollView {

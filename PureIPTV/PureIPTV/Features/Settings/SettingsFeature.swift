@@ -25,7 +25,14 @@ public struct SettingsFeature {
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
 
+        // Audio & Subtitle Language Settings (Madde #34)
+        public var preferredAudioLanguage: String = "tr"
+        public var preferredSubtitleLanguage: String = "off"
+        public var rememberMediaTrackPreferences: Bool = true
+
         public var cacheSize: String = AppStrings.Settings.calculating
+        public var isShowingClearCacheConfirmation: Bool = false
+        public var isShowingClearCacheSuccess: Bool = false
         public var isPremium: Bool = false
 
         public enum PINStep: Equatable {
@@ -62,11 +69,18 @@ public struct SettingsFeature {
         case setAutoUpdateEPG(Bool)
         case setHideAdultContent(Bool)
         case setDefaultStartupTab(String)
+        case setPreferredAudioLanguage(String)
+        case setPreferredSubtitleLanguage(String)
+        case setRememberMediaTrackPreferences(Bool)
 
         case calculateCacheSize
         case cacheSizeCalculated(String)
+        case clearCacheTapped
+        case cancelClearCache
+        case confirmClearCache
         case clearCache
         case clearCacheCompleted
+        case clearCacheSuccessDismissed
         case restorePurchases
         case restorePurchasesResponse(TaskResult<RevenueCat.CustomerInfo>)
         case updatePremiumStatus(Bool)
@@ -94,6 +108,9 @@ public struct SettingsFeature {
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.hideAdultContent = settingsClient.hideAdultContent()
                 state.defaultStartupTab = settingsClient.defaultStartupTab()
+                state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
+                state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
+                state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -212,6 +229,18 @@ public struct SettingsFeature {
                 state.defaultStartupTab = val
                 return .run { _ in settingsClient.setDefaultStartupTab(val) }
 
+            case let .setPreferredAudioLanguage(val):
+                state.preferredAudioLanguage = val
+                return .run { _ in settingsClient.setPreferredAudioLanguage(val) }
+
+            case let .setPreferredSubtitleLanguage(val):
+                state.preferredSubtitleLanguage = val
+                return .run { _ in settingsClient.setPreferredSubtitleLanguage(val) }
+
+            case let .setRememberMediaTrackPreferences(val):
+                state.rememberMediaTrackPreferences = val
+                return .run { _ in settingsClient.setRememberMediaTrackPreferences(val) }
+
             case .calculateCacheSize:
                 return .run { send in
                     let kingfisherBytes: Int64 = await withCheckedContinuation { continuation in
@@ -225,7 +254,21 @@ public struct SettingsFeature {
                         }
                     }
                     let urlCacheBytes = Int64(URLCache.shared.currentDiskUsage)
-                    let totalBytes = kingfisherBytes + urlCacheBytes
+
+                    var tmpBytes: Int64 = 0
+                    let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    if let enumerator = FileManager.default.enumerator(at: tmpURL, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey], options: [.skipsHiddenFiles]) {
+                        for case let fileURL as URL in enumerator {
+                            if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+                               values.isDirectory == false,
+                               let size = values.fileSize
+                            {
+                                tmpBytes += Int64(size)
+                            }
+                        }
+                    }
+
+                    let totalBytes = max(0, kingfisherBytes + urlCacheBytes + tmpBytes)
 
                     let formatter = ByteCountFormatter()
                     formatter.countStyle = .file
@@ -238,20 +281,54 @@ public struct SettingsFeature {
                 state.cacheSize = size
                 return .none
 
-            case .clearCache:
+            case .clearCacheTapped:
+                state.isShowingClearCacheConfirmation = true
+                return .none
+
+            case .cancelClearCache:
+                state.isShowingClearCacheConfirmation = false
+                return .none
+
+            case .confirmClearCache, .clearCache:
+                state.isShowingClearCacheConfirmation = false
                 state.cacheSize = AppStrings.Settings.clearing
                 return .run { send in
+                    // 1. Clear URLCache
                     URLCache.shared.removeAllCachedResponses()
+
+                    // 2. Clear Kingfisher disk and memory cache
                     await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                         ImageCache.default.clearDiskCache {
                             ImageCache.default.clearMemoryCache()
                             continuation.resume()
                         }
                     }
+
+                    // 3. Clear temporary files safely
+                    let tmpPath = NSTemporaryDirectory()
+                    let tmpURL = URL(fileURLWithPath: tmpPath)
+                    if let files = try? FileManager.default.contentsOfDirectory(at: tmpURL, includingPropertiesForKeys: nil) {
+                        for file in files {
+                            try? FileManager.default.removeItem(at: file)
+                        }
+                    }
+
+                    #if os(iOS)
+                        await MainActor.run {
+                            HapticManager.shared.trigger(.success)
+                        }
+                    #endif
+
+                    await send(.clearCacheCompleted)
                     await send(.calculateCacheSize)
                 }
 
             case .clearCacheCompleted:
+                state.isShowingClearCacheSuccess = true
+                return .none
+
+            case .clearCacheSuccessDismissed:
+                state.isShowingClearCacheSuccess = false
                 return .none
 
             case .restorePurchases:

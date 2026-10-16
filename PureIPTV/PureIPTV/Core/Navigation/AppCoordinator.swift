@@ -96,6 +96,7 @@ public final class AppCoordinator: NavigationCoordinator<AppRoute> {
                 return .none()
 
             case .dismissPlayer:
+                store.send(.player(.delegate(.didClose)))
                 return .dismiss()
 
             case .seriesDetail:

@@ -25,6 +25,7 @@ public struct PlayerClient: Sendable {
     public var stop: @MainActor @Sendable () async throws -> Void
     public var release: @MainActor @Sendable () async -> Void
     public var setVolume: @MainActor @Sendable (_ volume: Int32) async throws -> Void
+    public var setPlaybackRate: @MainActor @Sendable (_ rate: Float) async throws -> Void
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
@@ -87,6 +88,9 @@ extension PlayerClient: DependencyKey {
             },
             setVolume: { volume in
                 try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
+            },
+            setPlaybackRate: { rate in
+                try box.getPlayer().setPlaybackRate(PlaybackRate(rate))
             },
             jump: { offset in
                 let player = box.getPlayer()
@@ -218,6 +222,7 @@ extension PlayerClient: DependencyKey {
         stop: {},
         release: {},
         setVolume: { _ in },
+        setPlaybackRate: { _ in },
         jump: { _ in },
         seek: { _ in },
         seekToTime: { _ in },

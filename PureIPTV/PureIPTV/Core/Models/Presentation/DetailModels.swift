@@ -18,6 +18,7 @@ public enum DetailModels {
         public let productionCountries: [String]?
         public let productionCompanies: [String]?
         public let similarItems: [SimilarItem]?
+        public let youtubeTrailer: String?
 
         public init(
             plot: String? = nil,
@@ -33,7 +34,8 @@ public enum DetailModels {
             imdbId: String? = nil,
             productionCountries: [String]? = nil,
             productionCompanies: [String]? = nil,
-            similarItems: [SimilarItem]? = nil
+            similarItems: [SimilarItem]? = nil,
+            youtubeTrailer: String? = nil
         ) {
             self.plot = plot
             self.cast = cast
@@ -49,6 +51,7 @@ public enum DetailModels {
             self.productionCountries = productionCountries
             self.productionCompanies = productionCompanies
             self.similarItems = similarItems
+            self.youtubeTrailer = youtubeTrailer
         }
     }
 

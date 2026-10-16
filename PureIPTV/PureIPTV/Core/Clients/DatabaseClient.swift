@@ -11,8 +11,11 @@ public struct DatabaseClient {
 
     public var fetchWatchHistory: @Sendable () async throws -> [WatchHistoryItem]
     public var saveWatchProgress: @Sendable (_ item: WatchHistoryItem) async throws -> Void
+    public var deleteWatchProgress: @Sendable (_ id: String) async throws -> Void
+    public var clearWatchHistory: @Sendable () async throws -> Void
     public var getWatchProgress: @Sendable (_ id: String) async throws -> WatchHistoryItem?
     public var getSeriesWatchProgress: @Sendable (_ seriesID: String) async throws -> WatchHistoryItem?
+    public var fetchSeriesEpisodesWatchHistory: @Sendable (_ seriesID: String) async throws -> [WatchHistoryItem]
 
     public var fetchCategoryPreferences: @Sendable (_ type: String) async throws -> [CategoryPreferenceDTO]
     public var saveCategoryPreferences: @Sendable (_ preferences: [CategoryPreferenceDTO]) async throws -> Void
@@ -130,6 +133,26 @@ extension DatabaseClient: DependencyKey {
                 }
                 try context.save()
             },
+            deleteWatchProgress: { id in
+                let context = ModelContext(modelContainer)
+                let descriptor = FetchDescriptor<WatchHistoryItem>(
+                    predicate: #Predicate { $0.id == id }
+                )
+                let existing = try context.fetch(descriptor)
+                for item in existing {
+                    context.delete(item)
+                }
+                try context.save()
+            },
+            clearWatchHistory: {
+                let context = ModelContext(modelContainer)
+                let descriptor = FetchDescriptor<WatchHistoryItem>()
+                let existing = try context.fetch(descriptor)
+                for item in existing {
+                    context.delete(item)
+                }
+                try context.save()
+            },
             getWatchProgress: { id in
                 let context = ModelContext(modelContainer)
                 let descriptor = FetchDescriptor<WatchHistoryItem>(
@@ -144,6 +167,13 @@ extension DatabaseClient: DependencyKey {
                     sortBy: [SortDescriptor(\.lastWatchedAt, order: .reverse)]
                 )
                 return try context.fetch(descriptor).first
+            },
+            fetchSeriesEpisodesWatchHistory: { seriesID in
+                let context = ModelContext(modelContainer)
+                let descriptor = FetchDescriptor<WatchHistoryItem>(
+                    predicate: #Predicate { $0.seriesID == seriesID }
+                )
+                return try context.fetch(descriptor)
             },
             fetchCategoryPreferences: { type in
                 let context = ModelContext(modelContainer)

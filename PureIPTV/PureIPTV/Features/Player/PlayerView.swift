@@ -21,6 +21,12 @@ public struct PlayerView: View {
             #if os(iOS)
                 PiPVideoView(playerClient.vlcPlayer(), controller: $pipController)
                     .ignoresSafeArea()
+                    .scaleEffect(
+                        x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
+                        y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale
+                    )
+                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
                     .onTapGesture {
                         store.send(.toggleControls)
                     }
@@ -44,7 +50,7 @@ public struct PlayerView: View {
             store.send(.onDisappear)
         }
         #if os(iOS)
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             // Uygulama arka plana geçince PiP otomatik başlat
             if newPhase == .background, pipController?.isPossible == true, store.playerState == .playing {
                 _ = pipController?.start()

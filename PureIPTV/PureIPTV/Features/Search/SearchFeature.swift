@@ -26,6 +26,33 @@ public struct SearchFeature: Sendable {
         }
     }
 
+    public struct QuickSearchTag: Identifiable, Sendable, Equatable {
+        public let id: String
+        public let title: String
+        public let icon: String
+        public let hexColor: String
+
+        public init(id: String, title: String, icon: String, hexColor: String) {
+            self.id = id
+            self.title = title
+            self.icon = icon
+            self.hexColor = hexColor
+        }
+
+        public static let defaults: [QuickSearchTag] = [
+            QuickSearchTag(id: "spor", title: "Spor", icon: "sportscourt.fill", hexColor: "#FF9500"),
+            QuickSearchTag(id: "sinema", title: "Sinema", icon: "film.fill", hexColor: "#FF3B30"),
+            QuickSearchTag(id: "haber", title: "Haber", icon: "newspaper.fill", hexColor: "#0A84FF"),
+            QuickSearchTag(id: "belgesel", title: "Belgesel", icon: "globe.europe.africa.fill", hexColor: "#30D158"),
+            QuickSearchTag(id: "cocuk", title: "Çocuk", icon: "sparkles.tv.fill", hexColor: "#FFD60A"),
+            QuickSearchTag(id: "muzik", title: "Müzik", icon: "music.note", hexColor: "#BF5AF2"),
+            QuickSearchTag(id: "4k", title: "4K / UHD", icon: "4k.tv.fill", hexColor: "#64D2FF"),
+            QuickSearchTag(id: "aksiyon", title: "Aksiyon", icon: "flame.fill", hexColor: "#FF453A"),
+            QuickSearchTag(id: "komedi", title: "Komedi", icon: "face.smiling.fill", hexColor: "#63E6BE"),
+            QuickSearchTag(id: "dizi", title: "Dizi", icon: "play.tv.fill", hexColor: "#5E5CE6"),
+        ]
+    }
+
     @ObservableState
     public struct State: Equatable {
         // Data sources (everything fetched once)
@@ -38,6 +65,7 @@ public struct SearchFeature: Sendable {
         public var debouncedQuery: String = ""
         public var filter: SearchFilter = .all
         public var recentSearches: [SearchHistoryItem] = []
+        public var quickTags: [QuickSearchTag] = QuickSearchTag.defaults
 
         // UI state
         public var isLoading = false
@@ -93,6 +121,7 @@ public struct SearchFeature: Sendable {
         case seriesSelected(MediaModels.Item)
         case clearHistoryTapped
         case recentSearchTapped(String)
+        case tagSelected(QuickSearchTag)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -225,6 +254,12 @@ public struct SearchFeature: Sendable {
             case let .recentSearchTapped(query):
                 state.searchQuery = query
                 state.debouncedQuery = query
+                state.updateResults()
+                return .none
+
+            case let .tagSelected(tag):
+                state.searchQuery = tag.title
+                state.debouncedQuery = tag.title
                 state.updateResults()
                 return .none
 
