@@ -418,6 +418,8 @@ public enum AppStrings {
         public static let muteTrailer = "Sesi Kapat".localized
         public static let expandTrailer = "Tam Ekran Fragman".localized
         public static let autoPlayTrailer = "Fragmanı Otomatik Oynat".localized
+        public static let versionsAndQuality = "Sürüm & Kalite Seçenekleri".localized
+        public static let currentVersion = "Mevcut Sürüm".localized
     }
 
     // MARK: - Series Detail

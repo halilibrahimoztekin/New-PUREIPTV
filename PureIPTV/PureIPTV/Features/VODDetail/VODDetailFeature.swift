@@ -8,7 +8,7 @@ import XCoordinator
 public struct VODDetailFeature {
     @ObservableState
     public struct State: Equatable {
-        public let vod: MediaModels.Item
+        public var vod: MediaModels.Item
         public let config: PlaylistConfig
 
         // API Data
@@ -33,6 +33,10 @@ public struct VODDetailFeature {
         public var isAutoPlayTrailerActive: Bool = false
         public var isTrailerMuted: Bool = true
         public var isAutoPlayTrailerEnabled: Bool = true
+
+        // Multi-Version & Quality Grouping (Madde #47)
+        public var availableVersions: [MovieVersionEdition] = []
+        public var selectedVersionId: String?
 
         // Similar Movies Intelligent Matching
         public var catalogVODs: [MediaModels.Item] = []
@@ -98,6 +102,7 @@ public struct VODDetailFeature {
         case toggleTrailerMute
         case stopInlineTrailer
         case expandTrailer
+        case selectVersion(MovieVersionEdition)
         case similarMovieTapped(TMDBSimilarItemDTO)
         case dismissUnmatchedMovie
         case delegate(Delegate)
@@ -187,6 +192,51 @@ public struct VODDetailFeature {
         state.matchedVODsByTMDBId = map
     }
 
+    private static func discoverAvailableVersions(state: inout State) {
+        guard !state.catalogVODs.isEmpty else {
+            state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
+            state.selectedVersionId = state.vod.id
+            return
+        }
+
+        let targetNorm = normalizeTitle(state.vod.title)
+        guard !targetNorm.isEmpty else {
+            state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
+            state.selectedVersionId = state.vod.id
+            return
+        }
+
+        var matchingItems = state.catalogVODs.filter { item in
+            let itemNorm = normalizeTitle(item.title)
+            return itemNorm == targetNorm || (targetNorm.count >= 5 && (itemNorm.contains(targetNorm) || targetNorm.contains(itemNorm)))
+        }
+
+        if !matchingItems.contains(where: { $0.id == state.vod.id }) {
+            matchingItems.insert(state.vod, at: 0)
+        }
+
+        let currentId = state.selectedVersionId ?? state.vod.id
+        let editions = matchingItems.map { MovieVersionEdition(item: $0, isCurrent: $0.id == currentId) }
+
+        let qualityPriority: [String: Int] = [
+            "4K UHD": 4,
+            "1080p FHD": 3,
+            "720p HD": 2,
+            "HD": 1,
+            "SD": 0,
+        ]
+
+        state.availableVersions = editions.sorted {
+            let p1 = qualityPriority[$0.qualityLabel] ?? 1
+            let p2 = qualityPriority[$1.qualityLabel] ?? 1
+            return p1 > p2
+        }
+
+        if state.selectedVersionId == nil {
+            state.selectedVersionId = state.vod.id
+        }
+    }
+
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
         let tmdbClient = tmdbClient
@@ -194,6 +244,7 @@ public struct VODDetailFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                Self.discoverAvailableVersions(state: &state)
                 guard !state.isLoading, state.info == nil else { return .none }
                 state.isLoading = true
                 state.isTMDBLoading = true
@@ -248,6 +299,7 @@ public struct VODDetailFeature {
             case let .catalogVODsResponse(.success(items)):
                 state.catalogVODs = items
                 Self.updateMatchedVODs(state: &state)
+                Self.discoverAvailableVersions(state: &state)
                 return .none
 
             case .catalogVODsResponse(.failure):
@@ -387,6 +439,17 @@ public struct VODDetailFeature {
                     .cancel(id: CancelID.autoPlayTrailer),
                     .send(.trailerTapped)
                 )
+
+            case let .selectVersion(version):
+                state.selectedVersionId = version.id
+                state.vod = version.item
+                state.availableVersions = state.availableVersions.map {
+                    MovieVersionEdition(item: $0.item, isCurrent: $0.id == version.id)
+                }
+                return .run { [id = version.id] send in
+                    let history = try? await databaseClient.getWatchProgress(id)
+                    await send(.historyStatusLoaded(history))
+                }
 
             case let .similarMovieTapped(movie):
                 if let matched = state.matchedVODsByTMDBId[movie.id] {

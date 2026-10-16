@@ -40,6 +40,18 @@ public struct VODDetailView: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             headerView
+
+                            if store.availableVersions.count > 1 {
+                                MovieVersionPickerView(
+                                    versions: store.availableVersions,
+                                    selectedVersionId: store.selectedVersionId ?? store.vod.id,
+                                    onSelectVersion: { version in
+                                        store.send(.selectVersion(version))
+                                    }
+                                )
+                                .padding(.top, 14)
+                            }
+
                             contentView
                         }
                     }
@@ -1132,6 +1144,17 @@ public struct VODDetailView: View {
                                         .foregroundStyle(.white.opacity(0.75))
                                         .lineLimit(4)
                                         .multilineTextAlignment(.leading)
+                                }
+
+                                if store.availableVersions.count > 1 {
+                                    MovieVersionPickerView(
+                                        versions: store.availableVersions,
+                                        selectedVersionId: store.selectedVersionId ?? store.vod.id,
+                                        onSelectVersion: { version in
+                                            store.send(.selectVersion(version))
+                                        }
+                                    )
+                                    .padding(.top, 8)
                                 }
 
                                 // Actions
