@@ -304,6 +304,9 @@ public struct AppFeature {
             }
 
         case .seriesDetail(.presented(.delegate(.close))):
+            if state.player == nil {
+                state.seriesDetail = nil
+            }
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissSeriesDetail) }
             }
@@ -352,6 +355,9 @@ public struct AppFeature {
             return .none
 
         case .vodDetail(.presented(.delegate(.close))):
+            if state.player == nil {
+                state.vodDetail = nil
+            }
             return .run { _ in
                 await MainActor.run { appCoordinator.trigger(.dismissVodDetail) }
             }

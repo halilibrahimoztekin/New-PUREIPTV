@@ -21,6 +21,7 @@ public struct DashboardFeature {
         }
 
         public var errorMessage: String?
+        public var lastAdultHidden: Bool?
 
         public init() {}
     }
@@ -63,18 +64,23 @@ public struct DashboardFeature {
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.settingsClient) var settingsClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let playlistRepository = playlistRepository
+        let settingsClient = settingsClient
 
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
                 state.activePlaylistName = playlistRepository.getActivePlaylist()?.name ?? ""
                 let localEffect: Effect<Action> = .send(.loadLocalData)
-                let remoteEffect: Effect<Action> = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
+                let shouldReload = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty) || state.lastAdultHidden != currentAdultHidden
+                state.lastAdultHidden = currentAdultHidden
+                let remoteEffect: Effect<Action> = shouldReload
                     ? .send(.loadFeaturedData(config: config))
                     : .none
                 let notificationEffect: Effect<Action> = .run { send in
@@ -104,6 +110,8 @@ public struct DashboardFeature {
             case let .loadFeaturedData(config):
                 state.isLoading = true
                 state.errorMessage = nil
+                let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
+                let isAdult = settingsClient.isAdultContent
                 return .run { send in
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
                     async let allVODs = try? iptvClient.fetchVODs(config, nil)
@@ -116,16 +124,18 @@ public struct DashboardFeature {
                     var recommendations: [MediaModels.Item] = []
 
                     if let fetchedChannels = await liveStreams {
-                        channels = Array(fetchedChannels.prefix(10))
+                        let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
+                        channels = Array(filtered.prefix(10))
                     }
 
                     if let fetchedVODs = await allVODs {
-                        let sorted = fetchedVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        let safeVODs = hideAdult ? fetchedVODs.filter { !isAdult($0.title) } : fetchedVODs
+                        let sorted = safeVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         vods = Array(sorted.prefix(10))
 
                         let vodHistory = history.filter { $0.type == "vod" }
                         if !vodHistory.isEmpty {
-                            let shuffled = fetchedVODs.shuffled()
+                            let shuffled = safeVODs.shuffled()
                             recommendations = Array(shuffled.prefix(10))
                         } else {
                             recommendations = Array(sorted.dropFirst(10).prefix(10))
@@ -133,7 +143,8 @@ public struct DashboardFeature {
                     }
 
                     if let fetchedSeries = await allSeries {
-                        let sorted = fetchedSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
+                        let safeSeries = hideAdult ? fetchedSeries.filter { !isAdult($0.title) } : fetchedSeries
+                        let sorted = safeSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         series = Array(sorted.prefix(10))
                     }
 

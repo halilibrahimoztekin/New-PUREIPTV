@@ -1338,6 +1338,7 @@ public struct PlayerFeature {
                     }
 
                     try? await playerClient.stop()
+                    await playerClient.release()
                     await send(.delegate(.didClose))
                     await MainActor.run {
                         appCoordinator.trigger(.dismissPlayer)

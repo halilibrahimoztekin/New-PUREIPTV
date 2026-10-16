@@ -377,10 +377,12 @@ private struct MultiViewPlayer: View {
 
             // Clean up old client and retry after delay
             try? await client.stop()
+            await client.release()
             playerClient = nil
             try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
 
         try? await playerClient?.stop()
+        await playerClient?.release()
     }
 }

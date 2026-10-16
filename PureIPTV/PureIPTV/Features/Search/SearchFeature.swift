@@ -73,6 +73,7 @@ public struct SearchFeature: Sendable {
         public var hasLoaded = false
         public var errorMessage: String?
         public var lastLoadedConfig: PlaylistConfig?
+        public var lastAdultHidden: Bool?
 
         /// Stored Results (avoid recomputing over 50,000 items on every view render)
         public var liveResults: [MediaModels.Item] = []
@@ -144,11 +145,13 @@ public struct SearchFeature: Sendable {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.continuousClock) var clock
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.settingsClient) var settingsClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
+        let settingsClient = settingsClient
 
         Reduce { state, action in
             switch action {
@@ -163,7 +166,8 @@ public struct SearchFeature: Sendable {
                     await send(.loadFavoritesResponse(favs))
                 }
 
-                if state.lastLoadedConfig != config {
+                let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
+                if state.lastLoadedConfig != config || state.lastAdultHidden != currentAdultHidden {
                     state.hasLoaded = false
                     state.allChannels = []
                     state.allVODs = []
@@ -175,6 +179,7 @@ public struct SearchFeature: Sendable {
                     state.debouncedQuery = ""
                     state.isSearching = false
                     state.lastLoadedConfig = config
+                    state.lastAdultHidden = currentAdultHidden
                 }
 
                 guard !state.hasLoaded, !state.isLoading else { return .merge(loadHistory, loadFavs) }
@@ -207,9 +212,11 @@ public struct SearchFeature: Sendable {
             case let .loadAllDataResponse(.success(data)):
                 state.isLoading = false
                 state.hasLoaded = true
-                state.allChannels = data.channels
-                state.allVODs = data.vods
-                state.allSeries = data.series
+                let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
+                let isAdult = settingsClient.isAdultContent
+                state.allChannels = hideAdult ? data.channels.filter { !isAdult($0.title) } : data.channels
+                state.allVODs = hideAdult ? data.vods.filter { !isAdult($0.title) } : data.vods
+                state.allSeries = hideAdult ? data.series.filter { !isAdult($0.title) } : data.series
                 if !state.debouncedQuery.isEmpty {
                     return .send(.performSearch(state.debouncedQuery))
                 }
