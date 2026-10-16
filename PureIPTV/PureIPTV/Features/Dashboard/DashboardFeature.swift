@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import FactoryKit
 import Foundation
 
 @Reducer
@@ -6,6 +7,7 @@ public struct DashboardFeature {
     @ObservableState
     public struct State: Equatable {
         public var isLoading: Bool = false
+        public var activePlaylistName: String = ""
         public var featuredChannels: [MediaModels.Item] = []
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
@@ -21,6 +23,7 @@ public struct DashboardFeature {
 
     public enum Action {
         case onAppear(config: PlaylistConfig)
+        case openManagePlaylistsTapped
         case loadFeaturedData(config: PlaylistConfig)
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
@@ -43,6 +46,7 @@ public struct DashboardFeature {
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
             case restartHistoryItem(WatchHistoryItem)
+            case openManagePlaylists
         }
     }
 
@@ -50,15 +54,19 @@ public struct DashboardFeature {
         case watchHistoryObserver
     }
 
+    @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
+        let playlistRepository = playlistRepository
+
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                state.activePlaylistName = playlistRepository.getActivePlaylist()?.name ?? ""
                 let localEffect: Effect<Action> = .send(.loadLocalData)
                 let remoteEffect: Effect<Action> = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
                     ? .send(.loadFeaturedData(config: config))
@@ -70,6 +78,9 @@ public struct DashboardFeature {
                 }
                 .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
                 return .merge(localEffect, remoteEffect, notificationEffect)
+
+            case .openManagePlaylistsTapped:
+                return .send(.delegate(.openManagePlaylists))
 
             case .loadLocalData:
                 return .run { send in

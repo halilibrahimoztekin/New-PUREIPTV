@@ -357,6 +357,7 @@ public enum AppStrings {
     // MARK: - Dashboard
 
     public enum Dashboard {
+        public static let title = "Keşfet".localized
         public static let continueWatching = "Kaldığın Yerden İzle".localized
         public static let myFavorites = "Favorilerim".localized
         public static let featuredLiveTV = "Canlı TV (Önerilen)".localized
@@ -485,6 +486,7 @@ public enum AppStrings {
 
     public enum PlaylistMgmt {
         public static let savedAccounts = "Kayıtlı Hesaplar".localized
+        public static let addAccount = "Yeni Hesap Ekle".localized
         public static let switchNote = "Hesaplar arasında geçiş yaptığınızda uygulama yeni hesaba ait verileri yükleyecektir.".localized
         public static let accountManagement = "Hesap Yönetimi".localized
     }

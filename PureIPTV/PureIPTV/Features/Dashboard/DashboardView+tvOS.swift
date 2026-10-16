@@ -34,7 +34,32 @@
                     tvLoadingView
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 60) {
+                        VStack(alignment: .leading, spacing: 50) {
+                            // Top Bar: Active Playlist Fast Switcher
+                            HStack {
+                                Spacer()
+                                Button {
+                                    store.send(.openManagePlaylistsTapped)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 12, height: 12)
+                                        Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
+                                            .font(.system(size: 22, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.system(size: 18))
+                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                    }
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                            }
+                            .padding(.horizontal, 60)
+                            .padding(.top, 20)
+
                             // Hero Banner with Focus Guide Boundary
                             if let heroVOD = store.featuredVODs.first {
                                 TVHeroBanner(vod: heroVOD) {

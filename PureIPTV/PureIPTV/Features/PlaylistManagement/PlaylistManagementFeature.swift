@@ -8,6 +8,7 @@ public struct PlaylistManagementFeature {
     public struct State: Equatable {
         public var playlists: [SavedPlaylist] = []
         public var activePlaylistID: UUID?
+        public var playlistToDelete: SavedPlaylist?
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
         public init() {}
@@ -19,11 +20,17 @@ public struct PlaylistManagementFeature {
         case binding(BindingAction<State>)
         case setActivePlaylist(UUID)
         case deletePlaylist(UUID)
+        case confirmDeletePlaylist(SavedPlaylist)
+        case cancelDeletePlaylist
+        case deletePlaylistConfirmed
+        case addPlaylistButtonTapped
+        case closeAddPlaylistTapped
         case addPlaylist(PresentationAction<AddPlaylistFeature.Action>)
         case closeTapped
         case delegate(Delegate)
 
-        public enum Delegate: Equatable {
+        @CasePathable
+        public enum Delegate: Equatable, Sendable {
             case didChangeActivePlaylist
             case addPlaylistTapped
             case addPlaylistDidConnect
@@ -55,9 +62,23 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case let .setActivePlaylist(id):
+                guard state.activePlaylistID != id else { return .none }
                 playlistRepository.setActivePlaylistID(id)
                 state.activePlaylistID = id
                 return .send(.delegate(.didChangeActivePlaylist))
+
+            case let .confirmDeletePlaylist(playlist):
+                state.playlistToDelete = playlist
+                return .none
+
+            case .cancelDeletePlaylist:
+                state.playlistToDelete = nil
+                return .none
+
+            case .deletePlaylistConfirmed:
+                guard let playlist = state.playlistToDelete else { return .none }
+                state.playlistToDelete = nil
+                return .send(.deletePlaylist(playlist.id))
 
             case let .deletePlaylist(id):
                 playlistRepository.deletePlaylist(id: id)
@@ -68,6 +89,14 @@ public struct PlaylistManagementFeature {
                     state.activePlaylistID = newActive
                     return .send(.delegate(.didChangeActivePlaylist))
                 }
+                return .none
+
+            case .addPlaylistButtonTapped:
+                state.addPlaylist = AddPlaylistFeature.State()
+                return .none
+
+            case .closeAddPlaylistTapped:
+                state.addPlaylist = nil
                 return .none
 
             case .addPlaylist(.presented(.delegate(.didConnect))):

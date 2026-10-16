@@ -151,6 +151,9 @@ public struct HomeFeature {
             case let .dashboard(.delegate(.restartHistoryItem(item))):
                 return .send(.delegate(.restartHistoryItem(item)))
 
+            case .dashboard(.delegate(.openManagePlaylists)):
+                return .send(.delegate(.openManagePlaylists))
+
             case .dashboard:
                 return .none
 

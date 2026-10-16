@@ -27,6 +27,42 @@
 
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Top Switcher Bar
+                        HStack {
+                            Text(AppStrings.Dashboard.title)
+                                .font(.title2.bold())
+                                .foregroundStyle(.white)
+
+                            Spacer()
+
+                            Button {
+                                store.send(.openManagePlaylistsTapped)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                    Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption2)
+                                        .foregroundStyle(Color(hex: "#0A84FF"))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: "#1F1F23"))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
                         if store.isLoading {
                             loadingView
                         } else if let error = store.errorMessage {
