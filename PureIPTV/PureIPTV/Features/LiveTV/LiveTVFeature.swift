@@ -58,6 +58,7 @@ public struct LiveTVFeature {
         case unhideAllChannels
         case sendToMultiView(MediaModels.Item)
         case openChannelEPG(MediaModels.Item)
+        case openChannelGuide(MediaModels.Item)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
@@ -346,6 +347,16 @@ public struct LiveTVFeature {
                         categories: state.categories,
                         selectedCategoryID: channel.categoryID,
                         favoriteIDs: state.favoriteIDs
+                    )
+                }
+                return .none
+
+            case let .openChannelGuide(channel):
+                if let config = state.config {
+                    state.epgGuide = EPGGuideFeature.State(
+                        config: config,
+                        channels: state.currentChannels,
+                        initialChannel: channel
                     )
                 }
                 return .none

@@ -74,6 +74,9 @@
             .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
                 EPGTimelineView(store: store)
             }
+            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
+                EPGGuideView_tvOS(store: store)
+            }
             .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
                 MultiView(store: store)
             }
@@ -112,6 +115,15 @@
                                     store.send(.openEPGTimelineTapped)
                                 } label: {
                                     Image(systemName: "calendar.day.timeline.left")
+                                        .font(.system(size: 20))
+                                        .padding(8)
+                                }
+                                .buttonStyle(TVCircleButtonStyle())
+
+                                Button {
+                                    store.send(.epgGuideTapped)
+                                } label: {
+                                    Image(systemName: "calendar.badge.clock")
                                         .font(.system(size: 20))
                                         .padding(8)
                                 }
@@ -216,9 +228,15 @@
                                     }
 
                                     Button {
-                                        store.send(.openChannelEPG(channel))
+                                        store.send(.openChannelGuide(channel))
                                     } label: {
                                         Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+                                    }
+
+                                    Button {
+                                        store.send(.openChannelEPG(channel))
+                                    } label: {
+                                        Label("Zaman Çizelgesi (Timeline)".localized, systemImage: "calendar.day.timeline.left")
                                     }
 
                                     Button(role: .destructive) {

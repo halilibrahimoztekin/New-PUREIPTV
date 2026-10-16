@@ -76,10 +76,13 @@ public struct EPGGuideFeature {
                 return .none
 
             case .closeTapped:
-                return .run { _ in
-                    @Dependency(\.dismiss) var dismiss
-                    await dismiss()
-                }
+                return .merge(
+                    .send(.delegate(.close)),
+                    .run { _ in
+                        @Dependency(\.dismiss) var dismiss
+                        await dismiss()
+                    }
+                )
 
             case let .playTapped(channel):
                 return .send(.delegate(.playChannel(channel)))
