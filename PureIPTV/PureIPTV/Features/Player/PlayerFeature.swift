@@ -19,9 +19,10 @@ public struct PlayerFeature {
         public static let audioRouteHUD = "PlayerFeature.audioRouteHUD"
         public static let trackHUD = "PlayerFeature.trackHUD"
         public static let upNextCountdown = "PlayerFeature.upNextCountdown"
+        public static let aspectFeedback = "PlayerFeature.aspectFeedback"
     }
 
-    public struct PlayableItem: Equatable {
+    public struct PlayableItem: Equatable, Sendable {
         public let id: String
         public let title: String
         public let seriesTitle: String?
@@ -937,7 +938,14 @@ public struct PlayerFeature {
                 state.videoZoomScale = 1.0
             }
             state.isAspectFeedbackVisible = true
-            return .none
+            return .concatenate(
+                .cancel(id: CancelID.aspectFeedback),
+                .run { send in
+                    try? await Task.sleep(nanoseconds: 1_800_000_000)
+                    await send(.hideAspectFeedback)
+                }
+                .cancellable(id: CancelID.aspectFeedback)
+            )
 
         case let .setVideoZoomScale(scale):
             let clamped = max(1.0, min(3.0, scale))
@@ -948,7 +956,14 @@ public struct PlayerFeature {
                 state.videoAspectRatioMode = .fit
             }
             state.isAspectFeedbackVisible = true
-            return .none
+            return .concatenate(
+                .cancel(id: CancelID.aspectFeedback),
+                .run { send in
+                    try? await Task.sleep(nanoseconds: 1_800_000_000)
+                    await send(.hideAspectFeedback)
+                }
+                .cancellable(id: CancelID.aspectFeedback)
+            )
 
         case .toggleAspectRatioMode:
             let nextMode: VideoAspectRatioMode = switch state.videoAspectRatioMode {

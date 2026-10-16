@@ -174,8 +174,22 @@ public struct EPGTimelineView: View {
                 )) {
                     if let program = store.selectedProgramDetail, let channel = store.selectedProgramChannel {
                         programDetailSheet(program: program, channel: channel)
+                        #if os(tvOS)
+                            .onExitCommand {
+                                store.send(.dismissProgramDetails)
+                            }
+                        #endif
                     }
                 }
+            #if os(tvOS)
+                .onExitCommand {
+                    if store.selectedProgramDetail != nil {
+                        store.send(.dismissProgramDetails)
+                    } else {
+                        store.send(.closeTapped)
+                    }
+                }
+            #endif
         }
     }
 
@@ -1325,6 +1339,21 @@ public struct EPGTimelineView: View {
                         .padding(.vertical, 12)
                         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                     }
+                #endif
+
+                #if os(tvOS)
+                    Button {
+                        store.send(.dismissProgramDetails)
+                    } label: {
+                        HStack {
+                            Image(systemName: "xmark")
+                            Text(AppStrings.Common.close)
+                        }
+                        .font(.subheadline.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.card)
                 #endif
             }
         }

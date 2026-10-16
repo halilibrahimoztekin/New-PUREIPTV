@@ -116,6 +116,17 @@
                         .zIndex(85)
                     }
 
+                    // Aspect Ratio & Zoom HUD Feedback (Madde #14 / #49)
+                    if store.isAspectFeedbackVisible {
+                        AspectScaleHUDView(
+                            mode: store.videoAspectRatioMode,
+                            scale: store.videoZoomScale
+                        )
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: store.isAspectFeedbackVisible)
+                        .zIndex(90)
+                    }
+
                     // EPG Overlay
                     if store.isEPGVisible {
                         VStack {
@@ -554,6 +565,27 @@
                         }
                         .buttonStyle(PlayerCapsuleButtonStyle())
                     }
+
+                    // Aspect Ratio Menu (Madde #49 - Fit, Fill, Stretch, Zoom)
+                    Menu {
+                        ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
+                            Button {
+                                onInteraction()
+                                store.send(.setVideoAspectRatioMode(mode))
+                            } label: {
+                                HStack {
+                                    Text(mode.title)
+                                    if store.videoAspectRatioMode == mode {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: store.videoAspectRatioMode.systemIcon)
+                            .font(.system(size: 24))
+                    }
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // EPG Button (Live TV)
                     if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {

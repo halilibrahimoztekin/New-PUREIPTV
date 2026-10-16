@@ -33,6 +33,12 @@ public struct PlayerView: View {
             #else
                 VideoView(playerClient.vlcPlayer())
                     .ignoresSafeArea()
+                    .scaleEffect(
+                        x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
+                        y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale
+                    )
+                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
             #endif
 
             // UI Overlay

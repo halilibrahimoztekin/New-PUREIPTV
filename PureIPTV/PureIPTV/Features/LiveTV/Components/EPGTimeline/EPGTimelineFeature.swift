@@ -374,10 +374,13 @@ public struct EPGTimelineFeature {
                 return .none
 
             case .closeTapped:
-                return .run { _ in
-                    @Dependency(\.dismiss) var dismiss
-                    await dismiss()
-                }
+                return .merge(
+                    .send(.delegate(.close)),
+                    .run { _ in
+                        @Dependency(\.dismiss) var dismiss
+                        await dismiss()
+                    }
+                )
 
             case .delegate:
                 return .none

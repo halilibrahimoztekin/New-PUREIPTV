@@ -106,22 +106,23 @@ public enum FuzzySearchEngine: Sendable {
         return nil
     }
 
-    /// Performs fuzzy search on a collection of MediaModels.Item, ranking by relevance.
+    /// Generic fuzzy search on any collection of items with a title keypath, ranking by relevance.
     /// Returns at most `limit` items, preventing SwiftUI rendering stalls.
-    public static func searchItems(
-        _ items: [MediaModels.Item],
+    public static func search<T: Sendable>(
+        _ items: [T],
+        titleKeyPath: KeyPath<T, String>,
         query: String,
         limit: Int = 100
-    ) -> [MediaModels.Item] {
+    ) -> [T] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
         let normalizedQuery = normalize(trimmed)
-        var scoredResults: [(item: MediaModels.Item, score: Int)] = []
+        var scoredResults: [(item: T, score: Int)] = []
         scoredResults.reserveCapacity(min(items.count, limit * 2))
 
         for item in items {
-            let normalizedTitle = normalize(item.title)
+            let normalizedTitle = normalize(item[keyPath: titleKeyPath])
             if let score = score(query: normalizedQuery, target: normalizedTitle) {
                 scoredResults.append((item, score))
             }
@@ -132,15 +133,27 @@ public enum FuzzySearchEngine: Sendable {
             if lhs.score != rhs.score {
                 return lhs.score > rhs.score
             }
-            if lhs.item.title.count != rhs.item.title.count {
-                return lhs.item.title.count < rhs.item.title.count
+            let lhsTitle = lhs.item[keyPath: titleKeyPath]
+            let rhsTitle = rhs.item[keyPath: titleKeyPath]
+            if lhsTitle.count != rhsTitle.count {
+                return lhsTitle.count < rhsTitle.count
             }
-            return lhs.item.title.localizedStandardCompare(rhs.item.title) == .orderedAscending
+            return lhsTitle.localizedStandardCompare(rhsTitle) == .orderedAscending
         }
 
         if scoredResults.count > limit {
             return Array(scoredResults.prefix(limit).map(\.item))
         }
         return scoredResults.map(\.item)
+    }
+
+    /// Performs fuzzy search on a collection of MediaModels.Item, ranking by relevance.
+    /// Returns at most `limit` items, preventing SwiftUI rendering stalls.
+    public static func searchItems(
+        _ items: [MediaModels.Item],
+        query: String,
+        limit: Int = 100
+    ) -> [MediaModels.Item] {
+        search(items, titleKeyPath: \.title, query: query, limit: limit)
     }
 }

@@ -65,6 +65,11 @@ public struct PlayerSidebarDrawer: View {
         .onAppear {
             focusedItemID = store.item.id
         }
+        #if os(tvOS)
+        .onExitCommand {
+            onClose()
+        }
+        #endif
     }
 
     // MARK: - Drawer Content
@@ -74,7 +79,10 @@ public struct PlayerSidebarDrawer: View {
             // Header
             headerView
 
-            // Filter Tabs (All / History)
+            // Search Bar
+            searchBarView
+
+            // Filter Tabs (All / History / Categories)
             filterTabsView
 
             Divider()
@@ -127,16 +135,75 @@ public struct PlayerSidebarDrawer: View {
                 #endif
                     .foregroundStyle(.white.opacity(0.75))
             }
+            #if os(tvOS)
+            .buttonStyle(TVCircleButtonStyle())
+            #else
             .buttonStyle(.plain)
+            #endif
         }
         #if os(tvOS)
         .padding(.horizontal, 32)
         .padding(.top, 40)
-        .padding(.bottom, 20)
+        .padding(.bottom, 16)
         #else
         .padding(.horizontal, 16)
         .padding(.top, 24)
-        .padding(.bottom, 14)
+        .padding(.bottom, 12)
+        #endif
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBarView: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.white.opacity(0.55))
+            #if os(tvOS)
+                .font(.system(size: 22))
+            #else
+                .font(.system(size: 15))
+            #endif
+
+            TextField(AppStrings.Search.channelSearchPlaceholder, text: $searchQuery)
+            #if os(tvOS)
+                .font(.system(size: 20, weight: .medium))
+            #else
+                .font(.system(size: 14, weight: .medium))
+            #endif
+                .foregroundStyle(.white)
+                .tint(Color(hex: "#0A84FF"))
+
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.6))
+                    #if os(tvOS)
+                        .font(.system(size: 20))
+                    #else
+                        .font(.system(size: 15))
+                    #endif
+                }
+                #if os(tvOS)
+                .buttonStyle(TVCircleButtonStyle())
+                #else
+                .buttonStyle(.plain)
+                #endif
+            }
+        }
+        #if os(tvOS)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 32)
+        .padding(.bottom, 16)
+        #else
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
         #endif
     }
 
@@ -197,7 +264,11 @@ public struct PlayerSidebarDrawer: View {
                     .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1)
             )
         }
+        #if os(tvOS)
+        .buttonStyle(TVFilterChipButtonStyle(isSelected: isSelected))
+        #else
         .buttonStyle(.plain)
+        #endif
     }
 
     // MARK: - Channels List
@@ -382,10 +453,11 @@ public struct PlayerSidebarDrawer: View {
             (store.playlist ?? [store.item]).filter { $0.categoryID == cat }
         }
 
-        if searchQuery.isEmpty {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
             return baseList
         } else {
-            return baseList.filter { $0.title.localizedCaseInsensitiveContains(searchQuery) }
+            return FuzzySearchEngine.search(baseList, titleKeyPath: \.title, query: trimmed, limit: 100)
         }
     }
 
@@ -399,3 +471,32 @@ public struct PlayerSidebarDrawer: View {
         return unique
     }
 }
+
+#if os(tvOS)
+    private struct TVFilterChipButtonStyle: ButtonStyle {
+        let isSelected: Bool
+
+        func makeBody(configuration: Configuration) -> some View {
+            TVFilterChipBody(configuration: configuration, isSelected: isSelected)
+        }
+
+        private struct TVFilterChipBody: View {
+            let configuration: Configuration
+            let isSelected: Bool
+            @Environment(\.isFocused) private var isFocused
+
+            var body: some View {
+                configuration.label
+                    .scaleEffect(isFocused ? 1.08 : 1.0)
+                    .brightness(isFocused ? 0.15 : 0.0)
+                    .shadow(
+                        color: isFocused ? Color(hex: "#0A84FF").opacity(0.6) : .clear,
+                        radius: isFocused ? 10 : 0,
+                        x: 0,
+                        y: 0
+                    )
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            }
+        }
+    }
+#endif
