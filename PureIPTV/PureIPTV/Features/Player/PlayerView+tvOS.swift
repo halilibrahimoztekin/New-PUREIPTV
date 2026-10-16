@@ -152,6 +152,27 @@
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
+                    // On-Screen Display (OSD) Channel Info Card (Madde #95)
+                    if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !isMaskShow {
+                        VStack {
+                            Spacer()
+                            ChannelInfoOSDView(
+                                item: store.item,
+                                channelIndex: store.currentChannelIndex,
+                                totalChannels: store.playlist?.count,
+                                currentProgram: store.currentEPGProgram,
+                                nextProgram: store.nextEPGProgram
+                            )
+                            .padding(.horizontal, 60)
+                            .padding(.bottom, 60)
+                            .opacity(store.isDeepDimmed ? 0.35 : 1.0)
+                            .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.isChannelOSDVisible)
+                        .zIndex(80)
+                    }
+
                     // Edge-Swipe Channel Sidebar Drawer
                     if store.isChannelListVisible {
                         PlayerSidebarDrawer(store: store) {
@@ -216,7 +237,9 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isChannelListVisible {
+                if store.isChannelOSDVisible {
+                    store.send(.hideChannelOSD)
+                } else if store.isChannelListVisible {
                     store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
                     resetIdleTimer()
                 } else if store.isEPGVisible {

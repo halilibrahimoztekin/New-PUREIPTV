@@ -651,6 +651,25 @@
                     .zIndex(90)
                 }
 
+                // Channel Info OSD Card (Madde #95)
+                if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !store.isControlsVisible {
+                    VStack {
+                        Spacer()
+                        ChannelInfoOSDView(
+                            item: store.item,
+                            channelIndex: store.currentChannelIndex,
+                            totalChannels: store.playlist?.count,
+                            currentProgram: store.currentEPGProgram,
+                            nextProgram: store.nextEPGProgram
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isChannelOSDVisible)
+                    .zIndex(80)
+                }
+
                 // Edge-Swipe Channel Sidebar Drawer
                 if store.isChannelListVisible {
                     PlayerSidebarDrawer(store: store) {

@@ -20,6 +20,7 @@ public struct PlayerFeature {
         public static let trackHUD = "PlayerFeature.trackHUD"
         public static let upNextCountdown = "PlayerFeature.upNextCountdown"
         public static let aspectFeedback = "PlayerFeature.aspectFeedback"
+        public static let channelOSD = "PlayerFeature.channelOSD"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -188,6 +189,25 @@ public struct PlayerFeature {
             return playlist[prevIndex]
         }
 
+        /// Channel OSD Info Card (Madde #95)
+        public var isChannelOSDVisible: Bool = false
+
+        public var currentEPGProgram: EPGProgram? {
+            let now = Date()
+            return epgListings.first(where: { $0.startTime <= now && now <= $0.endTime })
+                ?? epgListings.first
+        }
+
+        public var nextEPGProgram: EPGProgram? {
+            guard let current = currentEPGProgram,
+                  let idx = epgListings.firstIndex(where: { $0.id == current.id }),
+                  idx + 1 < epgListings.count
+            else {
+                return nil
+            }
+            return epgListings[idx + 1]
+        }
+
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
             self.playlist = playlist
@@ -278,6 +298,8 @@ public struct PlayerFeature {
         case recallLastChannel
         case showZappingHUD(item: PlayableItem, direction: ZappingDirection)
         case hideZappingHUD
+        case showChannelOSD
+        case hideChannelOSD
 
         // EPG Actions
         case fetchEPG
@@ -352,6 +374,7 @@ public struct PlayerFeature {
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
 
             return .merge(
+                state.item.isLive ? .send(.showChannelOSD) : .none,
                 .send(.startOLEDDimTimer),
                 .run { send in
                     for await route in await AudioRouteManager.shared.routeStream() {
@@ -883,6 +906,7 @@ public struct PlayerFeature {
             state.hasAppliedInitialSeek = false
             state.zappingHUDItem = newItem
             state.isZappingHUDVisible = true
+            state.isChannelOSDVisible = newItem.isLive
 
             return .run { send in
                 try await playerClient.stop()
@@ -923,6 +947,18 @@ public struct PlayerFeature {
             state.isZappingHUDVisible = false
             state.zappingHUDItem = nil
             state.zappingHUDDirection = nil
+            return .none
+
+        case .showChannelOSD:
+            state.isChannelOSDVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                await send(.hideChannelOSD)
+            }
+            .cancellable(id: CancelID.channelOSD, cancelInFlight: true)
+
+        case .hideChannelOSD:
+            state.isChannelOSDVisible = false
             return .none
 
         case .toggleInfo:
@@ -1282,6 +1318,7 @@ public struct PlayerFeature {
             let item = state.item
             return .merge(
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.channelOSD),
                 .run { send in
                     @Dependency(\.dismiss) var dismiss
                     // Save Watch History before stopping
