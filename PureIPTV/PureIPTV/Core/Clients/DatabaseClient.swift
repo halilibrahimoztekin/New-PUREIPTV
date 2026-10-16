@@ -30,13 +30,15 @@ public struct CategoryPreferenceDTO: Equatable, Sendable {
     public var type: String
     public var categoryID: String
     public var isHidden: Bool
+    public var isLocked: Bool
     public var orderIndex: Int
 
-    public init(id: String, type: String, categoryID: String, isHidden: Bool, orderIndex: Int) {
+    public init(id: String, type: String, categoryID: String, isHidden: Bool, isLocked: Bool = false, orderIndex: Int) {
         self.id = id
         self.type = type
         self.categoryID = categoryID
         self.isHidden = isHidden
+        self.isLocked = isLocked
         self.orderIndex = orderIndex
     }
 }
@@ -191,6 +193,7 @@ extension DatabaseClient: DependencyKey {
                         type: $0.type,
                         categoryID: $0.categoryID,
                         isHidden: $0.isHidden,
+                        isLocked: $0.isLocked,
                         orderIndex: $0.orderIndex
                     )
                 }
@@ -204,6 +207,7 @@ extension DatabaseClient: DependencyKey {
                     )
                     if let existing = try? context.fetch(descriptor).first {
                         existing.isHidden = pref.isHidden
+                        existing.isLocked = pref.isLocked
                         existing.orderIndex = pref.orderIndex
                     } else {
                         let newModel = CategoryPreference(
@@ -211,6 +215,7 @@ extension DatabaseClient: DependencyKey {
                             type: pref.type,
                             categoryID: pref.categoryID,
                             isHidden: pref.isHidden,
+                            isLocked: pref.isLocked,
                             orderIndex: pref.orderIndex
                         )
                         context.insert(newModel)

@@ -109,7 +109,8 @@
                             ForEach(store.categories) { category in
                                 TVSeriesCategoryRow(
                                     category: category,
-                                    isSelected: store.selectedCategoryID == category.id
+                                    isSelected: store.selectedCategoryID == category.id,
+                                    isLocked: store.categoryPreferences[category.id]?.isLocked ?? false
                                 ) {
                                     store.send(.categorySelected(category))
                                 }
@@ -285,7 +286,15 @@
     private struct TVSeriesCategoryRow: View {
         let category: MediaModels.Category
         let isSelected: Bool
+        let isLocked: Bool
         let action: () -> Void
+
+        init(category: MediaModels.Category, isSelected: Bool, isLocked: Bool = false, action: @escaping () -> Void) {
+            self.category = category
+            self.isSelected = isSelected
+            self.isLocked = isLocked
+            self.action = action
+        }
 
         var body: some View {
             Button(action: action) {
@@ -300,6 +309,12 @@
                         .lineLimit(1)
 
                     Spacer()
+
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.orange.opacity(0.85))
+                    }
                 }
             }
             .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#30D158"), isSelected: isSelected))

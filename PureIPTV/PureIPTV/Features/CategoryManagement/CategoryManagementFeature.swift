@@ -84,6 +84,7 @@ public struct CategoryManagementFeature {
         case categoriesResponse(Result<[MediaModels.Category], Error>)
         case preferencesLoaded([CategoryPreferenceDTO])
         case toggleVisibility(categoryID: String)
+        case toggleLock(categoryID: String)
         case moveCategory(from: IndexSet, to: Int)
         case setSearchQuery(String)
         case setFilterMode(State.FilterMode)
@@ -192,6 +193,25 @@ public struct CategoryManagementFeature {
                         type: state.type.rawValue,
                         categoryID: categoryID,
                         isHidden: true,
+                        orderIndex: Int.max
+                    )
+                    state.categoryPreferences[categoryID] = pref
+                }
+                return .none
+
+            case let .toggleLock(categoryID):
+                state.hasUnsavedChanges = true
+                if let pref = state.categoryPreferences[categoryID] {
+                    var updated = pref
+                    updated.isLocked.toggle()
+                    state.categoryPreferences[categoryID] = updated
+                } else {
+                    let pref = CategoryPreferenceDTO(
+                        id: "\(state.type.rawValue)_\(categoryID)",
+                        type: state.type.rawValue,
+                        categoryID: categoryID,
+                        isHidden: false,
+                        isLocked: true,
                         orderIndex: Int.max
                     )
                     state.categoryPreferences[categoryID] = pref

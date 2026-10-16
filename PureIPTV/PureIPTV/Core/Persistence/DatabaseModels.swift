@@ -8,13 +8,15 @@ public final class CategoryPreference {
     public var type: String = "" // "live", "vod", "series"
     public var categoryID: String = ""
     public var isHidden: Bool = false
+    public var isLocked: Bool = false
     public var orderIndex: Int = 0
 
-    public init(id: String, type: String, categoryID: String, isHidden: Bool, orderIndex: Int) {
+    public init(id: String, type: String, categoryID: String, isHidden: Bool, isLocked: Bool = false, orderIndex: Int) {
         self.id = id
         self.type = type
         self.categoryID = categoryID
         self.isHidden = isHidden
+        self.isLocked = isLocked
         self.orderIndex = orderIndex
     }
 }

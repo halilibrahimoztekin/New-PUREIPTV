@@ -247,18 +247,37 @@ public struct CategoryManagementView: View {
         List {
             ForEach(store.filteredCategories) { category in
                 let isHidden = store.categoryPreferences[category.id]?.isHidden ?? false
+                let isLocked = store.categoryPreferences[category.id]?.isLocked ?? false
 
                 HStack(spacing: 12) {
                     // Category icon & name
-                    Image(systemName: isHidden ? "folder.badge.minus" : "folder.fill")
+                    Image(systemName: isLocked ? "lock.fill" : (isHidden ? "folder.badge.minus" : "folder.fill"))
                         .font(.system(size: 15))
-                        .foregroundColor(isHidden ? .secondary.opacity(0.5) : Color.accentColor)
+                        .foregroundColor(isLocked ? .orange : (isHidden ? .secondary.opacity(0.5) : Color.accentColor))
 
                     Text(category.name)
                         .font(.system(size: 15, weight: isHidden ? .regular : .semibold))
                         .foregroundColor(isHidden ? .secondary : .white)
 
                     Spacer()
+
+                    // Lock / PIN Protect Button
+                    Button {
+                        #if !os(tvOS)
+                            HapticManager.shared.trigger(.light)
+                        #endif
+                        store.send(.toggleLock(categoryID: category.id))
+                    } label: {
+                        Image(systemName: isLocked ? "lock.fill" : "lock.open")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(isLocked ? .orange : .secondary.opacity(0.7))
+                            .padding(6)
+                            .background(
+                                (isLocked ? Color.orange : Color.white).opacity(0.12),
+                                in: Circle()
+                            )
+                    }
+                    .buttonStyle(.plain)
 
                     // Toggle Button
                     Button {

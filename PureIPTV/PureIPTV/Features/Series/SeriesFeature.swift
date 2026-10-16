@@ -23,6 +23,8 @@ public struct SeriesFeature {
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
         public var lastSortMethod: SortMethod = .defaultOrder
+        public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
+        public var unlockedCategoryIDs: Set<String> = []
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
@@ -68,7 +70,7 @@ public struct SeriesFeature {
 
     public enum Action {
         case onAppear(config: PlaylistConfig)
-        case categoriesResponse(Result<[MediaModels.Category], Error>)
+        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
         case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
@@ -160,9 +162,9 @@ public struct SeriesFeature {
                         return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories)))
+                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
                 } catch: { error, send in
-                    await send(.categoriesResponse(.failure(error)))
+                    await send(.categoriesResponse(.failure(error), preferences: [:]))
                 }
 
             case .reloadPreferences:
@@ -204,7 +206,7 @@ public struct SeriesFeature {
                         return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories)))
+                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
                 }
 
             case .applySortIfChanged:
@@ -214,8 +216,9 @@ public struct SeriesFeature {
                 }
                 return .none
 
-            case let .categoriesResponse(.success(categories)):
+            case let .categoriesResponse(.success(categories), preferences):
                 state.isLoadingCategories = false
+                state.categoryPreferences = preferences
                 state.categories = categories
                 // Auto-select first category if current selection is invalid or nil
                 if let currentID = state.selectedCategoryID, let current = categories.first(where: { $0.id == currentID }) {
@@ -226,13 +229,17 @@ public struct SeriesFeature {
                 }
                 return .none
 
-            case let .categoriesResponse(.failure(error)):
+            case let .categoriesResponse(.failure(error), _):
                 state.isLoadingCategories = false
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
             case let .categorySelected(category):
-                if settingsClient.isParentalControlEnabled(), settingsClient.isAdultContent(category.name) {
+                let isLocked = state.categoryPreferences[category.id]?.isLocked ?? false
+                let isAdult = settingsClient.isAdultContent(category.name)
+                let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
+
+                if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
                     state.parentalLock = ParentalLockFeature.State(category: category)
                     return .none
                 }
@@ -324,6 +331,7 @@ public struct SeriesFeature {
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
                 if let category {
+                    state.unlockedCategoryIDs.insert(category.id)
                     state.selectedCategoryID = category.id
                     if state.seriesByCategory[category.id] != nil {
                         return .none

@@ -23,6 +23,8 @@ public struct LiveTVFeature {
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
         public var hiddenChannelIDs: Set<String> = []
+        public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
+        public var unlockedCategoryIDs: Set<String> = []
         public var selectedChannelEPG: [EPGProgram] = []
         public var isLoadingChannelEPG: Bool = false
 
@@ -44,7 +46,7 @@ public struct LiveTVFeature {
 
     public enum Action {
         case onAppear(config: PlaylistConfig)
-        case categoriesResponse(Result<[MediaModels.Category], Error>)
+        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
         case channelsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case channelSelected(MediaModels.Item)
@@ -152,9 +154,9 @@ public struct LiveTVFeature {
                         return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories)))
+                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
                 } catch: { error, send in
-                    await send(.categoriesResponse(.failure(error)))
+                    await send(.categoriesResponse(.failure(error), preferences: [:]))
                 }
 
             case .reloadPreferences:
@@ -196,11 +198,12 @@ public struct LiveTVFeature {
                         return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories)))
+                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
                 }
 
-            case let .categoriesResponse(.success(categories)):
+            case let .categoriesResponse(.success(categories), preferences):
                 state.isLoadingCategories = false
+                state.categoryPreferences = preferences
                 state.categories = categories
                 // Auto-select first category if current selection is invalid or nil
                 if let currentID = state.selectedCategoryID, let current = categories.first(where: { $0.id == currentID }) {
@@ -211,15 +214,17 @@ public struct LiveTVFeature {
                 }
                 return .none
 
-            case let .categoriesResponse(.failure(error)):
+            case let .categoriesResponse(.failure(error), _):
                 state.isLoadingCategories = false
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
             case let .categorySelected(category):
-                if settingsClient.isParentalControlEnabled(), settingsClient.isAdultContent(category.name) {
-                    // Check if already unlocked? For MVP, just prompt always or we can use a session variable.
-                    // For now, always prompt on category select if adult.
+                let isLocked = state.categoryPreferences[category.id]?.isLocked ?? false
+                let isAdult = settingsClient.isAdultContent(category.name)
+                let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
+
+                if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
                     state.parentalLock = ParentalLockFeature.State(category: category)
                     return .none
                 }
@@ -416,6 +421,7 @@ public struct LiveTVFeature {
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
                 if let category {
+                    state.unlockedCategoryIDs.insert(category.id)
                     // Proceed with category selection bypass
                     state.selectedCategoryID = category.id
                     if state.channelsByCategory[category.id] != nil {
