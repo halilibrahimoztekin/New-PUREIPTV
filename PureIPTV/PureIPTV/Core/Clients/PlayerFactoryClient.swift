@@ -142,8 +142,12 @@ extension PlayerFactoryClient: DependencyKey {
                 setSubtitleTrack: { track in
                     box.getPlayer().selectedSubtitleTrack = track
                 },
-                setAudioDelay: { _ in },
-                setSubtitleDelay: { _ in },
+                setAudioDelay: { delay in
+                    try? box.getPlayer().setAudioDelay(.milliseconds(delay))
+                },
+                setSubtitleDelay: { delay in
+                    try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
+                },
                 getStats: { nil },
                 events: {
                     let player = box.getPlayer()

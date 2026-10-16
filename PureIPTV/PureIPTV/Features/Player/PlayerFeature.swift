@@ -427,9 +427,14 @@ public struct PlayerFeature {
 
         case let .setAudioDelay(delay):
             state.audioDelay = delay
-            return .run { _ in
-                await playerClient.setAudioDelay(delay)
-            }
+            let delayStr = AppStrings.Player.audioDelayMs(delay)
+            let hudMessage = "\(AppStrings.Player.audioSync): \(delayStr)"
+            return .merge(
+                .send(.showTrackHUD(message: hudMessage, icon: "waveform.circle")),
+                .run { _ in
+                    await playerClient.setAudioDelay(delay)
+                }
+            )
 
         case let .setSubtitleDelay(delay):
             state.subtitleDelay = delay

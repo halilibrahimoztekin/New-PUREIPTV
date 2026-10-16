@@ -469,6 +469,29 @@
                                     }
                                 }
                             }
+
+                            Section(AppStrings.Player.audioSync) {
+                                Button("+500 ms") {
+                                    onInteraction()
+                                    store.send(.setAudioDelay(store.audioDelay + 500))
+                                }
+                                Button("+250 ms") {
+                                    onInteraction()
+                                    store.send(.setAudioDelay(store.audioDelay + 250))
+                                }
+                                Button(AppStrings.Player.resetAudioDelay) {
+                                    onInteraction()
+                                    store.send(.setAudioDelay(0))
+                                }
+                                Button("-250 ms") {
+                                    onInteraction()
+                                    store.send(.setAudioDelay(store.audioDelay - 250))
+                                }
+                                Button("-500 ms") {
+                                    onInteraction()
+                                    store.send(.setAudioDelay(store.audioDelay - 500))
+                                }
+                            }
                         } label: {
                             Image(systemName: "waveform.circle.fill")
                                 .font(.system(size: 26))
@@ -510,11 +533,11 @@
                                 Section(AppStrings.Player.subtitleSync) {
                                     Button("+500 ms") {
                                         onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay + 500_000))
+                                        store.send(.setSubtitleDelay(store.subtitleDelay + 500))
                                     }
                                     Button("+250 ms") {
                                         onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay + 250_000))
+                                        store.send(.setSubtitleDelay(store.subtitleDelay + 250))
                                     }
                                     Button(AppStrings.Player.resetSubtitleDelay) {
                                         onInteraction()
@@ -522,11 +545,11 @@
                                     }
                                     Button("-250 ms") {
                                         onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay - 250_000))
+                                        store.send(.setSubtitleDelay(store.subtitleDelay - 250))
                                     }
                                     Button("-500 ms") {
                                         onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay - 500_000))
+                                        store.send(.setSubtitleDelay(store.subtitleDelay - 500))
                                     }
                                 }
                             }

@@ -161,6 +161,12 @@ public enum AppStrings {
             "Bağlantı koptu, yeniden bağlanılıyor... (%lld/3)".localized(Int64(retryCount))
         }
 
+        public static let audioSync = "Ses Senkronizasyonu".localized
+        public static let resetAudioDelay = "Sesi Sıfırla".localized
+        public static func audioDelayMs(_ ms: Int) -> String {
+            ms > 0 ? "+%lld ms".localized(Int64(ms)) : "%lld ms".localized(Int64(ms))
+        }
+
         public static let subtitleSync = "Altyazı Senkronizasyonu".localized
         public static let resetSubtitleDelay = "Sıfırla".localized
         public static func subtitleDelayMs(_ ms: Int) -> String {

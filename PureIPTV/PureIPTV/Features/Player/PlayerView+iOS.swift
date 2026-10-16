@@ -789,6 +789,47 @@
                                     }
                                     .padding(.vertical, 4)
                                 }
+
+                                Divider().background(Color.white.opacity(0.2))
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(AppStrings.Player.audioSync)
+                                        .font(.caption.bold())
+                                        .foregroundColor(.white.opacity(0.8))
+                                    HStack(spacing: 8) {
+                                        Button("-250ms") {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.setAudioDelay(store.audioDelay - 250))
+                                        }
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.15), in: Capsule())
+
+                                        Button(AppStrings.Player.resetAudioDelay) {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.setAudioDelay(0))
+                                        }
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.15), in: Capsule())
+
+                                        Button("+250ms") {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.setAudioDelay(store.audioDelay + 250))
+                                        }
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.15), in: Capsule())
+
+                                        Spacer()
+                                        Text(AppStrings.Player.audioDelayMs(store.audioDelay))
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundColor(.accentColor)
+                                    }
+                                }
+                                .padding(.top, 4)
                             }
                         }
 
@@ -863,7 +904,7 @@
                                         HStack(spacing: 8) {
                                             Button("-250ms") {
                                                 HapticManager.shared.trigger(.light)
-                                                store.send(.setSubtitleDelay(store.subtitleDelay - 250_000))
+                                                store.send(.setSubtitleDelay(store.subtitleDelay - 250))
                                             }
                                             .font(.caption2.bold())
                                             .padding(.horizontal, 8)
@@ -881,7 +922,7 @@
 
                                             Button("+250ms") {
                                                 HapticManager.shared.trigger(.light)
-                                                store.send(.setSubtitleDelay(store.subtitleDelay + 250_000))
+                                                store.send(.setSubtitleDelay(store.subtitleDelay + 250))
                                             }
                                             .font(.caption2.bold())
                                             .padding(.horizontal, 8)
@@ -889,7 +930,7 @@
                                             .background(Color.white.opacity(0.15), in: Capsule())
 
                                             Spacer()
-                                            Text(AppStrings.Player.subtitleDelayMs(store.subtitleDelay / 1000))
+                                            Text(AppStrings.Player.subtitleDelayMs(store.subtitleDelay))
                                                 .font(.caption2.monospacedDigit())
                                                 .foregroundColor(.accentColor)
                                         }
