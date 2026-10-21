@@ -24,6 +24,7 @@ public struct PlayerFeature {
         public static let stallWatchdog = "PlayerFeature.stallWatchdog"
         public static let reconnectTimer = "PlayerFeature.reconnectTimer"
         public static let recentChannelsHUD = "PlayerFeature.recentChannelsHUD"
+        public static let recallHUD = "PlayerFeature.recallHUD"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -156,6 +157,8 @@ public struct PlayerFeature {
         /// Zapping & Last Channel Recall
         public var previousChannel: PlayableItem?
         public var zappingHistory: [PlayableItem] = []
+        public var isRecallHUDVisible: Bool = false
+        public var recalledChannelItem: PlayableItem?
 
         /// Quick Recent Channels Carousel HUD (Quick-Zap Dock)
         public var isRecentChannelsHUDVisible: Bool = false
@@ -348,6 +351,8 @@ public struct PlayerFeature {
         case nextChannel
         case previousChannel
         case recallLastChannel
+        case setRecallHUDVisible(Bool)
+        case hideRecallHUD
         case showZappingHUD(item: PlayableItem, direction: ZappingDirection)
         case hideZappingHUD
         case showChannelOSD
@@ -1373,8 +1378,29 @@ public struct PlayerFeature {
                     await send(.hideGestureFeedback)
                 }
             }
+            state.recalledChannelItem = prev
+            state.isRecallHUDVisible = true
             state.zappingHUDDirection = .previous
-            return .send(.selectChannel(prev))
+            return .concatenate(
+                .send(.selectChannel(prev)),
+                .run { send in
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    await send(.hideRecallHUD)
+                }
+                .cancellable(id: CancelID.recallHUD, cancelInFlight: true)
+            )
+
+        case let .setRecallHUDVisible(visible):
+            state.isRecallHUDVisible = visible
+            if !visible {
+                state.recalledChannelItem = nil
+            }
+            return .none
+
+        case .hideRecallHUD:
+            state.isRecallHUDVisible = false
+            state.recalledChannelItem = nil
+            return .none
 
         case .nextChannel:
             guard let next = state.nextChannelItem else { return .none }

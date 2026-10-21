@@ -361,6 +361,21 @@
                         .animation(.easeInOut(duration: 0.4), value: store.isSleepFadingActive)
                         .zIndex(120)
                     }
+
+                    // Instant Previous Channel Quick-Recall HUD (Madde #10)
+                    if store.isRecallHUDVisible, let prev = store.recalledChannelItem {
+                        VStack {
+                            PreviousChannelRecallHUDView(item: prev) {
+                                store.send(.hideRecallHUD)
+                            }
+                            .padding(.top, 50)
+
+                            Spacer()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecallHUDVisible)
+                        .zIndex(130)
+                    }
                 }
             }
             .preferredColorScheme(.dark)
@@ -429,6 +444,8 @@
                         store.send(.setRecentChannelsHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
                     } else if direction == .left, store.item.isLive, store.playlist != nil {
                         store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    } else if direction == .right, store.item.isLive, store.previousChannel != nil {
+                        store.send(.recallLastChannel)
                     } else {
                         showMask()
                     }

@@ -139,6 +139,8 @@ public enum AppStrings {
         public static let previousChannel = "Önceki Kanal".localized
         public static let nextChannel = "Sonraki Kanal".localized
         public static let recallLastChannel = "Son İzlenen Kanal".localized
+        public static let recalledTitle = "Önceki Kanala Dönüldü".localized
+        public static let quickRecallBadge = "HIZLI GEÇİŞ".localized
         public static let noPreviousChannel = "Geçmiş Kanal Yok".localized
         public static func recalledChannel(_ name: String) -> String {
             "Geri Dönüldü: %@".localized(name)

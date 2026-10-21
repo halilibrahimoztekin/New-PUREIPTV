@@ -36,9 +36,10 @@
         @State private var aspectDismissWorkItem: DispatchWorkItem? = nil
         @State private var isShowingSpeedTest: Bool = false
 
-        // Channel Zapping State (Madde #16)
+        // Channel Zapping State (Madde #16 & #10)
         @State private var interactiveZappingDirection: ZappingDirection? = nil
         @State private var hasTriggeredZappingThresholdHaptic: Bool = false
+        @State private var lastLiveCenterTapTime: Date? = nil
 
         private enum ActiveSeekSide {
             case left
@@ -981,6 +982,21 @@
                     .zIndex(96)
                 }
 
+                // Instant Previous Channel Quick-Recall HUD (Madde #10)
+                if store.isRecallHUDVisible, let prev = store.recalledChannelItem {
+                    VStack {
+                        PreviousChannelRecallHUDView(item: prev) {
+                            store.send(.hideRecallHUD)
+                        }
+                        .padding(.top, 24)
+
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecallHUDVisible)
+                    .zIndex(130)
+                }
+
                 // MARK: - Keyboard Shortcuts (Madde #68: iPad Magic Keyboard)
 
                 Group {
@@ -1265,6 +1281,19 @@
             let isCenter = !isLeft && !isRight
 
             if isCenter {
+                if store.item.isLive, store.previousChannel != nil,
+                   let last = lastLiveCenterTapTime,
+                   Date().timeIntervalSince(last) < 0.35
+                {
+                    singleTapWorkItem?.cancel()
+                    singleTapWorkItem = nil
+                    lastLiveCenterTapTime = nil
+                    HapticManager.shared.trigger(.medium)
+                    store.send(.recallLastChannel)
+                    return
+                }
+                lastLiveCenterTapTime = Date()
+
                 singleTapWorkItem?.cancel()
                 singleTapWorkItem = nil
                 seekDismissWorkItem?.cancel()
@@ -1274,7 +1303,12 @@
                 activeSeekSide = nil
                 cumulativeSeekSeconds = 0
 
-                store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                let work = DispatchWorkItem {
+                    store.send(.toggleControls, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    singleTapWorkItem = nil
+                }
+                singleTapWorkItem = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
                 return
             }
 

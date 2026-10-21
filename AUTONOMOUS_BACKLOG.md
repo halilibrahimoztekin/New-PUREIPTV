@@ -60,11 +60,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `ChannelCategoryFilter.swift` (akıllı anahtar kelime eşleştirme, çok dilli destek, aksan renkleri), `PlayerSidebarDrawer.swift` (akıllı kategori ve arama filtreleme motoru, 4K ve arşiv rozetleri, empty state), `AppStrings.LiveTV`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 10. [PENDING] Instant Previous Channel Quick-Recall Gesture & Mini-Preview HUD (Double-Tap Return)
-- **Açıklama:** Canlı maç izlerken veya reklam aralarında iki kanal arasında anında mekik dokumayı sağlayan hızlı geri çağırma ("Quick Recall / Swap Channel"). tvOS'ta Siri Remote çift tık/uzun basış veya iOS'ta çift parmak dokunuşu ile son izlenen önceki kanala anında geçiş ve ekranda 2 saniyelik sinematik "Önceki Kanal: [Kanal Adı] ↩️" HUD bildirimi.
-- **Platformlar:** tvOS (Siri Remote Play/Pause çift tıklama veya D-pad sol basılı tutma), iOS (Çift dokunuş jesti, Dynamic Island / Toast HUD).
-- **TCA & Mimari:** `PlayerFeature` (`previousChannelItem`, `.recallPreviousChannel`, `isRecallHUDVisible`), `PreviousChannelRecallHUDView.swift`.
-- **Durum:** `[PENDING]`
+### 10. [DONE] Instant Previous Channel Quick-Recall Gesture & Mini-Preview HUD (Double-Tap Return)
+- **Açıklama:** Canlı maç izlerken veya reklam aralarında iki kanal arasında anında mekik dokumayı sağlayan hızlı geri çağırma ("Quick Recall / Swap Channel"). tvOS'ta Siri Remote D-pad SAĞ tuşu veya iOS'ta ekrana çift dokunuş jesti ile son izlenen önceki kanala anında zapping ve ekranda 2.5 saniyelik sinematik "Önceki Kanala Dönüldü ↩️" amber cam HUD bildirimi.
+- **Platformlar:** tvOS (Siri Remote D-pad Sağ tuşu, 10-foot UI Obsidian cam HUD, kontrol barı geri butonu), iOS (Ekrana çift dokunuş jesti, dokunsal haptik, Dynamic Island / Toast cam HUD).
+- **TCA & Mimari:** `PlayerFeature` (`previousChannel`, `recalledChannelItem`, `isRecallHUDVisible`, `.recallLastChannel`, `.setRecallHUDVisible`, `.hideRecallHUD`, `CancelID.recallHUD`), `PreviousChannelRecallHUDView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
 ### 11. [PENDING] Direct Channel Number Dialing HUD (Quick-Jump Number Pad for tvOS & iOS)
 - **Açıklama:** Geleneksel televizyon kumandası hissiyatı sunan hızlı kanal numarası tuşlama motoru. Siri Remote üzerinde sayı tuşlayarak veya ekrandaki sinematik cam numaratör ile "1-0-4" tuşlandığında 2 saniye içinde doğrudan 104. kanala zapping yapan, eşleşen kanalların anlık önizlemesini veren akıllı tuşlama HUD'ı.
@@ -149,3 +149,9 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
     - Boş liste durumunda sinematik `emptyStateView` ve tek tuşla "Filtreyi Temizle" kurtarma aksiyonu.
     - Kanal satırlarında 4K ve arşiv (`tvArchive`) rozetleri, aktif oynatılan kanal ve geçmiş kanal göstergeleri.
     - iOS için akıcı yatay kaydırma, cam kapsül tasarımı ve dokunsal haptik geri bildirim entegre edildi.
+- **#10 Instant Previous Channel Quick-Recall Gesture & Mini-Preview HUD (Double-Tap Return):**
+  - `PlayerFeature.State` içine `isRecallHUDVisible: Bool` ve `recalledChannelItem: PlayableItem?` eklendi.
+  - `PlayerFeature.Action` içine `.recallLastChannel`, `.setRecallHUDVisible`, `.hideRecallHUD` eklendi; `CancelID.recallHUD` ile otomatik 2.5s zamanlayıcı yönetildi.
+  - `PreviousChannelRecallHUDView.swift` geliştirildi: Kanal logosu, amber renkli "arrow.uturn.backward" rozeti, "Önceki Kanala Dönüldü" başlığı, "HIZLI GEÇİŞ" hapı ve kanal adı.
+  - tvOS entegrasyonu: Siri Remote D-pad SAĞ tuşu ile anında önceki kanala geçiş sağlandı (`playView`'de `.onMoveCommand`), kontrol çubuğu "Önceki Kanal" butonuyla tam senkronize edildi.
+  - iOS entegrasyonu: Canlı yayında ekrana çift dokunulduğunda (`handleTap` center double-tap) anında önceki kanala dönme jesti ve Dynamic Island tarzı üst bildirim HUD'ı entegre edildi.
