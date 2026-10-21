@@ -323,6 +323,24 @@ public struct SettingsView: View {
                     get: { store.autoUpdateEPG },
                     set: { store.send(.setAutoUpdateEPG($0)) }
                 ))
+
+                Button {
+                    store.send(.setCustomEPGSheetPresented(true))
+                } label: {
+                    HStack {
+                        Label("Özel XMLTV Kaynakları & Eşleme", systemImage: "clock.arrow.2.circlepath")
+                            .foregroundStyle(.white)
+                        Spacer()
+                        if !store.customEPGSources.isEmpty {
+                            Text("\(store.customEPGSources.count) kaynak")
+                                .font(.caption)
+                                .foregroundStyle(Color(hex: "#0A84FF"))
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             Section(header: Text(AppStrings.Settings.cloudSyncSection), footer: Text(AppStrings.Settings.iCloudSyncDesc)) {
@@ -569,6 +587,12 @@ public struct SettingsView: View {
             set: { _ in store.send(.closeHiddenContentManagement) }
         )) {
             HiddenContentManagementView(store: store)
+        }
+        .sheet(isPresented: Binding(
+            get: { store.isCustomEPGSheetPresented },
+            set: { store.send(.setCustomEPGSheetPresented($0)) }
+        )) {
+            CustomEPGSettingsView(store: store)
         }
         .alert(
             "PureIPTV Bildirimi",

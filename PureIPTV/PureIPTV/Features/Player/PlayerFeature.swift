@@ -554,6 +554,7 @@ public struct PlayerFeature {
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
+    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
 
     public init() {}
 
@@ -567,13 +568,14 @@ public struct PlayerFeature {
         let pipClient = pipClient
         let parentalControlClient = parentalControlClient
         let displayModeClient = displayModeClient
+        let customEPGMappingClient = customEPGMappingClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -1865,17 +1867,36 @@ public struct PlayerFeature {
             return .none
 
         case .fetchEPG:
-            guard let config = state.item.config, let epgID = state.item.epgChannelID else { return .none }
+            guard state.item.isLive else { return .none }
             state.isEPGLoading = true
-            return .run { send in
+            let channelID = state.item.id
+            let channelTitle = state.item.title
+            let fallbackEpgID = state.item.epgChannelID
+            let config = state.item.config
+
+            return .run { [customEPGMappingClient] send in
+                // 1. Check custom XMLTV sources first
+                let customPrograms = await customEPGMappingClient.fetchProgramsForChannel(channelID, channelTitle, fallbackEpgID)
+                if !customPrograms.isEmpty {
+                    await send(.fetchEPGResponse(.success(customPrograms)))
+                    return
+                }
+
+                // 2. Fall back to IPTV client fetch
+                guard let config, let fallbackEpgID else {
+                    await send(.fetchEPGResponse(.success([])))
+                    return
+                }
+
                 await send(.fetchEPGResponse(Result {
-                    try await iptvClient.fetchShortEPG(config, epgID, 10)
+                    let rawListings = try await iptvClient.fetchShortEPG(config, fallbackEpgID, 10)
+                    return customEPGMappingClient.applyTimeShift(rawListings, channelID)
                 }))
             }
 
         case let .fetchEPGResponse(.success(listings)):
             state.isEPGLoading = false
-            state.epgListings = listings
+            state.epgListings = customEPGMappingClient.applyTimeShift(listings, state.item.id)
             return .none
 
         case let .fetchEPGResponse(.failure(error)):

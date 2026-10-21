@@ -138,17 +138,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `TopShelfService`, `TopShelfClient`, App Group Shared UserDefaults / CoreData paylaşımı, `PureIPTVTopShelfContentProvider`, `SettingsFeature`.
 - **Durum:** `[DONE]` (PR Onaylandı, 5 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 23. [IN_PROGRESS] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
+### 23. [DONE] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
 - **Açıklama:** IPTV sağlayıcısının EPG'si eksik veya hatalı saat diliminde olduğunda harici XMLTV/GZ URL ekleme, kanal bazında EPG ID eşleştirme ve +/- 12 saate kadar zaman kaydırma (time-shift offset) imkanı sağlayan gelişmiş EPG motoru.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `EPGManager`, `CustomEPGMappingClient`, `SettingsFeature`.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, 9 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 24. [PENDING] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
+### 24. [IN_PROGRESS] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
 - **Açıklama:** Apple TV, iPhone, iPad ve Mac arasında favori kanalları, gizlenen kanalları, VOD izleme kaldığı yeri (resume point) ve kanal sıralama tercihlerini iCloud KVS (NSUbiquitousKeyValueStore) ile kesintisiz ve arka planda senkronize eden çoklu cihaz motoru.
 - **Platformlar:** iOS, tvOS, iPadOS, macOS.
 - **TCA & Mimari:** `CloudSyncClient`, `NSUbiquitousKeyValueStore` background notification sync.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 25. [PENDING] Live EPG Focus Mini-Video Preview PIP in Channel Grid
 - **Açıklama:** EPG rehberinde veya kanal listesinde gezinirken Siri Remote ile bir kanalın üzerine gelindiğinde (focus), ana yayını kesmeden sağ üst köşede küçük bir canlı önizleme penceresinde kanalın anlık canlı akışını sessizce başlatan UHF/TiviMate tarzı hızlı kanal gözetleme motoru.
@@ -299,6 +299,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `TopShelfClient` TCA dependency client oluşturuldu (`updateTopShelfData`, `loadTopShelfData`, `getPreferredStyle`, `setPreferredStyle`), liveValue ve testValue tescillendi.
   - `SettingsFeature.swift` ve `SettingsView.swift` tvOS arayüzüne "Apple TV Top Shelf Vitrin Modu" başlığı altında bölüm/carousel düzeni seçici menüsü eklendi; vitrin stili değiştiğinde sistem `.TVTopShelfItemsDidChange` bildirimi tetiklendi.
   - 5 adet kapsamlı birim testi (`TopShelfEngineTests.swift`) yazıldı; serialization, deep link formatı, TCA client ve tvOS provider carousel/sectioned içerikleri test edilerek hem iOS hem tvOS platformlarında sıfır hata ile tamamlandı.
+- **#23 Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine:**
+  - Darwin `zlib` tabanlı `GzipDecompressor` geliştirildi: `16 + MAX_WBITS` pencere boyutu ile sıkıştırılmış `.xml.gz` akışlarını harici bağımlılık olmadan bellek içinde çözebilen yüksek performanslı açıcı entegre edildi.
+  - `CustomEPGSource`, `ChannelEPGMapping`, `CustomEPGStore` actor ve `CustomEPGMappingClient` (@DependencyClient) geliştirildi: Harici XMLTV/GZ kaynaklarını indirme, UserDefaults üzerinde kalıcı saklama, arka planda ayrıştırma, genel veya kanal bazında +/- 12 saat zaman kaydırma ve EPGID haritalama mekanizmaları sağlandı.
+  - `CustomEPGSettingsView.swift` Obsidian cam estetiğinde (`#0C0C10`, `.ultraThinMaterial`) tasarlandı: Genel zaman kaydırma kademeli adımlayıcılar, harici kaynak listesi, tek tıkla güncelleme/silme/etkinleştirme ve yeni kaynak ekleme modal formu sunuldu.
+  - `PlayerFeature.swift` canlı yayın EPG getirme mantığı yükseltildi: Önce özel harici XMLTV kaynakları arandı, bulunamazsa sağlayıcı kısa EPG'sine dönülerek hem genel hem de kanal bazlı saat dilimi zaman kaydırması (`applyTimeShift`) uygulandı.
+  - `SettingsFeature.swift` ve `SettingsView.swift` EPG ayarları menüsüne "Özel XMLTV Kaynakları & Eşleme" gezinti butonu ve modal yönetim sayfası eklendi.
+  - 9 adet kapsamlı birim testi (`CustomEPGMappingEngineTests.swift`) yazıldı; gzip algılama, decompressor, veri modelleri, canlı zaman kaydırma hesaplamaları, kanal bazlı override ve TCA Settings akışı test edilerek iOS ve tvOS'ta sıfır hata ile başarıyla doğrulandı.
 
 
 

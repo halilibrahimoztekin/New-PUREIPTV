@@ -1,0 +1,386 @@
+import ComposableArchitecture
+import Foundation
+import zlib
+
+// MARK: - Gzip Decompressor
+
+public enum GzipDecompressor {
+    public static func isGzipped(_ data: Data) -> Bool {
+        data.count >= 2 && data[0] == 0x1F && data[1] == 0x8B
+    }
+
+    public static func decompress(_ data: Data) -> Data {
+        guard isGzipped(data) else { return data }
+
+        var stream = z_stream()
+        var status: Int32 = inflateInit2_(&stream, 16 + MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+        guard status == Z_OK else { return data }
+        defer { inflateEnd(&stream) }
+
+        var decompressed = Data()
+        let bufferSize = 65536
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        data.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.bindMemory(to: Bytef.self).baseAddress else { return }
+            stream.next_in = UnsafeMutablePointer<Bytef>(mutating: base)
+            stream.avail_in = uInt(data.count)
+
+            repeat {
+                stream.next_out = buffer
+                stream.avail_out = uInt(bufferSize)
+
+                status = inflate(&stream, Z_NO_FLUSH)
+                if status == Z_OK || status == Z_STREAM_END {
+                    let bytesRead = bufferSize - Int(stream.avail_out)
+                    decompressed.append(buffer, count: bytesRead)
+                }
+            } while status == Z_OK
+        }
+
+        return status == Z_STREAM_END ? decompressed : data
+    }
+}
+
+// MARK: - Custom EPG Models
+
+public struct CustomEPGSource: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public var name: String
+    public var url: URL
+    public var isEnabled: Bool
+    public var lastFetched: Date?
+    public var channelCount: Int
+    public var programmeCount: Int
+
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        url: URL,
+        isEnabled: Bool = true,
+        lastFetched: Date? = nil,
+        channelCount: Int = 0,
+        programmeCount: Int = 0
+    ) {
+        self.id = id
+        self.name = name
+        self.url = url
+        self.isEnabled = isEnabled
+        self.lastFetched = lastFetched
+        self.channelCount = channelCount
+        self.programmeCount = programmeCount
+    }
+}
+
+public struct ChannelEPGMapping: Codable, Equatable, Identifiable, Sendable {
+    public var id: String {
+        channelID
+    }
+
+    public let channelID: String
+    public var channelName: String
+    public var customEPGChannelID: String?
+    public var customSourceID: String?
+    public var timeShiftHours: Int // -12 to +12 hours per-channel override
+
+    public init(
+        channelID: String,
+        channelName: String,
+        customEPGChannelID: String? = nil,
+        customSourceID: String? = nil,
+        timeShiftHours: Int = 0
+    ) {
+        self.channelID = channelID
+        self.channelName = channelName
+        self.customEPGChannelID = customEPGChannelID
+        self.customSourceID = customSourceID
+        self.timeShiftHours = timeShiftHours
+    }
+}
+
+// MARK: - In-Memory EPG Storage Actor
+
+public actor CustomEPGStore {
+    public static let shared = CustomEPGStore()
+
+    private var parsedSources: [String: XMLTVData] = [:]
+
+    private init() {}
+
+    public func setSourceData(sourceID: String, data: XMLTVData) {
+        parsedSources[sourceID] = data
+    }
+
+    public func removeSourceData(sourceID: String) {
+        parsedSources.removeValue(forKey: sourceID)
+    }
+
+    public func getSourceData(sourceID: String) -> XMLTVData? {
+        parsedSources[sourceID]
+    }
+
+    public func getAllChannels() -> [XMLTVChannel] {
+        parsedSources.values.flatMap(\.channels.values)
+    }
+
+    public func getProgrammes(channelID: String) -> [XMLTVProgramme]? {
+        for sourceData in parsedSources.values {
+            if let progs = sourceData.programmes[channelID], !progs.isEmpty {
+                return progs
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - CustomEPGMappingClient (TCA)
+
+@DependencyClient
+public struct CustomEPGMappingClient: Sendable {
+    public var getSources: @Sendable () -> [CustomEPGSource] = { [] }
+    public var addSource: @Sendable (_ name: String, _ url: URL) async throws -> CustomEPGSource
+    public var removeSource: @Sendable (_ id: String) -> Void
+    public var toggleSource: @Sendable (_ id: String, _ enabled: Bool) -> Void
+    public var refreshSource: @Sendable (_ id: String) async throws -> CustomEPGSource
+    public var refreshAllSources: @Sendable () async throws -> [CustomEPGSource] = { [] }
+
+    public var getChannelMapping: @Sendable (_ channelID: String) -> ChannelEPGMapping?
+    public var setChannelMapping: @Sendable (_ mapping: ChannelEPGMapping) -> Void
+    public var removeChannelMapping: @Sendable (_ channelID: String) -> Void
+    public var getAllMappings: @Sendable () -> [String: ChannelEPGMapping] = { [:] }
+
+    public var getChannelTimeShift: @Sendable (_ channelID: String) -> Int = { _ in 0 }
+    public var setChannelTimeShift: @Sendable (_ channelID: String, _ hours: Int) -> Void
+
+    public var getGlobalTimeShift: @Sendable () -> Int = { 0 }
+    public var setGlobalTimeShift: @Sendable (_ hours: Int) -> Void
+
+    public var getAvailableEPGChannels: @Sendable () async -> [XMLTVChannel] = { [] }
+    public var fetchProgramsForChannel: @Sendable (_ channelID: String, _ channelName: String, _ fallbackEPGID: String?) async -> [EPGProgram] = { _, _, _ in [] }
+    public var applyTimeShift: @Sendable (_ programs: [EPGProgram], _ channelID: String) -> [EPGProgram] = { programs, _ in programs }
+}
+
+extension CustomEPGMappingClient: DependencyKey {
+    public static let liveValue: CustomEPGMappingClient = {
+        let defaults = UserDefaults.standard
+        let sourcesKey = "com.pureiptv.customEPGSources"
+        let mappingsKey = "com.pureiptv.channelEPGMappings"
+        let globalShiftKey = "com.pureiptv.epgTimeShift"
+
+        @Sendable func loadSources() -> [CustomEPGSource] {
+            guard let data = defaults.data(forKey: sourcesKey) else { return [] }
+            return (try? JSONDecoder().decode([CustomEPGSource].self, from: data)) ?? []
+        }
+
+        @Sendable func saveSources(_ sources: [CustomEPGSource]) {
+            if let data = try? JSONEncoder().encode(sources) {
+                defaults.set(data, forKey: sourcesKey)
+            }
+        }
+
+        @Sendable func loadMappings() -> [String: ChannelEPGMapping] {
+            guard let data = defaults.data(forKey: mappingsKey) else { return [:] }
+            return (try? JSONDecoder().decode([String: ChannelEPGMapping].self, from: data)) ?? [:]
+        }
+
+        @Sendable func saveMappings(_ mappings: [String: ChannelEPGMapping]) {
+            if let data = try? JSONEncoder().encode(mappings) {
+                defaults.set(data, forKey: mappingsKey)
+            }
+        }
+
+        @Sendable func parseXMLTVData(from url: URL) async throws -> XMLTVData {
+            let (rawBytes, _) = try await URLSession.shared.data(from: url)
+            let decompressedBytes = GzipDecompressor.decompress(rawBytes)
+
+            return try await Task.detached(priority: .userInitiated) {
+                let parser = XMLParser(data: decompressedBytes)
+                let delegate = XMLTVParserDelegate()
+                parser.delegate = delegate
+                if parser.parse() {
+                    return delegate.getParsedData()
+                } else {
+                    throw NSError(domain: "CustomEPGMappingClient", code: 1, userInfo: [NSLocalizedDescriptionKey: "XMLTV Ayrıştırma Hatası"])
+                }
+            }.value
+        }
+
+        return CustomEPGMappingClient(
+            getSources: {
+                loadSources()
+            },
+            addSource: { name, url in
+                let parsed = try await parseXMLTVData(from: url)
+                let totalChannels = parsed.channels.count
+                let totalProgs = parsed.programmes.values.reduce(0) { $0 + $1.count }
+
+                var sources = loadSources()
+                let newSource = CustomEPGSource(
+                    name: name,
+                    url: url,
+                    isEnabled: true,
+                    lastFetched: .now,
+                    channelCount: totalChannels,
+                    programmeCount: totalProgs
+                )
+                sources.append(newSource)
+                saveSources(sources)
+
+                await CustomEPGStore.shared.setSourceData(sourceID: newSource.id, data: parsed)
+                return newSource
+            },
+            removeSource: { id in
+                var sources = loadSources()
+                sources.removeAll(where: { $0.id == id })
+                saveSources(sources)
+                Task {
+                    await CustomEPGStore.shared.removeSourceData(sourceID: id)
+                }
+            },
+            toggleSource: { id, enabled in
+                var sources = loadSources()
+                if let idx = sources.firstIndex(where: { $0.id == id }) {
+                    sources[idx].isEnabled = enabled
+                    saveSources(sources)
+                }
+            },
+            refreshSource: { id in
+                var sources = loadSources()
+                guard let idx = sources.firstIndex(where: { $0.id == id }) else {
+                    throw NSError(domain: "CustomEPGMappingClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Kaynak bulunamadı"])
+                }
+                let source = sources[idx]
+                let parsed = try await parseXMLTVData(from: source.url)
+                let totalChannels = parsed.channels.count
+                let totalProgs = parsed.programmes.values.reduce(0) { $0 + $1.count }
+
+                sources[idx].lastFetched = .now
+                sources[idx].channelCount = totalChannels
+                sources[idx].programmeCount = totalProgs
+                saveSources(sources)
+
+                await CustomEPGStore.shared.setSourceData(sourceID: id, data: parsed)
+                return sources[idx]
+            },
+            refreshAllSources: {
+                var sources = loadSources()
+                var updatedSources: [CustomEPGSource] = []
+
+                for var source in sources where source.isEnabled {
+                    if let parsed = try? await parseXMLTVData(from: source.url) {
+                        source.lastFetched = .now
+                        source.channelCount = parsed.channels.count
+                        source.programmeCount = parsed.programmes.values.reduce(0) { $0 + $1.count }
+                        await CustomEPGStore.shared.setSourceData(sourceID: source.id, data: parsed)
+                    }
+                    updatedSources.append(source)
+                }
+
+                saveSources(updatedSources)
+                return updatedSources
+            },
+            getChannelMapping: { channelID in
+                let mappings = loadMappings()
+                return mappings[channelID]
+            },
+            setChannelMapping: { mapping in
+                var mappings = loadMappings()
+                mappings[mapping.channelID] = mapping
+                saveMappings(mappings)
+            },
+            removeChannelMapping: { channelID in
+                var mappings = loadMappings()
+                mappings.removeValue(forKey: channelID)
+                saveMappings(mappings)
+            },
+            getAllMappings: {
+                loadMappings()
+            },
+            getChannelTimeShift: { channelID in
+                let mappings = loadMappings()
+                if let channelMapping = mappings[channelID], channelMapping.timeShiftHours != 0 {
+                    return channelMapping.timeShiftHours
+                }
+                return defaults.integer(forKey: globalShiftKey)
+            },
+            setChannelTimeShift: { channelID, hours in
+                var mappings = loadMappings()
+                if var mapping = mappings[channelID] {
+                    mapping.timeShiftHours = hours
+                    mappings[channelID] = mapping
+                } else {
+                    mappings[channelID] = ChannelEPGMapping(channelID: channelID, channelName: channelID, timeShiftHours: hours)
+                }
+                saveMappings(mappings)
+            },
+            getGlobalTimeShift: {
+                defaults.integer(forKey: globalShiftKey)
+            },
+            setGlobalTimeShift: { hours in
+                defaults.set(hours, forKey: globalShiftKey)
+            },
+            getAvailableEPGChannels: {
+                await CustomEPGStore.shared.getAllChannels()
+            },
+            fetchProgramsForChannel: { channelID, _, fallbackEPGID in
+                let mappings = loadMappings()
+                let targetEPGID = mappings[channelID]?.customEPGChannelID ?? fallbackEPGID ?? channelID
+
+                if let xmltvProgs = await CustomEPGStore.shared.getProgrammes(channelID: targetEPGID) {
+                    let now = Date()
+                    let shift = mappings[channelID]?.timeShiftHours != 0 ? mappings[channelID]?.timeShiftHours ?? 0 : defaults.integer(forKey: globalShiftKey)
+                    let shiftInterval = TimeInterval(shift * 3600)
+
+                    return xmltvProgs.map { prog in
+                        let start = prog.start.addingTimeInterval(shiftInterval)
+                        let end = prog.end.addingTimeInterval(shiftInterval)
+                        return EPGProgram(
+                            id: "\(targetEPGID)_\(start.timeIntervalSince1970)",
+                            title: prog.title,
+                            description: prog.description,
+                            startTime: start,
+                            endTime: end,
+                            isPlayingNow: start <= now && now <= end
+                        )
+                    }
+                }
+                return []
+            },
+            applyTimeShift: { programs, channelID in
+                let mappings = loadMappings()
+                let shift: Int = if let channelShift = mappings[channelID]?.timeShiftHours, channelShift != 0 {
+                    channelShift
+                } else {
+                    defaults.integer(forKey: globalShiftKey)
+                }
+                guard shift != 0 else { return programs }
+
+                let shiftInterval = TimeInterval(shift * 3600)
+                let now = Date()
+
+                return programs.map { prog in
+                    let newStart = prog.startTime.addingTimeInterval(shiftInterval)
+                    let newEnd = prog.endTime.addingTimeInterval(shiftInterval)
+                    return EPGProgram(
+                        id: prog.id,
+                        title: prog.title,
+                        description: prog.description,
+                        startTime: newStart,
+                        endTime: newEnd,
+                        isPlayingNow: newStart <= now && now <= newEnd
+                    )
+                }
+            }
+        )
+    }()
+
+    public static let testValue = CustomEPGMappingClient()
+}
+
+public extension DependencyValues {
+    var customEPGMappingClient: CustomEPGMappingClient {
+        get { self[CustomEPGMappingClient.self] }
+        set { self[CustomEPGMappingClient.self] = newValue }
+    }
+}

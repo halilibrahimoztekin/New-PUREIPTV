@@ -89,6 +89,16 @@ public struct SettingsFeature {
         public var hiddenContentUnlockPIN: String = ""
         public var hiddenContentUnlockError: String?
 
+        // Custom EPG XMLTV & Time-Shift Offset (Madde #23)
+        public var customEPGSources: [CustomEPGSource] = []
+        public var channelEPGMappings: [String: ChannelEPGMapping] = [:]
+        public var isCustomEPGSheetPresented: Bool = false
+        public var isAddCustomEPGSourceSheetPresented: Bool = false
+        public var newCustomEPGName: String = ""
+        public var newCustomEPGURLString: String = ""
+        public var customEPGErrorMessage: String?
+        public var isCustomEPGLoading: Bool = false
+
         public enum PINStep: Equatable {
             case enterNew
             case confirm
@@ -171,6 +181,22 @@ public struct SettingsFeature {
         case unblacklistCategoryFromSettings(String)
         case unhideAllChannelsFromSettings
         case unblacklistAllCategoriesFromSettings
+
+        // Custom EPG & Time-Shift (Madde #23)
+        case setCustomEPGSheetPresented(Bool)
+        case setAddCustomEPGSourceSheetPresented(Bool)
+        case setNewCustomEPGName(String)
+        case setNewCustomEPGURLString(String)
+        case loadCustomEPGData
+        case setGlobalEPGTimeShift(Int)
+        case addCustomEPGSource
+        case addCustomEPGSourceResponse(TaskResult<CustomEPGSource>)
+        case removeCustomEPGSource(String)
+        case toggleCustomEPGSource(id: String, enabled: Bool)
+        case refreshCustomEPGSource(String)
+        case refreshCustomEPGSourceResponse(TaskResult<CustomEPGSource>)
+        case refreshAllCustomEPGSources
+        case refreshAllCustomEPGSourcesCompleted
     }
 
     @Dependency(\.settingsClient) var settingsClient
@@ -180,6 +206,7 @@ public struct SettingsFeature {
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
     @Dependency(\.topShelfClient) var topShelfClient
+    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
 
     public init() {}
 
@@ -228,6 +255,10 @@ public struct SettingsFeature {
 
                 // Apple TV Top Shelf Style (Madde #22)
                 state.topShelfStyle = topShelfClient.getPreferredStyle()
+
+                // Custom EPG XMLTV & Time-Shift (Madde #23)
+                state.customEPGSources = customEPGMappingClient.getSources()
+                state.channelEPGMappings = customEPGMappingClient.getAllMappings()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -338,8 +369,9 @@ public struct SettingsFeature {
                 state.isChannelNameCleaningEnabled = val
                 return .run { _ in settingsClient.setIsChannelNameCleaningEnabled(val) }
 
-            case let .setEpgTimeShift(val):
+            case let .setEpgTimeShift(val), let .setGlobalEPGTimeShift(val):
                 state.epgTimeShift = val
+                customEPGMappingClient.setGlobalTimeShift(val)
                 return .run { _ in settingsClient.setEpgTimeShift(val) }
 
             case let .setAutoUpdateEPG(val):
@@ -636,6 +668,117 @@ public struct SettingsFeature {
                 parentalControlClient.unblacklistAllCategories()
                 state.blacklistedCategoriesList.removeAll()
                 state.blacklistedCategoriesCount = 0
+                return .none
+
+            // Custom EPG & Time-Shift (Madde #23)
+            case let .setCustomEPGSheetPresented(val):
+                state.isCustomEPGSheetPresented = val
+                if val {
+                    state.customEPGSources = customEPGMappingClient.getSources()
+                    state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                    state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
+                }
+                return .none
+
+            case let .setAddCustomEPGSourceSheetPresented(val):
+                state.isAddCustomEPGSourceSheetPresented = val
+                state.customEPGErrorMessage = nil
+                if !val {
+                    state.newCustomEPGName = ""
+                    state.newCustomEPGURLString = ""
+                }
+                return .none
+
+            case let .setNewCustomEPGName(val):
+                state.newCustomEPGName = val
+                return .none
+
+            case let .setNewCustomEPGURLString(val):
+                state.newCustomEPGURLString = val
+                return .none
+
+            case .loadCustomEPGData:
+                state.customEPGSources = customEPGMappingClient.getSources()
+                state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
+                return .none
+
+            case .addCustomEPGSource:
+                let urlString = state.newCustomEPGURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let url = URL(string: urlString), url.scheme != nil else {
+                    state.customEPGErrorMessage = "Geçersiz URL formatı. Lütfen http:// veya https:// ile başlayan bir link girin."
+                    return .none
+                }
+                let name = state.newCustomEPGName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else {
+                    state.customEPGErrorMessage = "Lütfen kaynak adı girin."
+                    return .none
+                }
+                state.isCustomEPGLoading = true
+                state.customEPGErrorMessage = nil
+                return .run { send in
+                    await send(.addCustomEPGSourceResponse(TaskResult {
+                        try await customEPGMappingClient.addSource(name, url)
+                    }))
+                }
+
+            case let .addCustomEPGSourceResponse(.success(source)):
+                state.isCustomEPGLoading = false
+                state.customEPGSources.append(source)
+                state.isAddCustomEPGSourceSheetPresented = false
+                state.newCustomEPGName = ""
+                state.newCustomEPGURLString = ""
+                state.customEPGErrorMessage = nil
+                return .none
+
+            case let .addCustomEPGSourceResponse(.failure(error)):
+                state.isCustomEPGLoading = false
+                state.customEPGErrorMessage = "Kaynak eklenemedi: \(error.localizedDescription)"
+                return .none
+
+            case let .removeCustomEPGSource(id):
+                customEPGMappingClient.removeSource(id)
+                state.customEPGSources.removeAll { $0.id == id }
+                return .none
+
+            case let .toggleCustomEPGSource(id, enabled):
+                customEPGMappingClient.toggleSource(id, enabled)
+                if let idx = state.customEPGSources.firstIndex(where: { $0.id == id }) {
+                    state.customEPGSources[idx].isEnabled = enabled
+                }
+                return .none
+
+            case let .refreshCustomEPGSource(id):
+                state.isCustomEPGLoading = true
+                return .run { send in
+                    await send(.refreshCustomEPGSourceResponse(TaskResult {
+                        try await customEPGMappingClient.refreshSource(id)
+                    }))
+                }
+
+            case let .refreshCustomEPGSourceResponse(.success(source)):
+                state.isCustomEPGLoading = false
+                if let idx = state.customEPGSources.firstIndex(where: { $0.id == source.id }) {
+                    state.customEPGSources[idx] = source
+                }
+                return .none
+
+            case let .refreshCustomEPGSourceResponse(.failure(error)):
+                state.isCustomEPGLoading = false
+                state.customEPGErrorMessage = "Güncelleme başarısız: \(error.localizedDescription)"
+                return .none
+
+            case .refreshAllCustomEPGSources:
+                state.isCustomEPGLoading = true
+                return .run { send in
+                    _ = try? await customEPGMappingClient.refreshAllSources()
+                    await send(.refreshAllCustomEPGSourcesCompleted)
+                }
+
+            case .refreshAllCustomEPGSourcesCompleted:
+                state.isCustomEPGLoading = false
+                state.customEPGSources = customEPGMappingClient.getSources()
+                state.channelEPGMappings = customEPGMappingClient.getAllMappings()
                 return .none
             }
         }
