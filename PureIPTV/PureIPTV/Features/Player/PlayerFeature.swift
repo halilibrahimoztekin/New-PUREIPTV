@@ -1384,6 +1384,10 @@ public struct PlayerFeature {
             state.isAudioSyncHUDVisible = false
             state.audioDelay = settingsClient.getChannelAudioDelay(newItem.id) ?? 0
             state.subtitleDelay = settingsClient.getChannelSubtitleDelay(newItem.id) ?? 0
+            state.audioTracks = []
+            state.subtitleTracks = []
+            state.selectedAudioTrack = nil
+            state.selectedSubtitleTrack = nil
             state.epgListings = []
             state.mediaInfo = nil
             state.currentTime = .zero
@@ -1778,9 +1782,14 @@ public struct PlayerFeature {
                 var audio = await playerClient.getAudioTracks()
                 var subtitle = await playerClient.getSubtitleTracks()
 
-                // If tracks aren't ready immediately, give VLC a short delay to parse the streams
+                // If tracks aren't ready immediately, progressive polling for live/VOD demuxing
                 if audio.isEmpty, subtitle.isEmpty {
                     try? await Task.sleep(nanoseconds: 500_000_000)
+                    audio = await playerClient.getAudioTracks()
+                    subtitle = await playerClient.getSubtitleTracks()
+                }
+                if audio.isEmpty, subtitle.isEmpty {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
                     audio = await playerClient.getAudioTracks()
                     subtitle = await playerClient.getSubtitleTracks()
                 }
@@ -1788,31 +1797,51 @@ public struct PlayerFeature {
                 var selAudio = await playerClient.getSelectedAudioTrack()
                 var selSubtitle = await playerClient.getSelectedSubtitleTrack()
 
-                // 1. Auto-select audio language (per-media preference -> global preference)
+                // Cascading Audio Selection: Channel-Specific -> Primary Language -> Secondary Fallback -> Default
                 let remember = settingsClient.rememberMediaTrackPreferences()
-                let mediaAudioKey = "com.pureiptv.media_\(mediaID)_audio"
-                let mediaSubtitleKey = "com.pureiptv.media_\(mediaID)_subtitle"
+                let legacyMediaAudio = remember ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(mediaID)_audio") : nil
+                let channelAudioPref = settingsClient.getChannelPreferredAudioTrack(mediaID) ?? legacyMediaAudio
+                let primaryAudioLang = settingsClient.preferredAudioLanguage()
+                let secondaryAudioLang = settingsClient.secondaryAudioLanguage()
 
-                let preferredAudio = (remember ? UserDefaults.standard.string(forKey: mediaAudioKey) : nil)
-                    ?? UserDefaults.standard.string(forKey: "com.pureiptv.preferredAudioLanguage")
-                    ?? settingsClient.preferredAudioLanguage()
+                let audioResult = AudioTrackSelector.selectAudioTrack(
+                    from: audio,
+                    channelPreferred: channelAudioPref,
+                    primaryLanguage: primaryAudioLang,
+                    secondaryLanguage: secondaryAudioLang,
+                    currentTrack: selAudio
+                )
 
-                if let matchedAudio = audio.first(where: { matchesLanguage(trackName: $0.name, preferredLanguage: preferredAudio) }) {
-                    await playerClient.setAudioTrack(matchedAudio)
-                    selAudio = matchedAudio
+                if let trackToSet = audioResult.selectedTrack, audioResult.isAutoSelected {
+                    await playerClient.setAudioTrack(trackToSet)
+                    selAudio = trackToSet
+                    let displayName = TrackLanguageFormatter.format(trackName: trackToSet.name).titleWithFlag
+                    let reasonText = audioResult.reason.map { " (\($0))" } ?? ""
+                    await send(.showTrackHUD(message: "🔊 \(displayName)\(reasonText)", icon: "waveform.circle.fill"))
+                } else if let trackToSet = audioResult.selectedTrack, selAudio == nil {
+                    await playerClient.setAudioTrack(trackToSet)
+                    selAudio = trackToSet
                 }
 
-                // 2. Auto-select subtitle language (per-media preference -> global preference)
-                let preferredSubtitle = (remember ? UserDefaults.standard.string(forKey: mediaSubtitleKey) : nil)
-                    ?? UserDefaults.standard.string(forKey: "com.pureiptv.preferredSubtitleLanguage")
-                    ?? settingsClient.preferredSubtitleLanguage()
+                // Subtitle Selection: Channel-Specific -> Global Preference -> Off
+                let legacyMediaSub = remember ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(mediaID)_subtitle") : nil
+                let channelSubPref = settingsClient.getChannelPreferredSubtitleTrack(mediaID) ?? legacyMediaSub
+                let preferredSubLang = settingsClient.preferredSubtitleLanguage()
 
-                if preferredSubtitle == "off" {
-                    await playerClient.setSubtitleTrack(nil)
-                    selSubtitle = nil
-                } else if let matchedSubtitle = subtitle.first(where: { matchesLanguage(trackName: $0.name, preferredLanguage: preferredSubtitle) }) {
-                    await playerClient.setSubtitleTrack(matchedSubtitle)
-                    selSubtitle = matchedSubtitle
+                let subResult = AudioTrackSelector.selectSubtitleTrack(
+                    from: subtitle,
+                    channelPreferred: channelSubPref,
+                    preferredLanguage: preferredSubLang,
+                    currentTrack: selSubtitle
+                )
+
+                if subResult.isAutoSelected {
+                    await playerClient.setSubtitleTrack(subResult.selectedTrack)
+                    selSubtitle = subResult.selectedTrack
+                    if let selTrack = subResult.selectedTrack {
+                        let displayName = TrackLanguageFormatter.format(trackName: selTrack.name, isSubtitle: true).titleWithFlag
+                        await send(.showTrackHUD(message: "💬 \(displayName) (Altyazı)", icon: "captions.bubble.fill"))
+                    }
                 }
 
                 await send(.tracksResponse(audio: audio, subtitle: subtitle, selectedAudio: selAudio, selectedSubtitle: selSubtitle))
@@ -1836,6 +1865,7 @@ public struct PlayerFeature {
                 .send(.showTrackHUD(message: hudMessage, icon: "waveform.circle.fill")),
                 .run { _ in
                     if let trackName {
+                        settingsClient.setChannelPreferredAudioTrack(mediaID, trackName)
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set(trackName, forKey: "com.pureiptv.media_\(mediaID)_audio")
                         }
@@ -1857,12 +1887,14 @@ public struct PlayerFeature {
                 .send(.showTrackHUD(message: hudMessage, icon: track == nil ? "captions.bubble" : "captions.bubble.fill")),
                 .run { _ in
                     if let trackName {
+                        settingsClient.setChannelPreferredSubtitleTrack(mediaID, trackName)
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set(trackName, forKey: "com.pureiptv.media_\(mediaID)_subtitle")
                         }
                         UserDefaults.standard.set(trackName, forKey: "com.pureiptv.preferredSubtitleLanguage")
                         settingsClient.setPreferredSubtitleLanguage(trackName)
                     } else {
+                        settingsClient.setChannelPreferredSubtitleTrack(mediaID, "off")
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set("off", forKey: "com.pureiptv.media_\(mediaID)_subtitle")
                         }

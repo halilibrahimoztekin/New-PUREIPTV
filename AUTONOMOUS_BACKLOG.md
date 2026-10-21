@@ -78,17 +78,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `ChannelSortOption.swift` (genel sıralama algoritması, aksan renkleri, başlıklar), `RecentChannelsClient` (izlenme sıklığı `watchCountsKey` sayacı), `SettingsClient` (kalıcı canlı TV sıralama tercihi), `PlayerFeature` state/actions (`channelSortOption`, `channelWatchCounts`, `setChannelSortOption`, `loadChannelSortPreferences`), `PlayerSidebarDrawer.swift` entegrasyonu.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 13. [IN_PROGRESS] Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine)
-- **Açıklama:** Çok dilli yayınlarda (İngilizce, Türkçe, Almanca) kullanıcının global tercih ettiği ses ve altyazı dilini otomatik algılayıp yeni kanala geçildiğinde varsayılan olarak seçen, böylece her kanal değişiminde manuel ses parçası değiştirme zahmetini ortadan kaldıran akıllı ses motoru.
+### 13. [DONE] Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine)
+- **Açıklama:** Çok dilli yayınlarda (İngilizce, Türkçe, Almanca) kullanıcının kanal bazlı tercihini ve genel birincil/ikincil dil tercihlerini kademeli olarak (Kanal Bazlı -> Birincil Dil -> İkincil Yedek Dil -> Akış Varsayılanı) otomatik seçen, kanal değişimlerinde parça listelerini sıfırlayıp akış demuxing sonrasında akıllıca kilitleyen ve ses/altyazı HUD'ı ile görsel geri bildirim sunan akıllı ses motoru.
 - **Platformlar:** iOS, tvOS.
-- **TCA & Mimari:** `AudioTrackSelector`, `PlayerClient` preferred language ISO-639 matcher, `SettingsClient`.
-- **Durum:** `[IN_PROGRESS]`
+- **TCA & Mimari:** `AudioTrackSelector.swift` (kademeli parça seçimi, dil kodları ve takma ad normalizasyonu), `SettingsClient` (`secondaryAudioLanguage`, kanal bazlı tercih saklama), `PlayerFeature` (`selectChannel` parça sıfırlama, progressive polling ile gecikmeli parça algılama, parça seçiminde otomatik kanal tercihi kaydı).
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 14. [PENDING] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
+### 14. [IN_PROGRESS] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
 - **Açıklama:** IPTV yayınlarında boğuk veya gürültülü spor/film seslerini iyileştirmek için "Diyalog Netleştirici (Vocal Boost)", "Stadyum / Spor Atmosferi (Stadium Surround)", "Gece Modu (Night Compression)" ve "Düz (Flat)" sinematik ses EQ profilleri.
 - **Platformlar:** iOS, tvOS (Siri Remote ses menüsü entegrasyonu).
 - **TCA & Mimari:** `AudioEQPreset`, `PlayerFeature` audio processing node / VLC audio equalizer, `AudioEQHUDView.swift`.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 15. [PENDING] Multi-Playlist Global Smart Search with Instant Filter Badges
 - **Açıklama:** Tüm M3U ve Xtream çalma listeleri arasında anında canlı arama yapan; Canlı TV, VOD Film, Dizi, 4K ve EPG mevcut program adına göre renk kodlu rozetlerle sonuçları ayıran ultra-hızlı global arama motoru.
@@ -185,3 +185,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PreviousChannelRecallHUDView.swift` geliştirildi: Kanal logosu, amber renkli "arrow.uturn.backward" rozeti, "Önceki Kanala Dönüldü" başlığı, "HIZLI GEÇİŞ" hapı ve kanal adı.
   - tvOS entegrasyonu: Siri Remote D-pad SAĞ tuşu ile anında önceki kanala geçiş sağlandı (`playView`'de `.onMoveCommand`), kontrol çubuğu "Önceki Kanal" butonuyla tam senkronize edildi.
   - iOS entegrasyonu: Canlı yayında ekrana çift dokunulduğunda (`handleTap` center double-tap) anında önceki kanala dönme jesti ve Dynamic Island tarzı üst bildirim HUD'ı entegre edildi.
+- **#11 Direct Channel Number Dialing HUD (Quick-Jump Number Pad for tvOS & iOS):**
+  - `DirectChannelDialHUDView.swift` geliştirildi: 3x4 cam tuş takımı, Siri Remote Focus Engine uyumlu `TVDialKeypadButtonStyle` (1.08x odak büyümesi, yeşil parlaklık), eşleşen kanal önizleme şeridi.
+  - `PlayerFeature` reducer'ına `appendDialedDigit`, `deleteDialedDigit`, `clearDialedDigits`, `submitDialedChannel` aksiyonları eklendi.
+  - tvOS oynatıcı katmanına kumanda butonu, `.onExitCommand` ve otomatik 1.8 saniye submit zamanlayıcısı entegre edildi; iOS oynatıcı katmanına alt dock butonu, üst menü ve klavye 'd' kısayolu eklendi.
+- **#12 Smart Channel Sorting & Grouping Rules Engine (Most Watched, Watch Frequency, A-Z):**
+  - `ChannelSortOption.swift` geliştirildi: `.defaultOrder`, `.mostWatched`, `.recentlyWatched`, `.nameAscending`, `.nameDescending` algoritmaları ve görsel rozet renkleri.
+  - `RecentChannelsClient` izlenme sıklığı (`watchCountsKey`) sayacı ile genişletildi; `SettingsClient` kalıcı sıralama tercihi saklayıcıları eklendi.
+  - `PlayerFeature` reducer'ına `channelSortOption`, `channelWatchCounts`, `setChannelSortOption` eklendi.
+  - `PlayerSidebarDrawer.swift` içine tvOS `TVSortOptionButtonStyle` ve Siri Remote odaklanabilir sıralama menüsü ile `🔥 12x` izlenme sıklığı rozetleri entegre edildi.
+- **#13 Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine):**
+  - `AudioTrackSelector.swift` motoru geliştirildi: Çok dilli takma ad çözümleyici, kademeli öncelik (Kanal Bazlı -> Birincil Dil -> İkincil Dil -> Varsayılan) ve altyazı motoru.
+  - `SettingsClient` ikincil ses dili (`secondaryAudioLanguage`), kanal bazlı ses ve altyazı tercih saklama API'leri ile genişletildi.
+  - `PlayerFeature` kanal geçişlerinde eski parça önbelleklerinin sıfırlanması, live IPTV gecikmeli akış demuxing için çok aşamalı progressive polling (500ms, 1200ms) ve HUD bildirimleriyle donatıldı.
+

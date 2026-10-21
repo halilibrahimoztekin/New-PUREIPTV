@@ -67,8 +67,17 @@ public struct SettingsClient: Sendable {
     public var preferredAudioLanguage: @Sendable () -> String = { "tr" }
     public var setPreferredAudioLanguage: @Sendable (String) -> Void = { _ in }
 
+    public var secondaryAudioLanguage: @Sendable () -> String = { "en" }
+    public var setSecondaryAudioLanguage: @Sendable (String) -> Void = { _ in }
+
     public var preferredSubtitleLanguage: @Sendable () -> String = { "off" }
     public var setPreferredSubtitleLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var getChannelPreferredAudioTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
+    public var setChannelPreferredAudioTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
+
+    public var getChannelPreferredSubtitleTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
+    public var setChannelPreferredSubtitleTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
 
     public var rememberMediaTrackPreferences: @Sendable () -> Bool = { true }
     public var setRememberMediaTrackPreferences: @Sendable (Bool) -> Void = { _ in }
@@ -102,12 +111,15 @@ extension SettingsClient: DependencyKey {
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
+        let secondaryAudioKey = "com.pureiptv.secondaryAudioLanguage"
         let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
         let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
         let iCloudSyncKey = "com.pureiptv.isICloudSyncEnabled"
         let oledDimmingKey = "com.pureiptv.isOLEDDimmingEnabled"
         let channelAudioDelayPrefix = "com.pureiptv.channelAudioDelay."
         let channelSubDelayPrefix = "com.pureiptv.channelSubDelay."
+        let channelAudioTrackPrefix = "com.pureiptv.channelAudioTrack."
+        let channelSubTrackPrefix = "com.pureiptv.channelSubTrack."
         let liveTVSortKey = "com.pureiptv.liveTVSortOption"
 
         // Set defaults for some keys
@@ -117,6 +129,7 @@ extension SettingsClient: DependencyKey {
             autoUpdateEpgKey: true,
             startupTabKey: "Keşfet",
             preferredAudioKey: "tr",
+            secondaryAudioKey: "en",
             preferredSubtitleKey: "off",
             rememberTracksKey: true,
             iCloudSyncKey: true,
@@ -232,8 +245,32 @@ extension SettingsClient: DependencyKey {
             setDefaultStartupTab: { defaults.set($0, forKey: startupTabKey) },
             preferredAudioLanguage: { defaults.string(forKey: preferredAudioKey) ?? "tr" },
             setPreferredAudioLanguage: { defaults.set($0, forKey: preferredAudioKey) },
+            secondaryAudioLanguage: { defaults.string(forKey: secondaryAudioKey) ?? "en" },
+            setSecondaryAudioLanguage: { defaults.set($0, forKey: secondaryAudioKey) },
             preferredSubtitleLanguage: { defaults.string(forKey: preferredSubtitleKey) ?? "off" },
             setPreferredSubtitleLanguage: { defaults.set($0, forKey: preferredSubtitleKey) },
+            getChannelPreferredAudioTrack: { channelID in
+                defaults.string(forKey: channelAudioTrackPrefix + channelID)
+            },
+            setChannelPreferredAudioTrack: { channelID, track in
+                let key = channelAudioTrackPrefix + channelID
+                if let track {
+                    defaults.set(track, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getChannelPreferredSubtitleTrack: { channelID in
+                defaults.string(forKey: channelSubTrackPrefix + channelID)
+            },
+            setChannelPreferredSubtitleTrack: { channelID, track in
+                let key = channelSubTrackPrefix + channelID
+                if let track {
+                    defaults.set(track, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
             rememberMediaTrackPreferences: { defaults.bool(forKey: rememberTracksKey) },
             setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) },
             isICloudSyncEnabled: { defaults.bool(forKey: iCloudSyncKey) },
