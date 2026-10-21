@@ -151,6 +151,22 @@
                         .zIndex(95)
                     }
 
+                    // Dynamic Range Indicator HUD (HDR / Dolby Vision / SDR) (Madde #20)
+                    if store.isDynamicRangeHUDVisible, let drInfo = store.dynamicRangeInfo {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                DynamicRangeHUDView(info: drInfo)
+                                    .padding(.top, 48)
+                                    .padding(.trailing, 60)
+                            }
+                            Spacer()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isDynamicRangeHUDVisible)
+                        .zIndex(96)
+                    }
+
                     // EPG Overlay
                     if store.isEPGVisible {
                         VStack {
@@ -186,7 +202,8 @@
                                 totalChannels: store.playlist?.count,
                                 currentProgram: store.currentEPGProgram,
                                 nextProgram: store.nextEPGProgram,
-                                isCleaningEnabled: store.isChannelNameCleaningEnabled
+                                isCleaningEnabled: store.isChannelNameCleaningEnabled,
+                                dynamicRange: store.videoDynamicRange
                             )
                             .padding(.horizontal, 60)
                             .padding(.bottom, 60)

@@ -120,17 +120,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `ParentalControlClient`, `HiddenChannelsDatabase`, `SettingsFeature`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 3 birim testi sıfır hata ile tamamlandı).
 
-### 20. [IN_PROGRESS] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
+### 20. [DONE] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
 - **Açıklama:** Yayının video akışında HDR10, HLG, Dolby Vision veya SDR renk uzayı ve pik parlaklık bilgisini algılayıp oynatıcı açılışında ve OSD bilgi kartında sinematik altın/mor rozetle gösteren renk uzayı algılayıcı HUD'ı.
 - **Platformlar:** tvOS, iOS (Display Gamut & Dynamic Range detection).
 - **TCA & Mimari:** `ColorSpaceDetector`, `PlayerFeature.State.videoDynamicRange`, `ChannelInfoOSDView`.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 7 birim testi sıfır hata ile tamamlandı).
 
-### 21. [PENDING] Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching)
+### 21. [IN_PROGRESS] Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching)
 - **Açıklama:** Canlı spor (50fps/60fps) veya sinema filmlerinde (24fps) micro-stutter ve judder'ı önlemek için Apple TV ve iOS ProMotion ekran yenileme hızını akışın orijinal kare hızına (FPS) ve dinamik aralığına göre otomatik eşleyen sinematik görüntü motoru.
 - **Platformlar:** tvOS (`AVDisplayManager`, mode switching), iOS (`CADisplayLink`, ProMotion 120Hz adaptif kare hızı).
 - **TCA & Mimari:** `DisplayModeClient`, `PlayerFeature` FPS detection & auto refresh-rate match effect.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 22. [PENDING] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
 - **Açıklama:** Kullanıcı Apple TV ana ekranında PureIPTV ikonunun üzerindeyken açılan üst vitrinde (Top Shelf) en sevilen kanalları, son izlenenleri ve yarım kalan VOD filmleri dinamik afiş ve doğrudan oynatma bağlantısıyla sunan yerel tvOS uzantısı.
@@ -279,5 +279,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `HiddenContentManagementView.swift` Obsidian cam estetiğinde (`#0C0C10`), sekmeli yapı ("Gizlenen Kanallar" & "Kara Liste Kategoriler"), tvOS Siri Remote Focus Engine uyumlu PIN klavyesi ve iOS SecureField ile tasarlandı.
   - `SettingsView.swift` Güvenlik bölümüne "Gizlenen Kanallar & Kategoriler" yönetim satırı ve dinamik sayaç rozeti eklendi.
   - 3 adet kapsamlı TCA birim testi (`ParentalControlEngineTests.swift`) yazıldı; hem iOS hem tvOS platformlarında sıfır hata ile derlendi ve doğrulandı.
+- **#20 HDR, Dolby Vision & SDR Dynamic Range Indicator HUD:**
+  - `ColorSpaceDetector.swift` ve `VideoDynamicRange` enum'ı (`.dolbyVision`, `.hdr10Plus`, `.hdr10`, `.hlg`, `.sdr`, `.unknown`) geliştirildi: Akış başlıkları ve URL parametrelerinden regex tabanlı akıllı format tespiti, CoreMedia/CoreVideo `CMFormatDescription` ve AVAssetTrack `containsHDRVideo` karakteristik analizi, renk gamı (BT.2020 / DCI-P3 / BT.709), transfer fonksiyonları (SMPTE ST 2084 PQ, ARIB HLG) ve pik parlaklık seviyeleri sağlandı.
+  - `DynamicRangeHUDView.swift` Obsidian cam estetiğinde (`#0C0C10`) sinematik HUD kapsülü tasarlandı: Format rozeti (Dolby Vision için Neon Mor-Altın gradyanı, HDR10/HDR10+ için Altın Sarısı, HLG için Canlı Yeşil), çözünürlük bilgisi (4K UHD / 1080p), bit derinliği (10-Bit / 12-Bit), BT.2020 renk gamı ve pik parlaklık (1000/4000 nits) çipleri, animasyonlu parıldayan neon çerçeve ile donatıldı.
+  - `ChannelInfoOSDView.swift` OSD bilgi kartı zenginleştirildi: Çözünürlük ve HEVC rozetlerinin hemen yanına akıllı `dynamicRange` rozeti eklendi; geriye dönük uyumlu `dynamicRange` desteği sağlandı.
+  - `PlayerFeature.swift` durumuna `videoDynamicRange`, `dynamicRangeInfo` ve `isDynamicRangeHUDVisible` durumları eklendi; başlatıcıda otomatik tespit, `selectChannel` geçişlerinde yeni kanal için renk uzayı tespiti, HDR yayın açılışlarında 3.5 saniye otomatik gösterim ve zamanlayıcı iptal mekanizması kuruldu.
+  - `PlayerView+iOS.swift` ve `PlayerView+tvOS.swift` oynatıcı arayüzlerine dinamik HUD kapsülü ve OSD entegrasyonu sağlandı.
+  - 7 adet kapsamlı TCA birim testi (`DynamicRangeEngineTests.swift`) yazıldı; hem iOS Simulator hem tvOS Simulator derlemeleri ile testleri 0 hata ile tamamlandı.
+
 
 

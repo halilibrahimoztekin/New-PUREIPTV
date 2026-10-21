@@ -11,6 +11,7 @@ public struct ChannelInfoOSDView: View {
     public let currentProgram: EPGProgram?
     public let nextProgram: EPGProgram?
     public let isCleaningEnabled: Bool
+    public let dynamicRange: VideoDynamicRange?
 
     @State private var isLivePulsing: Bool = false
 
@@ -20,7 +21,8 @@ public struct ChannelInfoOSDView: View {
         totalChannels: Int? = nil,
         currentProgram: EPGProgram? = nil,
         nextProgram: EPGProgram? = nil,
-        isCleaningEnabled: Bool = true
+        isCleaningEnabled: Bool = true,
+        dynamicRange: VideoDynamicRange? = nil
     ) {
         self.item = item
         self.channelIndex = channelIndex
@@ -28,6 +30,7 @@ public struct ChannelInfoOSDView: View {
         self.currentProgram = currentProgram
         self.nextProgram = nextProgram
         self.isCleaningEnabled = isCleaningEnabled
+        self.dynamicRange = dynamicRange
     }
 
     public var body: some View {
@@ -217,6 +220,28 @@ public struct ChannelInfoOSDView: View {
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Color(hex: "#FF9F0A").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+            }
+
+            // Dynamic Range Badge (HDR, Dolby Vision, HLG) (Madde #20)
+            let detectedRange = dynamicRange ?? ColorSpaceDetector.detectFromText(title: item.title, urlString: item.streamURL.absoluteString).range
+            if detectedRange.isHDR {
+                HStack(spacing: 3) {
+                    Image(systemName: detectedRange.iconName)
+                        .font(.system(size: 8, weight: .bold))
+                    Text(detectedRange.badgeTitle)
+                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                }
+                .foregroundStyle(Color(hex: detectedRange.primaryColorHex))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color(hex: detectedRange.primaryColorHex).opacity(0.18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(Color(hex: detectedRange.primaryColorHex).opacity(0.4), lineWidth: 0.8)
+                        )
+                )
             }
         }
     }

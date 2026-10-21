@@ -27,6 +27,7 @@ public struct PlayerFeature {
         public static let recallHUD = "PlayerFeature.recallHUD"
         public static let dialerAutoSubmit = "PlayerFeature.dialerAutoSubmit"
         public static let traktScrobbleHUD = "PlayerFeature.traktScrobbleHUD"
+        public static let dynamicRangeHUD = "PlayerFeature.dynamicRangeHUD"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -244,6 +245,11 @@ public struct PlayerFeature {
         public var hiddenChannelIDs: Set<String> = []
         public var blacklistedCategoryIDs: Set<String> = []
 
+        /// HDR, Dolby Vision & SDR Dynamic Range Indicator (Madde #20)
+        public var videoDynamicRange: VideoDynamicRange?
+        public var dynamicRangeInfo: DynamicRangeInfo?
+        public var isDynamicRangeHUDVisible: Bool = false
+
         /// Up Next Episode Auto-Play (Madde #48)
         public var isUpNextVisible: Bool = false
         public var upNextCountdownSeconds: Int = 15
@@ -306,6 +312,10 @@ public struct PlayerFeature {
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
             self.playlist = playlist
+            let drInfo = ColorSpaceDetector.detectFromText(title: item.title, urlString: item.streamURL.absoluteString)
+            dynamicRangeInfo = drInfo
+            videoDynamicRange = drInfo.range
+            isDynamicRangeHUDVisible = drInfo.range.isHDR
             if let startPos = item.startPosition, startPos > 0 {
                 position = min(1.0, max(0.0, startPos))
             }
@@ -503,6 +513,12 @@ public struct PlayerFeature {
         case unhideChannel(id: String)
         case hideCurrentChannel
 
+        // HDR & Dolby Vision Dynamic Range Indicator (Madde #20)
+        case detectDynamicRange
+        case dynamicRangeDetected(DynamicRangeInfo)
+        case showDynamicRangeHUD
+        case hideDynamicRangeHUD
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -585,6 +601,10 @@ public struct PlayerFeature {
                     try? await pipClient.configureAudioSession(true)
                 },
                 state.item.isLive ? .send(.showChannelOSD) : .none,
+                state.videoDynamicRange?.isHDR == true ? .run { send in
+                    try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    await send(.hideDynamicRangeHUD)
+                }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
                 recentEffect,
@@ -1563,6 +1583,10 @@ public struct PlayerFeature {
             state.totalTime = .zero
             state.position = 0.0
             state.hasAppliedInitialSeek = false
+            let drInfo = ColorSpaceDetector.detectFromText(title: newItem.title, urlString: newItem.streamURL.absoluteString)
+            state.dynamicRangeInfo = drInfo
+            state.videoDynamicRange = drInfo.range
+            state.isDynamicRangeHUDVisible = drInfo.range.isHDR
             state.zappingHUDItem = newItem
             state.isZappingHUDVisible = true
             state.isChannelOSDVisible = newItem.isLive
@@ -2473,6 +2497,34 @@ public struct PlayerFeature {
                 return .send(.selectChannel(firstInPrev))
             }
             return .none
+
+        // ── HDR, Dolby Vision & SDR Dynamic Range Indicator (Madde #20) ──
+        case .detectDynamicRange:
+            let info = ColorSpaceDetector.detectFromText(title: state.item.title, urlString: state.item.streamURL.absoluteString)
+            return .send(.dynamicRangeDetected(info))
+
+        case let .dynamicRangeDetected(info):
+            state.dynamicRangeInfo = info
+            state.videoDynamicRange = info.range
+            if info.range.isHDR {
+                state.isDynamicRangeHUDVisible = true
+                return .run { send in
+                    try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    await send(.hideDynamicRangeHUD)
+                }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true)
+            }
+            return .none
+
+        case .showDynamicRangeHUD:
+            state.isDynamicRangeHUDVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                await send(.hideDynamicRangeHUD)
+            }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true)
+
+        case .hideDynamicRangeHUD:
+            state.isDynamicRangeHUDVisible = false
+            return .cancel(id: CancelID.dynamicRangeHUD)
         }
     }
 
