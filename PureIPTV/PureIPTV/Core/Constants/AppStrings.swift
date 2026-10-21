@@ -78,6 +78,16 @@ public enum AppStrings {
         public static let quickZapHint = "Siri Remote ile gezin ve kanala anında geçiş yapın".localized
         public static let noRecentChannels = "Henüz izlenmiş kanal bulunmuyor".localized
         public static let nowPlayingBadge = "OYNATILIYOR".localized
+        public static let allChannels = "Tümü".localized
+        public static let categorySports = "Spor".localized
+        public static let categoryNews = "Haber".localized
+        public static let categoryCinema = "Sinema".localized
+        public static let categoryDocs = "Belgesel".localized
+        public static let categoryKids = "Çocuk".localized
+        public static let category4K = "4K / UHD".localized
+        public static let categoryMusic = "Müzik".localized
+        public static let clearFilter = "Filtreyi Temizle".localized
+        public static let noChannelsMatchingFilter = "Seçili filtre veya arama kriterine uygun kanal bulunamadı.".localized
     }
 
     // MARK: - Player & EPG

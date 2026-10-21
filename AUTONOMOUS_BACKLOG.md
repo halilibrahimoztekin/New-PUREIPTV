@@ -54,14 +54,46 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PlayerFeature` (`reconnectAttempts`, `isFallbackSwitching`, `fallbackStreamName`, `backupStreamItem`, `failedStreamIDs`, `.switchToBackupStream`, `exponential backoff retryEffect`), `PlayerFriendlyErrorView.swift` (yedek akış butonu, FocusState), `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 9. [PENDING] Instant Channel Category Filter Chips in Channel Drawer (Sports, News, 4K)
-- **Açıklama:** Kanal yan çekmecesinde binlerce kanal arasında anında Spor, Haber, Sinema veya 4K/FHD kanalları listeleyen akıcı filter chip bileşeni.
-- **Platformlar:** iOS, tvOS.
+### 9. [DONE] Instant Channel Category Filter Chips in Channel Drawer (Sports, News, Cinema, 4K/UHD)
+- **Açıklama:** Kanal yan çekmecesinde binlerce kanal arasında anında "Tümü", "Spor ⚽️", "Haber 📰", "Sinema 🍿", "Belgesel 🌍", "Çocuk 🧸", "4K / UHD 🌟", "Müzik 🎵" ve çalma listesi kategorilerini listeleyen, anlık sayaç rozetleri (`(48)`), boş durum kurtarma butonu ve Siri Remote odak efektleriyle donatılmış dinamik cam buton barı.
+- **Platformlar:** tvOS (Siri Remote Focus Engine, yatay çip odak gezintisi, renkli parıltı gölgesi), iOS (Haptic touch, horizontal scrollable glass chips).
+- **TCA & Mimari:** `ChannelCategoryFilter.swift` (akıllı anahtar kelime eşleştirme, çok dilli destek, aksan renkleri), `PlayerSidebarDrawer.swift` (akıllı kategori ve arama filtreleme motoru, 4K ve arşiv rozetleri, empty state), `AppStrings.LiveTV`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
+
+### 10. [PENDING] Instant Previous Channel Quick-Recall Gesture & Mini-Preview HUD (Double-Tap Return)
+- **Açıklama:** Canlı maç izlerken veya reklam aralarında iki kanal arasında anında mekik dokumayı sağlayan hızlı geri çağırma ("Quick Recall / Swap Channel"). tvOS'ta Siri Remote çift tık/uzun basış veya iOS'ta çift parmak dokunuşu ile son izlenen önceki kanala anında geçiş ve ekranda 2 saniyelik sinematik "Önceki Kanal: [Kanal Adı] ↩️" HUD bildirimi.
+- **Platformlar:** tvOS (Siri Remote Play/Pause çift tıklama veya D-pad sol basılı tutma), iOS (Çift dokunuş jesti, Dynamic Island / Toast HUD).
+- **TCA & Mimari:** `PlayerFeature` (`previousChannelItem`, `.recallPreviousChannel`, `isRecallHUDVisible`), `PreviousChannelRecallHUDView.swift`.
 - **Durum:** `[PENDING]`
 
-### 10. [PENDING] Instant Previous Channel Quick-Recall Gesture (Double-Tap Return)
-- **Açıklama:** Siri Remote'ta veya iOS ekranda çift dokunuşla son izlenen bir önceki kanala anında geri dönme ("Recall / Previous Channel") özelliği.
-- **Platformlar:** tvOS, iOS.
+### 11. [PENDING] Direct Channel Number Dialing HUD (Quick-Jump Number Pad for tvOS & iOS)
+- **Açıklama:** Geleneksel televizyon kumandası hissiyatı sunan hızlı kanal numarası tuşlama motoru. Siri Remote üzerinde sayı tuşlayarak veya ekrandaki sinematik cam numaratör ile "1-0-4" tuşlandığında 2 saniye içinde doğrudan 104. kanala zapping yapan, eşleşen kanalların anlık önizlemesini veren akıllı tuşlama HUD'ı.
+- **Platformlar:** tvOS (Siri Remote Focusable cam tuş takımı, D-pad sayı seçici), iOS (Floating 10-key glass keypad sheet).
+- **TCA & Mimari:** `PlayerFeature` (`dialedDigits: String`, `isNumberPadVisible`, `matchedChannels: [PlayableItem]`, `.appendDialedDigit`, `.submitDialedChannel`), `DirectChannelDialHUDView.swift`.
+- **Durum:** `[PENDING]`
+
+### 12. [PENDING] Smart Channel Sorting & Grouping Rules Engine (Most Watched, Watch Frequency, A-Z)
+- **Açıklama:** TiviMate ve UHF kullanıcılarının en çok övdüğü akıllı kanal sıralama motoru. Kanalları orijinal liste sırası, en çok izlenenler (top watch frequency), toplam izleme süresi (watch-time) veya alfabetik (A-Z) olarak anında yeniden sıralayan, sıralama tercihini kalıcı saklayan akıllı motor.
+- **Platformlar:** iOS, tvOS (Siri Remote Focusable Segmented Controller / Menü).
+- **TCA & Mimari:** `ChannelSortOption`, `SettingsClient` per-category sorting persistence, `ChannelDrawerFeature` dynamic sorting pipeline.
+- **Durum:** `[PENDING]`
+
+### 13. [PENDING] Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine)
+- **Açıklama:** Çok dilli yayınlarda (İngilizce, Türkçe, Almanca) kullanıcının global tercih ettiği ses ve altyazı dilini otomatik algılayıp yeni kanala geçildiğinde varsayılan olarak seçen, böylece her kanal değişiminde manuel ses parçası değiştirme zahmetini ortadan kaldıran akıllı ses motoru.
+- **Platformlar:** iOS, tvOS.
+- **TCA & Mimari:** `AudioTrackSelector`, `PlayerClient` preferred language ISO-639 matcher, `SettingsClient`.
+- **Durum:** `[PENDING]`
+
+### 14. [PENDING] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
+- **Açıklama:** IPTV yayınlarında boğuk veya gürültülü spor/film seslerini iyileştirmek için "Diyalog Netleştirici (Vocal Boost)", "Stadyum / Spor Atmosferi (Stadium Surround)", "Gece Modu (Night Compression)" ve "Düz (Flat)" sinematik ses EQ profilleri.
+- **Platformlar:** iOS, tvOS (Siri Remote ses menüsü entegrasyonu).
+- **TCA & Mimari:** `AudioEQPreset`, `PlayerFeature` audio processing node / VLC audio equalizer, `AudioEQHUDView.swift`.
+- **Durum:** `[PENDING]`
+
+### 15. [PENDING] Multi-Playlist Global Smart Search with Instant Filter Badges
+- **Açıklama:** Tüm M3U ve Xtream çalma listeleri arasında anında canlı arama yapan; Canlı TV, VOD Film, Dizi, 4K ve EPG mevcut program adına göre renk kodlu rozetlerle sonuçları ayıran ultra-hızlı global arama motoru.
+- **Platformlar:** iOS, tvOS (10-foot UI, Siri Remote Focus Engine).
+- **TCA & Mimari:** `GlobalSearchFeature`, debounce search query, playlist cross-indexing.
 - **Durum:** `[PENDING]`
 
 ---
@@ -109,3 +141,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - Eğer aynı kanalın alternatif/yedek akışı varsa (`PlayerFeature.areChannelsRelated`), otomatik olarak veya kullanıcı butonuyla `switchToBackupStream` aksiyonu tetiklenir; akıcı bir şekilde yedek akış başlatılır.
   - `PlayerFriendlyErrorView.swift` Obsidian cam kartı, hata kodu, yeniden deneme butonu ve Siri Remote uyumlu "Yedek Akışa Geç" butonuyla yenilendi.
   - tvOS ve iOS oynatıcı katmanlarına üstel geri çekilme sayacı ve yedek akış bildirim HUD'ı entegre edildi.
+- **#9 Instant Channel Category Filter Chips in Channel Drawer (Sports, News, Cinema, 4K/UHD):**
+  - `ChannelCategoryFilter.swift` mimarisi kuruldu: Tümü, Spor, Haber, Sinema, Belgesel, Çocuk, 4K/UHD, Müzik, Son İzlenenler ve özel M3U kategorileri için akıllı anahtar kelime eşleştirme motoru.
+  - `PlayerSidebarDrawer.swift` baştan sona yeniden tasarlandı:
+    - tvOS Siri Remote Focus Engine uyumlu `TVCategoryFilterChipButtonStyle` (odaklanıldığında 1.08x büyüme, parlaklık ve kategoriye özel renkli parıltı efekti).
+    - Her kategori çipinde anlık kanal sayısı rozeti (`(count)`), yalnızca kanalı bulunan kategorileri dinamik listeleme.
+    - Boş liste durumunda sinematik `emptyStateView` ve tek tuşla "Filtreyi Temizle" kurtarma aksiyonu.
+    - Kanal satırlarında 4K ve arşiv (`tvArchive`) rozetleri, aktif oynatılan kanal ve geçmiş kanal göstergeleri.
+    - iOS için akıcı yatay kaydırma, cam kapsül tasarımı ve dokunsal haptik geri bildirim entegre edildi.

@@ -1,21 +1,16 @@
 import ComposableArchitecture
 import SwiftUI
 
-// MARK: - Edge-Swipe Channel & Category Sidebar Drawer
+// MARK: - Edge-Swipe Channel & Category Sidebar Drawer (Madde #9)
 
 public struct PlayerSidebarDrawer: View {
     @Bindable var store: StoreOf<PlayerFeature>
     let onClose: () -> Void
 
-    @State private var selectedFilter: FilterType = .all
+    @State private var selectedFilter: ChannelCategoryFilter = .all
     @State private var searchQuery: String = ""
     @FocusState private var focusedItemID: String?
-
-    private enum FilterType: Hashable {
-        case all
-        case history
-        case category(String)
-    }
+    @FocusState private var focusedFilterID: String?
 
     public init(store: StoreOf<PlayerFeature>, onClose: @escaping () -> Void) {
         self.store = store
@@ -26,19 +21,19 @@ public struct PlayerSidebarDrawer: View {
         HStack(spacing: 0) {
             drawerContent
             #if os(tvOS)
-                .frame(width: 560)
+                .frame(width: 580)
             #else
-                .frame(width: min(360, UIScreen.main.bounds.width * 0.85))
+                .frame(width: min(370, UIScreen.main.bounds.width * 0.85))
             #endif
                 .frame(maxHeight: .infinity)
                 .background(
                     ZStack {
                         #if os(tvOS)
-                            Color.black.opacity(0.85)
+                            Color.black.opacity(0.88)
                         #else
                             Rectangle()
                                 .fill(.ultraThinMaterial)
-                            Color.black.opacity(0.4)
+                            Color.black.opacity(0.55)
                         #endif
                     }
                 )
@@ -87,14 +82,18 @@ public struct PlayerSidebarDrawer: View {
             // Search Bar
             searchBarView
 
-            // Filter Tabs (All / History / Categories)
+            // Filter Tabs (Smart Category Filter Chips)
             filterTabsView
 
             Divider()
-                .background(Color.white.opacity(0.15))
+                .background(Color.white.opacity(0.12))
 
-            // Channel List
-            channelsListView
+            // Channel List or Empty State
+            if filteredChannels.isEmpty {
+                emptyStateView
+            } else {
+                channelsListView
+            }
         }
     }
 
@@ -102,31 +101,47 @@ public struct PlayerSidebarDrawer: View {
 
     private var headerView: some View {
         HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "sidebar.leading")
-            #if os(tvOS)
-                .font(.system(size: 28, weight: .bold))
-            #else
-                .font(.title3.weight(.bold))
-            #endif
-                .foregroundStyle(Color(hex: "#0A84FF"))
+            ZStack {
+                Circle()
+                    .fill(selectedFilter.accentColor.opacity(0.2))
+                    .frame(width: 44, height: 44)
+
+                Image(systemName: selectedFilter.icon)
+                #if os(tvOS)
+                    .font(.system(size: 22, weight: .bold))
+                #else
+                    .font(.system(size: 18, weight: .bold))
+                #endif
+                    .foregroundStyle(selectedFilter.accentColor)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppStrings.LiveTV.channelsTitle)
                 #if os(tvOS)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                 #else
                     .font(.headline.weight(.bold))
                 #endif
                     .foregroundStyle(.white)
 
                 let count = filteredChannels.count
-                Text("\(count) " + "Kanal".localized)
+                HStack(spacing: 6) {
+                    Text("\(count) " + "Kanal".localized)
+                        .foregroundStyle(.white.opacity(0.6))
+
+                    if selectedFilter != .all {
+                        Text("•")
+                            .foregroundStyle(.white.opacity(0.4))
+                        Text(selectedFilter.title)
+                            .foregroundStyle(selectedFilter.accentColor)
+                            .fontWeight(.semibold)
+                    }
+                }
                 #if os(tvOS)
-                    .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 #else
-                    .font(.caption)
+                .font(.caption)
                 #endif
-                    .foregroundStyle(.white.opacity(0.6))
             }
 
             Spacer()
@@ -148,8 +163,8 @@ public struct PlayerSidebarDrawer: View {
         }
         #if os(tvOS)
         .padding(.horizontal, 32)
-        .padding(.top, 40)
-        .padding(.bottom, 16)
+        .padding(.top, 36)
+        .padding(.bottom, 14)
         #else
         .padding(.horizontal, 16)
         .padding(.top, 24)
@@ -176,7 +191,7 @@ public struct PlayerSidebarDrawer: View {
                 .font(.system(size: 14, weight: .medium))
             #endif
                 .foregroundStyle(.white)
-                .tint(Color(hex: "#0A84FF"))
+                .tint(selectedFilter.accentColor)
 
             if !searchQuery.isEmpty {
                 Button {
@@ -200,9 +215,9 @@ public struct PlayerSidebarDrawer: View {
         #if os(tvOS)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 32)
-        .padding(.bottom, 16)
+        .padding(.bottom, 14)
         #else
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -212,25 +227,20 @@ public struct PlayerSidebarDrawer: View {
         #endif
     }
 
-    // MARK: - Filter Tabs
+    // MARK: - Filter Tabs (Smart Category Filter Chips)
 
     private var filterTabsView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                filterChip(title: "Tüm Kanallar".localized, type: .all, icon: "tv")
-
-                if !store.zappingHistory.isEmpty {
-                    filterChip(title: "Son İzlenenler".localized, type: .history, icon: "clock.arrow.circlepath")
-                }
-
-                // Unique Category Chips
-                ForEach(availableCategories, id: \.self) { category in
-                    filterChip(title: category, type: .category(category), icon: "folder")
+            HStack(spacing: 8) {
+                ForEach(availableFilterChips, id: \.id) { chip in
+                    filterChipView(filter: chip)
+                        .id(chip.id)
                 }
             }
             #if os(tvOS)
             .padding(.horizontal, 32)
-            .padding(.bottom, 18)
+            .padding(.bottom, 16)
+            .focusSection()
             #else
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
@@ -239,41 +249,117 @@ public struct PlayerSidebarDrawer: View {
     }
 
     @ViewBuilder
-    private func filterChip(title: String, type: FilterType, icon: String) -> some View {
-        let isSelected = selectedFilter == type
+    private func filterChipView(filter: ChannelCategoryFilter) -> some View {
+        let isSelected = selectedFilter == filter
+        let count = countForFilter(filter)
 
         Button {
             #if !os(tvOS)
                 HapticManager.shared.trigger(.light)
             #endif
             withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
-                selectedFilter = type
+                selectedFilter = filter
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                Image(systemName: filter.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : filter.accentColor)
+
+                Text(filter.title)
+                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                     .lineLimit(1)
+
+                // Channel Count Badge
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.08))
+                    )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundStyle(isSelected ? .white : .white.opacity(0.75))
             .background(
                 Capsule()
-                    .fill(isSelected ? Color(hex: "#0A84FF") : Color.white.opacity(0.12))
+                    .fill(isSelected ? filter.accentColor : Color.white.opacity(0.1))
             )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(
+                        isSelected ? Color.white.opacity(0.5) : filter.accentColor.opacity(0.25),
+                        lineWidth: 1
+                    )
             )
         }
         #if os(tvOS)
-        .buttonStyle(TVFilterChipButtonStyle(isSelected: isSelected))
+        .buttonStyle(TVCategoryFilterChipButtonStyle(isSelected: isSelected, accentColor: filter.accentColor))
+        .focused($focusedFilterID, equals: filter.id)
         #else
         .buttonStyle(.plain)
         #endif
+    }
+
+    // MARK: - Empty State View
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(selectedFilter.accentColor.opacity(0.15))
+                    .frame(width: 72, height: 72)
+
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundStyle(selectedFilter.accentColor)
+            }
+
+            VStack(spacing: 6) {
+                Text(AppStrings.LiveTV.noChannels)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(AppStrings.LiveTV.noChannelsMatchingFilter)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.horizontal, 32)
+            }
+
+            Button {
+                #if !os(tvOS)
+                    HapticManager.shared.trigger(.medium)
+                #endif
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    selectedFilter = .all
+                    searchQuery = ""
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 13, weight: .bold))
+                    Text(AppStrings.LiveTV.clearFilter)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(Color.white.opacity(0.12), in: Capsule())
+                .foregroundStyle(.white)
+            }
+            #if os(tvOS)
+            .buttonStyle(.card)
+            #else
+            .buttonStyle(.plain)
+            #endif
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Channels List
@@ -289,14 +375,13 @@ public struct PlayerSidebarDrawer: View {
                 }
                 #if os(tvOS)
                 .padding(.horizontal, 28)
-                .padding(.vertical, 16)
+                .padding(.vertical, 14)
                 #else
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 #endif
             }
             .onAppear {
-                // Scroll to currently playing channel
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo(store.item.id, anchor: .center)
@@ -312,6 +397,8 @@ public struct PlayerSidebarDrawer: View {
     private func channelRow(item: PlayerFeature.PlayableItem, index: Int) -> some View {
         let isCurrent = item.id == store.item.id
         let isPrevious = item.id == store.previousChannel?.id
+        let is4K = item.title.localizedCaseInsensitiveContains("4k") || item.title.localizedCaseInsensitiveContains("uhd")
+        let hasCatchup = (item.tvArchive ?? 0) > 0
 
         Button {
             #if !os(tvOS)
@@ -320,37 +407,70 @@ public struct PlayerSidebarDrawer: View {
             store.send(.selectChannel(item))
         } label: {
             HStack(spacing: 12) {
-                // Index
+                // Index Number
                 Text("\(index)")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
                     .frame(width: 32, alignment: .trailing)
 
                 // Channel Logo
                 channelLogo(item: item)
 
-                // Channel Info
+                // Channel Title & Category
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                     #if os(tvOS)
-                        .font(.system(size: 20, weight: isCurrent ? .bold : .medium))
+                        .font(.system(size: 19, weight: isCurrent ? .bold : .medium))
                     #else
                         .font(.subheadline.weight(isCurrent ? .bold : .regular))
                     #endif
                         .foregroundStyle(isCurrent ? Color(hex: "#0A84FF") : .white)
                         .lineLimit(1)
 
-                    if let epgID = item.epgChannelID {
-                        Text(epgID)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.45))
-                            .lineLimit(1)
+                    HStack(spacing: 5) {
+                        if let cat = item.categoryID, !cat.isEmpty {
+                            Text(cat)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.5))
+                                .lineLimit(1)
+                        } else if let epgID = item.epgChannelID {
+                            Text(epgID)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.4))
+                                .lineLimit(1)
+                        }
+
+                        // 4K Badge
+                        if is4K {
+                            Text("4K")
+                                .font(.system(size: 9, weight: .black, design: .rounded))
+                                .foregroundStyle(Color(hex: "#64D2FF"))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color(hex: "#64D2FF").opacity(0.18))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+
+                        // Catchup Archive Indicator
+                        if hasCatchup {
+                            HStack(spacing: 2) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 8, weight: .bold))
+                                Text("ARŞİV")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color(hex: "#FFD60A").opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
                     }
                 }
 
                 Spacer()
 
-                // Badges
+                // State Badges
                 if isCurrent {
                     HStack(spacing: 5) {
                         Circle()
@@ -387,11 +507,14 @@ public struct PlayerSidebarDrawer: View {
             #endif
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isCurrent ? Color(hex: "#0A84FF").opacity(0.16) : Color.white.opacity(0.04))
+                    .fill(isCurrent ? Color(hex: "#0A84FF").opacity(0.18) : Color.white.opacity(0.04))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isCurrent ? Color(hex: "#0A84FF").opacity(0.5) : Color.white.opacity(0.06), lineWidth: 1)
+                    .stroke(
+                        isCurrent ? Color(hex: "#0A84FF").opacity(0.6) : Color.white.opacity(0.06),
+                        lineWidth: 1
+                    )
             )
         }
         #if os(tvOS)
@@ -445,7 +568,67 @@ public struct PlayerSidebarDrawer: View {
             .foregroundStyle(.white.opacity(0.5))
     }
 
-    // MARK: - Filtered Channels & Categories
+    // MARK: - Filter Logic & Counts
+
+    private var availableFilterChips: [ChannelCategoryFilter] {
+        guard let list = store.playlist, !list.isEmpty else {
+            return [.all]
+        }
+
+        var chips: [ChannelCategoryFilter] = [.all]
+
+        if !store.zappingHistory.isEmpty {
+            chips.append(.history)
+        }
+
+        // Smart Category candidates
+        let smartCandidates: [ChannelCategoryFilter] = [
+            .sports,
+            .news,
+            .cinema,
+            .documentaries,
+            .kids,
+            .ultraHD4K,
+            .music,
+        ]
+
+        for smart in smartCandidates {
+            let matchesAny = list.contains { smart.matches(title: $0.title, categoryID: $0.categoryID) }
+            if matchesAny {
+                chips.append(smart)
+            }
+        }
+
+        // Distinct custom M3U categories
+        let rawCategories = list.compactMap(\.categoryID).filter { !$0.isEmpty }
+        var uniqueRaw: [String] = []
+        for cat in rawCategories where !uniqueRaw.contains(cat) {
+            uniqueRaw.append(cat)
+            // Limit to top 15 distinct categories to avoid drawer tab clutter
+            if uniqueRaw.count >= 15 {
+                break
+            }
+        }
+
+        for cat in uniqueRaw {
+            chips.append(.custom(cat))
+        }
+
+        return chips
+    }
+
+    private func countForFilter(_ filter: ChannelCategoryFilter) -> Int {
+        guard let list = store.playlist else { return filter == .all ? 1 : 0 }
+
+        switch filter {
+        case .all:
+            return list.count
+        case .history:
+            return store.zappingHistory.count
+        default:
+            return list.filter { filter.matches(title: $0.title, categoryID: $0.categoryID) }.count
+        }
+    }
 
     private var filteredChannels: [PlayerFeature.PlayableItem] {
         let baseList: [PlayerFeature.PlayableItem] = switch selectedFilter {
@@ -453,40 +636,36 @@ public struct PlayerSidebarDrawer: View {
             store.playlist ?? [store.item]
         case .history:
             store.zappingHistory
-        case let .category(cat):
-            (store.playlist ?? [store.item]).filter { $0.categoryID == cat }
+        default:
+            (store.playlist ?? [store.item]).filter {
+                selectedFilter.matches(title: $0.title, categoryID: $0.categoryID)
+            }
         }
 
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return baseList
         } else {
-            return FuzzySearchEngine.search(baseList, titleKeyPath: \.title, query: trimmed, limit: 100)
+            return FuzzySearchEngine.search(baseList, titleKeyPath: \.title, query: trimmed, limit: 120)
         }
-    }
-
-    private var availableCategories: [String] {
-        guard let list = store.playlist else { return [] }
-        let categories = list.compactMap(\.categoryID).filter { !$0.isEmpty }
-        var unique: [String] = []
-        for cat in categories where !unique.contains(cat) {
-            unique.append(cat)
-        }
-        return unique
     }
 }
 
+// MARK: - tvOS Category Filter Chip Button Style
+
 #if os(tvOS)
-    private struct TVFilterChipButtonStyle: ButtonStyle {
+    private struct TVCategoryFilterChipButtonStyle: ButtonStyle {
         let isSelected: Bool
+        let accentColor: Color
 
         func makeBody(configuration: Configuration) -> some View {
-            TVFilterChipBody(configuration: configuration, isSelected: isSelected)
+            TVCategoryFilterChipBody(configuration: configuration, isSelected: isSelected, accentColor: accentColor)
         }
 
-        private struct TVFilterChipBody: View {
+        private struct TVCategoryFilterChipBody: View {
             let configuration: Configuration
             let isSelected: Bool
+            let accentColor: Color
             @Environment(\.isFocused) private var isFocused
 
             var body: some View {
@@ -494,7 +673,7 @@ public struct PlayerSidebarDrawer: View {
                     .scaleEffect(isFocused ? 1.08 : 1.0)
                     .brightness(isFocused ? 0.15 : 0.0)
                     .shadow(
-                        color: isFocused ? Color(hex: "#0A84FF").opacity(0.6) : .clear,
+                        color: isFocused ? accentColor.opacity(0.65) : .clear,
                         radius: isFocused ? 10 : 0,
                         x: 0,
                         y: 0
