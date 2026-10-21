@@ -132,17 +132,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `DisplayModeClient`, `PlayerFeature` FPS detection & auto refresh-rate match effect, `AFRToastView.swift`, `SettingsFeature`.
 - **Durum:** `[DONE]` (PR Onaylandı, 8 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 22. [IN_PROGRESS] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
+### 22. [DONE] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
 - **Açıklama:** Kullanıcı Apple TV ana ekranında PureIPTV ikonunun üzerindeyken açılan üst vitrinde (Top Shelf) en sevilen kanalları, son izlenenleri ve yarım kalan VOD filmleri dinamik afiş ve doğrudan oynatma bağlantısıyla sunan yerel tvOS uzantısı.
-- **Platformlar:** tvOS (`TVTopShelfProvider`, `TVTopShelfCarouselContent`).
-- **TCA & Mimari:** `TopShelfService`, App Group Shared UserDefaults / CoreData paylaşımı.
-- **Durum:** `[IN_PROGRESS]`
+- **Platformlar:** tvOS (`TVTopShelfProvider`, `TVTopShelfCarouselContent`, `TVTopShelfSectionedContent`).
+- **TCA & Mimari:** `TopShelfService`, `TopShelfClient`, App Group Shared UserDefaults / CoreData paylaşımı, `PureIPTVTopShelfContentProvider`, `SettingsFeature`.
+- **Durum:** `[DONE]` (PR Onaylandı, 5 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 23. [PENDING] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
+### 23. [IN_PROGRESS] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
 - **Açıklama:** IPTV sağlayıcısının EPG'si eksik veya hatalı saat diliminde olduğunda harici XMLTV/GZ URL ekleme, kanal bazında EPG ID eşleştirme ve +/- 12 saate kadar zaman kaydırma (time-shift offset) imkanı sağlayan gelişmiş EPG motoru.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `EPGManager`, `CustomEPGMappingClient`, `SettingsFeature`.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 24. [PENDING] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
 - **Açıklama:** Apple TV, iPhone, iPad ve Mac arasında favori kanalları, gizlenen kanalları, VOD izleme kaldığı yeri (resume point) ve kanal sıralama tercihlerini iCloud KVS (NSUbiquitousKeyValueStore) ile kesintisiz ve arka planda senkronize eden çoklu cihaz motoru.
@@ -293,6 +293,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerView+iOS.swift` ve `PlayerView+tvOS.swift` oynatıcı arayüzlerine `AFRToastView` animasyonlu üst toast bildirim katmanı eklendi.
   - `SettingsFeature.swift` ve `SettingsView.swift` içine "Ekran & Kare Hızı Eşleme (AFR)" ayar bölümü, otomatik kare hızı anahtarı ve dinamik aralık eşleme anahtarları entegre edildi.
   - 8 adet kapsamlı birim testi (`AutoFrameRateEngineTests.swift`) yazıldı; hem iOS Simulator hem de tvOS Simulator platformlarında testler ve derleme sıfır hata ile başarıyla doğrulandı.
+- **#22 Apple TV Top Shelf Content Provider & Quick-Launch Carousel:**
+  - `TopShelfStyle` enum modeli (`.sectioned`, `.carousel`) ve `TopShelfDataDTO` genişletildi; App Group `group.com.pureiptv.app` ve shared UserDefaults desteği kuruldu.
+  - `PureIPTVTopShelfContentProvider.swift` hem `TVTopShelfCarouselContent` (Sinematik Vitrin Carousel) hem de `TVTopShelfSectionedContent` (Bölümlü Liste: Kaldığın Yerden İzle, Favori Kanallar, Yeni Filmler) üretecek şekilde iki yönlü adaptif motor haline getirildi; deep link (`pureiptv://play?...`) tetikleyicileri ile hızlı başlatma sağlandı.
+  - `TopShelfClient` TCA dependency client oluşturuldu (`updateTopShelfData`, `loadTopShelfData`, `getPreferredStyle`, `setPreferredStyle`), liveValue ve testValue tescillendi.
+  - `SettingsFeature.swift` ve `SettingsView.swift` tvOS arayüzüne "Apple TV Top Shelf Vitrin Modu" başlığı altında bölüm/carousel düzeni seçici menüsü eklendi; vitrin stili değiştiğinde sistem `.TVTopShelfItemsDidChange` bildirimi tetiklendi.
+  - 5 adet kapsamlı birim testi (`TopShelfEngineTests.swift`) yazıldı; serialization, deep link formatı, TCA client ve tvOS provider carousel/sectioned içerikleri test edilerek hem iOS hem tvOS platformlarında sıfır hata ile tamamlandı.
+
 
 
 

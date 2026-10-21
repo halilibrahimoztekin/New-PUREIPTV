@@ -58,6 +58,9 @@ public struct SettingsFeature {
         public var isAFREnabled: Bool = true
         public var isMatchDynamicRangeEnabled: Bool = true
 
+        /// Apple TV Top Shelf Style (Madde #22)
+        public var topShelfStyle: TopShelfStyle = .sectioned
+
         /// Buffer Profile (Madde #39)
         public var bufferProfile: BufferProfile = .balanced
 
@@ -129,6 +132,7 @@ public struct SettingsFeature {
         case setTvOSMatchContent(Bool)
         case setAFREnabled(Bool)
         case setMatchDynamicRangeEnabled(Bool)
+        case setTopShelfStyle(TopShelfStyle)
         case setBufferProfile(BufferProfile)
         case setComplianceDemoMode(Bool)
 
@@ -175,6 +179,7 @@ public struct SettingsFeature {
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
+    @Dependency(\.topShelfClient) var topShelfClient
 
     public init() {}
 
@@ -220,6 +225,9 @@ public struct SettingsFeature {
                 // Auto Frame Rate & Match Dynamic Range (Madde #21)
                 state.isAFREnabled = displayModeClient.isAFREnabled()
                 state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
+
+                // Apple TV Top Shelf Style (Madde #22)
+                state.topShelfStyle = topShelfClient.getPreferredStyle()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -377,6 +385,11 @@ public struct SettingsFeature {
             case let .setMatchDynamicRangeEnabled(enabled):
                 state.isMatchDynamicRangeEnabled = enabled
                 displayModeClient.setMatchDynamicRangeEnabled(enabled)
+                return .none
+
+            case let .setTopShelfStyle(style):
+                state.topShelfStyle = style
+                topShelfClient.setPreferredStyle(style)
                 return .none
 
             case let .setBufferProfile(profile):

@@ -221,6 +221,23 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            #if os(tvOS)
+                Section(header: Text("Apple TV Top Shelf Vitrin Modu")) {
+                    Picker("Top Shelf Vitrin Düzeni", selection: Binding(
+                        get: { store.topShelfStyle },
+                        set: { store.send(.setTopShelfStyle($0)) }
+                    )) {
+                        ForEach(TopShelfStyle.allCases, id: \.self) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+
+                    Text("Apple TV ana ekranında uygulama simgesi üzerindeyken gösterilecek vitrin stili (Bölümlü Liste veya Tam Ekran Carousel).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            #endif
+
             Section(header: Text("Resim İçinde Resim (PiP) & Arka Plan")) {
                 Toggle("Arka Plana Geçince Otomatik PiP", isOn: Binding(
                     get: { store.isAutoPiPEnabled },
