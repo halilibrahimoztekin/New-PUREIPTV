@@ -208,6 +208,22 @@
                         .zIndex(99)
                     }
 
+                    // Live Stream Audio Equalizer & Dialogue Enhancer HUD (Madde #14)
+                    if store.isAudioEQHUDVisible {
+                        VStack {
+                            Spacer()
+                            AudioEQHUDView(store: store) {
+                                store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                resetIdleTimer()
+                            }
+                            .padding(.horizontal, 48)
+                            .padding(.bottom, 48)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioEQHUDVisible)
+                        .zIndex(100)
+                    }
+
                     // Catchup / Archive Timeline Visual Scrubber Overlay (Feature #4)
                     if store.isCatchupTimelineVisible {
                         VStack {
@@ -404,6 +420,8 @@
                 store.send(.userInteracted)
                 if store.isChannelDialerVisible {
                     store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                } else if store.isAudioEQHUDVisible {
+                    store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
                 } else if store.isCatchupTimelineVisible {
                     store.send(.setCatchupTimelineVisible(false))
                 } else if store.isAudioSyncHUDVisible {
@@ -685,6 +703,15 @@
                                 }
                             }
 
+                            Section("Ses İyileştirme & Ekolayzer") {
+                                Button {
+                                    onInteraction()
+                                    store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                } label: {
+                                    Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                }
+                            }
+
                             Section(AppStrings.Player.audioSync) {
                                 Button {
                                     onInteraction()
@@ -881,6 +908,17 @@
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
+
+                    // Audio Equalizer & Dialogue Enhancer Quick Button (Madde #14)
+                    Button {
+                        onInteraction()
+                        store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                    } label: {
+                        Image(systemName: "waveform.badge.magnifyingglass")
+                            .font(.system(size: 24))
+                            .foregroundStyle(store.isAudioEQHUDVisible ? store.audioEQPreset.accentColor : (store.audioEQPreset == .flat ? .white : store.audioEQPreset.accentColor))
+                    }
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // Catchup / Archive Timeline Scrubber (Feature #4)
                     if store.item.tvArchive == 1 {

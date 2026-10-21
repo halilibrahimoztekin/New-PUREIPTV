@@ -159,6 +159,17 @@ extension PlayerFactoryClient: DependencyKey {
                         sourceReadBytes: c.sourceReadBytes
                     )
                 },
+                setEqualizerPreset: { preset in
+                    let player = box.getPlayer()
+                    if preset == .flat {
+                        player.equalizer = nil
+                    } else {
+                        let eq = player.equalizer ?? Equalizer()
+                        _ = try? eq.setBands(preset.bandGains)
+                        eq.preampGain = EqualizerGain(preset.preamp)
+                        player.equalizer = eq
+                    }
+                },
                 events: {
                     let player = box.getPlayer()
                     return AsyncStream { continuation in

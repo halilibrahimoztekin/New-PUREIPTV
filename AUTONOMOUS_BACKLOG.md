@@ -84,17 +84,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `AudioTrackSelector.swift` (kademeli parça seçimi, dil kodları ve takma ad normalizasyonu), `SettingsClient` (`secondaryAudioLanguage`, kanal bazlı tercih saklama), `PlayerFeature` (`selectChannel` parça sıfırlama, progressive polling ile gecikmeli parça algılama, parça seçiminde otomatik kanal tercihi kaydı).
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 14. [IN_PROGRESS] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
-- **Açıklama:** IPTV yayınlarında boğuk veya gürültülü spor/film seslerini iyileştirmek için "Diyalog Netleştirici (Vocal Boost)", "Stadyum / Spor Atmosferi (Stadium Surround)", "Gece Modu (Night Compression)" ve "Düz (Flat)" sinematik ses EQ profilleri.
-- **Platformlar:** iOS, tvOS (Siri Remote ses menüsü entegrasyonu).
-- **TCA & Mimari:** `AudioEQPreset`, `PlayerFeature` audio processing node / VLC audio equalizer, `AudioEQHUDView.swift`.
-- **Durum:** `[IN_PROGRESS]`
+### 14. [DONE] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
+- **Açıklama:** IPTV yayınlarında boğuk veya gürültülü spor/film seslerini iyileştirmek için "Diyalog Netleştirici (Vocal Boost)", "Stadyum / Spor Atmosferi (Stadium Surround)", "Gece Modu (Night Compression)", "Bas Güçlendirici (Bass Boost)", "Akustik / Netlik (Acoustic)" ve "Düz (Flat)" sinematik ses EQ profilleri. SwiftVLC yerel 10-bant EQ motoru, interaktif frekans eğrisi görselleştirici, Siri Remote Focus Engine odak desteği ve kanal hafızası.
+- **Platformlar:** iOS, tvOS (Siri Remote Focus Engine ses menüsü & dock butonu, iOS modal cam HUD & klavye 'e' kısayolu).
+- **TCA & Mimari:** `AudioEQPreset`, `PlayerClient.setEqualizerPreset`, `PlayerFactoryClient`, `SettingsClient` (kanal bazlı kalıcı EQ hafızası), `PlayerFeature` state/actions (`audioEQPreset`, `isAudioEQHUDVisible`, `selectAudioEQPreset`), `AudioEQHUDView.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 15. [PENDING] Multi-Playlist Global Smart Search with Instant Filter Badges
+### 15. [IN_PROGRESS] Multi-Playlist Global Smart Search with Instant Filter Badges
 - **Açıklama:** Tüm M3U ve Xtream çalma listeleri arasında anında canlı arama yapan; Canlı TV, VOD Film, Dizi, 4K ve EPG mevcut program adına göre renk kodlu rozetlerle sonuçları ayıran ultra-hızlı global arama motoru.
 - **Platformlar:** iOS, tvOS (10-foot UI, Siri Remote Focus Engine).
 - **TCA & Mimari:** `GlobalSearchFeature`, debounce search query, playlist cross-indexing.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 16. [PENDING] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
 - **Açıklama:** IPTV listelerinde kanal isimlerindeki gereksiz "[TR]", "FHD", "1080p", "4K-UHD", "|HEVC|", "VIP" gibi gürültülü ekleri otomatik temizleyen, temiz başlık sunan ve istendiğinde tek tıkla orijinal başlığa dönülebilen akıllı normalizer motoru.
@@ -198,4 +198,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `AudioTrackSelector.swift` motoru geliştirildi: Çok dilli takma ad çözümleyici, kademeli öncelik (Kanal Bazlı -> Birincil Dil -> İkincil Dil -> Varsayılan) ve altyazı motoru.
   - `SettingsClient` ikincil ses dili (`secondaryAudioLanguage`), kanal bazlı ses ve altyazı tercih saklama API'leri ile genişletildi.
   - `PlayerFeature` kanal geçişlerinde eski parça önbelleklerinin sıfırlanması, live IPTV gecikmeli akış demuxing için çok aşamalı progressive polling (500ms, 1200ms) ve HUD bildirimleriyle donatıldı.
+- **#14 Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD:**
+  - `AudioEQPreset.swift` modeli geliştirildi: 6 sinematik ön ayar (.flat, .dialogueEnhancer, .stadium, .nightMode, .bassBoost, .acoustic) ile 10-bant frekans kazançları (60Hz..16kHz) ve preamp kazancı.
+  - `PlayerClient` ve `PlayerFactoryClient` SwiftVLC `Equalizer` API'si (`eq.setBands`, `eq.preampGain`, `player.equalizer = eq`) ile genişletildi; .flat modunda sıfır overhead ile nil bypass uygulandı.
+  - `SettingsClient` genel ve kanal bazlı kalıcı ses EQ profili saklama fonksiyonlarıyla güçlendirildi (`audioEQPreset`, `setAudioEQPreset`, `getChannelAudioEQPreset`, `setChannelAudioEQPreset`).
+  - `PlayerFeature` reducer'ına `audioEQPreset`, `isAudioEQHUDVisible`, `toggleAudioEQHUD`, `selectAudioEQPreset`, `loadAudioEQPreferences` ve kanal geçişinde hafızadan otomatik yükleme eklendi.
+  - `AudioEQHUDView.swift` Obsidian cam estetiği, 10-bant animasyonlu dinamik spektrum eğrisi, Siri Remote Focus Engine uyumlu `TVEQPresetButtonStyle` (1.05x büyüme ve renkli parıltı) ve otomatik gizlenme zamanlayıcısıyla geliştirildi.
+  - tvOS (`PlayerView+tvOS.swift` ses menüsü, alt dock butonu, `.onExitCommand` modal yönetimi) ve iOS (`PlayerView+iOS.swift` hızlı menü, parça sayfası, modal cam HUD ve 'e' klavye kısayolu) oynatıcılarına tam entegre edildi.
+
 

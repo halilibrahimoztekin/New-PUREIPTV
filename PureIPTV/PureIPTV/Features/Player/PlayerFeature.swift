@@ -215,6 +215,10 @@ public struct PlayerFeature {
         public var currentAudioRoute: AudioRouteInfo = .defaultSpeaker
         public var isAudioRouteHUDVisible: Bool = false
 
+        /// Audio Equalizer & Dialogue Enhancer (Madde #14)
+        public var audioEQPreset: AudioEQPreset = .flat
+        public var isAudioEQHUDVisible: Bool = false
+
         /// Audio / Subtitle Track & Sync HUD (Madde #34)
         public var trackHUDMessage: String?
         public var trackHUDIcon: String?
@@ -416,6 +420,12 @@ public struct PlayerFeature {
         case selectAudioTrack(Track?)
         case selectSubtitleTrack(Track?)
 
+        // Audio Equalizer & Dialogue Enhancer Actions (Madde #14)
+        case toggleAudioEQHUD
+        case setAudioEQHUDVisible(Bool)
+        case selectAudioEQPreset(AudioEQPreset)
+        case loadAudioEQPreferences
+
         // Series Playlist
         case loadSeriesPlaylist
         case seriesPlaylistResponse(Result<[PlayableItem], Error>)
@@ -519,6 +529,7 @@ public struct PlayerFeature {
             return .merge(
                 state.item.isLive ? .send(.showChannelOSD) : .none,
                 .send(.loadChannelSortPreferences),
+                .send(.loadAudioEQPreferences),
                 recentEffect,
                 .send(.startOLEDDimTimer),
                 .run { _ in
@@ -1382,6 +1393,7 @@ public struct PlayerFeature {
             state.isChannelListVisible = false
             state.isRecentChannelsHUDVisible = false
             state.isAudioSyncHUDVisible = false
+            state.isAudioEQHUDVisible = false
             state.audioDelay = settingsClient.getChannelAudioDelay(newItem.id) ?? 0
             state.subtitleDelay = settingsClient.getChannelSubtitleDelay(newItem.id) ?? 0
             state.audioTracks = []
@@ -1904,6 +1916,35 @@ public struct PlayerFeature {
                     await playerClient.setSubtitleTrack(track)
                 }
             )
+
+        case .toggleAudioEQHUD:
+            state.isAudioEQHUDVisible.toggle()
+            return .none
+
+        case let .setAudioEQHUDVisible(visible):
+            state.isAudioEQHUDVisible = visible
+            return .none
+
+        case let .selectAudioEQPreset(preset):
+            state.audioEQPreset = preset
+            let mediaID = state.item.id
+            settingsClient.setChannelAudioEQPreset(mediaID, preset)
+            settingsClient.setAudioEQPreset(preset)
+            let hudMessage = "🎛️ Ses Modu: \(preset.title)"
+            return .merge(
+                .send(.showTrackHUD(message: hudMessage, icon: preset.icon)),
+                .run { _ in
+                    await playerClient.setEqualizerPreset(preset)
+                }
+            )
+
+        case .loadAudioEQPreferences:
+            let mediaID = state.item.id
+            let activePreset = settingsClient.getChannelAudioEQPreset(mediaID) ?? settingsClient.audioEQPreset()
+            state.audioEQPreset = activePreset
+            return .run { _ in
+                await playerClient.setEqualizerPreset(activePreset)
+            }
 
         case let .handlePlayerEvent(event):
             // Handle different VLC events

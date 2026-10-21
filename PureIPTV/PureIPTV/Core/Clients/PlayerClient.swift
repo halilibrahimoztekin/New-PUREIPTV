@@ -59,6 +59,7 @@ public struct PlayerClient: Sendable {
     public var setSubtitleDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var getStats: @MainActor @Sendable () async -> String?
     public var getPlaybackCounters: @MainActor @Sendable () async -> PlayerPlaybackCounters
+    public var setEqualizerPreset: @MainActor @Sendable (_ preset: AudioEQPreset) async -> Void
 
     public var events: @MainActor @Sendable () async -> AsyncStream<PlayerEvent>
 }
@@ -233,6 +234,17 @@ extension PlayerClient: DependencyKey {
                     sourceReadBytes: c.sourceReadBytes
                 )
             },
+            setEqualizerPreset: { preset in
+                let player = box.getPlayer()
+                if preset == .flat {
+                    player.equalizer = nil
+                } else {
+                    let eq = player.equalizer ?? Equalizer()
+                    _ = try? eq.setBands(preset.bandGains)
+                    eq.preampGain = EqualizerGain(preset.preamp)
+                    player.equalizer = eq
+                }
+            },
             events: {
                 let player = box.getPlayer()
                 return AsyncStream { continuation in
@@ -276,6 +288,7 @@ extension PlayerClient: DependencyKey {
         setSubtitleDelay: { _ in },
         getStats: { nil },
         getPlaybackCounters: { PlayerPlaybackCounters() },
+        setEqualizerPreset: { _ in },
         events: { AsyncStream { $0.finish() } }
     )
 }

@@ -379,6 +379,14 @@
                                             Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
                                         }
 
+                                        // 9. Live Stream Audio Equalizer & Dialogue Enhancer (Madde #14)
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                        } label: {
+                                            Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                        }
+
                                         // 8. Stream Health & Buffer Diagnostics (Feature #3)
                                         Button {
                                             HapticManager.shared.trigger(.light)
@@ -907,6 +915,21 @@
                     .zIndex(99)
                 }
 
+                // Live Stream Audio Equalizer & Dialogue Enhancer HUD (Madde #14)
+                if store.isAudioEQHUDVisible {
+                    VStack {
+                        Spacer()
+                        AudioEQHUDView(store: store) {
+                            store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioEQHUDVisible)
+                    .zIndex(100)
+                }
+
                 // Catchup / Archive Timeline Visual Scrubber Overlay (Feature #4)
                 if store.isCatchupTimelineVisible {
                     VStack {
@@ -1044,6 +1067,8 @@
                         .keyboardShortcut(.downArrow, modifiers: [])
                     Button("") { store.send(.openChannelDialer) }
                         .keyboardShortcut("d", modifiers: [])
+                    Button("") { store.send(.toggleAudioEQHUD) }
+                        .keyboardShortcut("e", modifiers: [])
                     Button("") { store.send(.closeTapped) }
                         .keyboardShortcut(.escape, modifiers: [])
                 }
@@ -1168,6 +1193,21 @@
                                                 .font(.caption2.bold())
                                         }
                                         .foregroundColor(Color(hex: "#0A84FF"))
+                                        .padding(.top, 2)
+                                    }
+
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.toggleTracksMenu)
+                                        store.send(.setAudioEQHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "waveform.badge.magnifyingglass")
+                                                .font(.caption2)
+                                            Text("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))")
+                                                .font(.caption2.bold())
+                                        }
+                                        .foregroundColor(store.audioEQPreset.accentColor)
                                         .padding(.top, 2)
                                     }
                                 }

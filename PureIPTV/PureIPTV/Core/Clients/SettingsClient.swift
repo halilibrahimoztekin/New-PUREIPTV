@@ -94,6 +94,13 @@ public struct SettingsClient: Sendable {
     public var setChannelAudioDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
     public var getChannelSubtitleDelay: @Sendable (_ channelID: String) -> Int? = { _ in nil }
     public var setChannelSubtitleDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
+
+    // MARK: - Audio Equalizer & Dialogue Enhancer (Madde #14)
+
+    public var audioEQPreset: @Sendable () -> AudioEQPreset = { .flat }
+    public var setAudioEQPreset: @Sendable (AudioEQPreset) -> Void = { _ in }
+    public var getChannelAudioEQPreset: @Sendable (_ channelID: String) -> AudioEQPreset? = { _ in nil }
+    public var setChannelAudioEQPreset: @Sendable (_ channelID: String, _ preset: AudioEQPreset?) -> Void = { _, _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -121,6 +128,8 @@ extension SettingsClient: DependencyKey {
         let channelAudioTrackPrefix = "com.pureiptv.channelAudioTrack."
         let channelSubTrackPrefix = "com.pureiptv.channelSubTrack."
         let liveTVSortKey = "com.pureiptv.liveTVSortOption"
+        let audioEQKey = "com.pureiptv.audioEQPreset"
+        let channelEQPrefix = "com.pureiptv.channelAudioEQ."
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -134,6 +143,7 @@ extension SettingsClient: DependencyKey {
             rememberTracksKey: true,
             iCloudSyncKey: true,
             oledDimmingKey: true,
+            audioEQKey: "flat",
         ])
 
         return SettingsClient(
@@ -299,6 +309,29 @@ extension SettingsClient: DependencyKey {
                 let key = channelSubDelayPrefix + channelID
                 if let delay {
                     defaults.set(delay, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            audioEQPreset: {
+                guard let raw = defaults.string(forKey: audioEQKey),
+                      let preset = AudioEQPreset(rawValue: raw)
+                else {
+                    return .flat
+                }
+                return preset
+            },
+            setAudioEQPreset: { preset in
+                defaults.set(preset.rawValue, forKey: audioEQKey)
+            },
+            getChannelAudioEQPreset: { channelID in
+                guard let raw = defaults.string(forKey: channelEQPrefix + channelID) else { return nil }
+                return AudioEQPreset(rawValue: raw)
+            },
+            setChannelAudioEQPreset: { channelID, preset in
+                let key = channelEQPrefix + channelID
+                if let preset {
+                    defaults.set(preset.rawValue, forKey: key)
                 } else {
                     defaults.removeObject(forKey: key)
                 }
