@@ -1,9 +1,11 @@
 import ComposableArchitecture
 import SwiftUI
+import SwiftVLC
 
 #if os(tvOS)
     public struct EPGGuideView_tvOS: View {
         @Bindable var store: StoreOf<EPGGuideFeature>
+        @Dependency(\.previewPlayerClient) private var previewPlayerClient
 
         @FocusState private var focusedChannelID: String?
         @FocusState private var focusedProgramID: String?
@@ -285,32 +287,73 @@ import SwiftUI
         private var channelDetailHeader: some View {
             HStack(spacing: 20) {
                 if let selected = store.selectedChannel {
-                    // Large Logo
-                    Group {
-                        if let coverURL = selected.coverURL {
-                            AsyncImage(url: coverURL) { phase in
-                                switch phase {
-                                case let .success(img):
-                                    img.resizable().aspectRatio(contentMode: .fit)
-                                case .empty:
-                                    PureLoadingView(size: .small)
-                                case .failure:
-                                    fallbackHeaderLogo
-                                @unknown default:
-                                    fallbackHeaderLogo
-                                }
-                            }
-                        } else {
-                            fallbackHeaderLogo
+                    // Preview Video or Large Logo
+                    if store.activePreviewChannel?.id == selected.id, store.isPreviewPlaying,
+                       let player = previewPlayerClient.vlcPlayer()
+                    {
+                        ZStack {
+                            Color.black
+                            VideoView(player)
                         }
+                        .frame(width: 140, height: 79)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color(hex: "#0A84FF"), lineWidth: 2)
+                        )
+                        .overlay(alignment: .topLeading) {
+                            HStack(spacing: 3) {
+                                Circle().fill(Color.red).frame(width: 5, height: 5)
+                                Text("CANLI")
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.65), in: Capsule())
+                            .padding(4)
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            Button {
+                                store.send(.togglePreviewMute)
+                            } label: {
+                                Image(systemName: store.isPreviewMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(4)
+                                    .background(Color.black.opacity(0.6), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(4)
+                        }
+                    } else {
+                        // Large Logo
+                        Group {
+                            if let coverURL = selected.coverURL {
+                                AsyncImage(url: coverURL) { phase in
+                                    switch phase {
+                                    case let .success(img):
+                                        img.resizable().aspectRatio(contentMode: .fit)
+                                    case .empty:
+                                        PureLoadingView(size: .small)
+                                    case .failure:
+                                        fallbackHeaderLogo
+                                    @unknown default:
+                                        fallbackHeaderLogo
+                                    }
+                                }
+                            } else {
+                                fallbackHeaderLogo
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
                     }
-                    .frame(width: 72, height: 72)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
 
                     // Title & Badges
                     VStack(alignment: .leading, spacing: 6) {

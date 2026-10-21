@@ -614,6 +614,13 @@ public struct EPGTimelineView: View {
                     systemImage: isFav ? "star.slash.fill" : "star.fill"
                 )
             }
+
+            Button {
+                HapticManager.shared.trigger(.light)
+                store.send(.togglePiPPreview(channel))
+            } label: {
+                Label("Canlı Mini Önizleme", systemImage: "pip.enter")
+            }
         }
     }
 
@@ -1446,61 +1453,20 @@ public struct EPGTimelineView: View {
     // MARK: - PiP-in-EPG Canlı Mini Önizleme (Madde #25)
 
     private func pipInEPGCard(channel: MediaModels.Item) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                Color.black
-                Image(systemName: "tv.fill")
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            .frame(width: 72, height: 42)
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Circle().fill(Color.red).frame(width: 5, height: 5)
-                    Text("CANLI ÖNİZLEME")
-                        .font(.system(size: 8, weight: .black))
-                        .foregroundColor(.red)
-                }
-                Text(channel.title)
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-            }
-
-            Button {
-                store.send(.channelTapped(channel))
-            } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Color.white.opacity(0.15), in: Circle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
+        LiveEPGMiniPreviewView(
+            channel: channel,
+            isMuted: store.isPreviewMuted,
+            isLoading: store.isPreviewLoading,
+            errorMessage: store.previewErrorMessage,
+            onToggleMute: {
+                store.send(.togglePreviewMute)
+            },
+            onExpand: {
+                store.send(.expandPreviewToFullscreen)
+            },
+            onClose: {
                 store.send(.closePiPPreview)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 26, height: 26)
-                    .background(Color.white.opacity(0.1), in: Circle())
             }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.18), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.4), radius: 10)
     }
 }

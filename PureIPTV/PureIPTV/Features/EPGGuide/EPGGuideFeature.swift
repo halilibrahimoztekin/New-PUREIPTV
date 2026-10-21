@@ -14,6 +14,12 @@ public struct EPGGuideFeature {
         public var isLoadingEPG = false
         public var errorMessage: String?
 
+        // Live EPG Preview (Madde #25)
+        public var activePreviewChannel: MediaModels.Item?
+        public var isPreviewMuted: Bool = true
+        public var isPreviewPlaying: Bool = false
+        public var isAutoPreviewEnabled: Bool = true
+
         public init(config: PlaylistConfig, channels: [MediaModels.Item], initialChannel: MediaModels.Item?) {
             self.config = config
             self.channels = channels
@@ -28,6 +34,11 @@ public struct EPGGuideFeature {
         case closeTapped
         case playTapped(MediaModels.Item)
         case playCatchUp(EPGProgram, MediaModels.Item)
+        case channelFocused(MediaModels.Item?)
+        case startPreviewDebounce(MediaModels.Item)
+        case previewPlaybackStarted(String)
+        case togglePreviewMute
+        case stopPreview
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -38,6 +49,8 @@ public struct EPGGuideFeature {
 
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.dismiss) var dismiss
+    @Dependency(\.previewPlayerClient) var previewPlayerClient
+    @Dependency(\.continuousClock) var clock
 
     public init() {}
 
@@ -59,10 +72,60 @@ public struct EPGGuideFeature {
                 let config = state.config
                 let streamID = channel.id
 
-                return .run { send in
+                enum CancelID: Hashable {
+                    case previewDebounce
+                }
+
+                let epgEffect: Effect<Action> = .run { send in
                     await send(.epgResponse(
                         Result { try await iptvClient.fetchShortEPG(config, streamID, 20) }
                     ))
+                }
+
+                let previewEffect: Effect<Action> = state.isAutoPreviewEnabled ? .run { [clock] send in
+                    try await clock.sleep(for: .milliseconds(400))
+                    await send(.startPreviewDebounce(channel))
+                }.cancellable(id: CancelID.previewDebounce, cancelInFlight: true) : .none
+
+                return .merge(epgEffect, previewEffect)
+
+            case let .channelFocused(channel):
+                guard let channel, state.isAutoPreviewEnabled else { return .none }
+                if state.activePreviewChannel?.id == channel.id, state.isPreviewPlaying {
+                    return .none
+                }
+                enum CancelID: Hashable {
+                    case previewDebounce
+                }
+                return .run { [clock] send in
+                    try await clock.sleep(for: .milliseconds(400))
+                    await send(.startPreviewDebounce(channel))
+                }
+                .cancellable(id: CancelID.previewDebounce, cancelInFlight: true)
+
+            case let .startPreviewDebounce(channel):
+                state.activePreviewChannel = channel
+                state.isPreviewPlaying = true
+                return .run { [previewPlayerClient] send in
+                    try? await previewPlayerClient.playPreview(channel)
+                    await send(.previewPlaybackStarted(channel.id))
+                }
+
+            case .previewPlaybackStarted:
+                return .none
+
+            case .togglePreviewMute:
+                state.isPreviewMuted.toggle()
+                let isMuted = state.isPreviewMuted
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.setMuted(isMuted)
+                }
+
+            case .stopPreview:
+                state.activePreviewChannel = nil
+                state.isPreviewPlaying = false
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.stopPreview()
                 }
 
             case let .epgResponse(.success(listings)):
@@ -77,6 +140,9 @@ public struct EPGGuideFeature {
 
             case .closeTapped:
                 return .merge(
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    },
                     .send(.delegate(.close)),
                     .run { _ in
                         @Dependency(\.dismiss) var dismiss
@@ -85,7 +151,12 @@ public struct EPGGuideFeature {
                 )
 
             case let .playTapped(channel):
-                return .send(.delegate(.playChannel(channel)))
+                return .merge(
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    },
+                    .send(.delegate(.playChannel(channel)))
+                )
 
             case let .playCatchUp(program, channel):
                 let config = state.config
@@ -112,7 +183,12 @@ public struct EPGGuideFeature {
                         type: .live,
                         epgChannelID: channel.epgChannelID
                     )
-                    return .send(.delegate(.playChannel(catchupItem)))
+                    return .merge(
+                        .run { [previewPlayerClient] _ in
+                            await previewPlayerClient.stopPreview()
+                        },
+                        .send(.delegate(.playChannel(catchupItem)))
+                    )
                 }
                 return .none
 

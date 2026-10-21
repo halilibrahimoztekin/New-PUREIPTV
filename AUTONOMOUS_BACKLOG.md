@@ -150,11 +150,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `CloudSyncClient`, `NSUbiquitousKeyValueStore` background notification sync.
 - **Durum:** `[DONE]` (PR Onaylandı, 8 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 25. [IN_PROGRESS] Live EPG Focus Mini-Video Preview PIP in Channel Grid
+### 25. [DONE] Live EPG Focus Mini-Video Preview PIP in Channel Grid
 - **Açıklama:** EPG rehberinde veya kanal listesinde gezinirken Siri Remote ile bir kanalın üzerine gelindiğinde (focus), ana yayını kesmeden sağ üst köşede küçük bir canlı önizleme penceresinde kanalın anlık canlı akışını sessizce başlatan UHF/TiviMate tarzı hızlı kanal gözetleme motoru.
 - **Platformlar:** tvOS (Siri Remote Focus debounce, secondary mini player layer), iPadOS.
 - **TCA & Mimari:** `PreviewPlayerClient`, `EPGFeature` debounce focus preview effect.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, 9 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
 ---
 
@@ -312,6 +312,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `NotificationCenter` üzerinden `.cloudSyncDidComplete`, `.favoritesDidChange` ve `.hiddenContentDidChange` yayınları kuruldu; `NSUbiquitousKeyValueStore.didChangeExternallyNotification` ile arka planda uzaktan gelen değişiklikler anında yerel SwiftData ve UserDefaults'a entegre edildi.
   - `SettingsFeature.swift` ve `SettingsView.swift` iCloud Senkronizasyon bölümü zenginleştirildi: Son eşitleme zamanı göreceli formatı ("X dakika önce"), gerçek zamanlı durum rozetleri ("X Favori • Y Gizli • Z İlerleme"), animasyonlu "Şimdi Eşitle" butonu ve durum bildirimleri Obsidian Cam estetiğinde eklendi.
   - 8 adet kapsamlı birim testi (`CloudSyncEngineTests.swift`) yazıldı; model serileştirme, SwiftData dönüşümleri, çakışma çözümleme ve TCA Reducer akışı hem iOS Simulator hem de tvOS Simulator platformlarında sıfır hata ile doğrulandı.
+- **#25 Live EPG Focus Mini-Video Preview PIP in Channel Grid:**
+  - `PreviewPlayerClient` mimarisi kuruldu: Ana oynatıcıyı etkilemeden, izole `SwiftVLC.Player` ile sessizce (`volume = 0`) arka planda anlık canlı video akışı başlatan, oynatma durumu (`PreviewPlaybackStatus`), ses açma/kapama ve tam ekran terfi yeteneklerine sahip TCA bağımlılık istemcisi geliştirildi.
+  - `LiveEPGMiniPreviewView.swift` Obsidian cam estetiğinde (`#0C0C10`, `.ultraThinMaterial`) tasarlandı: 16:9 oranında canlı akış penceresi, kırmızı yanıp sönen "CANLI ÖNİZLEME" rozeti, ses açma/kapama butonu, kanal logosu, kalite rozeti ("4K", "FHD", "HD"), anında tam ekrana geçiş ("arrow.up.left.and.arrow.down.right") ve kapatma butonları entegre edildi.
+  - `EPGTimelineFeature.swift` reducer'ına 400ms odaklanma gecikmesi (`channelFocused` -> `startPreviewDebounce` effect debounce) eklendi; kullanıcı Siri Remote veya dokunmatik ekranla kanallar arasında hızlıca gezinirken gereksiz ağ trafiği ve sunucu yükü önlendi.
+  - `EPGTimelineView.swift` yüzen mini PIP penceresi `LiveEPGMiniPreviewView` ile donatıldı; kanal hücrelerine uzun basıldığında veya context menu açıldığında "Canlı Mini Önizleme" eylemi eklendi.
+  - `EPGGuideFeature.swift` ve Apple TV `EPGGuideView_tvOS.swift` Siri Remote Focus Engine ile kanal seçildiğinde üst başlık alanında canlı video önizlemesi ve ses açma/kapama butonu sunacak şekilde modernize edildi.
+  - 9 adet kapsamlı birim testi (`LiveEPGPreviewEngineTests.swift`) yazıldı; hem iOS Simulator (9/9 passed) hem de tvOS Simulator platformlarında sıfır hata ile doğrulandı.
+
 
 
 

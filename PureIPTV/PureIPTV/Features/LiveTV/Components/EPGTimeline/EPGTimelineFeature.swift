@@ -27,6 +27,11 @@ public struct EPGTimelineFeature {
         // PiP-in-EPG Live Mini-Preview (Madde #25)
         public var activePreviewChannel: MediaModels.Item?
         public var isPiPActive: Bool = false
+        public var isPreviewMuted: Bool = true
+        public var isPreviewLoading: Bool = false
+        public var previewErrorMessage: String?
+        public var focusedChannelID: String?
+        public var isAutoPreviewOnFocusEnabled: Bool = true
 
         public var lastSyncFormatted: String? {
             guard let lastSyncTimestamp else { return nil }
@@ -144,10 +149,18 @@ public struct EPGTimelineFeature {
         case syncCompleted(Date)
         case clearSyncStatusMessage
         case closeTapped
+        case channelFocused(MediaModels.Item?)
+        case startPreviewDebounce(MediaModels.Item)
+        case previewStarted(channelID: String)
+        case previewFailed(channelID: String, message: String)
+        case togglePreviewMute
+        case setPreviewMuted(Bool)
+        case expandPreviewToFullscreen
         case togglePiPPreview(MediaModels.Item?)
         case closePiPPreview
 
         case delegate(Delegate)
+        @CasePathable
         public enum Delegate: Equatable {
             case close
             case playChannel(MediaModels.Item)
@@ -160,6 +173,7 @@ public struct EPGTimelineFeature {
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.continuousClock) var clock
     @Dependency(\.dismiss) var dismiss
+    @Dependency(\.previewPlayerClient) var previewPlayerClient
 
     public init() {}
 
@@ -308,9 +322,6 @@ public struct EPGTimelineFeature {
                 state.epgData[streamID] = []
                 return .none
 
-            case let .channelTapped(channel):
-                return .send(.delegate(.playChannel(channel)))
-
             case let .showProgramDetails(program, channel):
                 state.selectedProgramDetail = program
                 state.selectedProgramChannel = channel
@@ -374,13 +385,29 @@ public struct EPGTimelineFeature {
                             type: .live,
                             epgChannelID: channel.epgChannelID
                         )
-                        return .send(.delegate(.playChannel(catchupItem)))
+                        return .concatenate(
+                            .run { [previewPlayerClient] _ in
+                                await previewPlayerClient.stopPreview()
+                            },
+                            .send(.delegate(.playChannel(catchupItem)))
+                        )
                     }
                 }
                 return .none
 
+            case let .channelTapped(channel):
+                return .concatenate(
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    },
+                    .send(.delegate(.playChannel(channel)))
+                )
+
             case .closeTapped:
                 return .merge(
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    },
                     .send(.delegate(.close)),
                     .run { _ in
                         @Dependency(\.dismiss) var dismiss
@@ -388,20 +415,96 @@ public struct EPGTimelineFeature {
                     }
                 )
 
+            case let .channelFocused(channel):
+                state.focusedChannelID = channel?.id
+                guard state.isAutoPreviewOnFocusEnabled, let channel else {
+                    return .none
+                }
+                if state.activePreviewChannel?.id == channel.id, state.isPiPActive {
+                    return .none
+                }
+
+                enum CancelID: Hashable {
+                    case previewDebounce
+                }
+
+                return .run { [clock] send in
+                    try await clock.sleep(for: .milliseconds(400))
+                    await send(.startPreviewDebounce(channel))
+                }
+                .cancellable(id: CancelID.previewDebounce, cancelInFlight: true)
+
+            case let .startPreviewDebounce(channel):
+                state.activePreviewChannel = channel
+                state.isPiPActive = true
+                state.isPreviewLoading = true
+                state.previewErrorMessage = nil
+
+                return .run { [previewPlayerClient] send in
+                    do {
+                        try await previewPlayerClient.playPreview(channel)
+                        await send(.previewStarted(channelID: channel.id))
+                    } catch {
+                        await send(.previewFailed(channelID: channel.id, message: error.localizedDescription))
+                    }
+                }
+
+            case .previewStarted:
+                state.isPreviewLoading = false
+                state.previewErrorMessage = nil
+                return .none
+
+            case let .previewFailed(_, message):
+                state.isPreviewLoading = false
+                state.previewErrorMessage = message
+                return .none
+
+            case .togglePreviewMute:
+                state.isPreviewMuted.toggle()
+                let isMuted = state.isPreviewMuted
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.setMuted(isMuted)
+                }
+
+            case let .setPreviewMuted(isMuted):
+                state.isPreviewMuted = isMuted
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.setMuted(isMuted)
+                }
+
+            case .expandPreviewToFullscreen:
+                guard let channel = state.activePreviewChannel else { return .none }
+                state.activePreviewChannel = nil
+                state.isPiPActive = false
+                return .merge(
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    },
+                    .send(.delegate(.playChannel(channel)))
+                )
+
             case let .togglePiPPreview(channel):
-                if state.activePreviewChannel?.id == channel?.id {
+                if state.activePreviewChannel?.id == channel?.id, state.isPiPActive {
                     state.activePreviewChannel = nil
                     state.isPiPActive = false
+                    state.isPreviewLoading = false
+                    return .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    }
+                } else if let channel {
+                    return .send(.startPreviewDebounce(channel))
                 } else {
-                    state.activePreviewChannel = channel
-                    state.isPiPActive = channel != nil
+                    return .send(.closePiPPreview)
                 }
-                return .none
 
             case .closePiPPreview:
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
-                return .none
+                state.isPreviewLoading = false
+                state.previewErrorMessage = nil
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.stopPreview()
+                }
 
             case .delegate:
                 return .none
