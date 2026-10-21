@@ -6,7 +6,7 @@
         @Bindable var store: StoreOf<SearchFeature>
         let config: PlaylistConfig
 
-        /// Columns for grids (wider for tvOS)
+        /// Columns for grids (wider for tvOS 10-foot UI)
         private let channelColumns: [GridItem] = [
             GridItem(.adaptive(minimum: 300, maximum: 400), spacing: 40),
         ]
@@ -32,17 +32,23 @@
             ZStack(alignment: .top) {
                 Color.black.ignoresSafeArea()
 
-                VStack(spacing: 40) {
+                VStack(spacing: 28) {
                     // Search Bar
                     searchBar
                         .padding(.horizontal, 60)
                         .padding(.top, 40)
 
-                    // Filters
-                    filterBar
-                        .padding(.bottom, 20)
+                    // Multi-Playlist Filter Bar (if multiple playlists exist)
+                    if store.savedPlaylists.count > 1 {
+                        playlistFilterBar
+                            .padding(.horizontal, 60)
+                    }
 
-                    // Results
+                    // Instant Filter Badges Bar
+                    filterBar
+                        .padding(.bottom, 12)
+
+                    // Results or Discovery State
                     if store.isLoading {
                         loadingView
                     } else if let error = store.errorMessage {
@@ -103,18 +109,79 @@
             )
         }
 
+        // MARK: - Multi-Playlist Filter Bar
+
+        private var playlistFilterBar: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    let isGlobalSelected = store.selectedPlaylistID == nil
+
+                    Button {
+                        store.send(.selectPlaylistFilter(nil))
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "globe.europe.africa.fill")
+                                .font(.system(size: 18))
+                            Text(AppStrings.Search.allPlaylistsShort)
+                                .font(.system(size: 20, weight: isGlobalSelected ? .bold : .medium))
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isGlobalSelected))
+
+                    ForEach(Array(store.savedPlaylists.enumerated()), id: \.element.id) { index, playlist in
+                        let isSelected = store.selectedPlaylistID == playlist.id
+                        let badge = playlist.toPlaylistConfig().map {
+                            UnifiedPlaylistManager.shared.badge(for: $0, index: index)
+                        } ?? PlaylistSourceBadge(id: playlist.id.uuidString, playlistName: playlist.name, colorHex: "#0A84FF")
+
+                        Button {
+                            store.send(.selectPlaylistFilter(playlist.id))
+                        } label: {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(badge.color)
+                                    .frame(width: 10, height: 10)
+                                Text(playlist.name)
+                                    .font(.system(size: 20, weight: isSelected ? .bold : .medium))
+                            }
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                    }
+                }
+            }
+        }
+
+        // MARK: - Instant Filter Badges Bar
+
         private var filterBar: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
                     ForEach(SearchFeature.SearchFilter.allCases, id: \.self) { filter in
                         let isSelected = store.filter == filter
+                        let count = store.filterCounts[filter]
+
                         Button {
                             store.send(.filterChanged(filter))
                         } label: {
-                            Text(filter.title)
-                                .font(.system(size: 24, weight: isSelected ? .bold : .medium))
-                                .padding(.horizontal, 30)
-                                .padding(.vertical, 14)
+                            HStack(spacing: 8) {
+                                Image(systemName: filter.icon)
+                                    .font(.system(size: 20))
+
+                                Text(filter.title)
+                                    .font(.system(size: 22, weight: isSelected ? .bold : .medium))
+
+                                if let count, count > 0 {
+                                    Text("(\(count))")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .opacity(isSelected ? 0.95 : 0.6)
+                                }
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 12)
                         }
                         .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
                     }
@@ -123,22 +190,35 @@
             }
         }
 
+        // MARK: - Results Scroll View
+
         private var resultsScrollView: some View {
             ScrollView {
                 VStack(spacing: 60) {
-                    let live = store.liveResults
+                    // 1. Live Channels Section
+                    let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+                        )
+                    } : store.enrichedLiveResults
+
                     if !live.isEmpty {
                         resultSection(title: AppStrings.Search.liveTV, count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 40) {
-                                ForEach(live) { channel in
-                                    TVChannelCard(channel: channel, isSelected: false) {
-                                        store.send(.channelSelected(channel))
+                                ForEach(live) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.channelSelected(result.item))
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: channel, type: "live"))
+                                            store.send(.toggleFavorite(item: result.item, type: "live"))
                                         } label: {
-                                            if store.favoriteIDs.contains(channel.id) {
+                                            if store.favoriteIDs.contains(result.item.id) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
@@ -146,7 +226,7 @@
                                         }
 
                                         Button {
-                                            store.send(.channelSelected(channel))
+                                            store.send(.channelSelected(result.item))
                                         } label: {
                                             Label(AppStrings.Common.watchNow, systemImage: "play.fill")
                                         }
@@ -156,19 +236,30 @@
                         }
                     }
 
-                    let vods = store.vodResults
+                    // 2. Movies (VOD) Section
+                    let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#BF5AF2")
+                        )
+                    } : store.enrichedVODResults
+
                     if !vods.isEmpty {
                         resultSection(title: AppStrings.Search.movies, count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
-                                ForEach(vods) { vod in
-                                    TVVODCard(vod: vod, isSelected: false) {
-                                        store.send(.vodSelected(vod))
+                                ForEach(vods) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.vodSelected(result.item))
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: vod, type: "vod"))
+                                            store.send(.toggleFavorite(item: result.item, type: "vod"))
                                         } label: {
-                                            if store.favoriteIDs.contains(vod.id) {
+                                            if store.favoriteIDs.contains(result.item.id) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
@@ -176,7 +267,7 @@
                                         }
 
                                         Button {
-                                            store.send(.vodSelected(vod))
+                                            store.send(.vodSelected(result.item))
                                         } label: {
                                             Label("Detayları Gör", systemImage: "info.circle")
                                         }
@@ -186,19 +277,30 @@
                         }
                     }
 
-                    let series = store.seriesResults
+                    // 3. Series Section
+                    let series = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#FF9F0A")
+                        )
+                    } : store.enrichedSeriesResults
+
                     if !series.isEmpty {
                         resultSection(title: AppStrings.Search.series, count: series.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 40) {
-                                ForEach(series) { item in
-                                    TVSeriesCard(series: item, isSelected: false) {
-                                        store.send(.seriesSelected(item))
+                                ForEach(series) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.seriesSelected(result.item))
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: item, type: "series"))
+                                            store.send(.toggleFavorite(item: result.item, type: "series"))
                                         } label: {
-                                            if store.favoriteIDs.contains(item.id) {
+                                            if store.favoriteIDs.contains(result.item.id) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
@@ -206,7 +308,7 @@
                                         }
 
                                         Button {
-                                            store.send(.seriesSelected(item))
+                                            store.send(.seriesSelected(result.item))
                                         } label: {
                                             Label("Bölümleri Gör", systemImage: "list.number")
                                         }
@@ -220,6 +322,8 @@
                 .padding(.bottom, 60)
             }
         }
+
+        // MARK: - Discovery & Empty Views
 
         private var emptySearchDiscoveryView: some View {
             ScrollView {

@@ -6,7 +6,7 @@ public struct PlaylistSourceBadge: Identifiable, Equatable, Sendable {
     public let playlistName: String
     public let colorHex: String
 
-    public init(id: String, playlistName: String, colorHex: String) {
+    public nonisolated init(id: String, playlistName: String, colorHex: String) {
         self.id = id
         self.playlistName = playlistName
         self.colorHex = colorHex
@@ -18,7 +18,7 @@ public struct PlaylistSourceBadge: Identifiable, Equatable, Sendable {
 }
 
 public final class UnifiedPlaylistManager: @unchecked Sendable {
-    public static let shared = UnifiedPlaylistManager()
+    public nonisolated static let shared = UnifiedPlaylistManager()
 
     private let paletteHex = [
         "#0A84FF", // Blue
@@ -31,7 +31,7 @@ public final class UnifiedPlaylistManager: @unchecked Sendable {
 
     private init() {}
 
-    public func badge(for playlistConfig: PlaylistConfig, index: Int = 0) -> PlaylistSourceBadge {
+    public nonisolated func badge(for playlistConfig: PlaylistConfig, index: Int = 0) -> PlaylistSourceBadge {
         let name = playlistConfig.serverURL?.host ?? playlistConfig.m3uURL?.lastPathComponent ?? "Playlist \(index + 1)"
         let id = playlistConfig.serverURL?.absoluteString ?? playlistConfig.m3uURL?.absoluteString ?? "playlist_\(index)"
         let colorHex = paletteHex[abs(index) % paletteHex.count]
@@ -39,7 +39,7 @@ public final class UnifiedPlaylistManager: @unchecked Sendable {
     }
 
     /// Merges channels across multiple playlists, attaching source playlist badges to prevent duplicates
-    public func mergeChannels(from playlistChannels: [(config: PlaylistConfig, channels: [MediaModels.Item])]) -> [MediaModels.Item] {
+    public nonisolated func mergeChannels(from playlistChannels: [(config: PlaylistConfig, channels: [MediaModels.Item])]) -> [MediaModels.Item] {
         var merged: [MediaModels.Item] = []
         var seenIDs: Set<String> = []
 

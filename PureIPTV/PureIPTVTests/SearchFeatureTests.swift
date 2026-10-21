@@ -62,11 +62,7 @@ final class SearchFeatureTests: XCTestCase {
 
         await store.send(.queryChanged("")) {
             $0.searchQuery = ""
-            $0.debouncedQuery = ""
             $0.isSearching = false
-            $0.liveResults = []
-            $0.vodResults = []
-            $0.seriesResults = []
         }
     }
 
@@ -85,17 +81,77 @@ final class SearchFeatureTests: XCTestCase {
 
         await store.send(.resetCache) {
             $0.hasLoaded = false
-            $0.isLoading = false
-            $0.isSearching = false
             $0.allChannels = []
-            $0.allVODs = []
-            $0.allSeries = []
-            $0.liveResults = []
-            $0.vodResults = []
-            $0.seriesResults = []
             $0.searchQuery = ""
             $0.debouncedQuery = ""
-            $0.lastLoadedConfig = nil
         }
+    }
+
+    func testGlobalSearchEngineFilteringAnd4KDetection() {
+        let channel1 = MediaModels.Item(id: "c1", title: "TRT 1 4K UHD", categoryID: "cat1", type: .live)
+        let channel2 = MediaModels.Item(id: "c2", title: "beIN Sports 1 HD", categoryID: "cat1", type: .live)
+        let movie1 = MediaModels.Item(id: "m1", title: "Inception 2160p UHD", categoryID: "cat2", type: .vod)
+        let series1 = MediaModels.Item(id: "s1", title: "Severance S02", categoryID: "cat3", type: .series)
+
+        let playlistAId = UUID()
+        let playlistBId = UUID()
+        let playlistA = PlaylistSourceBadge(id: playlistAId.uuidString, playlistName: "Ev Sunucusu", colorHex: "#3B82F6")
+        let playlistB = PlaylistSourceBadge(id: playlistBId.uuidString, playlistName: "Yedek Sunucu", colorHex: "#10B981")
+
+        let indexedChannels = [
+            GlobalSearchResultItem(item: channel1, playlistBadge: playlistA),
+            GlobalSearchResultItem(item: channel2, playlistBadge: playlistB),
+        ]
+        let indexedVODs = [
+            GlobalSearchResultItem(item: movie1, playlistBadge: playlistA),
+        ]
+        let indexedSeries = [
+            GlobalSearchResultItem(item: series1, playlistBadge: playlistA),
+        ]
+
+        // 1. Check 4K Detection
+        XCTAssertTrue(indexedChannels[0].is4K)
+        XCTAssertFalse(indexedChannels[1].is4K)
+        XCTAssertTrue(indexedVODs[0].is4K)
+
+        // 2. Multi-filter search output & counts
+        let output = GlobalSearchEngine.search(
+            query: "1",
+            filter: .all,
+            selectedPlaylistID: nil,
+            channels: indexedChannels,
+            vods: indexedVODs,
+            series: indexedSeries
+        )
+        // Matches query "1": "TRT 1 4K UHD" (live), "beIN Sports 1 HD" (live), "Inception 2160p UHD" (vod, contains 1)
+        XCTAssertEqual(output.counts[.live], 2)
+        XCTAssertEqual(output.counts[.vod], 1)
+        XCTAssertEqual(output.counts[.series], 0)
+        XCTAssertEqual(output.counts[.uhd4k], 2) // TRT 1 and Inception
+
+        // 3. Filter by 4K UHD
+        let uhdOutput = GlobalSearchEngine.search(
+            query: "1",
+            filter: .uhd4k,
+            selectedPlaylistID: nil,
+            channels: indexedChannels,
+            vods: indexedVODs,
+            series: indexedSeries
+        )
+        let totalUHDItems = uhdOutput.live + uhdOutput.vods + uhdOutput.series
+        XCTAssertEqual(totalUHDItems.count, 2)
+        XCTAssertTrue(totalUHDItems.allSatisfy(\.is4K))
+
+        // 4. Multi-playlist scoping
+        let pBOutput = GlobalSearchEngine.search(
+            query: "Sports",
+            filter: .all,
+            selectedPlaylistID: playlistBId,
+            channels: indexedChannels,
+            vods: indexedVODs,
+            series: indexedSeries
+        )
+        XCTAssertEqual(pBOutput.live.count, 1)
+        XCTAssertEqual(pBOutput.live.first?.item.id, "c2")
     }
 }

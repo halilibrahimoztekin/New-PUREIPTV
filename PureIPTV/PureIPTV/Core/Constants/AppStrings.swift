@@ -419,6 +419,12 @@ public enum AppStrings {
         public static let clear = "Temizle".localized
         public static let loadingMessage = "Arama altyapısı hazırlanıyor...\n(Bu işlem ilk girişte birkaç saniye sürebilir)".localized
         public static let all = "Tümü".localized
+        public static let filter4K = "4K / UHD 🌟".localized
+        public static let filterEPG = "EPG Programları 🕒".localized
+        public static let allPlaylists = "Tüm Çalma Listeleri (Global 🌐)".localized
+        public static let allPlaylistsShort = "Tümü (Global)".localized
+        public static let liveProgramMatch = "Canlı Program:".localized
+        public static let playlistSource = "Liste:".localized
     }
 
     // MARK: - MultiView

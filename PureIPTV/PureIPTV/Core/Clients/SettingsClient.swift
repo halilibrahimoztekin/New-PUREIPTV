@@ -338,6 +338,8 @@ extension SettingsClient: DependencyKey {
             }
         )
     }()
+
+    public static let testValue: SettingsClient = .liveValue
 }
 
 public extension DependencyValues {

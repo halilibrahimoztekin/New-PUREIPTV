@@ -37,13 +37,19 @@
                     searchBar
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 10)
 
-                    // Filters
+                    // Multi-Playlist Filter Bar (if multiple playlists exist)
+                    if store.savedPlaylists.count > 1 {
+                        playlistFilterBar
+                            .padding(.bottom, 8)
+                    }
+
+                    // Instant Filter Badges Bar
                     filterBar
                         .padding(.bottom, 12)
 
-                    // Results
+                    // Results or Discovery State
                     if store.isLoading {
                         loadingView
                     } else if let error = store.errorMessage {
@@ -62,7 +68,7 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
-            // Dismiss keyboard when scrolling
+            // Dismiss keyboard when scrolling or tapping outside
             .onTapGesture {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
@@ -86,7 +92,10 @@
                 }
 
                 if !store.searchQuery.isEmpty {
-                    Button(action: { store.send(.queryChanged("")) }) {
+                    Button(action: {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.queryChanged(""))
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
                     }
@@ -103,27 +112,117 @@
             )
         }
 
+        // MARK: - Multi-Playlist Filter Bar
+
+        private var playlistFilterBar: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    // Global All Playlists Chip
+                    let isGlobalSelected = store.selectedPlaylistID == nil
+                    Button {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.selectPlaylistFilter(nil))
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "globe.europe.africa.fill")
+                                .font(.system(size: 11))
+                            Text(AppStrings.Search.allPlaylistsShort)
+                                .font(.system(size: 12, weight: isGlobalSelected ? .bold : .medium))
+                        }
+                        .foregroundStyle(isGlobalSelected ? .white : Color(hex: "#C0C6D6").opacity(0.75))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5.5)
+                        .background(
+                            Capsule()
+                                .fill(isGlobalSelected ? Color(hex: "#0A84FF").opacity(0.28) : Color(hex: "#18181D"))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(isGlobalSelected ? Color(hex: "#0A84FF") : Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    // Individual Saved Playlists
+                    ForEach(Array(store.savedPlaylists.enumerated()), id: \.element.id) { index, playlist in
+                        let isSelected = store.selectedPlaylistID == playlist.id
+                        let badge = playlist.toPlaylistConfig().map {
+                            UnifiedPlaylistManager.shared.badge(for: $0, index: index)
+                        } ?? PlaylistSourceBadge(id: playlist.id.uuidString, playlistName: playlist.name, colorHex: "#0A84FF")
+
+                        Button {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.selectPlaylistFilter(playlist.id))
+                        } label: {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(badge.color)
+                                    .frame(width: 6, height: 6)
+                                Text(playlist.name)
+                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                            }
+                            .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.75))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5.5)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? badge.color.opacity(0.28) : Color(hex: "#18181D"))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(isSelected ? badge.color : Color.white.opacity(0.08), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+
+        // MARK: - Instant Filter Badges Bar
+
         private var filterBar: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(SearchFeature.SearchFilter.allCases, id: \.self) { filter in
                         let isSelected = store.filter == filter
+                        let count = store.filterCounts[filter]
+
                         Button {
+                            HapticManager.shared.trigger(.light)
                             store.send(.filterChanged(filter))
                         } label: {
-                            Text(filter.title)
-                                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                                .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? Color(hex: "#0A84FF") : Color(hex: "#1F1F23"))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color.white.opacity(isSelected ? 0 : 0.08), lineWidth: 1)
-                                        )
-                                )
+                            HStack(spacing: 5) {
+                                Image(systemName: filter.icon)
+                                    .font(.system(size: 11, weight: .semibold))
+
+                                Text(filter.title)
+                                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+
+                                if let count, count > 0 {
+                                    Text("(\(count))")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .opacity(isSelected ? 0.95 : 0.6)
+                                }
+                            }
+                            .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.75))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? filter.badgeColor : Color(hex: "#1F1F23"))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(isSelected ? 0.25 : 0.08), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(
+                                color: isSelected ? filter.badgeColor.opacity(0.4) : .clear,
+                                radius: 6,
+                                x: 0,
+                                y: 2
+                            )
                         }
                         .buttonStyle(.plain)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -133,42 +232,131 @@
             }
         }
 
+        // MARK: - Results Scroll View
+
         private var resultsScrollView: some View {
             ScrollView {
                 VStack(spacing: 24) {
-                    let live = store.liveResults
+                    // 1. Live Channels Section
+                    let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+                        )
+                    } : store.enrichedLiveResults
+
                     if !live.isEmpty {
                         resultSection(title: AppStrings.Search.liveTV, count: live.count) {
                             LazyVGrid(columns: channelColumns, spacing: 12) {
-                                ForEach(live) { channel in
-                                    ChannelCardView(channel: channel) {
-                                        store.send(.channelSelected(channel))
+                                ForEach(live) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.channelSelected(result.item))
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: result.item, type: "live"))
+                                        } label: {
+                                            Label(
+                                                store.favoriteIDs.contains(result.item.id)
+                                                    ? AppStrings.Common.removeFromFavorites
+                                                    : AppStrings.Common.addToFavorites,
+                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                            )
+                                        }
+
+                                        Button {
+                                            store.send(.channelSelected(result.item))
+                                        } label: {
+                                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    let vods = store.vodResults
+                    // 2. Movies (VOD) Section
+                    let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#BF5AF2")
+                        )
+                    } : store.enrichedVODResults
+
                     if !vods.isEmpty {
                         resultSection(title: AppStrings.Search.movies, count: vods.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
-                                ForEach(vods) { vod in
-                                    VODCardView(vod: vod) {
-                                        store.send(.vodSelected(vod))
+                                ForEach(vods) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.vodSelected(result.item))
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: result.item, type: "vod"))
+                                        } label: {
+                                            Label(
+                                                store.favoriteIDs.contains(result.item.id)
+                                                    ? AppStrings.Common.removeFromFavorites
+                                                    : AppStrings.Common.addToFavorites,
+                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                            )
+                                        }
+
+                                        Button {
+                                            store.send(.vodSelected(result.item))
+                                        } label: {
+                                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    let seriesList = store.seriesResults
+                    // 3. Series Section
+                    let seriesList = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
+                        GlobalSearchResultItem(
+                            item: $0,
+                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#FF9F0A")
+                        )
+                    } : store.enrichedSeriesResults
+
                     if !seriesList.isEmpty {
                         resultSection(title: AppStrings.Search.series, count: seriesList.count) {
                             LazyVGrid(columns: mediaColumns, spacing: 12) {
-                                ForEach(seriesList) { series in
-                                    SeriesCardView(series: series) {
-                                        store.send(.seriesSelected(series))
+                                ForEach(seriesList) { result in
+                                    GlobalSearchResultCard(
+                                        result: result,
+                                        isSelected: false,
+                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                    ) {
+                                        store.send(.seriesSelected(result.item))
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            store.send(.toggleFavorite(item: result.item, type: "series"))
+                                        } label: {
+                                            Label(
+                                                store.favoriteIDs.contains(result.item.id)
+                                                    ? AppStrings.Common.removeFromFavorites
+                                                    : AppStrings.Common.addToFavorites,
+                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                            )
+                                        }
+
+                                        Button {
+                                            store.send(.seriesSelected(result.item))
+                                        } label: {
+                                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                        }
                                     }
                                 }
                             }
@@ -180,6 +368,8 @@
             }
             .scrollDismissesKeyboard(.interactively)
         }
+
+        // MARK: - Discovery & Empty Views
 
         private var emptySearchDiscoveryView: some View {
             ScrollView {
@@ -193,6 +383,7 @@
                                     .foregroundStyle(.white)
                                 Spacer()
                                 Button {
+                                    HapticManager.shared.trigger(.light)
                                     store.send(.clearHistoryTapped)
                                 } label: {
                                     Text(AppStrings.Search.clear)
@@ -204,6 +395,7 @@
                             VStack(spacing: 0) {
                                 ForEach(store.recentSearches.prefix(6), id: \.id) { item in
                                     Button {
+                                        HapticManager.shared.trigger(.light)
                                         store.send(.recentSearchTapped(item.query))
                                     } label: {
                                         HStack {
@@ -251,6 +443,7 @@
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12)], spacing: 12) {
                             ForEach(store.quickTags) { tag in
                                 Button {
+                                    HapticManager.shared.trigger(.light)
                                     store.send(.tagSelected(tag))
                                 } label: {
                                     HStack(spacing: 12) {

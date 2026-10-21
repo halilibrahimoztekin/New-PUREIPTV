@@ -90,17 +90,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `AudioEQPreset`, `PlayerClient.setEqualizerPreset`, `PlayerFactoryClient`, `SettingsClient` (kanal bazlı kalıcı EQ hafızası), `PlayerFeature` state/actions (`audioEQPreset`, `isAudioEQHUDVisible`, `selectAudioEQPreset`), `AudioEQHUDView.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 15. [IN_PROGRESS] Multi-Playlist Global Smart Search with Instant Filter Badges
+### 15. [DONE] Multi-Playlist Global Smart Search with Instant Filter Badges
 - **Açıklama:** Tüm M3U ve Xtream çalma listeleri arasında anında canlı arama yapan; Canlı TV, VOD Film, Dizi, 4K ve EPG mevcut program adına göre renk kodlu rozetlerle sonuçları ayıran ultra-hızlı global arama motoru.
 - **Platformlar:** iOS, tvOS (10-foot UI, Siri Remote Focus Engine).
 - **TCA & Mimari:** `GlobalSearchFeature`, debounce search query, playlist cross-indexing.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile testleri sıfır hata ile tamamlandı).
 
-### 16. [PENDING] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
+### 16. [IN_PROGRESS] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
 - **Açıklama:** IPTV listelerinde kanal isimlerindeki gereksiz "[TR]", "FHD", "1080p", "4K-UHD", "|HEVC|", "VIP" gibi gürültülü ekleri otomatik temizleyen, temiz başlık sunan ve istendiğinde tek tıkla orijinal başlığa dönülebilen akıllı normalizer motoru.
 - **Platformlar:** iOS, tvOS (Siri Remote uyumlu ayarlar ve OSD gösterimi).
 - **TCA & Mimari:** `ChannelNameCleaner`, `SettingsClient` regex clutter toggles, `PlayableItem` presentation extension.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 17. [PENDING] Trakt.tv Watchlist & Scrobble Sync Engine
 - **Açıklama:** VOD film ve diziler izlenirken ilerleme durumunu gerçek zamanlı Trakt.tv hesabıyla senkronize eden, "İzlendi" olarak işaretleyen ve kullanıcıların yarım bıraktıkları içerikleri diğer tüm cihazlarından devam ettirmesini sağlayan modern scrobbler.
@@ -205,5 +205,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature` reducer'ına `audioEQPreset`, `isAudioEQHUDVisible`, `toggleAudioEQHUD`, `selectAudioEQPreset`, `loadAudioEQPreferences` ve kanal geçişinde hafızadan otomatik yükleme eklendi.
   - `AudioEQHUDView.swift` Obsidian cam estetiği, 10-bant animasyonlu dinamik spektrum eğrisi, Siri Remote Focus Engine uyumlu `TVEQPresetButtonStyle` (1.05x büyüme ve renkli parıltı) ve otomatik gizlenme zamanlayıcısıyla geliştirildi.
   - tvOS (`PlayerView+tvOS.swift` ses menüsü, alt dock butonu, `.onExitCommand` modal yönetimi) ve iOS (`PlayerView+iOS.swift` hızlı menü, parça sayfası, modal cam HUD ve 'e' klavye kısayolu) oynatıcılarına tam entegre edildi.
+- **#15 Multi-Playlist Global Smart Search with Instant Filter Badges:**
+  - `GlobalSearchResultItem.swift` ve `PlaylistSourceBadge` modelleri oluşturuldu: Her sonuç için kaynak çalma listesi rozeti, 4K UHD tespiti ve EPG canlı program eşleşmesi.
+  - `GlobalSearchEngine.swift` thread-safe, yüksek performanslı çapraz arama motoru geliştirildi: Dinamik kategori ve 4K sayaç hesaplaması, token normalizasyonu ve puanlama.
+  - `SearchFeature.swift` çoklu çalma listesi indeksleme (`indexedChannels`, `indexedVODs`, `indexedSeries`, `filterCounts`, `selectPlaylistFilter`) ve concurrent yükleme ile zenginleştirildi; geriye dönük uyumluluk korundu.
+  - `GlobalSearchResultCard.swift` Obsidian cam estetiğinde 16:9 (Canlı TV) ve 2:3 (VOD) kartları, 4K Altın rozet, çalma listesi kaynağı, Siri Remote Focus Engine (1.06x büyüme & parıltı) ile geliştirildi.
+  - `SearchView+iOS.swift` ve `SearchView+tvOS.swift` zenginleştirilmiş filtre hapları (Canlı TV (48), 4K / UHD (12) gibi sayaçlar), çoklu çalma listesi sekme seçicisi ve 10-foot TV UI ile güncellendi.
+  - Birim testleri (`SearchFeatureTests.swift`) ve iOS / tvOS derlemeleri sıfır hata ile tamamlandı.
+
 
 
