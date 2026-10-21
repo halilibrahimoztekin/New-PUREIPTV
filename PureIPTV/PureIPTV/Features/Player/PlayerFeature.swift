@@ -149,6 +149,10 @@ public struct PlayerFeature {
         public var isRecentChannelsHUDVisible: Bool = false
         public var recentChannels: [PlayableItem] = []
 
+        /// Lip-Sync & Subtitle Sync HUD
+        public var isAudioSyncHUDVisible: Bool = false
+        public var rememberDelayForChannel: Bool = true
+
         /// Aspect Ratio & Zoom (Madde #14)
         public var videoAspectRatioMode: VideoAspectRatioMode = .fit
         public var videoZoomScale: CGFloat = 1.0
@@ -266,6 +270,9 @@ public struct PlayerFeature {
         // Sync & Stats
         case setAudioDelay(Int)
         case setSubtitleDelay(Int)
+        case toggleAudioSyncHUD
+        case setAudioSyncHUDVisible(Bool)
+        case setRememberDelayForChannel(Bool)
         case toggleStats
         case updateStats(String)
 
@@ -400,6 +407,15 @@ public struct PlayerFeature {
             state.isMinimized = false
             state.isUserPaused = false
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
+
+            // Restore per-channel lip-sync and subtitle preferences
+            if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
+                state.audioDelay = savedAudio
+            }
+            if let savedSub = settingsClient.getChannelSubtitleDelay(state.item.id) {
+                state.subtitleDelay = savedSub
+            }
+
             let url = state.item.streamURL
             let isLive = state.item.isLive
             let position = state.item.startPosition ?? 0.0
@@ -537,6 +553,9 @@ public struct PlayerFeature {
             state.audioDelay = delay
             let delayStr = AppStrings.Player.audioDelayMs(delay)
             let hudMessage = "\(AppStrings.Player.audioSync): \(delayStr)"
+            if state.rememberDelayForChannel {
+                settingsClient.setChannelAudioDelay(state.item.id, delay == 0 ? nil : delay)
+            }
             return .merge(
                 .send(.showTrackHUD(message: hudMessage, icon: "waveform.circle")),
                 .run { _ in
@@ -548,12 +567,39 @@ public struct PlayerFeature {
             state.subtitleDelay = delay
             let delayStr = AppStrings.Player.subtitleDelayMs(delay)
             let hudMessage = "\(AppStrings.Player.subtitleSync): \(delayStr)"
+            if state.rememberDelayForChannel {
+                settingsClient.setChannelSubtitleDelay(state.item.id, delay == 0 ? nil : delay)
+            }
             return .merge(
                 .send(.showTrackHUD(message: hudMessage, icon: "timer")),
                 .run { _ in
                     await playerClient.setSubtitleDelay(delay)
                 }
             )
+
+        case .toggleAudioSyncHUD:
+            state.isAudioSyncHUDVisible.toggle()
+            if state.isAudioSyncHUDVisible {
+                state.isControlsVisible = false
+                state.isRecentChannelsHUDVisible = false
+                state.isChannelListVisible = false
+                state.isEPGVisible = false
+            }
+            return .none
+
+        case let .setAudioSyncHUDVisible(isVisible):
+            state.isAudioSyncHUDVisible = isVisible
+            if isVisible {
+                state.isControlsVisible = false
+                state.isRecentChannelsHUDVisible = false
+                state.isChannelListVisible = false
+                state.isEPGVisible = false
+            }
+            return .none
+
+        case let .setRememberDelayForChannel(remember):
+            state.rememberDelayForChannel = remember
+            return .none
 
         case .toggleStats:
             state.isShowingStats.toggle()
@@ -1142,6 +1188,9 @@ public struct PlayerFeature {
             state.item = newItem
             state.isChannelListVisible = false
             state.isRecentChannelsHUDVisible = false
+            state.isAudioSyncHUDVisible = false
+            state.audioDelay = settingsClient.getChannelAudioDelay(newItem.id) ?? 0
+            state.subtitleDelay = settingsClient.getChannelSubtitleDelay(newItem.id) ?? 0
             state.epgListings = []
             state.mediaInfo = nil
             state.currentTime = .zero

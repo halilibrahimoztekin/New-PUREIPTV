@@ -72,6 +72,16 @@ public struct SettingsClient: Sendable {
 
     public var isICloudSyncEnabled: @Sendable () -> Bool = { true }
     public var setIsICloudSyncEnabled: @Sendable (Bool) -> Void = { _ in }
+
+    public var isOLEDDimmingEnabled: @Sendable () -> Bool = { true }
+    public var setIsOLEDDimmingEnabled: @Sendable (Bool) -> Void = { _ in }
+
+    // MARK: - Channel Lip-Sync (Audio & Subtitle Delay) Persistence
+
+    public var getChannelAudioDelay: @Sendable (_ channelID: String) -> Int? = { _ in nil }
+    public var setChannelAudioDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
+    public var getChannelSubtitleDelay: @Sendable (_ channelID: String) -> Int? = { _ in nil }
+    public var setChannelSubtitleDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -92,6 +102,9 @@ extension SettingsClient: DependencyKey {
         let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
         let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
         let iCloudSyncKey = "com.pureiptv.isICloudSyncEnabled"
+        let oledDimmingKey = "com.pureiptv.isOLEDDimmingEnabled"
+        let channelAudioDelayPrefix = "com.pureiptv.channelAudioDelay."
+        let channelSubDelayPrefix = "com.pureiptv.channelSubDelay."
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -103,6 +116,7 @@ extension SettingsClient: DependencyKey {
             preferredSubtitleKey: "off",
             rememberTracksKey: true,
             iCloudSyncKey: true,
+            oledDimmingKey: true,
         ])
 
         return SettingsClient(
@@ -210,7 +224,35 @@ extension SettingsClient: DependencyKey {
             rememberMediaTrackPreferences: { defaults.bool(forKey: rememberTracksKey) },
             setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) },
             isICloudSyncEnabled: { defaults.bool(forKey: iCloudSyncKey) },
-            setIsICloudSyncEnabled: { defaults.set($0, forKey: iCloudSyncKey) }
+            setIsICloudSyncEnabled: { defaults.set($0, forKey: iCloudSyncKey) },
+            isOLEDDimmingEnabled: {
+                defaults.object(forKey: oledDimmingKey) == nil ? true : defaults.bool(forKey: oledDimmingKey)
+            },
+            setIsOLEDDimmingEnabled: { defaults.set($0, forKey: oledDimmingKey) },
+            getChannelAudioDelay: { channelID in
+                guard defaults.object(forKey: channelAudioDelayPrefix + channelID) != nil else { return nil }
+                return defaults.integer(forKey: channelAudioDelayPrefix + channelID)
+            },
+            setChannelAudioDelay: { channelID, delay in
+                let key = channelAudioDelayPrefix + channelID
+                if let delay {
+                    defaults.set(delay, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getChannelSubtitleDelay: { channelID in
+                guard defaults.object(forKey: channelSubDelayPrefix + channelID) != nil else { return nil }
+                return defaults.integer(forKey: channelSubDelayPrefix + channelID)
+            },
+            setChannelSubtitleDelay: { channelID, delay in
+                let key = channelSubDelayPrefix + channelID
+                if let delay {
+                    defaults.set(delay, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
         )
     }()
 }

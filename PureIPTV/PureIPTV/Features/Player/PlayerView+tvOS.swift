@@ -177,6 +177,22 @@
                         .zIndex(98)
                     }
 
+                    // Lip-Sync & Subtitle Sync HUD
+                    if store.isAudioSyncHUDVisible {
+                        VStack {
+                            Spacer()
+                            AudioSyncHUDView(store: store) {
+                                store.send(.setAudioSyncHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                resetIdleTimer()
+                            }
+                            .padding(.horizontal, 48)
+                            .padding(.bottom, 48)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioSyncHUDVisible)
+                        .zIndex(99)
+                    }
+
                     // Edge-Swipe Channel Sidebar Drawer
                     if store.isChannelListVisible {
                         PlayerSidebarDrawer(store: store) {
@@ -526,6 +542,13 @@
                             }
 
                             Section(AppStrings.Player.audioSync) {
+                                Button {
+                                    onInteraction()
+                                    store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                } label: {
+                                    Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                }
+
                                 Button("+500 ms") {
                                     onInteraction()
                                     store.send(.setAudioDelay(store.audioDelay + 500))

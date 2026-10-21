@@ -12,10 +12,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `RecentChannelDTO`, `RecentChannelsClient` (UserDefaults persistent), `PlayerFeature` state/actions (`toggleRecentChannelsHUD`, `selectRecentChannel`, `loadRecentChannels`), `RecentChannelsHUDView.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, derleme başarılı).
 
-### 2. [IN_PROGRESS] Audio Delay & Lip-Sync Micro-Adjustment Engine (-2000ms .. +2000ms)
+### 2. [DONE] Audio Delay & Lip-Sync Micro-Adjustment Engine (-2000ms .. +2000ms)
 - **Açıklama:** IPTV akışlarında sıkça yaşanan ses/görüntü senkron kaymasını anında düzeltmek için canlı oynatıcı HUD'ında 50ms hassasiyetle ayarlanabilir ses ve altyazı gecikme düzelticisi (+/- 2000ms), kalıcı kanal hafızası ve anlık OSD görsel geri bildirimi.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[IN_PROGRESS]`
+- **Platformlar:** iOS, tvOS (Siri Remote Focus Engine, D-pad steppers, iOS Slider & Haptics).
+- **TCA & Mimari:** `SettingsClient` (per-channel audio & subtitle delay persistence), `PlayerFeature` (`isAudioSyncHUDVisible`, `rememberDelayForChannel`, automated save/restore on channel change), `AudioSyncHUDView.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, iOS & tvOS derlemeleri sıfır hata ile tamamlandı).
 
 ### 3. [PENDING] Stream Health, Buffer Gauge & Real-time Network Jitter HUD
 - **Açıklama:** Canlı akışta anlık tampon doluluk süresi (buffer seconds), bitrate, frame drop ve ağ gecikmesini gösteren ultra-thin glassmorphic HUD.

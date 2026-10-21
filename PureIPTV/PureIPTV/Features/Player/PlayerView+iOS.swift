@@ -353,7 +353,15 @@
                                             }
                                         }
 
-                                        // 7. Technical Diagnostics (Nerd Stats)
+                                        // 7. Lip-Sync & Audio Delay Fine Adjustment
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                        } label: {
+                                            Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                        }
+
+                                        // 8. Technical Diagnostics (Nerd Stats)
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -767,6 +775,21 @@
                     .zIndex(98)
                 }
 
+                // Lip-Sync & Subtitle Sync HUD
+                if store.isAudioSyncHUDVisible {
+                    VStack {
+                        Spacer()
+                        AudioSyncHUDView(store: store) {
+                            store.send(.setAudioSyncHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioSyncHUDVisible)
+                    .zIndex(99)
+                }
+
                 // Edge-Swipe Channel Sidebar Drawer
                 if store.isChannelListVisible {
                     PlayerSidebarDrawer(store: store) {
@@ -968,6 +991,21 @@
                                         Text(AppStrings.Player.audioDelayMs(store.audioDelay))
                                             .font(.caption2.monospacedDigit())
                                             .foregroundColor(.accentColor)
+                                    }
+
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.toggleTracksMenu)
+                                        store.send(.setAudioSyncHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "slider.horizontal.2.square")
+                                                .font(.caption2)
+                                            Text(AppStrings.Player.lipSyncAdjustment)
+                                                .font(.caption2.bold())
+                                        }
+                                        .foregroundColor(Color(hex: "#0A84FF"))
+                                        .padding(.top, 2)
                                     }
                                 }
                                 .padding(.top, 4)

@@ -184,6 +184,11 @@ public enum AppStrings {
 
         public static let audioSync = "Ses Senkronizasyonu".localized
         public static let resetAudioDelay = "Sesi Sıfırla".localized
+        public static let lipSyncAdjustment = "Hassas Lip-Sync Ayarı".localized
+        public static let audioSyncSubtitle = "Ses ve görüntü kaymasını 50ms adımlarla düzeltin".localized
+        public static let rememberForChannel = "Bu kanal için ayarı hatırla".localized
+        public static let synchronizedBadge = "SENKRONİZE".localized
+        public static let adjustedBadge = "DÜZELTME AKTİF".localized
         public static func audioDelayMs(_ ms: Int) -> String {
             ms > 0 ? "+%lld ms".localized(Int64(ms)) : "%lld ms".localized(Int64(ms))
         }
