@@ -139,6 +139,8 @@ public struct PlayerFeature {
 
         /// Sleep Timer
         public var sleepTimerSeconds: Int?
+        public var sleepTimerInitialVolume: Int32 = 100
+        public var isSleepFadingActive: Bool = false
 
         /// Track whether initial seek was applied
         public var hasAppliedInitialSeek: Bool = false
@@ -956,6 +958,8 @@ public struct PlayerFeature {
         case let .setSleepTimer(minutes):
             if let minutes {
                 state.sleepTimerSeconds = minutes * 60
+                state.sleepTimerInitialVolume = state.volume
+                state.isSleepFadingActive = false
                 state.gestureFeedback = AppStrings.Player.sleepTimerMinutes(minutes)
                 return .run { send in
                     try await Task.sleep(nanoseconds: 2_000_000_000)
@@ -967,11 +971,21 @@ public struct PlayerFeature {
                 }
                 .cancellable(id: CancelID.sleepTimer, cancelInFlight: true)
             } else {
+                let wasFading = state.isSleepFadingActive
+                let restoreVol = state.sleepTimerInitialVolume
                 state.sleepTimerSeconds = nil
+                state.isSleepFadingActive = false
+                if wasFading {
+                    state.volume = restoreVol
+                    state.oledDimLevel = 0.0
+                }
                 state.gestureFeedback = AppStrings.Player.sleepTimerDisabled
                 return .merge(
                     .cancel(id: CancelID.sleepTimer),
                     .run { send in
+                        if wasFading {
+                            try? await playerClient.setVolume(restoreVol)
+                        }
                         try await Task.sleep(nanoseconds: 2_000_000_000)
                         await send(.hideGestureFeedback)
                     }
@@ -979,19 +993,51 @@ public struct PlayerFeature {
             }
 
         case .sleepTimerTick:
-            if let current = state.sleepTimerSeconds, current > 0 {
-                state.sleepTimerSeconds = current - 1
-                if current - 1 == 0 {
-                    return .send(.sleepTimerEnded)
+            guard let current = state.sleepTimerSeconds, current > 0 else { return .none }
+            let remaining = current - 1
+            state.sleepTimerSeconds = remaining
+
+            if remaining == 0 {
+                state.isSleepFadingActive = false
+                return .send(.sleepTimerEnded)
+            }
+
+            // Smooth audio fade & screen dimming during the last 60 seconds
+            if remaining <= 60 {
+                state.isSleepFadingActive = true
+                let progress = Double(60 - remaining) / 60.0
+                let initial = Double(state.sleepTimerInitialVolume)
+                let newVolume = max(0, Int32(initial * (1.0 - progress)))
+                state.volume = newVolume
+                state.oledDimLevel = max(state.oledDimLevel, progress * 0.85)
+
+                return .run { _ in
+                    try? await playerClient.setVolume(newVolume)
                 }
             }
             return .none
 
         case .sleepTimerEnded:
-            return .send(.closeTapped)
+            state.isSleepFadingActive = false
+            return .concatenate(
+                .run { _ in
+                    try? await playerClient.setVolume(0)
+                },
+                .send(.closeTapped)
+            )
 
         case .userInteracted:
             state.oledInactivitySeconds = 0
+            if state.isSleepFadingActive {
+                state.isSleepFadingActive = false
+                let restoredVol = state.sleepTimerInitialVolume
+                state.volume = restoredVol
+                state.oledDimLevel = 0.0
+                state.isDeepDimmed = false
+                return .run { _ in
+                    try? await playerClient.setVolume(restoredVol)
+                }
+            }
             if state.oledDimLevel > 0 || state.isDeepDimmed {
                 state.oledDimLevel = 0.0
                 state.isDeepDimmed = false

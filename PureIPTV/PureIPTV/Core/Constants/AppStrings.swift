@@ -130,6 +130,7 @@ public enum AppStrings {
 
         public static let sleepTimer = "Uyku Zamanlayıcısı".localized
         public static let sleepTimerDisabled = "Uyku Zamanlayıcısı Kapatıldı".localized
+        public static let sleepTimerFading = "Uyku Modu: Ses Kısılıyor...".localized
         public static let openInExternalPlayer = "Harici Oynatıcı".localized
         public static let technicalDetails = "Teknik Bilgi".localized
         public static let hideTechnicalDetails = "Teknik Bilgiyi Gizle".localized

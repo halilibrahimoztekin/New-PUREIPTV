@@ -36,15 +36,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `MultiViewLayoutMode`, `MultiViewFeature` (`layoutMode`, `primarySlotID`, `activeAudioSlotID`, `swapToPrimary`, `setAudioActive`), `MultiView.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 6. [IN_PROGRESS] Sleep Timer Smooth Audio Fade-Out Engine
-- **Açıklama:** Uyku zamanlayıcısının son 60 saniyesinde sesi kademeli olarak sıfıra indiren ve ekran parlaklığını yumuşakça kısarak oynatmayı sonlandıran sinematik deneyim.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[IN_PROGRESS]`
+### 6. [DONE] Sleep Timer Smooth Audio Fade-Out Engine & Visual Dimmer
+- **Açıklama:** Uyku zamanlayıcısının son 60 saniyesinde sesi kademeli olarak sıfıra indiren ve ekran parlaklığını (`oledDimLevel`) yumuşakça kısarak oynatmayı sonlandıran sinematik deneyim. tvOS ve iOS oynatıcı kontrol barlarında özel Siri Remote menüsü ve üst yüzen uyarı hapı.
+- **Platformlar:** iOS, tvOS (Siri Remote Focus uyumlu menü, dynamic countdown göstergesi, Obsidian/Purple yüzen cam bildirim hapı).
+- **TCA & Mimari:** `PlayerFeature` (`sleepTimerInitialVolume: Int32`, `isSleepFadingActive`, `.sleepTimerTick` kademeli ses ve parlaklık eğrisi, `userInteracted` anında kurtarma), `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 7. [PENDING] EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring
+### 7. [IN_PROGRESS] EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring
 - **Açıklama:** Kanal zapping HUD'ında ve OSD'sinde o anki programın ne kadarının geçtiğini gösteren şık dairesel/çizgisel progress bar ve hemen sonrasındaki programın başlama saati.
 - **Platformlar:** iOS, tvOS.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 8. [PENDING] Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback
 - **Açıklama:** Yayın koptuğunda veya sunucu 403/timeout döndüğünde donmayı engelleyen akıllı yeniden bağlanma ve alternatif playlist linkine otomatik geçiş mekanizması.
@@ -89,3 +90,8 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `MultiViewFeature` reducer'ına `layoutMode`, `primarySlotID`, `activeAudioSlotID`, `swapToPrimary`, `setAudioActive` eklendi.
   - `MultiView.swift` tamamen modernize edildi: Üst bar mod değiştirici haplar, aktif ses rozeti, 1+3 asimetrik vitrin hesaplamaları (%73 ana vitrin + %27 3 alt slot).
   - Siri Remote ile gezinirken anında ses odağı geçişi (`.onChange(of: tvFocusedSlotID)`), D-pad Play/Pause veya "Ana Ekrana Taşı" butonu ile vitrine terfi mekanizması hayata geçirildi.
+- **#6 Sleep Timer Smooth Audio Fade-Out Engine & Visual Dimmer:**
+  - `PlayerFeature.State` içine `sleepTimerInitialVolume: Int32` ve `isSleepFadingActive: Bool` entegre edildi.
+  - `.setSleepTimer`, `.sleepTimerTick`, `.sleepTimerEnded` ve `.userInteracted` aksiyonları güncellendi: son 60 saniyede ses doğrusal olarak kısılarak 0'a çekilir, ekran `oledDimLevel` ile sinematik olarak kararır. Kullanıcı kumandaya veya ekrana dokunduğu anda orijinal ses seviyesi ve parlaklık anında geri yüklenir.
+  - tvOS `VideoControllerView` içine Siri Remote uyumlu Sleep Timer menüsü eklendi (aktifken kalan dakikayı buton üzerinde canlı gösterir).
+  - tvOS ve iOS oynatıcı üst katmanlarına Obsidian/Purple cam malzeme ile "Uyku Modu: Ses Kısılıyor..." yüzen bildirim hapı yerleştirildi.

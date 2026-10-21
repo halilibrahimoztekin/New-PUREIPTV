@@ -481,37 +481,37 @@ public struct MultiView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         #if os(tvOS)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    isFocused
-                        ? Color.white
-                        : (isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12)),
-                    lineWidth: isFocused ? 3.5 : (isAudioActive ? 2.5 : 1.0)
-                )
-                .shadow(
-                    color: isFocused
-                        ? Color.white.opacity(0.6)
-                        : (isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear),
-                    radius: isFocused ? 8 : (isAudioActive ? 6 : 0)
-                )
-        )
-        .scaleEffect(isFocused ? 1.025 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isFocused
+                            ? Color.white
+                            : (isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12)),
+                        lineWidth: isFocused ? 3.5 : (isAudioActive ? 2.5 : 1.0)
+                    )
+                    .shadow(
+                        color: isFocused
+                            ? Color.white.opacity(0.6)
+                            : (isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear),
+                        radius: isFocused ? 8 : (isAudioActive ? 6 : 0)
+                    )
+            )
+            .scaleEffect(isFocused ? 1.025 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
         #else
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12),
-                    lineWidth: isAudioActive ? 2.5 : 1.0
-                )
-                .shadow(
-                    color: isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear,
-                    radius: isAudioActive ? 6 : 0
-                )
-        )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12),
+                        lineWidth: isAudioActive ? 2.5 : 1.0
+                    )
+                    .shadow(
+                        color: isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear,
+                        radius: isAudioActive ? 6 : 0
+                    )
+            )
         #endif
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isAudioActive)
+            .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isAudioActive)
     }
 }
 

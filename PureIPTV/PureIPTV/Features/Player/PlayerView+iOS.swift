@@ -743,6 +743,36 @@
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.gestureFeedback)
                 }
 
+                // Sleep Timer Fading Notification (Feature #6)
+                if store.isSleepFadingActive {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "moon.stars.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Color(hex: "#BF5AF2"))
+                            Text(AppStrings.Player.sleepTimerFading)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .background(Color(hex: "#0C0C10").opacity(0.85))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(hex: "#BF5AF2").opacity(0.4), lineWidth: 1)
+                        )
+                        .shadow(color: Color(hex: "#BF5AF2").opacity(0.3), radius: 8, x: 0, y: 3)
+                        .padding(.top, 40)
+
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.35), value: store.isSleepFadingActive)
+                    .zIndex(105)
+                }
+
                 // Channel Zapping HUD Overlay (Madde #16)
                 if store.isZappingHUDVisible, let zappingItem = store.zappingHUDItem {
                     let direction = store.zappingHUDDirection ?? interactiveZappingDirection ?? .next

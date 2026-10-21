@@ -316,6 +316,36 @@
                         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: store.isShowingStats)
                         .zIndex(110)
                     }
+
+                    // Sleep Timer Smooth Fading Notification (Feature #6)
+                    if store.isSleepFadingActive {
+                        VStack {
+                            HStack(spacing: 12) {
+                                Image(systemName: "moon.stars.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundStyle(Color(hex: "#BF5AF2"))
+                                Text(AppStrings.Player.sleepTimerFading)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(.ultraThinMaterial)
+                            .background(Color(hex: "#0C0C10").opacity(0.85))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color(hex: "#BF5AF2").opacity(0.4), lineWidth: 1)
+                            )
+                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.35), radius: 14, x: 0, y: 6)
+                            .padding(.top, 50)
+
+                            Spacer()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.4), value: store.isSleepFadingActive)
+                        .zIndex(120)
+                    }
                 }
             }
             .preferredColorScheme(.dark)
@@ -828,6 +858,31 @@
                             .foregroundStyle(store.isShowingStats ? Color(hex: "#00F5D4") : .white)
                     }
                     .buttonStyle(PlayerCircleButtonStyle(size: 56))
+
+                    // Sleep Timer Menu (Feature #6)
+                    Menu {
+                        Button(AppStrings.Player.sleepTimerDisabled) {
+                            onInteraction()
+                            store.send(.setSleepTimer(nil))
+                        }
+                        ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
+                            Button("\(mins) \(AppStrings.Common.minAbbr)") {
+                                onInteraction()
+                                store.send(.setSleepTimer(mins))
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: store.sleepTimerSeconds != nil ? "moon.stars.fill" : "moon.stars")
+                                .font(.system(size: 24))
+                            if let seconds = store.sleepTimerSeconds {
+                                Text("\(seconds / 60) \(AppStrings.Common.minAbbr)")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .foregroundStyle(store.sleepTimerSeconds != nil ? Color(hex: "#BF5AF2") : .white)
+                    }
+                    .buttonStyle(PlayerCapsuleButtonStyle())
                 }
             }
         }
