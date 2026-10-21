@@ -175,6 +175,11 @@ public struct SettingsView: View {
                     get: { store.isOLEDDimmingEnabled },
                     set: { store.send(.setOLEDDimmingEnabled($0)) }
                 ))
+
+                Toggle(AppStrings.Settings.cleanChannelNames, isOn: Binding(
+                    get: { store.isChannelNameCleaningEnabled },
+                    set: { store.send(.setChannelNameCleaningEnabled($0)) }
+                ))
             }
 
             Section(header: Text(AppStrings.Settings.audioAndSubtitleSettings)) {

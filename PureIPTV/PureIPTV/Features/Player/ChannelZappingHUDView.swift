@@ -31,6 +31,7 @@ public struct ChannelZappingHUDView: View {
     public let isCommitted: Bool
     public let currentProgram: EPGProgram?
     public let nextProgram: EPGProgram?
+    public let isCleaningEnabled: Bool
 
     @State private var pulseChevron: Bool = false
 
@@ -41,7 +42,8 @@ public struct ChannelZappingHUDView: View {
         totalChannels: Int? = nil,
         isCommitted: Bool = false,
         currentProgram: EPGProgram? = nil,
-        nextProgram: EPGProgram? = nil
+        nextProgram: EPGProgram? = nil,
+        isCleaningEnabled: Bool = true
     ) {
         self.item = item
         self.direction = direction
@@ -50,6 +52,7 @@ public struct ChannelZappingHUDView: View {
         self.isCommitted = isCommitted
         self.currentProgram = currentProgram
         self.nextProgram = nextProgram
+        self.isCleaningEnabled = isCleaningEnabled
     }
 
     public var body: some View {
@@ -87,6 +90,24 @@ public struct ChannelZappingHUDView: View {
                             .background(Color.white.opacity(0.12), in: Capsule())
                     }
 
+                    if let q = item.cleanedMetadata.detectedQuality {
+                        Text(q.rawValue)
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .foregroundColor(Color(hex: q.badgeColorHex))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: q.badgeColorHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                    }
+
+                    if let country = item.cleanedMetadata.detectedCountry {
+                        Text(country)
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                    }
+
                     if isCommitted {
                         Text("YÜKLENİYOR")
                             .font(.system(size: 9, weight: .bold))
@@ -97,7 +118,7 @@ public struct ChannelZappingHUDView: View {
                     }
                 }
 
-                Text(item.title)
+                Text(isCleaningEnabled ? item.cleanTitle : item.title)
                     .font(.title3.bold())
                     .foregroundColor(.white)
                     .lineLimit(1)

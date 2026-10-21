@@ -155,6 +155,9 @@ public struct PlayerFeature {
         public var isDeepDimmed: Bool = false
         public var oledInactivitySeconds: Int = 0
 
+        /// Smart Channel Name Cleaner (Madde #16)
+        public var isChannelNameCleaningEnabled: Bool = true
+
         /// Zapping & Last Channel Recall
         public var previousChannel: PlayableItem?
         public var zappingHistory: [PlayableItem] = []
@@ -380,6 +383,8 @@ public struct PlayerFeature {
         // Zapping Actions
         case toggleChannelList
         case setChannelListVisible(Bool)
+        case toggleChannelNameCleaning
+        case setChannelNameCleaningEnabled(Bool)
         case selectChannel(PlayableItem)
         case nextChannel
         case previousChannel
@@ -494,6 +499,7 @@ public struct PlayerFeature {
             state.isMinimized = false
             state.isUserPaused = false
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
+            state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
 
             // Restore per-channel lip-sync and subtitle preferences
             if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
@@ -1179,6 +1185,19 @@ public struct PlayerFeature {
             }
             return .run { _ in
                 settingsClient.setIsOLEDDimmingEnabled(enabled)
+            }
+
+        case .toggleChannelNameCleaning:
+            let newValue = !state.isChannelNameCleaningEnabled
+            state.isChannelNameCleaningEnabled = newValue
+            return .run { _ in
+                settingsClient.setIsChannelNameCleaningEnabled(newValue)
+            }
+
+        case let .setChannelNameCleaningEnabled(enabled):
+            state.isChannelNameCleaningEnabled = enabled
+            return .run { _ in
+                settingsClient.setIsChannelNameCleaningEnabled(enabled)
             }
 
         case let .dragGestureChanged(translation, screenWidth, _, startLocation):

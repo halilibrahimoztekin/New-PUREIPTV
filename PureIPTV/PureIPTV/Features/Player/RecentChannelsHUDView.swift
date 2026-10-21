@@ -231,7 +231,7 @@ public struct RecentChannelsHUDView: View {
                 // Bottom Title & EPG Progress Bar
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .center, spacing: 6) {
-                        Text(channel.title)
+                        Text(channel.cleanTitle)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundColor(isCurrent ? Color(hex: "#0A84FF") : .white)
                             .lineLimit(1)

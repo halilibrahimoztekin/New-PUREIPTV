@@ -146,8 +146,11 @@ public struct PlayerSidebarDrawer: View {
 
             Spacer()
 
-            // Sort Menu Button (Madde #12)
-            sortMenuButton
+            // Cleaner & Sort Controls (Madde #12 & #16)
+            HStack(spacing: 8) {
+                cleanerToggleButton
+                sortMenuButton
+            }
 
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
@@ -239,6 +242,55 @@ public struct PlayerSidebarDrawer: View {
         }
         #if os(tvOS)
         .buttonStyle(TVSortOptionButtonStyle(accentColor: store.channelSortOption.accentColor))
+        #else
+        .buttonStyle(.plain)
+        #endif
+    }
+
+    // MARK: - Cleaner Toggle Button (Madde #16)
+
+    private var cleanerToggleButton: some View {
+        Button {
+            #if !os(tvOS)
+                HapticManager.shared.trigger(.light)
+            #endif
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                store.send(.toggleChannelNameCleaning)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: store.isChannelNameCleaningEnabled ? "wand.and.stars" : "wand.and.stars.inverse")
+                #if os(tvOS)
+                    .font(.system(size: 16, weight: .bold))
+                #else
+                    .font(.system(size: 12, weight: .bold))
+                #endif
+                    .foregroundStyle(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A") : .white.opacity(0.5))
+
+                #if !os(tvOS)
+                    Text(store.isChannelNameCleaningEnabled ? "Sade" : "Ham")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A") : .white.opacity(0.6))
+                #endif
+            }
+            #if os(tvOS)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            #else
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            #endif
+            .background(
+                Capsule()
+                    .fill(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A").opacity(0.15) : Color.white.opacity(0.08))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A").opacity(0.4) : Color.white.opacity(0.12), lineWidth: 1)
+            )
+        }
+        #if os(tvOS)
+        .buttonStyle(TVCleanerButtonStyle(isActive: store.isChannelNameCleaningEnabled))
         #else
         .buttonStyle(.plain)
         #endif
@@ -469,7 +521,8 @@ public struct PlayerSidebarDrawer: View {
     private func channelRow(item: PlayerFeature.PlayableItem, index: Int) -> some View {
         let isCurrent = item.id == store.item.id
         let isPrevious = item.id == store.previousChannel?.id
-        let is4K = item.title.localizedCaseInsensitiveContains("4k") || item.title.localizedCaseInsensitiveContains("uhd")
+        let metadata = item.cleanedMetadata
+        let displayTitle = store.isChannelNameCleaningEnabled ? item.cleanTitle : item.title
         let hasCatchup = (item.tvArchive ?? 0) > 0
 
         Button {
@@ -490,7 +543,7 @@ public struct PlayerSidebarDrawer: View {
 
                 // Channel Title & Category
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
+                    Text(displayTitle)
                     #if os(tvOS)
                         .font(.system(size: 19, weight: isCurrent ? .bold : .medium))
                     #else
@@ -512,14 +565,36 @@ public struct PlayerSidebarDrawer: View {
                                 .lineLimit(1)
                         }
 
-                        // 4K Badge
-                        if is4K {
-                            Text("4K")
-                                .font(.system(size: 9, weight: .black, design: .rounded))
-                                .foregroundStyle(Color(hex: "#64D2FF"))
+                        // Country Badge
+                        if let country = metadata.detectedCountry {
+                            Text(country)
+                                .font(.system(size: 8, weight: .black, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color(hex: "#64D2FF").opacity(0.18))
+                                .background(Color.white.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+
+                        // Quality Badge
+                        if let q = metadata.detectedQuality {
+                            Text(q.rawValue)
+                                .font(.system(size: 9, weight: .black, design: .rounded))
+                                .foregroundStyle(Color(hex: q.badgeColorHex))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color(hex: q.badgeColorHex).opacity(0.18))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+
+                        // HEVC Badge
+                        if metadata.isHEVC {
+                            Text("HEVC")
+                                .font(.system(size: 8, weight: .black, design: .rounded))
+                                .foregroundStyle(Color(hex: "#BF5AF2"))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color(hex: "#BF5AF2").opacity(0.18))
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
 
@@ -795,6 +870,33 @@ public struct PlayerSidebarDrawer: View {
                     .brightness(isFocused ? 0.2 : 0.0)
                     .shadow(
                         color: isFocused ? accentColor.opacity(0.8) : .clear,
+                        radius: isFocused ? 10 : 0,
+                        x: 0,
+                        y: 0
+                    )
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            }
+        }
+    }
+
+    private struct TVCleanerButtonStyle: ButtonStyle {
+        let isActive: Bool
+
+        func makeBody(configuration: Configuration) -> some View {
+            TVCleanerBody(configuration: configuration, isActive: isActive)
+        }
+
+        private struct TVCleanerBody: View {
+            let configuration: Configuration
+            let isActive: Bool
+            @Environment(\.isFocused) private var isFocused
+
+            var body: some View {
+                configuration.label
+                    .scaleEffect(isFocused ? 1.08 : 1.0)
+                    .brightness(isFocused ? 0.25 : 0.0)
+                    .shadow(
+                        color: isFocused ? (isActive ? Color(hex: "#FFD60A").opacity(0.8) : Color.white.opacity(0.5)) : .clear,
                         radius: isFocused ? 10 : 0,
                         x: 0,
                         y: 0

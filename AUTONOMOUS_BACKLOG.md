@@ -96,17 +96,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `GlobalSearchFeature`, debounce search query, playlist cross-indexing.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile testleri sıfır hata ile tamamlandı).
 
-### 16. [IN_PROGRESS] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
+### 16. [DONE] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
 - **Açıklama:** IPTV listelerinde kanal isimlerindeki gereksiz "[TR]", "FHD", "1080p", "4K-UHD", "|HEVC|", "VIP" gibi gürültülü ekleri otomatik temizleyen, temiz başlık sunan ve istendiğinde tek tıkla orijinal başlığa dönülebilen akıllı normalizer motoru.
 - **Platformlar:** iOS, tvOS (Siri Remote uyumlu ayarlar ve OSD gösterimi).
 - **TCA & Mimari:** `ChannelNameCleaner`, `SettingsClient` regex clutter toggles, `PlayableItem` presentation extension.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 6 birim testi sıfır hata ile tamamlandı).
 
-### 17. [PENDING] Trakt.tv Watchlist & Scrobble Sync Engine
+### 17. [IN_PROGRESS] Trakt.tv Watchlist & Scrobble Sync Engine
 - **Açıklama:** VOD film ve diziler izlenirken ilerleme durumunu gerçek zamanlı Trakt.tv hesabıyla senkronize eden, "İzlendi" olarak işaretleyen ve kullanıcıların yarım bıraktıkları içerikleri diğer tüm cihazlarından devam ettirmesini sağlayan modern scrobbler.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `TraktClient`, `TraktFeature`, `PlayerFeature` playback progress scrobble effect.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 18. [PENDING] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
 - **Açıklama:** Oynatıcıdan ana menüye veya diğer uygulamalara geçildiğinde yayını kesintiye uğratmadan iOS ve tvOS sistem PiP penceresine aktaran veya arka planda sadece ses dinleme (background audio playback) modunu akıllıca yöneten motor.
@@ -212,6 +212,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `GlobalSearchResultCard.swift` Obsidian cam estetiğinde 16:9 (Canlı TV) ve 2:3 (VOD) kartları, 4K Altın rozet, çalma listesi kaynağı, Siri Remote Focus Engine (1.06x büyüme & parıltı) ile geliştirildi.
   - `SearchView+iOS.swift` ve `SearchView+tvOS.swift` zenginleştirilmiş filtre hapları (Canlı TV (48), 4K / UHD (12) gibi sayaçlar), çoklu çalma listesi sekme seçicisi ve 10-foot TV UI ile güncellendi.
   - Birim testleri (`SearchFeatureTests.swift`) ve iOS / tvOS derlemeleri sıfır hata ile tamamlandı.
+- **#16 Smart Channel Name Cleaner & Clutter Stripper Regex Engine:**
+  - `ChannelNameCleaner.swift` geliştirildi: Ülke/dil ön ekleri (`[TR]`, `TR:`, `TR -`, `[DE]`, `[FR]`), çözünürlük (`4K`, `UHD`, `FHD`, `1080p`, `720p`, `HD`, `SD`), codec/gürültü (`HEVC`, `H.265`, `RAW`, `50FPS`, `60FPS`, `MULTI-AUDIO`) ve sunucu etiketlerini (`VIP`, `BACKUP`, `YEDEK`) temizleyen önceden derlenmiş statik regex motoru.
+  - Zengin metadata çıkarımı eklendi: `CleanedChannelMetadata` ile `cleanTitle`, `detectedQuality` (`ChannelQualityBadge`: `.uhd4k`, `.fhd1080`, `.hd720`, `.sd`), `detectedCountry`, `isBackup`, `isHEVC`, `hasStrippedClutter` tespiti.
+  - `MediaModels.Item` ve `PlayerFeature.PlayableItem` modellerine `.cleanTitle` ve `.cleanedMetadata` presentation extension'ları eklendi.
+  - `SettingsClient` ve `SettingsFeature` kalıcı `isChannelNameCleaningEnabled` ayarıyla donatıldı; `SettingsView` oynatıcı ayarları altına toggle eklendi.
+  - `PlayerFeature` reducer'ına `isChannelNameCleaningEnabled` durumu, onAppear yüklemesi ve `toggleChannelNameCleaning` aksiyonu entegre edildi.
+  - `PlayerSidebarDrawer.swift` içine tek tıkla "Sade / Ham" mod geçiş butonu (`cleanerToggleButton`), tvOS Siri Remote için `TVCleanerButtonStyle` ve `CleanedChannelMetadata` etiketleri eklendi.
+  - `ChannelInfoOSDView.swift`, `ChannelZappingHUDView.swift`, `ChannelCardView.swift` ve `RecentChannelsHUDView.swift` temiz başlık ve kalite rozetleri ile güncellendi.
+  - 6 adet birim testi (`ChannelNameCleanerTests.swift`) yazıldı; hem tvOS hem de iOS Simülatör derlemeleri sıfır hata ile tamamlandı.
+
 
 
 

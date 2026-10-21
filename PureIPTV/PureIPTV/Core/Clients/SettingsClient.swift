@@ -101,6 +101,11 @@ public struct SettingsClient: Sendable {
     public var setAudioEQPreset: @Sendable (AudioEQPreset) -> Void = { _ in }
     public var getChannelAudioEQPreset: @Sendable (_ channelID: String) -> AudioEQPreset? = { _ in nil }
     public var setChannelAudioEQPreset: @Sendable (_ channelID: String, _ preset: AudioEQPreset?) -> Void = { _, _ in }
+
+    // MARK: - Smart Channel Name Cleaner
+
+    public var isChannelNameCleaningEnabled: @Sendable () -> Bool = { true }
+    public var setIsChannelNameCleaningEnabled: @Sendable (Bool) -> Void = { _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -130,6 +135,7 @@ extension SettingsClient: DependencyKey {
         let liveTVSortKey = "com.pureiptv.liveTVSortOption"
         let audioEQKey = "com.pureiptv.audioEQPreset"
         let channelEQPrefix = "com.pureiptv.channelAudioEQ."
+        let channelNameCleaningKey = "com.pureiptv.isChannelNameCleaningEnabled"
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -144,6 +150,7 @@ extension SettingsClient: DependencyKey {
             iCloudSyncKey: true,
             oledDimmingKey: true,
             audioEQKey: "flat",
+            channelNameCleaningKey: true,
         ])
 
         return SettingsClient(
@@ -335,6 +342,12 @@ extension SettingsClient: DependencyKey {
                 } else {
                     defaults.removeObject(forKey: key)
                 }
+            },
+            isChannelNameCleaningEnabled: {
+                defaults.object(forKey: channelNameCleaningKey) == nil ? true : defaults.bool(forKey: channelNameCleaningKey)
+            },
+            setIsChannelNameCleaningEnabled: { enabled in
+                defaults.set(enabled, forKey: channelNameCleaningKey)
             }
         )
     }()

@@ -66,7 +66,7 @@ public struct ChannelCardView: View {
 
                 // ── Channel name + LIVE badge ──────────────────────
                 HStack(alignment: .center, spacing: 6) {
-                    Text(channel.title)
+                    Text(channel.cleanTitle)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)

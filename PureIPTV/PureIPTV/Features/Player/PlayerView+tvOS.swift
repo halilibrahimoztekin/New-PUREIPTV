@@ -109,7 +109,8 @@
                                 totalChannels: store.playlist?.count,
                                 isCommitted: store.item.id == zappingItem.id,
                                 currentProgram: store.item.id == zappingItem.id ? store.currentEPGProgram : nil,
-                                nextProgram: store.item.id == zappingItem.id ? store.nextEPGProgram : nil
+                                nextProgram: store.item.id == zappingItem.id ? store.nextEPGProgram : nil,
+                                isCleaningEnabled: store.isChannelNameCleaningEnabled
                             )
                             .padding(.top, 60)
                             Spacer()
@@ -164,7 +165,8 @@
                                 channelIndex: store.currentChannelIndex,
                                 totalChannels: store.playlist?.count,
                                 currentProgram: store.currentEPGProgram,
-                                nextProgram: store.nextEPGProgram
+                                nextProgram: store.nextEPGProgram,
+                                isCleaningEnabled: store.isChannelNameCleaningEnabled
                             )
                             .padding(.horizontal, 60)
                             .padding(.bottom, 60)

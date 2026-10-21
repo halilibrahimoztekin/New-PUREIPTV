@@ -35,6 +35,7 @@ public struct SettingsFeature {
         public var startMuted: Bool = false
         public var hardwareAcceleration: Bool = true
         public var isOLEDDimmingEnabled: Bool = true
+        public var isChannelNameCleaningEnabled: Bool = true
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
         public var hideAdultContent: Bool = false
@@ -91,6 +92,7 @@ public struct SettingsFeature {
         case setStartMuted(Bool)
         case setHardwareAcceleration(Bool)
         case setOLEDDimmingEnabled(Bool)
+        case setChannelNameCleaningEnabled(Bool)
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
         case setHideAdultContent(Bool)
@@ -135,6 +137,7 @@ public struct SettingsFeature {
                 state.startMuted = settingsClient.startMuted()
                 state.hardwareAcceleration = settingsClient.hardwareAcceleration()
                 state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
+                state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.hideAdultContent = settingsClient.hideAdultContent()
@@ -248,6 +251,10 @@ public struct SettingsFeature {
             case let .setOLEDDimmingEnabled(val):
                 state.isOLEDDimmingEnabled = val
                 return .run { _ in settingsClient.setIsOLEDDimmingEnabled(val) }
+
+            case let .setChannelNameCleaningEnabled(val):
+                state.isChannelNameCleaningEnabled = val
+                return .run { _ in settingsClient.setIsChannelNameCleaningEnabled(val) }
 
             case let .setEpgTimeShift(val):
                 state.epgTimeShift = val

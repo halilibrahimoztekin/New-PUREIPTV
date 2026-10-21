@@ -371,6 +371,8 @@ public enum AppStrings {
         public static let hardwareAcceleration = "Donanım Hızlandırma".localized
         public static let oledDimming = "OLED Ekran Koruma / Karartma".localized
         public static let oledDimmingDesc = "Ekran yanmasını önlemek için kontroller açıkken veya duraklatıldığında ekranı kademeli olarak karartır.".localized
+        public static let cleanChannelNames = "Kanal İsimlerini Sadeleştir".localized
+        public static let cleanChannelNamesDesc = "Kanal adlarındaki gereksiz [TR], FHD, 1080p, 4K, |HEVC| ve VIP etiketlerini temizler.".localized
         public static let epgSettings = "Yayın Akışı (EPG) Ayarları".localized
         public static let timeShift = "Zaman Kaydırma (Time Shift)".localized
         public static func timeShiftHours(_ hours: Int) -> String {

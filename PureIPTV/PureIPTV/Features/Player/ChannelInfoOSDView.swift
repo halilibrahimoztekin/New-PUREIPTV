@@ -10,6 +10,7 @@ public struct ChannelInfoOSDView: View {
     public let totalChannels: Int?
     public let currentProgram: EPGProgram?
     public let nextProgram: EPGProgram?
+    public let isCleaningEnabled: Bool
 
     @State private var isLivePulsing: Bool = false
 
@@ -18,13 +19,15 @@ public struct ChannelInfoOSDView: View {
         channelIndex: Int? = nil,
         totalChannels: Int? = nil,
         currentProgram: EPGProgram? = nil,
-        nextProgram: EPGProgram? = nil
+        nextProgram: EPGProgram? = nil,
+        isCleaningEnabled: Bool = true
     ) {
         self.item = item
         self.channelIndex = channelIndex
         self.totalChannels = totalChannels
         self.currentProgram = currentProgram
         self.nextProgram = nextProgram
+        self.isCleaningEnabled = isCleaningEnabled
     }
 
     public var body: some View {
@@ -45,7 +48,7 @@ public struct ChannelInfoOSDView: View {
                             .background(Color(hex: "#0A84FF").opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
                     }
 
-                    Text(item.title)
+                    Text(isCleaningEnabled ? item.cleanTitle : item.title)
                     #if os(tvOS)
                         .font(.system(size: 24, weight: .bold))
                     #else
@@ -166,22 +169,55 @@ public struct ChannelInfoOSDView: View {
     // MARK: - Quality Badge
 
     private var qualityBadgeView: some View {
-        let titleLower = item.title.lowercased()
-        let badge: (text: String, color: Color) = if titleLower.contains("4k") || titleLower.contains("uhd") {
-            ("4K UHD", Color.yellow)
-        } else if titleLower.contains("fhd") || titleLower.contains("1080") {
-            ("FHD 1080p", Color(hex: "#0A84FF"))
-        } else if titleLower.contains("hevc") || titleLower.contains("h.265") {
-            ("HEVC", Color.green)
+        let meta = item.cleanedMetadata
+        let badgeText: String
+        let badgeColor: Color
+
+        if let q = meta.detectedQuality {
+            badgeText = q == .uhd4k ? "4K UHD" : (q == .fhd1080 ? "FHD 1080p" : q.rawValue)
+            badgeColor = Color(hex: q.badgeColorHex)
+        } else if meta.isHEVC {
+            badgeText = "HEVC"
+            badgeColor = Color(hex: "#30D158")
         } else {
-            ("HD", Color.white.opacity(0.8))
+            badgeText = "HD"
+            badgeColor = Color.white.opacity(0.8)
         }
 
-        return Text(badge.text)
-            .font(.system(size: 10, weight: .heavy, design: .rounded))
-            .foregroundStyle(badge.color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(badge.color.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))
+        return HStack(spacing: 5) {
+            if let country = meta.detectedCountry {
+                Text(country)
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+            }
+
+            Text(badgeText)
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .foregroundStyle(badgeColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(badgeColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))
+
+            if meta.isHEVC, meta.detectedQuality != nil {
+                Text("HEVC")
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(Color(hex: "#BF5AF2"))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#BF5AF2").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+            }
+
+            if meta.isBackup {
+                Text("YEDEK")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color(hex: "#FF9F0A").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+            }
+        }
     }
 }
