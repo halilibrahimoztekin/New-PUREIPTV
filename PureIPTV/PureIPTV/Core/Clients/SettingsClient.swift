@@ -38,6 +38,9 @@ public struct SettingsClient: Sendable {
     public var getSeriesSortMethod: @Sendable () -> SortMethod = { .defaultOrder }
     public var setSeriesSortMethod: @Sendable (SortMethod) -> Void = { _ in }
 
+    public var getLiveTVSortOption: @Sendable () -> ChannelSortOption = { .defaultOrder }
+    public var setLiveTVSortOption: @Sendable (ChannelSortOption) -> Void = { _ in }
+
     // MARK: - New Settings
 
     public var autoPlayNextEpisode: @Sendable () -> Bool = { true }
@@ -105,6 +108,7 @@ extension SettingsClient: DependencyKey {
         let oledDimmingKey = "com.pureiptv.isOLEDDimmingEnabled"
         let channelAudioDelayPrefix = "com.pureiptv.channelAudioDelay."
         let channelSubDelayPrefix = "com.pureiptv.channelSubDelay."
+        let liveTVSortKey = "com.pureiptv.liveTVSortOption"
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -202,6 +206,15 @@ extension SettingsClient: DependencyKey {
             },
             setSeriesSortMethod: { method in
                 defaults.set(method.rawValue, forKey: seriesSortKey)
+            },
+            getLiveTVSortOption: {
+                if let raw = defaults.string(forKey: liveTVSortKey), let opt = ChannelSortOption(rawValue: raw) {
+                    return opt
+                }
+                return .defaultOrder
+            },
+            setLiveTVSortOption: { opt in
+                defaults.set(opt.rawValue, forKey: liveTVSortKey)
             },
             autoPlayNextEpisode: { defaults.bool(forKey: autoPlayKey) },
             setAutoPlayNextEpisode: { defaults.set($0, forKey: autoPlayKey) },

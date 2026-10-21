@@ -146,6 +146,9 @@ public struct PlayerSidebarDrawer: View {
 
             Spacer()
 
+            // Sort Menu Button (Madde #12)
+            sortMenuButton
+
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                 #if os(tvOS)
@@ -169,6 +172,75 @@ public struct PlayerSidebarDrawer: View {
         .padding(.horizontal, 16)
         .padding(.top, 24)
         .padding(.bottom, 12)
+        #endif
+    }
+
+    // MARK: - Sort Menu Button (Madde #12)
+
+    private var sortMenuButton: some View {
+        Menu {
+            Section(AppStrings.LiveTV.sortTitle) {
+                ForEach(ChannelSortOption.allCases) { option in
+                    Button {
+                        #if !os(tvOS)
+                            HapticManager.shared.trigger(.light)
+                        #endif
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            store.send(.setChannelSortOption(option))
+                        }
+                    } label: {
+                        HStack {
+                            Label(option.title, systemImage: option.icon)
+                            if store.channelSortOption == option {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: store.channelSortOption.icon)
+                #if os(tvOS)
+                    .font(.system(size: 16, weight: .bold))
+                #else
+                    .font(.system(size: 12, weight: .bold))
+                #endif
+                    .foregroundStyle(store.channelSortOption.accentColor)
+
+                Text(store.channelSortOption.title)
+                #if os(tvOS)
+                    .font(.system(size: 15, weight: .semibold))
+                #else
+                    .font(.caption.weight(.semibold))
+                #endif
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            #if os(tvOS)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            #else
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            #endif
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(store.channelSortOption.accentColor.opacity(0.35), lineWidth: 1)
+            )
+        }
+        #if os(tvOS)
+        .buttonStyle(TVSortOptionButtonStyle(accentColor: store.channelSortOption.accentColor))
+        #else
+        .buttonStyle(.plain)
         #endif
     }
 
@@ -465,6 +537,21 @@ public struct PlayerSidebarDrawer: View {
                             .background(Color(hex: "#FFD60A").opacity(0.16))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
+
+                        // Watch Count Badge (Madde #12)
+                        if store.channelSortOption == .mostWatched, let count = store.channelWatchCounts[item.id], count > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                Text("\(count)x")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundStyle(Color(hex: "#FF9F0A"))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color(hex: "#FF9F0A").opacity(0.18))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
                     }
                 }
 
@@ -644,7 +731,14 @@ public struct PlayerSidebarDrawer: View {
 
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return baseList
+            return store.channelSortOption.sort(
+                items: baseList,
+                playlist: store.playlist,
+                idKeyPath: \.id,
+                titleKeyPath: \.title,
+                watchCounts: store.channelWatchCounts,
+                recentIDs: store.recentChannels.map(\.id)
+            )
         } else {
             return FuzzySearchEngine.search(baseList, titleKeyPath: \.title, query: trimmed, limit: 120)
         }
@@ -674,6 +768,33 @@ public struct PlayerSidebarDrawer: View {
                     .brightness(isFocused ? 0.15 : 0.0)
                     .shadow(
                         color: isFocused ? accentColor.opacity(0.65) : .clear,
+                        radius: isFocused ? 10 : 0,
+                        x: 0,
+                        y: 0
+                    )
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+            }
+        }
+    }
+
+    private struct TVSortOptionButtonStyle: ButtonStyle {
+        let accentColor: Color
+
+        func makeBody(configuration: Configuration) -> some View {
+            TVSortOptionBody(configuration: configuration, accentColor: accentColor)
+        }
+
+        private struct TVSortOptionBody: View {
+            let configuration: Configuration
+            let accentColor: Color
+            @Environment(\.isFocused) private var isFocused
+
+            var body: some View {
+                configuration.label
+                    .scaleEffect(isFocused ? 1.08 : 1.0)
+                    .brightness(isFocused ? 0.2 : 0.0)
+                    .shadow(
+                        color: isFocused ? accentColor.opacity(0.8) : .clear,
                         radius: isFocused ? 10 : 0,
                         x: 0,
                         y: 0

@@ -189,6 +189,10 @@ public struct PlayerFeature {
         public var isRecentChannelsHUDVisible: Bool = false
         public var recentChannels: [PlayableItem] = []
 
+        /// Smart Channel Sorting & Watch Counts (Madde #12)
+        public var channelSortOption: ChannelSortOption = .defaultOrder
+        public var channelWatchCounts: [String: Int] = [:]
+
         /// Lip-Sync & Subtitle Sync HUD
         public var isAudioSyncHUDVisible: Bool = false
         public var rememberDelayForChannel: Bool = true
@@ -391,6 +395,11 @@ public struct PlayerFeature {
         case clearDialedDigits
         case submitDialedChannel
 
+        // Smart Channel Sorting Actions (Madde #12)
+        case setChannelSortOption(ChannelSortOption)
+        case loadChannelSortPreferences
+        case channelSortPreferencesLoaded(sortOption: ChannelSortOption, watchCounts: [String: Int])
+
         // EPG Actions
         case fetchEPG
         case fetchEPGResponse(Result<[EPGProgram], Error>)
@@ -509,6 +518,7 @@ public struct PlayerFeature {
 
             return .merge(
                 state.item.isLive ? .send(.showChannelOSD) : .none,
+                .send(.loadChannelSortPreferences),
                 recentEffect,
                 .send(.startOLEDDimTimer),
                 .run { _ in
@@ -1363,6 +1373,7 @@ public struct PlayerFeature {
                 if state.zappingHistory.count > 10 {
                     state.zappingHistory.removeFirst()
                 }
+                state.channelWatchCounts[newItem.id] = (state.channelWatchCounts[newItem.id] ?? 0) + 1
             }
             if !state.isReconnecting {
                 state.failedStreamIDs.removeAll()
@@ -1532,6 +1543,24 @@ public struct PlayerFeature {
                         await send(.hideGestureFeedback)
                     }
                 )
+            }
+
+        case .loadChannelSortPreferences:
+            return .run { send in
+                let sort = settingsClient.getLiveTVSortOption()
+                let counts = await recentChannelsClient.fetchWatchCounts()
+                await send(.channelSortPreferencesLoaded(sortOption: sort, watchCounts: counts))
+            }
+
+        case let .channelSortPreferencesLoaded(opt, counts):
+            state.channelSortOption = opt
+            state.channelWatchCounts = counts
+            return .none
+
+        case let .setChannelSortOption(opt):
+            state.channelSortOption = opt
+            return .run { _ in
+                settingsClient.setLiveTVSortOption(opt)
             }
 
         case .showChannelOSD:

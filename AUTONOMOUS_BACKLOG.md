@@ -72,17 +72,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PlayerFeature` (`dialedChannelNumber: String`, `isChannelDialerVisible: Bool`, `matchedDialedChannels: [(index: Int, item: PlayableItem)]`, `.appendDialedDigit`, `.deleteDialedDigit`, `.clearDialedDigits`, `.submitDialedChannel`, `CancelID.dialerAutoSubmit`), `DirectChannelDialHUDView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 12. [PENDING] Smart Channel Sorting & Grouping Rules Engine (Most Watched, Watch Frequency, A-Z)
-- **Açıklama:** TiviMate ve UHF kullanıcılarının en çok övdüğü akıllı kanal sıralama motoru. Kanalları orijinal liste sırası, en çok izlenenler (top watch frequency), toplam izleme süresi (watch-time) veya alfabetik (A-Z) olarak anında yeniden sıralayan, sıralama tercihini kalıcı saklayan akıllı motor.
-- **Platformlar:** iOS, tvOS (Siri Remote Focusable Segmented Controller / Menü).
-- **TCA & Mimari:** `ChannelSortOption`, `SettingsClient` per-category sorting persistence, `ChannelDrawerFeature` dynamic sorting pipeline.
-- **Durum:** `[PENDING]`
+### 12. [DONE] Smart Channel Sorting & Grouping Rules Engine (Most Watched, Watch Frequency, A-Z)
+- **Açıklama:** TiviMate ve UHF kullanıcılarının en çok övdüğü akıllı kanal sıralama motoru. Kanalları orijinal liste sırası, en çok izlenenler (top watch frequency), son izlenenler veya alfabetik (A-Z / Z-A) olarak anında yeniden sıralayan; izlenme sıklığı rozeti (`🔥 12x`) ekleyen ve sıralama tercihini kalıcı saklayan akıllı motor.
+- **Platformlar:** tvOS (Siri Remote Focusable Segmented Sort Menu, `TVSortOptionButtonStyle`), iOS (Haptic feedback, quick sort pill menu).
+- **TCA & Mimari:** `ChannelSortOption.swift` (genel sıralama algoritması, aksan renkleri, başlıklar), `RecentChannelsClient` (izlenme sıklığı `watchCountsKey` sayacı), `SettingsClient` (kalıcı canlı TV sıralama tercihi), `PlayerFeature` state/actions (`channelSortOption`, `channelWatchCounts`, `setChannelSortOption`, `loadChannelSortPreferences`), `PlayerSidebarDrawer.swift` entegrasyonu.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 13. [PENDING] Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine)
+### 13. [IN_PROGRESS] Custom Channel Audio & Subtitle Language Auto-Selector (Preferred Audio Stream Engine)
 - **Açıklama:** Çok dilli yayınlarda (İngilizce, Türkçe, Almanca) kullanıcının global tercih ettiği ses ve altyazı dilini otomatik algılayıp yeni kanala geçildiğinde varsayılan olarak seçen, böylece her kanal değişiminde manuel ses parçası değiştirme zahmetini ortadan kaldıran akıllı ses motoru.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `AudioTrackSelector`, `PlayerClient` preferred language ISO-639 matcher, `SettingsClient`.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 14. [PENDING] Live Stream Audio Equalizer Presets & Dialogue Enhancer HUD
 - **Açıklama:** IPTV yayınlarında boğuk veya gürültülü spor/film seslerini iyileştirmek için "Diyalog Netleştirici (Vocal Boost)", "Stadyum / Spor Atmosferi (Stadium Surround)", "Gece Modu (Night Compression)" ve "Düz (Flat)" sinematik ses EQ profilleri.
@@ -94,6 +94,36 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Açıklama:** Tüm M3U ve Xtream çalma listeleri arasında anında canlı arama yapan; Canlı TV, VOD Film, Dizi, 4K ve EPG mevcut program adına göre renk kodlu rozetlerle sonuçları ayıran ultra-hızlı global arama motoru.
 - **Platformlar:** iOS, tvOS (10-foot UI, Siri Remote Focus Engine).
 - **TCA & Mimari:** `GlobalSearchFeature`, debounce search query, playlist cross-indexing.
+- **Durum:** `[PENDING]`
+
+### 16. [PENDING] Smart Channel Name Cleaner & Clutter Stripper Regex Engine
+- **Açıklama:** IPTV listelerinde kanal isimlerindeki gereksiz "[TR]", "FHD", "1080p", "4K-UHD", "|HEVC|", "VIP" gibi gürültülü ekleri otomatik temizleyen, temiz başlık sunan ve istendiğinde tek tıkla orijinal başlığa dönülebilen akıllı normalizer motoru.
+- **Platformlar:** iOS, tvOS (Siri Remote uyumlu ayarlar ve OSD gösterimi).
+- **TCA & Mimari:** `ChannelNameCleaner`, `SettingsClient` regex clutter toggles, `PlayableItem` presentation extension.
+- **Durum:** `[PENDING]`
+
+### 17. [PENDING] Trakt.tv Watchlist & Scrobble Sync Engine
+- **Açıklama:** VOD film ve diziler izlenirken ilerleme durumunu gerçek zamanlı Trakt.tv hesabıyla senkronize eden, "İzlendi" olarak işaretleyen ve kullanıcıların yarım bıraktıkları içerikleri diğer tüm cihazlarından devam ettirmesini sağlayan modern scrobbler.
+- **Platformlar:** iOS, tvOS.
+- **TCA & Mimari:** `TraktClient`, `TraktFeature`, `PlayerFeature` playback progress scrobble effect.
+- **Durum:** `[PENDING]`
+
+### 18. [PENDING] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
+- **Açıklama:** Oynatıcıdan ana menüye veya diğer uygulamalara geçildiğinde yayını kesintiye uğratmadan iOS ve tvOS sistem PiP penceresine aktaran veya arka planda sadece ses dinleme (background audio playback) modunu akıllıca yöneten motor.
+- **Platformlar:** iOS, tvOS (AVPictureInPictureController, AudioSession background modes).
+- **TCA & Mimari:** `PiPClient`, `PlayerFeature` PiP state actions (`togglePiP`, `onPiPStatusChanged`).
+- **Durum:** `[PENDING]`
+
+### 19. [PENDING] Channel Hide & Category Blacklist PIN Protection System
+- **Açıklama:** İstenmeyen kategorileri veya yetişkin kanallarını çalma listelerinden tamamen gizleyen, ebeveyn denetimi (Parental Control PIN) ile korunan ve liste gezintisini tertemiz tutan gizleme/kilit motoru.
+- **Platformlar:** iOS, tvOS.
+- **TCA & Mimari:** `ParentalControlClient`, `HiddenChannelsDatabase`, `SettingsFeature`.
+- **Durum:** `[PENDING]`
+
+### 20. [PENDING] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
+- **Açıklama:** Yayının video akışında HDR10, HLG, Dolby Vision veya SDR renk uzayı ve pik parlaklık bilgisini algılayıp oynatıcı açılışında ve OSD bilgi kartında sinematik altın/mor rozetle gösteren renk uzayı algılayıcı HUD'ı.
+- **Platformlar:** tvOS, iOS (Display Gamut & Dynamic Range detection).
+- **TCA & Mimari:** `ColorSpaceDetector`, `PlayerFeature.State.videoDynamicRange`, `ChannelInfoOSDView`.
 - **Durum:** `[PENDING]`
 
 ---

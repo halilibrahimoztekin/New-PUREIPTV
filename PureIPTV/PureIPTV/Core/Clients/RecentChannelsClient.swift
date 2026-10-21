@@ -6,10 +6,12 @@ public struct RecentChannelsClient: Sendable {
     public var fetchRecentChannels: @Sendable () async -> [RecentChannelDTO] = { [] }
     public var recordChannel: @Sendable (_ item: RecentChannelDTO) async -> Void
     public var clearRecentChannels: @Sendable () async -> Void
+    public var fetchWatchCounts: @Sendable () async -> [String: Int] = { [:] }
 }
 
 extension RecentChannelsClient: DependencyKey {
     private static let storageKey = "PureIPTV.RecentChannelsList.v1"
+    private static let watchCountsKey = "PureIPTV.RecentChannelsList.watchCounts.v1"
     private static let maxRecentChannels = 20
 
     public static let liveValue: RecentChannelsClient = {
@@ -41,9 +43,18 @@ extension RecentChannelsClient: DependencyKey {
                 if let encoded = try? jsonEncoder.encode(list) {
                     defaults.set(encoded, forKey: storageKey)
                 }
+
+                // Update Watch Frequency Count
+                var counts = (defaults.dictionary(forKey: watchCountsKey) as? [String: Int]) ?? [:]
+                counts[item.id] = (counts[item.id] ?? 0) + 1
+                defaults.set(counts, forKey: watchCountsKey)
             },
             clearRecentChannels: {
                 defaults.removeObject(forKey: storageKey)
+                defaults.removeObject(forKey: watchCountsKey)
+            },
+            fetchWatchCounts: {
+                (defaults.dictionary(forKey: watchCountsKey) as? [String: Int]) ?? [:]
             }
         )
     }()

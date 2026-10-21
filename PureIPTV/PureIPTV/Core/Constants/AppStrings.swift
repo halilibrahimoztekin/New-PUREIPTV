@@ -91,6 +91,12 @@ public enum AppStrings {
         public static let channelDialerTitle = "Kanal Numarası".localized
         public static let channelDialerHint = "Kanal numarası tuşlayarak anında geçiş yapın".localized
         public static let jumpToChannel = "Kanala Git".localized
+        public static let sortTitle = "Sıralama".localized
+        public static let sortDefault = "Varsayılan Sıra".localized
+        public static let sortNameAZ = "İsim (A-Z)".localized
+        public static let sortNameZA = "İsim (Z-A)".localized
+        public static let sortMostWatched = "En Çok İzlenenler".localized
+        public static let sortRecentlyWatched = "Son İzlenenler".localized
     }
 
     // MARK: - Player & EPG
