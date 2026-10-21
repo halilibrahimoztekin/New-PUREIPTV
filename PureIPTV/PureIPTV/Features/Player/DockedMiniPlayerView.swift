@@ -82,11 +82,17 @@ public struct DockedMiniPlayerView: View {
                         store.send(.play)
                     }
                 }) {
-                    Image(systemName: store.playerState == .playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.12), in: Circle())
+                    if store.isReconnecting {
+                        PureLoadingView(size: .small)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.12), in: Circle())
+                    } else {
+                        Image(systemName: store.playerState == .playing ? "pause.fill" : "play.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.12), in: Circle())
+                    }
                 }
                 .buttonStyle(.plain)
 

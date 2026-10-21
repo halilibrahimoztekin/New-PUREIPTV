@@ -28,6 +28,7 @@
                 }
             }
             .tint(Color(hex: "#0A84FF"))
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 // Style the tab bar for glassmorphism
                 let appearance = UITabBarAppearance()

@@ -211,7 +211,7 @@ import SwiftUI
 
                 if store.isLoadingEPG {
                     Spacer()
-                    ProgressView()
+                    PureLoadingView(size: .medium, text: AppStrings.EPG.loadingEPG)
                     Spacer()
                 } else if let error = store.errorMessage {
                     Spacer()

@@ -10,11 +10,8 @@ struct PureIPTVApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var themeManager = ThemeManager.shared
-    @Injected(\.appCoordinator) var coordinator
-
     init() {
         VLCInstance.prewarmShared()
-        coordinator.setup(store: store)
 
         // Initialize RevenueCat
         PurchasesClient.liveValue.configure("appl_bSAnxGvXpdPeSquSYsatWQrNwOG")
@@ -37,8 +34,8 @@ struct PureIPTVApp: App {
     }
 
     /// The single store that drives the entire app logic
-    let store = Store(initialState: AppFeature.State()) {
-        AppFeature()
+    let store = Store(initialState: AppCoordinator.State.initialState) {
+        AppCoordinator()
     }
 
     var sharedModelContainer: ModelContainer = SharedDatabaseConfig.shared
@@ -46,7 +43,7 @@ struct PureIPTVApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                CoordinatorRootView(coordinator: coordinator)
+                AppCoordinatorView(store: store)
                     .preferredColorScheme(.dark)
                     .tint(themeManager.accentColor)
                     .ignoresSafeArea()
@@ -58,7 +55,7 @@ struct PureIPTVApp: App {
                     }
 
                 #if os(iOS)
-                    if let playerStore = store.scope(state: \.player, action: \.player) {
+                    if let playerStore = store.scope(state: \.miniPlayer, action: \.miniPlayer) {
                         if store.isPlayerMini {
                             VStack {
                                 Spacer()

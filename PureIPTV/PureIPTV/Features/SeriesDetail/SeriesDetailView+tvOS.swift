@@ -16,14 +16,10 @@
             ZStack {
                 Color(hex: "#0F0F13").ignoresSafeArea()
 
-                if store.isLoading {
-                    loadingView
-                } else {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            headerView
-                            contentView
-                        }
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerView
+                        contentView
                     }
                 }
             }
@@ -41,6 +37,9 @@
                 if let title = store.trailerTitle {
                     tvOSTrailerSheet(title: title)
                 }
+            }
+            .onExitCommand {
+                store.send(.closeTapped)
             }
         }
 
@@ -206,6 +205,20 @@
                         .lineSpacing(6)
                         .padding(.horizontal, 80)
                         .lineLimit(4)
+                } else if store.isLoading || store.isTMDBLoading {
+                    VStack(alignment: .leading, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.12))
+                            .frame(maxWidth: .infinity, maxHeight: 20)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.12))
+                            .frame(maxWidth: .infinity, maxHeight: 20)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.12))
+                            .frame(width: 400, height: 20)
+                    }
+                    .padding(.horizontal, 80)
+                    .shimmeringPlaceholder(isLoading: true)
                 }
 
                 // Next Up Episode Auto-Cue Banner (if available)
@@ -250,6 +263,23 @@
                             .padding(.horizontal, 80)
                             .padding(.vertical, 8)
                         }
+                    }
+                } else if store.isLoading {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(AppStrings.SeriesDetail.seasons)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 80)
+
+                        HStack(spacing: 16) {
+                            ForEach(0 ..< 4, id: \.self) { _ in
+                                Capsule()
+                                    .fill(Color.white.opacity(0.12))
+                                    .frame(width: 140, height: 50)
+                            }
+                        }
+                        .padding(.horizontal, 80)
+                        .shimmeringPlaceholder(isLoading: true)
                     }
                 }
 
@@ -311,22 +341,41 @@
                             .padding(.horizontal, 80)
                         }
                     }
+                } else if store.isLoading {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text(AppStrings.SeriesDetail.episodes)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 80)
+
+                        LazyVStack(spacing: 20) {
+                            ForEach(0 ..< 3, id: \.self) { _ in
+                                HStack(spacing: 28) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 260, height: 150)
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 280, height: 24)
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 140, height: 18)
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(maxWidth: .infinity, maxHeight: 18)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(12)
+                            }
+                        }
+                        .padding(.horizontal, 80)
+                        .shimmeringPlaceholder(isLoading: true)
+                    }
                 }
 
                 Spacer().frame(height: 80)
-            }
-        }
-
-        // MARK: – Loading
-
-        private var loadingView: some View {
-            VStack(spacing: 32) {
-                ProgressView()
-                    .tint(Color(hex: "#0A84FF"))
-                    .scaleEffect(2.0)
-                Text(AppStrings.SeriesDetail.loading)
-                    .font(.system(size: 28))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
             }
         }
 

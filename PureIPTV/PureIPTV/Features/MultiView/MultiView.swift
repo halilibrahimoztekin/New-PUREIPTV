@@ -66,30 +66,49 @@ public struct MultiView: View {
 
                 // Grid
                 GeometryReader { gridGeo in
-                    let w = gridGeo.size.width
-                    let h = gridGeo.size.height
+                    let rawW = gridGeo.size.width
+                    let rawH = gridGeo.size.height
+                    let isValidSize = rawW.isFinite && rawH.isFinite && rawW > 8 && rawH > 8
 
-                    ZStack(alignment: .topLeading) {
-                        ForEach(store.slots) { slot in
-                            let isFocused = store.focusedSlotID == slot.id
-                            let isHidden = store.focusedSlotID != nil && !isFocused
+                    if isValidSize {
+                        let w = rawW
+                        let h = rawH
+                        let spacing: CGFloat = 4
+                        let slotCount = max(1, store.slots.count)
+                        let rowCount = columns == 2 ? max(1, (slotCount + 1) / 2) : slotCount
+                        let colCount = columns == 2 ? min(2, slotCount) : 1
 
-                            let idx = slot.id
-                            let row = columns == 2 ? idx / 2 : idx
-                            let col = columns == 2 ? idx % 2 : 0
-                            let itemW = columns == 2 ? (w - 4) / 2 : w
-                            let itemH = columns == 2 ? (h - 4) / 2 : (h - 4) / (columns == 2 ? 2 : CGFloat(store.slots.count))
+                        let availableW = max(0, w - spacing * CGFloat(colCount - 1))
+                        let availableH = max(0, h - spacing * CGFloat(rowCount - 1))
 
-                            let xOffset = columns == 2 ? CGFloat(col) * (itemW + 4) : 0
-                            let yOffset = CGFloat(row) * (itemH + 4)
+                        let itemW = max(1, colCount > 0 ? availableW / CGFloat(colCount) : w)
+                        let itemH = max(1, rowCount > 0 ? availableH / CGFloat(rowCount) : h)
 
-                            slotView(for: slot)
-                                .frame(width: isFocused ? w : itemW, height: isFocused ? h : itemH)
-                                .offset(x: isFocused ? 0 : xOffset, y: isFocused ? 0 : yOffset)
-                                .opacity(isHidden ? 0 : 1)
-                                .zIndex(isFocused ? 10 : 1)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+                        ZStack(alignment: .topLeading) {
+                            ForEach(store.slots) { slot in
+                                let isFocused = store.focusedSlotID == slot.id
+                                let isHidden = store.focusedSlotID != nil && !isFocused
+
+                                let idx = slot.id
+                                let row = columns == 2 ? idx / 2 : idx
+                                let col = columns == 2 ? idx % 2 : 0
+
+                                let xOffset = columns == 2 ? CGFloat(col) * (itemW + spacing) : 0
+                                let yOffset = CGFloat(row) * (itemH + spacing)
+
+                                let targetW = max(1, isFocused ? w : itemW)
+                                let targetH = max(1, isFocused ? h : itemH)
+
+                                slotView(for: slot)
+                                    .frame(width: targetW, height: targetH)
+                                    .offset(x: isFocused ? 0 : xOffset, y: isFocused ? 0 : yOffset)
+                                    .opacity(isHidden ? 0 : 1)
+                                    .zIndex(isFocused ? 10 : 1)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+                            }
                         }
+                    } else {
+                        Color.clear
                     }
                 }
                 .padding(.horizontal, 4)

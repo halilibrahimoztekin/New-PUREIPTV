@@ -2,7 +2,6 @@ import ComposableArchitecture
 import FactoryKit
 import Foundation
 import OSLog
-import XCoordinator
 
 // MARK: - SeriesDetailFeature
 
@@ -17,6 +16,7 @@ public struct SeriesDetailFeature {
         public var info: DetailModels.Info?
         public var seasons: [DetailModels.Season] = []
         public var allEpisodes: [String: [DetailModels.Episode]] = [:] // Keyed by season number string
+        public var nextUpEpisode: DetailModels.Episode?
         public var tmdbTV: TMDBTVDetailsDTO?
 
         public var selectedSeasonNumber: Int?
@@ -65,7 +65,17 @@ public struct SeriesDetailFeature {
             return allEpisodes[String(seasonNum)] ?? []
         }
 
-        public var nextUpEpisode: DetailModels.Episode? {
+        public var sequentialPlaylistEpisodes: [DetailModels.Episode] {
+            let all = allEpisodes.values.flatMap(\.self).sorted {
+                if $0.season != $1.season {
+                    return $0.season < $1.season
+                }
+                return $0.episodeNum < $1.episodeNum
+            }
+            return all.isEmpty ? currentEpisodes : all
+        }
+
+        public mutating func updateNextUpEpisode() {
             let allEps = allEpisodes.values.flatMap(\.self).sorted {
                 if $0.season != $1.season {
                     return $0.season < $1.season
@@ -77,13 +87,15 @@ public struct SeriesDetailFeature {
                 if isFinished {
                     let nextIndex = allEps.index(after: currentIndex)
                     if nextIndex < allEps.endIndex {
-                        return allEps[nextIndex]
+                        nextUpEpisode = allEps[nextIndex]
+                        return
                     }
                 } else {
-                    return allEps[currentIndex]
+                    nextUpEpisode = allEps[currentIndex]
+                    return
                 }
             }
-            return currentEpisodes.first ?? allEps.first
+            nextUpEpisode = currentEpisodes.first ?? allEps.first
         }
 
         public init(series: MediaModels.Item, config: PlaylistConfig, historyItem: WatchHistoryItem? = nil, autoPlayOnLoad: Bool = false) {
@@ -96,7 +108,7 @@ public struct SeriesDetailFeature {
 
     public enum Action {
         case onAppear
-        case infoResponse(Result<(info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode]), Error>)
+        case infoResponse(Result<(info: DetailModels.Info, seasons: [DetailModels.Season], allEpisodes: [String: [DetailModels.Episode]]), Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBTVDetailsDTO, Error>)
         case seasonSelected(Int)
@@ -151,9 +163,20 @@ public struct SeriesDetailFeature {
                 print("Fetching Series Info and TMDB details for: \(searchTitle)")
 
                 let infoEffect: Effect<Action> = .run { send in
-                    await send(.infoResponse(
-                        Result { try await iptvClient.fetchSeriesInfo(config, seriesID) }
-                    ))
+                    do {
+                        let result = try await iptvClient.fetchSeriesInfo(config, seriesID)
+                        var parsed: [String: [DetailModels.Episode]] = [:]
+                        for ep in result.episodes {
+                            let seasonStr = String(ep.season)
+                            parsed[seasonStr, default: []].append(ep)
+                        }
+                        for (key, eps) in parsed {
+                            parsed[key] = eps.sorted { $0.episodeNum < $1.episodeNum }
+                        }
+                        await send(.infoResponse(.success((info: result.info, seasons: result.seasons, allEpisodes: parsed))))
+                    } catch {
+                        await send(.infoResponse(.failure(error)))
+                    }
                 }
 
                 let tmdbEffect: Effect<Action> = .run { send in
@@ -193,18 +216,7 @@ public struct SeriesDetailFeature {
             case let .infoResponse(.success(result)):
                 state.info = result.info
                 state.seasons = result.seasons
-
-                var parsedEpisodes: [String: [DetailModels.Episode]] = [:]
-                for ep in result.episodes {
-                    let seasonStr = String(ep.season)
-                    parsedEpisodes[seasonStr, default: []].append(ep)
-                }
-
-                // Sort episodes
-                for (key, eps) in parsedEpisodes {
-                    parsedEpisodes[key] = eps.sorted { $0.episodeNum < $1.episodeNum }
-                }
-                state.allEpisodes = parsedEpisodes
+                state.allEpisodes = result.allEpisodes
 
                 // Auto-select first season
                 if let firstSeason = state.seasons.first {
@@ -216,6 +228,8 @@ public struct SeriesDetailFeature {
                 if !state.isTMDBLoading {
                     state.isLoading = false
                 }
+
+                state.updateNextUpEpisode()
 
                 if state.autoPlayOnLoad {
                     state.autoPlayOnLoad = false
@@ -280,6 +294,7 @@ public struct SeriesDetailFeature {
 
             case let .seasonSelected(seasonNum):
                 state.selectedSeasonNumber = seasonNum
+                state.updateNextUpEpisode()
                 return .none
 
             case .toggleLayoutMode:
@@ -326,8 +341,8 @@ public struct SeriesDetailFeature {
                     initialDuration: history?.duration,
                     initialProgress: initialProgress
                 )
-                let seasonEpisodes = state.allEpisodes[String(episode.season)] ?? state.currentEpisodes
-                let playlist = seasonEpisodes.isEmpty ? nil : seasonEpisodes.map { ep in
+                let playlistEpisodes = state.sequentialPlaylistEpisodes
+                let playlist = playlistEpisodes.isEmpty ? nil : playlistEpisodes.map { ep in
                     PlayerFeature.PlayableItem(
                         id: ep.id,
                         title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
@@ -351,9 +366,6 @@ public struct SeriesDetailFeature {
                     state.selectedSeasonNumber = ep.season
                 }
 
-                let seasonNumber = matchingEpisode?.season ?? state.selectedSeasonNumber
-                let targetEpisodes = seasonNumber != nil ? (state.allEpisodes[String(seasonNumber!)] ?? state.currentEpisodes) : state.currentEpisodes
-
                 let startPosition = history.duration > 0 ? (history.progress / history.duration) : 0.0
                 let playable = PlayerFeature.PlayableItem(
                     id: history.id,
@@ -366,7 +378,8 @@ public struct SeriesDetailFeature {
                     initialDuration: history.duration > 0 ? history.duration : nil,
                     initialProgress: history.progress > 0 ? history.progress : nil
                 )
-                let playlist = targetEpisodes.isEmpty ? nil : targetEpisodes.map { ep in
+                let resumeEpisodes = state.sequentialPlaylistEpisodes
+                let playlist = resumeEpisodes.isEmpty ? nil : resumeEpisodes.map { ep in
                     PlayerFeature.PlayableItem(
                         id: ep.id,
                         title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
@@ -385,8 +398,6 @@ public struct SeriesDetailFeature {
                     if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
                         state.selectedSeasonNumber = ep.season
                     }
-                    let seasonNumber = matchingEpisode?.season ?? state.selectedSeasonNumber
-                    let targetEpisodes = seasonNumber != nil ? (state.allEpisodes[String(seasonNumber!)] ?? state.currentEpisodes) : state.currentEpisodes
 
                     let playable = PlayerFeature.PlayableItem(
                         id: history.id,
@@ -397,7 +408,8 @@ public struct SeriesDetailFeature {
                         seriesID: state.series.id,
                         startPosition: 0.0
                     )
-                    let playlist = targetEpisodes.isEmpty ? nil : targetEpisodes.map { ep in
+                    let restartEpisodes = state.sequentialPlaylistEpisodes
+                    let playlist = restartEpisodes.isEmpty ? nil : restartEpisodes.map { ep in
                         PlayerFeature.PlayableItem(
                             id: ep.id,
                             title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
@@ -428,6 +440,7 @@ public struct SeriesDetailFeature {
 
             case let .historyStatusLoaded(history):
                 state.historyItem = history
+                state.updateNextUpEpisode()
                 return .none
 
             case let .favoriteStatusLoaded(isFav):

@@ -96,6 +96,11 @@
             .onAppear {
                 store.send(.onAppear)
             }
+            .onExitCommand {
+                if store.isEditing {
+                    store.send(.toggleEditMode)
+                }
+            }
             .sheet(isPresented: $store.showingAddProfile) {
                 TVAddProfileSheet(
                     name: $newProfileName,
@@ -453,6 +458,7 @@
                 }
                 .padding(48)
             }
+            .onExitCommand(perform: onCancel)
         }
     }
 #endif

@@ -14,6 +14,9 @@
             // We can just present the native RevenueCatUI PaywallView here.
             // Or we could wrap RevenueCatUI.PaywallView
             RevenueCatUI.PaywallView(displayCloseButton: true)
+                .onRequestedDismissal {
+                    store.send(.closeButtonTapped)
+                }
                 .onPurchaseCompleted { customerInfo in
                     store.send(.purchaseResponse(.success(customerInfo)))
                 }

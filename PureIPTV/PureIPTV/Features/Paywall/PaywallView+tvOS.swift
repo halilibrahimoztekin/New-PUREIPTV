@@ -29,9 +29,7 @@
                         .padding(.horizontal, 100)
 
                     if store.isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(2)
+                        PureLoadingView(size: .large, text: AppStrings.Common.loading)
                     } else if let error = store.errorMessage {
                         Text(error)
                             .foregroundColor(.red)

@@ -10,13 +10,6 @@ public final class FactoryManager {
 }
 
 public extension Container {
-    /// App Coordinator
-    var appCoordinator: Factory<AppCoordinator> {
-        self {
-            AppCoordinator()
-        }.singleton
-    }
-
     /// IPTV Client
     var iptvClient: Factory<IPTVClient> {
         self { .liveValue }

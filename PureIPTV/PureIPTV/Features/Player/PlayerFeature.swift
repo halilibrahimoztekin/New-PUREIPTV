@@ -111,6 +111,12 @@ public struct PlayerFeature {
         public var playerStats: String = ""
         public var streamHealthMetrics: StreamHealthMetrics?
         public var isStreamHealthHUDVisible: Bool = false
+        public var activeCatchupProgram: EPGProgram?
+        public var isPlayingCatchup: Bool {
+            activeCatchupProgram != nil
+        }
+
+        public var isCatchupTimelineVisible: Bool = false
         public var isTracksMenuVisible: Bool = false
 
         // Gestures
@@ -280,6 +286,9 @@ public struct PlayerFeature {
         case toggleStreamHealthHUD
         case setStreamHealthHUDVisible(Bool)
         case updateStreamHealth(StreamHealthMetrics)
+        case toggleCatchupTimeline
+        case setCatchupTimelineVisible(Bool)
+        case returnToLiveStream
 
         // Gestures & Adjustments
         case setVolume(Int32)
@@ -1468,11 +1477,38 @@ public struct PlayerFeature {
             if let catchupURL = components.url {
                 state.playerState = .playing
                 state.isEPGVisible = false
+                state.isCatchupTimelineVisible = false
+                state.activeCatchupProgram = program
                 return .run { _ in
                     try await playerClient.play(catchupURL)
                 } catch: { error, _ in
                     print("Failed to play catchup: \(error)")
                 }
+            }
+            return .none
+
+        case .returnToLiveStream:
+            state.activeCatchupProgram = nil
+            state.isCatchupTimelineVisible = false
+            state.playerState = .playing
+            let liveURL = state.item.streamURL
+            return .run { _ in
+                try await playerClient.play(liveURL)
+            } catch: { error, _ in
+                print("Failed to return to live stream: \(error)")
+            }
+
+        case .toggleCatchupTimeline:
+            state.isCatchupTimelineVisible.toggle()
+            if state.isCatchupTimelineVisible, state.epgListings.isEmpty {
+                return .send(.fetchEPG)
+            }
+            return .none
+
+        case let .setCatchupTimelineVisible(visible):
+            state.isCatchupTimelineVisible = visible
+            if visible, state.epgListings.isEmpty {
+                return .send(.fetchEPG)
             }
             return .none
 

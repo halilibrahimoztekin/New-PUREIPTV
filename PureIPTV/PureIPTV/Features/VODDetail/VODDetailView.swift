@@ -6,6 +6,7 @@ import SwiftUI
 
 public struct VODDetailView: View {
     let store: StoreOf<VODDetailFeature>
+    @State private var hasDisappeared = false
 
     public init(store: StoreOf<VODDetailFeature>) {
         self.store = store
@@ -14,10 +15,20 @@ public struct VODDetailView: View {
     public var body: some View {
         #if os(tvOS)
             VODDetailView_tvOS(store: store)
-                .onDisappear { store.send(.viewDidDisappear) }
+                .onAppear { hasDisappeared = false }
+                .onDisappear {
+                    guard !hasDisappeared else { return }
+                    hasDisappeared = true
+                    store.send(.viewDidDisappear)
+                }
         #else
             VODDetailView_iOS(store: store)
-                .onDisappear { store.send(.viewDidDisappear) }
+                .onAppear { hasDisappeared = false }
+                .onDisappear {
+                    guard !hasDisappeared else { return }
+                    hasDisappeared = true
+                    store.send(.viewDidDisappear)
+                }
         #endif
     }
 }
@@ -33,83 +44,82 @@ public struct VODDetailView: View {
         }
 
         public var body: some View {
-            NavigationStack {
-                ZStack(alignment: .top) {
-                    Color(hex: "#0F0F13").ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(hex: "#0F0F13").ignoresSafeArea()
 
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            headerView
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerView
 
-                            if store.availableVersions.count > 1 {
-                                MovieVersionPickerView(
-                                    versions: store.availableVersions,
-                                    selectedVersionId: store.selectedVersionId ?? store.vod.id,
-                                    onSelectVersion: { version in
-                                        store.send(.selectVersion(version))
-                                    }
-                                )
-                                .padding(.top, 14)
-                            }
+                        if store.availableVersions.count > 1 {
+                            MovieVersionPickerView(
+                                versions: store.availableVersions,
+                                selectedVersionId: store.selectedVersionId ?? store.vod.id,
+                                onSelectVersion: { version in
+                                    store.send(.selectVersion(version))
+                                }
+                            )
+                            .padding(.top, 14)
+                        }
 
-                            contentView
-                        }
-                    }
-                    .id(store.vod.id)
-                    .sheet(isPresented: Binding(
-                        get: { store.selectedUnmatchedMovie != nil },
-                        set: {
-                            if !$0 {
-                                store.send(.dismissUnmatchedMovie)
-                            }
-                        }
-                    )) {
-                        if let item = store.selectedUnmatchedMovie {
-                            unmatchedMovieSheet(item: item)
-                        }
+                        contentView
                     }
                 }
+                .id(store.vod.id)
                 .sheet(isPresented: Binding(
-                    get: { store.isTrailerPresented },
+                    get: { store.selectedUnmatchedMovie != nil },
                     set: {
                         if !$0 {
-                            store.send(.dismissTrailer)
+                            store.send(.dismissUnmatchedMovie)
                         }
                     }
                 )) {
-                    if let key = store.trailerVideoKey, let title = store.trailerTitle {
-                        trailerPlayerSheet(videoKey: key, title: title)
+                    if let item = store.selectedUnmatchedMovie {
+                        unmatchedMovieSheet(item: item)
                     }
                 }
-                .onAppear {
-                    store.send(.onAppear)
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.closeTapped)
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(8)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
+            }
+            .sheet(isPresented: Binding(
+                get: { store.isTrailerPresented },
+                set: {
+                    if !$0 {
+                        store.send(.dismissTrailer)
                     }
                 }
-                .sheet(isPresented: Binding(
-                    get: { store.selectedActor != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.dismissActorDetails)
-                        }
+            )) {
+                if let key = store.trailerVideoKey, let title = store.trailerTitle {
+                    trailerPlayerSheet(videoKey: key, title: title)
+                }
+            }
+            .onAppear {
+                store.send(.onAppear)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.closeTapped)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
-                )) {
-                    if let actor = store.selectedActor {
-                        actorBiographySheet(actor: actor)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { store.selectedActor != nil },
+                set: {
+                    if !$0 {
+                        store.send(.dismissActorDetails)
                     }
+                }
+            )) {
+                if let actor = store.selectedActor {
+                    actorBiographySheet(actor: actor)
                 }
             }
         }
@@ -444,6 +454,20 @@ public struct VODDetailView: View {
                             .lineSpacing(4)
                     }
                     .padding(.horizontal, 24)
+                } else if store.isTMDBLoading || store.isLoading {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(AppStrings.VODDetail.overview)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.white)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 14)
+                            RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 14)
+                            RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(width: 220, height: 14)
+                        }
+                        .shimmeringPlaceholder(isLoading: true)
+                    }
+                    .padding(.horizontal, 24)
                 }
 
                 // Oyuncu Kadrosu (Cast & Crew Carousel)
@@ -510,6 +534,29 @@ public struct VODDetailView: View {
                                         }
                                     }
                                     .buttonStyle(FluidScaleButtonStyle())
+                                }
+                            }
+                        }
+                    }
+                } else if store.isTMDBLoading {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(AppStrings.VODDetail.castCrew)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 14) {
+                                ForEach(0 ..< 5, id: \.self) { _ in
+                                    VStack(spacing: 7) {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 70, height: 70)
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 60, height: 10)
+                                    }
+                                    .shimmeringPlaceholder(isLoading: true)
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -676,6 +723,24 @@ public struct VODDetailView: View {
                                         }
                                     }
                                     .buttonStyle(FluidScaleButtonStyle())
+                                }
+                            }
+                        }
+                    }
+                } else if store.isTMDBLoading {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(AppStrings.VODDetail.similarMovies)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(0 ..< 4, id: \.self) { _ in
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 110, height: 165)
+                                        .shimmeringPlaceholder(isLoading: true)
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -1096,185 +1161,256 @@ public struct VODDetailView: View {
                 }
                 .ignoresSafeArea()
 
-                if store.isLoading || store.isTMDBLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(2.0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView(.vertical) {
-                        HStack(spacing: 80) {
-                            // Info Section
-                            VStack(alignment: .leading, spacing: 28) {
-                                Text(store.tmdbMovie?.title ?? store.vod.title)
-                                    .font(.system(size: 58, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(2)
+                ScrollView(.vertical) {
+                    HStack(spacing: 80) {
+                        // Info Section
+                        VStack(alignment: .leading, spacing: 28) {
+                            Text(store.tmdbMovie?.title ?? store.vod.title)
+                                .font(.system(size: 58, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
 
-                                // Metadata
-                                HStack(spacing: 20) {
-                                    if let vote = store.tmdbMovie?.voteAverage, vote > 0 {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "star.fill")
-                                                .foregroundColor(.yellow)
-                                            Text(String(format: "%.1f", vote))
-                                                .font(.title3)
-                                                .fontWeight(.semibold)
-                                                .foregroundStyle(.white)
-                                            Text(AppStrings.VODDetail.imdbRating)
-                                                .font(.caption.bold())
-                                                .foregroundColor(.yellow)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
-                                        }
-                                    }
-
-                                    if let releaseDate = store.tmdbMovie?.releaseDate {
-                                        let year = String(releaseDate.prefix(4))
-                                        Text(year)
+                            // Metadata
+                            HStack(spacing: 20) {
+                                if let vote = store.tmdbMovie?.voteAverage, vote > 0 {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "star.fill")
+                                            .foregroundColor(.yellow)
+                                        Text(String(format: "%.1f", vote))
                                             .font(.title3)
-                                            .foregroundStyle(.white.opacity(0.7))
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(.white)
+                                        Text(AppStrings.VODDetail.imdbRating)
+                                            .font(.caption.bold())
+                                            .foregroundColor(.yellow)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
                                     }
-
-                                    if let duration = store.tmdbMovie?.runtime, duration > 0 {
-                                        Text("\(duration) \(AppStrings.Common.minAbbr)")
-                                            .font(.title3)
-                                            .foregroundStyle(.white.opacity(0.7))
-                                    } else if let dur = store.vod.duration, !dur.isEmpty {
-                                        Text(dur)
-                                            .font(.title3)
-                                            .foregroundStyle(.white.opacity(0.7))
-                                    }
-
-                                    Text(AppStrings.VODDetail.uhdQualityBadge)
-                                        .font(.caption.bold())
-                                        .foregroundColor(.cyan)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.cyan.opacity(0.2), in: Capsule())
                                 }
 
-                                // Plot
-                                if let plot = store.tmdbMovie?.overview ?? store.info?.plot, !plot.isEmpty {
-                                    Text(plot)
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(.white.opacity(0.75))
-                                        .lineLimit(4)
-                                        .multilineTextAlignment(.leading)
+                                if let releaseDate = store.tmdbMovie?.releaseDate {
+                                    let year = String(releaseDate.prefix(4))
+                                    Text(year)
+                                        .font(.title3)
+                                        .foregroundStyle(.white.opacity(0.7))
                                 }
 
-                                if store.availableVersions.count > 1 {
-                                    MovieVersionPickerView(
-                                        versions: store.availableVersions,
-                                        selectedVersionId: store.selectedVersionId ?? store.vod.id,
-                                        onSelectVersion: { version in
-                                            store.send(.selectVersion(version))
-                                        }
-                                    )
-                                    .padding(.top, 8)
+                                if let duration = store.tmdbMovie?.runtime, duration > 0 {
+                                    Text("\(duration) \(AppStrings.Common.minAbbr)")
+                                        .font(.title3)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                } else if let dur = store.vod.duration, !dur.isEmpty {
+                                    Text(dur)
+                                        .font(.title3)
+                                        .foregroundStyle(.white.opacity(0.7))
                                 }
 
-                                // Actions
-                                HStack(spacing: 24) {
-                                    if let history = store.historyItem, history.duration > 0 {
-                                        Button {
-                                            store.send(.resumeTapped)
-                                        } label: {
-                                            HStack(spacing: 12) {
-                                                CircularProgressRing(
-                                                    progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
-                                                    lineWidth: 3.5,
-                                                    size: 26,
-                                                    gradientColors: [Color(hex: "#00F5D4"), Color(hex: "#FFFFFF")],
-                                                    trackColor: Color.white.opacity(0.3)
-                                                ) {
-                                                    Image(systemName: "play.fill")
-                                                        .font(.system(size: 10, weight: .bold))
-                                                        .foregroundStyle(.white)
-                                                }
+                                Text(AppStrings.VODDetail.uhdQualityBadge)
+                                    .font(.caption.bold())
+                                    .foregroundColor(.cyan)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.cyan.opacity(0.2), in: Capsule())
+                            }
 
-                                                Text(AppStrings.VODDetail.continueWatching)
-                                                    .fontWeight(.bold)
+                            // Plot
+                            if let plot = store.tmdbMovie?.overview ?? store.info?.plot, !plot.isEmpty {
+                                Text(plot)
+                                    .font(.system(size: 22))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                    .lineLimit(4)
+                                    .multilineTextAlignment(.leading)
+                            } else if store.isTMDBLoading || store.isLoading {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(height: 22)
+                                    RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(height: 22)
+                                    RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(width: 400, height: 22)
+                                }
+                                .shimmeringPlaceholder(isLoading: true)
+                            }
 
-                                                let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
-                                                Text("%\(percent)")
-                                                    .font(.system(size: 14, weight: .bold))
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 4)
-                                                    .background(Color.white.opacity(0.2), in: Capsule())
-                                            }
-                                            .padding(.horizontal, 32)
-                                            .padding(.vertical, 16)
-                                        }
-                                        .focused($isPlayButtonFocused)
+                            if store.availableVersions.count > 1 {
+                                MovieVersionPickerView(
+                                    versions: store.availableVersions,
+                                    selectedVersionId: store.selectedVersionId ?? store.vod.id,
+                                    onSelectVersion: { version in
+                                        store.send(.selectVersion(version))
+                                    }
+                                )
+                                .padding(.top, 8)
+                            }
 
-                                        Button {
-                                            store.send(.restartTapped)
-                                        } label: {
-                                            HStack(spacing: 12) {
-                                                Image(systemName: "arrow.counterclockwise")
-                                                Text(AppStrings.VODDetail.restart)
-                                                    .fontWeight(.bold)
-                                            }
-                                            .padding(.horizontal, 28)
-                                            .padding(.vertical, 16)
-                                        }
-                                    } else {
-                                        Button {
-                                            store.send(.playTapped)
-                                        } label: {
-                                            HStack(spacing: 12) {
+                            // Actions
+                            HStack(spacing: 24) {
+                                if let history = store.historyItem, history.duration > 0 {
+                                    Button {
+                                        store.send(.resumeTapped)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            CircularProgressRing(
+                                                progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
+                                                lineWidth: 3.5,
+                                                size: 26,
+                                                gradientColors: [Color(hex: "#00F5D4"), Color(hex: "#FFFFFF")],
+                                                trackColor: Color.white.opacity(0.3)
+                                            ) {
                                                 Image(systemName: "play.fill")
-                                                Text(AppStrings.Common.watchNow)
-                                                    .fontWeight(.bold)
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundStyle(.white)
                                             }
-                                            .padding(.horizontal, 32)
-                                            .padding(.vertical, 16)
-                                        }
-                                        .focused($isPlayButtonFocused)
-                                    }
 
-                                    // Fragman on tvOS
-                                    if store.resolvedTrailerKey != nil {
-                                        Button {
-                                            store.send(.trailerTapped)
-                                        } label: {
-                                            HStack(spacing: 12) {
-                                                Image(systemName: "film.fill")
-                                                Text(AppStrings.VODDetail.trailer)
-                                                    .fontWeight(.bold)
-                                            }
-                                            .padding(.horizontal, 28)
-                                            .padding(.vertical, 16)
+                                            Text(AppStrings.VODDetail.continueWatching)
+                                                .fontWeight(.bold)
+
+                                            let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
+                                            Text("%\(percent)")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.white.opacity(0.2), in: Capsule())
                                         }
+                                        .padding(.horizontal, 32)
+                                        .padding(.vertical, 16)
                                     }
+                                    .focused($isPlayButtonFocused)
 
                                     Button {
-                                        store.send(.toggleFavorite)
+                                        store.send(.restartTapped)
                                     } label: {
-                                        Image(systemName: store.isFavorite ? "heart.fill" : "heart")
-                                            .foregroundColor(store.isFavorite ? .red : .white)
-                                            .padding()
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "arrow.counterclockwise")
+                                            Text(AppStrings.VODDetail.restart)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 16)
+                                    }
+                                } else {
+                                    Button {
+                                        store.send(.playTapped)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "play.fill")
+                                            Text(AppStrings.Common.watchNow)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 32)
+                                        .padding(.vertical, 16)
+                                    }
+                                    .focused($isPlayButtonFocused)
+                                }
+
+                                // Fragman on tvOS
+                                if store.resolvedTrailerKey != nil {
+                                    Button {
+                                        store.send(.trailerTapped)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "film.fill")
+                                            Text(AppStrings.VODDetail.trailer)
+                                                .fontWeight(.bold)
+                                        }
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 16)
                                     }
                                 }
 
-                                // Cast Row on tvOS
-                                if let cast = store.tmdbMovie?.credits?.cast, !cast.isEmpty {
-                                    VStack(alignment: .leading, spacing: 14) {
-                                        Text(AppStrings.VODDetail.castCrew)
+                                Button {
+                                    store.send(.toggleFavorite)
+                                } label: {
+                                    Image(systemName: store.isFavorite ? "heart.fill" : "heart")
+                                        .foregroundColor(store.isFavorite ? .red : .white)
+                                        .padding()
+                                }
+                            }
+
+                            // Cast Row on tvOS
+                            if let cast = store.tmdbMovie?.credits?.cast, !cast.isEmpty {
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text(AppStrings.VODDetail.castCrew)
+                                        .font(.title3.bold())
+                                        .foregroundStyle(.white)
+
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 20) {
+                                            ForEach(cast.prefix(12), id: \.id) { actor in
+                                                Button {
+                                                    store.send(.actorTapped(actor))
+                                                } label: {
+                                                    VStack(spacing: 8) {
+                                                        let avatarURL = actor.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                                                        if let urlString = avatarURL, let url = URL(string: urlString) {
+                                                            AsyncImage(url: url) { phase in
+                                                                switch phase {
+                                                                case let .success(img):
+                                                                    img.resizable().scaledToFill()
+                                                                default:
+                                                                    Rectangle().fill(Color(hex: "#2A2A30"))
+                                                                }
+                                                            }
+                                                            .frame(width: 80, height: 80)
+                                                            .clipShape(Circle())
+                                                        } else {
+                                                            Rectangle()
+                                                                .fill(Color(hex: "#2A2A30"))
+                                                                .frame(width: 80, height: 80)
+                                                                .clipShape(Circle())
+                                                        }
+
+                                                        Text(actor.name ?? "")
+                                                            .font(.caption.bold())
+                                                            .foregroundStyle(.white)
+                                                            .lineLimit(1)
+                                                            .frame(width: 100)
+
+                                                        if let char = actor.character {
+                                                            Text(char)
+                                                                .font(.system(size: 10))
+                                                                .foregroundStyle(.white.opacity(0.6))
+                                                                .lineLimit(1)
+                                                                .frame(width: 100)
+                                                        }
+                                                    }
+                                                    .padding(6)
+                                                }
+                                                .buttonStyle(.card)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.top, 12)
+                            }
+
+                            // Similar Movies on tvOS
+                            if let similar = store.tmdbMovie?.similar?.results, !similar.isEmpty {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    HStack(spacing: 12) {
+                                        Text(AppStrings.VODDetail.similarMovies)
                                             .font(.title3.bold())
                                             .foregroundStyle(.white)
 
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 20) {
-                                                ForEach(cast.prefix(12), id: \.id) { actor in
-                                                    Button {
-                                                        store.send(.actorTapped(actor))
-                                                    } label: {
-                                                        VStack(spacing: 8) {
-                                                            let avatarURL = actor.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
-                                                            if let urlString = avatarURL, let url = URL(string: urlString) {
+                                        if !store.matchedVODsByTMDBId.isEmpty {
+                                            Text("\(store.matchedVODsByTMDBId.count) \(AppStrings.VODDetail.inLibrary)")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 4)
+                                                .background(Color(hex: "#00F5D4").opacity(0.18), in: Capsule())
+                                        }
+                                    }
+
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 24) {
+                                            ForEach(similar.prefix(12), id: \.id) { item in
+                                                let isMatched = store.matchedVODsByTMDBId[item.id] != nil
+                                                Button {
+                                                    store.send(.similarMovieTapped(item))
+                                                } label: {
+                                                    VStack(alignment: .leading, spacing: 10) {
+                                                        ZStack(alignment: .topTrailing) {
+                                                            let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" }
+                                                            if let urlString = cover, let url = URL(string: urlString) {
                                                                 AsyncImage(url: url) { phase in
                                                                     switch phase {
                                                                     case let .success(img):
@@ -1283,136 +1419,65 @@ public struct VODDetailView: View {
                                                                         Rectangle().fill(Color(hex: "#2A2A30"))
                                                                     }
                                                                 }
-                                                                .frame(width: 80, height: 80)
-                                                                .clipShape(Circle())
+                                                                .frame(width: 140, height: 210)
+                                                                .clipShape(RoundedRectangle(cornerRadius: 12))
                                                             } else {
                                                                 Rectangle()
                                                                     .fill(Color(hex: "#2A2A30"))
-                                                                    .frame(width: 80, height: 80)
-                                                                    .clipShape(Circle())
-                                                            }
-
-                                                            Text(actor.name ?? "")
-                                                                .font(.caption.bold())
-                                                                .foregroundStyle(.white)
-                                                                .lineLimit(1)
-                                                                .frame(width: 100)
-
-                                                            if let char = actor.character {
-                                                                Text(char)
-                                                                    .font(.system(size: 10))
-                                                                    .foregroundStyle(.white.opacity(0.6))
-                                                                    .lineLimit(1)
-                                                                    .frame(width: 100)
-                                                            }
-                                                        }
-                                                        .padding(6)
-                                                    }
-                                                    .buttonStyle(.card)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .padding(.top, 12)
-                                }
-
-                                // Similar Movies on tvOS
-                                if let similar = store.tmdbMovie?.similar?.results, !similar.isEmpty {
-                                    VStack(alignment: .leading, spacing: 16) {
-                                        HStack(spacing: 12) {
-                                            Text(AppStrings.VODDetail.similarMovies)
-                                                .font(.title3.bold())
-                                                .foregroundStyle(.white)
-
-                                            if !store.matchedVODsByTMDBId.isEmpty {
-                                                Text("\(store.matchedVODsByTMDBId.count) \(AppStrings.VODDetail.inLibrary)")
-                                                    .font(.caption.bold())
-                                                    .foregroundStyle(Color(hex: "#00F5D4"))
-                                                    .padding(.horizontal, 10)
-                                                    .padding(.vertical, 4)
-                                                    .background(Color(hex: "#00F5D4").opacity(0.18), in: Capsule())
-                                            }
-                                        }
-
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 24) {
-                                                ForEach(similar.prefix(12), id: \.id) { item in
-                                                    let isMatched = store.matchedVODsByTMDBId[item.id] != nil
-                                                    Button {
-                                                        store.send(.similarMovieTapped(item))
-                                                    } label: {
-                                                        VStack(alignment: .leading, spacing: 10) {
-                                                            ZStack(alignment: .topTrailing) {
-                                                                let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" }
-                                                                if let urlString = cover, let url = URL(string: urlString) {
-                                                                    AsyncImage(url: url) { phase in
-                                                                        switch phase {
-                                                                        case let .success(img):
-                                                                            img.resizable().scaledToFill()
-                                                                        default:
-                                                                            Rectangle().fill(Color(hex: "#2A2A30"))
-                                                                        }
-                                                                    }
                                                                     .frame(width: 140, height: 210)
                                                                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                                                                } else {
-                                                                    Rectangle()
-                                                                        .fill(Color(hex: "#2A2A30"))
-                                                                        .frame(width: 140, height: 210)
-                                                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                                                }
-
-                                                                if isMatched {
-                                                                    Text(AppStrings.VODDetail.inLibrary)
-                                                                        .font(.system(size: 10, weight: .heavy))
-                                                                        .foregroundStyle(.black)
-                                                                        .padding(.horizontal, 8)
-                                                                        .padding(.vertical, 4)
-                                                                        .background(Color(hex: "#00F5D4"), in: Capsule())
-                                                                        .padding(8)
-                                                                } else if let vote = item.voteAverage, vote > 0 {
-                                                                    HStack(spacing: 3) {
-                                                                        Image(systemName: "star.fill")
-                                                                            .font(.system(size: 9))
-                                                                            .foregroundStyle(.yellow)
-                                                                        Text(String(format: "%.1f", vote))
-                                                                            .font(.system(size: 10, weight: .bold))
-                                                                            .foregroundStyle(.white)
-                                                                    }
-                                                                    .padding(.horizontal, 6)
-                                                                    .padding(.vertical, 3)
-                                                                    .background(.ultraThinMaterial, in: Capsule())
-                                                                    .padding(8)
-                                                                }
                                                             }
 
-                                                            Text(item.title ?? item.name ?? "")
-                                                                .font(.caption.bold())
-                                                                .foregroundStyle(.white)
-                                                                .lineLimit(1)
-                                                                .frame(width: 140, alignment: .leading)
+                                                            if isMatched {
+                                                                Text(AppStrings.VODDetail.inLibrary)
+                                                                    .font(.system(size: 10, weight: .heavy))
+                                                                    .foregroundStyle(.black)
+                                                                    .padding(.horizontal, 8)
+                                                                    .padding(.vertical, 4)
+                                                                    .background(Color(hex: "#00F5D4"), in: Capsule())
+                                                                    .padding(8)
+                                                            } else if let vote = item.voteAverage, vote > 0 {
+                                                                HStack(spacing: 3) {
+                                                                    Image(systemName: "star.fill")
+                                                                        .font(.system(size: 9))
+                                                                        .foregroundStyle(.yellow)
+                                                                    Text(String(format: "%.1f", vote))
+                                                                        .font(.system(size: 10, weight: .bold))
+                                                                        .foregroundStyle(.white)
+                                                                }
+                                                                .padding(.horizontal, 6)
+                                                                .padding(.vertical, 3)
+                                                                .background(.ultraThinMaterial, in: Capsule())
+                                                                .padding(8)
+                                                            }
                                                         }
-                                                        .padding(6)
+
+                                                        Text(item.title ?? item.name ?? "")
+                                                            .font(.caption.bold())
+                                                            .foregroundStyle(.white)
+                                                            .lineLimit(1)
+                                                            .frame(width: 140, alignment: .leading)
                                                     }
-                                                    .buttonStyle(.card)
+                                                    .padding(6)
                                                 }
+                                                .buttonStyle(.card)
                                             }
                                         }
                                     }
-                                    .padding(.top, 16)
                                 }
-
-                                Spacer().frame(height: 60)
+                                .padding(.top, 16)
                             }
-                            .frame(maxWidth: 880, alignment: .leading)
-                            .padding(.leading, 100)
-                            .padding(.top, 100)
 
-                            Spacer()
+                            Spacer().frame(height: 60)
                         }
+                        .frame(maxWidth: 880, alignment: .leading)
+                        .padding(.leading, 100)
+                        .padding(.top, 100)
+
+                        Spacer()
                     }
-                    .id(store.vod.id)
                 }
+                .id(store.vod.id)
             }
             .onAppear {
                 store.send(.onAppear)
@@ -1455,6 +1520,9 @@ public struct VODDetailView: View {
                 if let item = store.selectedUnmatchedMovie {
                     tvOSUnmatchedMovieSheet(item: item)
                 }
+            }
+            .onExitCommand {
+                store.send(.closeTapped)
             }
         }
 

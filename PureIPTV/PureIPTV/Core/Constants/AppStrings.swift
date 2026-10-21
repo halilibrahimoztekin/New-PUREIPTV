@@ -147,8 +147,13 @@ public enum AppStrings {
         public static let bluetooth = "Bluetooth".localized
         public static let speaker = "Hoparlör".localized
         public static let jumpToNow = "Şu Ana Git".localized
+        public static let returnToLive = "Canlı Yayına Dön".localized
         public static let catchUp = "Geriye Dönük".localized
         public static let watchCatchUp = "Tekrarı İzle".localized
+        public static let catchupTimelineTitle = "Arşiv Zaman Çizelgesi (Timeshift)".localized
+        public static let timelineBookmarks = "Program İmleri".localized
+        public static let twoDaysAgo = "2 Gün Önce".localized
+        public static let playingArchiveBanner = "Arşiv / Tekrar Yayını Oynatılıyor".localized
         public static let programDetails = "Program Detayı".localized
         public static let setReminder = "Hatırlatıcı Ekle".localized
         public static let reminderSet = "Hatırlatıcı Eklendi".localized

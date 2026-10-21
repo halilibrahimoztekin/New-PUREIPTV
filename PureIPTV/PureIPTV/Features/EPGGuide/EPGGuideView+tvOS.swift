@@ -134,8 +134,7 @@ import SwiftUI
                                         .resizable()
                                         .aspectRatio(contentMode: .fit)
                                 case .empty:
-                                    ProgressView()
-                                        .scaleEffect(0.6)
+                                    PureLoadingView(size: .small)
                                 case .failure:
                                     fallbackLogo
                                 @unknown default:
@@ -249,14 +248,7 @@ import SwiftUI
                 // Schedule Body
                 if store.isLoadingEPG {
                     Spacer()
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.4)
-                            .tint(Color(hex: "#0A84FF"))
-                        Text("Yayın akışı yükleniyor...".localized)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
+                    PureLoadingView(size: .large, text: "Yayın akışı yükleniyor...".localized)
                     Spacer()
                 } else if let error = store.errorMessage {
                     Spacer()
@@ -301,7 +293,7 @@ import SwiftUI
                                 case let .success(img):
                                     img.resizable().aspectRatio(contentMode: .fit)
                                 case .empty:
-                                    ProgressView().scaleEffect(0.7)
+                                    PureLoadingView(size: .small)
                                 case .failure:
                                     fallbackHeaderLogo
                                 @unknown default:

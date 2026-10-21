@@ -53,12 +53,15 @@ public struct PlayerView: View {
             store.send(.onAppear)
         }
         .onDisappear {
-            store.send(.onDisappear)
+            if !store.isMinimized, !store.isPiPActive {
+                store.send(.onDisappear)
+            }
         }
         #if os(iOS)
         .onChange(of: scenePhase) { _, newPhase in
             // Uygulama arka plana geçince PiP otomatik başlat
             if newPhase == .background, pipController?.isPossible == true, store.playerState == .playing {
+                store.send(.pipStarted)
                 _ = pipController?.start()
             }
         }
@@ -70,10 +73,11 @@ public struct PlayerView: View {
                 case .willStart:
                     store.send(.pipStarted)
                 case let .didStop(reason):
-                    store.send(.pipStopped)
                     // Kullanıcı "Geri Dön" tıkladıysa full-screen'e restore et
                     if reason == .restoreRequested {
                         store.send(.pipRestoreUI)
+                    } else {
+                        store.send(.pipStopped)
                     }
                 default:
                     break

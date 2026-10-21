@@ -24,15 +24,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `StreamHealthMetrics`, `StreamHealthClient` (actor-isolated latency & jitter probe), `PlayerClient.getPlaybackCounters` (SwiftVLC native counters), `PlayerFeature` state/actions (`streamHealthMetrics`, `isStreamHealthHUDVisible`, `toggleStreamHealthHUD`), `StreamHealthHUDView.swift` & yükseltilmiş `NerdStatsHUDView.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS & iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 4. [PENDING] Catchup / Timeshift TV Archive Visual Scrubber & Timeline Bookmarks
-- **Açıklama:** `tvArchive == 1` olan kanallarda geçmiş 3 günlük EPG programlarını zaman çizelgesi üzerinde gösterip tek dokunuşla geriye dönük izleme başlatan interaktif timeline scrubber.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[PENDING]`
+### 4. [DONE] Catchup / Timeshift TV Archive Visual Scrubber & Timeline Bookmarks
+- **Açıklama:** `tvArchive == 1` olan kanallarda geçmiş 3 günlük EPG programlarını zaman çizelgesi üzerinde interaktif imler (bookmarks/ticks) ile gösteren, anlık program önizlemeli scrubber, gün filtreleme (Bugün/Dün/Önceki Gün) ve tek tuşla "Canlıya Dön" (Return to Live) motoru.
+- **Platformlar:** tvOS (Siri Remote D-pad bookmark zapping, 10-foot UI, focus highlight), iOS (Haptic scrubber, day tabs, floating live button).
+- **TCA & Mimari:** `PlayerFeature` state/actions (`activeCatchupProgram`, `isPlayingCatchup`, `isCatchupTimelineVisible`, `returnToLiveStream`), `CatchupTimelineScrubberView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 5. [PENDING] MultiView 1+3 Layout & Siri Remote One-Tap Audio Focus Swapping
+### 5. [IN_PROGRESS] MultiView 1+3 Layout & Siri Remote One-Tap Audio Focus Swapping
 - **Açıklama:** MultiView ekranında 1 ana odak ekranı ve yanında 3 dikey alt ekran düzeni sunma; Siri Remote veya dokunma ile anında ana ses kanalını değiştirme.
 - **Platformlar:** tvOS, iPadOS, iOS.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 6. [PENDING] Sleep Timer Smooth Audio Fade-Out Engine
 - **Açıklama:** Uyku zamanlayıcısının son 60 saniyesinde sesi kademeli olarak sıfıra indiren ve ekran parlaklığını yumuşakça kısarak oynatmayı sonlandıran sinematik deneyim.
@@ -68,3 +69,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature` reducer'ına `toggleRecentChannelsHUD`, `selectRecentChannel`, `loadRecentChannels` aksiyonları eklendi.
   - `RecentChannelsHUDView.swift` oluşturuldu: tvOS Focus Engine tam uyumlu, Siri Remote ile gezinilebilir, 1.08x odak büyütmesi, OLED siyahı & Electric Blue vurguları.
   - iOS ve tvOS `PlayerView`'lerine doğrudan entegre edildi: tvOS'ta Siri Remote Aşağı yön tuşu ile, iOS'ta ise kontroller ve hızlı menüden anında açılır.
+- **#2 Audio Delay & Lip-Sync Micro-Adjustment Engine:**
+  - `SettingsClient` ses ve altyazı gecikme hafızasıyla güçlendirildi (kanal bazlı kalıcı saklama).
+  - `PlayerFeature` reducer'ına `audioDelay`, `subtitleDelay`, `isAudioSyncHUDVisible`, `rememberDelayForChannel` durum ve aksiyonları eklendi.
+  - `AudioSyncHUDView.swift` oluşturuldu: tvOS D-pad kademeli adımlayıcılar, iOS slider ve titreşimli geri bildirim desteği.
+  - OSD ve ses menülerine kalıcı entegrasyon sağlandı.
+- **#3 Stream Health, Buffer Gauge & Real-time Network Jitter HUD:**
+  - `StreamHealthMetrics` ve actor-isolated `StreamHealthClient` geliştirildi.
+  - `PlayerClient` SwiftVLC donanımsal sayaçlarıyla (`PlayerPlaybackCounters`) genişletildi.
+  - `StreamHealthHUDView.swift` oluşturuldu, `NerdStatsHUDView.swift` tampon göstergesi ve ping/jitter grafikleriyle yükseltildi.
+  - tvOS ve iOS oynatıcı arayüzlerine tam entegre edildi.
+- **#4 Catchup / Timeshift TV Archive Visual Scrubber & Timeline Bookmarks:**
+  - `PlayerFeature` durumuna `activeCatchupProgram`, `isPlayingCatchup`, `isCatchupTimelineVisible` ve `returnToLiveStream` mantığı eklendi.
+  - `CatchupTimelineScrubberView.swift` geliştirildi: Günlük filtre sekmeleri (Bugün / Dün / 2 Gün Önce), yatay program imleri (bookmarks), Siri Remote Focus Engine odak takibi ve ölçeklendirme animasyonları.
+  - tvOS ve iOS için canlıya dönüş rozeti ("Canlı Yayına Dön") ve kontrol barı butonları entegre edildi. tvOS geri tuşu (`onExitCommand`) güvenli kapatma ile donatıldı.

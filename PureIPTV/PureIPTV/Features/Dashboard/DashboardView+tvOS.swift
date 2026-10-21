@@ -242,15 +242,8 @@
         }
 
         private var tvLoadingView: some View {
-            VStack(spacing: 32) {
-                ProgressView()
-                    .tint(Color(hex: "#0A84FF"))
-                    .scaleEffect(2.0)
-                Text(AppStrings.Common.loadingAlt)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
-            }
-            .transition(.opacity)
+            PureLoadingView(size: .large, text: AppStrings.Common.loadingAlt)
+                .transition(.opacity)
         }
     }
 

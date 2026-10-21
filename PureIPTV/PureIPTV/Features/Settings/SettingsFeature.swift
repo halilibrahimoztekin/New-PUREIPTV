@@ -34,6 +34,7 @@ public struct SettingsFeature {
         public var autoPlayNextEpisode: Bool = true
         public var startMuted: Bool = false
         public var hardwareAcceleration: Bool = true
+        public var isOLEDDimmingEnabled: Bool = true
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
         public var hideAdultContent: Bool = false
@@ -89,6 +90,7 @@ public struct SettingsFeature {
         case setAutoPlayNextEpisode(Bool)
         case setStartMuted(Bool)
         case setHardwareAcceleration(Bool)
+        case setOLEDDimmingEnabled(Bool)
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
         case setHideAdultContent(Bool)
@@ -132,6 +134,7 @@ public struct SettingsFeature {
                 state.autoPlayNextEpisode = settingsClient.autoPlayNextEpisode()
                 state.startMuted = settingsClient.startMuted()
                 state.hardwareAcceleration = settingsClient.hardwareAcceleration()
+                state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.hideAdultContent = settingsClient.hideAdultContent()
@@ -241,6 +244,10 @@ public struct SettingsFeature {
             case let .setHardwareAcceleration(val):
                 state.hardwareAcceleration = val
                 return .run { _ in settingsClient.setHardwareAcceleration(val) }
+
+            case let .setOLEDDimmingEnabled(val):
+                state.isOLEDDimmingEnabled = val
+                return .run { _ in settingsClient.setIsOLEDDimmingEnabled(val) }
 
             case let .setEpgTimeShift(val):
                 state.epgTimeShift = val

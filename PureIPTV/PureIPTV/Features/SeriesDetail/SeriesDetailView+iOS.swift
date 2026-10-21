@@ -10,57 +10,59 @@
         }
 
         public var body: some View {
-            NavigationStack {
-                ZStack(alignment: .top) {
-                    Color(hex: "#0F0F13").ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(hex: "#0F0F13").ignoresSafeArea()
 
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            headerView
-                            contentView
-                        }
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerView
+                        contentView
                     }
                 }
-                .onAppear {
-                    store.send(.onAppear)
-                }
-                #if !os(tvOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            store.send(.closeTapped)
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
+            }
+            .onAppear {
+                store.send(.onAppear)
+            }
+            #if !os(tvOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.closeTapped)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
+                }
 
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            // Reload or Sync Action
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        // Reload or Sync Action
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
                 }
-                .sheet(
-                    isPresented: Binding(
-                        get: { store.isTrailerPresented },
-                        set: { isPresented in
-                            if !isPresented {
-                                store.send(.dismissTrailer)
-                            }
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { store.isTrailerPresented },
+                    set: { isPresented in
+                        if !isPresented {
+                            store.send(.dismissTrailer)
                         }
-                    )
-                ) {
-                    if let key = store.trailerVideoKey, let title = store.trailerTitle {
-                        trailerPlayerSheet(videoKey: key, title: title)
                     }
+                )
+            ) {
+                if let key = store.trailerVideoKey, let title = store.trailerTitle {
+                    trailerPlayerSheet(videoKey: key, title: title)
                 }
             }
         }
@@ -178,8 +180,6 @@
                 .padding(.bottom, 20)
                 .padding(.top, 20)
             }
-            .redacted(reason: store.isLoading ? .placeholder : [])
-            .shimmeringPlaceholder(isLoading: store.isLoading)
         }
 
         // MARK: - Action Section (Zero-Friction "Don't Make Me Think")
@@ -330,11 +330,11 @@
                         .foregroundStyle(Color.white.opacity(0.8))
                         .lineSpacing(4)
                         .padding(.horizontal, 24)
-                } else if store.isTMDBLoading {
-                    VStack(spacing: 8) {
-                        Text("")
-                        Text("")
-                        Text("")
+                } else if store.isTMDBLoading || store.isLoading {
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 14)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 14)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(width: 220, height: 14)
                     }
                     .shimmeringPlaceholder(isLoading: true)
                     .padding(.horizontal, 24)
@@ -356,6 +356,23 @@
                                 store.send(.seasonSelected(seasonNum))
                             }
                         )
+                        .padding(.horizontal, 24)
+                    }
+                } else if store.isLoading {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(AppStrings.SeriesDetail.seasons)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+
+                        HStack(spacing: 10) {
+                            ForEach(0 ..< 4, id: \.self) { _ in
+                                Capsule()
+                                    .fill(Color.white.opacity(0.12))
+                                    .frame(width: 90, height: 36)
+                                    .shimmeringPlaceholder(isLoading: true)
+                            }
+                        }
                         .padding(.horizontal, 24)
                     }
                 }
@@ -448,12 +465,36 @@
                             .padding(.horizontal, 24)
                         }
                     }
+                } else if store.isLoading {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(AppStrings.SeriesDetail.episodes)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 24)
+
+                        VStack(spacing: 12) {
+                            ForEach(0 ..< 3, id: \.self) { _ in
+                                HStack(spacing: 14) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 130, height: 75)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 16)
+                                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(width: 120, height: 12)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(10)
+                                .background(Color(hex: "#1A1A24"), in: RoundedRectangle(cornerRadius: 14))
+                                .shimmeringPlaceholder(isLoading: true)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
                 }
 
                 Spacer().frame(height: 40)
             }
-            .redacted(reason: store.isLoading ? .placeholder : [])
-            .shimmeringPlaceholder(isLoading: store.isLoading)
         }
 
         // MARK: - In-App Trailer Player Sheet

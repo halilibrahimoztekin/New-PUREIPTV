@@ -13,7 +13,7 @@ import SwiftUI
         public var body: some View {
             Group {
                 if store.isLoading, store.downloadedItems.isEmpty, store.activeDownloads.isEmpty {
-                    ProgressView(AppStrings.Common.loading)
+                    PureLoadingView(size: .large, text: AppStrings.Common.loading)
                 } else if store.downloadedItems.isEmpty, store.activeDownloads.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "arrow.down.circle")

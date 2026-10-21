@@ -415,8 +415,7 @@ public struct PlayerSidebarDrawer: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                     case .empty:
-                        ProgressView()
-                            .scaleEffect(0.6)
+                        PureLoadingView(size: .small)
                     case .failure:
                         fallbackLogo
                     @unknown default:

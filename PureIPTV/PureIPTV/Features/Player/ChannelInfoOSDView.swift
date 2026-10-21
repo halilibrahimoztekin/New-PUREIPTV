@@ -129,8 +129,7 @@ public struct ChannelInfoOSDView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                     case .empty:
-                        ProgressView()
-                            .scaleEffect(0.7)
+                        PureLoadingView(size: .small)
                     case .failure:
                         fallbackLogo
                     @unknown default:

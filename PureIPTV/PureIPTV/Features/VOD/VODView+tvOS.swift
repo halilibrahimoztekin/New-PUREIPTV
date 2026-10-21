@@ -104,9 +104,7 @@
                         .padding(.bottom, 16)
 
                         if store.isLoadingCategories {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(Color(hex: "#0A84FF"))
+                            PureLoadingView(size: .small)
                                 .padding(.top, 40)
                         } else {
                             ForEach(store.categories) { category in
@@ -179,14 +177,7 @@
                 // Grid or Empty State
                 if store.isLoadingVODs {
                     VStack {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(Color(hex: "#0A84FF"))
-                            .scaleEffect(1.5)
-                        Text(AppStrings.VOD.loadingMovies)
-                            .font(.system(size: 24))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
-                            .padding(.top, 16)
+                        PureLoadingView(size: .large, text: AppStrings.VOD.loadingMovies)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if store.currentVODs.isEmpty {

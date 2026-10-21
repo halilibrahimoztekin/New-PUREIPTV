@@ -15,13 +15,18 @@
         }
 
         public var body: some View {
-            NavigationSplitView(columnVisibility: .constant(.all)) {
+            HStack(spacing: 0) {
                 sidebar
-                    .navigationSplitViewColumnWidth(240)
-            } detail: {
-                detailView
+                    .frame(width: 240)
+                ZStack {
+                    detailView
+                        .id(store.selectedTab)
+                        .transition(.opacity.combined(with: .scale(scale: 0.99)))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationSplitViewStyle(.balanced)
+            .animation(.easeInOut(duration: 0.25), value: store.selectedTab)
+            .toolbar(.hidden, for: .navigationBar)
         }
 
         // MARK: – Sidebar
@@ -51,7 +56,7 @@
                             tab: tab,
                             isSelected: store.selectedTab == tab
                         ) {
-                            store.send(.tabSelected(tab))
+                            store.send(.tabSelected(tab), animation: .easeInOut(duration: 0.25))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)

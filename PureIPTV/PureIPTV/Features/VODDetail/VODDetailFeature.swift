@@ -2,7 +2,6 @@ import ComposableArchitecture
 import FactoryKit
 import Foundation
 import OSLog
-import XCoordinator
 
 @Reducer
 public struct VODDetailFeature {
@@ -32,7 +31,7 @@ public struct VODDetailFeature {
         public var trailerTitle: String?
         public var isAutoPlayTrailerActive: Bool = false
         public var isTrailerMuted: Bool = true
-        public var isAutoPlayTrailerEnabled: Bool = true
+        public var isAutoPlayTrailerEnabled: Bool = false
 
         // Multi-Version & Quality Grouping (Madde #47)
         public var availableVersions: [MovieVersionEdition] = []
@@ -105,6 +104,7 @@ public struct VODDetailFeature {
         case selectVersion(MovieVersionEdition)
         case similarMovieTapped(TMDBSimilarItemDTO)
         case dismissUnmatchedMovie
+        case backgroundMatchingCompleted(versions: [MovieVersionEdition], matched: [Int: MediaModels.Item])
         case delegate(Delegate)
         case closeTapped
         case viewDidDisappear
@@ -124,117 +124,88 @@ public struct VODDetailFeature {
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.downloadClient) var downloadClient
-    @Injected(\.appCoordinator) var appCoordinator
     @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
-    private static func normalizeTitle(_ raw: String) -> String {
-        var s = raw.lowercased()
-        let replacements: [(String, String)] = [
-            ("ı", "i"), ("ğ", "g"), ("ü", "u"), ("ş", "s"), ("ö", "o"), ("ç", "c"),
-            ("İ", "i"), ("Ğ", "g"), ("Ü", "u"), ("Ş", "s"), ("Ö", "o"), ("Ç", "c"),
-        ]
-        for (target, replacement) in replacements {
-            s = s.replacingOccurrences(of: target, with: replacement)
-        }
-        let noiseTags = [
-            "1080p", "720p", "2160p", "4k", "uhd", "hdr", "bluray", "blu-ray",
-            "web-dl", "webdl", "webrip", "dual", "dublaj", "altyazili", "altyazılı",
-            "turkce", "türkçe", "tr", "eng", "ita", "ger", "fra", "es", "multi",
-        ]
-        for tag in noiseTags {
-            s = s.replacingOccurrences(of: "\\b\(tag)\\b", with: "", options: .regularExpression)
-        }
-        let allowed = CharacterSet.alphanumerics.union(.whitespaces)
-        s = s.unicodeScalars.filter { allowed.contains($0) }.map(String.init).joined()
-        return s.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
-    }
-
-    private static func updateMatchedVODs(state: inout State) {
-        guard let similar = state.tmdbMovie?.similar?.results, !similar.isEmpty, !state.catalogVODs.isEmpty else {
-            return
-        }
-        var map: [Int: MediaModels.Item] = [:]
-        let catalogNormMap: [(norm: String, item: MediaModels.Item)] = state.catalogVODs.compactMap { item in
-            let norm = normalizeTitle(item.title)
-            return norm.isEmpty ? nil : (norm: norm, item: item)
-        }
-
-        for movie in similar {
-            let primaryNorm = normalizeTitle(movie.title ?? movie.name ?? "")
-            let origNorm = normalizeTitle(movie.originalTitle ?? movie.originalName ?? "")
-
-            // 1. Exact match with primary title or original title
-            if let exact = catalogNormMap.first(where: {
-                (!primaryNorm.isEmpty && $0.norm == primaryNorm) ||
-                    (!origNorm.isEmpty && $0.norm == origNorm)
-            }) {
-                map[movie.id] = exact.item
-                continue
+    private static func computeMatchingInBackground(
+        vod: MediaModels.Item,
+        catalog: [MediaModels.Item],
+        similar: [TMDBSimilarItemDTO]?,
+        selectedVersionId: String?
+    ) async -> (versions: [MovieVersionEdition], matched: [Int: MediaModels.Item]) {
+        await Task.detached(priority: .utility) {
+            func fastNorm(_ raw: String) -> String {
+                var s = raw.lowercased()
+                let replacements: [(String, String)] = [
+                    ("ı", "i"), ("ğ", "g"), ("ü", "u"), ("ş", "s"), ("ö", "o"), ("ç", "c"),
+                    ("İ", "i"), ("Ğ", "g"), ("Ü", "u"), ("Ş", "s"), ("Ö", "o"), ("Ç", "c"),
+                ]
+                for (t, r) in replacements {
+                    s = s.replacingOccurrences(of: t, with: r)
+                }
+                let noiseWords: Set = [
+                    "1080p", "720p", "2160p", "4k", "uhd", "hdr", "bluray", "blu-ray",
+                    "web-dl", "webdl", "webrip", "dual", "dublaj", "altyazili", "altyazılı",
+                    "turkce", "türkçe", "tr", "eng", "ita", "ger", "fra", "es", "multi",
+                ]
+                let tokens = s.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { !noiseWords.contains($0) && !$0.isEmpty }
+                return tokens.joined(separator: " ")
             }
 
-            // 2. Substring match if length is meaningful (>= 4 characters)
-            if primaryNorm.count >= 4 {
-                if let match = catalogNormMap.first(where: { $0.norm.contains(primaryNorm) || primaryNorm.contains($0.norm) }) {
-                    map[movie.id] = match.item
-                    continue
+            // 1. Versions Discovery
+            var versions: [MovieVersionEdition] = []
+            let targetNorm = fastNorm(vod.title)
+            if catalog.isEmpty || targetNorm.isEmpty {
+                versions = [MovieVersionEdition(item: vod, isCurrent: true)]
+            } else {
+                var matchingItems = catalog.filter { item in
+                    let itemNorm = fastNorm(item.title)
+                    return itemNorm == targetNorm || (targetNorm.count >= 5 && (itemNorm.contains(targetNorm) || targetNorm.contains(itemNorm)))
+                }
+                if !matchingItems.contains(where: { $0.id == vod.id }) {
+                    matchingItems.insert(vod, at: 0)
+                }
+                let currentId = selectedVersionId ?? vod.id
+                let editions = matchingItems.map { MovieVersionEdition(item: $0, isCurrent: $0.id == currentId) }
+                let qualityPriority: [String: Int] = [
+                    "4K UHD": 4, "1080p FHD": 3, "720p HD": 2, "HD": 1, "SD": 0,
+                ]
+                versions = editions.sorted {
+                    (qualityPriority[$0.qualityLabel] ?? 1) > (qualityPriority[$1.qualityLabel] ?? 1)
                 }
             }
 
-            if origNorm.count >= 4 {
-                if let match = catalogNormMap.first(where: { $0.norm.contains(origNorm) || origNorm.contains($0.norm) }) {
-                    map[movie.id] = match.item
-                    continue
+            // 2. Similar Movies Matching
+            var matched: [Int: MediaModels.Item] = [:]
+            if let similarList = similar, !similarList.isEmpty, !catalog.isEmpty {
+                let catalogNormMap: [(norm: String, item: MediaModels.Item)] = catalog.compactMap { item in
+                    let norm = fastNorm(item.title)
+                    return norm.isEmpty ? nil : (norm: norm, item: item)
+                }
+                for movie in similarList {
+                    let primaryNorm = fastNorm(movie.title ?? movie.name ?? "")
+                    let origNorm = fastNorm(movie.originalTitle ?? movie.originalName ?? "")
+                    if let exact = catalogNormMap.first(where: {
+                        (!primaryNorm.isEmpty && $0.norm == primaryNorm) || (!origNorm.isEmpty && $0.norm == origNorm)
+                    }) {
+                        matched[movie.id] = exact.item
+                        continue
+                    }
+                    if primaryNorm.count >= 4, let m = catalogNormMap.first(where: { $0.norm.contains(primaryNorm) || primaryNorm.contains($0.norm) }) {
+                        matched[movie.id] = m.item
+                        continue
+                    }
+                    if origNorm.count >= 4, let m = catalogNormMap.first(where: { $0.norm.contains(origNorm) || origNorm.contains($0.norm) }) {
+                        matched[movie.id] = m.item
+                        continue
+                    }
                 }
             }
-        }
-        state.matchedVODsByTMDBId = map
-    }
 
-    private static func discoverAvailableVersions(state: inout State) {
-        guard !state.catalogVODs.isEmpty else {
-            state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
-            state.selectedVersionId = state.vod.id
-            return
-        }
-
-        let targetNorm = normalizeTitle(state.vod.title)
-        guard !targetNorm.isEmpty else {
-            state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
-            state.selectedVersionId = state.vod.id
-            return
-        }
-
-        var matchingItems = state.catalogVODs.filter { item in
-            let itemNorm = normalizeTitle(item.title)
-            return itemNorm == targetNorm || (targetNorm.count >= 5 && (itemNorm.contains(targetNorm) || targetNorm.contains(itemNorm)))
-        }
-
-        if !matchingItems.contains(where: { $0.id == state.vod.id }) {
-            matchingItems.insert(state.vod, at: 0)
-        }
-
-        let currentId = state.selectedVersionId ?? state.vod.id
-        let editions = matchingItems.map { MovieVersionEdition(item: $0, isCurrent: $0.id == currentId) }
-
-        let qualityPriority: [String: Int] = [
-            "4K UHD": 4,
-            "1080p FHD": 3,
-            "720p HD": 2,
-            "HD": 1,
-            "SD": 0,
-        ]
-
-        state.availableVersions = editions.sorted {
-            let p1 = qualityPriority[$0.qualityLabel] ?? 1
-            let p2 = qualityPriority[$1.qualityLabel] ?? 1
-            return p1 > p2
-        }
-
-        if state.selectedVersionId == nil {
-            state.selectedVersionId = state.vod.id
-        }
+            return (versions: versions, matched: matched)
+        }.value
     }
 
     public var body: some Reducer<State, Action> {
@@ -244,7 +215,10 @@ public struct VODDetailFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
-                Self.discoverAvailableVersions(state: &state)
+                if state.availableVersions.isEmpty {
+                    state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
+                    state.selectedVersionId = state.vod.id
+                }
                 guard !state.isLoading, state.info == nil else { return .none }
                 state.isLoading = true
                 state.isTMDBLoading = true
@@ -294,15 +268,26 @@ public struct VODDetailFeature {
                     ))
                 } : .none
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect)
+                let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
+                    let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
+                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                }
+
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect, matchingEffect)
 
             case let .catalogVODsResponse(.success(items)):
                 state.catalogVODs = items
-                Self.updateMatchedVODs(state: &state)
-                Self.discoverAvailableVersions(state: &state)
-                return .none
+                return .run { [vod = state.vod, catalog = items, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
+                    let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
+                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                }
 
             case .catalogVODsResponse(.failure):
+                return .none
+
+            case let .backgroundMatchingCompleted(versions, matched):
+                state.availableVersions = versions
+                state.matchedVODsByTMDBId = matched
                 return .none
 
             case let .infoResponse(.success(dto)):
@@ -338,20 +323,24 @@ public struct VODDetailFeature {
                 print("TMDB details fetched for VOD: \(movieDetails.title ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbMovie = movieDetails
-                Self.updateMatchedVODs(state: &state)
                 if state.info != nil {
                     state.isLoading = false
                 }
+                let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = movieDetails.similar?.results, versionId = state.selectedVersionId] send in
+                    let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
+                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                }
+                var effects: [Effect<Action>] = [matchingEffect]
                 if state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled {
-                    return .run { send in
+                    effects.append(.run { send in
                         try? await Task.sleep(nanoseconds: 1_500_000_000)
                         if !Task.isCancelled {
                             await send(.startInlineTrailer)
                         }
                     }
-                    .cancellable(id: CancelID.autoPlayTrailer, cancelInFlight: true)
+                    .cancellable(id: CancelID.autoPlayTrailer, cancelInFlight: true))
                 }
-                return .none
+                return .merge(effects)
 
             case let .tmdbSearchResponse(.failure(error)):
                 print("TMDB search failed: \(error.localizedDescription)")
@@ -453,16 +442,7 @@ public struct VODDetailFeature {
 
             case let .similarMovieTapped(movie):
                 if let matched = state.matchedVODsByTMDBId[movie.id] {
-                    let catalog = state.catalogVODs
-                    state = State(
-                        vod: matched,
-                        config: state.config,
-                        catalogVODs: catalog
-                    )
-                    return .merge(
-                        .send(.onAppear),
-                        .send(.delegate(.didSelectVOD(matched)))
-                    )
+                    return .send(.delegate(.didSelectVOD(matched)))
                 } else {
                     state.selectedUnmatchedMovie = movie
                     return .none

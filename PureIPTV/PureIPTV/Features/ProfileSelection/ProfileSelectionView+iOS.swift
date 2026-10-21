@@ -112,7 +112,7 @@
                 store.send(.onAppear)
             }
             .sheet(isPresented: $store.showingAddProfile) {
-                NavigationView {
+                NavigationStack {
                     Form {
                         Section(header: Text(AppStrings.Profile.profileInfo)) {
                             TextField(AppStrings.Profile.profileName, text: $newProfileName)

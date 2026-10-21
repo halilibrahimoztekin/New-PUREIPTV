@@ -200,7 +200,7 @@ import SwiftUI
 
                 if store.isLoadingChannels {
                     Spacer()
-                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    PureLoadingView(size: .medium)
                     Spacer()
                 } else if filteredChannels.isEmpty {
                     Spacer()
@@ -494,8 +494,7 @@ import SwiftUI
                         .foregroundColor(.white)
                     Spacer()
                     if store.isLoadingChannelEPG {
-                        ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
+                        PureLoadingView(size: .small)
                     }
                 }
                 .padding(.horizontal, 20)

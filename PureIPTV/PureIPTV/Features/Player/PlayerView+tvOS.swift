@@ -193,6 +193,25 @@
                         .zIndex(99)
                     }
 
+                    // Catchup / Archive Timeline Visual Scrubber Overlay (Feature #4)
+                    if store.isCatchupTimelineVisible {
+                        VStack {
+                            Spacer()
+                            CatchupTimelineScrubberView(
+                                store: store,
+                                onClose: {
+                                    store.send(.setCatchupTimelineVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    resetIdleTimer()
+                                }
+                            )
+                            .padding(.horizontal, 48)
+                            .padding(.bottom, 48)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isCatchupTimelineVisible)
+                        .zIndex(99)
+                    }
+
                     // Edge-Swipe Channel Sidebar Drawer
                     if store.isChannelListVisible {
                         PlayerSidebarDrawer(store: store) {
@@ -312,7 +331,13 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isStreamHealthHUDVisible {
+                if store.isCatchupTimelineVisible {
+                    store.send(.setCatchupTimelineVisible(false))
+                } else if store.isAudioSyncHUDVisible {
+                    store.send(.setAudioSyncHUDVisible(false))
+                } else if store.isRecentChannelsHUDVisible {
+                    store.send(.setRecentChannelsHUDVisible(false))
+                } else if store.isStreamHealthHUDVisible {
                     store.send(.setStreamHealthHUDVisible(false))
                 } else if store.isShowingStats {
                     store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
@@ -457,7 +482,26 @@
                         .lineLimit(2)
                         .layoutPriority(3)
 
-                    if store.item.epgChannelID != nil {
+                    if store.isPlayingCatchup {
+                        Button {
+                            onInteraction()
+                            store.send(.returnToLiveStream)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                Text(AppStrings.Player.returnToLive)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.85))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(PlayerCapsuleButtonStyle())
+                    } else if store.item.epgChannelID != nil {
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(Color.red)
@@ -746,6 +790,19 @@
                             Image(systemName: "clock.arrow.circlepath")
                                 .font(.system(size: 24))
                                 .foregroundStyle(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
+
+                    // Catchup / Archive Timeline Scrubber (Feature #4)
+                    if store.item.tvArchive == 1 {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "calendar.badge.clock")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isCatchupTimelineVisible ? Color(hex: "#BF5AF2") : .white)
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }

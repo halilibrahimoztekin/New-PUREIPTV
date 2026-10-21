@@ -353,7 +353,17 @@
                                             }
                                         }
 
-                                        // 7. Lip-Sync & Audio Delay Fine Adjustment
+                                        // 7. Catchup / Timeshift TV Archive Timeline (Feature #4)
+                                        if store.item.tvArchive == 1 {
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                Label(AppStrings.Player.catchupTimelineTitle, systemImage: "calendar.badge.clock")
+                                            }
+                                        }
+
+                                        // 8. Lip-Sync & Audio Delay Fine Adjustment
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
@@ -549,7 +559,24 @@
                             } else if store.item.isLive {
                                 // Live TV Quick Zapping & Recall Bar
                                 HStack {
-                                    if let prev = store.previousChannel {
+                                    if store.isPlayingCatchup {
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.medium)
+                                            store.send(.returnToLiveStream)
+                                        }) {
+                                            HStack(spacing: 6) {
+                                                Circle()
+                                                    .fill(Color.red)
+                                                    .frame(width: 8, height: 8)
+                                                Text(AppStrings.Player.returnToLive)
+                                                    .font(.subheadline.bold())
+                                                    .foregroundColor(.white)
+                                            }
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Color.red.opacity(0.85), in: Capsule())
+                                        }
+                                    } else if let prev = store.previousChannel {
                                         Button(action: {
                                             HapticManager.shared.trigger(.medium)
                                             store.send(.recallLastChannel)
@@ -811,6 +838,24 @@
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioSyncHUDVisible)
+                    .zIndex(99)
+                }
+
+                // Catchup / Archive Timeline Visual Scrubber Overlay (Feature #4)
+                if store.isCatchupTimelineVisible {
+                    VStack {
+                        Spacer()
+                        CatchupTimelineScrubberView(
+                            store: store,
+                            onClose: {
+                                store.send(.setCatchupTimelineVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isCatchupTimelineVisible)
                     .zIndex(99)
                 }
 

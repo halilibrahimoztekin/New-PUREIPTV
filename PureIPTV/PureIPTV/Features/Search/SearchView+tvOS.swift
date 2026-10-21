@@ -78,9 +78,7 @@
                     .font(.system(size: 32))
 
                 if store.isSearching {
-                    ProgressView()
-                        .tint(Color(hex: "#0A84FF"))
-                        .scaleEffect(1.2)
+                    PureLoadingView(size: .small)
                         .padding(.trailing, 10)
                 }
 
@@ -344,13 +342,7 @@
         private var loadingView: some View {
             VStack(spacing: 32) {
                 Spacer()
-                ProgressView()
-                    .tint(Color(hex: "#0A84FF"))
-                    .scaleEffect(2.0)
-                Text(AppStrings.Search.loadingMessage)
-                    .font(.system(size: 28))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                PureLoadingView(size: .large, text: AppStrings.Search.loadingMessage)
                 Spacer()
             }
             .padding()
@@ -359,12 +351,7 @@
         private var searchingView: some View {
             VStack(spacing: 24) {
                 Spacer()
-                ProgressView()
-                    .tint(Color(hex: "#0A84FF"))
-                    .scaleEffect(1.6)
-                Text(AppStrings.Common.loading)
-                    .font(.system(size: 28))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
+                PureLoadingView(size: .large, text: AppStrings.Common.loading)
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
