@@ -129,3 +129,34 @@ public struct EPGProgram: Equatable, Identifiable, Sendable {
         self.isPlayingNow = isPlayingNow
     }
 }
+
+public extension EPGProgram {
+    func progress(at date: Date = Date()) -> Double {
+        let total = endTime.timeIntervalSince(startTime)
+        guard total > 0 else { return 0.0 }
+        let elapsed = date.timeIntervalSince(startTime)
+        return max(0.0, min(1.0, elapsed / total))
+    }
+
+    func remainingMinutes(at date: Date = Date()) -> Int {
+        let remaining = endTime.timeIntervalSince(date)
+        return max(0, Int(remaining / 60))
+    }
+
+    func elapsedMinutes(at date: Date = Date()) -> Int {
+        let elapsed = date.timeIntervalSince(startTime)
+        return max(0, Int(elapsed / 60))
+    }
+
+    var formattedTimeRange: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return "\(formatter.string(from: startTime)) - \(formatter.string(from: endTime))"
+    }
+
+    var formattedStartTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: startTime)
+    }
+}

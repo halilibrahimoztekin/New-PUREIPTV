@@ -94,7 +94,9 @@
                                 direction: direction,
                                 currentIndex: store.currentChannelIndex,
                                 totalChannels: store.playlist?.count,
-                                isCommitted: store.item.id == zappingItem.id
+                                isCommitted: store.item.id == zappingItem.id,
+                                currentProgram: store.item.id == zappingItem.id ? store.currentEPGProgram : nil,
+                                nextProgram: store.item.id == zappingItem.id ? store.nextEPGProgram : nil
                             )
                             .padding(.top, 60)
                             Spacer()

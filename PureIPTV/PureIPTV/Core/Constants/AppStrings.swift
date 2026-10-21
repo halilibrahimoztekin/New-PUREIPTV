@@ -95,6 +95,16 @@ public enum AppStrings {
         public static let timeline = "Zaman Çizelgesi".localized
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
+        public static let nextUp = "Sıradaki:".localized
+        public static let nextLabel = "SONRAKİ".localized
+        public static func minutesRemaining(_ minutes: Int) -> String {
+            "%lld dk kaldı".localized(Int64(minutes))
+        }
+
+        public static func elapsedPercent(_ percent: Int) -> String {
+            "%%%lld".localized(Int64(percent))
+        }
+
         public static let mediaInfo = "Media Info".localized
         public static let nerdStats = "Yayın İstatistikleri (Nerd Stats)".localized
         public static let nerdStatsShort = "Teknik Bilgi".localized

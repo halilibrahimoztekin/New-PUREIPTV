@@ -42,15 +42,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PlayerFeature` (`sleepTimerInitialVolume: Int32`, `isSleepFadingActive`, `.sleepTimerTick` kademeli ses ve parlaklık eğrisi, `userInteracted` anında kurtarma), `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 7. [IN_PROGRESS] EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring
-- **Açıklama:** Kanal zapping HUD'ında ve OSD'sinde o anki programın ne kadarının geçtiğini gösteren şık dairesel/çizgisel progress bar ve hemen sonrasındaki programın başlama saati.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[IN_PROGRESS]`
+### 7. [DONE] EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring
+- **Açıklama:** Kanal zapping HUD'ında (`ChannelZappingHUDView`), OSD bilgi kartında (`ChannelInfoOSDView`) ve son izlenenler çekmecesinde (`RecentChannelsHUDView`) o anki programın ne kadarının geçtiğini gösteren şık dairesel progress ring, canlı yüzde (`48%`), çift renk geçişli degrade bar, kalan dakika rozeti (`22 dk kaldı`) ve hemen sonrasındaki programın ("SONRAKİ") başlama saati ve adı.
+- **Platformlar:** iOS, tvOS (Siri Remote Focus Engine, 10-foot UI, D-pad gezinme, Obsidian & Cyan/Purple sinematik cam estetiği).
+- **TCA & Mimari:** `NowNextEPGPeekView.swift`, `EPGProgram` uzantıları (`progress`, `remainingMinutes`, `elapsedMinutes`, formatlayıcılar), `ChannelInfoOSDView.swift`, `ChannelZappingHUDView.swift`, `RecentChannelsHUDView.swift`, `AppStrings.Player`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 8. [PENDING] Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback
+### 8. [IN_PROGRESS] Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback
 - **Açıklama:** Yayın koptuğunda veya sunucu 403/timeout döndüğünde donmayı engelleyen akıllı yeniden bağlanma ve alternatif playlist linkine otomatik geçiş mekanizması.
 - **Platformlar:** iOS, tvOS.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 9. [PENDING] Instant Channel Category Filter Chips in Channel Drawer (Sports, News, 4K)
 - **Açıklama:** Kanal yan çekmecesinde binlerce kanal arasında anında Spor, Haber, Sinema veya 4K/FHD kanalları listeleyen akıcı filter chip bileşeni.
@@ -95,3 +96,9 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `.setSleepTimer`, `.sleepTimerTick`, `.sleepTimerEnded` ve `.userInteracted` aksiyonları güncellendi: son 60 saniyede ses doğrusal olarak kısılarak 0'a çekilir, ekran `oledDimLevel` ile sinematik olarak kararır. Kullanıcı kumandaya veya ekrana dokunduğu anda orijinal ses seviyesi ve parlaklık anında geri yüklenir.
   - tvOS `VideoControllerView` içine Siri Remote uyumlu Sleep Timer menüsü eklendi (aktifken kalan dakikayı buton üzerinde canlı gösterir).
   - tvOS ve iOS oynatıcı üst katmanlarına Obsidian/Purple cam malzeme ile "Uyku Modu: Ses Kısılıyor..." yüzen bildirim hapı yerleştirildi.
+- **#7 EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring:**
+  - `NowNextEPGPeekView.swift` bağımsız ve yüksek performanslı bileşen olarak geliştirildi (dairesel progress ring, yüzde rozeti, degrade ilerleme çubuğu, kalan dakika ve sonraki program kartı).
+  - `EPGProgram` modeline `progress(at:)`, `remainingMinutes(at:)`, `elapsedMinutes(at:)` ve dinamik saat formatlayıcıları eklendi.
+  - `ChannelInfoOSDView.swift` tamamen `NowNextEPGPeekView` ile modernize edildi.
+  - `ChannelZappingHUDView.swift` zapping anında canlı program ve sıradaki program verileriyle donatıldı (tvOS ve iOS `PlayerView`'lerinden beslenir).
+  - `RecentChannelsHUDView.swift` son izlenenler çekmecesindeki aktif kanal kartına anlık canlı EPG ilerleme çizgisi ve yüzdesi entegre edildi.

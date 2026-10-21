@@ -76,13 +76,13 @@ public struct ChannelInfoOSDView: View {
                     Spacer(minLength: 0)
                 }
 
-                // Middle Row: Current Program Title & Time
-                currentProgramView
-
-                // Bottom Row: Next Program Sneak-Peek (if available)
-                if let next = nextProgram {
-                    nextProgramView(program: next)
-                }
+                // Middle Row: Now & Next EPG Peek with Live Progress Ring (Feature #7)
+                NowNextEPGPeekView(
+                    currentProgram: currentProgram,
+                    nextProgram: nextProgram,
+                    isCompact: false,
+                    showProgressRing: true
+                )
             }
         }
         .padding(.horizontal, 20)
@@ -183,87 +183,5 @@ public struct ChannelInfoOSDView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(badge.color.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))
-    }
-
-    // MARK: - Current Program & Timeline
-
-    private var currentProgramView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let program = currentProgram {
-                HStack(spacing: 8) {
-                    Text(program.title)
-                    #if os(tvOS)
-                        .font(.system(size: 18, weight: .semibold))
-                    #else
-                        .font(.system(size: 14, weight: .semibold))
-                    #endif
-                        .foregroundStyle(.white.opacity(0.95))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 0)
-
-                    Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
-                }
-
-                // Progress Bar
-                let progress = calculateProgress(start: program.startTime, end: program.endTime)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.15))
-                            .frame(height: 4)
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#64D2FF")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(progress))), height: 4)
-                    }
-                }
-                .frame(height: 4)
-            } else {
-                Text(AppStrings.Player.liveBroadcast)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-        }
-    }
-
-    // MARK: - Next Program Sneak-Peek
-
-    private func nextProgramView(program: EPGProgram) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock")
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.45))
-
-            Text("Sonraki:".localized + " \(formatTime(program.startTime)) \(program.title)")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.white.opacity(0.65))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func calculateProgress(start: Date, end: Date) -> Double {
-        let total = end.timeIntervalSince(start)
-        guard total > 0 else { return 0.0 }
-        let elapsed = Date().timeIntervalSince(start)
-        return max(0.0, min(1.0, elapsed / total))
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
     }
 }

@@ -228,19 +228,55 @@ public struct RecentChannelsHUDView: View {
                 .frame(width: 170, height: 86)
                 #endif
 
-                // Bottom Title Bar
-                HStack(alignment: .center, spacing: 6) {
-                    Text(channel.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(isCurrent ? Color(hex: "#0A84FF") : .white)
-                        .lineLimit(1)
+                // Bottom Title & EPG Progress Bar
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 6) {
+                        Text(channel.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(isCurrent ? Color(hex: "#0A84FF") : .white)
+                            .lineLimit(1)
 
-                    Spacer(minLength: 0)
+                        Spacer(minLength: 0)
 
-                    if channel.tvArchive == 1 {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(Color(hex: "#BF5AF2"))
+                        if channel.tvArchive == 1 {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: "#BF5AF2"))
+                        }
+                    }
+
+                    if isCurrent, let prog = store.currentEPGProgram {
+                        let progress = prog.progress()
+                        HStack(spacing: 6) {
+                            Text(prog.title)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .lineLimit(1)
+
+                            Spacer(minLength: 0)
+
+                            Text("\(Int(progress * 100))%")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color(hex: "#00F5D4"))
+                        }
+
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.12))
+                                    .frame(height: 3)
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#00F5D4")],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(progress))), height: 3)
+                            }
+                        }
+                        .frame(height: 3)
                     }
                 }
                 .padding(.horizontal, 10)

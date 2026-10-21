@@ -29,6 +29,8 @@ public struct ChannelZappingHUDView: View {
     public let currentIndex: Int?
     public let totalChannels: Int?
     public let isCommitted: Bool
+    public let currentProgram: EPGProgram?
+    public let nextProgram: EPGProgram?
 
     @State private var pulseChevron: Bool = false
 
@@ -37,13 +39,17 @@ public struct ChannelZappingHUDView: View {
         direction: ZappingDirection,
         currentIndex: Int? = nil,
         totalChannels: Int? = nil,
-        isCommitted: Bool = false
+        isCommitted: Bool = false,
+        currentProgram: EPGProgram? = nil,
+        nextProgram: EPGProgram? = nil
     ) {
         self.item = item
         self.direction = direction
         self.currentIndex = currentIndex
         self.totalChannels = totalChannels
         self.isCommitted = isCommitted
+        self.currentProgram = currentProgram
+        self.nextProgram = nextProgram
     }
 
     public var body: some View {
@@ -65,7 +71,7 @@ public struct ChannelZappingHUDView: View {
             }
 
             // Channel Metadata
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(direction.title.uppercased())
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
@@ -96,7 +102,15 @@ public struct ChannelZappingHUDView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
 
-                if let subtitle = item.seriesTitle, !subtitle.isEmpty {
+                if let current = currentProgram {
+                    NowNextEPGPeekView(
+                        currentProgram: current,
+                        nextProgram: nextProgram,
+                        isCompact: true,
+                        showProgressRing: true
+                    )
+                    .padding(.top, 2)
+                } else if let subtitle = item.seriesTitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
@@ -132,7 +146,11 @@ public struct ChannelZappingHUDView: View {
                 )
                 .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
         )
-        .frame(maxWidth: 420)
+        #if os(tvOS)
+        .frame(maxWidth: 580)
+        #else
+        .frame(maxWidth: 440)
+        #endif
         .onAppear {
             pulseChevron = true
         }
