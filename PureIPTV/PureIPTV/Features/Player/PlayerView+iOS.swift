@@ -692,17 +692,26 @@
                 // Auto-Reconnecting Glass HUD Pill (Subtle, non-blocking notification pill)
                 if store.isReconnecting {
                     HStack(spacing: 12) {
-                        PureLoadingView(size: .small)
-                        Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
+                        if store.isFallbackSwitching {
+                            Image(systemName: "arrow.triangle.swap")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color(hex: "#00F5D4"))
+                            Text(AppStrings.Player.switchingToBackup(store.fallbackStreamName ?? ""))
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                        } else {
+                            PureLoadingView(size: .small)
+                            Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(
                         Capsule()
-                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                            .strokeBorder(store.isFallbackSwitching ? Color(hex: "#00F5D4").opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1)
                     )
                     .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -719,6 +728,11 @@
                             HapticManager.shared.trigger(.medium)
                             store.send(.retryPlayback)
                         },
+                        onSwitchToBackup: store.backupStreamItem != nil ? {
+                            HapticManager.shared.trigger(.medium)
+                            store.send(.switchToBackupStream)
+                        } : nil,
+                        backupChannelName: store.backupStreamItem?.title,
                         onOpenSpeedTest: {
                             isShowingSpeedTest = true
                         },

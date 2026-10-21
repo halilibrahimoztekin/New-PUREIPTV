@@ -48,10 +48,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `NowNextEPGPeekView.swift`, `EPGProgram` uzantıları (`progress`, `remainingMinutes`, `elapsedMinutes`, formatlayıcılar), `ChannelInfoOSDView.swift`, `ChannelZappingHUDView.swift`, `RecentChannelsHUDView.swift`, `AppStrings.Player`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 8. [IN_PROGRESS] Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback
-- **Açıklama:** Yayın koptuğunda veya sunucu 403/timeout döndüğünde donmayı engelleyen akıllı yeniden bağlanma ve alternatif playlist linkine otomatik geçiş mekanizması.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[IN_PROGRESS]`
+### 8. [DONE] Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback
+- **Açıklama:** Yayın koptuğunda veya sunucu 403/timeout/buffer underrun verdiğinde donmayı engelleyen akıllı üstel geri çekilmeli (exponential backoff: 1s, 2s, 4s, 8s, 16s) otomatik yeniden bağlanma motoru ve aynı kanala ait yedek yayın akışı (backup stream) bulunduğunda anında/otomatik yedek kanala aktarma (Fallback Switch) sistemi.
+- **Platformlar:** iOS, tvOS (Siri Remote Focus Engine uyumlu hata ekranı & butonları, Obsidian/Amber yeniden bağlanma HUD'ı, tek tuşla yedek akışa geçiş).
+- **TCA & Mimari:** `PlayerFeature` (`reconnectAttempts`, `isFallbackSwitching`, `fallbackStreamName`, `backupStreamItem`, `failedStreamIDs`, `.switchToBackupStream`, `exponential backoff retryEffect`), `PlayerFriendlyErrorView.swift` (yedek akış butonu, FocusState), `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
 ### 9. [PENDING] Instant Channel Category Filter Chips in Channel Drawer (Sports, News, 4K)
 - **Açıklama:** Kanal yan çekmecesinde binlerce kanal arasında anında Spor, Haber, Sinema veya 4K/FHD kanalları listeleyen akıcı filter chip bileşeni.
@@ -102,3 +103,9 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `ChannelInfoOSDView.swift` tamamen `NowNextEPGPeekView` ile modernize edildi.
   - `ChannelZappingHUDView.swift` zapping anında canlı program ve sıradaki program verileriyle donatıldı (tvOS ve iOS `PlayerView`'lerinden beslenir).
   - `RecentChannelsHUDView.swift` son izlenenler çekmecesindeki aktif kanal kartına anlık canlı EPG ilerleme çizgisi ve yüzdesi entegre edildi.
+- **#8 Smart Stream Reconnect with Exponential Backoff & Backup Stream Fallback:**
+  - `PlayerFeature.State` içine `reconnectAttempts: Int`, `isFallbackSwitching: Bool`, `fallbackStreamName: String?`, `backupStreamItem: PlayableItem?`, `failedStreamIDs: Set<String>` eklendi.
+  - Yayın koptuğunda veya buffer underrun oluştuğunda 5 denemeye kadar üstel geri çekilme (`2^(attempts-1)` saniye: 1s, 2s, 4s, 8s, 16s) uygulandı.
+  - Eğer aynı kanalın alternatif/yedek akışı varsa (`PlayerFeature.areChannelsRelated`), otomatik olarak veya kullanıcı butonuyla `switchToBackupStream` aksiyonu tetiklenir; akıcı bir şekilde yedek akış başlatılır.
+  - `PlayerFriendlyErrorView.swift` Obsidian cam kartı, hata kodu, yeniden deneme butonu ve Siri Remote uyumlu "Yedek Akışa Geç" butonuyla yenilendi.
+  - tvOS ve iOS oynatıcı katmanlarına üstel geri çekilme sayacı ve yedek akış bildirim HUD'ı entegre edildi.

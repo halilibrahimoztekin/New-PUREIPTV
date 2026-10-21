@@ -50,17 +50,26 @@
                     // Auto-Reconnecting Glass HUD Pill for tvOS
                     if store.isReconnecting {
                         HStack(spacing: 16) {
-                            PureLoadingView(size: .small)
-                            Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
-                                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white)
+                            if store.isFallbackSwitching {
+                                Image(systemName: "arrow.triangle.swap")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#00F5D4"))
+                                Text(AppStrings.Player.switchingToBackup(store.fallbackStreamName ?? ""))
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            } else {
+                                PureLoadingView(size: .small)
+                                Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
                         }
                         .padding(.horizontal, 28)
                         .padding(.vertical, 14)
                         .background(.ultraThinMaterial, in: Capsule())
                         .overlay(
                             Capsule()
-                                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5)
+                                .strokeBorder(store.isFallbackSwitching ? Color(hex: "#00F5D4").opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1.5)
                         )
                         .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 6)
                         .padding(.top, 40)
@@ -75,6 +84,10 @@
                             onRetry: {
                                 store.send(.retryPlayback)
                             },
+                            onSwitchToBackup: store.backupStreamItem != nil ? {
+                                store.send(.switchToBackupStream)
+                            } : nil,
+                            backupChannelName: store.backupStreamItem?.title,
                             onOpenSpeedTest: nil,
                             onDismiss: {
                                 store.send(.closeTapped)

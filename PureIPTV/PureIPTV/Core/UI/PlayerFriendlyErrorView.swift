@@ -68,17 +68,23 @@ public enum PlayerDiagnosticCategory: Sendable {
 public struct PlayerFriendlyErrorView: View {
     public let errorMessage: String
     public let onRetry: () -> Void
+    public let onSwitchToBackup: (() -> Void)?
+    public let backupChannelName: String?
     public let onOpenSpeedTest: (() -> Void)?
     public let onDismiss: () -> Void
 
     public init(
         errorMessage: String,
         onRetry: @escaping () -> Void,
+        onSwitchToBackup: (() -> Void)? = nil,
+        backupChannelName: String? = nil,
         onOpenSpeedTest: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.errorMessage = errorMessage
         self.onRetry = onRetry
+        self.onSwitchToBackup = onSwitchToBackup
+        self.backupChannelName = backupChannelName
         self.onOpenSpeedTest = onOpenSpeedTest
         self.onDismiss = onDismiss
     }
@@ -109,6 +115,24 @@ public struct PlayerFriendlyErrorView: View {
 
             // Action Buttons
             VStack(spacing: 10) {
+                if let onSwitchToBackup {
+                    Button {
+                        onSwitchToBackup()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.triangle.swap")
+                            Text(backupChannelName != nil ? "\(AppStrings.Player.switchToBackup) (\(backupChannelName!))" : AppStrings.Player.switchToBackup)
+                                .fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "#0A84FF"))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Button {
                     onRetry()
                 } label: {

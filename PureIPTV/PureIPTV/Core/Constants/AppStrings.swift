@@ -134,6 +134,13 @@ public enum AppStrings {
             "Geri Dönüldü: %@".localized(name)
         }
 
+        public static func switchingToBackup(_ channel: String) -> String {
+            "Yedek Akışa Geçiliyor: %@".localized(channel)
+        }
+
+        public static let switchToBackup = "Yedek Yayını Başlat".localized
+        public static let backupStreamAvailable = "Alternatif Yedek Yayın Mevcut".localized
+
         public static func sleepTimerMinutes(_ minutes: Int) -> String {
             "Uyku Zamanlayıcısı: %lld dk".localized(Int64(minutes))
         }

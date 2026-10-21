@@ -134,6 +134,8 @@ public struct PlayerFeature {
         public var retryCount: Int = 0
         public var maxReconnectAttempts: Int = 5
         public var isReconnecting: Bool = false
+        public var isFallbackSwitching: Bool = false
+        public var fallbackStreamName: String?
         public var isUserPaused: Bool = false
         public var failedStreamIDs: Set<String> = []
 
@@ -217,6 +219,15 @@ public struct PlayerFeature {
             return playlist[prevIndex]
         }
 
+        public var backupStreamItem: PlayableItem? {
+            guard let playlist, !playlist.isEmpty else { return nil }
+            return playlist.first(where: {
+                $0.id != item.id &&
+                    !failedStreamIDs.contains($0.id) &&
+                    PlayerFeature.areChannelsRelated($0.title, item.title)
+            })
+        }
+
         /// Channel OSD Info Card (Madde #95)
         public var isChannelOSDVisible: Bool = false
 
@@ -261,6 +272,7 @@ public struct PlayerFeature {
         case streamStalled
         case initiateAutoReconnect
         case autoReconnectPulse
+        case switchToBackupStream
         case toggleControls
         case hideControls
         case toggleScreenLock
@@ -769,14 +781,18 @@ public struct PlayerFeature {
         case .initiateAutoReconnect:
             guard !state.isUserPaused, !state.isMinimized else { return .none }
 
-            // If within retry limit for current item, attempt retry with progressive backoff
+            // If within retry limit for current item, attempt retry with progressive jittered exponential backoff
             if state.retryCount < state.maxReconnectAttempts {
                 state.retryCount += 1
                 state.isReconnecting = true
+                state.isFallbackSwitching = false
                 state.errorMessage = nil
 
                 let attempt = state.retryCount
-                let backoffDelay = min(Double(attempt) * 1.5, 6.0)
+                // Jittered Exponential Backoff: 1.0 * (1.8^(attempt-1)) + jitter, max 12.0s
+                let exponential = pow(1.8, Double(attempt - 1)) * 1.0
+                let jitter = Double.random(in: 0.15 ... 0.45)
+                let backoffDelay = min(exponential + jitter, 12.0)
                 let delayNanoseconds = UInt64(backoffDelay * 1_000_000_000)
 
                 return .concatenate(
@@ -791,23 +807,23 @@ public struct PlayerFeature {
                 // Retries exhausted on this specific source
                 state.failedStreamIDs.insert(state.item.id)
 
-                // Automatic failover source search (Madde #34)
-                let currentItem = state.item
-                if let failoverItem = state.playlist?.first(where: {
-                    !state.failedStreamIDs.contains($0.id) &&
-                        Self.areChannelsRelated($0.title, currentItem.title)
-                }) {
+                // Automatic failover source search (Feature #8)
+                if let failoverItem = state.backupStreamItem {
                     state.retryCount = 0
                     state.isReconnecting = true
+                    state.isFallbackSwitching = true
+                    state.fallbackStreamName = failoverItem.title
                     state.errorMessage = nil
                     return .concatenate(
                         .cancel(id: CancelID.stallWatchdog),
                         .cancel(id: CancelID.reconnectTimer),
+                        .send(.showGestureFeedback(AppStrings.Player.switchingToBackup(failoverItem.title))),
                         .send(.selectChannel(failoverItem))
                     )
                 } else {
                     // No alternate backup sources available in playlist
                     state.isReconnecting = false
+                    state.isFallbackSwitching = false
                     state.errorMessage = AppStrings.Errors.cannotPlayStream
 
                     // For live streams, schedule silent background pulse (every 12 seconds)
@@ -833,6 +849,20 @@ public struct PlayerFeature {
                 return .send(.retryPlayback)
             }
             return .none
+
+        case .switchToBackupStream:
+            guard let backup = state.backupStreamItem else { return .none }
+            state.retryCount = 0
+            state.isReconnecting = true
+            state.isFallbackSwitching = true
+            state.fallbackStreamName = backup.title
+            state.errorMessage = nil
+            return .concatenate(
+                .cancel(id: CancelID.stallWatchdog),
+                .cancel(id: CancelID.reconnectTimer),
+                .send(.showGestureFeedback(AppStrings.Player.switchingToBackup(backup.title))),
+                .send(.selectChannel(backup))
+            )
 
         case .toggleControls:
             if state.isScreenLocked {
@@ -1316,6 +1346,8 @@ public struct PlayerFeature {
             state.isChannelOSDVisible = newItem.isLive
             state.isUserPaused = false
             state.isReconnecting = false
+            state.isFallbackSwitching = false
+            state.fallbackStreamName = nil
             state.retryCount = 0
             state.errorMessage = nil
             state.isUpNextVisible = false
