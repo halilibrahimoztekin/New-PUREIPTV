@@ -74,6 +74,10 @@ public enum AppStrings {
         public static let hideChannel = "Kanalı Gizle".localized
         public static let sendToMultiView = "Çoklu Ekran'a Gönder".localized
         public static let channelGuide = "Yayın Akışı (EPG)".localized
+        public static let recentChannels = "Son İzlenen Kanallar".localized
+        public static let quickZapHint = "Siri Remote ile gezin ve kanala anında geçiş yapın".localized
+        public static let noRecentChannels = "Henüz izlenmiş kanal bulunmuyor".localized
+        public static let nowPlayingBadge = "OYNATILIYOR".localized
     }
 
     // MARK: - Player & EPG
@@ -174,8 +178,8 @@ public enum AppStrings {
         public static let primeBroadcast = "Akşam Yayını Kuşağı".localized
         public static let nightBroadcast = "Gece Kuşağı Yayını".localized
         public static let preparingGuide = "Yayın Akışı Hazırlanıyor".localized
-        public static func reconnecting(_ retryCount: Int) -> String {
-            "Bağlantı koptu, yeniden bağlanılıyor... (%lld/3)".localized(Int64(retryCount))
+        public static func reconnecting(_ retryCount: Int, max: Int = 5) -> String {
+            "Bağlantı koptu, yeniden bağlanılıyor... (%lld/%lld)".localized(Int64(retryCount), Int64(max))
         }
 
         public static let audioSync = "Ses Senkronizasyonu".localized
@@ -310,6 +314,8 @@ public enum AppStrings {
         public static let autoPlayNextEpisode = "Sonraki Bölüme Otomatik Geç".localized
         public static let startMuted = "Kanalları Sessiz Başlat".localized
         public static let hardwareAcceleration = "Donanım Hızlandırma".localized
+        public static let oledDimming = "OLED Ekran Koruma / Karartma".localized
+        public static let oledDimmingDesc = "Ekran yanmasını önlemek için kontroller açıkken veya duraklatıldığında ekranı kademeli olarak karartır.".localized
         public static let epgSettings = "Yayın Akışı (EPG) Ayarları".localized
         public static let timeShift = "Zaman Kaydırma (Time Shift)".localized
         public static func timeShiftHours(_ hours: Int) -> String {
@@ -532,6 +538,7 @@ public enum AppStrings {
         public static let watch = "İzle".localized
         public static let error = "Hata: ".localized
         public static let noData = "Bu kanal için EPG verisi bulunamadı.".localized
+        public static let loadingEPG = "Yayın akışı yükleniyor...".localized
     }
 
     // MARK: - Splash

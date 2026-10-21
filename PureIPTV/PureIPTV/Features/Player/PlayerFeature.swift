@@ -5,7 +5,6 @@ import Foundation
 import GroupActivities
 import SwiftUI
 import SwiftVLC
-import XCoordinator
 
 @Reducer
 public struct PlayerFeature {
@@ -22,6 +21,9 @@ public struct PlayerFeature {
         public static let aspectFeedback = "PlayerFeature.aspectFeedback"
         public static let channelOSD = "PlayerFeature.channelOSD"
         public static let lockPill = "PlayerFeature.lockPill"
+        public static let stallWatchdog = "PlayerFeature.stallWatchdog"
+        public static let reconnectTimer = "PlayerFeature.reconnectTimer"
+        public static let recentChannelsHUD = "PlayerFeature.recentChannelsHUD"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -120,8 +122,12 @@ public struct PlayerFeature {
         /// Playback Rate (Madde #43)
         public var playbackRate: Float = 1.0
 
-        /// Auto-Reconnect
+        /// Auto-Reconnect & Failover Engine
         public var retryCount: Int = 0
+        public var maxReconnectAttempts: Int = 5
+        public var isReconnecting: Bool = false
+        public var isUserPaused: Bool = false
+        public var failedStreamIDs: Set<String> = []
 
         /// Sleep Timer
         public var sleepTimerSeconds: Int?
@@ -138,6 +144,10 @@ public struct PlayerFeature {
         /// Zapping & Last Channel Recall
         public var previousChannel: PlayableItem?
         public var zappingHistory: [PlayableItem] = []
+
+        /// Quick Recent Channels Carousel HUD (Quick-Zap Dock)
+        public var isRecentChannelsHUDVisible: Bool = false
+        public var recentChannels: [PlayableItem] = []
 
         /// Aspect Ratio & Zoom (Madde #14)
         public var videoAspectRatioMode: VideoAspectRatioMode = .fit
@@ -165,7 +175,9 @@ public struct PlayerFeature {
         /// Up Next Episode Auto-Play (Madde #48)
         public var isUpNextVisible: Bool = false
         public var upNextCountdownSeconds: Int = 15
+        public var upNextInitialSeconds: Int = 15
         public var isUpNextDismissed: Bool = false
+        public var isTransitioningEpisode: Bool = false
 
         public var nextEpisodeItem: PlayableItem? {
             guard !item.isLive, let playlist, let idx = currentChannelIndex, idx + 1 < playlist.count else {
@@ -232,6 +244,9 @@ public struct PlayerFeature {
         case pause
         case stop
         case retryPlayback
+        case streamStalled
+        case initiateAutoReconnect
+        case autoReconnectPulse
         case toggleControls
         case hideControls
         case toggleScreenLock
@@ -347,6 +362,13 @@ public struct PlayerFeature {
         case jumpToNextCategory
         case jumpToPreviousCategory
 
+        // Quick Recent Channels Carousel HUD (Quick-Zap Dock)
+        case toggleRecentChannelsHUD
+        case setRecentChannelsHUDVisible(Bool)
+        case selectRecentChannel(PlayableItem)
+        case loadRecentChannels
+        case recentChannelsLoaded([PlayableItem])
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -354,38 +376,56 @@ public struct PlayerFeature {
     }
 
     @Injected(\.playerClient) var playerClient
-    @Injected(\.appCoordinator) var appCoordinator
     @Dependency(\.databaseClient) var databaseClient
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
-    @Dependency(\.dismiss) var dismiss
+    @Dependency(\.recentChannelsClient) var recentChannelsClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let playerClient = playerClient
-        let appCoordinator = appCoordinator
         let databaseClient = databaseClient
         let settingsClient = settingsClient
+        let recentChannelsClient = recentChannelsClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, appCoordinator: appCoordinator, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, appCoordinator: AppCoordinator, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
+            state.isUserPaused = false
+            state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
             let url = state.item.streamURL
+            let isLive = state.item.isLive
             let position = state.item.startPosition ?? 0.0
             let seriesID = state.item.seriesID
             let config = state.item.config
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
 
+            let recentEffect: Effect<Action> = isLive ? .run { [item = state.item] send in
+                await send(.loadRecentChannels)
+                let recentDTO = RecentChannelDTO(
+                    id: item.id,
+                    title: item.title,
+                    seriesTitle: item.seriesTitle,
+                    streamURL: item.streamURL,
+                    coverURL: item.coverURL,
+                    epgChannelID: item.epgChannelID,
+                    categoryID: item.categoryID,
+                    tvArchive: item.tvArchive
+                )
+                await recentChannelsClient.recordChannel(recentDTO)
+            } : .none
+
             return .merge(
                 state.item.isLive ? .send(.showChannelOSD) : .none,
+                recentEffect,
                 .send(.startOLEDDimTimer),
                 .run { _ in
                     #if os(iOS)
@@ -423,7 +463,7 @@ public struct PlayerFeature {
                                         try? await playerClient.setVolume(0)
                                     }
 
-                                    if position > 0 {
+                                    if !isLive, position > 0 {
                                         try? await Task.sleep(nanoseconds: 600_000_000)
                                         try? await playerClient.seek(position)
                                     }
@@ -445,8 +485,8 @@ public struct PlayerFeature {
             let isPiPActive = state.isPiPActive
             let isMinimized = state.isMinimized
 
-            // If transitioning to In-App MiniPlayer, keep player alive and active!
-            if isMinimized {
+            // If transitioning to In-App MiniPlayer or PiP is active, keep player alive and active!
+            if isMinimized || isPiPActive {
                 return .none
             }
 
@@ -458,6 +498,8 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.audioRouteHUD),
                 .cancel(id: CancelID.upNextCountdown),
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.stallWatchdog),
+                .cancel(id: CancelID.reconnectTimer),
                 .run { send in
                     #if os(iOS)
                         await MainActor.run {
@@ -534,6 +576,7 @@ public struct PlayerFeature {
             return .none
 
         case .play:
+            state.isUserPaused = false
             state.oledInactivitySeconds = 0
             state.oledDimLevel = 0.0
             state.isDeepDimmed = false
@@ -542,10 +585,14 @@ public struct PlayerFeature {
             }
 
         case .pause:
+            state.isUserPaused = true
             state.oledInactivitySeconds = 0
-            return .run { _ in
-                try await playerClient.pause()
-            }
+            return .merge(
+                .cancel(id: CancelID.stallWatchdog),
+                .run { _ in
+                    try await playerClient.pause()
+                }
+            )
 
         case .stop:
             return .run { _ in
@@ -553,14 +600,22 @@ public struct PlayerFeature {
             }
 
         case .retryPlayback:
-            if state.errorMessage == AppStrings.Errors.cannotPlayStream {
-                state.retryCount = 0
-            }
             state.errorMessage = nil
+            state.isUserPaused = false
+            if state.retryCount >= state.maxReconnectAttempts {
+                state.retryCount = 0
+                state.failedStreamIDs.removeAll()
+            }
+            state.isReconnecting = true
             let url = state.item.streamURL
+            let isLive = state.item.isLive
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
             let currentRate = state.playbackRate
             return .run { send in
+                // Flush and cleanly reset VLC engine to avoid pipeline lockups
+                try? await playerClient.stop()
+                try? await Task.sleep(nanoseconds: 200_000_000)
+
                 let eventsStream = await playerClient.events()
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
@@ -572,7 +627,7 @@ public struct PlayerFeature {
                     group.addTask {
                         do {
                             try await playerClient.play(url)
-                            if position > 0 {
+                            if !isLive, position > 0 {
                                 try? await Task.sleep(nanoseconds: 500_000_000)
                                 try? await playerClient.seek(position)
                             }
@@ -587,6 +642,81 @@ public struct PlayerFeature {
                 }
             }
             .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
+
+        case .streamStalled:
+            guard !state.isUserPaused, !state.isMinimized else { return .none }
+            if state.playerState == .buffering || state.playerState == .opening {
+                return .send(.initiateAutoReconnect)
+            }
+            return .none
+
+        case .initiateAutoReconnect:
+            guard !state.isUserPaused, !state.isMinimized else { return .none }
+
+            // If within retry limit for current item, attempt retry with progressive backoff
+            if state.retryCount < state.maxReconnectAttempts {
+                state.retryCount += 1
+                state.isReconnecting = true
+                state.errorMessage = nil
+
+                let attempt = state.retryCount
+                let backoffDelay = min(Double(attempt) * 1.5, 6.0)
+                let delayNanoseconds = UInt64(backoffDelay * 1_000_000_000)
+
+                return .concatenate(
+                    .cancel(id: CancelID.stallWatchdog),
+                    .run { send in
+                        try? await Task.sleep(nanoseconds: delayNanoseconds)
+                        await send(.retryPlayback)
+                    }
+                    .cancellable(id: CancelID.reconnectTimer, cancelInFlight: true)
+                )
+            } else {
+                // Retries exhausted on this specific source
+                state.failedStreamIDs.insert(state.item.id)
+
+                // Automatic failover source search (Madde #34)
+                let currentItem = state.item
+                if let failoverItem = state.playlist?.first(where: {
+                    !state.failedStreamIDs.contains($0.id) &&
+                        Self.areChannelsRelated($0.title, currentItem.title)
+                }) {
+                    state.retryCount = 0
+                    state.isReconnecting = true
+                    state.errorMessage = nil
+                    return .concatenate(
+                        .cancel(id: CancelID.stallWatchdog),
+                        .cancel(id: CancelID.reconnectTimer),
+                        .send(.selectChannel(failoverItem))
+                    )
+                } else {
+                    // No alternate backup sources available in playlist
+                    state.isReconnecting = false
+                    state.errorMessage = AppStrings.Errors.cannotPlayStream
+
+                    // For live streams, schedule silent background pulse (every 12 seconds)
+                    if state.item.isLive {
+                        return .concatenate(
+                            .cancel(id: CancelID.stallWatchdog),
+                            .run { send in
+                                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                                await send(.autoReconnectPulse)
+                            }
+                            .cancellable(id: CancelID.reconnectTimer, cancelInFlight: true)
+                        )
+                    } else {
+                        return .cancel(id: CancelID.stallWatchdog)
+                    }
+                }
+            }
+
+        case .autoReconnectPulse:
+            guard state.item.isLive, !state.isUserPaused, !state.isMinimized else { return .none }
+            if state.errorMessage != nil {
+                state.isReconnecting = true
+                return .send(.retryPlayback)
+            }
+            return .none
 
         case .toggleControls:
             if state.isScreenLocked {
@@ -798,7 +928,9 @@ public struct PlayerFeature {
                 state.isDeepDimmed = false
                 state.oledInactivitySeconds = 0
             }
-            return .none
+            return .run { _ in
+                settingsClient.setIsOLEDDimmingEnabled(enabled)
+            }
 
         case let .dragGestureChanged(translation, screenWidth, _, startLocation):
             state.lastDragTranslation = translation
@@ -910,14 +1042,22 @@ public struct PlayerFeature {
             if state.totalTime.components.seconds > 0 {
                 state.currentTime = Duration.seconds(Double(state.totalTime.components.seconds) * clamped)
             }
-            return .run { _ in try await playerClient.seek(clamped) }
+            let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+            return .merge(
+                .run { _ in try await playerClient.seek(clamped) },
+                upNextEffect
+            )
 
         case let .seekToTime(time):
             state.currentTime = time
             if state.totalTime.components.seconds > 0 {
                 state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
             }
-            return .run { _ in try await playerClient.seekToTime(time) }
+            let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+            return .merge(
+                .run { _ in try await playerClient.seekToTime(time) },
+                upNextEffect
+            )
 
         case let .setPlaybackRate(rate):
             let clamped = max(0.25, min(4.0, rate))
@@ -936,6 +1076,56 @@ public struct PlayerFeature {
             state.isChannelListVisible = isVisible
             return .none
 
+        case .toggleRecentChannelsHUD:
+            state.isRecentChannelsHUDVisible.toggle()
+            if state.isRecentChannelsHUDVisible {
+                state.isControlsVisible = false
+                state.isChannelListVisible = false
+                state.isEPGVisible = false
+                return .send(.loadRecentChannels)
+            }
+            return .none
+
+        case let .setRecentChannelsHUDVisible(isVisible):
+            state.isRecentChannelsHUDVisible = isVisible
+            if isVisible {
+                state.isControlsVisible = false
+                state.isChannelListVisible = false
+                state.isEPGVisible = false
+                return .send(.loadRecentChannels)
+            }
+            return .none
+
+        case let .selectRecentChannel(targetItem):
+            state.isRecentChannelsHUDVisible = false
+            return .send(.selectChannel(targetItem))
+
+        case .loadRecentChannels:
+            return .run { [playlist = state.playlist] send in
+                let recentDTOs = await recentChannelsClient.fetchRecentChannels()
+                let items: [PlayableItem] = recentDTOs.compactMap { dto in
+                    if let match = playlist?.first(where: { $0.id == dto.id }) {
+                        return match
+                    }
+                    return PlayableItem(
+                        id: dto.id,
+                        title: dto.title,
+                        seriesTitle: dto.seriesTitle,
+                        streamURL: dto.streamURL,
+                        coverURL: dto.coverURL,
+                        isLive: true,
+                        epgChannelID: dto.epgChannelID,
+                        tvArchive: dto.tvArchive,
+                        categoryID: dto.categoryID
+                    )
+                }
+                await send(.recentChannelsLoaded(items))
+            }
+
+        case let .recentChannelsLoaded(items):
+            state.recentChannels = items
+            return .none
+
         case let .selectChannel(newItem):
             let currentItem = state.item
             if newItem.id != currentItem.id {
@@ -946,8 +1136,12 @@ public struct PlayerFeature {
                     state.zappingHistory.removeFirst()
                 }
             }
+            if !state.isReconnecting {
+                state.failedStreamIDs.removeAll()
+            }
             state.item = newItem
             state.isChannelListVisible = false
+            state.isRecentChannelsHUDVisible = false
             state.epgListings = []
             state.mediaInfo = nil
             state.currentTime = .zero
@@ -957,14 +1151,24 @@ public struct PlayerFeature {
             state.zappingHUDItem = newItem
             state.isZappingHUDVisible = true
             state.isChannelOSDVisible = newItem.isLive
+            state.isUserPaused = false
+            state.isReconnecting = false
+            state.retryCount = 0
+            state.errorMessage = nil
+            state.isUpNextVisible = false
+            state.isUpNextDismissed = false
 
-            return .run { send in
-                try await playerClient.stop()
-                await send(.onAppear)
-                await send(.fetchEPG)
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                await send(.hideZappingHUD)
-            }
+            return .merge(
+                .cancel(id: CancelID.stallWatchdog),
+                .cancel(id: CancelID.reconnectTimer),
+                .run { send in
+                    try await playerClient.stop()
+                    await send(.onAppear)
+                    await send(.fetchEPG)
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    await send(.hideZappingHUD)
+                }
+            )
 
         case .recallLastChannel:
             guard let prev = state.previousChannel ?? state.zappingHistory.last(where: { $0.id != state.item.id }) else {
@@ -1289,8 +1493,13 @@ public struct PlayerFeature {
                 state.playerState = newState
                 if newState == .playing {
                     state.retryCount = 0 // Reset on successful play
+                    state.isReconnecting = false
                     state.errorMessage = nil
-                    var actions: [Effect<Action>] = []
+                    state.failedStreamIDs.removeAll()
+                    var actions: [Effect<Action>] = [
+                        .cancel(id: CancelID.stallWatchdog),
+                        .cancel(id: CancelID.reconnectTimer),
+                    ]
 
                     LiveStreamActivityManager.shared.startStreamActivity(
                         channelTitle: state.item.title,
@@ -1312,6 +1521,8 @@ public struct PlayerFeature {
                         )
                     )
 
+                    state.isTransitioningEpisode = false
+
                     // Apply initial progress / seek if not yet applied
                     if !state.hasAppliedInitialSeek {
                         state.hasAppliedInitialSeek = true
@@ -1332,74 +1543,50 @@ public struct PlayerFeature {
                         actions.append(.send(.fetchEPG))
                     }
                     return .merge(actions)
-                } else if newState == .stopped {
-                    // Auto Play Next Episode
-                    if settingsClient.autoPlayNextEpisode(), let playlist = state.playlist, let currentIdx = playlist.firstIndex(where: { $0.id == state.item.id }) {
-                        let nextIdx = currentIdx + 1
-                        if nextIdx < playlist.count {
-                            // Only auto-play if it's a series episode
-                            let currentItem = state.item
-                            if currentItem.seriesID != nil || (currentItem.title.contains("S") && currentItem.title.contains("E")) {
-                                return .send(.selectChannel(playlist[nextIdx]))
-                            }
+                } else if newState == .buffering || newState == .opening {
+                    if !state.isUserPaused {
+                        return .run { send in
+                            try await Task.sleep(nanoseconds: 12_000_000_000)
+                            await send(.streamStalled)
                         }
+                        .cancellable(id: CancelID.stallWatchdog, cancelInFlight: true)
+                    }
+                } else if newState == .stopped {
+                    if state.item.isLive, !state.isUserPaused, !state.isMinimized {
+                        return .send(.initiateAutoReconnect)
+                    }
+                } else if newState == .error {
+                    state.isTransitioningEpisode = false
+                    return .send(.initiateAutoReconnect)
+                }
+            case .endReached:
+                if state.item.isLive, !state.isUserPaused, !state.isMinimized {
+                    return .send(.initiateAutoReconnect)
+                } else if !state.item.isLive {
+                    if settingsClient.autoPlayNextEpisode(), !state.isTransitioningEpisode {
+                        return .send(.playNextEpisode)
                     }
                 }
             case .encounteredError:
-                if state.retryCount < 3 {
-                    state.retryCount += 1
-                    state.errorMessage = AppStrings.Player.reconnecting(state.retryCount)
-                    return .run { send in
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        await send(.retryPlayback)
-                    }
-                } else {
-                    // Automatic failover source search (Madde #34)
-                    let currentTitle = state.item.title.lowercased()
-                    let baseCleanTitle = currentTitle
-                        .replacingOccurrences(of: "fhd", with: "")
-                        .replacingOccurrences(of: "hd", with: "")
-                        .replacingOccurrences(of: "4k", with: "")
-                        .replacingOccurrences(of: "sd", with: "")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    if let failoverItem = state.playlist?.first(where: {
-                        $0.id != state.item.id &&
-                            $0.title.lowercased()
-                            .replacingOccurrences(of: "fhd", with: "")
-                            .replacingOccurrences(of: "hd", with: "")
-                            .replacingOccurrences(of: "4k", with: "")
-                            .replacingOccurrences(of: "sd", with: "")
-                            .trimmingCharacters(in: .whitespacesAndNewlines) == baseCleanTitle
-                    }) {
-                        state.retryCount = 0
-                        state.errorMessage = "Yedek kaynağa geçiliyor: \(failoverItem.title)..."
-                        return .send(.selectChannel(failoverItem))
-                    } else {
-                        state.errorMessage = AppStrings.Errors.cannotPlayStream
-                    }
-                }
+                state.isTransitioningEpisode = false
+                return .send(.initiateAutoReconnect)
             case let .timeChanged(time):
                 state.currentTime = time
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
                     let totalSecs = Double(time.components.seconds) / state.position
                     state.totalTime = Duration.seconds(totalSecs)
                 }
-                if !state.item.isLive, state.nextEpisodeItem != nil, !state.isUpNextVisible, !state.isUpNextDismissed {
-                    let total = Double(state.totalTime.components.seconds)
-                    let current = Double(time.components.seconds)
-                    if total > 60, total - current <= 25 || state.position > 0.95 {
-                        return .send(.showUpNext)
-                    }
-                }
+                return updateUpNextState(state: &state, settingsClient: settingsClient)
             case let .lengthChanged(length):
                 state.totalTime = length
+                return updateUpNextState(state: &state, settingsClient: settingsClient)
             case let .positionChanged(pos):
                 state.position = pos
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, pos > 0.001, state.currentTime.components.seconds > 0 {
                     let totalSecs = Double(state.currentTime.components.seconds) / pos
                     state.totalTime = Duration.seconds(totalSecs)
                 }
+                return updateUpNextState(state: &state, settingsClient: settingsClient)
             default:
                 break
             }
@@ -1417,10 +1604,9 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
-                .run { _ in
-                    @Dependency(\.isPresented) var isPresented
-                    @Dependency(\.dismiss) var dismiss
-
+                .cancel(id: CancelID.stallWatchdog),
+                .cancel(id: CancelID.reconnectTimer),
+                .run { send in
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
                         let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod" // Basic detection
@@ -1452,12 +1638,9 @@ public struct PlayerFeature {
                         #if os(iOS)
                             OrientationManager.shared.unlockPortrait()
                         #endif
-                        appCoordinator.trigger(.dismissPlayer)
                     }
 
-                    if isPresented {
-                        await dismiss()
-                    }
+                    await send(.delegate(.didClose))
                 }
             )
 
@@ -1465,6 +1648,7 @@ public struct PlayerFeature {
             return .none
 
         case .minimizeTapped:
+            guard !state.isMinimized else { return .none }
             state.isMinimized = true
             return .run { send in
                 await send(.delegate(.didRequestMinimize))
@@ -1472,7 +1656,6 @@ public struct PlayerFeature {
                     #if os(iOS)
                         OrientationManager.shared.unlockPortrait()
                     #endif
-                    appCoordinator.trigger(.dismissPlayer)
                 }
             }
 
@@ -1486,28 +1669,43 @@ public struct PlayerFeature {
 
         case .pipStopped:
             state.isPiPActive = false
-            return .run { send in
-                await playerClient.release()
-                await send(.delegate(.didClose))
-            }
+            #if os(iOS)
+                if UIApplication.shared.applicationState == .background {
+                    return .run { send in
+                        try? await playerClient.stop()
+                        await playerClient.release()
+                        await send(.delegate(.didClose))
+                    }
+                } else {
+                    return .none
+                }
+            #else
+                return .none
+            #endif
 
         case .pipRestoreUI:
             // PiP floating window'dan "geri dön" tıklandı → full-screen'e dön
             state.isPiPActive = false
-            return .none
+            state.isControlsVisible = true
+            state.oledInactivitySeconds = 0
+            return .run { _ in
+                #if os(iOS)
+                    await MainActor.run {
+                        OrientationManager.shared.lockLandscape()
+                    }
+                #endif
+            }
 
         // ── Up Next Episode Auto-Play (Madde #48 / #42) ──
         case .showUpNext:
             guard state.nextEpisodeItem != nil, !state.isUpNextVisible, !state.isUpNextDismissed else { return .none }
             state.isUpNextVisible = true
-            state.upNextCountdownSeconds = 15
-            return .run { send in
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    await send(.upNextCountdownTick)
-                }
-            }
-            .cancellable(id: CancelID.upNextCountdown, cancelInFlight: true)
+            let total = Double(state.totalTime.components.seconds)
+            let current = Double(state.currentTime.components.seconds)
+            let remaining = max(1, Int(total - current))
+            state.upNextInitialSeconds = remaining
+            state.upNextCountdownSeconds = remaining
+            return .none
 
         case .dismissUpNext:
             state.isUpNextVisible = false
@@ -1515,24 +1713,21 @@ public struct PlayerFeature {
             return .cancel(id: CancelID.upNextCountdown)
 
         case .playNextEpisode:
-            state.isUpNextVisible = false
-            state.isUpNextDismissed = false
+            guard !state.isTransitioningEpisode else { return .none }
             guard let next = state.nextEpisodeItem else {
+                state.isUpNextVisible = false
                 return .cancel(id: CancelID.upNextCountdown)
             }
+            state.isTransitioningEpisode = true
+            state.isUpNextVisible = false
+            state.isUpNextDismissed = false
             return .merge(
                 .cancel(id: CancelID.upNextCountdown),
                 .send(.selectChannel(next))
             )
 
         case .upNextCountdownTick:
-            if state.upNextCountdownSeconds > 1 {
-                state.upNextCountdownSeconds -= 1
-                return .none
-            } else {
-                state.upNextCountdownSeconds = 0
-                return .send(.playNextEpisode)
-            }
+            return .none
 
         case let .openInExternalPlayer(player):
             #if canImport(UIKit)
@@ -1608,5 +1803,77 @@ public struct PlayerFeature {
         }
 
         return false
+    }
+
+    // MARK: - Failover Source Matching Helpers
+
+    static func cleanChannelTitle(_ title: String) -> String {
+        var cleaned = title.lowercased()
+        let tagsToRemove = [
+            "fhd", "uhd", "4k", "8k", "hevc", "h.265", "h265", "h.264", "h264",
+            "hd", "sd", "1080p", "720p", "50fps", "60fps", "raw", "vip", "backup",
+        ]
+        for tag in tagsToRemove {
+            cleaned = cleaned.replacingOccurrences(of: tag, with: " ")
+        }
+        let punctuation = CharacterSet(charactersIn: ":|[]()-–_.")
+        let components = cleaned.components(separatedBy: punctuation)
+            .joined(separator: " ")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.count > 1 }
+        return components.joined(separator: " ")
+    }
+
+    static func areChannelsRelated(_ titleA: String, _ titleB: String) -> Bool {
+        let cleanA = cleanChannelTitle(titleA)
+        let cleanB = cleanChannelTitle(titleB)
+        if cleanA == cleanB {
+            return true
+        }
+        if !cleanA.isEmpty, !cleanB.isEmpty {
+            if cleanA.contains(cleanB) || cleanB.contains(cleanA) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Up Next Episode State Synchronization Helper
+
+    private static func updateUpNextState(state: inout State, settingsClient: SettingsClient) -> Effect<Action> {
+        guard !state.item.isLive, state.nextEpisodeItem != nil, settingsClient.autoPlayNextEpisode() else {
+            if state.isUpNextVisible {
+                state.isUpNextVisible = false
+            }
+            return .none
+        }
+
+        let total = Double(state.totalTime.components.seconds)
+        let current = Double(state.currentTime.components.seconds)
+        guard total > 60 else { return .none }
+
+        let remaining = max(0, Int(total - current))
+
+        if remaining <= 15, remaining > 0 {
+            if !state.isUpNextDismissed {
+                if !state.isUpNextVisible {
+                    state.isUpNextVisible = true
+                    state.upNextInitialSeconds = max(remaining, 1)
+                }
+                state.upNextCountdownSeconds = remaining
+            }
+        } else if remaining > 18 {
+            // User scrubbed backward away from the ending threshold
+            if state.isUpNextVisible {
+                state.isUpNextVisible = false
+            }
+            state.isUpNextDismissed = false
+        } else if remaining <= 0 {
+            if state.isUpNextVisible, !state.isTransitioningEpisode {
+                state.isUpNextVisible = false
+                return .send(.playNextEpisode)
+            }
+        }
+        return .none
     }
 }

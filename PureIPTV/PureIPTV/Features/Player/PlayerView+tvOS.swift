@@ -37,22 +37,39 @@
                         .ignoresSafeArea()
 
                     // Buffering Indicator
-                    if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil {
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.6)
-                            Text(AppStrings.Common.loading)
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
+                    if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil, !store.isReconnecting {
+                        VStack(spacing: 20) {
+                            PureLoadingView(size: .large, text: AppStrings.Common.loading)
                         }
-                        .padding(32)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                        .padding(36)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+                        .shadow(color: Color(hex: "#00D2FF").opacity(0.2), radius: 20)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
+                    // Auto-Reconnecting Glass HUD Pill for tvOS
+                    if store.isReconnecting {
+                        HStack(spacing: 16) {
+                            PureLoadingView(size: .small)
+                            Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
+                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5)
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 6)
+                        .padding(.top, 40)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .zIndex(99)
+                    }
+
                     // Error Overlay (Madde #89)
-                    if let errorMessage = store.errorMessage {
+                    if let errorMessage = store.errorMessage, !store.isReconnecting {
                         PlayerFriendlyErrorView(
                             errorMessage: errorMessage,
                             onRetry: {
@@ -65,6 +82,7 @@
                         )
                         .padding(48)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .zIndex(100)
                     }
 
                     // Channel Zapping HUD Overlay (Madde #16)
@@ -123,7 +141,7 @@
                     }
 
                     // On-Screen Display (OSD) Channel Info Card (Madde #95)
-                    if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !isMaskShow {
+                    if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !store.isRecentChannelsHUDVisible, !isMaskShow {
                         VStack {
                             Spacer()
                             ChannelInfoOSDView(
@@ -141,6 +159,22 @@
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .animation(.spring(response: 0.38, dampingFraction: 0.8), value: store.isChannelOSDVisible)
                         .zIndex(80)
+                    }
+
+                    // Recent Channels Carousel HUD (Quick-Zap Dock)
+                    if store.isRecentChannelsHUDVisible {
+                        VStack {
+                            Spacer()
+                            RecentChannelsHUDView(store: store) {
+                                store.send(.setRecentChannelsHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                resetIdleTimer()
+                            }
+                            .padding(.horizontal, 48)
+                            .padding(.bottom, 48)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecentChannelsHUDVisible)
+                        .zIndex(98)
                     }
 
                     // Edge-Swipe Channel Sidebar Drawer
@@ -177,6 +211,7 @@
                                 UpNextCountdownOverlayView(
                                     item: nextItem,
                                     countdownSeconds: store.upNextCountdownSeconds,
+                                    totalSeconds: store.upNextInitialSeconds,
                                     onPlayNow: {
                                         store.send(.playNextEpisode)
                                     },
@@ -279,12 +314,8 @@
                     store.send(.userInteracted)
                     if direction == .up, store.item.isLive, store.playlist != nil {
                         store.send(.nextChannel)
-                    } else if direction == .down, store.item.isLive, store.playlist != nil {
-                        if store.previousChannel != nil || !store.zappingHistory.isEmpty {
-                            store.send(.recallLastChannel)
-                        } else {
-                            store.send(.previousChannel)
-                        }
+                    } else if direction == .down, store.item.isLive {
+                        store.send(.setRecentChannelsHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
                     } else if direction == .left, store.item.isLive, store.playlist != nil {
                         store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
                     } else {
@@ -402,9 +433,7 @@
                 }
 
                 if store.playerState == .buffering {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.2)
+                    PureLoadingView(size: .small)
                         .padding(.leading, 8)
                 }
 
@@ -656,6 +685,19 @@
                         } label: {
                             Image(systemName: "sidebar.leading")
                                 .font(.system(size: 24))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
+
+                    // Recent Channels Carousel Dock Button (Live TV)
+                    if store.item.isLive {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }

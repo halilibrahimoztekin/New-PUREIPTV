@@ -171,6 +171,7 @@
                                 // Primary Window Controls (Close & Minimize)
                                 HStack(spacing: 10) {
                                     Button(action: {
+                                        cancelAllPendingWorkItems()
                                         HapticManager.shared.trigger(.light)
                                         store.send(.closeTapped)
                                     }) {
@@ -183,6 +184,8 @@
                                     }
 
                                     Button(action: {
+                                        guard !store.isMinimized else { return }
+                                        cancelAllPendingWorkItems()
                                         HapticManager.shared.trigger(.medium)
                                         store.send(.minimizeTapped)
                                     }) {
@@ -193,6 +196,7 @@
                                             .background(.ultraThinMaterial, in: Circle())
                                             .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
+                                    .disabled(store.isMinimized)
                                 }
 
                                 Spacer()
@@ -339,7 +343,17 @@
                                             Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")
                                         }
 
-                                        // 6. Technical Diagnostics (Nerd Stats)
+                                        // 6. Recent Channels Quick Dock
+                                        if store.item.isLive {
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                Label(AppStrings.LiveTV.recentChannels, systemImage: "clock.arrow.circlepath")
+                                            }
+                                        }
+
+                                        // 7. Technical Diagnostics (Nerd Stats)
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -347,7 +361,7 @@
                                             Label(store.isInfoVisible ? AppStrings.Player.hideTechnicalDetails : AppStrings.Player.technicalDetails, systemImage: "info.circle")
                                         }
 
-                                        // 7. SharePlay
+                                        // 8. SharePlay
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.sharePlayTapped)
@@ -565,6 +579,18 @@
                                                     .background(.ultraThinMaterial, in: Circle())
                                             }
 
+                                            // Recent Channels Quick Dock Button
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            }) {
+                                                Image(systemName: "clock.arrow.circlepath")
+                                                    .font(.headline)
+                                                    .foregroundColor(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+
                                             // Category Jump (Madde #97)
                                             Button(action: {
                                                 HapticManager.shared.trigger(.light)
@@ -597,16 +623,37 @@
                 }
 
                 // Global Buffering Indicator (visible whether controls are active or hidden)
-                if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(1.3)
-                        .padding(16)
+                if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil, !store.isReconnecting {
+                    PureLoadingView(size: .medium)
+                        .padding(20)
                         .background(.ultraThinMaterial, in: Circle())
+                        .shadow(color: Color(hex: "#00D2FF").opacity(0.25), radius: 16)
+                }
+
+                // Auto-Reconnecting Glass HUD Pill (Subtle, non-blocking notification pill)
+                if store.isReconnecting {
+                    HStack(spacing: 12) {
+                        PureLoadingView(size: .small)
+                        Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 20)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .zIndex(99)
                 }
 
                 // Global Error Overlay with Diagnostic Support (Madde #89)
-                if let error = store.errorMessage {
+                if let error = store.errorMessage, !store.isReconnecting {
                     PlayerFriendlyErrorView(
                         errorMessage: error,
                         onRetry: {
@@ -622,6 +669,7 @@
                     )
                     .padding(24)
                     .transition(.scale.combined(with: .opacity))
+                    .zIndex(100)
                 }
 
                 // Gesture Feedback Overlay
@@ -686,7 +734,7 @@
                 }
 
                 // Channel Info OSD Card (Madde #95)
-                if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !store.isControlsVisible {
+                if store.isChannelOSDVisible, store.item.isLive, !store.isEPGVisible, !store.isRecentChannelsHUDVisible, !store.isControlsVisible {
                     VStack {
                         Spacer()
                         ChannelInfoOSDView(
@@ -702,6 +750,21 @@
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isChannelOSDVisible)
                     .zIndex(80)
+                }
+
+                // Recent Channels Carousel HUD (Quick-Zap Dock)
+                if store.isRecentChannelsHUDVisible {
+                    VStack {
+                        Spacer()
+                        RecentChannelsHUDView(store: store) {
+                            store.send(.setRecentChannelsHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecentChannelsHUDVisible)
+                    .zIndex(98)
                 }
 
                 // Edge-Swipe Channel Sidebar Drawer
@@ -763,6 +826,7 @@
                             UpNextCountdownOverlayView(
                                 item: nextItem,
                                 countdownSeconds: store.upNextCountdownSeconds,
+                                totalSeconds: store.upNextInitialSeconds,
                                 onPlayNow: {
                                     store.send(.playNextEpisode)
                                 },
@@ -801,13 +865,12 @@
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
             }
-            .onChange(of: scenePhase) { _, newPhase in
-                if newPhase == .background {
-                    store.send(.onDisappear)
-                }
-            }
+            .allowsHitTesting(!store.isMinimized)
             .sheet(isPresented: $isShowingSpeedTest) {
                 StreamSpeedTestView()
+            }
+            .onDisappear {
+                cancelAllPendingWorkItems()
             }
         }
 
@@ -1163,7 +1226,7 @@
             let height = geo.size.height
 
             if dragGestureMode == nil {
-                if startLocation.y < 90, translation.height > 20, abs(translation.height) >= abs(translation.width) {
+                if !store.isMinimized, startLocation.y < 90, translation.height > 20, abs(translation.height) >= abs(translation.width) {
                     dragGestureMode = .swipeToMiniPlayer
                 } else if abs(translation.height) >= abs(translation.width) {
                     if store.item.isLive, startLocation.x >= width * 0.25, startLocation.x <= width * 0.75 {
@@ -1363,7 +1426,8 @@
                 interactiveZappingDirection = nil
                 hasTriggeredZappingThresholdHaptic = false
             } else if dragGestureMode == .swipeToMiniPlayer {
-                if translation.height > 60 {
+                if !store.isMinimized, translation.height > 60 {
+                    cancelAllPendingWorkItems()
                     HapticManager.shared.trigger(.medium)
                     store.send(.minimizeTapped)
                 }
@@ -1381,6 +1445,17 @@
             }
             aspectDismissWorkItem = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+        }
+
+        private func cancelAllPendingWorkItems() {
+            singleTapWorkItem?.cancel()
+            singleTapWorkItem = nil
+            seekDismissWorkItem?.cancel()
+            seekDismissWorkItem = nil
+            osdDismissWorkItem?.cancel()
+            osdDismissWorkItem = nil
+            aspectDismissWorkItem?.cancel()
+            aspectDismissWorkItem = nil
         }
     }
 
