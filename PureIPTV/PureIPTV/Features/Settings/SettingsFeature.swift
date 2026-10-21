@@ -99,6 +99,13 @@ public struct SettingsFeature {
         public var customEPGErrorMessage: String?
         public var isCustomEPGLoading: Bool = false
 
+        // iCloud Cross-Device Sync (Madde #24)
+        public var cloudSyncStatus: CloudSyncStatus = .idle
+        public var lastCloudSyncDate: Date?
+        public var isCloudSyncing: Bool = false
+        public var cloudSyncSummary: CloudSyncSummary?
+        public var cloudSyncMessage: String?
+
         public enum PINStep: Equatable {
             case enterNew
             case confirm
@@ -197,6 +204,13 @@ public struct SettingsFeature {
         case refreshCustomEPGSourceResponse(TaskResult<CustomEPGSource>)
         case refreshAllCustomEPGSources
         case refreshAllCustomEPGSourcesCompleted
+
+        // iCloud Cross-Device Sync (Madde #24)
+        case syncNowTapped
+        case syncNowResponse(TaskResult<CloudSyncSummary>)
+        case cloudSyncSummaryUpdated(CloudSyncSummary)
+        case startCloudSyncObservation
+        case dismissCloudSyncMessage
     }
 
     @Dependency(\.settingsClient) var settingsClient
@@ -207,6 +221,7 @@ public struct SettingsFeature {
     @Dependency(\.displayModeClient) var displayModeClient
     @Dependency(\.topShelfClient) var topShelfClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
+    @Dependency(\.cloudSyncClient) var cloudSyncClient
 
     public init() {}
 
@@ -260,8 +275,14 @@ public struct SettingsFeature {
                 state.customEPGSources = customEPGMappingClient.getSources()
                 state.channelEPGMappings = customEPGMappingClient.getAllMappings()
 
+                // iCloud Cross-Device Sync (Madde #24)
+                state.isICloudSyncEnabled = cloudSyncClient.isSyncEnabled()
+                state.lastCloudSyncDate = cloudSyncClient.lastSyncDate()
+                state.cloudSyncStatus = cloudSyncClient.getSyncStatus()
+
                 return .merge(
                     .send(.calculateCacheSize),
+                    .send(.startCloudSyncObservation),
                     .run { send in
                         if let info = try? await purchases.customerInfo() {
                             await send(.updatePremiumStatus(!info.entitlements.active.isEmpty))
@@ -400,6 +421,7 @@ public struct SettingsFeature {
 
             case let .setICloudSyncEnabled(val):
                 state.isICloudSyncEnabled = val
+                cloudSyncClient.setSyncEnabled(val)
                 return .run { _ in
                     settingsClient.setIsICloudSyncEnabled(val)
                 }
@@ -779,6 +801,49 @@ public struct SettingsFeature {
                 state.isCustomEPGLoading = false
                 state.customEPGSources = customEPGMappingClient.getSources()
                 state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                return .none
+
+            // iCloud Cross-Device Sync (Madde #24)
+            case .syncNowTapped:
+                guard !state.isCloudSyncing else { return .none }
+                state.isCloudSyncing = true
+                state.cloudSyncStatus = .syncing
+                state.cloudSyncMessage = nil
+                return .run { send in
+                    await send(.syncNowResponse(TaskResult {
+                        try await cloudSyncClient.performFullSync()
+                    }))
+                }
+
+            case let .syncNowResponse(.success(summary)):
+                state.isCloudSyncing = false
+                state.cloudSyncStatus = .success(summary.lastSyncDate)
+                state.lastCloudSyncDate = summary.lastSyncDate
+                state.cloudSyncSummary = summary
+                state.cloudSyncMessage = "iCloud senkronizasyonu tamamlandı (\(summary.favoritesCount) favori, \(summary.hiddenChannelsCount) gizli kanal)."
+                return .none
+
+            case let .syncNowResponse(.failure(error)):
+                state.isCloudSyncing = false
+                state.cloudSyncStatus = .error(error.localizedDescription)
+                state.cloudSyncMessage = "iCloud eşitleme hatası: \(error.localizedDescription)"
+                return .none
+
+            case let .cloudSyncSummaryUpdated(summary):
+                state.lastCloudSyncDate = summary.lastSyncDate
+                state.cloudSyncStatus = .success(summary.lastSyncDate)
+                state.cloudSyncSummary = summary
+                return .none
+
+            case .startCloudSyncObservation:
+                return .run { send in
+                    for await summary in cloudSyncClient.observeRemoteChanges() {
+                        await send(.cloudSyncSummaryUpdated(summary))
+                    }
+                }
+
+            case .dismissCloudSyncMessage:
+                state.cloudSyncMessage = nil
                 return .none
             }
         }

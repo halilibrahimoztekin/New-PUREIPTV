@@ -355,6 +355,78 @@ public struct SettingsView: View {
                             .foregroundColor(.blue)
                     }
                 }
+
+                if store.isICloudSyncEnabled {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Son Senkronizasyon")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let lastSync = store.lastCloudSyncDate {
+                                Text(lastSync, style: .relative)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+                            } else {
+                                Text("Henüz senkronize edilmedi")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Button {
+                            store.send(.syncNowTapped)
+                        } label: {
+                            HStack(spacing: 6) {
+                                if store.isCloudSyncing {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                                        .font(.caption)
+                                    Text("Şimdi Eşitle")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#0A84FF").opacity(0.15))
+                            )
+                            .foregroundStyle(Color(hex: "#0A84FF"))
+                        }
+                        #if !os(tvOS)
+                        .buttonStyle(.plain)
+                        #endif
+                        .disabled(store.isCloudSyncing)
+                    }
+
+                    if let summary = store.cloudSyncSummary {
+                        HStack(spacing: 12) {
+                            Label("\(summary.favoritesCount) Favori", systemImage: "star.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Color(hex: "#FFD60A"))
+
+                            Label("\(summary.hiddenChannelsCount) Gizli", systemImage: "eye.slash.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
+                            Label("\(summary.watchProgressCount) İlerleme", systemImage: "play.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Color(hex: "#30D158"))
+                        }
+                        .padding(.vertical, 2)
+                    }
+
+                    if let msg = store.cloudSyncMessage {
+                        Text(msg)
+                            .font(.caption2)
+                            .foregroundStyle(store.cloudSyncMessage?.contains("hata") == true ? Color.red : Color(hex: "#30D158"))
+                    }
+                }
             }
 
             // Trakt.tv Integration (Madde #17)

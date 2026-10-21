@@ -144,17 +144,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `EPGManager`, `CustomEPGMappingClient`, `SettingsFeature`.
 - **Durum:** `[DONE]` (PR Onaylandı, 9 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 24. [IN_PROGRESS] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
+### 24. [DONE] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
 - **Açıklama:** Apple TV, iPhone, iPad ve Mac arasında favori kanalları, gizlenen kanalları, VOD izleme kaldığı yeri (resume point) ve kanal sıralama tercihlerini iCloud KVS (NSUbiquitousKeyValueStore) ile kesintisiz ve arka planda senkronize eden çoklu cihaz motoru.
 - **Platformlar:** iOS, tvOS, iPadOS, macOS.
 - **TCA & Mimari:** `CloudSyncClient`, `NSUbiquitousKeyValueStore` background notification sync.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, 8 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 25. [PENDING] Live EPG Focus Mini-Video Preview PIP in Channel Grid
+### 25. [IN_PROGRESS] Live EPG Focus Mini-Video Preview PIP in Channel Grid
 - **Açıklama:** EPG rehberinde veya kanal listesinde gezinirken Siri Remote ile bir kanalın üzerine gelindiğinde (focus), ana yayını kesmeden sağ üst köşede küçük bir canlı önizleme penceresinde kanalın anlık canlı akışını sessizce başlatan UHF/TiviMate tarzı hızlı kanal gözetleme motoru.
 - **Platformlar:** tvOS (Siri Remote Focus debounce, secondary mini player layer), iPadOS.
 - **TCA & Mimari:** `PreviewPlayerClient`, `EPGFeature` debounce focus preview effect.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ---
 
@@ -306,6 +306,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature.swift` canlı yayın EPG getirme mantığı yükseltildi: Önce özel harici XMLTV kaynakları arandı, bulunamazsa sağlayıcı kısa EPG'sine dönülerek hem genel hem de kanal bazlı saat dilimi zaman kaydırması (`applyTimeShift`) uygulandı.
   - `SettingsFeature.swift` ve `SettingsView.swift` EPG ayarları menüsüne "Özel XMLTV Kaynakları & Eşleme" gezinti butonu ve modal yönetim sayfası eklendi.
   - 9 adet kapsamlı birim testi (`CustomEPGMappingEngineTests.swift`) yazıldı; gzip algılama, decompressor, veri modelleri, canlı zaman kaydırma hesaplamaları, kanal bazlı override ve TCA Settings akışı test edilerek iOS ve tvOS'ta sıfır hata ile başarıyla doğrulandı.
+- **#24 iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress:**
+  - `FavoriteSyncDTO`, `CloudSyncSummary`, `CloudSyncStatus` ve `@DependencyClient CloudSyncClient` mimarisi geliştirildi: Apple TV, iPhone, iPad ve Mac arasında favori kanalları, gizlenen kanalları/kategorileri ve VOD izleme kaldığı yeri `NSUbiquitousKeyValueStore` üzerinden arka planda sıfır gecikmeyle eşitler.
+  - Akıllı çakışma çözümleme (Conflict Resolution): Zaman damgalı son yazan kazanır (Last-Write-Wins) ve yerel/uzak veri kümesi birleştirme (union merge) algoritmaları ile çift yönlü veri kaybı engellendi; iCloud KVS 1MB kota sınırına göre otomatik budama (pruning) uygulandı.
+  - `NotificationCenter` üzerinden `.cloudSyncDidComplete`, `.favoritesDidChange` ve `.hiddenContentDidChange` yayınları kuruldu; `NSUbiquitousKeyValueStore.didChangeExternallyNotification` ile arka planda uzaktan gelen değişiklikler anında yerel SwiftData ve UserDefaults'a entegre edildi.
+  - `SettingsFeature.swift` ve `SettingsView.swift` iCloud Senkronizasyon bölümü zenginleştirildi: Son eşitleme zamanı göreceli formatı ("X dakika önce"), gerçek zamanlı durum rozetleri ("X Favori • Y Gizli • Z İlerleme"), animasyonlu "Şimdi Eşitle" butonu ve durum bildirimleri Obsidian Cam estetiğinde eklendi.
+  - 8 adet kapsamlı birim testi (`CloudSyncEngineTests.swift`) yazıldı; model serileştirme, SwiftData dönüşümleri, çakışma çözümleme ve TCA Reducer akışı hem iOS Simulator hem de tvOS Simulator platformlarında sıfır hata ile doğrulandı.
 
 
 
