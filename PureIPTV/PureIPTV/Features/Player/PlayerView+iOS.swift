@@ -361,7 +361,15 @@
                                             Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
                                         }
 
-                                        // 8. Technical Diagnostics (Nerd Stats)
+                                        // 8. Stream Health & Buffer Diagnostics (Feature #3)
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                        } label: {
+                                            Label(AppStrings.Player.streamHealthTitle, systemImage: "waveform.path.ecg")
+                                        }
+
+                                        // 9. Technical Diagnostics (Nerd Stats)
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -369,7 +377,7 @@
                                             Label(store.isInfoVisible ? AppStrings.Player.hideTechnicalDetails : AppStrings.Player.technicalDetails, systemImage: "info.circle")
                                         }
 
-                                        // 8. SharePlay
+                                        // 10. SharePlay
                                         Button {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.sharePlayTapped)
@@ -398,8 +406,23 @@
                         }
                         .padding()
 
-                        // Overlays (Info / Tracks)
+                        // Overlays (Stream Health / Info / Tracks)
                         ZStack(alignment: .topTrailing) {
+                            if store.isStreamHealthHUDVisible {
+                                HStack {
+                                    Spacer()
+                                    StreamHealthHUDView(
+                                        store: store,
+                                        onClose: {
+                                            store.send(.setStreamHealthHUDVisible(false))
+                                        }
+                                    )
+                                    .padding(.trailing, 16)
+                                }
+                                .transition(.scale(scale: 0.92).combined(with: .opacity))
+                                .zIndex(100)
+                            }
+
                             if store.isInfoVisible {
                                 HStack {
                                     Spacer()
@@ -415,6 +438,7 @@
                                         selectedSubtitleTrack: store.selectedSubtitleTrack,
                                         currentAudioRoute: store.currentAudioRoute,
                                         playerStats: store.playerStats,
+                                        streamHealthMetrics: store.streamHealthMetrics,
                                         onClose: {
                                             store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                         }

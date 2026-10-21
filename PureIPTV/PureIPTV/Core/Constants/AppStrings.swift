@@ -103,6 +103,12 @@ public enum AppStrings {
         public static let resolution = "Çözünürlük".localized
         public static let bitrate = "Bit Hızı (Bitrate)".localized
         public static let bufferHealth = "Tampon Durumu".localized
+        public static let streamHealthTitle = "Yayın Sağlığı & Tampon".localized
+        public static let networkLatency = "Ağ Gecikmesi (Ping)".localized
+        public static let networkJitter = "Ağ Dalgalanması (Jitter)".localized
+        public static let droppedFramesTitle = "Kayıp Kareler (Drop)".localized
+        public static let connectionStabilityTitle = "Bağlantı Kararlılığı".localized
+        public static let bufferDuration = "Tampon Süresi".localized
         public static let streamProtocol = "Protokol / Format".localized
         public static let audioTracks = "Ses İzleri".localized
         public static let subtitles = "Altyazılar".localized

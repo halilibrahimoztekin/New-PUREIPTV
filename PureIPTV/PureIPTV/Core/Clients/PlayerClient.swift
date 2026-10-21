@@ -17,6 +17,25 @@ public struct MediaInfo: Equatable, Sendable {
     }
 }
 
+public struct PlayerPlaybackCounters: Equatable, Sendable {
+    public var decodedFrames: UInt64
+    public var droppedFrames: UInt64
+    public var lateFrames: UInt64
+    public var sourceReadBytes: UInt64
+
+    public nonisolated init(
+        decodedFrames: UInt64 = 0,
+        droppedFrames: UInt64 = 0,
+        lateFrames: UInt64 = 0,
+        sourceReadBytes: UInt64 = 0
+    ) {
+        self.decodedFrames = decodedFrames
+        self.droppedFrames = droppedFrames
+        self.lateFrames = lateFrames
+        self.sourceReadBytes = sourceReadBytes
+    }
+}
+
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
     public var play: @MainActor @Sendable (_ url: URL) async throws -> Void
@@ -39,6 +58,7 @@ public struct PlayerClient: Sendable {
     public var setAudioDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var setSubtitleDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var getStats: @MainActor @Sendable () async -> String?
+    public var getPlaybackCounters: @MainActor @Sendable () async -> PlayerPlaybackCounters
 
     public var events: @MainActor @Sendable () async -> AsyncStream<PlayerEvent>
 }
@@ -197,7 +217,22 @@ extension PlayerClient: DependencyKey {
             setSubtitleDelay: { delay in
                 try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
             },
-            getStats: { nil },
+            getStats: {
+                let health = box.getPlayer().playbackHealth
+                let c = health.counters
+                let mbRead = String(format: "%.1f", Double(c.sourceReadBytes) / (1024.0 * 1024.0))
+                return "Decoded: \(c.decodedVideoFrames)f | Dropped: \(c.droppedVideoFrames)f | Data: \(mbRead)MB"
+            },
+            getPlaybackCounters: {
+                let health = box.getPlayer().playbackHealth
+                let c = health.counters
+                return PlayerPlaybackCounters(
+                    decodedFrames: c.decodedVideoFrames,
+                    droppedFrames: c.droppedVideoFrames,
+                    lateFrames: c.lateVideoFrames,
+                    sourceReadBytes: c.sourceReadBytes
+                )
+            },
             events: {
                 let player = box.getPlayer()
                 return AsyncStream { continuation in
@@ -240,6 +275,7 @@ extension PlayerClient: DependencyKey {
         setAudioDelay: { _ in },
         setSubtitleDelay: { _ in },
         getStats: { nil },
+        getPlaybackCounters: { PlayerPlaybackCounters() },
         events: { AsyncStream { $0.finish() } }
     )
 }

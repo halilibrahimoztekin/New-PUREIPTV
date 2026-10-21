@@ -18,10 +18,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `SettingsClient` (per-channel audio & subtitle delay persistence), `PlayerFeature` (`isAudioSyncHUDVisible`, `rememberDelayForChannel`, automated save/restore on channel change), `AudioSyncHUDView.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, iOS & tvOS derlemeleri sıfır hata ile tamamlandı).
 
-### 3. [PENDING] Stream Health, Buffer Gauge & Real-time Network Jitter HUD
-- **Açıklama:** Canlı akışta anlık tampon doluluk süresi (buffer seconds), bitrate, frame drop ve ağ gecikmesini gösteren ultra-thin glassmorphic HUD.
-- **Platformlar:** iOS, tvOS.
-- **Durum:** `[PENDING]`
+### 3. [DONE] Stream Health, Buffer Gauge & Real-time Network Jitter HUD
+- **Açıklama:** Canlı akışta anlık tampon doluluk süresi (buffer seconds), dinamik bitrate, frame drop ve ağ gecikmesi / jitter'ı gösteren ultra-thin glassmorphic HUD ve Nerd Stats entegrasyonu.
+- **Platformlar:** tvOS (Siri Remote Focus Engine, .onExitCommand, 10-foot UI), iOS (Haptic Feedback, top glass card).
+- **TCA & Mimari:** `StreamHealthMetrics`, `StreamHealthClient` (actor-isolated latency & jitter probe), `PlayerClient.getPlaybackCounters` (SwiftVLC native counters), `PlayerFeature` state/actions (`streamHealthMetrics`, `isStreamHealthHUDVisible`, `toggleStreamHealthHUD`), `StreamHealthHUDView.swift` & yükseltilmiş `NerdStatsHUDView.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS & iOS derlemeleri sıfır hata ile tamamlandı).
 
 ### 4. [PENDING] Catchup / Timeshift TV Archive Visual Scrubber & Timeline Bookmarks
 - **Açıklama:** `tvArchive == 1` olan kanallarda geçmiş 3 günlük EPG programlarını zaman çizelgesi üzerinde gösterip tek dokunuşla geriye dönük izleme başlatan interaktif timeline scrubber.

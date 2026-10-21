@@ -149,6 +149,16 @@ extension PlayerFactoryClient: DependencyKey {
                     try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
                 },
                 getStats: { nil },
+                getPlaybackCounters: {
+                    let health = box.getPlayer().playbackHealth
+                    let c = health.counters
+                    return PlayerPlaybackCounters(
+                        decodedFrames: c.decodedVideoFrames,
+                        droppedFrames: c.droppedVideoFrames,
+                        lateFrames: c.lateVideoFrames,
+                        sourceReadBytes: c.sourceReadBytes
+                    )
+                },
                 events: {
                     let player = box.getPlayer()
                     return AsyncStream { continuation in

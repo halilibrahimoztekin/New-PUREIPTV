@@ -109,6 +109,8 @@ public struct PlayerFeature {
         public var subtitleDelay: Int = 0
         public var isShowingStats: Bool = false
         public var playerStats: String = ""
+        public var streamHealthMetrics: StreamHealthMetrics?
+        public var isStreamHealthHUDVisible: Bool = false
         public var isTracksMenuVisible: Bool = false
 
         // Gestures
@@ -275,6 +277,9 @@ public struct PlayerFeature {
         case setRememberDelayForChannel(Bool)
         case toggleStats
         case updateStats(String)
+        case toggleStreamHealthHUD
+        case setStreamHealthHUDVisible(Bool)
+        case updateStreamHealth(StreamHealthMetrics)
 
         // Gestures & Adjustments
         case setVolume(Int32)
@@ -387,6 +392,7 @@ public struct PlayerFeature {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.recentChannelsClient) var recentChannelsClient
+    @Dependency(\.streamHealthClient) var streamHealthClient
 
     public init() {}
 
@@ -395,13 +401,14 @@ public struct PlayerFeature {
         let databaseClient = databaseClient
         let settingsClient = settingsClient
         let recentChannelsClient = recentChannelsClient
+        let streamHealthClient = streamHealthClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -605,20 +612,72 @@ public struct PlayerFeature {
             state.isShowingStats.toggle()
             if state.isShowingStats {
                 let fetchInfoEffect: Effect<Action> = .send(.fetchMediaInfo)
-                let timerEffect: Effect<Action> = .run { send in
+                let timerEffect: Effect<Action> = .run { [item = state.item, isPlaying = (state.playerState == .playing), mediaBitrate = state.mediaInfo?.bitrate] send in
+                    var prevCounters: PlayerPlaybackCounters?
                     while !Task.isCancelled {
                         let stats = await playerClient.getStats()
+                        let counters = await playerClient.getPlaybackCounters()
+                        let health = await streamHealthClient.evaluateHealth(
+                            item.streamURL,
+                            isPlaying,
+                            counters,
+                            prevCounters,
+                            1.0,
+                            mediaBitrate
+                        )
+                        prevCounters = counters
                         await send(.updateStats(stats ?? ""))
+                        await send(.updateStreamHealth(health))
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
                 }.cancellable(id: CancelID.statsTimer, cancelInFlight: true)
                 return .merge(fetchInfoEffect, timerEffect)
-            } else {
+            } else if !state.isStreamHealthHUDVisible {
                 return .cancel(id: CancelID.statsTimer)
+            } else {
+                return .none
             }
 
         case let .updateStats(stats):
             state.playerStats = stats
+            return .none
+
+        case .toggleStreamHealthHUD:
+            state.isStreamHealthHUDVisible.toggle()
+            if state.isStreamHealthHUDVisible {
+                let timerEffect: Effect<Action> = .run { [item = state.item, isPlaying = (state.playerState == .playing), mediaBitrate = state.mediaInfo?.bitrate] send in
+                    var prevCounters: PlayerPlaybackCounters?
+                    while !Task.isCancelled {
+                        let counters = await playerClient.getPlaybackCounters()
+                        let health = await streamHealthClient.evaluateHealth(
+                            item.streamURL,
+                            isPlaying,
+                            counters,
+                            prevCounters,
+                            1.0,
+                            mediaBitrate
+                        )
+                        prevCounters = counters
+                        await send(.updateStreamHealth(health))
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    }
+                }.cancellable(id: CancelID.statsTimer, cancelInFlight: true)
+                return timerEffect
+            } else if !state.isShowingStats {
+                return .cancel(id: CancelID.statsTimer)
+            } else {
+                return .none
+            }
+
+        case let .setStreamHealthHUDVisible(visible):
+            state.isStreamHealthHUDVisible = visible
+            if !visible, !state.isShowingStats {
+                return .cancel(id: CancelID.statsTimer)
+            }
+            return .none
+
+        case let .updateStreamHealth(metrics):
+            state.streamHealthMetrics = metrics
             return .none
 
         case .play:

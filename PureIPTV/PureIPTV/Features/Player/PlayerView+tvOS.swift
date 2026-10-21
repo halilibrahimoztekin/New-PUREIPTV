@@ -243,6 +243,28 @@
                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
                         .zIndex(96)
                     }
+                    // Stream Health & Network Jitter HUD (Feature #3)
+                    if store.isStreamHealthHUDVisible {
+                        VStack {
+                            HStack {
+                                StreamHealthHUDView(
+                                    store: store,
+                                    onClose: {
+                                        store.send(.setStreamHealthHUDVisible(false))
+                                    }
+                                )
+                                .padding(.leading, 80)
+                                .padding(.top, 60)
+
+                                Spacer()
+                            }
+                            Spacer()
+                        }
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.78), value: store.isStreamHealthHUDVisible)
+                        .zIndex(112)
+                    }
+
                     // Nerd Stats Technical Diagnostics Overlay (Madde #33)
                     if store.isShowingStats {
                         VStack {
@@ -259,6 +281,7 @@
                                     selectedSubtitleTrack: store.selectedSubtitleTrack,
                                     currentAudioRoute: store.currentAudioRoute,
                                     playerStats: store.playerStats,
+                                    streamHealthMetrics: store.streamHealthMetrics,
                                     onClose: {
                                         store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
                                     }
@@ -289,7 +312,9 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isShowingStats {
+                if store.isStreamHealthHUDVisible {
+                    store.send(.setStreamHealthHUDVisible(false))
+                } else if store.isShowingStats {
                     store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
                 } else if store.isChannelOSDVisible {
                     store.send(.hideChannelOSD)
@@ -724,6 +749,17 @@
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
+
+                    // Stream Health & Buffer Gauge Button (Feature #3)
+                    Button {
+                        onInteraction()
+                        store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    } label: {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: 24))
+                            .foregroundStyle(store.isStreamHealthHUDVisible ? Color(hex: "#00F5D4") : .white)
+                    }
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // Nerd Stats Technical Diagnostics Button (Madde #33)
                     Button {
