@@ -30,15 +30,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PlayerFeature` state/actions (`activeCatchupProgram`, `isPlayingCatchup`, `isCatchupTimelineVisible`, `returnToLiveStream`), `CatchupTimelineScrubberView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 5. [IN_PROGRESS] MultiView 1+3 Layout & Siri Remote One-Tap Audio Focus Swapping
-- **Açıklama:** MultiView ekranında 1 ana odak ekranı ve yanında 3 dikey alt ekran düzeni sunma; Siri Remote veya dokunma ile anında ana ses kanalını değiştirme.
-- **Platformlar:** tvOS, iPadOS, iOS.
-- **Durum:** `[IN_PROGRESS]`
+### 5. [DONE] MultiView 1+3 Layout & Siri Remote One-Tap Audio Focus Swapping
+- **Açıklama:** MultiView ekranında 1 ana odak ekranı (%73) ve yanında 3 dikey alt ekran (%27) düzeni sunma; üst barda 1+3 Vitrin, 2x2 Izgara ve 1+1 İkili mod değiştirici haplar; Siri Remote veya dokunma ile anında ana ses kanalını değiştirme (`setAudioActive`) ve tek tuşla ana ekrana terfi (`swapToPrimary`).
+- **Platformlar:** tvOS (Siri Remote Focus Engine, D-pad gezinme ile anlık ses odağı, Play/Pause ile ana ekrana taşıma), iPadOS & iOS (Dokunmatik ses odağı, haptik geri bildirim, 1+3 vitrin kartları).
+- **TCA & Mimari:** `MultiViewLayoutMode`, `MultiViewFeature` (`layoutMode`, `primarySlotID`, `activeAudioSlotID`, `swapToPrimary`, `setAudioActive`), `MultiView.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 6. [PENDING] Sleep Timer Smooth Audio Fade-Out Engine
+### 6. [IN_PROGRESS] Sleep Timer Smooth Audio Fade-Out Engine
 - **Açıklama:** Uyku zamanlayıcısının son 60 saniyesinde sesi kademeli olarak sıfıra indiren ve ekran parlaklığını yumuşakça kısarak oynatmayı sonlandıran sinematik deneyim.
 - **Platformlar:** iOS, tvOS.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 7. [PENDING] EPG 'Now & Next' Channel Peek with Live Elapsed Progress Ring
 - **Açıklama:** Kanal zapping HUD'ında ve OSD'sinde o anki programın ne kadarının geçtiğini gösteren şık dairesel/çizgisel progress bar ve hemen sonrasındaki programın başlama saati.
@@ -83,3 +84,8 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature` durumuna `activeCatchupProgram`, `isPlayingCatchup`, `isCatchupTimelineVisible` ve `returnToLiveStream` mantığı eklendi.
   - `CatchupTimelineScrubberView.swift` geliştirildi: Günlük filtre sekmeleri (Bugün / Dün / 2 Gün Önce), yatay program imleri (bookmarks), Siri Remote Focus Engine odak takibi ve ölçeklendirme animasyonları.
   - tvOS ve iOS için canlıya dönüş rozeti ("Canlı Yayına Dön") ve kontrol barı butonları entegre edildi. tvOS geri tuşu (`onExitCommand`) güvenli kapatma ile donatıldı.
+- **#5 MultiView 1+3 Layout & Siri Remote One-Tap Audio Focus Swapping:**
+  - `MultiViewLayoutMode` (`showcase1Plus3`, `grid2x2`, `dual1Plus1`) eklendi.
+  - `MultiViewFeature` reducer'ına `layoutMode`, `primarySlotID`, `activeAudioSlotID`, `swapToPrimary`, `setAudioActive` eklendi.
+  - `MultiView.swift` tamamen modernize edildi: Üst bar mod değiştirici haplar, aktif ses rozeti, 1+3 asimetrik vitrin hesaplamaları (%73 ana vitrin + %27 3 alt slot).
+  - Siri Remote ile gezinirken anında ses odağı geçişi (`.onChange(of: tvFocusedSlotID)`), D-pad Play/Pause veya "Ana Ekrana Taşı" butonu ile vitrine terfi mekanizması hayata geçirildi.

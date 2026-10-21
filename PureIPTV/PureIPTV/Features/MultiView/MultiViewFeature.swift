@@ -1,6 +1,43 @@
 import ComposableArchitecture
 import Foundation
 
+// MARK: - MultiView Layout Modes
+
+public enum MultiViewLayoutMode: String, CaseIterable, Equatable, Sendable, Identifiable {
+    case showcase1Plus3 = "1+3" // 1 Large Main + 3 Right Sub-views (Showcase)
+    case grid2x2 = "2x2" // 2x2 Equal Quad Grid
+    case dual1Plus1 = "1+1" // Side-by-side Dual Split
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .showcase1Plus3: AppStrings.MultiView.layoutShowcase
+        case .grid2x2: AppStrings.MultiView.layoutGrid
+        case .dual1Plus1: AppStrings.MultiView.layoutDual
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .showcase1Plus3: "rectangle.righthalf.inset.filled"
+        case .grid2x2: "square.grid.2x2"
+        case .dual1Plus1: "rectangle.split.2x1"
+        }
+    }
+
+    public var requiredSlotCount: Int {
+        switch self {
+        case .showcase1Plus3, .grid2x2: 4
+        case .dual1Plus1: 2
+        }
+    }
+}
+
+// MARK: - MultiView Slot Model
+
 public struct MultiViewSlot: Equatable, Identifiable {
     public let id: Int
     public var item: MediaModels.Item?
@@ -16,11 +53,15 @@ public struct MultiViewSlot: Equatable, Identifiable {
     }
 }
 
+// MARK: - MultiView Reducer
+
 @Reducer
 public struct MultiViewFeature {
     @ObservableState
     public struct State: Equatable {
-        public var layoutSize: Int = 4 // 2, 4, or 9
+        public var layoutMode: MultiViewLayoutMode = .showcase1Plus3
+        public var layoutSize: Int = 4 // 2, 4, or 9 (Compatibility)
+        public var primarySlotID: Int = 0
 
         public var slots: [MultiViewSlot] = [
             MultiViewSlot(id: 0),
@@ -46,7 +87,10 @@ public struct MultiViewFeature {
 
     public enum Action {
         case onAppear
+        case setLayoutMode(MultiViewLayoutMode)
+        case swapToPrimary(slotID: Int)
         case setAudioActive(slotID: Int)
+        case toggleAudioMute
         case selectChannelTapped(slotID: Int)
         case channelSelected(MediaModels.Item)
         case channelSelectionDismissed
@@ -69,8 +113,43 @@ public struct MultiViewFeature {
             case .onAppear:
                 return .none
 
+            case let .setLayoutMode(mode):
+                state.layoutMode = mode
+                state.layoutSize = mode.requiredSlotCount
+                while state.slots.count < mode.requiredSlotCount {
+                    state.slots.append(MultiViewSlot(id: state.slots.count))
+                }
+                return .none
+
+            case let .swapToPrimary(slotID):
+                guard slotID != state.primarySlotID else { return .none }
+                guard let primaryIndex = state.slots.firstIndex(where: { $0.id == state.primarySlotID }),
+                      let targetIndex = state.slots.firstIndex(where: { $0.id == slotID })
+                else {
+                    return .none
+                }
+
+                // Swap items between primary and target slots
+                let tempItem = state.slots[primaryIndex].item
+                state.slots[primaryIndex].item = state.slots[targetIndex].item
+                state.slots[primaryIndex].instanceID = UUID()
+                state.slots[targetIndex].item = tempItem
+                state.slots[targetIndex].instanceID = UUID()
+
+                // Immediately switch audio focus to primary showcase screen
+                state.activeAudioSlotID = state.primarySlotID
+                return .none
+
             case let .setAudioActive(slotID):
                 state.activeAudioSlotID = slotID
+                return .none
+
+            case .toggleAudioMute:
+                if state.activeAudioSlotID != nil {
+                    state.activeAudioSlotID = nil
+                } else {
+                    state.activeAudioSlotID = state.primarySlotID
+                }
                 return .none
 
             case let .selectChannelTapped(slotID):
@@ -107,6 +186,11 @@ public struct MultiViewFeature {
 
             case let .changeLayout(size):
                 state.layoutSize = size
+                if size == 2 {
+                    state.layoutMode = .dual1Plus1
+                } else if size == 4 {
+                    state.layoutMode = .grid2x2
+                }
                 // Adjust slots count
                 if state.slots.count < size {
                     let diff = size - state.slots.count
@@ -115,9 +199,7 @@ public struct MultiViewFeature {
                         state.slots.append(MultiViewSlot(id: startID + i))
                     }
                 } else if state.slots.count > size {
-                    // We need to keep only 'size' slots.
                     state.slots = Array(state.slots.prefix(size))
-                    // If activeAudioSlotID is removed, set to 0
                     if let active = state.activeAudioSlotID, active >= size {
                         state.activeAudioSlotID = 0
                     }
@@ -129,6 +211,7 @@ public struct MultiViewFeature {
                     state.focusedSlotID = nil // Exit fullscreen
                 } else {
                     state.focusedSlotID = slotID // Enter fullscreen
+                    state.activeAudioSlotID = slotID
                 }
                 return .none
 

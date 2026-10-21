@@ -388,6 +388,13 @@ public enum AppStrings {
         public static let title = "Multi-view".localized
         public static let addChannel = "Kanal Ekle".localized
         public static let selectChannel = "Kanal Seç".localized
+        public static let layoutShowcase = "1+3 Vitrin".localized
+        public static let layoutGrid = "2x2 Izgara".localized
+        public static let layoutDual = "1+1 İkili".localized
+        public static let swapToPrimary = "Ana Ekrana Taşı".localized
+        public static let audioActive = "Aktif Ses".localized
+        public static let audioMuted = "Sessiz".localized
+        public static let primaryScreen = "Ana Ekran".localized
     }
 
     // MARK: - Parental Lock
