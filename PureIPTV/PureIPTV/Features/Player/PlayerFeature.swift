@@ -25,6 +25,7 @@ public struct PlayerFeature {
         public static let reconnectTimer = "PlayerFeature.reconnectTimer"
         public static let recentChannelsHUD = "PlayerFeature.recentChannelsHUD"
         public static let recallHUD = "PlayerFeature.recallHUD"
+        public static let dialerAutoSubmit = "PlayerFeature.dialerAutoSubmit"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -159,6 +160,30 @@ public struct PlayerFeature {
         public var zappingHistory: [PlayableItem] = []
         public var isRecallHUDVisible: Bool = false
         public var recalledChannelItem: PlayableItem?
+
+        /// Direct Channel Number Dialing HUD (Madde #11)
+        public var dialedChannelNumber: String = ""
+        public var isChannelDialerVisible: Bool = false
+
+        public var matchedDialedChannels: [(index: Int, item: PlayableItem)] {
+            guard let playlist, !playlist.isEmpty, !dialedChannelNumber.isEmpty else { return [] }
+            guard let targetIndex = Int(dialedChannelNumber) else { return [] }
+
+            var results: [(index: Int, item: PlayableItem)] = []
+            if targetIndex >= 1, targetIndex <= playlist.count {
+                results.append((index: targetIndex, item: playlist[targetIndex - 1]))
+            }
+            for (idx, ch) in playlist.enumerated() {
+                let chNum = idx + 1
+                if chNum != targetIndex, "\(chNum)".hasPrefix(dialedChannelNumber) {
+                    results.append((index: chNum, item: ch))
+                    if results.count >= 6 {
+                        break
+                    }
+                }
+            }
+            return results
+        }
 
         /// Quick Recent Channels Carousel HUD (Quick-Zap Dock)
         public var isRecentChannelsHUDVisible: Bool = false
@@ -357,6 +382,14 @@ public struct PlayerFeature {
         case hideZappingHUD
         case showChannelOSD
         case hideChannelOSD
+
+        // Direct Channel Number Dialing Actions (Madde #11)
+        case openChannelDialer
+        case setChannelDialerVisible(Bool)
+        case appendDialedDigit(String)
+        case deleteDialedDigit
+        case clearDialedDigits
+        case submitDialedChannel
 
         // EPG Actions
         case fetchEPG
@@ -1423,6 +1456,83 @@ public struct PlayerFeature {
             state.zappingHUDItem = nil
             state.zappingHUDDirection = nil
             return .none
+
+        case .openChannelDialer:
+            state.dialedChannelNumber = ""
+            state.isChannelDialerVisible = true
+            return .none
+
+        case let .setChannelDialerVisible(visible):
+            state.isChannelDialerVisible = visible
+            if !visible {
+                state.dialedChannelNumber = ""
+                return .cancel(id: CancelID.dialerAutoSubmit)
+            }
+            return .none
+
+        case let .appendDialedDigit(digit):
+            guard state.dialedChannelNumber.count < 5 else { return .none }
+            state.dialedChannelNumber.append(digit)
+            state.isChannelDialerVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                await send(.submitDialedChannel)
+            }
+            .cancellable(id: CancelID.dialerAutoSubmit, cancelInFlight: true)
+
+        case .deleteDialedDigit:
+            if !state.dialedChannelNumber.isEmpty {
+                state.dialedChannelNumber.removeLast()
+            }
+            if state.dialedChannelNumber.isEmpty {
+                return .cancel(id: CancelID.dialerAutoSubmit)
+            } else {
+                return .run { send in
+                    try? await Task.sleep(nanoseconds: 1_800_000_000)
+                    await send(.submitDialedChannel)
+                }
+                .cancellable(id: CancelID.dialerAutoSubmit, cancelInFlight: true)
+            }
+
+        case .clearDialedDigits:
+            state.dialedChannelNumber = ""
+            return .cancel(id: CancelID.dialerAutoSubmit)
+
+        case .submitDialedChannel:
+            guard !state.dialedChannelNumber.isEmpty else {
+                state.isChannelDialerVisible = false
+                return .cancel(id: CancelID.dialerAutoSubmit)
+            }
+            let dialed = state.dialedChannelNumber
+            let matches = state.matchedDialedChannels
+            state.dialedChannelNumber = ""
+            state.isChannelDialerVisible = false
+
+            if let targetIdx = Int(dialed), targetIdx >= 1,
+               let list = state.playlist, targetIdx <= list.count
+            {
+                let targetChannel = list[targetIdx - 1]
+                state.zappingHUDDirection = .next
+                return .concatenate(
+                    .cancel(id: CancelID.dialerAutoSubmit),
+                    .send(.selectChannel(targetChannel))
+                )
+            } else if let matched = matches.first {
+                state.zappingHUDDirection = .next
+                return .concatenate(
+                    .cancel(id: CancelID.dialerAutoSubmit),
+                    .send(.selectChannel(matched.item))
+                )
+            } else {
+                return .concatenate(
+                    .cancel(id: CancelID.dialerAutoSubmit),
+                    .run { send in
+                        await send(.showGestureFeedback(AppStrings.LiveTV.noChannels))
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        await send(.hideGestureFeedback)
+                    }
+                )
+            }
 
         case .showChannelOSD:
             state.isChannelOSDVisible = true

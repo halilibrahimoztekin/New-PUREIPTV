@@ -352,6 +352,13 @@
                                             } label: {
                                                 Label(AppStrings.LiveTV.recentChannels, systemImage: "clock.arrow.circlepath")
                                             }
+
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                Label(AppStrings.LiveTV.channelDialerTitle, systemImage: "number.square.fill")
+                                            }
                                         }
 
                                         // 7. Catchup / Timeshift TV Archive Timeline (Feature #4)
@@ -647,6 +654,18 @@
                                                 Image(systemName: "clock.arrow.circlepath")
                                                     .font(.headline)
                                                     .foregroundColor(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
+                                                    .padding(10)
+                                                    .background(.ultraThinMaterial, in: Circle())
+                                            }
+
+                                            // Channel Dialer Button (Madde #11)
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            }) {
+                                                Image(systemName: "number.square.fill")
+                                                    .font(.headline)
+                                                    .foregroundColor(store.isChannelDialerVisible ? Color(hex: "#FFD60A") : .white)
                                                     .padding(10)
                                                     .background(.ultraThinMaterial, in: Circle())
                                             }
@@ -997,6 +1016,17 @@
                     .zIndex(130)
                 }
 
+                // Direct Channel Number Dialing HUD (Madde #11)
+                if store.isChannelDialerVisible {
+                    DirectChannelDialHUDView(store: store) {
+                        store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        store.send(.userInteracted)
+                    }
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isChannelDialerVisible)
+                    .zIndex(140)
+                }
+
                 // MARK: - Keyboard Shortcuts (Madde #68: iPad Magic Keyboard)
 
                 Group {
@@ -1012,6 +1042,8 @@
                         .keyboardShortcut(.upArrow, modifiers: [])
                     Button("") { store.send(.nextChannel) }
                         .keyboardShortcut(.downArrow, modifiers: [])
+                    Button("") { store.send(.openChannelDialer) }
+                        .keyboardShortcut("d", modifiers: [])
                     Button("") { store.send(.closeTapped) }
                         .keyboardShortcut(.escape, modifiers: [])
                 }

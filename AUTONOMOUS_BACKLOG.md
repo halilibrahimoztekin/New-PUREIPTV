@@ -66,11 +66,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PlayerFeature` (`previousChannel`, `recalledChannelItem`, `isRecallHUDVisible`, `.recallLastChannel`, `.setRecallHUDVisible`, `.hideRecallHUD`, `CancelID.recallHUD`), `PreviousChannelRecallHUDView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 11. [PENDING] Direct Channel Number Dialing HUD (Quick-Jump Number Pad for tvOS & iOS)
-- **Açıklama:** Geleneksel televizyon kumandası hissiyatı sunan hızlı kanal numarası tuşlama motoru. Siri Remote üzerinde sayı tuşlayarak veya ekrandaki sinematik cam numaratör ile "1-0-4" tuşlandığında 2 saniye içinde doğrudan 104. kanala zapping yapan, eşleşen kanalların anlık önizlemesini veren akıllı tuşlama HUD'ı.
-- **Platformlar:** tvOS (Siri Remote Focusable cam tuş takımı, D-pad sayı seçici), iOS (Floating 10-key glass keypad sheet).
-- **TCA & Mimari:** `PlayerFeature` (`dialedDigits: String`, `isNumberPadVisible`, `matchedChannels: [PlayableItem]`, `.appendDialedDigit`, `.submitDialedChannel`), `DirectChannelDialHUDView.swift`.
-- **Durum:** `[PENDING]`
+### 11. [DONE] Direct Channel Number Dialing HUD (Quick-Jump Number Pad for tvOS & iOS)
+- **Açıklama:** Geleneksel televizyon kumandası hissiyatı sunan hızlı kanal numarası tuşlama motoru. Siri Remote üzerinde sayı tuşlayarak veya ekrandaki sinematik cam numaratör ile "1-0-4" tuşlandığında 1.8 saniye içinde doğrudan 104. kanala zapping yapan, eşleşen kanalların anlık önizleme kartlarını veren akıllı tuşlama HUD'ı.
+- **Platformlar:** tvOS (Siri Remote Focusable cam 3x4 tuş takımı, D-pad sayı seçici, yeşil/mavi odak ışığı, `.onExitCommand`), iOS (Floating 10-key glass keypad modal, dokunsal haptik geri bildirim, iPad Magic Keyboard 'd' kısayolu).
+- **TCA & Mimari:** `PlayerFeature` (`dialedChannelNumber: String`, `isChannelDialerVisible: Bool`, `matchedDialedChannels: [(index: Int, item: PlayableItem)]`, `.appendDialedDigit`, `.deleteDialedDigit`, `.clearDialedDigits`, `.submitDialedChannel`, `CancelID.dialerAutoSubmit`), `DirectChannelDialHUDView.swift`, `PlayerView+tvOS.swift`, `PlayerView+iOS.swift`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
 ### 12. [PENDING] Smart Channel Sorting & Grouping Rules Engine (Most Watched, Watch Frequency, A-Z)
 - **Açıklama:** TiviMate ve UHF kullanıcılarının en çok övdüğü akıllı kanal sıralama motoru. Kanalları orijinal liste sırası, en çok izlenenler (top watch frequency), toplam izleme süresi (watch-time) veya alfabetik (A-Z) olarak anında yeniden sıralayan, sıralama tercihini kalıcı saklayan akıllı motor.

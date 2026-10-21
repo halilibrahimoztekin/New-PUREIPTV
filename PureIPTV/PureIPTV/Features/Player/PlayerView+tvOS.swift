@@ -376,6 +376,17 @@
                         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecallHUDVisible)
                         .zIndex(130)
                     }
+
+                    // Direct Channel Number Dialing HUD (Madde #11)
+                    if store.isChannelDialerVisible {
+                        DirectChannelDialHUDView(store: store) {
+                            store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            resetIdleTimer()
+                        }
+                        .transition(.scale(scale: 0.94).combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isChannelDialerVisible)
+                        .zIndex(140)
+                    }
                 }
             }
             .preferredColorScheme(.dark)
@@ -391,7 +402,9 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isCatchupTimelineVisible {
+                if store.isChannelDialerVisible {
+                    store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                } else if store.isCatchupTimelineVisible {
                     store.send(.setCatchupTimelineVisible(false))
                 } else if store.isAudioSyncHUDVisible {
                     store.send(.setAudioSyncHUDVisible(false))
@@ -839,6 +852,19 @@
                         } label: {
                             Image(systemName: "sidebar.leading")
                                 .font(.system(size: 24))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
+
+                    // Direct Channel Dialer Button (Madde #11 - Live TV)
+                    if store.item.isLive, store.playlist != nil {
+                        Button {
+                            onInteraction()
+                            store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "number.square.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isChannelDialerVisible ? Color(hex: "#FFD60A") : .white)
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }

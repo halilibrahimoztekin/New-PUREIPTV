@@ -88,6 +88,9 @@ public enum AppStrings {
         public static let categoryMusic = "Müzik".localized
         public static let clearFilter = "Filtreyi Temizle".localized
         public static let noChannelsMatchingFilter = "Seçili filtre veya arama kriterine uygun kanal bulunamadı.".localized
+        public static let channelDialerTitle = "Kanal Numarası".localized
+        public static let channelDialerHint = "Kanal numarası tuşlayarak anında geçiş yapın".localized
+        public static let jumpToChannel = "Kanala Git".localized
     }
 
     // MARK: - Player & EPG
