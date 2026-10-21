@@ -837,6 +837,26 @@
                     .zIndex(85)
                 }
 
+                // Trakt.tv Scrobble Toast HUD (Madde #17)
+                if store.isTraktScrobbleHUDVisible {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            TraktScrobbleHUDView(
+                                message: store.traktScrobbleHUDMessage,
+                                isSuccess: true,
+                                progressPercent: store.traktScrobbleHUDPercent
+                            )
+                            .padding(.top, 40)
+                            .padding(.trailing, 20)
+                        }
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isTraktScrobbleHUDVisible)
+                    .zIndex(95)
+                }
+
                 // Mini EPG Overlay (Madde #15: Swipe Down / Up for Mini EPG)
                 if store.isEPGVisible {
                     ZStack(alignment: .bottom) {

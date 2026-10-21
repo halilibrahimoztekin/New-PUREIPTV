@@ -61,6 +61,13 @@ public struct SettingsFeature {
         public var isShowingClearCacheSuccess: Bool = false
         public var isPremium: Bool = false
 
+        // Trakt.tv Integration (Madde #17)
+        public var isTraktAuthenticated: Bool = false
+        public var traktUsername: String?
+        public var isTraktAutoScrobbleEnabled: Bool = true
+        public var isTraktAuthSheetPresented: Bool = false
+        public var traktState: TraktFeature.State = .init()
+
         public enum PINStep: Equatable {
             case enterNew
             case confirm
@@ -117,15 +124,25 @@ public struct SettingsFeature {
         case restorePurchasesResponse(TaskResult<RevenueCat.CustomerInfo>)
         case updatePremiumStatus(Bool)
         case switchProfileTapped
+
+        // Trakt.tv Actions (Madde #17)
+        case setTraktAuthSheetPresented(Bool)
+        case traktAction(TraktFeature.Action)
+        case toggleTraktAutoScrobble(Bool)
+        case traktLogout
     }
 
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.purchases) var purchases
+    @Dependency(\.traktClient) var traktClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
+        Scope(state: \.traktState, action: \.traktAction) {
+            TraktFeature()
+        }
         Reduce { state, action in
             switch action {
             case .onAppear:
@@ -146,6 +163,11 @@ public struct SettingsFeature {
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
                 state.isICloudSyncEnabled = settingsClient.isICloudSyncEnabled()
+
+                // Trakt State (Madde #17)
+                state.isTraktAuthenticated = traktClient.isAuthenticated()
+                state.traktUsername = traktClient.currentUser()?.username
+                state.isTraktAutoScrobbleEnabled = traktClient.isAutoScrobbleEnabled()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -411,6 +433,34 @@ public struct SettingsFeature {
 
             case let .updatePremiumStatus(isPremium):
                 state.isPremium = isPremium
+                return .none
+
+            // Trakt.tv Reducer Handlers (Madde #17)
+            case let .setTraktAuthSheetPresented(presented):
+                state.isTraktAuthSheetPresented = presented
+                if !presented {
+                    state.isTraktAuthenticated = traktClient.isAuthenticated()
+                    state.traktUsername = traktClient.currentUser()?.username
+                }
+                return .none
+
+            case let .toggleTraktAutoScrobble(enabled):
+                state.isTraktAutoScrobbleEnabled = enabled
+                traktClient.setAutoScrobbleEnabled(enabled)
+                return .none
+
+            case .traktLogout:
+                traktClient.logout()
+                state.isTraktAuthenticated = false
+                state.traktUsername = nil
+                return .send(.traktAction(.logout))
+
+            case .traktAction(.pollTokenResponse(.success(.some))):
+                state.isTraktAuthenticated = true
+                state.traktUsername = traktClient.currentUser()?.username
+                return .none
+
+            case .traktAction:
                 return .none
             }
         }

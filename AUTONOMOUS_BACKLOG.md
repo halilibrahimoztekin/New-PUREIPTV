@@ -102,17 +102,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `ChannelNameCleaner`, `SettingsClient` regex clutter toggles, `PlayableItem` presentation extension.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 6 birim testi sıfır hata ile tamamlandı).
 
-### 17. [IN_PROGRESS] Trakt.tv Watchlist & Scrobble Sync Engine
+### 17. [DONE] Trakt.tv Watchlist & Scrobble Sync Engine
 - **Açıklama:** VOD film ve diziler izlenirken ilerleme durumunu gerçek zamanlı Trakt.tv hesabıyla senkronize eden, "İzlendi" olarak işaretleyen ve kullanıcıların yarım bıraktıkları içerikleri diğer tüm cihazlarından devam ettirmesini sağlayan modern scrobbler.
-- **Platformlar:** iOS, tvOS.
-- **TCA & Mimari:** `TraktClient`, `TraktFeature`, `PlayerFeature` playback progress scrobble effect.
-- **Durum:** `[IN_PROGRESS]`
+- **Platformlar:** iOS, tvOS (Siri Remote Focus Engine & QR Code TV Login).
+- **TCA & Mimari:** `TraktClient`, `TraktFeature`, `PlayerFeature` playback progress scrobble effect, `KeychainManager`.
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 5 birim testi sıfır hata ile tamamlandı).
 
-### 18. [PENDING] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
+### 18. [IN_PROGRESS] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
 - **Açıklama:** Oynatıcıdan ana menüye veya diğer uygulamalara geçildiğinde yayını kesintiye uğratmadan iOS ve tvOS sistem PiP penceresine aktaran veya arka planda sadece ses dinleme (background audio playback) modunu akıllıca yöneten motor.
 - **Platformlar:** iOS, tvOS (AVPictureInPictureController, AudioSession background modes).
 - **TCA & Mimari:** `PiPClient`, `PlayerFeature` PiP state actions (`togglePiP`, `onPiPStatusChanged`).
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 19. [PENDING] Channel Hide & Category Blacklist PIN Protection System
 - **Açıklama:** İstenmeyen kategorileri veya yetişkin kanallarını çalma listelerinden tamamen gizleyen, ebeveyn denetimi (Parental Control PIN) ile korunan ve liste gezintisini tertemiz tutan gizleme/kilit motoru.
@@ -220,8 +220,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature` reducer'ına `isChannelNameCleaningEnabled` durumu, onAppear yüklemesi ve `toggleChannelNameCleaning` aksiyonu entegre edildi.
   - `PlayerSidebarDrawer.swift` içine tek tıkla "Sade / Ham" mod geçiş butonu (`cleanerToggleButton`), tvOS Siri Remote için `TVCleanerButtonStyle` ve `CleanedChannelMetadata` etiketleri eklendi.
   - `ChannelInfoOSDView.swift`, `ChannelZappingHUDView.swift`, `ChannelCardView.swift` ve `RecentChannelsHUDView.swift` temiz başlık ve kalite rozetleri ile güncellendi.
-  - 6 adet birim testi (`ChannelNameCleanerTests.swift`) yazıldı; hem tvOS hem de iOS Simülatör derlemeleri sıfır hata ile tamamlandı.
-
-
-
+- **#17 Trakt.tv Watchlist & Scrobble Sync Engine:**
+  - `TraktModels.swift` oluşturuldu: OAuth2 Device Flow modelleri (`TraktDeviceCode`, `TraktTokenResponse`), `TraktUser`, scrobbler payloadları (`TraktScrobblePayload`, `TraktScrobbleResponse`), `TraktWatchlistItem` ve `TraktPlaybackProgressItem`.
+  - `TraktMediaParser.swift` VOD / Dizi akıllı regex ayrıştırıcı motoru yazıldı: Başlıklardaki sezon & bölüm formatlarını (`S01E05`, `1x05`), yapım yılını (`(2014)`), codec ve ses gürültülerini temizleyerek başlığı netleştirir ve Trakt API payloadına dönüştürür.
+  - `TraktClient.swift` TCA bağımlılık servisi geliştirildi: Device Code akışı, OAuth2 token yenileme ve polling döngüsü, canlı scrobble başlangıç/duraklatma/tamamlama çağrıları, izleme listesi ve devam etme ilerlemesi getirme; KeychainManager üzerinden iCloud Keychain kalıcılığı sağlandı.
+  - `TraktFeature.swift` TCA reducer'ı yazıldı: Cihaz yetkilendirme akışı, otomatik scrobble açma/kapama, izleme listesi senkronizasyonu ve kullanıcı çıkış yönetimi.
+  - `TraktAuthView.swift` Obsidian cam estetiğinde tvOS ve iOS için QR kodlu giriş modalı (`CIQRCodeGenerator` ile ekranda dinamik QR kod ve 8 haneli `user_code`) geliştirildi; Siri Remote Focus Engine butonları ile donatıldı.
+  - `TraktWatchlistView.swift` ile Trakt İzleme Listesi ve İzlemeye Devam Et arayüzü tasarlandı.
+  - `TraktScrobbleHUDView.swift` oynatıcı üzerine scrobble başlangıç ve tamamlanma bildirim tostu eklendi.
+  - `PlayerFeature.swift` VOD ve dizi oynatımlarında >=10s izlemede otomatik scrobble başlatma, duraklatmada senkronize etme ve >=%80 izlemede "İzlendi" olarak işaretleme etkileriyle donatıldı; HUD tostu tetikleyicileri eklendi.
+  - `SettingsFeature.swift` ve `SettingsView.swift` içine "Trakt.tv Senkronizasyonu" yönetim kartı, bağlı hesap profili, izleme listesi bağlantısı ve giriş/çıkış modalı eklendi.
+  - 5 adet birim testi (`TraktSyncEngineTests.swift`) yazıldı; TestClock ve scheduler entegrasyonu sağlandı; iOS ve tvOS derlemeleri ile testleri 0 hata ile tamamlandı.
 

@@ -26,6 +26,7 @@ public struct PlayerFeature {
         public static let recentChannelsHUD = "PlayerFeature.recentChannelsHUD"
         public static let recallHUD = "PlayerFeature.recallHUD"
         public static let dialerAutoSubmit = "PlayerFeature.dialerAutoSubmit"
+        public static let traktScrobbleHUD = "PlayerFeature.traktScrobbleHUD"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -157,6 +158,13 @@ public struct PlayerFeature {
 
         /// Smart Channel Name Cleaner (Madde #16)
         public var isChannelNameCleaningEnabled: Bool = true
+
+        /// Trakt.tv Watchlist & Scrobble Sync Engine (Madde #17)
+        public var isTraktScrobbleStarted: Bool = false
+        public var lastTraktScrobbleProgress: Double = 0.0
+        public var isTraktScrobbleHUDVisible: Bool = false
+        public var traktScrobbleHUDMessage: String = ""
+        public var traktScrobbleHUDPercent: Double?
 
         /// Zapping & Last Channel Recall
         public var previousChannel: PlayableItem?
@@ -466,6 +474,13 @@ public struct PlayerFeature {
         case loadRecentChannels
         case recentChannelsLoaded([PlayableItem])
 
+        // Trakt.tv Scrobbler (Madde #17)
+        case traktScrobbleStart
+        case traktScrobblePause
+        case traktScrobbleStop
+        case showTraktScrobbleHUD(message: String, progress: Double?)
+        case dismissTraktScrobbleHUD
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -478,6 +493,7 @@ public struct PlayerFeature {
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.recentChannelsClient) var recentChannelsClient
     @Dependency(\.streamHealthClient) var streamHealthClient
+    @Dependency(\.traktClient) var traktClient
 
     public init() {}
 
@@ -487,13 +503,14 @@ public struct PlayerFeature {
         let settingsClient = settingsClient
         let recentChannelsClient = recentChannelsClient
         let streamHealthClient = streamHealthClient
+        let traktClient = traktClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -634,6 +651,14 @@ public struct PlayerFeature {
                         } else {
                             try? await databaseClient.saveWatchProgress(historyItem)
                         }
+
+                        // Trakt.tv scrobble stop on close (Madde #17)
+                        if !item.isLive {
+                            let pct = totalSecs > 0 ? (currentSecs / totalSecs) * 100.0 : 0.0
+                            if let payload = TraktMediaParser.makePayload(title: item.title, seriesTitle: item.seriesTitle, isLive: item.isLive, progress: pct) {
+                                _ = try? await traktClient.scrobbleStop(payload)
+                            }
+                        }
                     }
 
                     if !isPiPActive {
@@ -773,9 +798,12 @@ public struct PlayerFeature {
             state.oledInactivitySeconds = 0
             state.oledDimLevel = 0.0
             state.isDeepDimmed = false
-            return .run { _ in
-                try await playerClient.resume()
-            }
+            return .merge(
+                .run { _ in
+                    try await playerClient.resume()
+                },
+                state.isTraktScrobbleStarted ? .send(.traktScrobbleStart) : .none
+            )
 
         case .pause:
             state.isUserPaused = true
@@ -784,13 +812,17 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.stallWatchdog),
                 .run { _ in
                     try await playerClient.pause()
-                }
+                },
+                .send(.traktScrobblePause)
             )
 
         case .stop:
-            return .run { _ in
-                try await playerClient.stop()
-            }
+            return .merge(
+                .run { _ in
+                    try await playerClient.stop()
+                },
+                .send(.traktScrobbleStop)
+            )
 
         case .retryPlayback:
             state.errorMessage = nil
@@ -1199,6 +1231,78 @@ public struct PlayerFeature {
             return .run { _ in
                 settingsClient.setIsChannelNameCleaningEnabled(enabled)
             }
+
+        // Trakt.tv Scrobbler (Madde #17)
+        case .traktScrobbleStart:
+            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
+                return .none
+            }
+            let item = state.item
+            let percent = state.position * 100.0
+            guard let payload = TraktMediaParser.makePayload(
+                title: item.title,
+                seriesTitle: item.seriesTitle,
+                isLive: item.isLive,
+                progress: percent
+            ) else { return .none }
+
+            return .run { send in
+                if let resp = try? await traktClient.scrobbleStart(payload) {
+                    await send(.showTraktScrobbleHUD(message: "Trakt: Scrobble Başlatıldı", progress: resp.progress))
+                }
+            }
+
+        case .traktScrobblePause:
+            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
+                return .none
+            }
+            let item = state.item
+            let percent = state.position * 100.0
+            guard let payload = TraktMediaParser.makePayload(
+                title: item.title,
+                seriesTitle: item.seriesTitle,
+                isLive: item.isLive,
+                progress: percent
+            ) else { return .none }
+
+            return .run { _ in
+                _ = try? await traktClient.scrobblePause(payload)
+            }
+
+        case .traktScrobbleStop:
+            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
+                return .none
+            }
+            let item = state.item
+            let percent = state.position * 100.0
+            guard let payload = TraktMediaParser.makePayload(
+                title: item.title,
+                seriesTitle: item.seriesTitle,
+                isLive: item.isLive,
+                progress: percent
+            ) else { return .none }
+
+            return .run { send in
+                if let resp = try? await traktClient.scrobbleStop(payload) {
+                    if resp.action == "scrobble" || percent >= 80.0 {
+                        await send(.showTraktScrobbleHUD(message: "Trakt: İzlendi Olarak İşaretlendi", progress: resp.progress))
+                    }
+                }
+            }
+
+        case let .showTraktScrobbleHUD(message, progress):
+            state.traktScrobbleHUDMessage = message
+            state.traktScrobbleHUDPercent = progress
+            state.isTraktScrobbleHUDVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                await send(.dismissTraktScrobbleHUD)
+            }
+            .cancellable(id: CancelID.traktScrobbleHUD, cancelInFlight: true)
+
+        case .dismissTraktScrobbleHUD:
+            state.isTraktScrobbleHUDVisible = false
+            return .cancel(id: CancelID.traktScrobbleHUD)
 
         case let .dragGestureChanged(translation, screenWidth, _, startLocation):
             state.lastDragTranslation = translation
@@ -2065,7 +2169,26 @@ public struct PlayerFeature {
                     let totalSecs = Double(state.currentTime.components.seconds) / pos
                     state.totalTime = Duration.seconds(totalSecs)
                 }
-                return updateUpNextState(state: &state, settingsClient: settingsClient)
+
+                var effects: [Effect<Action>] = [
+                    updateUpNextState(state: &state, settingsClient: settingsClient),
+                ]
+
+                // Trakt.tv VOD scrobble progress detection (Madde #17)
+                if !state.item.isLive {
+                    let curSecs = Double(state.currentTime.components.seconds)
+                    let pct = pos * 100.0
+                    if curSecs >= 10, !state.isTraktScrobbleStarted {
+                        state.isTraktScrobbleStarted = true
+                        state.lastTraktScrobbleProgress = pct
+                        effects.append(.send(.traktScrobbleStart))
+                    } else if pct >= 80.0, state.lastTraktScrobbleProgress < 80.0 {
+                        state.lastTraktScrobbleProgress = pct
+                        effects.append(.send(.traktScrobbleStop))
+                    }
+                }
+
+                return .merge(effects)
             default:
                 break
             }
@@ -2103,6 +2226,14 @@ public struct PlayerFeature {
                             try? await databaseClient.deleteWatchProgress(item.id)
                         } else {
                             try? await databaseClient.saveWatchProgress(historyItem)
+                        }
+
+                        // Trakt.tv scrobble stop on close (Madde #17)
+                        if !item.isLive {
+                            let pct = totalSecs > 0 ? (currentSecs / totalSecs) * 100.0 : 0.0
+                            if let payload = TraktMediaParser.makePayload(title: item.title, seriesTitle: item.seriesTitle, isLive: item.isLive, progress: pct) {
+                                _ = try? await traktClient.scrobbleStop(payload)
+                            }
                         }
                     }
 

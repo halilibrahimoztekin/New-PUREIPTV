@@ -262,6 +262,64 @@ public struct SettingsView: View {
                 }
             }
 
+            // Trakt.tv Integration (Madde #17)
+            Section(
+                header: Text("Trakt.tv Senkronizasyonu"),
+                footer: Text("VOD film ve dizi ilerlemelerinizi Trakt.tv ile gerçek zamanlı eşitleyin.")
+            ) {
+                if store.isTraktAuthenticated {
+                    HStack {
+                        Image(systemName: "tv.badge.wifi")
+                            .foregroundColor(Color(hex: "#ED1C24"))
+                        Text("Bağlı Hesap")
+                        Spacer()
+                        Text(store.traktUsername ?? "Kullanıcı")
+                            .foregroundColor(Color(hex: "#ED1C24"))
+                            .bold()
+                    }
+
+                    Toggle("Otomatik Scrobble", isOn: Binding(
+                        get: { store.isTraktAutoScrobbleEnabled },
+                        set: { store.send(.toggleTraktAutoScrobble($0)) }
+                    ))
+                    .tint(Color(hex: "#ED1C24"))
+
+                    NavigationLink {
+                        TraktWatchlistView(store: store.scope(state: \.traktState, action: \.traktAction))
+                    } label: {
+                        HStack {
+                            Image(systemName: "bookmark.fill")
+                                .foregroundColor(Color(hex: "#ED1C24"))
+                            Text("İzleme Listesi & Devam Edenler")
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        store.send(.traktLogout)
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Trakt Hesabından Çıkış Yap")
+                        }
+                    }
+                } else {
+                    Button {
+                        store.send(.setTraktAuthSheetPresented(true))
+                    } label: {
+                        HStack {
+                            Image(systemName: "tv.badge.wifi")
+                                .foregroundColor(Color(hex: "#ED1C24"))
+                            Text("Trakt.tv ile Bağlan")
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.caption)
+                        }
+                    }
+                }
+            }
+
             Section(header: Text(AppStrings.Settings.subscriptionAndStorage)) {
                 HStack {
                     Text(AppStrings.Settings.subscriptionStatus)
@@ -417,6 +475,17 @@ public struct SettingsView: View {
             #if os(iOS)
                 .presentationDetents([.medium, .large])
             #endif
+        }
+        .sheet(isPresented: Binding(
+            get: { store.isTraktAuthSheetPresented },
+            set: { store.send(.setTraktAuthSheetPresented($0)) }
+        )) {
+            TraktAuthView(
+                store: store.scope(state: \.traktState, action: \.traktAction),
+                onClose: {
+                    store.send(.setTraktAuthSheetPresented(false))
+                }
+            )
         }
         .alert(
             "PureIPTV Bildirimi",
