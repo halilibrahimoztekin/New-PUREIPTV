@@ -240,6 +240,10 @@ public struct PlayerFeature {
         public var trackHUDIcon: String?
         public var isTrackHUDVisible: Bool = false
 
+        /// Channel Hide & Category Blacklist (Madde #19)
+        public var hiddenChannelIDs: Set<String> = []
+        public var blacklistedCategoryIDs: Set<String> = []
+
         /// Up Next Episode Auto-Play (Madde #48)
         public var isUpNextVisible: Bool = false
         public var upNextCountdownSeconds: Int = 15
@@ -493,6 +497,12 @@ public struct PlayerFeature {
         case showTraktScrobbleHUD(message: String, progress: Double?)
         case dismissTraktScrobbleHUD
 
+        // Channel Hide & Category Blacklist (Madde #19)
+        case loadHiddenContentPreferences
+        case hideChannel(id: String, title: String)
+        case unhideChannel(id: String)
+        case hideCurrentChannel
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -507,6 +517,7 @@ public struct PlayerFeature {
     @Dependency(\.streamHealthClient) var streamHealthClient
     @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
+    @Dependency(\.parentalControlClient) var parentalControlClient
 
     public init() {}
 
@@ -518,13 +529,14 @@ public struct PlayerFeature {
         let streamHealthClient = streamHealthClient
         let traktClient = traktClient
         let pipClient = pipClient
+        let parentalControlClient = parentalControlClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -534,6 +546,8 @@ public struct PlayerFeature {
             state.isPiPSupported = pipClient.isPiPSupported()
             state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
             state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
+            state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
+            state.blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
 
             // Restore per-channel lip-sync and subtitle preferences
             if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
@@ -2412,6 +2426,30 @@ public struct PlayerFeature {
                 _ = ExternalPlayerManager.shared.openStream(url, in: player)
             #endif
             return .none
+
+        // ── Channel Hide & Category Blacklist (Madde #19) ──
+        case .loadHiddenContentPreferences:
+            state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
+            state.blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
+            return .none
+
+        case let .hideChannel(id, title):
+            parentalControlClient.hideChannel(id, title)
+            state.hiddenChannelIDs.insert(id)
+            if state.item.id == id {
+                if let playlist = state.playlist, let next = playlist.first(where: { !state.hiddenChannelIDs.contains($0.id) }) {
+                    return .send(.selectChannel(next))
+                }
+            }
+            return .none
+
+        case let .unhideChannel(id):
+            parentalControlClient.unhideChannel(id)
+            state.hiddenChannelIDs.remove(id)
+            return .none
+
+        case .hideCurrentChannel:
+            return .send(.hideChannel(id: state.item.id, title: state.item.title))
 
         case .jumpToNextCategory:
             guard let playlist = state.playlist, !playlist.isEmpty else { return .none }

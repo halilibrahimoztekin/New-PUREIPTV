@@ -100,6 +100,29 @@ public struct SettingsView: View {
                     }
                 }
                 .tint(.orange)
+
+                Button {
+                    store.send(.openHiddenContentManagement)
+                } label: {
+                    HStack {
+                        Image(systemName: "shield.lefthalf.filled.badge.checkmark")
+                            .foregroundColor(Color(hex: "#0A84FF"))
+                        Text("Gizlenen Kanallar & Kategoriler")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if (store.hiddenChannelsCount + store.blacklistedCategoriesCount) > 0 {
+                            Text("\(store.hiddenChannelsCount + store.blacklistedCategoriesCount)")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color(hex: "#0A84FF"), in: Capsule())
+                        }
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
             }
 
             Section(header: Text(AppStrings.Settings.appearance)) {
@@ -507,6 +530,12 @@ public struct SettingsView: View {
                     store.send(.setTraktAuthSheetPresented(false))
                 }
             )
+        }
+        .sheet(isPresented: Binding(
+            get: { store.isShowingHiddenContentSheet },
+            set: { _ in store.send(.closeHiddenContentManagement) }
+        )) {
+            HiddenContentManagementView(store: store)
         }
         .alert(
             "PureIPTV Bildirimi",

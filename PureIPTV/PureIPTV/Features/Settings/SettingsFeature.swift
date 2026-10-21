@@ -72,6 +72,16 @@ public struct SettingsFeature {
         public var isTraktAuthSheetPresented: Bool = false
         public var traktState: TraktFeature.State = .init()
 
+        // Hidden Content & Category Blacklist (Madde #19)
+        public var hiddenChannelsCount: Int = 0
+        public var blacklistedCategoriesCount: Int = 0
+        public var isShowingHiddenContentSheet: Bool = false
+        public var hiddenChannelsList: [HiddenItemDTO] = []
+        public var blacklistedCategoriesList: [HiddenItemDTO] = []
+        public var isUnlockingHiddenContent: Bool = false
+        public var hiddenContentUnlockPIN: String = ""
+        public var hiddenContentUnlockError: String?
+
         public enum PINStep: Equatable {
             case enterNew
             case confirm
@@ -138,12 +148,26 @@ public struct SettingsFeature {
         // PiP & Background Playback Actions (Madde #18)
         case setAutoPiPEnabled(Bool)
         case setBackgroundPlaybackMode(BackgroundPlaybackMode)
+
+        // Hidden Content & Category Blacklist (Madde #19)
+        case openHiddenContentManagement
+        case closeHiddenContentManagement
+        case loadHiddenContentData
+        case hiddenContentUnlockPINChanged(String)
+        case cancelHiddenContentUnlock
+        case submitHiddenContentUnlock
+        case biometricUnlockResult(Bool)
+        case unhideChannelFromSettings(String)
+        case unblacklistCategoryFromSettings(String)
+        case unhideAllChannelsFromSettings
+        case unblacklistAllCategoriesFromSettings
     }
 
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.purchases) var purchases
     @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
+    @Dependency(\.parentalControlClient) var parentalControlClient
 
     public init() {}
 
@@ -181,6 +205,10 @@ public struct SettingsFeature {
                 // PiP & Background Playback (Madde #18)
                 state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
                 state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
+
+                // Hidden Content Counts (Madde #19)
+                state.hiddenChannelsCount = parentalControlClient.hiddenChannelIDs().count
+                state.blacklistedCategoriesCount = parentalControlClient.blacklistedCategoryIDs().count
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -482,6 +510,98 @@ public struct SettingsFeature {
                 return .none
 
             case .traktAction:
+                return .none
+
+            // ── Hidden Content & Category Blacklist (Madde #19) ──
+            case .openHiddenContentManagement:
+                if parentalControlClient.isParentalControlEnabled() {
+                    #if os(tvOS)
+                        state.isUnlockingHiddenContent = true
+                        state.hiddenContentUnlockPIN = ""
+                        state.hiddenContentUnlockError = nil
+                        return .none
+                    #else
+                        return .run { send in
+                            let authSuccess = await parentalControlClient.authenticateWithBiometrics("Gizlenen kanalları yönetmek için doğrulayın")
+                            await send(.biometricUnlockResult(authSuccess))
+                        }
+                    #endif
+                } else {
+                    return .send(.loadHiddenContentData)
+                }
+
+            case let .biometricUnlockResult(success):
+                if success {
+                    return .send(.loadHiddenContentData)
+                } else {
+                    state.isUnlockingHiddenContent = true
+                    state.hiddenContentUnlockPIN = ""
+                    state.hiddenContentUnlockError = nil
+                    return .none
+                }
+
+            case .cancelHiddenContentUnlock:
+                state.isUnlockingHiddenContent = false
+                state.hiddenContentUnlockPIN = ""
+                state.hiddenContentUnlockError = nil
+                return .none
+
+            case let .hiddenContentUnlockPINChanged(input):
+                let filtered = input.filter(\.isNumber)
+                if filtered.count <= 4 {
+                    state.hiddenContentUnlockPIN = filtered
+                    if filtered.count == 4 {
+                        return .send(.submitHiddenContentUnlock)
+                    }
+                }
+                return .none
+
+            case .submitHiddenContentUnlock:
+                if parentalControlClient.verifyPIN(state.hiddenContentUnlockPIN) {
+                    state.isUnlockingHiddenContent = false
+                    state.hiddenContentUnlockPIN = ""
+                    state.hiddenContentUnlockError = nil
+                    return .send(.loadHiddenContentData)
+                } else {
+                    state.hiddenContentUnlockError = AppStrings.Errors.incorrectPIN
+                    state.hiddenContentUnlockPIN = ""
+                    return .none
+                }
+
+            case .loadHiddenContentData:
+                state.hiddenChannelsList = parentalControlClient.fetchHiddenChannels()
+                state.blacklistedCategoriesList = parentalControlClient.fetchBlacklistedCategories()
+                state.hiddenChannelsCount = state.hiddenChannelsList.count
+                state.blacklistedCategoriesCount = state.blacklistedCategoriesList.count
+                state.isShowingHiddenContentSheet = true
+                return .none
+
+            case .closeHiddenContentManagement:
+                state.isShowingHiddenContentSheet = false
+                return .none
+
+            case let .unhideChannelFromSettings(id):
+                parentalControlClient.unhideChannel(id)
+                state.hiddenChannelsList.removeAll { $0.id == id }
+                state.hiddenChannelsCount = state.hiddenChannelsList.count
+                return .none
+
+            case let .unblacklistCategoryFromSettings(id):
+                parentalControlClient.unblacklistCategory(id)
+                state.blacklistedCategoriesList.removeAll { $0.id == id }
+                state.blacklistedCategoriesCount = state.blacklistedCategoriesList.count
+                return .none
+
+            case .unhideAllChannelsFromSettings:
+                parentalControlClient.unhideAllChannels()
+                state.hiddenChannelsList.removeAll()
+                state.hiddenChannelsCount = 0
+                return .none
+
+            case .unblacklistAllCategoriesFromSettings:
+                parentalControlClient.unblacklistAllCategories()
+                state.blacklistedCategoriesList.removeAll()
+                state.blacklistedCategoriesCount = 0
                 return .none
             }
         }

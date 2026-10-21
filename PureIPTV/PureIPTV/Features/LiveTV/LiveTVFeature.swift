@@ -82,18 +82,18 @@ public struct LiveTVFeature {
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.hapticClient) var hapticClient
+    @Dependency(\.parentalControlClient) var parentalControlClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
+        let parentalControlClient = parentalControlClient
 
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
-                if let savedHidden = UserDefaults.standard.stringArray(forKey: "PureIPTV.hiddenChannelIDs") {
-                    state.hiddenChannelIDs = Set(savedHidden)
-                }
+                state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
 
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("live")) ?? []
@@ -315,16 +315,15 @@ public struct LiveTVFeature {
 
             case let .hideChannel(channel):
                 state.hiddenChannelIDs.insert(channel.id)
-                let hiddenIDs = Array(state.hiddenChannelIDs)
                 return .run { _ in
-                    UserDefaults.standard.set(hiddenIDs, forKey: "PureIPTV.hiddenChannelIDs")
+                    parentalControlClient.hideChannel(channel.id, channel.title)
                     await hapticClient.notification(.warning)
                 }
 
             case .unhideAllChannels:
                 state.hiddenChannelIDs.removeAll()
                 return .run { _ in
-                    UserDefaults.standard.removeObject(forKey: "PureIPTV.hiddenChannelIDs")
+                    parentalControlClient.unhideAllChannels()
                     await hapticClient.notification(.success)
                 }
 

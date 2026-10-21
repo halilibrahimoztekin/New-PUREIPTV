@@ -685,6 +685,18 @@ public struct PlayerSidebarDrawer: View {
         .buttonStyle(.plain)
         #endif
         .focused($focusedItemID, equals: item.id)
+        .contextMenu {
+            Button(role: .destructive) {
+                #if !os(tvOS)
+                    HapticManager.shared.trigger(.warning)
+                #endif
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    store.send(.hideChannel(id: item.id, title: item.title))
+                }
+            } label: {
+                Label("Kanalı Gizle", systemImage: "eye.slash.fill")
+            }
+        }
     }
 
     // MARK: - Channel Logo
@@ -793,7 +805,7 @@ public struct PlayerSidebarDrawer: View {
     }
 
     private var filteredChannels: [PlayerFeature.PlayableItem] {
-        let baseList: [PlayerFeature.PlayableItem] = switch selectedFilter {
+        let rawList: [PlayerFeature.PlayableItem] = switch selectedFilter {
         case .all:
             store.playlist ?? [store.item]
         case .history:
@@ -802,6 +814,12 @@ public struct PlayerSidebarDrawer: View {
             (store.playlist ?? [store.item]).filter {
                 selectedFilter.matches(title: $0.title, categoryID: $0.categoryID)
             }
+        }
+
+        // Filter out hidden channels and blacklisted categories (Madde #19)
+        let baseList = rawList.filter {
+            !store.hiddenChannelIDs.contains($0.id) &&
+                !store.blacklistedCategoryIDs.contains($0.categoryID ?? "")
         }
 
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)

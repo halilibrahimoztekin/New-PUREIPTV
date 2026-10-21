@@ -114,16 +114,46 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `PiPClient`, `PlayerFeature` PiP state actions (`togglePiP`, `onPiPStatusChanged`).
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 5 birim testi sıfır hata ile tamamlandı).
 
-### 19. [IN_PROGRESS] Channel Hide & Category Blacklist PIN Protection System
+### 19. [DONE] Channel Hide & Category Blacklist PIN Protection System
 - **Açıklama:** İstenmeyen kategorileri veya yetişkin kanallarını çalma listelerinden tamamen gizleyen, ebeveyn denetimi (Parental Control PIN) ile korunan ve liste gezintisini tertemiz tutan gizleme/kilit motoru.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `ParentalControlClient`, `HiddenChannelsDatabase`, `SettingsFeature`.
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 3 birim testi sıfır hata ile tamamlandı).
 
-### 20. [PENDING] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
+### 20. [IN_PROGRESS] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
 - **Açıklama:** Yayının video akışında HDR10, HLG, Dolby Vision veya SDR renk uzayı ve pik parlaklık bilgisini algılayıp oynatıcı açılışında ve OSD bilgi kartında sinematik altın/mor rozetle gösteren renk uzayı algılayıcı HUD'ı.
 - **Platformlar:** tvOS, iOS (Display Gamut & Dynamic Range detection).
 - **TCA & Mimari:** `ColorSpaceDetector`, `PlayerFeature.State.videoDynamicRange`, `ChannelInfoOSDView`.
+- **Durum:** `[IN_PROGRESS]`
+
+### 21. [PENDING] Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching)
+- **Açıklama:** Canlı spor (50fps/60fps) veya sinema filmlerinde (24fps) micro-stutter ve judder'ı önlemek için Apple TV ve iOS ProMotion ekran yenileme hızını akışın orijinal kare hızına (FPS) ve dinamik aralığına göre otomatik eşleyen sinematik görüntü motoru.
+- **Platformlar:** tvOS (`AVDisplayManager`, mode switching), iOS (`CADisplayLink`, ProMotion 120Hz adaptif kare hızı).
+- **TCA & Mimari:** `DisplayModeClient`, `PlayerFeature` FPS detection & auto refresh-rate match effect.
+- **Durum:** `[PENDING]`
+
+### 22. [PENDING] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
+- **Açıklama:** Kullanıcı Apple TV ana ekranında PureIPTV ikonunun üzerindeyken açılan üst vitrinde (Top Shelf) en sevilen kanalları, son izlenenleri ve yarım kalan VOD filmleri dinamik afiş ve doğrudan oynatma bağlantısıyla sunan yerel tvOS uzantısı.
+- **Platformlar:** tvOS (`TVTopShelfProvider`, `TVTopShelfCarouselContent`).
+- **TCA & Mimari:** `TopShelfService`, App Group Shared UserDefaults / CoreData paylaşımı.
+- **Durum:** `[PENDING]`
+
+### 23. [PENDING] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
+- **Açıklama:** IPTV sağlayıcısının EPG'si eksik veya hatalı saat diliminde olduğunda harici XMLTV/GZ URL ekleme, kanal bazında EPG ID eşleştirme ve +/- 12 saate kadar zaman kaydırma (time-shift offset) imkanı sağlayan gelişmiş EPG motoru.
+- **Platformlar:** iOS, tvOS.
+- **TCA & Mimari:** `EPGManager`, `CustomEPGMappingClient`, `SettingsFeature`.
+- **Durum:** `[PENDING]`
+
+### 24. [PENDING] iCloud Cross-Device Sync Engine for Favorites, Hidden Channels & Watch Progress
+- **Açıklama:** Apple TV, iPhone, iPad ve Mac arasında favori kanalları, gizlenen kanalları, VOD izleme kaldığı yeri (resume point) ve kanal sıralama tercihlerini iCloud KVS (NSUbiquitousKeyValueStore) ile kesintisiz ve arka planda senkronize eden çoklu cihaz motoru.
+- **Platformlar:** iOS, tvOS, iPadOS, macOS.
+- **TCA & Mimari:** `CloudSyncClient`, `NSUbiquitousKeyValueStore` background notification sync.
+- **Durum:** `[PENDING]`
+
+### 25. [PENDING] Live EPG Focus Mini-Video Preview PIP in Channel Grid
+- **Açıklama:** EPG rehberinde veya kanal listesinde gezinirken Siri Remote ile bir kanalın üzerine gelindiğinde (focus), ana yayını kesmeden sağ üst köşede küçük bir canlı önizleme penceresinde kanalın anlık canlı akışını sessizce başlatan UHF/TiviMate tarzı hızlı kanal gözetleme motoru.
+- **Platformlar:** tvOS (Siri Remote Focus debounce, secondary mini player layer), iPadOS.
+- **TCA & Mimari:** `PreviewPlayerClient`, `EPGFeature` debounce focus preview effect.
 - **Durum:** `[PENDING]`
 
 ---
@@ -240,4 +270,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - tvOS için `PlayerView+tvOS.swift` alt dock çubuğuna Siri Remote Focus Engine uyumlu PiP / MiniPlayer butonu eklendi.
   - `SettingsFeature.swift` ve `SettingsView.swift` içine "Resim İçinde Resim (PiP) & Arka Plan" ayar kartı, otomatik PiP anahtarı ve oynatma modu seçici menüsü eklendi.
   - 5 adet birim testi (`PiPBackgroundEngineTests.swift`) yazılarak test edildi; iOS Simulator ve tvOS Simulator derlemeleri ile birim testleri sıfır hata ile tamamlandı.
+- **#19 Channel Hide & Category Blacklist PIN Protection System:**
+  - `ParentalControlClient.swift` ve `HiddenItemDTO` (id, title, type: .channel/.category, hiddenAt) modelleri oluşturuldu: Gizli kanal ve kara liste kategori yönetimi, PIN doğrulama/kaydetme, yetişkin anahtar kelime tespiti, Face ID / Touch ID biyometrik doğrulama ve geriye dönük uyumlu UserDefaults/Keychain kalıcılığı sağlandı.
+  - `PlayerFeature.swift` durumuna `hiddenChannelIDs` ve `blacklistedCategoryIDs` eklendi; kanal gizleme (`hideChannel`), gizlilik tercihlerini yükleme ve oynatılmakta olan kanal gizlendiğinde listedeki bir sonraki uygun kanala otomatik atlama lojiği kuruldu.
+  - `PlayerSidebarDrawer.swift` kanal listesinde gizlenen kanalları ve kilitli kategorileri filtreleyecek şekilde güncellendi; her kanal satırına "Kanalı Gizle" (`eye.slash.fill`) context menu eylemi eklendi.
+  - `LiveTVFeature.swift` ve `SearchFeature.swift` arama motoru ve canlı liste görünümleri gizli kanal ve kategorileri tüm sonuçlardan filtreleyecek şekilde `parentalControlClient` ile güçlendirildi.
+  - `SettingsFeature.swift` içine gizli içerik yönetimi açma/kapama, biyometrik kilit açma, 4 haneli PIN modalı ve tek tek/toplu görünür yapma aksiyonları entegre edildi.
+  - `HiddenContentManagementView.swift` Obsidian cam estetiğinde (`#0C0C10`), sekmeli yapı ("Gizlenen Kanallar" & "Kara Liste Kategoriler"), tvOS Siri Remote Focus Engine uyumlu PIN klavyesi ve iOS SecureField ile tasarlandı.
+  - `SettingsView.swift` Güvenlik bölümüne "Gizlenen Kanallar & Kategoriler" yönetim satırı ve dinamik sayaç rozeti eklendi.
+  - 3 adet kapsamlı TCA birim testi (`ParentalControlEngineTests.swift`) yazıldı; hem iOS hem tvOS platformlarında sıfır hata ile derlendi ve doğrulandı.
+
 

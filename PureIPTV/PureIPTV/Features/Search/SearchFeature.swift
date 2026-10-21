@@ -219,6 +219,7 @@ public struct SearchFeature: Sendable {
     @Dependency(\.continuousClock) var clock
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.parentalControlClient) var parentalControlClient
 
     public init() {}
 
@@ -226,6 +227,7 @@ public struct SearchFeature: Sendable {
         let iptvClient = iptvClient
         let playlistRepository = playlistRepository
         let settingsClient = settingsClient
+        let parentalControlClient = parentalControlClient
 
         Reduce { state, action in
             switch action {
@@ -320,9 +322,23 @@ public struct SearchFeature: Sendable {
             case let .loadAllDataResponse(.success(data)):
                 state.isLoading = false
                 state.hasLoaded = true
+                let hiddenIDs = parentalControlClient.hiddenChannelIDs()
+                let blacklistedCats = parentalControlClient.blacklistedCategoryIDs()
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
-                state.allChannels = hideAdult ? data.channels.filter { !isAdult($0.title) } : data.channels
+
+                state.allChannels = data.channels.filter { ch in
+                    if hiddenIDs.contains(ch.id) {
+                        return false
+                    }
+                    if blacklistedCats.contains(ch.categoryID) {
+                        return false
+                    }
+                    if hideAdult, isAdult(ch.title) {
+                        return false
+                    }
+                    return true
+                }
                 state.allVODs = hideAdult ? data.vods.filter { !isAdult($0.title) } : data.vods
                 state.allSeries = hideAdult ? data.series.filter { !isAdult($0.title) } : data.series
 
@@ -349,6 +365,8 @@ public struct SearchFeature: Sendable {
                 return .none
 
             case let .loadPlaylistsDataResponse(list):
+                let hiddenIDs = parentalControlClient.hiddenChannelIDs()
+                let blacklistedCats = parentalControlClient.blacklistedCategoryIDs()
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
 
@@ -357,7 +375,18 @@ public struct SearchFeature: Sendable {
                 var allIndexedSe: [GlobalSearchResultItem] = []
 
                 for item in list {
-                    let chs = hideAdult ? item.channels.filter { !isAdult($0.title) } : item.channels
+                    let chs = item.channels.filter { ch in
+                        if hiddenIDs.contains(ch.id) {
+                            return false
+                        }
+                        if blacklistedCats.contains(ch.categoryID) {
+                            return false
+                        }
+                        if hideAdult, isAdult(ch.title) {
+                            return false
+                        }
+                        return true
+                    }
                     let vos = hideAdult ? item.vods.filter { !isAdult($0.title) } : item.vods
                     let ses = hideAdult ? item.series.filter { !isAdult($0.title) } : item.series
 
