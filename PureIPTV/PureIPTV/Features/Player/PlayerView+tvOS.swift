@@ -966,6 +966,17 @@
                     }
                     .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
+                    // Picture-in-Picture / Mini-Player Toggle (Madde #18)
+                    Button {
+                        onInteraction()
+                        store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                    } label: {
+                        Image(systemName: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 24))
+                            .foregroundStyle(store.isPiPActive || store.isMinimized ? Color(hex: "#00D2FF") : .white)
+                    }
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
+
                     // Nerd Stats Technical Diagnostics Button (Madde #33)
                     Button {
                         onInteraction()

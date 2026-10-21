@@ -108,17 +108,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `TraktClient`, `TraktFeature`, `PlayerFeature` playback progress scrobble effect, `KeychainManager`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 5 birim testi sıfır hata ile tamamlandı).
 
-### 18. [IN_PROGRESS] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
+### 18. [DONE] Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit
 - **Açıklama:** Oynatıcıdan ana menüye veya diğer uygulamalara geçildiğinde yayını kesintiye uğratmadan iOS ve tvOS sistem PiP penceresine aktaran veya arka planda sadece ses dinleme (background audio playback) modunu akıllıca yöneten motor.
 - **Platformlar:** iOS, tvOS (AVPictureInPictureController, AudioSession background modes).
 - **TCA & Mimari:** `PiPClient`, `PlayerFeature` PiP state actions (`togglePiP`, `onPiPStatusChanged`).
-- **Durum:** `[IN_PROGRESS]`
+- **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 5 birim testi sıfır hata ile tamamlandı).
 
-### 19. [PENDING] Channel Hide & Category Blacklist PIN Protection System
+### 19. [IN_PROGRESS] Channel Hide & Category Blacklist PIN Protection System
 - **Açıklama:** İstenmeyen kategorileri veya yetişkin kanallarını çalma listelerinden tamamen gizleyen, ebeveyn denetimi (Parental Control PIN) ile korunan ve liste gezintisini tertemiz tutan gizleme/kilit motoru.
 - **Platformlar:** iOS, tvOS.
 - **TCA & Mimari:** `ParentalControlClient`, `HiddenChannelsDatabase`, `SettingsFeature`.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 20. [PENDING] HDR, Dolby Vision & SDR Dynamic Range Indicator HUD
 - **Açıklama:** Yayının video akışında HDR10, HLG, Dolby Vision veya SDR renk uzayı ve pik parlaklık bilgisini algılayıp oynatıcı açılışında ve OSD bilgi kartında sinematik altın/mor rozetle gösteren renk uzayı algılayıcı HUD'ı.
@@ -231,4 +231,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `PlayerFeature.swift` VOD ve dizi oynatımlarında >=10s izlemede otomatik scrobble başlatma, duraklatmada senkronize etme ve >=%80 izlemede "İzlendi" olarak işaretleme etkileriyle donatıldı; HUD tostu tetikleyicileri eklendi.
   - `SettingsFeature.swift` ve `SettingsView.swift` içine "Trakt.tv Senkronizasyonu" yönetim kartı, bağlı hesap profili, izleme listesi bağlantısı ve giriş/çıkış modalı eklendi.
   - 5 adet birim testi (`TraktSyncEngineTests.swift`) yazıldı; TestClock ve scheduler entegrasyonu sağlandı; iOS ve tvOS derlemeleri ile testleri 0 hata ile tamamlandı.
+- **#18 Native Picture-in-Picture (PiP) Background Audio & Auto-PiP on Exit:**
+  - `PiPClient.swift` TCA bağımlılık servisi ve `BackgroundPlaybackMode` (`.pip`, `.audioOnly`, `.disabled`) enum modeli oluşturuldu.
+  - `AVPictureInPictureController.isPictureInPictureSupported()` entegrasyonu sağlandı; UserDefaults üzerinde `com.pureiptv.autoPiPEnabled` ve `com.pureiptv.backgroundPlaybackMode` kalıcılığı kuruldu.
+  - Arka planda kesintisiz ses için `AVAudioSession` category `.playback`, mode `.moviePlayback` ve options `[.allowAirPlay, .defaultToSpeaker]` konfigürasyonu tamamlandı.
+  - `PlayerFeature.swift` durum ve aksiyonlarına `isPiPSupported`, `isAutoPiPEnabled`, `backgroundPlaybackMode`, `isBackgroundAudioActive`, `shouldTriggerPiP`, `togglePiP`, `onPiPStatusChanged`, `appMovedToBackground`, `appMovedToForeground` entegre edildi.
+  - `PlayerView.swift` SwiftUI scenePhase lifecycle (`.background` / `.active`) dinleyicisi eklendi; arka plana geçildiğinde seçili moda göre PiP tetikleme, ses çalmaya devam etme veya duraklatma akışları bağlandı.
+  - tvOS için `PlayerView+tvOS.swift` alt dock çubuğuna Siri Remote Focus Engine uyumlu PiP / MiniPlayer butonu eklendi.
+  - `SettingsFeature.swift` ve `SettingsView.swift` içine "Resim İçinde Resim (PiP) & Arka Plan" ayar kartı, otomatik PiP anahtarı ve oynatma modu seçici menüsü eklendi.
+  - 5 adet birim testi (`PiPBackgroundEngineTests.swift`) yazılarak test edildi; iOS Simulator ve tvOS Simulator derlemeleri ile birim testleri sıfır hata ile tamamlandı.
 

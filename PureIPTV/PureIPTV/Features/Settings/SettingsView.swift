@@ -182,6 +182,27 @@ public struct SettingsView: View {
                 ))
             }
 
+            Section(header: Text("Resim İçinde Resim (PiP) & Arka Plan")) {
+                Toggle("Arka Plana Geçince Otomatik PiP", isOn: Binding(
+                    get: { store.isAutoPiPEnabled },
+                    set: { store.send(.setAutoPiPEnabled($0)) }
+                ))
+
+                Picker("Arka Planda Oynatma Modu", selection: Binding(
+                    get: { store.backgroundPlaybackMode },
+                    set: { store.send(.setBackgroundPlaybackMode($0)) }
+                )) {
+                    ForEach(BackgroundPlaybackMode.allCases) { mode in
+                        Label(mode.title, systemImage: mode.icon)
+                            .tag(mode)
+                    }
+                }
+
+                Text(store.backgroundPlaybackMode.descriptionText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section(header: Text(AppStrings.Settings.audioAndSubtitleSettings)) {
                 Picker(AppStrings.Settings.defaultAudioLanguage, selection: Binding(
                     get: { store.preferredAudioLanguage },

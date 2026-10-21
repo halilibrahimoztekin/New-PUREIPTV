@@ -59,10 +59,32 @@ public struct PlayerView: View {
         }
         #if os(iOS)
         .onChange(of: scenePhase) { _, newPhase in
-            // Uygulama arka plana geçince PiP otomatik başlat
-            if newPhase == .background, pipController?.isPossible == true, store.playerState == .playing {
-                store.send(.pipStarted)
-                _ = pipController?.start()
+            switch newPhase {
+            case .background:
+                store.send(.appMovedToBackground)
+                if store.backgroundPlaybackMode == .pip,
+                   store.isAutoPiPEnabled,
+                   pipController?.isPossible == true,
+                   store.playerState == .playing
+                {
+                    store.send(.pipStarted)
+                    _ = pipController?.start()
+                }
+            case .active:
+                store.send(.appMovedToForeground)
+            default:
+                break
+            }
+        }
+        .onChange(of: store.shouldTriggerPiP) { _, shouldTrigger in
+            if shouldTrigger {
+                store.send(.resetPiPTrigger)
+                if store.isPiPActive {
+                    pipController?.stop()
+                } else if pipController?.isPossible == true {
+                    store.send(.pipStarted)
+                    _ = pipController?.start()
+                }
             }
         }
         .task(id: ObjectIdentifier(pipController as AnyObject? ?? NSObject())) {
@@ -72,7 +94,9 @@ public struct PlayerView: View {
                 switch event {
                 case .willStart:
                     store.send(.pipStarted)
+                    store.send(.onPiPStatusChanged(isActive: true))
                 case let .didStop(reason):
+                    store.send(.onPiPStatusChanged(isActive: false))
                     // Kullanıcı "Geri Dön" tıkladıysa full-screen'e restore et
                     if reason == .restoreRequested {
                         store.send(.pipRestoreUI)
@@ -82,6 +106,13 @@ public struct PlayerView: View {
                 default:
                     break
                 }
+            }
+        }
+        #elseif os(tvOS)
+        .onChange(of: store.shouldTriggerPiP) { _, shouldTrigger in
+            if shouldTrigger {
+                store.send(.resetPiPTrigger)
+                store.send(.minimizeTapped)
             }
         }
         #endif

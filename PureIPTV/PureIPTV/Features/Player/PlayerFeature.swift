@@ -127,8 +127,13 @@ public struct PlayerFeature {
         public var brightness: Double = 1.0
         public var gestureFeedback: String?
 
-        /// PiP
+        /// PiP & Background Playback Engine (Madde #18)
         public var isPiPActive: Bool = false
+        public var isPiPSupported: Bool = true
+        public var isAutoPiPEnabled: Bool = true
+        public var backgroundPlaybackMode: BackgroundPlaybackMode = .pip
+        public var isBackgroundAudioActive: Bool = false
+        public var shouldTriggerPiP: Bool = false
 
         /// Playback Rate (Madde #43)
         public var playbackRate: Float = 1.0
@@ -448,7 +453,14 @@ public struct PlayerFeature {
         case closeTapped
         case delegate(Delegate)
 
-        // PiP
+        // PiP & Background Playback Engine (Madde #18)
+        case togglePiP
+        case onPiPStatusChanged(isActive: Bool)
+        case setAutoPiPEnabled(Bool)
+        case setBackgroundPlaybackMode(BackgroundPlaybackMode)
+        case appMovedToBackground
+        case appMovedToForeground
+        case resetPiPTrigger
         case pipStarted
         case pipStopped
         case pipRestoreUI
@@ -494,6 +506,7 @@ public struct PlayerFeature {
     @Dependency(\.recentChannelsClient) var recentChannelsClient
     @Dependency(\.streamHealthClient) var streamHealthClient
     @Dependency(\.traktClient) var traktClient
+    @Dependency(\.pipClient) var pipClient
 
     public init() {}
 
@@ -504,19 +517,23 @@ public struct PlayerFeature {
         let recentChannelsClient = recentChannelsClient
         let streamHealthClient = streamHealthClient
         let traktClient = traktClient
+        let pipClient = pipClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
             state.isUserPaused = false
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
             state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
+            state.isPiPSupported = pipClient.isPiPSupported()
+            state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
+            state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
 
             // Restore per-channel lip-sync and subtitle preferences
             if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
@@ -550,6 +567,9 @@ public struct PlayerFeature {
             } : .none
 
             return .merge(
+                .run { _ in
+                    try? await pipClient.configureAudioSession(true)
+                },
                 state.item.isLive ? .send(.showChannelOSD) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
@@ -2272,7 +2292,49 @@ public struct PlayerFeature {
         case .sharePlayTapped:
             return .none
 
-        // ── PiP ─────────────────────────────────────────────────
+        // ── PiP & Background Playback Engine (Madde #18) ───────────────────────────
+        case .togglePiP:
+            state.shouldTriggerPiP = true
+            return .none
+
+        case .resetPiPTrigger:
+            state.shouldTriggerPiP = false
+            return .none
+
+        case let .onPiPStatusChanged(isActive):
+            state.isPiPActive = isActive
+            return .none
+
+        case let .setAutoPiPEnabled(enabled):
+            state.isAutoPiPEnabled = enabled
+            return .run { _ in pipClient.setAutoPiPEnabled(enabled) }
+
+        case let .setBackgroundPlaybackMode(mode):
+            state.backgroundPlaybackMode = mode
+            return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
+
+        case .appMovedToBackground:
+            switch state.backgroundPlaybackMode {
+            case .pip:
+                if state.isAutoPiPEnabled, state.isPiPSupported, state.playerState == .playing {
+                    state.shouldTriggerPiP = true
+                }
+                return .none
+            case .audioOnly:
+                if state.playerState == .playing {
+                    state.isBackgroundAudioActive = true
+                }
+                return .none
+            case .disabled:
+                return .run { send in
+                    await send(.pause)
+                }
+            }
+
+        case .appMovedToForeground:
+            state.isBackgroundAudioActive = false
+            return .none
+
         case .pipStarted:
             state.isPiPActive = true
             return .none
@@ -2281,10 +2343,15 @@ public struct PlayerFeature {
             state.isPiPActive = false
             #if os(iOS)
                 if UIApplication.shared.applicationState == .background {
-                    return .run { send in
-                        try? await playerClient.stop()
-                        await playerClient.release()
-                        await send(.delegate(.didClose))
+                    if state.backgroundPlaybackMode == .audioOnly {
+                        state.isBackgroundAudioActive = true
+                        return .none
+                    } else {
+                        return .run { send in
+                            try? await playerClient.stop()
+                            await playerClient.release()
+                            await send(.delegate(.didClose))
+                        }
                     }
                 } else {
                     return .none

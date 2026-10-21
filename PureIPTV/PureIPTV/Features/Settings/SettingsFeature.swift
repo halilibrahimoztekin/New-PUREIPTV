@@ -41,6 +41,10 @@ public struct SettingsFeature {
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
 
+        // Picture-in-Picture & Background Audio (Madde #18)
+        public var isAutoPiPEnabled: Bool = true
+        public var backgroundPlaybackMode: BackgroundPlaybackMode = .pip
+
         // Audio & Subtitle Language Settings (Madde #34)
         public var preferredAudioLanguage: String = "tr"
         public var preferredSubtitleLanguage: String = "off"
@@ -130,11 +134,16 @@ public struct SettingsFeature {
         case traktAction(TraktFeature.Action)
         case toggleTraktAutoScrobble(Bool)
         case traktLogout
+
+        // PiP & Background Playback Actions (Madde #18)
+        case setAutoPiPEnabled(Bool)
+        case setBackgroundPlaybackMode(BackgroundPlaybackMode)
     }
 
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.purchases) var purchases
     @Dependency(\.traktClient) var traktClient
+    @Dependency(\.pipClient) var pipClient
 
     public init() {}
 
@@ -168,6 +177,10 @@ public struct SettingsFeature {
                 state.isTraktAuthenticated = traktClient.isAuthenticated()
                 state.traktUsername = traktClient.currentUser()?.username
                 state.isTraktAutoScrobbleEnabled = traktClient.isAutoScrobbleEnabled()
+
+                // PiP & Background Playback (Madde #18)
+                state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
+                state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -326,6 +339,14 @@ public struct SettingsFeature {
                 state.isComplianceDemoMode = enabled
                 ComplianceModeManager.shared.isComplianceModeActive = enabled
                 return .none
+
+            case let .setAutoPiPEnabled(enabled):
+                state.isAutoPiPEnabled = enabled
+                return .run { _ in pipClient.setAutoPiPEnabled(enabled) }
+
+            case let .setBackgroundPlaybackMode(mode):
+                state.backgroundPlaybackMode = mode
+                return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
 
             case .calculateCacheSize:
                 return .run { send in
