@@ -126,17 +126,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **TCA & Mimari:** `ColorSpaceDetector`, `PlayerFeature.State.videoDynamicRange`, `ChannelInfoOSDView`.
 - **Durum:** `[DONE]` (PR Onaylandı, tvOS ve iOS derlemeleri ile 7 birim testi sıfır hata ile tamamlandı).
 
-### 21. [IN_PROGRESS] Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching)
+### 21. [DONE] Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching)
 - **Açıklama:** Canlı spor (50fps/60fps) veya sinema filmlerinde (24fps) micro-stutter ve judder'ı önlemek için Apple TV ve iOS ProMotion ekran yenileme hızını akışın orijinal kare hızına (FPS) ve dinamik aralığına göre otomatik eşleyen sinematik görüntü motoru.
 - **Platformlar:** tvOS (`AVDisplayManager`, mode switching), iOS (`CADisplayLink`, ProMotion 120Hz adaptif kare hızı).
-- **TCA & Mimari:** `DisplayModeClient`, `PlayerFeature` FPS detection & auto refresh-rate match effect.
-- **Durum:** `[IN_PROGRESS]`
+- **TCA & Mimari:** `DisplayModeClient`, `PlayerFeature` FPS detection & auto refresh-rate match effect, `AFRToastView.swift`, `SettingsFeature`.
+- **Durum:** `[DONE]` (PR Onaylandı, 8 birim testi geçti, tvOS ve iOS derlemeleri sıfır hata ile tamamlandı).
 
-### 22. [PENDING] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
+### 22. [IN_PROGRESS] Apple TV Top Shelf Content Provider & Quick-Launch Carousel
 - **Açıklama:** Kullanıcı Apple TV ana ekranında PureIPTV ikonunun üzerindeyken açılan üst vitrinde (Top Shelf) en sevilen kanalları, son izlenenleri ve yarım kalan VOD filmleri dinamik afiş ve doğrudan oynatma bağlantısıyla sunan yerel tvOS uzantısı.
 - **Platformlar:** tvOS (`TVTopShelfProvider`, `TVTopShelfCarouselContent`).
 - **TCA & Mimari:** `TopShelfService`, App Group Shared UserDefaults / CoreData paylaşımı.
-- **Durum:** `[PENDING]`
+- **Durum:** `[IN_PROGRESS]`
 
 ### 23. [PENDING] Custom EPG XMLTV Source Mapping & Channel Time-Shift Offset Engine
 - **Açıklama:** IPTV sağlayıcısının EPG'si eksik veya hatalı saat diliminde olduğunda harici XMLTV/GZ URL ekleme, kanal bazında EPG ID eşleştirme ve +/- 12 saate kadar zaman kaydırma (time-shift offset) imkanı sağlayan gelişmiş EPG motoru.
@@ -285,7 +285,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `ChannelInfoOSDView.swift` OSD bilgi kartı zenginleştirildi: Çözünürlük ve HEVC rozetlerinin hemen yanına akıllı `dynamicRange` rozeti eklendi; geriye dönük uyumlu `dynamicRange` desteği sağlandı.
   - `PlayerFeature.swift` durumuna `videoDynamicRange`, `dynamicRangeInfo` ve `isDynamicRangeHUDVisible` durumları eklendi; başlatıcıda otomatik tespit, `selectChannel` geçişlerinde yeni kanal için renk uzayı tespiti, HDR yayın açılışlarında 3.5 saniye otomatik gösterim ve zamanlayıcı iptal mekanizması kuruldu.
   - `PlayerView+iOS.swift` ve `PlayerView+tvOS.swift` oynatıcı arayüzlerine dinamik HUD kapsülü ve OSD entegrasyonu sağlandı.
-  - 7 adet kapsamlı TCA birim testi (`DynamicRangeEngineTests.swift`) yazıldı; hem iOS Simulator hem tvOS Simulator derlemeleri ile testleri 0 hata ile tamamlandı.
+- **#21 Auto Frame Rate & Match Dynamic Range Engine (AFR 24/50/60fps Judder-Free Display Switching):**
+  - `DisplayModeClient.swift` TCA servis istemcisi, `FrameRate` enum'ı (`.fps23_976`, `.fps24`, `.fps25`, `.fps29_97`, `.fps30`, `.fps50`, `.fps59_94`, `.fps60`, `.fps120`) ve `DisplayMatchResult` veri modelleri geliştirildi: 24Hz sinematik film, 50Hz Avrupa/TR canlı yayın ve 60/120Hz yüksek akıcılık modları desteklendi.
+  - `FrameRateDetector` regex motoru geliştirildi: Yayın başlığı, URL ve içerik türünden (VOD vs Live) 50fps, 60fps, 24fps/24p, 25fps ve 30fps yayınları ultra hızlı ve sıfır gecikmeyle tespit eden akıllı analiz ve judder-free frekans haritalama lojiği kuruldu.
+  - `AFRToastView.swift` Obsidian cam estetiğinde (`#0C0C10`, `.ultraThinMaterial`) sinematik toast kapsülü tasarlandı: Eşlenen yenileme frekansı rozeti (24 Hz, 50 Hz, 60 Hz), "Judder-Free • Kare Hızı Eşlendi" bildirim çipi, içerik türüne göre renk gradyanı (Sinematik 24p için Apple Mavisi, Canlı TV için Canlı Yeşil, 60/120Hz için Neon Mor) ve HDR/DV renk uzayı rozeti entegre edildi.
+  - `PlayerFeature.swift` durum ve aksiyonlarına `isAFREnabled`, `isMatchDynamicRangeEnabled`, `currentFrameRate`, `afrMatchResult`, `isAFRToastVisible`, `matchDisplayMode`, `displayModeSwitched`, `showAFRToast`, `hideAFRToast` eklendi; başlatıcıda ve kanal değişimlerinde otomatik frekans tespiti ve ekran eşleme tetiklendi; oynatıcıdan çıkışta `resetDisplayMode` ve toast temizliği sağlandı.
+  - `PlayerView+iOS.swift` ve `PlayerView+tvOS.swift` oynatıcı arayüzlerine `AFRToastView` animasyonlu üst toast bildirim katmanı eklendi.
+  - `SettingsFeature.swift` ve `SettingsView.swift` içine "Ekran & Kare Hızı Eşleme (AFR)" ayar bölümü, otomatik kare hızı anahtarı ve dinamik aralık eşleme anahtarları entegre edildi.
+  - 8 adet kapsamlı birim testi (`AutoFrameRateEngineTests.swift`) yazıldı; hem iOS Simulator hem de tvOS Simulator platformlarında testler ve derleme sıfır hata ile başarıyla doğrulandı.
 
 
 

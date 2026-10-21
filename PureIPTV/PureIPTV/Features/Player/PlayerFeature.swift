@@ -28,6 +28,7 @@ public struct PlayerFeature {
         public static let dialerAutoSubmit = "PlayerFeature.dialerAutoSubmit"
         public static let traktScrobbleHUD = "PlayerFeature.traktScrobbleHUD"
         public static let dynamicRangeHUD = "PlayerFeature.dynamicRangeHUD"
+        public static let afrToast = "PlayerFeature.afrToast"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -250,6 +251,13 @@ public struct PlayerFeature {
         public var dynamicRangeInfo: DynamicRangeInfo?
         public var isDynamicRangeHUDVisible: Bool = false
 
+        /// Auto Frame Rate & Match Dynamic Range (Madde #21)
+        public var isAFREnabled: Bool = true
+        public var isMatchDynamicRangeEnabled: Bool = true
+        public var currentFrameRate: FrameRate?
+        public var afrMatchResult: DisplayMatchResult?
+        public var isAFRToastVisible: Bool = false
+
         /// Up Next Episode Auto-Play (Madde #48)
         public var isUpNextVisible: Bool = false
         public var upNextCountdownSeconds: Int = 15
@@ -316,6 +324,8 @@ public struct PlayerFeature {
             dynamicRangeInfo = drInfo
             videoDynamicRange = drInfo.range
             isDynamicRangeHUDVisible = drInfo.range.isHDR
+            let detectedFPS = FrameRateDetector.detect(title: item.title, urlString: item.streamURL.absoluteString, isLive: item.isLive)
+            currentFrameRate = detectedFPS
             if let startPos = item.startPosition, startPos > 0 {
                 position = min(1.0, max(0.0, startPos))
             }
@@ -519,6 +529,15 @@ public struct PlayerFeature {
         case showDynamicRangeHUD
         case hideDynamicRangeHUD
 
+        // Auto Frame Rate & Match Dynamic Range (Madde #21)
+        case loadAFRPreferences
+        case setAFREnabled(Bool)
+        case setMatchDynamicRangeEnabled(Bool)
+        case matchDisplayMode
+        case displayModeSwitched(DisplayMatchResult)
+        case showAFRToast(DisplayMatchResult)
+        case hideAFRToast
+
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
@@ -534,6 +553,7 @@ public struct PlayerFeature {
     @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
+    @Dependency(\.displayModeClient) var displayModeClient
 
     public init() {}
 
@@ -546,13 +566,14 @@ public struct PlayerFeature {
         let traktClient = traktClient
         let pipClient = pipClient
         let parentalControlClient = parentalControlClient
+        let displayModeClient = displayModeClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -564,6 +585,8 @@ public struct PlayerFeature {
             state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
             state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
             state.blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
+            state.isAFREnabled = displayModeClient.isAFREnabled()
+            state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
 
             // Restore per-channel lip-sync and subtitle preferences
             if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
@@ -605,6 +628,7 @@ public struct PlayerFeature {
                     try? await Task.sleep(nanoseconds: 3_500_000_000)
                     await send(.hideDynamicRangeHUD)
                 }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true) : .none,
+                state.isAFREnabled ? .send(.matchDisplayMode) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
                 recentEffect,
@@ -682,6 +706,11 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
+                .cancel(id: CancelID.dynamicRangeHUD),
+                .cancel(id: CancelID.afrToast),
+                .run { _ in
+                    await displayModeClient.resetDisplayMode()
+                },
                 .run { send in
                     #if os(iOS)
                         await MainActor.run {
@@ -1587,6 +1616,8 @@ public struct PlayerFeature {
             state.dynamicRangeInfo = drInfo
             state.videoDynamicRange = drInfo.range
             state.isDynamicRangeHUDVisible = drInfo.range.isHDR
+            let detectedFPS = FrameRateDetector.detect(title: newItem.title, urlString: newItem.streamURL.absoluteString, isLive: newItem.isLive)
+            state.currentFrameRate = detectedFPS
             state.zappingHUDItem = newItem
             state.isZappingHUDVisible = true
             state.isChannelOSDVisible = newItem.isLive
@@ -2525,6 +2556,57 @@ public struct PlayerFeature {
         case .hideDynamicRangeHUD:
             state.isDynamicRangeHUDVisible = false
             return .cancel(id: CancelID.dynamicRangeHUD)
+
+        // ── Auto Frame Rate & Match Dynamic Range (Madde #21) ──
+        case .loadAFRPreferences:
+            state.isAFREnabled = displayModeClient.isAFREnabled()
+            state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
+            return .none
+
+        case let .setAFREnabled(enabled):
+            state.isAFREnabled = enabled
+            displayModeClient.setAFREnabled(enabled)
+            return .none
+
+        case let .setMatchDynamicRangeEnabled(enabled):
+            state.isMatchDynamicRangeEnabled = enabled
+            displayModeClient.setMatchDynamicRangeEnabled(enabled)
+            return .none
+
+        case .matchDisplayMode:
+            guard state.isAFREnabled else { return .none }
+            let detectedFPS = state.currentFrameRate ?? FrameRateDetector.detect(
+                title: state.item.title,
+                urlString: state.item.streamURL.absoluteString,
+                isLive: state.item.isLive
+            )
+            state.currentFrameRate = detectedFPS
+            let dRange = state.videoDynamicRange ?? .sdr
+
+            return .run { [displayModeClient] send in
+                let result = await displayModeClient.switchDisplayMode(detectedFPS.rawValue, dRange)
+                await send(.displayModeSwitched(result))
+            }
+
+        case let .displayModeSwitched(result):
+            state.afrMatchResult = result
+            state.isAFRToastVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await send(.hideAFRToast)
+            }.cancellable(id: CancelID.afrToast, cancelInFlight: true)
+
+        case let .showAFRToast(result):
+            state.afrMatchResult = result
+            state.isAFRToastVisible = true
+            return .run { send in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await send(.hideAFRToast)
+            }.cancellable(id: CancelID.afrToast, cancelInFlight: true)
+
+        case .hideAFRToast:
+            state.isAFRToastVisible = false
+            return .cancel(id: CancelID.afrToast)
         }
     }
 

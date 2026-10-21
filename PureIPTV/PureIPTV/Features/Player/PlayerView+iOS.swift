@@ -873,6 +873,22 @@
                     .zIndex(96)
                 }
 
+                // Auto Frame Rate & Match Dynamic Range HUD Toast (Madde #21)
+                if store.isAFRToastVisible, let afrResult = store.afrMatchResult {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            AFRToastView(result: afrResult)
+                                .padding(.top, 40)
+                                .padding(.trailing, 20)
+                        }
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isAFRToastVisible)
+                    .zIndex(97)
+                }
+
                 // Mini EPG Overlay (Madde #15: Swipe Down / Up for Mini EPG)
                 if store.isEPGVisible {
                     ZStack(alignment: .bottom) {

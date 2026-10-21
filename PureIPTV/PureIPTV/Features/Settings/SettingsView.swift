@@ -205,6 +205,22 @@ public struct SettingsView: View {
                 ))
             }
 
+            Section(header: Text("Ekran & Kare Hızı Eşleme (AFR)")) {
+                Toggle("Otomatik Kare Hızı Eşleme (AFR)", isOn: Binding(
+                    get: { store.isAFREnabled },
+                    set: { store.send(.setAFREnabled($0)) }
+                ))
+
+                Toggle("Dinamik Aralık Eşleme (HDR / Dolby Vision)", isOn: Binding(
+                    get: { store.isMatchDynamicRangeEnabled },
+                    set: { store.send(.setMatchDynamicRangeEnabled($0)) }
+                ))
+
+                Text("İçeriğin orijinal kare hızına (24p sinematik, 50/60 Hz) ve HDR renk aralığına göre ekran yenileme hızını judder-free eşler.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section(header: Text("Resim İçinde Resim (PiP) & Arka Plan")) {
                 Toggle("Arka Plana Geçince Otomatik PiP", isOn: Binding(
                     get: { store.isAutoPiPEnabled },

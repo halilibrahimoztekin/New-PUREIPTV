@@ -54,6 +54,10 @@ public struct SettingsFeature {
         /// Frame Rate and Dynamic Range Matching (Madde #38)
         public var tvOSMatchContent: Bool = true
 
+        /// Auto Frame Rate & Match Dynamic Range (Madde #21)
+        public var isAFREnabled: Bool = true
+        public var isMatchDynamicRangeEnabled: Bool = true
+
         /// Buffer Profile (Madde #39)
         public var bufferProfile: BufferProfile = .balanced
 
@@ -123,6 +127,8 @@ public struct SettingsFeature {
         case setRememberMediaTrackPreferences(Bool)
         case setICloudSyncEnabled(Bool)
         case setTvOSMatchContent(Bool)
+        case setAFREnabled(Bool)
+        case setMatchDynamicRangeEnabled(Bool)
         case setBufferProfile(BufferProfile)
         case setComplianceDemoMode(Bool)
 
@@ -168,6 +174,7 @@ public struct SettingsFeature {
     @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
+    @Dependency(\.displayModeClient) var displayModeClient
 
     public init() {}
 
@@ -209,6 +216,10 @@ public struct SettingsFeature {
                 // Hidden Content Counts (Madde #19)
                 state.hiddenChannelsCount = parentalControlClient.hiddenChannelIDs().count
                 state.blacklistedCategoriesCount = parentalControlClient.blacklistedCategoryIDs().count
+
+                // Auto Frame Rate & Match Dynamic Range (Madde #21)
+                state.isAFREnabled = displayModeClient.isAFREnabled()
+                state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
 
                 return .merge(
                     .send(.calculateCacheSize),
@@ -356,6 +367,16 @@ public struct SettingsFeature {
             case let .setTvOSMatchContent(enabled):
                 state.tvOSMatchContent = enabled
                 UserDefaults.standard.set(enabled, forKey: "pureiptv_match_content")
+                return .none
+
+            case let .setAFREnabled(enabled):
+                state.isAFREnabled = enabled
+                displayModeClient.setAFREnabled(enabled)
+                return .none
+
+            case let .setMatchDynamicRangeEnabled(enabled):
+                state.isMatchDynamicRangeEnabled = enabled
+                displayModeClient.setMatchDynamicRangeEnabled(enabled)
                 return .none
 
             case let .setBufferProfile(profile):
