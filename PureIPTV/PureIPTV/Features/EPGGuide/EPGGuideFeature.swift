@@ -143,11 +143,7 @@ public struct EPGGuideFeature {
                     .run { [previewPlayerClient] _ in
                         await previewPlayerClient.stopPreview()
                     },
-                    .send(.delegate(.close)),
-                    .run { _ in
-                        @Dependency(\.dismiss) var dismiss
-                        await dismiss()
-                    }
+                    .send(.delegate(.close))
                 )
 
             case let .playTapped(channel):

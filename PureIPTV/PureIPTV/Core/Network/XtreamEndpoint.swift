@@ -11,6 +11,7 @@ public enum XtreamEndpoint {
     case getSeries(categoryID: String?)
     case getSeriesInfo(seriesID: String)
     case getShortEPG(streamID: String, limit: Int?)
+    case getEPGDataTable(streamID: String)
 
     public func url(with config: ServerConfig) throws -> URL {
         var components = URLComponents(url: config.baseURL.appendingPathComponent("player_api.php"), resolvingAgainstBaseURL: false)
@@ -56,6 +57,9 @@ public enum XtreamEndpoint {
             if let limit {
                 queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
             }
+        case let .getEPGDataTable(streamID):
+            queryItems.append(URLQueryItem(name: "action", value: "get_simple_data_table"))
+            queryItems.append(URLQueryItem(name: "stream_id", value: streamID))
         }
 
         components?.queryItems = queryItems

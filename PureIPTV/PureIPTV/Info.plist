@@ -30,5 +30,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>vlc</string>
+		<string>vlc-x-callback</string>
+		<string>infuse</string>
+		<string>outplayer</string>
+		<string>iina</string>
+	</array>
 </dict>
 </plist>

@@ -249,12 +249,36 @@ extension PlayerClient: DependencyKey {
                 let player = box.getPlayer()
                 return AsyncStream { continuation in
                     let task = Task {
+                        var lastEmittedTimeSecond: Int64 = -1
+                        var lastEmittedPosition: Double = -1.0
+                        var lastEmittedPositionDate = Date.distantPast
+
                         for await event in player.events {
-                            // Filter out high-frequency unused events that flood TCA
-                            if case .bufferingProgress = event {
+                            switch event {
+                            case .bufferingProgress:
                                 continue
+
+                            case let .timeChanged(time):
+                                let sec = time.components.seconds
+                                if sec == lastEmittedTimeSecond {
+                                    continue
+                                }
+                                lastEmittedTimeSecond = sec
+                                continuation.yield(event)
+
+                            case let .positionChanged(pos):
+                                let now = Date()
+                                // Yield if position moved by at least 0.5% or at least 1 second passed
+                                if abs(pos - lastEmittedPosition) < 0.005, now.timeIntervalSince(lastEmittedPositionDate) < 1.0 {
+                                    continue
+                                }
+                                lastEmittedPosition = pos
+                                lastEmittedPositionDate = now
+                                continuation.yield(event)
+
+                            default:
+                                continuation.yield(event)
                             }
-                            continuation.yield(event)
                         }
                     }
                     continuation.onTermination = { _ in

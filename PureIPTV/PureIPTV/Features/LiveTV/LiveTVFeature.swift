@@ -28,6 +28,13 @@ public struct LiveTVFeature {
         public var selectedChannelEPG: [EPGProgram] = []
         public var isLoadingChannelEPG: Bool = false
 
+        public enum TabMode: String, CaseIterable, Equatable, Sendable {
+            case channels = "Kanallar"
+            case epg = "Yayın Akışı (EPG)"
+        }
+
+        public var selectedTabMode: TabMode = .channels
+
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var epgGuide: EPGGuideFeature.State?
         @Presents public var epgTimeline: EPGTimelineFeature.State?
@@ -71,6 +78,7 @@ public struct LiveTVFeature {
         case multiView(PresentationAction<MultiViewFeature.Action>)
         case openMultiViewTapped
         case openEPGTimelineTapped
+        case setTabMode(State.TabMode)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -251,6 +259,9 @@ public struct LiveTVFeature {
             case let .channelsResponse(categoryID, .success(channels)):
                 state.isLoadingChannels = false
                 state.channelsByCategory[categoryID] = channels
+                if state.selectedTabMode == .epg, let epg = state.epgTimeline, epg.channels.isEmpty {
+                    state.epgTimeline?.channels = channels
+                }
                 return .none
 
             case let .channelsResponse(_, .failure(error)):
@@ -347,6 +358,7 @@ public struct LiveTVFeature {
                         selectedCategoryID: channel.categoryID,
                         favoriteIDs: state.favoriteIDs
                     )
+                    state.selectedTabMode = .epg
                 }
                 return .none
 
@@ -402,10 +414,14 @@ public struct LiveTVFeature {
                 return .none
 
             case .openEPGTimelineTapped:
-                if let config = state.config {
-                    let allLoadedChannels = Array(state.channelsByCategory.values.joined())
-                    let channelsToUse = allLoadedChannels.isEmpty ? state.currentChannels : allLoadedChannels
-                    if !channelsToUse.isEmpty {
+                return .send(.setTabMode(.epg))
+
+            case let .setTabMode(mode):
+                state.selectedTabMode = mode
+                if mode == .epg, state.epgTimeline == nil {
+                    if let config = state.config {
+                        let allLoadedChannels = Array(state.channelsByCategory.values.joined())
+                        let channelsToUse = allLoadedChannels.isEmpty ? state.currentChannels : allLoadedChannels
                         state.epgTimeline = EPGTimelineFeature.State(
                             config: config,
                             channels: channelsToUse,
@@ -415,14 +431,14 @@ public struct LiveTVFeature {
                         )
                     }
                 }
-                return .none
+                return .run { _ in await hapticClient.impact(.light) }
 
             case .epgTimeline(.presented(.delegate(.close))):
                 state.epgTimeline = nil
+                state.selectedTabMode = .channels
                 return .none
 
             case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
-                state.epgTimeline = nil
                 return .send(.channelSelected(channel))
 
             case .epgTimeline:

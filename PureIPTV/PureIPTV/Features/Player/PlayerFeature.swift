@@ -2349,6 +2349,7 @@ public struct PlayerFeature {
 
                     if !isPiPActive {
                         try? await playerClient.stop()
+                        await playerClient.release()
                     }
 
                     await MainActor.run {
@@ -2380,7 +2381,15 @@ public struct PlayerFeature {
             }
 
         case .sharePlayTapped:
-            return .none
+            let activity = PureIPTVSharePlayActivity(
+                itemID: state.item.id,
+                title: state.item.title,
+                streamURLString: state.item.streamURL.absoluteString,
+                type: state.item.isLive ? "live" : "vod"
+            )
+            return .run { _ in
+                _ = try? await activity.activate()
+            }
 
         // ── PiP & Background Playback Engine (Madde #18) ───────────────────────────
         case .togglePiP:

@@ -45,11 +45,8 @@
             .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
                 CategoryManagementView(store: store)
             }
-            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
+            .sheet(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
                 EPGGuideView_iOS(store: store)
-            }
-            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
-                EPGTimelineView(store: store)
             }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
@@ -74,42 +71,24 @@
 
                         Spacer()
 
-                        HStack(spacing: 12) {
+                        HStack(spacing: 10) {
                             Button {
-                                store.send(.epgGuideTapped)
-                            } label: {
-                                Image(systemName: "list.bullet.rectangle.portrait")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
-                            }
-
-                            Button {
+                                HapticManager.shared.trigger(.light)
                                 store.send(.openMultiViewTapped)
                             } label: {
                                 Image(systemName: "square.split.2x2.fill")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.9))
                                     .frame(width: 36, height: 36)
                                     .background(Circle().fill(Color(hex: "#1F1F23")))
                             }
 
                             Button {
-                                store.send(.openEPGTimelineTapped)
-                            } label: {
-                                Image(systemName: "calendar.day.timeline.left")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
-                            }
-
-                            Button {
+                                HapticManager.shared.trigger(.light)
                                 store.send(.editCategoriesTapped)
                             } label: {
                                 Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.9))
                                     .frame(width: 36, height: 36)
                                     .background(Circle().fill(Color(hex: "#1F1F23")))
@@ -118,22 +97,80 @@
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 6)
 
-                    // ── Category horizontal scroll ─────────────────────
-                    categoryBar
-                        .padding(.bottom, 12)
+                    // ── Mode Switcher (Kanallar / Yayın Akışı) ─────────
+                    tabModePicker
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
 
-                    // ── Channel grid ───────────────────────────────────
-                    if store.isLoadingCategories {
-                        loadingView
-                    } else if store.categories.isEmpty {
-                        emptyView
+                    if store.selectedTabMode == .channels {
+                        // ── Category horizontal scroll ─────────────────────
+                        categoryBar
+                            .padding(.bottom, 12)
+
+                        // ── Channel grid ───────────────────────────────────
+                        if store.isLoadingCategories {
+                            loadingView
+                        } else if store.categories.isEmpty {
+                            emptyView
+                        } else {
+                            channelGrid
+                        }
                     } else {
-                        channelGrid
+                        // ── Embedded EPG Timeline ───────────────────────────
+                        if let epgStore = store.scope(state: \.epgTimeline, action: \.epgTimeline.presented) {
+                            EPGTimelineView(store: epgStore)
+                        } else {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(Color(hex: "#0A84FF"))
+                                Text(AppStrings.Player.syncing)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.white.opacity(0.6))
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onAppear {
+                                store.send(.openEPGTimelineTapped)
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // MARK: – Mode Picker
+
+        private var tabModePicker: some View {
+            HStack(spacing: 4) {
+                ForEach(LiveTVFeature.State.TabMode.allCases, id: \.self) { mode in
+                    Button {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.setTabMode(mode))
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: mode == .channels ? "tv" : "calendar.day.timeline.left")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(mode.rawValue)
+                                .font(.system(size: 14, weight: store.selectedTabMode == mode ? .bold : .medium))
+                        }
+                        .foregroundColor(store.selectedTabMode == mode ? .white : Color(hex: "#C0C6D6").opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(store.selectedTabMode == mode ? Color(hex: "#0A84FF") : Color.clear)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(hex: "#1F1F23").opacity(0.8))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            )
         }
 
         // MARK: – Category Bar

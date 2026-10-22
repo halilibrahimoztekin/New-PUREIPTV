@@ -1,6 +1,7 @@
 import AVFoundation
 import ComposableArchitecture
 import FactoryKit
+import Kingfisher
 import SwiftData
 import SwiftUI
 import SwiftVLC
@@ -15,6 +16,28 @@ struct PureIPTVApp: App {
 
         // Initialize RevenueCat
         PurchasesClient.liveValue.configure("appl_bSAnxGvXpdPeSquSYsatWQrNwOG")
+
+        // Memory & Cache Optimization: Cap Kingfisher and URLCache to prevent unbounded memory growth
+        ImageCache.default.memoryStorage.config.totalCostLimit = 64 * 1024 * 1024 // 64MB max memory
+        ImageCache.default.memoryStorage.config.countLimit = 150
+        ImageCache.default.memoryStorage.config.expiration = .seconds(300)
+
+        URLCache.shared = URLCache(
+            memoryCapacity: 20 * 1024 * 1024, // 20MB in memory
+            diskCapacity: 100 * 1024 * 1024, // 100MB on disk
+            diskPath: "pureiptv_url_cache"
+        )
+
+        #if os(iOS)
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didReceiveMemoryWarningNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                ImageCache.default.clearMemoryCache()
+                URLCache.shared.removeAllCachedResponses()
+            }
+        #endif
 
         do {
             #if os(tvOS)

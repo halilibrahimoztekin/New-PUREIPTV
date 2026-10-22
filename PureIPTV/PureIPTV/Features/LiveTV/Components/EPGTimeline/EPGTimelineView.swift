@@ -688,7 +688,7 @@ public struct EPGTimelineView: View {
         .frame(width: totalTimelineWidth, alignment: .leading)
     }
 
-    // MARK: - Intelligent Fallback Program Resolving
+    // MARK: - Honest Program Resolving (No fabricated/fake data)
 
     private func resolvedPrograms(for channel: MediaModels.Item) -> [EPGProgram] {
         let calendar = Calendar.current
@@ -696,8 +696,17 @@ public struct EPGTimelineView: View {
         let now = store.currentTime
 
         guard let rawPrograms = store.epgData[channel.id], !rawPrograms.isEmpty else {
-            // Channel has no EPG data: Generate continuous intelligent broadcast blocks
-            return generateFallbackPrograms(for: channel, timelineStart: timelineStart, timelineEnd: timelineEnd, now: now)
+            // Channel has no EPG data from provider: Return honest "Yayın Akışı Yok"
+            return [
+                EPGProgram(
+                    id: "empty_\(channel.id)_\(Int(timelineStart.timeIntervalSince1970))",
+                    title: "\(channel.title) - Yayın Akışı Yok",
+                    description: "Bu kanal için IPTV sağlayıcısı tarafından yayın akışı programı iletilmemiştir.",
+                    startTime: timelineStart,
+                    endTime: timelineEnd,
+                    isPlayingNow: timelineStart <= now && timelineEnd > now
+                ),
+            ]
         }
 
         // Channel has EPG data: Sort by startTime and bridge any empty intervals > 10 mins
@@ -717,8 +726,8 @@ public struct EPGTimelineView: View {
                 let gapEnd = prog.startTime
                 let gapProg = EPGProgram(
                     id: "gap_\(channel.id)_\(Int(cursor.timeIntervalSince1970))",
-                    title: AppStrings.Player.preparingGuide,
-                    description: AppStrings.Player.epgFallbackDescription,
+                    title: "Program Bilgisi Yok",
+                    description: "Belirtilen saat aralığında yayın bilgisi bulunmuyor.",
                     startTime: cursor,
                     endTime: gapEnd,
                     isPlayingNow: cursor <= now && gapEnd > now
@@ -733,8 +742,8 @@ public struct EPGTimelineView: View {
         if timelineEnd.timeIntervalSince(cursor) > 600 {
             let gapProg = EPGProgram(
                 id: "gap_\(channel.id)_\(Int(cursor.timeIntervalSince1970))",
-                title: AppStrings.Player.automaticBroadcast,
-                description: AppStrings.Player.epgFallbackDescription,
+                title: "Program Bilgisi Yok",
+                description: "Yayın akışı bilgisi mevcut değil.",
                 startTime: cursor,
                 endTime: timelineEnd,
                 isPlayingNow: cursor <= now && timelineEnd > now
@@ -743,50 +752,6 @@ public struct EPGTimelineView: View {
         }
 
         return bridged
-    }
-
-    private func generateFallbackPrograms(
-        for channel: MediaModels.Item,
-        timelineStart: Date,
-        timelineEnd: Date,
-        now: Date
-    ) -> [EPGProgram] {
-        var fallbackList: [EPGProgram] = []
-        let calendar = Calendar.current
-        var currentSlotStart = timelineStart
-
-        while currentSlotStart < timelineEnd {
-            let nextSlot = calendar.date(byAdding: .hour, value: 2, to: currentSlotStart) ?? currentSlotStart.addingTimeInterval(7200)
-            let slotEnd = min(nextSlot, timelineEnd)
-
-            let hour = calendar.component(.hour, from: currentSlotStart)
-            let title = switch hour {
-            case 6 ..< 12:
-                "\(channel.title) - \(AppStrings.Player.morningBroadcast)"
-            case 12 ..< 18:
-                "\(channel.title) - \(AppStrings.Player.dayBroadcast)"
-            case 18 ..< 23:
-                "\(channel.title) - \(AppStrings.Player.primeBroadcast)"
-            default:
-                "\(channel.title) - \(AppStrings.Player.nightBroadcast)"
-            }
-
-            let isPlaying = currentSlotStart <= now && slotEnd > now
-            let displayTitle = isPlaying ? "\(channel.title) (\(AppStrings.Player.automaticBroadcast))" : title
-
-            let prog = EPGProgram(
-                id: "fallback_\(channel.id)_\(Int(currentSlotStart.timeIntervalSince1970))",
-                title: displayTitle,
-                description: AppStrings.Player.epgFallbackDescription,
-                startTime: currentSlotStart,
-                endTime: slotEnd,
-                isPlayingNow: isPlaying
-            )
-            fallbackList.append(prog)
-            currentSlotStart = slotEnd
-        }
-
-        return fallbackList
     }
 
     // MARK: - Program Block

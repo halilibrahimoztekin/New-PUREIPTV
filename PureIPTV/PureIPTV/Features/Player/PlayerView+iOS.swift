@@ -266,6 +266,9 @@
                                             .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
 
+                                    // AirPlay Route Picker (Native Video Route Picker)
+                                    AirPlayButton(size: 38)
+
                                     // Consolidated Player Settings Menu (Zero Friction - Don't Make Me Think)
                                     Menu {
                                         // 1. Tracks (Audio & Subtitles)
@@ -331,7 +334,7 @@
                                             Label(store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer, systemImage: "moon.stars")
                                         }
 
-                                        // 5. External Player Launcher
+                                        // 5. External Player Launcher & Share
                                         Menu {
                                             ForEach(ExternalPlayer.allCases) { player in
                                                 Button {
@@ -339,6 +342,23 @@
                                                 } label: {
                                                     Label(player.rawValue, systemImage: player.iconName)
                                                 }
+                                            }
+
+                                            Divider()
+
+                                            ShareLink(
+                                                item: store.item.streamURL,
+                                                subject: Text(store.item.title),
+                                                message: Text("PureIPTV: \(store.item.title)")
+                                            ) {
+                                                Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
+                                            }
+
+                                            Button {
+                                                UIPasteboard.general.string = store.item.streamURL.absoluteString
+                                                HapticManager.shared.trigger(.success)
+                                            } label: {
+                                                Label("Bağlantıyı Kopyala", systemImage: "doc.on.doc")
                                             }
                                         } label: {
                                             Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")

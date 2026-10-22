@@ -313,11 +313,14 @@ public struct AppCoordinator {
                 state.routes.dismiss()
             }
             return .run { _ in
+                @Injected(\.playerClient) var playerClient
                 #if os(iOS)
                     await MainActor.run {
                         OrientationManager.shared.unlockPortrait()
                     }
                 #endif
+                try? await playerClient.stop()
+                await playerClient.release()
             }
 
         case .router(.routeAction(_, .player(.delegate(.didRequestMinimize)))):

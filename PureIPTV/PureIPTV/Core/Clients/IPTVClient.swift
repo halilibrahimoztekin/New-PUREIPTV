@@ -397,32 +397,39 @@ extension IPTVClient: DependencyKey {
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
-                let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
-                let data = try await networkClient.fetchData(url: url)
 
-                let response: [EPGItemDTO]
-                var debugError: String? = nil
+                var response: [EPGItemDTO] = []
 
-                do {
-                    let dto = try JSONDecoder().decode(EPGResponseDTO.self, from: data)
-                    response = dto.epgListings
-                } catch {
-                    if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
+                // Strategy 1: Attempt action=get_short_epg
+                if let url = try? XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig),
+                   let data = try? await networkClient.fetchData(url: url)
+                {
+                    if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
+                        response = dto.epgListings
+                    } else if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
                         response = array
-                    } else {
-                        // If data is empty or malformed
-                        let str = String(data: data, encoding: .utf8) ?? "unknown"
-                        debugError = "Dec Err: \(error.localizedDescription) DataPrefix: \(str.prefix(100))"
-                        response = []
                     }
                 }
 
-                if let err = debugError {
-                    print("EPG fetch error: \(err)")
-                    return []
+                // Strategy 2: If empty, attempt action=get_simple_data_table
+                if response.isEmpty,
+                   let url = try? XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig),
+                   let data = try? await networkClient.fetchData(url: url)
+                {
+                    if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
+                        response = dto.epgListings
+                    } else if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
+                        response = array
+                    }
                 }
 
+                // Strategy 3: If still empty, check mapped XMLTV sources via CustomEPGMappingClient
                 if response.isEmpty {
+                    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
+                    let customPrograms = await customEPGMappingClient.fetchProgramsForChannel(streamID, "", nil)
+                    if !customPrograms.isEmpty {
+                        return customPrograms
+                    }
                     return []
                 }
 
@@ -460,6 +467,19 @@ extension IPTVClient: DependencyKey {
                     return nil
                 }
 
+                let decodeBase64OrSelf: (String) -> String = { text in
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return text }
+                    if let data = Data(base64Encoded: trimmed, options: [.ignoreUnknownCharacters]),
+                       let decoded = String(data: data, encoding: .utf8),
+                       !decoded.isEmpty,
+                       decoded.rangeOfCharacter(from: CharacterSet.controlCharacters.subtracting(.newlines)) == nil
+                    {
+                        return decoded
+                    }
+                    return text
+                }
+
                 let epgShift = UserDefaults.standard.integer(forKey: "com.pureiptv.epgTimeShift")
                 let shiftInterval = TimeInterval(epgShift * 3600)
 
@@ -479,13 +499,16 @@ extension IPTVClient: DependencyKey {
 
                     guard let finalStart = start, let finalEnd = end else { return nil }
 
+                    let cleanTitle = decodeBase64OrSelf(item.title)
+                    let cleanDesc = decodeBase64OrSelf(item.description)
+
                     return EPGProgram(
-                        id: item.id,
-                        title: item.title,
-                        description: item.description,
+                        id: item.id.isEmpty ? UUID().uuidString : item.id,
+                        title: cleanTitle.isEmpty ? AppStrings.Player.epgNotFound : cleanTitle,
+                        description: cleanDesc,
                         startTime: finalStart,
                         endTime: finalEnd,
-                        isPlayingNow: item.nowPlaying == 1
+                        isPlayingNow: item.nowPlaying == 1 || (finalStart <= Date() && Date() <= finalEnd)
                     )
                 }
 
