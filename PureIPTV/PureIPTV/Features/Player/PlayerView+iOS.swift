@@ -30,6 +30,7 @@
         @State private var horizontalScrubState: HorizontalScrubState? = nil
         @State private var dragInitialScrubPosition: Double = 0.0
         @State private var lastScrubHapticInterval: Int = -1
+        @State private var lastScrubThumbnailBucket: Int?
 
         // Aspect Ratio & Zoom State (Madde #14)
         @State private var pinchStartScale: CGFloat? = nil
@@ -147,7 +148,7 @@
 
                 // Horizontal Pan Scrubbing HUD Overlay (Madde #13)
                 if let scrub = horizontalScrubState {
-                    HorizontalScrubHUDView(state: scrub)
+                    HorizontalScrubHUDView(state: scrub, previewData: store.scrubThumbnailData)
                         .transition(.scale(scale: 0.9).combined(with: .opacity))
                         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: scrub)
                 }
@@ -1694,6 +1695,7 @@
                     dragGestureMode = .horizontal
                     dragInitialScrubPosition = store.position
                     lastScrubHapticInterval = -1
+                    lastScrubThumbnailBucket = nil
                 }
             }
 
@@ -1794,6 +1796,11 @@
                     withAnimation(.interactiveSpring(response: 0.15, dampingFraction: 0.85)) {
                         horizontalScrubState = scrub
                     }
+                    let thumbnailBucket = Int(targetSecs / 5)
+                    if thumbnailBucket != lastScrubThumbnailBucket {
+                        lastScrubThumbnailBucket = thumbnailBucket
+                        store.send(.requestScrubThumbnail(.seconds(targetSecs)))
+                    }
 
                     // Haptic pulse when crossing 30-second milestone intervals
                     let interval = abs(offsetSecs) / 30
@@ -1835,6 +1842,7 @@
                 if let scrub = horizontalScrubState {
                     HapticManager.shared.trigger(.medium)
                     store.send(.seek(scrub.targetPosition))
+                    store.send(.cancelScrubThumbnail)
                     withAnimation(.easeOut(duration: 0.25)) {
                         horizontalScrubState = nil
                     }
@@ -1872,6 +1880,7 @@
             dragGestureMode = nil
             lastHapticThreshold = -1
             lastScrubHapticInterval = -1
+            lastScrubThumbnailBucket = nil
         }
 
         private func triggerAspectFeedback() {

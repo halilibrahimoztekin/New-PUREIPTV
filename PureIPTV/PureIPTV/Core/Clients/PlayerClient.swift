@@ -36,6 +36,85 @@ public struct PlayerPlaybackCounters: Equatable, Sendable {
     }
 }
 
+actor ThumbnailGenerationGate {
+    static let shared = ThumbnailGenerationGate()
+
+    private struct Waiter {
+        let id: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    private var isOccupied = false
+    private var waiters: [Waiter] = []
+
+    func acquire() async throws {
+        try Task.checkCancellation()
+        guard isOccupied else {
+            isOccupied = true
+            return
+        }
+
+        let waiterID = UUID()
+        let acquired = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(returning: false)
+                } else {
+                    waiters.append(Waiter(id: waiterID, continuation: continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancel(waiterID) }
+        }
+        guard acquired else { throw CancellationError() }
+    }
+
+    func release() {
+        while !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            waiter.continuation.resume(returning: true)
+            return
+        }
+        isOccupied = false
+    }
+
+    private func cancel(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        let waiter = waiters.remove(at: index)
+        waiter.continuation.resume(returning: false)
+    }
+}
+
+enum PlayerThumbnailGenerator {
+    static func generate(url: URL, userAgentOverride: String?, time: Duration) async throws -> Data {
+        let gate = ThumbnailGenerationGate.shared
+        try await gate.acquire()
+        do {
+            try Task.checkCancellation()
+            let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let media = try Media(
+                url: url,
+                httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
+                httpReferrer: nil
+            )
+            let data = try await media.thumbnail(
+                at: time,
+                width: 360,
+                height: 203,
+                crop: true,
+                seekMode: .precise,
+                timeout: .seconds(3),
+                instance: PlaybackVLC.instance
+            )
+            await gate.release()
+            return data
+        } catch {
+            await gate.release()
+            throw error
+        }
+    }
+}
+
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
     public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool) -> Void = { _, _, _ in }
@@ -50,6 +129,7 @@ public struct PlayerClient: Sendable {
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
+    public var thumbnail: @Sendable (_ url: URL, _ userAgentOverride: String?, _ time: Duration) async throws -> Data
     public var getMediaInfo: @MainActor @Sendable () async -> MediaInfo?
     public var getAudioTracks: @MainActor @Sendable () async -> [Track]
     public var getSubtitleTracks: @MainActor @Sendable () async -> [Track]
@@ -202,6 +282,13 @@ extension PlayerClient: DependencyKey {
                     }
                 }
             },
+            thumbnail: { url, userAgentOverride, time in
+                try await PlayerThumbnailGenerator.generate(
+                    url: url,
+                    userAgentOverride: userAgentOverride,
+                    time: time
+                )
+            },
             getMediaInfo: {
                 var info = MediaInfo()
                 let player = box.getPlayer()
@@ -330,6 +417,7 @@ extension PlayerClient: DependencyKey {
         jump: { _ in },
         seek: { _ in },
         seekToTime: { _ in },
+        thumbnail: { _, _, _ in Data() },
         getMediaInfo: { nil },
         getAudioTracks: { [] },
         getSubtitleTracks: { [] },

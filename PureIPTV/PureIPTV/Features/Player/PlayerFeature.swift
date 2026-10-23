@@ -31,6 +31,7 @@ public struct PlayerFeature {
         public static let afrToast = "PlayerFeature.afrToast"
         public static let epgBrowse = "PlayerFeature.epgBrowse"
         public static let channelSwitch = "PlayerFeature.channelSwitch"
+        public static let scrubThumbnail = "PlayerFeature.scrubThumbnail"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -142,6 +143,8 @@ public struct PlayerFeature {
         public var currentTime: Duration = .zero
         public var totalTime: Duration = .zero
         public var position: Double = 0.0
+        public var scrubThumbnailData: Data?
+        public var scrubThumbnailRequestID: UUID?
         public var mediaInfo: MediaInfo?
         public var isInfoVisible: Bool = false
         public var lastDragTranslation: CGSize = .zero
@@ -466,6 +469,9 @@ public struct PlayerFeature {
         case restartPlayback
         case seek(Double)
         case seekToTime(Duration)
+        case requestScrubThumbnail(Duration)
+        case scrubThumbnailLoaded(requestID: UUID, itemID: String, data: Data?)
+        case cancelScrubThumbnail
         case setPlaybackRate(Float)
         case toggleInfo
         case toggleEPG
@@ -784,14 +790,17 @@ public struct PlayerFeature {
             let item = state.item
             let isPiPActive = state.isPiPActive
             let isMinimized = state.isMinimized
+            state.scrubThumbnailRequestID = nil
+            state.scrubThumbnailData = nil
 
             // If transitioning to In-App MiniPlayer or PiP is active, keep player alive and active!
             if isMinimized || isPiPActive {
-                return .none
+                return .cancel(id: CancelID.scrubThumbnail)
             }
 
             return .merge(
                 .cancel(id: CancelID.channelSwitch),
+                .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
@@ -1601,6 +1610,8 @@ public struct PlayerFeature {
             }
 
         case let .seek(position):
+            state.scrubThumbnailRequestID = nil
+            state.scrubThumbnailData = nil
             let clamped = max(0.0, min(1.0, position))
             state.position = clamped
             if state.totalTime.components.seconds > 0 {
@@ -1608,17 +1619,59 @@ public struct PlayerFeature {
             }
             let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
             return .merge(
+                .cancel(id: CancelID.scrubThumbnail),
                 .run { _ in try await playerClient.seek(clamped) },
                 upNextEffect
             )
 
+        case let .requestScrubThumbnail(time):
+            guard
+                !state.item.isLive,
+                state.totalTime > .zero,
+                time >= .zero,
+                time < state.totalTime
+            else { return .none }
+            let requestID = UUID()
+            let itemID = state.item.id
+            let url = state.item.streamURL
+            let userAgentOverride = state.item.userAgentOverride
+            state.scrubThumbnailRequestID = requestID
+            state.scrubThumbnailData = nil
+            return .run { send in
+                do {
+                    try await Task.sleep(for: .milliseconds(300))
+                    try Task.checkCancellation()
+                    let data = try? await playerClient.thumbnail(url, userAgentOverride, time)
+                    try Task.checkCancellation()
+                    await send(.scrubThumbnailLoaded(requestID: requestID, itemID: itemID, data: data))
+                } catch is CancellationError {
+                    return
+                } catch {
+                    return
+                }
+            }
+            .cancellable(id: CancelID.scrubThumbnail, cancelInFlight: true)
+
+        case let .scrubThumbnailLoaded(requestID, itemID, data):
+            guard state.scrubThumbnailRequestID == requestID, state.item.id == itemID else { return .none }
+            state.scrubThumbnailData = data
+            return .none
+
+        case .cancelScrubThumbnail:
+            state.scrubThumbnailRequestID = nil
+            state.scrubThumbnailData = nil
+            return .cancel(id: CancelID.scrubThumbnail)
+
         case let .seekToTime(time):
+            state.scrubThumbnailRequestID = nil
+            state.scrubThumbnailData = nil
             state.currentTime = time
             if state.totalTime.components.seconds > 0 {
                 state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
             }
             let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
             return .merge(
+                .cancel(id: CancelID.scrubThumbnail),
                 .run { _ in try await playerClient.seekToTime(time) },
                 upNextEffect
             )
@@ -1719,6 +1772,8 @@ public struct PlayerFeature {
                 state.failedStreamIDs.removeAll()
             }
             state.item = newItem
+            state.scrubThumbnailRequestID = nil
+            state.scrubThumbnailData = nil
             state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(newItem.id)
             state.isChannelListVisible = false
             state.isRecentChannelsHUDVisible = false
@@ -1755,6 +1810,7 @@ public struct PlayerFeature {
             state.isUpNextDismissed = false
 
             return .concatenate(
+                .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.playerEvents),

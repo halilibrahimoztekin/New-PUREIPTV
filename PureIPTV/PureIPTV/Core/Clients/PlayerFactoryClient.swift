@@ -116,6 +116,13 @@ extension PlayerFactoryClient: DependencyKey {
                         }
                     }
                 },
+                thumbnail: { url, userAgentOverride, time in
+                    try await PlayerThumbnailGenerator.generate(
+                        url: url,
+                        userAgentOverride: userAgentOverride,
+                        time: time
+                    )
+                },
                 getMediaInfo: {
                     var info = MediaInfo()
                     let player = box.getPlayer()

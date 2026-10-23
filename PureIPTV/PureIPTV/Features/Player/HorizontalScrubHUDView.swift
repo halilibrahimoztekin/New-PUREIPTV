@@ -30,13 +30,27 @@ import SwiftUI
     /// featuring target timestamp, relative offset pill (+01:30 / -00:45), and dual-indicator progress line.
     public struct HorizontalScrubHUDView: View {
         let state: HorizontalScrubState
+        let previewData: Data?
 
-        public init(state: HorizontalScrubState) {
+        public init(state: HorizontalScrubState, previewData: Data? = nil) {
             self.state = state
+            self.previewData = previewData
         }
 
         public var body: some View {
             VStack(spacing: 12) {
+                if let previewData, let previewImage = UIImage(data: previewData) {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 260, height: 146)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                        }
+                        .accessibilityHidden(true)
+                }
                 // Target Time & Offset Badge Header
                 HStack(spacing: 8) {
                     // Direction icon

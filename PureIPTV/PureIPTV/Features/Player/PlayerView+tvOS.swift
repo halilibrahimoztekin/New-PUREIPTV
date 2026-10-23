@@ -2,6 +2,7 @@
     import ComposableArchitecture
     import SwiftUI
     import SwiftVLC
+    import UIKit
 
     // MARK: - tvOS Player View (KSPlayer Architecture)
 
@@ -1185,6 +1186,18 @@
                 let currentDisplaySeconds = isScrubbing ? (durationDouble * clampedProgress) : Double(store.currentTime.components.seconds)
 
                 VStack(spacing: 8) {
+                    if isScrubbing, let data = store.scrubThumbnailData, let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 320, height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(.white.opacity(0.24), lineWidth: 1)
+                            }
+                            .accessibilityHidden(true)
+                    }
                     // Scrubber Bar & Timestamps
                     HStack(spacing: 16) {
                         Text(formatTime(currentDisplaySeconds))
@@ -1329,6 +1342,7 @@
             default:
                 break
             }
+            store.send(.requestScrubThumbnail(.seconds(duration * scrubValue)))
 
             // Debounce automatic seek after user pauses movement
             commitTask?.cancel()
@@ -1345,6 +1359,7 @@
             commitTask = nil
             if isScrubbing {
                 store.send(.seek(scrubValue))
+                store.send(.cancelScrubThumbnail)
                 isScrubbing = false
                 consecutiveMoveCount = 0
             }

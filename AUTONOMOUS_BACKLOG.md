@@ -197,13 +197,22 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız Xcode build alındı; test ve uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — sınırlandırılmış aktif-playlist EPG rafı tamamlandı ve reviewer onayladı.
 
-### 49. [PENDING] VOD Zaman Çizelgesinde Önizleme Küçük Resimleri
+### 49. [DONE] VOD Zaman Çizelgesinde Önizleme Küçük Resimleri
 - **Bulgu:** UHF’in App Store sürüm geçmişi, VOD scrub sırasında thumbnail önizlemesi sunduğunu belirtiyor; bu, kullanıcının hedef sahneye daha hızlı ulaşmasını sağlar.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Canlı keşif (24 Ekim 2026):** UHF’in güncel App Store sürüm notları VOD scrub thumbnail’larını listeliyor; tvOS kullanıcıları başka bir oynatıcıda scrub önizlemesinin geri gelmesini talep etmiş, Swiptv 3.7.0 da Apple TV scrub preview’ını yeni özellik olarak duyurmuş. Kaynaklar: https://apps.apple.com/mm/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/MovieBoxPro/comments/1ubx8wn/apple_tv_users_no_thumbnail_previews_while/ · https://www.reddit.com/r/Swiptv_Official/comments/1wcctt5/swiptv_v370_redesigned_apple_tv_player_scrubbing/
+- **Kod incelemesi:** Uygulamanın scrub arayüzleri yalnız hedef zaman ve progress gösteriyordu. Reviewer, paketin `Media.thumbnail(at:width:height:crop:seekMode:timeout:instance:)` API’sini doğruladı; ayrı `Player` veya ana oynatıcı seek’i olmadan hedef kare üretebiliyor ve görev iptalini destekliyor.
+- **Kapsam:** Ana player’a dokunmadan aynı VLC instance’ında istek başına 360×203 PNG üret; 300 ms debounce, cancellable latest-request-wins, global single-flight gate, 3 sn timeout ve tek görsellik bellek sınırı kullan. iOS sürükleme HUD’ı ve tvOS scrubber’ı thumbnail göstermeli; başarısız/seek edilemeyen provider’da zaman/progress scrubber’ı çalışmayı sürdürmeli. Herhangi bir seek veya item/screen değişimi eski isteği iptal etmeli.
+- **Uygulama:** SwiftVLC `Media.thumbnail` aynı player instance’ında hedef kareyi alıyor; PlayerClient URL ve playlist User-Agent’ı ile çağırıyor. TCA 300 ms debounce, latest-request-wins, stale response ID, global cancellation-aware FIFO single-flight gate, 360×203 çıktı ve 3 sn timeout sağlıyor. iOS gesture scrub HUD’ı ve tvOS remote scrubber’ı kareyi göstermeye çalışıyor; hatada zaman göstergesi korunuyor. Seek, item değişimi ve ekran ayrılışı isteği iptal ediyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız build alındı; test ve uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — VOD scrub thumbnail desteği tamamlandı ve reviewer onayladı.
 
-### 50. [PENDING] İndirme Kuyruğunda Eşzamanlı İndirme Sınırı
+### 50. [IN_PROGRESS] İndirme Kuyruğunda Eşzamanlı İndirme Sınırı
 - **Bulgu:** IPTVX 22.10.2, otomatik resume/retry ve Live Activity yanında isteğe bağlı eşzamanlı indirme sayısı ekledi.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+- **Canlı keşif (24 Ekim 2026):** IPTVX’in güncel App Store notları isteğe bağlı eşzamanlı indirmeleri duyuruyor; resmi FAQ bunun iPhone/iPad’e özel olduğunu ve sağlayıcıların bağlantı sınırlarına dikkat edilmesi gerektiğini açıklıyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=mac · https://iptvx.app/faq/
+- **Kod incelemesi:** `DownloadManager.startDownload` her background `URLSessionDownloadTask`’ını hemen `resume()` ediyor; başlatılmış işler için global admission cap yok. `taskDescription` zaten yeniden açılışta kullanılan metadata taşıyor ve `getAllTasks` arka plan görevlerini geri yüklüyor. Ayar yalnız iOS/iPadOS görünmeli; mevcut işler duraklatılmadan yalnızca yeni slot kabulünü sınırlamalı. Kuyruk suspended background task’lar olarak temsil edilip process relaunch sonrasında URLSession’dan restore edilmeli.
+- **Kapsam:** iOS/iPadOS için varsayılan 1 ve kullanıcı seçeneği 1–4 eşzamanlı indirme; yeni/restore edilen suspended task’ları FIFO ile yalnız boş slota resume et. Limit düşürülürse çalışan transferleri kesme, yeni iş kabulünü mevcut sayı sınır altına inene dek beklet. Arıza/iptal slotu bırakmalı; mevcut URLSession identifer ve User-Agent metadata’sı korunmalı.
 
 ### 51. [PENDING] Canlı Arama Sonuçlarında Hatırlatıcı Durumu
 - **Bulgu:** IPTVX 22.10.2, Live TV arama kartlarında daha zengin program bilgisiyle birlikte hatırlatma eylemi ve planlandı durumunu sundu.
