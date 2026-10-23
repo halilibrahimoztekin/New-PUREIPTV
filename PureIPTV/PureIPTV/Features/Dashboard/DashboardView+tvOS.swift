@@ -75,6 +75,7 @@
                                     ForEach(store.continueWatchingItems) { hist in
                                         ResumeWatchingCardView(
                                             item: hist,
+                                            userAgentOverride: config.userAgentOverride,
                                             onResume: {
                                                 store.send(.historySelected(hist))
                                             },
@@ -93,7 +94,7 @@
                             if !store.favoriteItems.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
                                     ForEach(store.favoriteItems) { fav in
-                                        TVFavoriteMediaCard(item: fav) {
+                                        TVFavoriteMediaCard(item: fav, userAgentOverride: config.userAgentOverride) {
                                             store.send(.favoriteSelected(fav))
                                         }
                                         .frame(width: fav.type.lowercased() == "live" ? 340 : 220)
@@ -259,7 +260,10 @@
             Button(action: onTap) {
                 ZStack(alignment: .bottomLeading) {
                     if let url = vod.coverURL {
-                        KFImage(url)
+                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: vod.userAgentOverride))
+                            .requestModifier { request in
+                                UserAgentManager.applyHeaders(to: &request, override: vod.userAgentOverride)
+                            }
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(height: 600)
@@ -348,6 +352,7 @@
 
     private struct TVWatchHistoryCard: View {
         let item: WatchHistoryItem
+        let userAgentOverride: String?
         let onTap: () -> Void
 
         @Environment(\.isFocused) private var isFocused
@@ -357,7 +362,10 @@
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack(alignment: .bottomLeading) {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            KFImage(url)
+                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                .requestModifier { request in
+                                    UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                }
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 320, height: 180)

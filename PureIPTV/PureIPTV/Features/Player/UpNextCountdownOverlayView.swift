@@ -34,7 +34,7 @@ public struct UpNextCountdownOverlayView: View {
             // Thumbnail / Artwork with Countdown Ring Overlay
             ZStack {
                 if let url = item.coverURL {
-                    AsyncImage(url: url) { phase in
+                    PlaylistAsyncImage(url: url, userAgentOverride: item.userAgentOverride) { phase in
                         switch phase {
                         case let .success(img):
                             img.resizable()

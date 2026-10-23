@@ -76,7 +76,7 @@
                         store.series.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -110,7 +110,7 @@
                         let cover = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
 
                         if let urlString = cover, let url = URL(string: urlString) {
-                            AsyncImage(url: url) { phase in
+                            PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
                                 switch phase {
                                 case let .success(image):
                                     image.resizable().scaledToFill()
@@ -382,6 +382,7 @@
                     VStack(alignment: .leading, spacing: 10) {
                         NextUpEpisodeBannerView(
                             episode: nextEp,
+                            userAgentOverride: store.config.userAgentOverride,
                             seriesTitle: store.series.title,
                             progressItem: store.episodeProgressMap[nextEp.id],
                             onPlay: {
@@ -426,6 +427,7 @@
                                 ForEach(store.currentEpisodes) { episode in
                                     EpisodeCardView(
                                         episode: episode,
+                                        userAgentOverride: store.config.userAgentOverride,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
                                         layoutMode: .list,
@@ -453,6 +455,7 @@
                                 ForEach(store.currentEpisodes) { episode in
                                     EpisodeCardView(
                                         episode: episode,
+                                        userAgentOverride: store.config.userAgentOverride,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
                                         layoutMode: .grid,

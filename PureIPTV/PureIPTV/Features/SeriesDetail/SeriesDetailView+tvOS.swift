@@ -53,7 +53,10 @@
                     ?? store.series.coverURL?.absoluteString
 
                 if let urlString = cover, let url = URL(string: urlString) {
-                    KFImage(url)
+                    KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride))
+                        .requestModifier { request in
+                            UserAgentManager.applyHeaders(to: &request, override: store.config.userAgentOverride)
+                        }
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(height: 650)
@@ -83,7 +86,10 @@
                     let posterURL = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? store.series.coverURL?.absoluteString
 
                     if let urlString = posterURL, let url = URL(string: urlString) {
-                        KFImage(url)
+                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride))
+                            .requestModifier { request in
+                                UserAgentManager.applyHeaders(to: &request, override: store.config.userAgentOverride)
+                            }
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 240, height: 360)
@@ -230,6 +236,7 @@
 
                         NextUpEpisodeBannerView(
                             episode: nextEp,
+                            userAgentOverride: store.config.userAgentOverride,
                             seriesTitle: store.series.title,
                             progressItem: store.episodeProgressMap[nextEp.id]
                         ) {
@@ -321,6 +328,7 @@
                                     TVEpisodeRow(
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
+                                        userAgentOverride: store.config.userAgentOverride,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
@@ -334,6 +342,7 @@
                                     TVEpisodeGridCard(
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
+                                        userAgentOverride: store.config.userAgentOverride,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
@@ -426,6 +435,7 @@
     private struct TVEpisodeRow: View {
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
+        let userAgentOverride: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
@@ -448,13 +458,18 @@
         }
 
         var body: some View {
-            Button(action: action) {
+            Button {
+                action()
+            } label: {
                 HStack(alignment: .top, spacing: 28) {
                     // Thumbnail
                     ZStack(alignment: .bottomLeading) {
                         Group {
                             if let url = episode.coverURL {
-                                KFImage(url)
+                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                    .requestModifier { request in
+                                        UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                    }
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {
@@ -566,6 +581,7 @@
     private struct TVEpisodeGridCard: View {
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
+        let userAgentOverride: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
@@ -588,12 +604,17 @@
         }
 
         var body: some View {
-            Button(action: action) {
+            Button {
+                action()
+            } label: {
                 VStack(alignment: .leading, spacing: 14) {
                     ZStack(alignment: .bottomLeading) {
                         Group {
                             if let url = episode.coverURL {
-                                KFImage(url)
+                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                    .requestModifier { request in
+                                        UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                    }
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {

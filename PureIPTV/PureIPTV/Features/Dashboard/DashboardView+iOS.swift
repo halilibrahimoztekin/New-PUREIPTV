@@ -83,6 +83,7 @@
                                 featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.continueWatchingItems) { hist in
                                     ResumeWatchingCardView(
                                         item: hist,
+                                        userAgentOverride: config.userAgentOverride,
                                         onResume: {
                                             store.send(.historySelected(hist))
                                         },
@@ -98,7 +99,7 @@
 
                             if !store.favoriteItems.isEmpty {
                                 featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { fav in
-                                    FavoriteCardView(item: fav) {
+                                    FavoriteCardView(item: fav, userAgentOverride: config.userAgentOverride) {
                                         store.send(.favoriteSelected(fav))
                                     }
                                     .frame(width: 140)
@@ -227,12 +228,12 @@
                 ZStack(alignment: .bottomLeading) {
                     // Poster/Backdrop
                     if let url = vod.coverURL {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color(hex: "#0F0F13").shimmeringPlaceholder(isLoading: true)
+                        PlaylistAsyncImage(url: url, userAgentOverride: vod.userAgentOverride) { phase in
+                            if let image = phase.image {
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } else {
+                                Color(hex: "#0F0F13").shimmeringPlaceholder(isLoading: true)
+                            }
                         }
                         .frame(height: 520)
                         .clipped()
@@ -328,17 +329,17 @@
 
     struct FavoriteCardView: View {
         let item: FavoriteItem
+        let userAgentOverride: String?
         let onTap: () -> Void
 
         var body: some View {
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case let .success(image):
+                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                            if let image = phase.image {
                                 image.resizable().scaledToFill()
-                            default:
+                            } else {
                                 Rectangle().fill(Color(hex: "#1F1F23"))
                             }
                         }
@@ -368,6 +369,7 @@
 
     struct WatchHistoryCardView: View {
         let item: WatchHistoryItem
+        let userAgentOverride: String?
         let onTap: () -> Void
 
         var body: some View {
@@ -375,11 +377,10 @@
                 VStack(alignment: .leading, spacing: 8) {
                     ZStack(alignment: .bottomLeading) {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case let .success(image):
+                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                                if let image = phase.image {
                                     image.resizable().scaledToFill()
-                                default:
+                                } else {
                                     Rectangle().fill(Color(hex: "#1F1F23"))
                                 }
                             }

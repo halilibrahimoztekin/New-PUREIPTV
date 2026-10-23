@@ -17,6 +17,11 @@ public struct PlaylistManagementView: View {
                     playlistRow(playlist)
                     #if os(iOS)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                store.send(.editUserAgent(playlist))
+                            } label: {
+                                Label("User-Agent", systemImage: "text.badge.checkmark")
+                            }
                             Button(role: .destructive) {
                                 store.send(.confirmDeletePlaylist(playlist))
                             } label: {
@@ -135,6 +140,51 @@ public struct PlaylistManagementView: View {
                     #endif
                 }
             }
+            .sheet(
+                isPresented: Binding(
+                    get: { store.playlistBeingEdited != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            store.send(.cancelUserAgentOverride)
+                        }
+                    }
+                )
+            ) {
+                if let playlist = store.playlistBeingEdited {
+                    NavigationStack {
+                        Form {
+                            Section(playlist.name) {
+                                TextField("User-Agent", text: $store.userAgentDraft)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .accessibilityLabel("\(playlist.name) için özel User-Agent")
+                                Text("Boş bırakılırsa uygulamanın genel User-Agent değeri kullanılır.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                if let message = store.userAgentValidationMessage {
+                                    Text(message)
+                                        .font(.footnote)
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                        }
+                        .navigationTitle("Playlist User-Agent")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(AppStrings.Common.cancel) {
+                                    store.send(.cancelUserAgentOverride)
+                                }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(AppStrings.Common.save) {
+                                    store.send(.saveUserAgentOverride)
+                                }
+                                .disabled(!canSaveUserAgentDraft)
+                            }
+                        }
+                    }
+                }
+            }
     }
 
     // MARK: - Playlist Row
@@ -184,6 +234,17 @@ public struct PlaylistManagementView: View {
                 Spacer()
 
                 #if os(tvOS)
+                    Button {
+                        store.send(.editUserAgent(playlist))
+                    } label: {
+                        Image(systemName: "text.badge.checkmark")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color(hex: "#0A84FF"))
+                            .padding(8)
+                    }
+                    .buttonStyle(TVCircleButtonStyle())
+                    .accessibilityLabel("User-Agent ayarını düzenle")
+
                     // Delete button on tvOS
                     Button {
                         store.send(.confirmDeletePlaylist(playlist))
@@ -209,5 +270,11 @@ public struct PlaylistManagementView: View {
         #else
         .buttonStyle(.plain)
         #endif
+    }
+
+    private var canSaveUserAgentDraft: Bool {
+        let value = store.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.utf8.count <= 512
+            && value.rangeOfCharacter(from: .controlCharacters) == nil
     }
 }

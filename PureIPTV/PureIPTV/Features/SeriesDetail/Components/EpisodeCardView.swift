@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct EpisodeCardView: View {
     public let episode: DetailModels.Episode
+    public let userAgentOverride: String?
     public let progressItem: WatchHistoryItem?
     public let isDownloaded: Bool
     public let layoutMode: SeriesDetailFeature.State.EpisodeLayoutMode
@@ -11,6 +12,7 @@ public struct EpisodeCardView: View {
 
     public init(
         episode: DetailModels.Episode,
+        userAgentOverride: String? = nil,
         progressItem: WatchHistoryItem?,
         isDownloaded: Bool,
         layoutMode: SeriesDetailFeature.State.EpisodeLayoutMode = .list,
@@ -19,6 +21,7 @@ public struct EpisodeCardView: View {
         onMarkUnwatched: @escaping () -> Void = {}
     ) {
         self.episode = episode
+        self.userAgentOverride = userAgentOverride
         self.progressItem = progressItem
         self.isDownloaded = isDownloaded
         self.layoutMode = layoutMode
@@ -77,7 +80,7 @@ public struct EpisodeCardView: View {
                     ZStack(alignment: .bottomLeading) {
                         Group {
                             if let url = episode.coverURL {
-                                AsyncImage(url: url) { phase in
+                                PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
                                     switch phase {
                                     case let .success(img):
                                         img.resizable().scaledToFill()
@@ -246,7 +249,7 @@ public struct EpisodeCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     Group {
                         if let url = episode.coverURL {
-                            AsyncImage(url: url) { phase in
+                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
                                 switch phase {
                                 case let .success(img):
                                     img.resizable().scaledToFill()

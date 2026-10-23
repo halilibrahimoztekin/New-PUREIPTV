@@ -241,11 +241,12 @@ import SwiftUI
                             .frame(width: 44, height: 44)
 
                         if let coverURL = channel.coverURL {
-                            AsyncImage(url: coverURL) { image in
-                                image.resizable().scaledToFit()
-                            } placeholder: {
-                                Image(systemName: "tv")
-                                    .foregroundColor(.white.opacity(0.4))
+                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
+                                if let image = phase.image {
+                                    image.resizable().scaledToFit()
+                                } else {
+                                    Image(systemName: "tv").foregroundColor(.white.opacity(0.4))
+                                }
                             }
                             .frame(width: 38, height: 38)
                         } else {
@@ -372,12 +373,14 @@ import SwiftUI
                         .overlay(
                             VStack(spacing: 12) {
                                 if let cover = selected.coverURL {
-                                    AsyncImage(url: cover) { img in
-                                        img.resizable().scaledToFit()
-                                    } placeholder: {
-                                        Image(systemName: "tv")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.white.opacity(0.3))
+                                    PlaylistAsyncImage(url: cover, userAgentOverride: selected.userAgentOverride) { phase in
+                                        if let img = phase.image {
+                                            img.resizable().scaledToFit()
+                                        } else {
+                                            Image(systemName: "tv")
+                                                .font(.system(size: 40))
+                                                .foregroundColor(.white.opacity(0.3))
+                                        }
                                     }
                                     .frame(maxHeight: 100)
                                 } else {

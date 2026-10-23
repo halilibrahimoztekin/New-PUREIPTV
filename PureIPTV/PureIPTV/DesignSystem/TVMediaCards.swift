@@ -44,7 +44,10 @@
                     // Katman 3: Öne fırlayan Parallax Logo & Bilgiler
                     ZStack(alignment: .bottomLeading) {
                         if let logoURL = channel.coverURL {
-                            KFImage(logoURL)
+                            KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride))
+                                .requestModifier { request in
+                                    UserAgentManager.applyHeaders(to: &request, override: channel.userAgentOverride)
+                                }
                                 .placeholder {
                                     Image(systemName: "tv.fill")
                                         .font(.system(size: 34))
@@ -114,7 +117,10 @@
                     // Katman 1: Arka Plan Posteri
                     ZStack {
                         if let posterURL = vod.coverURL {
-                            KFImage(posterURL)
+                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride))
+                                .requestModifier { request in
+                                    UserAgentManager.applyHeaders(to: &request, override: vod.userAgentOverride)
+                                }
                                 .placeholder {
                                     ZStack {
                                         Color(hex: "#2C2C30")
@@ -221,7 +227,10 @@
                     // Katman 1: Arka Plan Posteri
                     ZStack {
                         if let posterURL = series.coverURL {
-                            KFImage(posterURL)
+                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: series.userAgentOverride))
+                                .requestModifier { request in
+                                    UserAgentManager.applyHeaders(to: &request, override: series.userAgentOverride)
+                                }
                                 .placeholder {
                                     ZStack {
                                         Color(hex: "#2C2C30")
@@ -291,12 +300,14 @@
 
     public struct TVFavoriteMediaCard: View {
         public let item: FavoriteItem
+        public let userAgentOverride: String?
         public let action: () -> Void
 
         @Environment(\.isFocused) private var isFocused
 
-        public init(item: FavoriteItem, action: @escaping () -> Void) {
+        public init(item: FavoriteItem, userAgentOverride: String? = nil, action: @escaping () -> Void) {
             self.item = item
+            self.userAgentOverride = userAgentOverride
             self.action = action
         }
 
@@ -315,7 +326,10 @@
                     // Katman 1: Poster & Arka Plan
                     ZStack {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            KFImage(url)
+                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                .requestModifier { request in
+                                    UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                }
                                 .placeholder {
                                     placeholderBackground
                                 }

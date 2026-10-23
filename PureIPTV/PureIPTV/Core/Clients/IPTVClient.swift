@@ -2,33 +2,38 @@ import ComposableArchitecture
 @preconcurrency import Foundation
 
 actor M3UCache {
-    var items: [M3UItemDTO] = []
-    var epgURL: URL?
-    var xmltvData: XMLTVData?
-
-    func update(items: [M3UItemDTO], epgURL: URL?) {
-        self.items = items
-        self.epgURL = epgURL
+    struct Entry {
+        var items: [M3UItemDTO] = []
+        var epgURL: URL?
+        var xmltvData: XMLTVData?
     }
 
-    func getItems() -> [M3UItemDTO] {
-        items
+    private var entries: [String: Entry] = [:]
+
+    func update(items: [M3UItemDTO], epgURL: URL?, for key: String) {
+        entries[key] = Entry(items: items, epgURL: epgURL)
     }
 
-    func getEpgURL() -> URL? {
-        epgURL
+    func getItems(for key: String) -> [M3UItemDTO] {
+        entries[key]?.items ?? []
     }
 
-    func getXmltvData() -> XMLTVData? {
-        xmltvData
+    func getEpgURL(for key: String) -> URL? {
+        entries[key]?.epgURL
     }
 
-    func setXmltvData(_ data: XMLTVData) {
-        xmltvData = data
+    func getXmltvData(for key: String) -> XMLTVData? {
+        entries[key]?.xmltvData
+    }
+
+    func setXmltvData(_ data: XMLTVData, for key: String) {
+        entries[key, default: Entry()].xmltvData = data
     }
 
     func clearXmltvData() {
-        xmltvData = nil
+        for key in Array(entries.keys) {
+            entries[key]?.xmltvData = nil
+        }
     }
 }
 
@@ -86,19 +91,27 @@ extension IPTVClient: DependencyKey {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
 
+        let m3uCacheKey: @Sendable (PlaylistConfig) -> String = { config in
+            let identity = config.playlistID?.uuidString ?? config.m3uURL?.absoluteString ?? "unidentified"
+            let sourceURL = config.m3uURL?.absoluteString ?? ""
+            let userAgent = (config.userAgentOverride ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return "\(identity)|\(sourceURL)|\(userAgent.isEmpty ? "default" : userAgent)"
+        }
+
         let ensureM3UCache: @Sendable (PlaylistConfig) async -> [M3UItemDTO] = { config in
-            let existing = await m3uCache.getItems()
+            let key = m3uCacheKey(config)
+            let existing = await m3uCache.getItems(for: key)
             if !existing.isEmpty {
                 return existing
             }
             guard let url = config.m3uURL else { return [] }
-            guard let data = try? await networkClient.fetchData(url: url) else { return [] }
+            guard let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride) else { return [] }
             guard let str = String(data: data, encoding: .utf8) else { return [] }
             let parser = M3UParser()
             let parsedResult = await Task.detached(priority: .userInitiated) {
                 parser.parse(m3uString: str)
             }.value
-            await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL)
+            await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
             return parsedResult.items
         }
 
@@ -108,7 +121,7 @@ extension IPTVClient: DependencyKey {
                     guard let m3uURL = config.m3uURL else {
                         throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U configuration"])
                     }
-                    let data = try await networkClient.fetchData(url: m3uURL)
+                    let data = try await networkClient.fetchData(url: m3uURL, userAgentOverride: config.userAgentOverride)
                     guard let m3uString = String(data: data, encoding: .utf8) else {
                         throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Failed to parse M3U data"])
                     }
@@ -116,7 +129,7 @@ extension IPTVClient: DependencyKey {
                     let parsedResult = await Task.detached(priority: .userInitiated) {
                         parser.parse(m3uString: m3uString)
                     }.value
-                    await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL)
+                    await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL, for: m3uCacheKey(config))
                     return
                 }
 
@@ -124,7 +137,7 @@ extension IPTVClient: DependencyKey {
 
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
-                if let authDTO: XtreamAuthResponseDTO = try? await networkClient.fetch(url: url) {
+                if let authDTO: XtreamAuthResponseDTO = try? await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride) {
                     await AccountInfoManager.shared.update(from: authDTO)
                 }
             },
@@ -138,7 +151,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveCategories.url(with: xtreamConfig)
-                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchLiveChannels: { config, categoryID in
@@ -153,7 +166,8 @@ extension IPTVClient: DependencyKey {
                             coverURL: item.coverURL,
                             categoryID: item.groupTitle,
                             type: .live,
-                            epgChannelID: item.tvgID
+                            epgChannelID: item.tvgID,
+                            userAgentOverride: config.userAgentOverride
                         )
                     }
                 }
@@ -161,7 +175,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveStreams(categoryID: categoryID).url(with: xtreamConfig)
-                let dtos: [XtreamLiveStreamDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamLiveStreamDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { dto in
                     let streamURL = xtreamConfig.baseURL.appendingPathComponent("live/\(xtreamConfig.username)/\(xtreamConfig.password)/\(dto.streamId).ts")
                     return MediaModels.Item(
@@ -173,7 +187,8 @@ extension IPTVClient: DependencyKey {
                         type: .live,
                         epgChannelID: dto.epgChannelId,
                         tvArchive: dto.tvArchive,
-                        tvArchiveDuration: dto.tvArchiveDuration
+                        tvArchiveDuration: dto.tvArchiveDuration,
+                        userAgentOverride: config.userAgentOverride
                     )
                 }
             },
@@ -187,7 +202,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODCategories.url(with: xtreamConfig)
-                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchVODs: { config, categoryID in
@@ -202,7 +217,8 @@ extension IPTVClient: DependencyKey {
                             coverURL: item.coverURL,
                             categoryID: item.groupTitle,
                             type: .vod,
-                            epgChannelID: item.tvgID
+                            epgChannelID: item.tvgID,
+                            userAgentOverride: config.userAgentOverride
                         )
                     }
                 }
@@ -210,7 +226,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODStreams(categoryID: categoryID).url(with: xtreamConfig)
-                let dtos: [XtreamVODStreamDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamVODStreamDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { dto in
                     let ext = dto.containerExtension ?? "mp4"
                     let streamURL = xtreamConfig.baseURL.appendingPathComponent("movie/\(xtreamConfig.username)/\(xtreamConfig.password)/\(dto.streamId).\(ext)")
@@ -223,7 +239,8 @@ extension IPTVClient: DependencyKey {
                         categoryID: dto.categoryId,
                         type: .vod,
                         rating: dto.rating5based ?? dto.rating,
-                        addedDate: addedDate
+                        addedDate: addedDate,
+                        userAgentOverride: config.userAgentOverride
                     )
                 }
             },
@@ -237,7 +254,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesCategories.url(with: xtreamConfig)
-                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchSeries: { config, categoryID in
@@ -252,7 +269,8 @@ extension IPTVClient: DependencyKey {
                             coverURL: item.coverURL,
                             categoryID: item.groupTitle,
                             type: .series,
-                            epgChannelID: item.tvgID
+                            epgChannelID: item.tvgID,
+                            userAgentOverride: config.userAgentOverride
                         )
                     }
                 }
@@ -260,7 +278,7 @@ extension IPTVClient: DependencyKey {
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeries(categoryID: categoryID).url(with: xtreamConfig)
-                let dtos: [XtreamSeriesDTO] = try await networkClient.fetch(url: url)
+                let dtos: [XtreamSeriesDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { dto in
                     let addedDate = dto.lastModified.flatMap { TimeInterval($0) }.map { Date(timeIntervalSince1970: $0) }
                     return MediaModels.Item(
@@ -272,7 +290,8 @@ extension IPTVClient: DependencyKey {
                         type: .series,
                         rating: dto.rating5based ?? Double(dto.rating ?? "0"),
                         releaseDate: dto.releaseDate,
-                        addedDate: addedDate
+                        addedDate: addedDate,
+                        userAgentOverride: config.userAgentOverride
                     )
                 }
             },
@@ -295,7 +314,7 @@ extension IPTVClient: DependencyKey {
                 }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesInfo(seriesID: seriesID).url(with: xtreamConfig)
-                let data = try await networkClient.fetchData(url: url)
+                let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                 let dto = try await MainActor.run { try JSONDecoder().decode(XtreamSeriesInfoDTO.self, from: data) }
 
                 let info = DetailModels.Info(
@@ -351,7 +370,7 @@ extension IPTVClient: DependencyKey {
                 }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODInfo(vodID: vodID).url(with: xtreamConfig)
-                let data = try await networkClient.fetchData(url: url)
+                let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                 let dto = try await MainActor.run { try JSONDecoder().decode(XtreamVODInfoDTO.self, from: data) }
 
                 return DetailModels.Info(
@@ -370,13 +389,14 @@ extension IPTVClient: DependencyKey {
                 @Dependency(\.xmltvParser) var xmltvParser
                 if config.type == .m3u {
                     _ = await ensureM3UCache(config)
-                    guard let epgURL = await m3uCache.getEpgURL() else { return [] }
-                    var currentXMLTV = await m3uCache.getXmltvData()
+                    let cacheKey = m3uCacheKey(config)
+                    guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else { return [] }
+                    var currentXMLTV = await m3uCache.getXmltvData(for: cacheKey)
                     if currentXMLTV == nil {
-                        let data = try await networkClient.fetchData(url: epgURL)
+                        let data = try await networkClient.fetchData(url: epgURL, userAgentOverride: config.userAgentOverride)
                         currentXMLTV = try await xmltvParser.parse(data)
                         if let parsed = currentXMLTV {
-                            await m3uCache.setXmltvData(parsed)
+                            await m3uCache.setXmltvData(parsed, for: cacheKey)
                         }
                     }
                     guard let xmlData = currentXMLTV else { return [] }
@@ -402,7 +422,7 @@ extension IPTVClient: DependencyKey {
 
                 // Strategy 1: Attempt action=get_short_epg
                 if let url = try? XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig),
-                   let data = try? await networkClient.fetchData(url: url)
+                   let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                 {
                     if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
                         response = dto.epgListings
@@ -414,7 +434,7 @@ extension IPTVClient: DependencyKey {
                 // Strategy 2: If empty, attempt action=get_simple_data_table
                 if response.isEmpty,
                    let url = try? XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig),
-                   let data = try? await networkClient.fetchData(url: url)
+                   let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                 {
                     if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
                         response = dto.epgListings

@@ -108,12 +108,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS 26.5 iPhone 17 Release ve tvOS 26.5 Simulator Release Xcode build’leri exit code 0 ile tamamlandı. Mevcut Swift 6 concurrency uyarıları derleme çıktısında yer aldı. Akış veya test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Live TV, VOD ve Series kategori hataları için yerel retry eklendi; reviewer onayladı.
 
-### 38. [PENDING] Playlist Başına Özel User-Agent
+### 38. [IN_PROGRESS] Playlist Başına Özel User-Agent
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları hazır User-Agent seçeneklerine ek olarak özel değer girişi sunduğunu bildiriyor. Sağlayıcı uyumluluğunda istemci başlığını değiştirmek kullanıcıya pratik bir çözüm veriyor.
 - **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** `UserAgentManager` mevcut ortak başlık kaynağı; tercih playlist bazında saklanıp Xtream, M3U, catch-up ve artwork isteklerinde tutarlı kullanılabilir.
+- **Uygulama:** Playlist başına özel User-Agent saklama/düzenleme ve doğrulama eklendi; Xtream/M3U istekleri, player/VLC, preview, prebuffer, downloads ve Kingfisher artwork istekleri bu değeri kullanıyor. Aktif playlist değiştirilince Home, mini-player ve açık player route’ları yeni başlıkla güncelleniyor. Artwork cache anahtarları URL ve UA’yı kapsıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Simulator Release Xcode derlemeleri başarılı (`BUILD SUCCEEDED`). `git diff --check` başarılı. Yalnızca derleme yapıldı; uygulama akışı ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 39. [PENDING] VOD için Daha Büyük Ağ Tamponu Seçeneği
+### 39. [IN_PROGRESS] VOD için Daha Büyük Ağ Tamponu Seçeneği
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları Metal oynatıcıya daha akıcı oynatma için isteğe bağlı büyük tampon modu eklediğini bildiriyor.
 - **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** Mevcut VLC buffer ayarları ve `StreamHealthMetrics` üzerinden düşük bant genişliğinde VOD’a özel tampon seçeneği; canlı kanal zapping gecikmesini artırmamalı.

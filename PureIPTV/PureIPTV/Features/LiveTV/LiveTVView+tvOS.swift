@@ -286,7 +286,10 @@
             guard let newID else { return }
             TVFocusMemory.shared.recordChannel(newID, in: store.selectedCategoryID)
             guard let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
-            PrebufferingManager.shared.prepareChannel(url: ch.streamURL)
+            PrebufferingManager.shared.prepareChannel(
+                url: ch.streamURL,
+                userAgentOverride: ch.userAgentOverride
+            )
             let firstChar = String(ch.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
             if !firstChar.isEmpty, firstChar != currentScrubLetter {
                 currentScrubLetter = firstChar

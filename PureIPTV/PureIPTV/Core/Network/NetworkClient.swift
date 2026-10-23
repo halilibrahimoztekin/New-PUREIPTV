@@ -11,9 +11,9 @@ public struct NetworkClient {
         // Also might need date decoding strategies depending on API format.
     }
 
-    public func fetchData(url: URL) async throws -> Data {
+    public func fetchData(url: URL, userAgentOverride: String? = nil) async throws -> Data {
         var request = URLRequest(url: url)
-        UserAgentManager.shared.applyHeaders(to: &request)
+        UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
             throw NetworkError.invalidResponse
@@ -22,14 +22,14 @@ public struct NetworkClient {
     }
 
     @MainActor
-    public func fetch<T: Decodable>(url: URL) async throws -> T {
+    public func fetch<T: Decodable>(url: URL, userAgentOverride: String? = nil) async throws -> T {
         #if DEBUG
             print("🌐 [NETWORK REQUEST] -> \(url.absoluteString)")
             let startTime = CFAbsoluteTimeGetCurrent()
         #endif
 
         var request = URLRequest(url: url)
-        UserAgentManager.shared.applyHeaders(to: &request)
+        UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
         let (data, response) = try await session.data(for: request)
 
         #if DEBUG

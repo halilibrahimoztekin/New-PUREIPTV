@@ -81,7 +81,13 @@ extension PreviewPlayerClient: DependencyKey {
                 let p = getPlayer()
                 let targetVol: Float = status.isMuted ? 0.0 : 0.85
                 _ = try? p.setAudioVolume(Volume(targetVol))
-                try p.play(url: streamURL)
+                let userAgent = channel.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let media = try Media(
+                    url: streamURL,
+                    httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
+                    httpReferrer: nil
+                )
+                try p.play(media)
 
                 status = PreviewPlaybackStatus(
                     isPlaying: true,

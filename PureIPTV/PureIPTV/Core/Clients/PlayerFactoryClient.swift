@@ -27,11 +27,17 @@ extension PlayerFactoryClient: DependencyKey {
 
             return PlayerClient(
                 vlcPlayer: { box.getPlayer() },
-                play: { url in
+                play: { url, userAgentOverride in
                     try await PlaybackAudioSession.setActive(true)
                     try Task.checkCancellation()
                     let player = box.getPlayer()
-                    try player.play(url: url)
+                    let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let media = try Media(
+                        url: url,
+                        httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
+                        httpReferrer: nil
+                    )
+                    try player.play(media)
                 },
                 resume: {
                     try await PlaybackAudioSession.setActive(true)

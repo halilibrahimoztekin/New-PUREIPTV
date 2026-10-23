@@ -293,6 +293,63 @@ public struct AppCoordinator {
             }
             return .none
 
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUpdateActivePlaylistUserAgent(config))))):
+            for index in state.routes.indices {
+                guard case var .home(homeState) = state.routes[index].screen else { continue }
+                homeState.config = config
+                homeState.liveTV.config = config
+                homeState.liveTV.channelsByCategory = homeState.liveTV.channelsByCategory.mapValues { items in
+                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
+                }
+                homeState.vod.config = config
+                homeState.vod.vodsByCategory = homeState.vod.vodsByCategory.mapValues { items in
+                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
+                }
+                homeState.series.config = config
+                homeState.series.seriesByCategory = homeState.series.seriesByCategory.mapValues { items in
+                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
+                }
+                homeState.dashboard.featuredChannels = homeState.dashboard.featuredChannels.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                homeState.dashboard.featuredVODs = homeState.dashboard.featuredVODs.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                homeState.dashboard.featuredSeries = homeState.dashboard.featuredSeries.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                homeState.dashboard.recommendedVODs = homeState.dashboard.recommendedVODs.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                state.routes[index].screen = .home(homeState)
+            }
+            if let miniPlayer = state.miniPlayer {
+                var updated = miniPlayer
+                updated.item = miniPlayer.item.replacingUserAgentOverride(config.userAgentOverride)
+                updated.playlist = miniPlayer.playlist?.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                updated.liveChannels = miniPlayer.liveChannels.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                updated.epgBrowseChannel = miniPlayer.epgBrowseChannel?.replacingUserAgentOverride(config.userAgentOverride)
+                state.miniPlayer = updated
+            }
+            for index in state.routes.indices {
+                guard case let .player(playerState) = state.routes[index].screen else { continue }
+                var updated = playerState
+                updated.item = playerState.item.replacingUserAgentOverride(config.userAgentOverride)
+                updated.playlist = playerState.playlist?.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                updated.liveChannels = playerState.liveChannels.map {
+                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                }
+                updated.epgBrowseChannel = playerState.epgBrowseChannel?.replacingUserAgentOverride(config.userAgentOverride)
+                state.routes[index].screen = .player(updated)
+            }
+            return .none
+
         case .router(.routeAction(_, .playlistManagement(.delegate(.addPlaylistDidConnect)))):
             withAnimation(.easeInOut(duration: 0.35)) {
                 state.routes = [.root(.splash(SplashFeature.State()), withNavigation: true)]

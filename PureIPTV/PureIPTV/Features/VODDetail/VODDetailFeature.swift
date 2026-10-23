@@ -470,7 +470,8 @@ public struct VODDetailFeature {
                     title: state.vod.title,
                     streamURL: finalStreamURL,
                     coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
-                    startPosition: 0.0
+                    startPosition: 0.0,
+                    config: state.config
                 )
                 return .merge(
                     .cancel(id: CancelID.autoPlayTrailer),
@@ -504,7 +505,8 @@ public struct VODDetailFeature {
                     coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
                     startPosition: startPosition,
                     initialDuration: history.duration,
-                    initialProgress: history.progress
+                    initialProgress: history.progress,
+                    config: state.config
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
 
@@ -541,6 +543,7 @@ public struct VODDetailFeature {
                     guard let streamURL = state.vod.streamURL else { return .none }
                     let id = state.vod.id
                     let title = state.vod.title
+                    let userAgentOverride = state.config.userAgentOverride
 
                     let finalCoverURL: URL? = {
                         if let posterPath = state.tmdbMovie?.posterPath {
@@ -552,7 +555,7 @@ public struct VODDetailFeature {
                     }()
 
                     return .run { send in
-                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL)
+                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
                         await send(.downloadStatusLoaded(true))
                     }
                 }

@@ -5,16 +5,19 @@ public struct ResumeWatchingCardView: View {
     public let onResume: () -> Void
     public let onRestart: () -> Void
     public let onDelete: () -> Void
+    public let userAgentOverride: String?
 
     @State private var isHovered: Bool = false
 
     public init(
         item: WatchHistoryItem,
+        userAgentOverride: String? = nil,
         onResume: @escaping () -> Void,
         onRestart: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) {
         self.item = item
+        self.userAgentOverride = userAgentOverride
         self.onResume = onResume
         self.onRestart = onRestart
         self.onDelete = onDelete
@@ -43,7 +46,7 @@ public struct ResumeWatchingCardView: View {
                 ZStack {
                     // Artwork / Poster
                     if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable()

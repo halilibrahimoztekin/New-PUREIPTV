@@ -12,6 +12,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
 
     /// M3U fields
     public let m3uURL: String?
+    public let userAgentOverride: String?
 
     public init(
         id: UUID = UUID(),
@@ -20,7 +21,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         serverURL: String? = nil,
         username: String? = nil,
         password: String? = nil,
-        m3uURL: String? = nil
+        m3uURL: String? = nil,
+        userAgentOverride: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -29,6 +31,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.username = username
         self.password = password
         self.m3uURL = m3uURL
+        self.userAgentOverride = userAgentOverride
     }
 
     /// Converts SavedPlaylist to an active PlaylistConfig instance if valid credentials exist.
@@ -41,15 +44,40 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             else {
                 return nil
             }
-            return PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)
+            return PlaylistConfig(
+                playlistID: id,
+                type: .xtream,
+                serverURL: url,
+                username: username,
+                password: password,
+                userAgentOverride: userAgentOverride
+            )
         } else if type == .m3u {
             guard let m3uURLStr = m3uURL,
                   let url = URL(string: m3uURLStr)
             else {
                 return nil
             }
-            return PlaylistConfig(type: .m3u, m3uURL: url)
+            return PlaylistConfig(
+                playlistID: id,
+                type: .m3u,
+                m3uURL: url,
+                userAgentOverride: userAgentOverride
+            )
         }
         return nil
+    }
+
+    public func replacingUserAgentOverride(_ value: String?) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            m3uURL: m3uURL,
+            userAgentOverride: value
+        )
     }
 }

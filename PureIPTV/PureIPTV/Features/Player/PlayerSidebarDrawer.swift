@@ -62,7 +62,10 @@ public struct PlayerSidebarDrawer: View {
         }
         .onChange(of: focusedItemID) { _, newID in
             if let newID, let ch = store.playlist?.first(where: { $0.id == newID }) {
-                PrebufferingManager.shared.prepareChannel(url: ch.streamURL)
+                PrebufferingManager.shared.prepareChannel(
+                    url: ch.streamURL,
+                    userAgentOverride: ch.userAgentOverride
+                )
             }
         }
         #if os(tvOS)
@@ -705,7 +708,7 @@ public struct PlayerSidebarDrawer: View {
     private func channelLogo(item: PlayerFeature.PlayableItem) -> some View {
         Group {
             if let coverURL = item.coverURL {
-                AsyncImage(url: coverURL) { phase in
+                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
                     switch phase {
                     case let .success(image):
                         image

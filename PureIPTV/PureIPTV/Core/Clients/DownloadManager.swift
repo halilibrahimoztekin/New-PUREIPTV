@@ -5,6 +5,7 @@ struct DownloadMetadata: Codable, Sendable {
     let id: String
     let title: String
     let coverURL: String?
+    let userAgentOverride: String?
 }
 
 actor DownloadManager {
@@ -25,11 +26,18 @@ actor DownloadManager {
         return URLSession(configuration: config, delegate: DownloadDelegate.shared, delegateQueue: nil)
     }()
 
-    func startDownload(id: String, title: String, url: URL, coverURL: URL?) throws {
+    func startDownload(id: String, title: String, url: URL, coverURL: URL?, userAgentOverride: String?) throws {
         invalidatedDownloadIDs.remove(id)
-        let task = session.downloadTask(with: url)
+        var request = URLRequest(url: url)
+        UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+        let task = session.downloadTask(with: request)
 
-        let metadata = DownloadMetadata(id: id, title: title, coverURL: coverURL?.absoluteString)
+        let metadata = DownloadMetadata(
+            id: id,
+            title: title,
+            coverURL: coverURL?.absoluteString,
+            userAgentOverride: userAgentOverride
+        )
         if let data = try? JSONEncoder().encode(metadata),
            let jsonString = String(data: data, encoding: .utf8)
         {
@@ -37,7 +45,14 @@ actor DownloadManager {
         }
 
         tasks[id] = task
-        let item = DownloadProgressItem(id: id, title: title, coverURL: coverURL?.absoluteString, progress: 0.0, isCompleted: false)
+        let item = DownloadProgressItem(
+            id: id,
+            title: title,
+            coverURL: coverURL?.absoluteString,
+            userAgentOverride: userAgentOverride,
+            progress: 0.0,
+            isCompleted: false
+        )
         activeDownloads[id] = item
         lastSpeedCalculationTimes[id] = Date()
         lastBytesWritten[id] = 0
@@ -93,6 +108,7 @@ actor DownloadManager {
                 id: metadata.id,
                 title: metadata.title,
                 coverURL: metadata.coverURL,
+                userAgentOverride: metadata.userAgentOverride,
                 progress: progress,
                 bytesWritten: receivedBytes,
                 totalBytesExpected: expectedBytes
@@ -240,7 +256,14 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
             let fileSize = attributes[.size] as? Int64 ?? 0
 
             let context = ModelContext(SharedDatabaseConfig.shared)
-            let offlineMedia = OfflineMedia(id: metadata.id, title: metadata.title, localFilePath: destinationURL.path, coverURL: metadata.coverURL, fileSize: fileSize)
+            let offlineMedia = OfflineMedia(
+                id: metadata.id,
+                title: metadata.title,
+                localFilePath: destinationURL.path,
+                coverURL: metadata.coverURL,
+                fileSize: fileSize,
+                userAgentOverride: metadata.userAgentOverride
+            )
             context.insert(offlineMedia)
             try context.save()
 

@@ -23,6 +23,7 @@ public enum MediaModels: Sendable {
         public let epgChannelID: String?
         public let tvArchive: Int?
         public let tvArchiveDuration: Int?
+        public let userAgentOverride: String?
 
         public init(
             id: String,
@@ -37,7 +38,8 @@ public enum MediaModels: Sendable {
             addedDate: Date? = nil,
             epgChannelID: String? = nil,
             tvArchive: Int? = nil,
-            tvArchiveDuration: Int? = nil
+            tvArchiveDuration: Int? = nil,
+            userAgentOverride: String? = nil
         ) {
             self.id = id
             self.title = title
@@ -52,6 +54,26 @@ public enum MediaModels: Sendable {
             self.epgChannelID = epgChannelID
             self.tvArchive = tvArchive
             self.tvArchiveDuration = tvArchiveDuration
+            self.userAgentOverride = userAgentOverride
+        }
+
+        public func replacingUserAgentOverride(_ value: String?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                categoryID: categoryID,
+                type: type,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: value
+            )
         }
     }
 

@@ -47,6 +47,7 @@ public struct PlayerFeature {
         public let epgChannelID: String?
         public let tvArchive: Int?
         public let categoryID: String?
+        public let userAgentOverride: String?
 
         public nonisolated init(
             id: String,
@@ -62,7 +63,8 @@ public struct PlayerFeature {
             config: PlaylistConfig? = nil,
             epgChannelID: String? = nil,
             tvArchive: Int? = nil,
-            categoryID: String? = nil
+            categoryID: String? = nil,
+            userAgentOverride: String? = nil
         ) {
             self.id = id
             self.title = title
@@ -78,6 +80,27 @@ public struct PlayerFeature {
             self.epgChannelID = epgChannelID
             self.tvArchive = tvArchive
             self.categoryID = categoryID
+            self.userAgentOverride = userAgentOverride ?? config?.userAgentOverride
+        }
+
+        public func replacingUserAgentOverride(_ value: String?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                seriesTitle: seriesTitle,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                seriesID: seriesID,
+                startPosition: startPosition,
+                initialDuration: initialDuration,
+                initialProgress: initialProgress,
+                isLive: isLive,
+                config: config?.replacingUserAgentOverride(value),
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                categoryID: categoryID,
+                userAgentOverride: value
+            )
         }
     }
 
@@ -621,6 +644,7 @@ public struct PlayerFeature {
             let position = state.item.startPosition ?? 0.0
             let seriesID = state.item.seriesID
             let config = state.item.config
+            let userAgentOverride = state.item.userAgentOverride
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
 
@@ -684,7 +708,7 @@ public struct PlayerFeature {
                         group.addTask {
                             if !isAlreadyPlaying {
                                 do {
-                                    try await playerClient.play(url)
+                                    try await playerClient.play(url, userAgentOverride)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
                                     }
@@ -951,6 +975,7 @@ public struct PlayerFeature {
             let isLive = state.item.isLive
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
             let currentRate = state.playbackRate
+            let userAgentOverride = state.item.userAgentOverride
             return .run { send in
                 // Flush and cleanly reset VLC engine to avoid pipeline lockups
                 try? await playerClient.stop()
@@ -966,7 +991,7 @@ public struct PlayerFeature {
 
                     group.addTask {
                         do {
-                            try await playerClient.play(url)
+                            try await playerClient.play(url, userAgentOverride)
                             if !isLive, position > 0 {
                                 try? await Task.sleep(nanoseconds: 500_000_000)
                                 try? await playerClient.seek(position)
@@ -1588,7 +1613,7 @@ public struct PlayerFeature {
             return .send(.selectChannel(targetItem))
 
         case .loadRecentChannels:
-            return .run { [playlist = state.playlist] send in
+            return .run { [playlist = state.playlist, config = state.item.config] send in
                 let recentDTOs = await recentChannelsClient.fetchRecentChannels()
                 let items: [PlayableItem] = recentDTOs.compactMap { dto in
                     if let match = playlist?.first(where: { $0.id == dto.id }) {
@@ -1601,6 +1626,7 @@ public struct PlayerFeature {
                         streamURL: dto.streamURL,
                         coverURL: dto.coverURL,
                         isLive: true,
+                        config: config,
                         epgChannelID: dto.epgChannelID,
                         tvArchive: dto.tvArchive,
                         categoryID: dto.categoryID
@@ -2052,6 +2078,7 @@ public struct PlayerFeature {
 
         case let .playArchive(program):
             guard state.item.tvArchive == 1 else { return .none }
+            let userAgentOverride = state.item.userAgentOverride
 
             let archiveStart = program.startTime.addingTimeInterval(
                 TimeInterval(customEPGMappingClient.getCatchupTimeShift(state.item.id) * 3600)
@@ -2078,7 +2105,7 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.activeCatchupProgram = program
                 return .run { _ in
-                    try await playerClient.play(catchupURL)
+                    try await playerClient.play(catchupURL, userAgentOverride)
                 } catch: { error, _ in
                     print("Failed to play catchup: \(error)")
                 }
@@ -2090,8 +2117,9 @@ public struct PlayerFeature {
             state.isCatchupTimelineVisible = false
             state.playerState = .playing
             let liveURL = state.item.streamURL
+            let userAgentOverride = state.item.userAgentOverride
             return .run { _ in
-                try await playerClient.play(liveURL)
+                try await playerClient.play(liveURL, userAgentOverride)
             } catch: { error, _ in
                 print("Failed to return to live stream: \(error)")
             }

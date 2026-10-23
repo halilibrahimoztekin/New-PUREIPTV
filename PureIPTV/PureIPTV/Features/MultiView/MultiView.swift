@@ -538,10 +538,12 @@ private struct ChannelSelectionSheet: View {
                 Button(action: { onSelect(channel) }) {
                     HStack(spacing: 12) {
                         if let url = channel.coverURL {
-                            AsyncImage(url: url) { img in
-                                img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)
-                            } placeholder: {
-                                Image(systemName: "tv").frame(width: 34, height: 34)
+                            PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
+                                if let img = phase.image {
+                                    img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)
+                                } else {
+                                    Image(systemName: "tv").frame(width: 34, height: 34)
+                                }
                             }
                         } else {
                             Image(systemName: "tv").frame(width: 34, height: 34)
@@ -623,7 +625,7 @@ private struct MultiViewPlayer: View {
         playerClient = client
 
         if let url = item.streamURL {
-            try? await client.play(url)
+            try? await client.play(url, item.userAgentOverride)
             try? await client.setVolume(isActiveAudio ? 100 : 0)
         }
     }

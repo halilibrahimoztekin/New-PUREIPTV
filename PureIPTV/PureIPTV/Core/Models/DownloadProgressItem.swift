@@ -4,6 +4,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let coverURL: String?
+    public let userAgentOverride: String?
     public var progress: Double // 0.0 ... 1.0
     public var isCompleted: Bool
     public var bytesWritten: Int64
@@ -14,6 +15,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         id: String,
         title: String,
         coverURL: String?,
+        userAgentOverride: String? = nil,
         progress: Double = 0.0,
         isCompleted: Bool = false,
         bytesWritten: Int64 = 0,
@@ -23,6 +25,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         self.id = id
         self.title = title
         self.coverURL = coverURL
+        self.userAgentOverride = userAgentOverride
         self.progress = progress
         self.isCompleted = isCompleted
         self.bytesWritten = bytesWritten

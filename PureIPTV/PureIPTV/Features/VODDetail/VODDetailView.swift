@@ -173,7 +173,7 @@ public struct VODDetailView: View {
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = posterURLString, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -1151,7 +1151,7 @@ public struct VODDetailView: View {
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()

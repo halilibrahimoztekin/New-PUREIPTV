@@ -3,7 +3,7 @@ import Foundation
 
 @DependencyClient
 public struct DownloadClient {
-    public var startDownload: @Sendable (_ id: String, _ title: String, _ url: URL, _ coverURL: URL?) async throws -> Void
+    public var startDownload: @Sendable (_ id: String, _ title: String, _ url: URL, _ coverURL: URL?, _ userAgentOverride: String?) async throws -> Void
     public var cancelDownload: @Sendable (_ id: String) async throws -> Void
     public var getDownloadProgress: @Sendable (_ id: String) -> AsyncStream<Double> = { _ in .finished }
     public var getDownloadedMedia: @Sendable () async throws -> [OfflineMedia]
@@ -15,8 +15,11 @@ public struct DownloadClient {
 
 extension DownloadClient: DependencyKey {
     public static let liveValue: DownloadClient = .init(
-        startDownload: { id, title, url, coverURL in
-            try await DownloadManager.shared.startDownload(id: id, title: title, url: url, coverURL: coverURL)
+        startDownload: { id, title, url, coverURL, userAgentOverride in
+            try await DownloadManager.shared.startDownload(
+                id: id, title: title, url: url, coverURL: coverURL,
+                userAgentOverride: userAgentOverride
+            )
         },
         cancelDownload: { id in
             await DownloadManager.shared.cancelDownload(id: id)

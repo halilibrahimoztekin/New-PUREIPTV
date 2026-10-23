@@ -548,7 +548,7 @@ public struct EPGTimelineView: View {
             HStack(spacing: 8) {
                 // Channel Logo
                 if let url = channel.coverURL {
-                    AsyncImage(url: url) { phase in
+                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                         if let image = phase.image {
                             image.resizable().aspectRatio(contentMode: .fit)
                         } else {
@@ -1013,7 +1013,7 @@ public struct EPGTimelineView: View {
             HStack {
                 HStack(spacing: 10) {
                     if let url = channel.coverURL {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                             if let img = phase.image {
                                 img.resizable().scaledToFit()
                             } else {
@@ -1164,7 +1164,7 @@ public struct EPGTimelineView: View {
 
                 // Blurred channel artwork backdrop if available
                 if let url = channel.coverURL {
-                    AsyncImage(url: url) { phase in
+                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                         if let img = phase.image {
                             img.resizable()
                                 .aspectRatio(contentMode: .fill)

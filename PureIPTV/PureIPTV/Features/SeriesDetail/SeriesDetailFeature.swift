@@ -355,7 +355,8 @@ public struct SeriesDetailFeature {
                     seriesID: state.series.id,
                     startPosition: startPosition,
                     initialDuration: history?.duration,
-                    initialProgress: initialProgress
+                    initialProgress: initialProgress,
+                    config: state.config
                 )
                 let playlistEpisodes = state.sequentialPlaylistEpisodes
                 let playlist = playlistEpisodes.isEmpty ? nil : playlistEpisodes.map { ep in
@@ -365,7 +366,8 @@ public struct SeriesDetailFeature {
                         seriesTitle: state.series.title,
                         streamURL: ep.streamURL,
                         coverURL: ep.coverURL ?? state.series.coverURL,
-                        seriesID: state.series.id
+                        seriesID: state.series.id,
+                        config: state.config
                     )
                 }
                 return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
@@ -392,7 +394,8 @@ public struct SeriesDetailFeature {
                     seriesID: state.series.id,
                     startPosition: startPosition,
                     initialDuration: history.duration > 0 ? history.duration : nil,
-                    initialProgress: history.progress > 0 ? history.progress : nil
+                    initialProgress: history.progress > 0 ? history.progress : nil,
+                    config: state.config
                 )
                 let resumeEpisodes = state.sequentialPlaylistEpisodes
                 let playlist = resumeEpisodes.isEmpty ? nil : resumeEpisodes.map { ep in
@@ -402,7 +405,8 @@ public struct SeriesDetailFeature {
                         seriesTitle: state.series.title,
                         streamURL: ep.streamURL,
                         coverURL: ep.coverURL ?? state.series.coverURL,
-                        seriesID: state.series.id
+                        seriesID: state.series.id,
+                        config: state.config
                     )
                 }
                 return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
@@ -422,7 +426,8 @@ public struct SeriesDetailFeature {
                         streamURL: streamURL,
                         coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                         seriesID: state.series.id,
-                        startPosition: 0.0
+                        startPosition: 0.0,
+                        config: state.config
                     )
                     let restartEpisodes = state.sequentialPlaylistEpisodes
                     let playlist = restartEpisodes.isEmpty ? nil : restartEpisodes.map { ep in
@@ -432,7 +437,8 @@ public struct SeriesDetailFeature {
                             seriesTitle: state.series.title,
                             streamURL: ep.streamURL,
                             coverURL: ep.coverURL ?? state.series.coverURL,
-                            seriesID: state.series.id
+                            seriesID: state.series.id,
+                            config: state.config
                         )
                     }
                     return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
@@ -480,6 +486,7 @@ public struct SeriesDetailFeature {
 
                     let id = episode.id
                     let title = "\(state.series.title) - S\(episode.season)E\(episode.episodeNum): \(episode.title)"
+                    let userAgentOverride = state.config.userAgentOverride
 
                     let finalCoverURL: URL? = {
                         if let url = episode.coverURL {
@@ -493,7 +500,7 @@ public struct SeriesDetailFeature {
                     }()
 
                     return .run { send in
-                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL)
+                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
                         let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
                         let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
                         await send(.downloadedEpisodesLoaded(dict))

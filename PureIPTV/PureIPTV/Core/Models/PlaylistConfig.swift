@@ -1,6 +1,7 @@
 import Foundation
 
 public struct PlaylistConfig: Equatable, Sendable {
+    public let playlistID: UUID?
     public let type: PlaylistType
 
     // Xtream
@@ -10,18 +11,36 @@ public struct PlaylistConfig: Equatable, Sendable {
 
     /// M3U
     public let m3uURL: URL?
+    /// Optional provider-specific HTTP User-Agent. `nil` keeps the app default.
+    public let userAgentOverride: String?
 
     public nonisolated init(
+        playlistID: UUID? = nil,
         type: PlaylistType,
         serverURL: URL? = nil,
         username: String? = nil,
         password: String? = nil,
-        m3uURL: URL? = nil
+        m3uURL: URL? = nil,
+        userAgentOverride: String? = nil
     ) {
+        self.playlistID = playlistID
         self.type = type
         self.serverURL = serverURL
         self.username = username
         self.password = password
         self.m3uURL = m3uURL
+        self.userAgentOverride = userAgentOverride
+    }
+
+    public func replacingUserAgentOverride(_ value: String?) -> Self {
+        Self(
+            playlistID: playlistID,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            m3uURL: m3uURL,
+            userAgentOverride: value
+        )
     }
 }

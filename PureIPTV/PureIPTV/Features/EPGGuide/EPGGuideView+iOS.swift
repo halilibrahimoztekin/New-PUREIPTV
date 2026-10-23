@@ -97,7 +97,7 @@ import SwiftUI
             } label: {
                 HStack(spacing: 12) {
                     if let coverURL = channel.coverURL {
-                        AsyncImage(url: coverURL) { phase in
+                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {
@@ -140,7 +140,7 @@ import SwiftUI
             } label: {
                 VStack(spacing: 8) {
                     if let coverURL = channel.coverURL {
-                        AsyncImage(url: coverURL) { phase in
+                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {

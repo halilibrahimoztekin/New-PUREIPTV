@@ -162,7 +162,7 @@ public struct LiveEPGMiniPreviewView: View {
                 // Logo
                 Group {
                     if let coverURL = channel.coverURL {
-                        AsyncImage(url: coverURL) { phase in
+                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable().aspectRatio(contentMode: .fit)

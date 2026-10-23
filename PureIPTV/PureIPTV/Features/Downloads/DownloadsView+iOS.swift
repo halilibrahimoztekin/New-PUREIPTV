@@ -83,7 +83,7 @@
                                     HStack(spacing: 14) {
                                         // Thumbnail
                                         if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                                            AsyncImage(url: coverURL) { phase in
+                                            PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
                                                 switch phase {
                                                 case let .success(image):
                                                     image.resizable().scaledToFill()
@@ -166,7 +166,7 @@
                                     } label: {
                                         HStack(spacing: 14) {
                                             if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                                                AsyncImage(url: coverURL) { phase in
+                                                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
                                                     switch phase {
                                                     case let .success(image):
                                                         image.resizable().scaledToFill()

@@ -67,6 +67,10 @@ public final class UserAgentManager: ObservableObject {
     }
 
     public nonisolated var resolvedUserAgent: String {
+        Self.resolveUserAgent()
+    }
+
+    public nonisolated static func resolveUserAgent() -> String {
         let presetRaw = UserDefaults.standard.string(forKey: "pureiptv_user_agent_preset")
         let customString = UserDefaults.standard.string(forKey: "pureiptv_user_agent_custom") ?? ""
         if presetRaw == UserAgentPreset.custom.rawValue, !customString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -76,7 +80,12 @@ public final class UserAgentManager: ObservableObject {
         return preset.userAgentString
     }
 
-    public nonisolated func applyHeaders(to request: inout URLRequest) {
-        request.setValue(resolvedUserAgent, forHTTPHeaderField: "User-Agent")
+    public nonisolated func applyHeaders(to request: inout URLRequest, override: String? = nil) {
+        Self.applyHeaders(to: &request, override: override)
+    }
+
+    public nonisolated static func applyHeaders(to request: inout URLRequest, override: String? = nil) {
+        let value = override?.trimmingCharacters(in: .whitespacesAndNewlines)
+        request.setValue(value?.isEmpty == false ? value : resolveUserAgent(), forHTTPHeaderField: "User-Agent")
     }
 }
