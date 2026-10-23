@@ -15,7 +15,15 @@ enum PlaybackAudioSession {
                 do {
                     let session = AVAudioSession.sharedInstance()
                     if active {
-                        try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
+                        // Avoid reapplying an identical configuration. A
+                        // category change can trigger a route update and may
+                        // block on system audio work.
+                        if session.category != .playback
+                            || session.mode != .moviePlayback
+                            || session.routeSharingPolicy != .longFormAudio
+                        {
+                            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
+                        }
                     }
                     try session.setActive(active)
                     continuation.resume()

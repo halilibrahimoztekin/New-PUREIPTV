@@ -49,7 +49,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 31. [IN_PROGRESS] Dashboard Raflarını Hızlı Açılış için Önbellekleme
+### 31. [DONE] Dashboard Raflarını Hızlı Açılış için Önbellekleme
 - **Bulgu:** Son aktif playlist zaten `PlaylistRepository` ile kalıcı tutuluyor ve açılışta otomatik seçiliyor; bu nedenle yeni playlist açılış tercihi eklemek mevcut davranışı yineleyecekti. Profil seçimi ebeveyn/çocuk profili güvenliği için korunmalı. Gerçek gecikme kaynağı Dashboard’ın her uygulama açılışında üç tam kataloğu tekrar istemesi.
 - **Canlı keşif (23 Ekim 2026):** IPTVX 23.2 sürüm notları başlangıçta son playlist’i otomatik açma tercihini doğruluyor. Büyük playlist’lerin açılışta gereksiz yenilenmesiyle ilgili Apple TV kullanıcı şikayeti de hızlı açılış / manuel kontrol ihtiyacını destekliyor.
 - **Kaynaklar:** https://apps.apple.com/ly/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ufhnhh/
@@ -91,11 +91,71 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 36. [PENDING] Canlı Yayın Duraklatma ve Yerel Geri Sarma Tamponu
+### 36. [DONE] Canlı Yayın Duraklatma ve Yerel Geri Sarma Tamponu — uygulanabilirlik kararı
 - **Bulgu:** Apple TV’de kullanıcılar canlı yayın duraklatıldığında konum göstergesi/geri sarma olmamasını, başka platformlarda pause/rewind çalışmasını bildiriyor. PureIPTV’de VLC’nin canlı yayın state/position API’si var, fakat normal network buffer gerçek DVR zaman çizgisi değil; anlamlı geri sarma için dosya/segment yakalama, süre ve depolama sınırı, seek destekleme ve canlı noktaya dönüş yönetimi gerekiyor.
-- **Canlı keşif (24 Ekim 2026):** UHF Apple TV şikâyeti pause ayarı açık olsa da timeline/geri sarma olmadığını belirtiyor; bir diğer kullanıcı hizmet değiştirmenin nedeni olarak pause’un çalışmamasını aktarıyor. Timeshift/yerel tampon kaynakları, buffer’ın player/protokole bağlı olduğunu ve yerel disk yönetiminin gerektiğini açıklıyor.
+- **Canlı keşif (24 Ekim 2026):** UHF Apple TV kullanıcısı pause çalışırken timeline/geri sarma olmadığını bildiriyor. Ayrı bir Apple TV tartışması pause’un platform/uygulama desteğini soruyor; hizmet değiştirme iddiası kaynakla doğrulanmadığı için çıkarıldı. OrbitAI sayfası yerel HLS/MPEG-TS tamponu için rakip tasarım örneğidir, SwiftVLC uyumluluğunun kanıtı değildir.
 - **Kaynaklar:** https://www.reddit.com/r/uhf_app/comments/1o4d2da/appletv_os_skip_forward_backforward_not_possible/ · https://www.reddit.com/r/localtvplus/comments/1u5jgbv/pause_rewind_on_apple_tv/ · https://orbitai.tv/en/docs/timeshift-catch-up
 - **Kod taraması:** Player VLC için pause, relative seek ve buffer-health metriklerini sunuyor; `totalTime == 0` canlı durumda scrubber’ı gizliyor. Entegrasyondaki mevcut network buffer göstergesi local DVR kapasitesi sağlamıyor. Güvenli kapsam için önce SwiftVLC/libVLC’nin iOS/tvOS’ta erişilebilir kayıt/caching kabiliyetini ve depolama politikasını araştırmak gerekiyor.
+- **Paket incelemesi:** SwiftVLC `Player.startRecording(to:)` kaydı dosyaya başlatıp durduruyor; oynatılan canlı stream için döngüsel seek tamponu veya canlı noktaya dönme API’si sunmuyor. Uygulamanın `LocalDVRManager` da URLSession’dan ayrı `.ts` dosyası yazıyor ve VLC playback’ine bağlanmıyor. Bu iki yol kayıt işlevi, canlı time-shift değildir.
+- **Sonuç:** Mevcut SwiftVLC entegrasyonunda bounded segment-ring buffer, VLC’ye seek edilebilir kaynak, dosya yaş/kapasite eviction’ı ve live-edge geçişi bulunmuyor. UI-only scrubber yanlış seek vaadi olur. Bu nedenle bu altyapıyla özellik için **NO-GO**; ayrı playback/DVR mimarisi gerekir. Kullanıcı akışları çalıştırılmadı. **Canlı pause/rewind özelliği gönderilmedi.**
+- **Durum:** `[DONE]` — yalnızca uygulanabilirlik kararı kapatıldı; DVR özelliği tamamlanmadı.
+
+### 37. [PENDING] Hatalı Xtream Bölümü İçin Tekrar Dene
+- **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları, yüklenemeyen Xtream bölümüne playlist’in tamamını yeniden yüklemeden bölüm bazlı Retry eylemi eklediğini belirtiyor. Bu, büyük kataloglarda hata kurtarmayı daha hızlı ve düşük maliyetli yapıyor.
+- **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** Xtream bölüm yükleme hataları bölüm düzeyinde görünür mü; retry yalnız ilgili endpoint’i çağırıp eski başarılı bölümleri koruyor mu?
+
+### 38. [PENDING] Playlist Başına Özel User-Agent
+- **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları hazır User-Agent seçeneklerine ek olarak özel değer girişi sunduğunu bildiriyor. Sağlayıcı uyumluluğunda istemci başlığını değiştirmek kullanıcıya pratik bir çözüm veriyor.
+- **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** `UserAgentManager` mevcut ortak başlık kaynağı; tercih playlist bazında saklanıp Xtream, M3U, catch-up ve artwork isteklerinde tutarlı kullanılabilir.
+
+### 39. [PENDING] VOD için Daha Büyük Ağ Tamponu Seçeneği
+- **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları Metal oynatıcıya daha akıcı oynatma için isteğe bağlı büyük tampon modu eklediğini bildiriyor.
+- **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** Mevcut VLC buffer ayarları ve `StreamHealthMetrics` üzerinden düşük bant genişliğinde VOD’a özel tampon seçeneği; canlı kanal zapping gecikmesini artırmamalı.
+
+### 40. [PENDING] Oyuncu İçinden Playback Engine Seçimi
+- **Bulgu:** IPTVX 22.0.1 sürüm notları oynatıcı içinde yalnız mevcut oturuma uygulanan motor değiştirme seçeneğini tanıtıyor; resmi App Store açıklaması da çoklu oynatıcı uyumluluğunu vurguluyor.
+- **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** PureIPTV’nin VLC sarmalayıcısı içerik/codec uyumsuzluğunda alternatif playback backend açabiliyor mu; sağlayıcı parolası ve playback konumu dışarı sızmadan oturuma özel seçim tasarla.
+
+### 41. [PENDING] Arama Sonuçlarında EPG Programı ve Kayıt Eylemi
+- **Bulgu:** IPTVX 22.3 sürüm notları arama sonuçlarındaki EPG programları için doğrudan kayıt seçeneklerini eklediğini belirtiyor. Program araması ile eylem arasındaki gezinmeyi azaltıyor.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** Global arama EPG programlarını içeriyor mu; program satırından mevcut catch-up oynatma veya kayıt altyapısı kullanılabiliyor mu? Kayıt varsa UHF Server ve yerel DVR kapsamlarını ayır.
+
+### 42. [PENDING] EPG Yüklenirken Boşlukları Azalt ve Kısmi Sonuç Göster
+- **Bulgu:** IPTVX 22.2 sürüm notları büyük EPG yüklemesinde placeholder boşluklarını azaltıp rehber güvenilirliğini iyileştirdiğini; UHF kullanıcıları ise Apple TV’de EPG’nin çok uzun sürmesi ve cihazlar arasında eski/farklı bilgi göstermesi sorununu paylaşıyor.
+- **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/uhf_app/comments/1q1edqo/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
+- **İnceleme odağı:** EPG cache kapsamı playlist/cihaz bazında mı, kısmi yükleme UI’ı veriyi bekliyor mu; eski cache güncellik damgasıyla gösterilebilir mi?
+
+### 43. [PENDING] Canlı Önizlemeyi Tam Ekrana Yeniden Bağlanmadan Terfi Ettir
+- **Bulgu:** IPTVX 22.3 App Store notları önizlenen kanalı tam ekrana geçirirken mümkün olduğunda yeniden bağlantıyı önlediğini ve kategori değişiminde eski preview akışını kapattığını bildiriyor.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **İnceleme odağı:** PureIPTV’de EPG mini-preview ile ana VLC player ayrı oturum kullanıyor; preview→player terfisi mevcut native handle’ı güvenle devredebilir mi, ses/abonelik kaynaklarını doğru kapatıyor mu?
+
+### 44. [PENDING] TV Rehberinde EPG Yenileme ve Yaş Damgası
+- **Bulgu:** Kullanıcılar Apple TV rehberinin hiç yüklenmemesi veya iOS cihazdaki rehberden farklı/eski içerik göstermesi sorununu bildiriyor; sağlayıcıyı silip tekrar eklemenin geçici çözüm olduğuna dair rapor da var.
+- **Kaynaklar:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
+- **İnceleme odağı:** Kullanıcıya playlist/EPG kaynağı başına son başarılı güncelleme zamanı, kısmi hata ve yalnız EPG’yi yenile eylemi sun; tam playlist silme/yeniden ekleme gerektirmesin.
+
+### 45. [PENDING] EPG Programında Kayıt Süresini Serbest Belirleme
+- **Bulgu:** UHF 1.95 sürüm notları kayıt süresini 15 dakikalık aralıklara bağlı olmadan seçme ve 24 saate kadar kayıt başlatma özelliğini duyuruyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=mac
+- **İnceleme odağı:** Uygulamadaki `LocalDVRManager` yalnızca ham URL dosyasını kaydediyor; EPG program zamanlaması, uçta pay bırakma ve kayıt çakışması çözümleme ayrı TCA akışı gerektirir.
+
+### 46. [PENDING] Kanal Geçişi Gecikmesini Sağlayıcıya Göre Ayarlama
+- **Bulgu:** UHF 1.101.2 sürüm notları, kanal değişiminde aktif bağlantı sorunları yaşayan kullanıcıların kapatılan ve açılan stream arasındaki gecikmeyi artırabilmesi için “Channel zapping delay” ayarı eklediğini bildiriyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=mac
+- **İnceleme odağı:** Hızlı geçiş isteyenleri yavaşlatmadan, bağlantı çakışan sağlayıcılar için playlist/sağlayıcı bazında geçiş gecikmesi sun; AFR tercihi ve alternatif-source değişimiyle etkileşimini kontrol et.
+
+### 47. [DONE] Aktif Audio Session’da Gereksiz Kategori Değişimini Önle
+- **Bulgu:** Kullanıcı iOS 26.5 iPhone 17 loglarında `setCategory` sırasında aktif AVAudioSession’ın main-thread hang uyarısını ve SwiftVLC kaynaklı `defaultToSpeaker`/`playAndRecord` kategori uyumsuzluğu hatasını paylaştı.
+- **Kod incelemesi:** App `PlaybackAudioSession` mutasyonları seri arka plan kuyruğuna gönderiyor; kategori/mode/policy’yi her `setActive(true)` çağrısında tekrar kuruyordu. App target’ındaki Swift kaynaklarda `defaultToSpeaker` kullanılmıyor; PiP player’ları `.applicationManaged` SwiftVLC instance’ını kullanıyor. Kaynakta görünür kategori tekrarını azaltmak güvenli, repo dışı kategori hatasının kaynağını bu kodla belirlemek mümkün değil.
+- **Uygulama:** Kategori, mode veya route-sharing policy istenen değerlerden farklıysa değiştirilecek; aynı ayar aktif oturuma tekrar uygulanmayacak.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; bağlı iOS 26.5 iPhone 17 için Release compile-only build exit code 0. Debug build, `TCACoordinators 0.16.0` bağımlılığında XCTest sembolleri çözülmediği için başarısız oldu. App akışı/test edilmedi.
+- **Durum:** `[DONE]` — audio-session kategori ayarı idempotent hale getirildi; reviewer onayladı.
 
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)
 - **Açıklama:** Canlı yayın izlerken Siri Remote aşağı basıldığında veya iOS'ta buton/menü ile ekranın altında beliren, son izlenen 10 kanalı logo, canlı badge, aktif oynatma halkası ve odaklanabilir kartlarla gösteren hızlı zapping rulosu.
