@@ -31,9 +31,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve bir script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 29. [PENDING] Kanal Bazlı Catch-up Zaman Ofseti
+### 29. [DONE] Kanal Bazlı Catch-up Zaman Ofseti
 - **Bulgu:** Farklı sağlayıcıların arşiv zaman farklarını kanal başına düzeltme ihtiyacı; UHF bunu kanal bilgi düzenleme ekranına ekledi.
-- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726
+- **Canlı keşif (23 Ekim 2026):** UHF App Store sürüm notları desteklenen kanala uzun basıp Edit Information içinden kanal bazlı catch-up offset ayarını doğruluyor. Reddit kullanıcısı archive stream’in EPG’ye göre saatler kaydığını, kanal veya playlist seviyesinde time shift gerektiğini bildiriyor.
+- **Kaynaklar:** https://apps.apple.com/pl/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/IPTVGroupBuy/comments/1indo6l/
+- **Analiz:** Catch-up URL’leri Player, EPG Guide ve LiveTV EPG timeline’da ayrı ayrı oluşturuluyor. Per-channel EPG shift alanı arşiv URL’sinde kullanılmıyor ve arşiv saat düzeltmesi olarak tekrar kullanılması EPG ile catch-up ayarlarını birbirine bağlardı; M3U catch-up template playback yolu mevcut akışta kapsam dışı.
+- **Uygulama:** `CustomEPGMappingClient` içinde kanal ID’sine göre kalıcı, ±12 saat sınırlandırılmış ayrı catch-up ofseti eklendi. Oynatıcıdaki Arşiv Zaman Çizelgesi paneline kanal başına saat düzeltme kontrolleri kondu. Üç Xtream catch-up URL üreticisi arşiv başlangıcına bu ofseti uyguluyor; EPG görüntüleme saatleri ve program süresi değişmiyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 30. [PENDING] Canlı Eşleşen Alternatif Kaynağa Kesintisiz Geçiş
 - **Bulgu:** Aynı kanalın alternatif canlı kaynaklarını oynatıcıdan, yayın akışını kapatmadan seçme; IPTVX’in son sürüm notlarında yer alıyor.

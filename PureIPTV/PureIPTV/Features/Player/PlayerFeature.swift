@@ -127,6 +127,7 @@ public struct PlayerFeature {
         }
 
         public var isCatchupTimelineVisible: Bool = false
+        public var catchupTimeShiftHours: Int = 0
         public var isTracksMenuVisible: Bool = false
 
         // Gestures
@@ -389,6 +390,7 @@ public struct PlayerFeature {
         case updateStreamHealth(StreamHealthMetrics)
         case toggleCatchupTimeline
         case setCatchupTimelineVisible(Bool)
+        case setCatchupTimeShiftHours(Int)
         case returnToLiveStream
 
         // Gestures & Adjustments
@@ -1626,6 +1628,7 @@ public struct PlayerFeature {
                 state.failedStreamIDs.removeAll()
             }
             state.item = newItem
+            state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(newItem.id)
             state.isChannelListVisible = false
             state.isRecentChannelsHUDVisible = false
             state.isAudioSyncHUDVisible = false
@@ -2050,9 +2053,12 @@ public struct PlayerFeature {
         case let .playArchive(program):
             guard state.item.tvArchive == 1 else { return .none }
 
+            let archiveStart = program.startTime.addingTimeInterval(
+                TimeInterval(customEPGMappingClient.getCatchupTimeShift(state.item.id) * 3600)
+            )
             let startFormat = DateFormatter()
             startFormat.dateFormat = "yyyy-MM-dd:HH-mm"
-            let startTimeString = startFormat.string(from: program.startTime)
+            let startTimeString = startFormat.string(from: archiveStart)
             let durationMinutes = Int(program.endTime.timeIntervalSince(program.startTime) / 60)
 
             guard let streamURL = URL(string: state.item.streamURL.absoluteString),
@@ -2093,6 +2099,7 @@ public struct PlayerFeature {
         case .toggleCatchupTimeline:
             state.isCatchupTimelineVisible.toggle()
             if state.isCatchupTimelineVisible {
+                state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(state.item.id)
                 state.isTracksMenuVisible = false
                 state.isInfoVisible = false
                 state.isStreamHealthHUDVisible = false
@@ -2108,8 +2115,18 @@ public struct PlayerFeature {
         case let .setCatchupTimelineVisible(visible):
             state.isCatchupTimelineVisible = visible
             if visible, state.epgListings.isEmpty {
+                state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(state.item.id)
                 return .send(.fetchEPG)
             }
+            if visible {
+                state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(state.item.id)
+            }
+            return .none
+
+        case let .setCatchupTimeShiftHours(hours):
+            let boundedHours = min(12, max(-12, hours))
+            state.catchupTimeShiftHours = boundedHours
+            customEPGMappingClient.setCatchupTimeShift(state.item.id, boundedHours)
             return .none
 
         case .fetchMediaInfo:

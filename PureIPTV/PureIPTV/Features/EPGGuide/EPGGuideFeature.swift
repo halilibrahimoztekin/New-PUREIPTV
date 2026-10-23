@@ -48,6 +48,7 @@ public struct EPGGuideFeature {
     }
 
     @Dependency(\.iptvClient) var iptvClient
+    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.previewPlayerClient) var previewPlayerClient
     @Dependency(\.continuousClock) var clock
@@ -157,7 +158,10 @@ public struct EPGGuideFeature {
             case let .playCatchUp(program, channel):
                 let config = state.config
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return .none }
-                let startUnix = Int(program.startTime.timeIntervalSince1970)
+                let archiveStart = program.startTime.addingTimeInterval(
+                    TimeInterval(customEPGMappingClient.getCatchupTimeShift(channel.id) * 3600)
+                )
+                let startUnix = Int(archiveStart.timeIntervalSince1970)
                 let durationMins = max(1, Int(program.endTime.timeIntervalSince(program.startTime) / 60))
 
                 var components = URLComponents(url: serverURL.appendingPathComponent("streaming/timeshift.php"), resolvingAgainstBaseURL: false)

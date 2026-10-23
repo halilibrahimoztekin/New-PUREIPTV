@@ -45,6 +45,8 @@ public struct CatchupTimelineScrubberView: View {
             // Header Bar & Days Filter
             headerBar
 
+            catchupOffsetControls
+
             // Day Selector Tabs
             dayFilterTabs
 
@@ -166,6 +168,48 @@ public struct CatchupTimelineScrubberView: View {
 
             Spacer()
         }
+    }
+
+    private var catchupOffsetControls: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Arşiv saat düzeltmesi".localized)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Yalnızca bu kanalın catch-up başlangıç saatini değiştirir.".localized)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                store.send(.setCatchupTimeShiftHours(store.catchupTimeShiftHours - 1))
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Arşiv saatini bir saat geri al".localized)
+
+            Text(String(format: "%+d sa", store.catchupTimeShiftHours))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+                .frame(minWidth: 56)
+                .accessibilityLabel("Arşiv düzeltmesi %@".localized(String(format: "%+d saat", store.catchupTimeShiftHours)))
+
+            Button {
+                store.send(.setCatchupTimeShiftHours(store.catchupTimeShiftHours + 1))
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Arşiv saatini bir saat ileri al".localized)
+        }
+        .foregroundStyle(Color(hex: "#BF5AF2"))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder

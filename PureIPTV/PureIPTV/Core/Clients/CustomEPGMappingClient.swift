@@ -153,6 +153,11 @@ public struct CustomEPGMappingClient: Sendable {
     public var getChannelTimeShift: @Sendable (_ channelID: String) -> Int = { _ in 0 }
     public var setChannelTimeShift: @Sendable (_ channelID: String, _ hours: Int) -> Void
 
+    /// Catch-up clock correction is separate from EPG display correction.
+    /// Positive values move the requested archive start later.
+    public var getCatchupTimeShift: @Sendable (_ channelID: String) -> Int = { _ in 0 }
+    public var setCatchupTimeShift: @Sendable (_ channelID: String, _ hours: Int) -> Void
+
     public var getGlobalTimeShift: @Sendable () -> Int = { 0 }
     public var setGlobalTimeShift: @Sendable (_ hours: Int) -> Void
 
@@ -167,6 +172,7 @@ extension CustomEPGMappingClient: DependencyKey {
         let sourcesKey = "com.pureiptv.customEPGSources"
         let mappingsKey = "com.pureiptv.channelEPGMappings"
         let globalShiftKey = "com.pureiptv.epgTimeShift"
+        let catchupShiftsKey = "com.pureiptv.channelCatchupTimeShifts"
 
         @Sendable func loadSources() -> [CustomEPGSource] {
             guard let data = defaults.data(forKey: sourcesKey) else { return [] }
@@ -187,6 +193,17 @@ extension CustomEPGMappingClient: DependencyKey {
         @Sendable func saveMappings(_ mappings: [String: ChannelEPGMapping]) {
             if let data = try? JSONEncoder().encode(mappings) {
                 defaults.set(data, forKey: mappingsKey)
+            }
+        }
+
+        @Sendable func loadCatchupShifts() -> [String: Int] {
+            guard let data = defaults.data(forKey: catchupShiftsKey) else { return [:] }
+            return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
+        }
+
+        @Sendable func saveCatchupShifts(_ shifts: [String: Int]) {
+            if let data = try? JSONEncoder().encode(shifts) {
+                defaults.set(data, forKey: catchupShiftsKey)
             }
         }
 
@@ -313,6 +330,19 @@ extension CustomEPGMappingClient: DependencyKey {
                     mappings[channelID] = ChannelEPGMapping(channelID: channelID, channelName: channelID, timeShiftHours: hours)
                 }
                 saveMappings(mappings)
+            },
+            getCatchupTimeShift: { channelID in
+                loadCatchupShifts()[channelID] ?? 0
+            },
+            setCatchupTimeShift: { channelID, hours in
+                var shifts = loadCatchupShifts()
+                let boundedHours = min(12, max(-12, hours))
+                if boundedHours == 0 {
+                    shifts.removeValue(forKey: channelID)
+                } else {
+                    shifts[channelID] = boundedHours
+                }
+                saveCatchupShifts(shifts)
             },
             getGlobalTimeShift: {
                 defaults.integer(forKey: globalShiftKey)
