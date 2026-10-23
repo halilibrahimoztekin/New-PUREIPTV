@@ -50,6 +50,7 @@ public struct SettingsFeature {
         public var isChannelNameCleaningEnabled: Bool = true
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
+        public var downloadConcurrencyLimit: Int = 1
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
 
@@ -153,6 +154,7 @@ public struct SettingsFeature {
         case setChannelNameCleaningEnabled(Bool)
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
+        case setDownloadConcurrencyLimit(Int)
         case setHideAdultContent(Bool)
         case setDefaultStartupTab(String)
         case setPreferredAudioLanguage(String)
@@ -236,6 +238,7 @@ public struct SettingsFeature {
     @Dependency(\.topShelfClient) var topShelfClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.cloudSyncClient) var cloudSyncClient
+    @Dependency(\.downloadClient) var downloadClient
 
     public init() {}
 
@@ -258,6 +261,7 @@ public struct SettingsFeature {
                 state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
+                state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
                 state.hideAdultContent = settingsClient.hideAdultContent()
                 state.defaultStartupTab = settingsClient.defaultStartupTab()
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
@@ -391,6 +395,14 @@ public struct SettingsFeature {
             case let .setAutoPlayNextEpisode(val):
                 state.autoPlayNextEpisode = val
                 return .run { _ in settingsClient.setAutoPlayNextEpisode(val) }
+
+            case let .setDownloadConcurrencyLimit(value):
+                let limit = min(4, max(1, value))
+                state.downloadConcurrencyLimit = limit
+                return .run { _ in
+                    settingsClient.setDownloadConcurrencyLimit(limit)
+                    await downloadClient.setConcurrencyLimit(limit)
+                }
 
             case let .setStartMuted(val):
                 state.startMuted = val

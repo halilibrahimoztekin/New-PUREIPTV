@@ -66,7 +66,7 @@ public struct DownloadsFeature {
                 return .none
 
             case let .downloadProgressUpdated(update):
-                if update.isCompleted {
+                if update.isCompleted || update.isFailed {
                     state.activeDownloads.removeAll { $0.id == update.id }
                     return .send(.loadDownloads)
                 } else {

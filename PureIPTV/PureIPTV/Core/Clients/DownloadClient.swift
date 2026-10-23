@@ -11,6 +11,7 @@ public struct DownloadClient {
     public var isDownloaded: @Sendable (_ id: String) async throws -> Bool
     public var getActiveDownloads: @Sendable () async -> [DownloadProgressItem] = { [] }
     public var observeDownloads: @Sendable () -> AsyncStream<DownloadProgressItem> = { .finished }
+    public var setConcurrencyLimit: @Sendable (_ value: Int) async -> Void = { _ in }
 }
 
 extension DownloadClient: DependencyKey {
@@ -56,6 +57,9 @@ extension DownloadClient: DependencyKey {
                     }
                 }
             }
+        },
+        setConcurrencyLimit: { value in
+            await DownloadManager.shared.setConcurrencyLimit(value)
         }
     )
 }

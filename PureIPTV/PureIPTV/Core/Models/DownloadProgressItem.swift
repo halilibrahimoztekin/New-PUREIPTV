@@ -10,6 +10,8 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     public var bytesWritten: Int64
     public var totalBytesExpected: Int64
     public var speedBytesPerSecond: Double
+    public var isQueued: Bool
+    public var isFailed: Bool
 
     public init(
         id: String,
@@ -20,7 +22,9 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         isCompleted: Bool = false,
         bytesWritten: Int64 = 0,
         totalBytesExpected: Int64 = 0,
-        speedBytesPerSecond: Double = 0
+        speedBytesPerSecond: Double = 0,
+        isQueued: Bool = false,
+        isFailed: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -31,6 +35,8 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         self.bytesWritten = bytesWritten
         self.totalBytesExpected = totalBytesExpected
         self.speedBytesPerSecond = speedBytesPerSecond
+        self.isQueued = isQueued
+        self.isFailed = isFailed
     }
 
     public var formattedProgress: String {

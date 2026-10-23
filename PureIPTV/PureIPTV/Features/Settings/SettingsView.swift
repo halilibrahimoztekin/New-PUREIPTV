@@ -194,6 +194,20 @@ public struct SettingsView: View {
                     set: { store.send(.setHardwareAcceleration($0)) }
                 ))
 
+                #if os(iOS)
+                    Picker(AppStrings.Settings.downloadConcurrencyLimit, selection: Binding(
+                        get: { store.downloadConcurrencyLimit },
+                        set: { store.send(.setDownloadConcurrencyLimit($0)) }
+                    )) {
+                        ForEach(1 ... 4, id: \.self) { limit in
+                            Text("\(limit)").tag(limit)
+                        }
+                    }
+                    Text(AppStrings.Settings.downloadConcurrencyLimitDesc)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                #endif
+
                 Picker("Film ve Dizi Arabellek Boyutu", selection: Binding(
                     get: { store.bufferProfile },
                     set: { store.send(.setBufferProfile($0)) }

@@ -57,6 +57,8 @@ public struct SettingsClient: Sendable {
 
     public var autoUpdateEPG: @Sendable () -> Bool = { true }
     public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
+    public var downloadConcurrencyLimit: @Sendable () -> Int = { 1 }
+    public var setDownloadConcurrencyLimit: @Sendable (Int) -> Void = { _ in }
     public var getLastEPGRefreshDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
     public var setLastEPGRefreshDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
 
@@ -122,6 +124,7 @@ extension SettingsClient: DependencyKey {
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
+        let downloadConcurrencyLimitKey = "com.pureiptv.downloadConcurrencyLimit"
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
@@ -145,6 +148,7 @@ extension SettingsClient: DependencyKey {
             autoPlayKey: true,
             hwAccelKey: true,
             autoUpdateEpgKey: true,
+            downloadConcurrencyLimitKey: 1,
             startupTabKey: "Keşfet",
             preferredAudioKey: "tr",
             secondaryAudioKey: "en",
@@ -259,6 +263,8 @@ extension SettingsClient: DependencyKey {
             setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
             autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },
             setAutoUpdateEPG: { defaults.set($0, forKey: autoUpdateEpgKey) },
+            downloadConcurrencyLimit: { min(4, max(1, defaults.integer(forKey: downloadConcurrencyLimitKey))) },
+            setDownloadConcurrencyLimit: { defaults.set(min(4, max(1, $0)), forKey: downloadConcurrencyLimitKey) },
             getLastEPGRefreshDate: { playlistID in
                 guard let playlistID else { return nil }
                 return defaults.object(forKey: lastEPGRefreshPrefix + playlistID.uuidString) as? Date

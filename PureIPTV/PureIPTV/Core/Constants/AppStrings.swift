@@ -385,6 +385,8 @@ public enum AppStrings {
         public static let autoPlayNextEpisode = "Sonraki Bölüme Otomatik Geç".localized
         public static let startMuted = "Kanalları Sessiz Başlat".localized
         public static let hardwareAcceleration = "Donanım Hızlandırma".localized
+        public static let downloadConcurrencyLimit = "Eşzamanlı İndirme Sayısı".localized
+        public static let downloadConcurrencyLimitDesc = "Aynı anda indirilecek içerik sayısını sınırlar.".localized
         public static let oledDimming = "OLED Ekran Koruma / Karartma".localized
         public static let oledDimmingDesc = "Ekran yanmasını önlemek için kontroller açıkken veya duraklatıldığında ekranı kademeli olarak karartır.".localized
         public static let cleanChannelNames = "Kanal İsimlerini Sadeleştir".localized
@@ -493,6 +495,7 @@ public enum AppStrings {
         public static let empty = "Henüz indirilmiş içerik yok".localized
         public static let emptyDescription = "Filmleri veya dizileri indirerek internet bağlantınız olmadan da izleyebilirsiniz.".localized
         public static let activeDownloads = "Aktif İndirmeler".localized
+        public static let queued = "Kuyrukta".localized
         public static let completedDownloads = "İndirilen İçerikler".localized
         public static let totalStorage = "Kullanılan Alan".localized
         public static let downloadSpeed = "Hız".localized

@@ -109,11 +109,17 @@
                                                 .fontWeight(.semibold)
                                                 .lineLimit(1)
 
-                                            ProgressView(value: max(0.01, item.progress))
-                                                .tint(.blue)
+                                            if item.isQueued {
+                                                Text(AppStrings.Downloads.queued)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            } else {
+                                                ProgressView(value: max(0.01, item.progress))
+                                                    .tint(.blue)
+                                            }
 
                                             HStack(spacing: 8) {
-                                                Text(item.formattedProgress)
+                                                Text(item.isQueued ? AppStrings.Downloads.queued : item.formattedProgress)
                                                     .font(.caption2)
                                                     .fontWeight(.bold)
                                                     .foregroundStyle(.blue)
