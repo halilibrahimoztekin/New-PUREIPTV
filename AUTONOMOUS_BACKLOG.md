@@ -116,12 +116,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Simulator Release Xcode derlemeleri başarılı (`BUILD SUCCEEDED`). `git diff --check` başarılı. Yalnızca derleme yapıldı; uygulama akışı ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 39. [IN_PROGRESS] VOD için Daha Büyük Ağ Tamponu Seçeneği
+### 39. [DONE] VOD için Daha Büyük Ağ Tamponu Seçeneği
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları Metal oynatıcıya daha akıcı oynatma için isteğe bağlı büyük tampon modu eklediğini bildiriyor.
 - **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
-- **İnceleme odağı:** Mevcut VLC buffer ayarları ve `StreamHealthMetrics` üzerinden düşük bant genişliğinde VOD’a özel tampon seçeneği; canlı kanal zapping gecikmesini artırmamalı.
+- **Kod taraması:** `BufferProfile` için 1/3/8 saniyelik model ve UserDefaults kaydı vardı; ayar satırı ve VLC medya seçeneğine bağlantısı yoktu. SwiftVLC `Media.addOption(_:)` ile `:network-caching=<ms>` seçeneğini destekliyor.
+- **Uygulama:** Ayarlara film/dizi için 1/3/8 saniyelik arabellek seçimi ve gecikme açıklaması eklendi; seçili değer geri yükleniyor, bozuk/eksik kayıt 3 saniyeye düşüyor. Normal VOD oynatımı ve yeniden bağlanma VLC medya nesnesine seçilen değeri iletiyor. Canlı, catch-up ve MultiView çağrıları varsayılan VLC tamponunda kalıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Simulator Release Xcode build’leri başarılı (`BUILD SUCCEEDED`). `git diff --check` başarılı. Yalnızca derleme yapıldı; uygulama akışı ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 40. [PENDING] Oyuncu İçinden Playback Engine Seçimi
+### 40. [IN_PROGRESS] Oyuncu İçinden Playback Engine Seçimi
 - **Bulgu:** IPTVX 22.0.1 sürüm notları oynatıcı içinde yalnız mevcut oturuma uygulanan motor değiştirme seçeneğini tanıtıyor; resmi App Store açıklaması da çoklu oynatıcı uyumluluğunu vurguluyor.
 - **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** PureIPTV’nin VLC sarmalayıcısı içerik/codec uyumsuzluğunda alternatif playback backend açabiliyor mu; sağlayıcı parolası ve playback konumu dışarı sızmadan oturuma özel seçim tasarla.

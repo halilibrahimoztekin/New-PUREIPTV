@@ -38,7 +38,7 @@ public struct PlayerPlaybackCounters: Equatable, Sendable {
 
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
-    public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?) async throws -> Void
+    public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?, _ networkCachingMilliseconds: Int?) async throws -> Void
     public var resume: @MainActor @Sendable () async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
     public var stop: @MainActor @Sendable () async throws -> Void
@@ -81,7 +81,7 @@ extension PlayerClient: DependencyKey {
 
         return PlayerClient(
             vlcPlayer: { box.getPlayer() },
-            play: { url, userAgentOverride in
+            play: { url, userAgentOverride, networkCachingMilliseconds in
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
                 let player = box.getPlayer()
@@ -91,6 +91,9 @@ extension PlayerClient: DependencyKey {
                     httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
                     httpReferrer: nil
                 )
+                if let networkCachingMilliseconds, networkCachingMilliseconds > 0 {
+                    media.addOption(":network-caching=\(networkCachingMilliseconds)")
+                }
                 try player.play(media)
             },
             resume: {
@@ -292,7 +295,7 @@ extension PlayerClient: DependencyKey {
 
     public nonisolated static let testValue = PlayerClient(
         vlcPlayer: { fatalError() },
-        play: { _, _ in },
+        play: { _, _, _ in },
         resume: {},
         pause: {},
         stop: {},

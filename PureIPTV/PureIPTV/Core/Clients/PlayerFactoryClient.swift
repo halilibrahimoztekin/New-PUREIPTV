@@ -27,7 +27,7 @@ extension PlayerFactoryClient: DependencyKey {
 
             return PlayerClient(
                 vlcPlayer: { box.getPlayer() },
-                play: { url, userAgentOverride in
+                play: { url, userAgentOverride, networkCachingMilliseconds in
                     try await PlaybackAudioSession.setActive(true)
                     try Task.checkCancellation()
                     let player = box.getPlayer()
@@ -37,6 +37,9 @@ extension PlayerFactoryClient: DependencyKey {
                         httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
                         httpReferrer: nil
                     )
+                    if let networkCachingMilliseconds, networkCachingMilliseconds > 0 {
+                        media.addOption(":network-caching=\(networkCachingMilliseconds)")
+                    }
                     try player.play(media)
                 },
                 resume: {

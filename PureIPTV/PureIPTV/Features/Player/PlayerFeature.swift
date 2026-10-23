@@ -645,6 +645,7 @@ public struct PlayerFeature {
             let seriesID = state.item.seriesID
             let config = state.item.config
             let userAgentOverride = state.item.userAgentOverride
+            let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
 
@@ -708,7 +709,7 @@ public struct PlayerFeature {
                         group.addTask {
                             if !isAlreadyPlaying {
                                 do {
-                                    try await playerClient.play(url, userAgentOverride)
+                                    try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
                                     }
@@ -976,6 +977,7 @@ public struct PlayerFeature {
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
             let currentRate = state.playbackRate
             let userAgentOverride = state.item.userAgentOverride
+            let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
             return .run { send in
                 // Flush and cleanly reset VLC engine to avoid pipeline lockups
                 try? await playerClient.stop()
@@ -991,7 +993,7 @@ public struct PlayerFeature {
 
                     group.addTask {
                         do {
-                            try await playerClient.play(url, userAgentOverride)
+                            try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
                             if !isLive, position > 0 {
                                 try? await Task.sleep(nanoseconds: 500_000_000)
                                 try? await playerClient.seek(position)
@@ -2105,7 +2107,7 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.activeCatchupProgram = program
                 return .run { _ in
-                    try await playerClient.play(catchupURL, userAgentOverride)
+                    try await playerClient.play(catchupURL, userAgentOverride, nil)
                 } catch: { error, _ in
                     print("Failed to play catchup: \(error)")
                 }
@@ -2119,7 +2121,7 @@ public struct PlayerFeature {
             let liveURL = state.item.streamURL
             let userAgentOverride = state.item.userAgentOverride
             return .run { _ in
-                try await playerClient.play(liveURL, userAgentOverride)
+                try await playerClient.play(liveURL, userAgentOverride, nil)
             } catch: { error, _ in
                 print("Failed to return to live stream: \(error)")
             }

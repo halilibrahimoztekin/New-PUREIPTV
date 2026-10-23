@@ -194,6 +194,19 @@ public struct SettingsView: View {
                     set: { store.send(.setHardwareAcceleration($0)) }
                 ))
 
+                Picker("Film ve Dizi Arabellek Boyutu", selection: Binding(
+                    get: { store.bufferProfile },
+                    set: { store.send(.setBufferProfile($0)) }
+                )) {
+                    ForEach(BufferProfile.allCases, id: \.self) { profile in
+                        Text(profile.rawValue).tag(profile)
+                    }
+                }
+
+                Text("Yüksek arabellek yavaş bağlantılarda kesintiyi azaltabilir; ilk oynatma biraz daha uzun sürebilir. Yalnızca film ve dizi akışlarında kullanılır.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle(AppStrings.Settings.oledDimming, isOn: Binding(
                     get: { store.isOLEDDimmingEnabled },
                     set: { store.send(.setOLEDDimmingEnabled($0)) }

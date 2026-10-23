@@ -15,6 +15,18 @@ public enum BufferProfile: String, CaseIterable, Sendable, Equatable {
         case .smooth: 8.0
         }
     }
+
+    public var networkCachingMilliseconds: Int {
+        Int(seconds * 1000)
+    }
+
+    public static func activeNetworkCachingMilliseconds(for isLive: Bool) -> Int? {
+        guard !isLive else { return nil }
+        let key = "pureiptv_buffer_profile"
+        let storedValue = UserDefaults.standard.string(forKey: key)
+        let profile = storedValue.flatMap(Self.init(rawValue:)) ?? .balanced
+        return profile.networkCachingMilliseconds
+    }
 }
 
 @Reducer
@@ -273,6 +285,9 @@ public struct SettingsFeature {
 
                 // Apple TV Top Shelf Style (Madde #22)
                 state.topShelfStyle = topShelfClient.getPreferredStyle()
+
+                let storedBufferProfile = UserDefaults.standard.string(forKey: "pureiptv_buffer_profile")
+                state.bufferProfile = storedBufferProfile.flatMap(BufferProfile.init(rawValue:)) ?? .balanced
 
                 // Custom EPG XMLTV & Time-Shift (Madde #23)
                 state.customEPGSources = customEPGMappingClient.getSources()

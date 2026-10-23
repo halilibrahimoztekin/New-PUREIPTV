@@ -625,7 +625,7 @@ private struct MultiViewPlayer: View {
         playerClient = client
 
         if let url = item.streamURL {
-            try? await client.play(url, item.userAgentOverride)
+            try? await client.play(url, item.userAgentOverride, nil)
             try? await client.setVolume(isActiveAudio ? 100 : 0)
         }
     }
