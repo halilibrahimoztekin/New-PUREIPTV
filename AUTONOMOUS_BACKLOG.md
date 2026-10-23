@@ -75,9 +75,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 34. [PENDING] İndirme Kuyruğu için Canlı Aktivite ve Sıralı Devam
-- **Bulgu:** IPTVX son sürümlerinde arka plan indirme, otomatik devam/yeniden deneme, Live Activity durum kartı ve eşzamanlı indirme tercihi sunuyor.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+### 34. [DONE] İndirme Kuyruğu için Canlı Aktivite ve Sıralı Devam
+- **Bulgu:** IPTVX’in 25 sürüm duyurusu ve FAQ’sı arka plan indirme kuyruğu, otomatik devam/yeniden deneme ve Live Activity ilerleme görünümünü anlatıyor. Kod taramasında PureIPTV’nin background URLSession görev açıklamalarına indirme metadata’sı yazdığı, ancak uygulama yeniden açılınca `DownloadManager` içindeki boş sözlükleri URLSession’ın devam eden görevlerinden geri kurmadığı görüldü. Bu nedenle devam eden indirmeler ekran açılana dek görünmüyor; sonrasında da yönetici ilerleme yayınlamıyor.
+- **Canlı keşif (23 Ekim 2026):** IPTVX’in 25 sürüm yazısı iOS Downloads ekranında transfer kontrolü ve tamamlanan içerikleri ayırıyor. Resmi FAQ otomatik kuyruk devamını ve Live Activities durumunu belirtiyor.
+- **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://iptvx.app/faq/index.html
+- **Uygulama:** `DownloadManager.getActiveDownloads()` background URLSession görevlerini ilk çağrıda geri yükleyip `taskDescription` metadata’sı ve byte sayaçlarıyla aktif durum yayınlıyor. Eşzamanlı restore/cancel/complete yarışları geçici invalidation kümesi ve mevcut ID önceliğiyle uzlaştırılıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 35. [PENDING] Kullanıcının Sağladığı Catch-up Süresini Keşfetme
 - **Bulgu:** Kullanıcı geri bildiriminde sağlayıcının 6–7 günlük arşivine rağmen uygulamanın daha kısa geçmiş göstermesi şikâyeti var; sabit pencere yerine sağlayıcı kapasitesini görünür kılmak değerlendirilmeli.

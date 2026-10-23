@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-struct DownloadMetadata: Codable {
+struct DownloadMetadata: Codable, Sendable {
     let id: String
     let title: String
     let coverURL: String?
@@ -16,6 +16,9 @@ actor DownloadManager {
     private var progressBroadcasters: [UUID: AsyncStream<DownloadProgressItem>.Continuation] = [:]
     private var lastSpeedCalculationTimes: [String: Date] = [:]
     private var lastBytesWritten: [String: Int64] = [:]
+    private var hasRestoredBackgroundTasks = false
+    private var backgroundTaskRestorationsInProgress = 0
+    private var invalidatedDownloadIDs: Set<String> = []
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.pureiptv.downloads")
@@ -23,6 +26,7 @@ actor DownloadManager {
     }()
 
     func startDownload(id: String, title: String, url: URL, coverURL: URL?) throws {
+        invalidatedDownloadIDs.remove(id)
         let task = session.downloadTask(with: url)
 
         let metadata = DownloadMetadata(id: id, title: title, coverURL: coverURL?.absoluteString)
@@ -42,6 +46,9 @@ actor DownloadManager {
     }
 
     func cancelDownload(id: String) {
+        if backgroundTaskRestorationsInProgress > 0 {
+            invalidatedDownloadIDs.insert(id)
+        }
         tasks[id]?.cancel()
         tasks.removeValue(forKey: id)
         activeDownloads.removeValue(forKey: id)
@@ -51,8 +58,57 @@ actor DownloadManager {
         progressContinuations.removeValue(forKey: id)
     }
 
-    func getActiveDownloads() -> [DownloadProgressItem] {
-        Array(activeDownloads.values)
+    func getActiveDownloads() async -> [DownloadProgressItem] {
+        guard !hasRestoredBackgroundTasks else {
+            return Array(activeDownloads.values)
+        }
+        backgroundTaskRestorationsInProgress += 1
+        let restoredTasks: [URLSessionDownloadTask] = await withCheckedContinuation { continuation in
+            session.getAllTasks { tasks in
+                continuation.resume(returning: tasks.compactMap { $0 as? URLSessionDownloadTask })
+            }
+        }
+
+        for task in restoredTasks where task.state != .completed {
+            guard
+                let description = task.taskDescription,
+                let data = description.data(using: .utf8),
+                let metadata = try? JSONDecoder().decode(DownloadMetadata.self, from: data)
+            else { continue }
+
+            // Actor reentrancy allows cancellation, completion, or a new task
+            // with the same ID while getAllTasks is suspended. Never let this
+            // stale session snapshot recreate or replace newer actor state.
+            guard !invalidatedDownloadIDs.contains(metadata.id), tasks[metadata.id] == nil else {
+                continue
+            }
+
+            tasks[metadata.id] = task
+            let expectedBytes = task.countOfBytesExpectedToReceive
+            let receivedBytes = task.countOfBytesReceived
+            let progress = expectedBytes > 0
+                ? min(1, max(0, Double(receivedBytes) / Double(expectedBytes)))
+                : 0
+            let item = DownloadProgressItem(
+                id: metadata.id,
+                title: metadata.title,
+                coverURL: metadata.coverURL,
+                progress: progress,
+                bytesWritten: receivedBytes,
+                totalBytesExpected: expectedBytes
+            )
+            activeDownloads[metadata.id] = item
+            lastSpeedCalculationTimes[metadata.id] = Date()
+            lastBytesWritten[metadata.id] = receivedBytes
+            broadcast(item)
+        }
+
+        hasRestoredBackgroundTasks = true
+        backgroundTaskRestorationsInProgress -= 1
+        if backgroundTaskRestorationsInProgress == 0 {
+            invalidatedDownloadIDs.removeAll()
+        }
+        return Array(activeDownloads.values)
     }
 
     func observeDownloads() -> AsyncStream<DownloadProgressItem> {
@@ -107,6 +163,9 @@ actor DownloadManager {
     }
 
     func completeDownload(id: String) {
+        if backgroundTaskRestorationsInProgress > 0 {
+            invalidatedDownloadIDs.insert(id)
+        }
         if var item = activeDownloads[id] {
             item.progress = 1.0
             item.isCompleted = true
