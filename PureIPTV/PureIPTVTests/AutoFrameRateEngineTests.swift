@@ -127,15 +127,19 @@ final class AutoFrameRateEngineTests: XCTestCase {
         // State init automatically analyzes title and sets currentFrameRate
         var state = PlayerFeature.State(item: cinematicMovie)
         XCTAssertEqual(state.currentFrameRate, .fps24)
-        XCTAssertTrue(state.isAFREnabled)
+        XCTAssertTrue(state.isAFREnabledForLive)
+        XCTAssertTrue(state.isAFREnabledForVOD)
+        XCTAssertTrue(state.isAFREnabledForCurrentItem)
         XCTAssertFalse(state.isAFRToastVisible)
 
         let store = TestStore(initialState: state) {
             PlayerFeature()
         } withDependencies: {
             $0.displayModeClient = .init(
-                isAFREnabled: { true },
-                setAFREnabled: { _ in },
+                isAFREnabledForLive: { true },
+                setAFREnabledForLive: { _ in },
+                isAFREnabledForVOD: { true },
+                setAFREnabledForVOD: { _ in },
                 isMatchDynamicRangeEnabled: { true },
                 setMatchDynamicRangeEnabled: { _ in },
                 currentDisplayRefreshRate: { 60.0 },
@@ -147,20 +151,32 @@ final class AutoFrameRateEngineTests: XCTestCase {
             )
         }
 
-        // 1. Toggle AFR Enabled to false
-        await store.send(.setAFREnabled(false)) {
-            $0.isAFREnabled = false
+        // 1. Disable AFR for live TV while retaining VOD matching.
+        await store.send(.setAFREnabledForLive(false)) {
+            $0.isAFREnabledForLive = false
         }
+        XCTAssertTrue(store.state.isAFREnabledForCurrentItem)
+        XCTAssertTrue(store.state.isAFREnabledForVOD)
+        var liveState = PlayerFeature.State(item: PlayerFeature.PlayableItem(
+            id: "live_channel",
+            title: "Live Channel",
+            streamURL: streamURL,
+            isLive: true
+        ))
+        liveState.isAFREnabledForLive = store.state.isAFREnabledForLive
+        liveState.isAFREnabledForVOD = store.state.isAFREnabledForVOD
+        XCTAssertFalse(liveState.isAFREnabledForCurrentItem)
 
         // 2. Toggle Match Dynamic Range to false
         await store.send(.setMatchDynamicRangeEnabled(false)) {
             $0.isMatchDynamicRangeEnabled = false
         }
 
-        // 3. Re-enable AFR
-        await store.send(.setAFREnabled(true)) {
-            $0.isAFREnabled = true
+        // 3. Disable VOD matching independently.
+        await store.send(.setAFREnabledForVOD(false)) {
+            $0.isAFREnabledForVOD = false
         }
+        XCTAssertFalse(store.state.isAFREnabledForCurrentItem)
 
         // 4. Trigger displayModeSwitched
         let matchResult = DisplayMatchResult(matchedRate: 24.0, matchedRange: .dolbyVision, message: "24 Hz Sinematik Eşleme")

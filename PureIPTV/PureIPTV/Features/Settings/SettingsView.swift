@@ -206,9 +206,14 @@ public struct SettingsView: View {
             }
 
             Section(header: Text("Ekran & Kare Hızı Eşleme (AFR)")) {
-                Toggle("Otomatik Kare Hızı Eşleme (AFR)", isOn: Binding(
-                    get: { store.isAFREnabled },
-                    set: { store.send(.setAFREnabled($0)) }
+                Toggle("Canlı TV için Kare Hızı Eşleme", isOn: Binding(
+                    get: { store.isAFREnabledForLive },
+                    set: { store.send(.setAFREnabledForLive($0)) }
+                ))
+
+                Toggle("Filmler ve Diziler için Kare Hızı Eşleme", isOn: Binding(
+                    get: { store.isAFREnabledForVOD },
+                    set: { store.send(.setAFREnabledForVOD($0)) }
                 ))
 
                 Toggle("Dinamik Aralık Eşleme (HDR / Dolby Vision)", isOn: Binding(
@@ -216,7 +221,7 @@ public struct SettingsView: View {
                     set: { store.send(.setMatchDynamicRangeEnabled($0)) }
                 ))
 
-                Text("İçeriğin orijinal kare hızına (24p sinematik, 50/60 Hz) ve HDR renk aralığına göre ekran yenileme hızını judder-free eşler.")
+                Text("Canlı yayınlar ve filmler/diziler için eşlemeyi ayrı ayrı açın. Etkin olduğunda içerik kare hızı (24p, 50/60 Hz) ve HDR renk aralığıyla ekran yenileme hızı eşlenir.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

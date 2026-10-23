@@ -96,7 +96,9 @@
         @discardableResult
         public func openStream(_ streamURL: URL, in player: ExternalPlayer) -> ExternalPlayerResult {
             // Always copy the stream URL to clipboard so user can paste it anywhere
-            UIPasteboard.general.string = streamURL.absoluteString
+            #if os(iOS)
+                UIPasteboard.general.string = streamURL.absoluteString
+            #endif
             HapticManager.shared.trigger(.light)
 
             let candidateURLs = player.openURLs(for: streamURL)

@@ -252,7 +252,12 @@ public struct PlayerFeature {
         public var isDynamicRangeHUDVisible: Bool = false
 
         /// Auto Frame Rate & Match Dynamic Range (Madde #21)
-        public var isAFREnabled: Bool = true
+        public var isAFREnabledForLive: Bool = true
+        public var isAFREnabledForVOD: Bool = true
+        public var isAFREnabledForCurrentItem: Bool {
+            item.isLive ? isAFREnabledForLive : isAFREnabledForVOD
+        }
+
         public var isMatchDynamicRangeEnabled: Bool = true
         public var currentFrameRate: FrameRate?
         public var afrMatchResult: DisplayMatchResult?
@@ -531,7 +536,8 @@ public struct PlayerFeature {
 
         // Auto Frame Rate & Match Dynamic Range (Madde #21)
         case loadAFRPreferences
-        case setAFREnabled(Bool)
+        case setAFREnabledForLive(Bool)
+        case setAFREnabledForVOD(Bool)
         case setMatchDynamicRangeEnabled(Bool)
         case matchDisplayMode
         case displayModeSwitched(DisplayMatchResult)
@@ -587,7 +593,8 @@ public struct PlayerFeature {
             state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
             state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
             state.blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
-            state.isAFREnabled = displayModeClient.isAFREnabled()
+            state.isAFREnabledForLive = displayModeClient.isAFREnabledForLive()
+            state.isAFREnabledForVOD = displayModeClient.isAFREnabledForVOD()
             state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
 
             // Restore per-channel lip-sync and subtitle preferences
@@ -630,7 +637,7 @@ public struct PlayerFeature {
                     try? await Task.sleep(nanoseconds: 3_500_000_000)
                     await send(.hideDynamicRangeHUD)
                 }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true) : .none,
-                state.isAFREnabled ? .send(.matchDisplayMode) : .none,
+                state.isAFREnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
                 recentEffect,
@@ -2632,13 +2639,19 @@ public struct PlayerFeature {
 
         // ── Auto Frame Rate & Match Dynamic Range (Madde #21) ──
         case .loadAFRPreferences:
-            state.isAFREnabled = displayModeClient.isAFREnabled()
+            state.isAFREnabledForLive = displayModeClient.isAFREnabledForLive()
+            state.isAFREnabledForVOD = displayModeClient.isAFREnabledForVOD()
             state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
             return .none
 
-        case let .setAFREnabled(enabled):
-            state.isAFREnabled = enabled
-            displayModeClient.setAFREnabled(enabled)
+        case let .setAFREnabledForLive(enabled):
+            state.isAFREnabledForLive = enabled
+            displayModeClient.setAFREnabledForLive(enabled)
+            return .none
+
+        case let .setAFREnabledForVOD(enabled):
+            state.isAFREnabledForVOD = enabled
+            displayModeClient.setAFREnabledForVOD(enabled)
             return .none
 
         case let .setMatchDynamicRangeEnabled(enabled):
@@ -2647,7 +2660,7 @@ public struct PlayerFeature {
             return .none
 
         case .matchDisplayMode:
-            guard state.isAFREnabled else { return .none }
+            guard state.isAFREnabledForCurrentItem else { return .none }
             let detectedFPS = state.currentFrameRate ?? FrameRateDetector.detect(
                 title: state.item.title,
                 urlString: state.item.streamURL.absoluteString,

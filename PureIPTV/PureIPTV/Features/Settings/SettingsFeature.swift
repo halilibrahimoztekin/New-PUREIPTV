@@ -55,7 +55,8 @@ public struct SettingsFeature {
         public var tvOSMatchContent: Bool = true
 
         /// Auto Frame Rate & Match Dynamic Range (Madde #21)
-        public var isAFREnabled: Bool = true
+        public var isAFREnabledForLive: Bool = true
+        public var isAFREnabledForVOD: Bool = true
         public var isMatchDynamicRangeEnabled: Bool = true
 
         /// Apple TV Top Shelf Style (Madde #22)
@@ -147,7 +148,8 @@ public struct SettingsFeature {
         case setRememberMediaTrackPreferences(Bool)
         case setICloudSyncEnabled(Bool)
         case setTvOSMatchContent(Bool)
-        case setAFREnabled(Bool)
+        case setAFREnabledForLive(Bool)
+        case setAFREnabledForVOD(Bool)
         case setMatchDynamicRangeEnabled(Bool)
         case setTopShelfStyle(TopShelfStyle)
         case setBufferProfile(BufferProfile)
@@ -265,7 +267,8 @@ public struct SettingsFeature {
                 state.blacklistedCategoriesCount = parentalControlClient.blacklistedCategoryIDs().count
 
                 // Auto Frame Rate & Match Dynamic Range (Madde #21)
-                state.isAFREnabled = displayModeClient.isAFREnabled()
+                state.isAFREnabledForLive = displayModeClient.isAFREnabledForLive()
+                state.isAFREnabledForVOD = displayModeClient.isAFREnabledForVOD()
                 state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
 
                 // Apple TV Top Shelf Style (Madde #22)
@@ -431,9 +434,14 @@ public struct SettingsFeature {
                 UserDefaults.standard.set(enabled, forKey: "pureiptv_match_content")
                 return .none
 
-            case let .setAFREnabled(enabled):
-                state.isAFREnabled = enabled
-                displayModeClient.setAFREnabled(enabled)
+            case let .setAFREnabledForLive(enabled):
+                state.isAFREnabledForLive = enabled
+                displayModeClient.setAFREnabledForLive(enabled)
+                return .none
+
+            case let .setAFREnabledForVOD(enabled):
+                state.isAFREnabledForVOD = enabled
+                displayModeClient.setAFREnabledForVOD(enabled)
                 return .none
 
             case let .setMatchDynamicRangeEnabled(enabled):

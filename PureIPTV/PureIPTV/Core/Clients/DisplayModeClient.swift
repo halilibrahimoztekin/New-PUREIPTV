@@ -150,8 +150,10 @@ public struct DisplayMatchResult: Equatable, Sendable {
 
 @DependencyClient
 public struct DisplayModeClient: Sendable {
-    public var isAFREnabled: @Sendable () -> Bool = { true }
-    public var setAFREnabled: @Sendable (_ enabled: Bool) -> Void
+    public var isAFREnabledForLive: @Sendable () -> Bool = { true }
+    public var setAFREnabledForLive: @Sendable (_ enabled: Bool) -> Void
+    public var isAFREnabledForVOD: @Sendable () -> Bool = { true }
+    public var setAFREnabledForVOD: @Sendable (_ enabled: Bool) -> Void
     public var isMatchDynamicRangeEnabled: @Sendable () -> Bool = { true }
     public var setMatchDynamicRangeEnabled: @Sendable (_ enabled: Bool) -> Void
     public var currentDisplayRefreshRate: @Sendable () -> Float = { 60.0 }
@@ -172,18 +174,30 @@ public struct DisplayModeClient: Sendable {
 extension DisplayModeClient: DependencyKey {
     public static let liveValue: DisplayModeClient = {
         let defaults = UserDefaults.standard
-        let afrKey = "com.pureiptv.afrEnabled"
+        let legacyAFRKey = "com.pureiptv.afrEnabled"
+        let liveAFRKey = "com.pureiptv.afrEnabled.live"
+        let vodAFRKey = "com.pureiptv.afrEnabled.vod"
         let matchRangeKey = "com.pureiptv.matchDynamicRangeEnabled"
 
+        func afrPreference(for key: String) -> Bool {
+            if let value = defaults.object(forKey: key) as? Bool {
+                return value
+            }
+            return defaults.object(forKey: legacyAFRKey) as? Bool ?? true
+        }
+
         return DisplayModeClient(
-            isAFREnabled: {
-                if defaults.object(forKey: afrKey) == nil {
-                    return true // Enabled by default for premium judder-free experience
-                }
-                return defaults.bool(forKey: afrKey)
+            isAFREnabledForLive: {
+                afrPreference(for: liveAFRKey)
             },
-            setAFREnabled: { enabled in
-                defaults.set(enabled, forKey: afrKey)
+            setAFREnabledForLive: { enabled in
+                defaults.set(enabled, forKey: liveAFRKey)
+            },
+            isAFREnabledForVOD: {
+                afrPreference(for: vodAFRKey)
+            },
+            setAFREnabledForVOD: { enabled in
+                defaults.set(enabled, forKey: vodAFRKey)
             },
             isMatchDynamicRangeEnabled: {
                 if defaults.object(forKey: matchRangeKey) == nil {

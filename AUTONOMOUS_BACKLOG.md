@@ -6,6 +6,54 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 
 ## 📊 Backlog Durumu (Active Pipeline)
 
+### 26. [DONE] İçerik Türüne Göre Otomatik Kare Hızı Eşleme (AFR)
+- **Bulgu:** AFR tek bir `com.pureiptv.afrEnabled` tercihiyle yönetiliyor; kullanıcı canlı yayın için kapatıp film/dizilerde açık tutamıyor. Bu, r/appletv kullanıcısının canlı TV için AFR’yi kapatıp film/dizilerde açık bırakma isteğine doğrudan karşılık geliyor.
+- **Kapsam:** iOS ve tvOS ayarlarında ayrı Live TV ve VOD/Dizi anahtarları; oynatıcıda içerik sınıfına göre eşleme; eski genel tercihi iki sınıfa da geriye dönük varsayılan olarak kullanma.
+- **Uygulama:** Ayarlara Live TV ve Film/Dizi için ayrı AFR anahtarları eklendi. Yeni tercihler mevcut genel AFR tercihini her iki içerik türü için geriye dönük varsayılan olarak kullanıyor. Oynatıcı mevcut içeriğin türüne göre doğru anahtarı uyguluyor. tvOS derlemesi, iOS-only `UIPasteboard` erişiminin platform koşuluyla korunmasıyla düzeltildi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS 26.5 / iPhone 17 simulator için Xcode compile-only build başarılı, tvOS Simulator compile-only build ürün üretti. Uygulama akışı veya test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1pauyyl/iptv_on_appletv/
+
+### 27. [PENDING] İzlenen İçeriği Manuel Olarak İzlenmedi İşaretleme
+- **Bulgu:** Kullanıcılar dizi/bölüm/film izleme durumunu sıfırlamak istiyor; ortak aile profilleri aynı watch history’yi etkileyebiliyor.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1w6hkes/remove_watched_history/
+
+### 28. [PENDING] Canlı Yayını Kesmeden EPG’de Gezinme
+- **Bulgu:** Kullanıcı mevcut kanalı izlemeye devam ederken rehberde dolaşmak, yalnızca vurgulanan kanalın sessiz önizlemesine geçmemek istiyor.
+- **Kaynak:** https://www.reddit.com/r/IPTV_Help_Desk/comments/1uzehpu/apple_tv_iptv_player_with_persistent_live_preview/
+
+### 29. [PENDING] Kanal Bazlı Catch-up Zaman Ofseti
+- **Bulgu:** Farklı sağlayıcıların arşiv zaman farklarını kanal başına düzeltme ihtiyacı; UHF bunu kanal bilgi düzenleme ekranına ekledi.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726
+
+### 30. [PENDING] Canlı Eşleşen Alternatif Kaynağa Kesintisiz Geçiş
+- **Bulgu:** Aynı kanalın alternatif canlı kaynaklarını oynatıcıdan, yayın akışını kapatmadan seçme; IPTVX’in son sürüm notlarında yer alıyor.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 31. [PENDING] Açılışta Son Kullanılan Çalma Listesini Açma Tercihi
+- **Bulgu:** Kullanıcıya başlangıçta son playlist’i otomatik açma veya seçimi kendisine bırakma tercihi sunma; IPTVX bunu güncel sürümünde sunuyor.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 32. [PENDING] Tema, Simge, Avatar ve Oynatıcı Kontrol Eklentileri
+- **Bulgu:** Görünümü ve kontrol düzenini eklenti temalarıyla kişiselleştirme; IPTVX yakın zamanda tema/add-on özelleştirmesi yayınladı.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 33. [PENDING] Xtream İçe Aktarma ve Kategori Tutarlılık Tanılaması
+- **Bulgu:** Kullanıcı değerlendirmesinde bazı film/dizilerin sonuçlarda eksik olduğu, başka oynatıcıda göründüğü bildiriliyor; içe aktarma sonrası sayım ve eksik kategori tanılaması keşfedilebilirliği artırabilir.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726
+
+### 34. [PENDING] İndirme Kuyruğu için Canlı Aktivite ve Sıralı Devam
+- **Bulgu:** IPTVX son sürümlerinde arka plan indirme, otomatik devam/yeniden deneme, Live Activity durum kartı ve eşzamanlı indirme tercihi sunuyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 35. [PENDING] Kullanıcının Sağladığı Catch-up Süresini Keşfetme
+- **Bulgu:** Kullanıcı geri bildiriminde sağlayıcının 6–7 günlük arşivine rağmen uygulamanın daha kısa geçmiş göstermesi şikâyeti var; sabit pencere yerine sağlayıcı kapasitesini görünür kılmak değerlendirilmeli.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1hlb7nk/just_tried_swiptv_app_and_its_my_new_favorite_app/
+
+### 36. [PENDING] Canlı Yayın Duraklatma ve Yerel Geri Sarma Tamponu
+- **Bulgu:** Apple TV’de canlı yayın duraklatma/geri sarma tutarsızlığı ve yerel buffer/DVR beklentisi kullanıcı şikâyetlerinde tekrar ediyor.
+- **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1o4d2da/appletv_os_skip_forward_backforward_not_possible/
+
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)
 - **Açıklama:** Canlı yayın izlerken Siri Remote aşağı basıldığında veya iOS'ta buton/menü ile ekranın altında beliren, son izlenen 10 kanalı logo, canlı badge, aktif oynatma halkası ve odaklanabilir kartlarla gösteren hızlı zapping rulosu.
 - **Platformlar:** tvOS (Siri Remote Focus Engine uyumlu, .onExitCommand, focusSection), iOS (Haptic feedback, bottom glass dock).
