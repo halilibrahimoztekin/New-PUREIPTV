@@ -1,0 +1,40 @@
+name: iOS CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test iOS
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        working-directory: PureIPTV
+        run: xcodebuild -resolvePackageDependencies -project PureIPTV.xcodeproj -scheme PureIPTV
+
+      - name: Run iOS unit tests
+        working-directory: PureIPTV
+        run: >-
+          xcodebuild test
+          -project PureIPTV.xcodeproj
+          -scheme PureIPTV
+          -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+          -only-testing:PureIPTVTests
+          CODE_SIGNING_ALLOWED=NO
