@@ -1,6 +1,11 @@
 import ComposableArchitecture
 import Foundation
 
+private nonisolated enum EPGTimelineCancelID: Hashable, Sendable {
+    case request(String)
+    case clearSyncStatusMessage
+}
+
 @Reducer
 public struct EPGTimelineFeature {
     @ObservableState
@@ -11,6 +16,8 @@ public struct EPGTimelineFeature {
         public var selectedCategoryID: String?
         public var epgData: [String: [EPGProgram]] = [:] // streamID -> programs
         public var isLoading: [String: Bool] = [:]
+        public var epgRequestIDs: [String: UUID] = [:]
+        public var syncPendingEPGChannels: Set<String> = []
 
         public var currentTime: Date = .init()
         public var selectedDate: Date = .init()
@@ -128,7 +135,8 @@ public struct EPGTimelineFeature {
     public enum Action {
         case onAppear
         case fetchEPG(streamID: String)
-        case epgResponse(streamID: String, Result<[EPGProgram], Error>)
+        case refreshEPG(streamID: String)
+        case epgResponse(streamID: String, requestID: UUID, Result<[EPGProgram], Error>)
         case channelTapped(MediaModels.Item)
         case programTapped(EPGProgram, MediaModels.Item)
         case showProgramDetails(EPGProgram, MediaModels.Item)
@@ -207,27 +215,36 @@ public struct EPGTimelineFeature {
                 state.isSyncingEPG = true
                 state.syncStatusMessage = AppStrings.Player.syncing
 
-                // Invalidate active channel EPG cache to force re-fetch
-                state.epgData.removeAll()
-                state.isLoading.removeAll()
-
                 let channelsToPrewarm = Array(state.filteredChannels.prefix(20))
-                return .run { [clock] send in
-                    await iptvClient.clearEPGCache()
-                    for ch in channelsToPrewarm {
-                        await send(.fetchEPG(streamID: ch.id))
+                state.syncPendingEPGChannels = Set(channelsToPrewarm.map(\.id))
+                guard !channelsToPrewarm.isEmpty else {
+                    return .merge(
+                        .cancel(id: EPGTimelineCancelID.clearSyncStatusMessage),
+                        .send(.syncCompleted(Date()))
+                    )
+                }
+
+                return .merge(
+                    .cancel(id: EPGTimelineCancelID.clearSyncStatusMessage),
+                    .run { send in
+                        await iptvClient.clearEPGCache()
+                        for ch in channelsToPrewarm {
+                            await send(.refreshEPG(streamID: ch.id))
+                        }
                     }
-                    try? await clock.sleep(for: .milliseconds(700))
-                    await send(.syncCompleted(Date()))
+                )
+
+            case let .syncCompleted(date):
+                guard state.isSyncingEPG else { return .none }
+                state.isSyncingEPG = false
+                state.lastSyncTimestamp = date
+                state.syncPendingEPGChannels = []
+                state.syncStatusMessage = AppStrings.Player.epgUpdated
+                return .run { [clock] send in
                     try? await clock.sleep(for: .seconds(3))
                     await send(.clearSyncStatusMessage)
                 }
-
-            case let .syncCompleted(date):
-                state.isSyncingEPG = false
-                state.lastSyncTimestamp = date
-                state.syncStatusMessage = AppStrings.Player.epgUpdated
-                return .none
+                .cancellable(id: EPGTimelineCancelID.clearSyncStatusMessage, cancelInFlight: true)
 
             case .clearSyncStatusMessage:
                 state.syncStatusMessage = nil
@@ -306,21 +323,50 @@ public struct EPGTimelineFeature {
                 }
                 state.isLoading[streamID] = true
                 let config = state.config
+                let requestID = UUID()
+                state.epgRequestIDs[streamID] = requestID
                 return .run { send in
-                    await send(.epgResponse(streamID: streamID, Result {
+                    await send(.epgResponse(streamID: streamID, requestID: requestID, Result {
                         try await iptvClient.fetchShortEPG(config, streamID, 20)
                     }))
                 }
+                .cancellable(id: EPGTimelineCancelID.request(streamID), cancelInFlight: true)
 
-            case let .epgResponse(streamID, .success(programs)):
+            case let .refreshEPG(streamID):
+                state.isLoading[streamID] = true
+                let config = state.config
+                let requestID = UUID()
+                state.epgRequestIDs[streamID] = requestID
+                return .run { send in
+                    await send(.epgResponse(streamID: streamID, requestID: requestID, Result {
+                        try await iptvClient.fetchShortEPG(config, streamID, 20)
+                    }))
+                }
+                .cancellable(id: EPGTimelineCancelID.request(streamID), cancelInFlight: true)
+
+            case let .epgResponse(streamID, requestID, .success(programs)):
+                guard state.epgRequestIDs[streamID] == requestID else { return .none }
+                state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
                 state.epgData[streamID] = programs
+                let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
+                if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
+                    return .send(.syncCompleted(Date()))
+                }
                 return .none
 
-            case let .epgResponse(streamID, .failure):
+            case let .epgResponse(streamID, requestID, .failure):
+                guard state.epgRequestIDs[streamID] == requestID else { return .none }
+                state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
-                // Optional: Store an empty array to prevent retrying constantly
-                state.epgData[streamID] = []
+                // Retain the last successful guide while refresh is failing.
+                if state.epgData[streamID] == nil {
+                    state.epgData[streamID] = []
+                }
+                let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
+                if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
+                    return .send(.syncCompleted(Date()))
+                }
                 return .none
 
             case let .showProgramDetails(program, channel):

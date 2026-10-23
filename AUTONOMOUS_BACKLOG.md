@@ -142,12 +142,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED — NO-GO]`; analist ve reviewer kaynak incelemesi. Kod değişmedi; yalnız akış/test/derleme çalıştırılmadı.
 - **Durum:** `[DONE]` — Tam program arama/kayıt mimarisi ayrı iş olarak gerektiğinden bu kapsam reviewer tarafından NO-GO onaylandı.
 
-### 42. [IN_PROGRESS] EPG Yüklenirken Boşlukları Azalt ve Kısmi Sonuç Göster
+### 42. [DONE] EPG Yüklenirken Boşlukları Azalt ve Kısmi Sonuç Göster
 - **Bulgu:** IPTVX 22.2 sürüm notları büyük EPG yüklemesinde placeholder boşluklarını azaltıp rehber güvenilirliğini iyileştirdiğini; UHF kullanıcıları ise Apple TV’de EPG’nin çok uzun sürmesi ve cihazlar arasında eski/farklı bilgi göstermesi sorununu paylaşıyor.
 - **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/uhf_app/comments/1q1edqo/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
-- **İnceleme odağı:** EPG cache kapsamı playlist/cihaz bazında mı, kısmi yükleme UI’ı veriyi bekliyor mu; eski cache güncellik damgasıyla gösterilebilir mi?
+- **Uygulama:** EPG yenilemesi başarılı kanal verisini ekranda tutup her kanal sonucunu geldikçe işler. Yenileme aynı kanaldaki önceki isteği iptal edip yeni istek nesliyle değiştirir; eski yanıtlar atlanır. Senkronizasyon yalnızca kendi bekleyen kanal yanıtları bitince tamamlanır; eski durum mesajı zamanlayıcısı yeni yenilemeyi temizleyemez.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 ve tvOS Release Xcode build; `git diff --check`. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — Kısmi EPG yenileme ve istek nesli koruması tamamlandı.
 
-### 43. [PENDING] Canlı Önizlemeyi Tam Ekrana Yeniden Bağlanmadan Terfi Ettir
+### 43. [IN_PROGRESS] Canlı Önizlemeyi Tam Ekrana Yeniden Bağlanmadan Terfi Ettir
 - **Bulgu:** IPTVX 22.3 App Store notları önizlenen kanalı tam ekrana geçirirken mümkün olduğunda yeniden bağlantıyı önlediğini ve kategori değişiminde eski preview akışını kapattığını bildiriyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** PureIPTV’de EPG mini-preview ile ana VLC player ayrı oturum kullanıyor; preview→player terfisi mevcut native handle’ı güvenle devredebilir mi, ses/abonelik kaynaklarını doğru kapatıyor mu?
@@ -173,6 +175,46 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Uygulama:** Kategori, mode veya route-sharing policy istenen değerlerden farklıysa değiştirilecek; aynı ayar aktif oturuma tekrar uygulanmayacak.
 - **Doğrulama:** PR Reviewer `[APPROVED]`; bağlı iOS 26.5 iPhone 17 için Release compile-only build exit code 0. Debug build, `TCACoordinators 0.16.0` bağımlılığında XCTest sembolleri çözülmediği için başarısız oldu. App akışı/test edilmedi.
 - **Durum:** `[DONE]` — audio-session kategori ayarı idempotent hale getirildi; reviewer onayladı.
+
+### 48. [PENDING] Takım Etkinliği Araması ve Takip Edilen Maçlar Rafı
+- **Bulgu:** UHF 2.3.0, playlist’ler arasında etkinlik araması ve takip edilen takım/turnuvalar için Home etkinlik rafı ekledi.
+- **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 49. [PENDING] VOD Zaman Çizelgesinde Önizleme Küçük Resimleri
+- **Bulgu:** UHF’in App Store sürüm geçmişi, VOD scrub sırasında thumbnail önizlemesi sunduğunu belirtiyor; bu, kullanıcının hedef sahneye daha hızlı ulaşmasını sağlar.
+- **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 50. [PENDING] İndirme Kuyruğunda Eşzamanlı İndirme Sınırı
+- **Bulgu:** IPTVX 22.10.2, otomatik resume/retry ve Live Activity yanında isteğe bağlı eşzamanlı indirme sayısı ekledi.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+
+### 51. [PENDING] Canlı Arama Sonuçlarında Hatırlatıcı Durumu
+- **Bulgu:** IPTVX 22.10.2, Live TV arama kartlarında daha zengin program bilgisiyle birlikte hatırlatma eylemi ve planlandı durumunu sundu.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+
+### 52. [PENDING] Kişiye Göre Ayarlanabilir Keşif Vitrini
+- **Bulgu:** IPTVX 25, izleme davranışından şekillenen öneri rafları ve koleksiyonları tanıtıyor; UHF hero bölümünün özelleştirilip kaldırılmasını sağlıyor.
+- **Kaynaklar:** https://iptvx.app/ · https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 53. [PENDING] Web Konsolundan Playlist ve Yedek Yönetimi
+- **Bulgu:** UHF’in App Store sürüm geçmişi, PRO kullanıcıları için playlist ve yedeklerin tarayıcıdan yönetildiği web konsolunu listeliyor.
+- **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 54. [PENDING] Film Ayrıntısında Sinematik Hero ve Hızlı Oynatım
+- **Bulgu:** IPTVX 25, film ayrıntı sayfasını sinematik hero ile yeniden tasarlıyor; içerik bilgisinden oynatmaya geçişi kısaltıyor.
+- **Kaynak:** https://iptvx.app/
+
+### 55. [PENDING] Alternatif Dosya/Sürüm Seçimi Oynatmadan Önce
+- **Bulgu:** UHF, Jellyfin/Emby/Plex öğesinde birden çok medya dosyası olduğunda oynatma öncesi seçim gösteriyor; farklı kalite sürümleri için benzer ihtiyaç ayrıca incelenebilir.
+- **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 56. [PENDING] Fuzzy Search Alaka Düzeyi ve Sonuç Sıralama İyileştirmesi
+- **Bulgu:** UHF’in App Store sürüm geçmişi, arama algoritmasının doğruluk ve alaka düzeyini geliştirdiğini belirtiyor; büyük playlist’lerde başlık/kanal/metadata ağırlıkları ölçülebilir.
+- **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 57. [PENDING] tvOS EPG Kartında Erişilebilir Program Özeti
+- **Bulgu:** IPTVX’in TV Guide, Live Search ve Apple TV sürüm notları daha zengin program bilgisi, okunabilir satırlar ve focus sorunlarının giderilmesini öne çıkarıyor; odak kartı program/kanal/saat bilgisini erişilebilir tek özet olarak sunabilir.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
 
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)
 - **Açıklama:** Canlı yayın izlerken Siri Remote aşağı basıldığında veya iOS'ta buton/menü ile ekranın altında beliren, son izlenen 10 kanalı logo, canlı badge, aktif oynatma halkası ve odaklanabilir kartlarla gösteren hızlı zapping rulosu.
