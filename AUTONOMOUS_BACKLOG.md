@@ -67,9 +67,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 33. [PENDING] Xtream İçe Aktarma ve Kategori Tutarlılık Tanılaması
-- **Bulgu:** Kullanıcı değerlendirmesinde bazı film/dizilerin sonuçlarda eksik olduğu, başka oynatıcıda göründüğü bildiriliyor; içe aktarma sonrası sayım ve eksik kategori tanılaması keşfedilebilirliği artırabilir.
-- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726
+### 33. [DONE] Xtream İçe Aktarma ve Kategori Tutarlılık Tanılaması
+- **Bulgu:** Kullanıcı değerlendirmeleri bazı dizi ve filmlerin diğer oynatıcılarda görünmesine rağmen uygulamada eksik olduğunu bildiriyor. Kod taramasında canlı/VOD/dizi Xtream DTO’larının `category_id` değerini zorunlu String çözmesi, sağlayıcı sayı/null/eksik değer gönderdiğinde bütün yanıt dizisinin decode edilmesini engelliyor.
+- **Canlı keşif (23 Ekim 2026):** Xtream Player API endpoint referansı tüm katalog uçlarının `category_id` filtresini isteğe bağlı desteklediğini gösteriyor; kategori alanının eksik olması filtresiz listede öğeyi kaybetmek için neden olmamalı. UHF App Store değerlendirmesi yaklaşık 12 film/dizinin bir başka ücretsiz oynatıcıda görünürken UHF’te çıkmadığını bildiriyor.
+- **Kaynaklar:** https://github.com/worldofiptvcom/xtream-codes-api/blob/master/docs/player-api/overview.md · https://github.com/worldofiptvcom/xtream-codes-api/blob/master/docs/player-api/endpoint-reference.md · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad&see-all=reviews
+- **Uygulama:** `XtreamDTOValueDecoder` üç katalog DTO’sunda `category_id` alanını string veya integer olarak okur; eksik/null/başka tür değerlerde boş kimliğe düşürüp canlı, VOD ve dizi öğelerinin tüm yanıt decode’unu korur.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 34. [PENDING] İndirme Kuyruğu için Canlı Aktivite ve Sıralı Devam
 - **Bulgu:** IPTVX son sürümlerinde arka plan indirme, otomatik devam/yeniden deneme, Live Activity durum kartı ve eşzamanlı indirme tercihi sunuyor.

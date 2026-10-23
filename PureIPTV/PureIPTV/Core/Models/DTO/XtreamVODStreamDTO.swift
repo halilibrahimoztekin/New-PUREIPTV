@@ -28,4 +28,20 @@ public struct XtreamVODStreamDTO: Codable, Sendable {
         case customSid = "custom_sid"
         case directSource = "direct_source"
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        num = try container.decodeIfPresent(Int.self, forKey: .num)
+        name = try container.decode(String.self, forKey: .name)
+        streamType = try container.decodeIfPresent(String.self, forKey: .streamType)
+        streamId = try container.decode(Int.self, forKey: .streamId)
+        streamIcon = try container.decodeIfPresent(String.self, forKey: .streamIcon)
+        rating = try container.decodeIfPresent(Double.self, forKey: .rating)
+        rating5based = try container.decodeIfPresent(Double.self, forKey: .rating5based)
+        added = try container.decodeIfPresent(String.self, forKey: .added)
+        categoryId = try XtreamDTOValueDecoder.categoryID(from: container, forKey: .categoryId)
+        containerExtension = try container.decodeIfPresent(String.self, forKey: .containerExtension)
+        customSid = try container.decodeIfPresent(String.self, forKey: .customSid)
+        directSource = try container.decodeIfPresent(String.self, forKey: .directSource)
+    }
 }

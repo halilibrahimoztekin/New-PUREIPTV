@@ -30,4 +30,21 @@ public struct XtreamSeriesDTO: Codable, Sendable {
         case rating5based = "rating_5based"
         case categoryId = "category_id"
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        num = try container.decodeIfPresent(Int.self, forKey: .num)
+        name = try container.decode(String.self, forKey: .name)
+        seriesId = try container.decode(Int.self, forKey: .seriesId)
+        cover = try container.decodeIfPresent(String.self, forKey: .cover)
+        plot = try container.decodeIfPresent(String.self, forKey: .plot)
+        cast = try container.decodeIfPresent(String.self, forKey: .cast)
+        director = try container.decodeIfPresent(String.self, forKey: .director)
+        genre = try container.decodeIfPresent(String.self, forKey: .genre)
+        releaseDate = try container.decodeIfPresent(String.self, forKey: .releaseDate)
+        lastModified = try container.decodeIfPresent(String.self, forKey: .lastModified)
+        rating = try container.decodeIfPresent(String.self, forKey: .rating)
+        rating5based = try container.decodeIfPresent(Double.self, forKey: .rating5based)
+        categoryId = try XtreamDTOValueDecoder.categoryID(from: container, forKey: .categoryId)
+    }
 }
