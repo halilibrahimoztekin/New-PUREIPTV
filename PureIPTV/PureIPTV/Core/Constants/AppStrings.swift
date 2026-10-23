@@ -606,6 +606,12 @@ public enum AppStrings {
         public static let addAccount = "Yeni Hesap Ekle".localized
         public static let switchNote = "Hesaplar arasında geçiş yaptığınızda uygulama yeni hesaba ait verileri yükleyecektir.".localized
         public static let accountManagement = "Hesap Yönetimi".localized
+        public static let playbackSettings = "Oynatma Ayarları".localized
+        public static let channelZappingDelay = "Kanal Geçiş Gecikmesi".localized
+        public static let channelZappingDelayDescription = "Önceki yayın kapandıktan sonra sonraki kanal açılmadan önce beklenecek süre. 0 ms anında geçiş yapar.".localized
+        public static func channelZappingDelayValue(_ milliseconds: Int) -> String {
+            "%lld ms".localized(Int64(milliseconds))
+        }
     }
 
     // MARK: - Player Media Info

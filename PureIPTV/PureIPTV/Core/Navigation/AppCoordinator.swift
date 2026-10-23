@@ -293,7 +293,7 @@ public struct AppCoordinator {
             }
             return .none
 
-        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUpdateActivePlaylistUserAgent(config))))):
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUpdateActivePlaylistSettings(config))))):
             for index in state.routes.indices {
                 guard case var .home(homeState) = state.routes[index].screen else { continue }
                 homeState.config = config
@@ -325,27 +325,27 @@ public struct AppCoordinator {
             }
             if let miniPlayer = state.miniPlayer {
                 var updated = miniPlayer
-                updated.item = miniPlayer.item.replacingUserAgentOverride(config.userAgentOverride)
+                updated.item = miniPlayer.item.replacingPlaylistConfig(config)
                 updated.playlist = miniPlayer.playlist?.map {
-                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                    $0.replacingPlaylistConfig(config)
                 }
                 updated.liveChannels = miniPlayer.liveChannels.map {
-                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                    $0.replacingPlaylistConfig(config)
                 }
-                updated.epgBrowseChannel = miniPlayer.epgBrowseChannel?.replacingUserAgentOverride(config.userAgentOverride)
+                updated.epgBrowseChannel = miniPlayer.epgBrowseChannel?.replacingPlaylistConfig(config)
                 state.miniPlayer = updated
             }
             for index in state.routes.indices {
                 guard case let .player(playerState) = state.routes[index].screen else { continue }
                 var updated = playerState
-                updated.item = playerState.item.replacingUserAgentOverride(config.userAgentOverride)
+                updated.item = playerState.item.replacingPlaylistConfig(config)
                 updated.playlist = playerState.playlist?.map {
-                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                    $0.replacingPlaylistConfig(config)
                 }
                 updated.liveChannels = playerState.liveChannels.map {
-                    $0.replacingUserAgentOverride(config.userAgentOverride)
+                    $0.replacingPlaylistConfig(config)
                 }
-                updated.epgBrowseChannel = playerState.epgBrowseChannel?.replacingUserAgentOverride(config.userAgentOverride)
+                updated.epgBrowseChannel = playerState.epgBrowseChannel?.replacingPlaylistConfig(config)
                 state.routes[index].screen = .player(updated)
             }
             return .none

@@ -18,9 +18,9 @@ public struct PlaylistManagementView: View {
                     #if os(iOS)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
-                                store.send(.editUserAgent(playlist))
+                                store.send(.editPlaylistSettings(playlist))
                             } label: {
-                                Label("User-Agent", systemImage: "text.badge.checkmark")
+                                Label(AppStrings.PlaylistMgmt.playbackSettings, systemImage: "slider.horizontal.3")
                             }
                             Button(role: .destructive) {
                                 store.send(.confirmDeletePlaylist(playlist))
@@ -145,43 +145,28 @@ public struct PlaylistManagementView: View {
                     get: { store.playlistBeingEdited != nil },
                     set: { isPresented in
                         if !isPresented {
-                            store.send(.cancelUserAgentOverride)
+                            store.send(.cancelPlaylistSettings)
                         }
                     }
                 )
             ) {
                 if let playlist = store.playlistBeingEdited {
                     NavigationStack {
-                        Form {
-                            Section(playlist.name) {
-                                TextField("User-Agent", text: $store.userAgentDraft)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .accessibilityLabel("\(playlist.name) için özel User-Agent")
-                                Text("Boş bırakılırsa uygulamanın genel User-Agent değeri kullanılır.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                if let message = store.userAgentValidationMessage {
-                                    Text(message)
-                                        .font(.footnote)
-                                        .foregroundStyle(.red)
+                        playlistSettingsForm(for: playlist)
+                            .navigationTitle(AppStrings.PlaylistMgmt.playbackSettings)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button(AppStrings.Common.cancel) {
+                                        store.send(.cancelPlaylistSettings)
+                                    }
+                                }
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button(AppStrings.Common.save) {
+                                        store.send(.savePlaylistSettings)
+                                    }
+                                    .disabled(!canSaveUserAgentDraft)
                                 }
                             }
-                        }
-                        .navigationTitle("Playlist User-Agent")
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(AppStrings.Common.cancel) {
-                                    store.send(.cancelUserAgentOverride)
-                                }
-                            }
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button(AppStrings.Common.save) {
-                                    store.send(.saveUserAgentOverride)
-                                }
-                                .disabled(!canSaveUserAgentDraft)
-                            }
-                        }
                     }
                 }
             }
@@ -235,7 +220,7 @@ public struct PlaylistManagementView: View {
 
                 #if os(tvOS)
                     Button {
-                        store.send(.editUserAgent(playlist))
+                        store.send(.editPlaylistSettings(playlist))
                     } label: {
                         Image(systemName: "text.badge.checkmark")
                             .font(.system(size: 20))
@@ -243,7 +228,7 @@ public struct PlaylistManagementView: View {
                             .padding(8)
                     }
                     .buttonStyle(TVCircleButtonStyle())
-                    .accessibilityLabel("User-Agent ayarını düzenle")
+                    .accessibilityLabel(AppStrings.PlaylistMgmt.playbackSettings)
 
                     // Delete button on tvOS
                     Button {
@@ -276,5 +261,53 @@ public struct PlaylistManagementView: View {
         let value = store.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.utf8.count <= 512
             && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private var channelZappingDelayValue: String {
+        guard store.channelZappingDelayDraft > 0 else { return AppStrings.Player.off }
+        return AppStrings.PlaylistMgmt.channelZappingDelayValue(store.channelZappingDelayDraft)
+    }
+
+    private func playlistSettingsForm(for playlist: SavedPlaylist) -> some View {
+        Form {
+            Section(playlist.name) {
+                TextField("User-Agent", text: $store.userAgentDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("\(playlist.name) için özel User-Agent")
+                Text("Boş bırakılırsa uygulamanın genel User-Agent değeri kullanılır.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    #if os(tvOS)
+                        Picker(AppStrings.PlaylistMgmt.channelZappingDelay, selection: $store.channelZappingDelayDraft) {
+                            ForEach(Array(stride(from: 0, through: 3000, by: 250)), id: \.self) { delay in
+                                Text(delay == 0 ? AppStrings.Player.off : AppStrings.PlaylistMgmt.channelZappingDelayValue(delay))
+                                    .tag(delay)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    #else
+                        Stepper(value: $store.channelZappingDelayDraft, in: 0 ... 3000, step: 250) {
+                            HStack {
+                                Text(AppStrings.PlaylistMgmt.channelZappingDelay)
+                                Spacer()
+                                Text(channelZappingDelayValue)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                    #endif
+                    Text(AppStrings.PlaylistMgmt.channelZappingDelayDescription)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let message = store.userAgentValidationMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
     }
 }

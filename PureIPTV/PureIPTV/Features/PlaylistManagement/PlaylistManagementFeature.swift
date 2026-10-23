@@ -11,6 +11,7 @@ public struct PlaylistManagementFeature {
         public var playlistToDelete: SavedPlaylist?
         public var playlistBeingEdited: SavedPlaylist?
         public var userAgentDraft = ""
+        public var channelZappingDelayDraft = 0
         public var userAgentValidationMessage: String?
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
@@ -22,9 +23,9 @@ public struct PlaylistManagementFeature {
         case viewDidDisappear
         case binding(BindingAction<State>)
         case setActivePlaylist(UUID)
-        case editUserAgent(SavedPlaylist)
-        case saveUserAgentOverride
-        case cancelUserAgentOverride
+        case editPlaylistSettings(SavedPlaylist)
+        case savePlaylistSettings
+        case cancelPlaylistSettings
         case deletePlaylist(UUID)
         case confirmDeletePlaylist(SavedPlaylist)
         case cancelDeletePlaylist
@@ -38,7 +39,7 @@ public struct PlaylistManagementFeature {
         @CasePathable
         public enum Delegate: Equatable, Sendable {
             case didChangeActivePlaylist
-            case didUpdateActivePlaylistUserAgent(PlaylistConfig)
+            case didUpdateActivePlaylistSettings(PlaylistConfig)
             case addPlaylistTapped
             case addPlaylistDidConnect
             case dismissed
@@ -74,13 +75,14 @@ public struct PlaylistManagementFeature {
                 state.activePlaylistID = id
                 return .send(.delegate(.didChangeActivePlaylist))
 
-            case let .editUserAgent(playlist):
+            case let .editPlaylistSettings(playlist):
                 state.playlistBeingEdited = playlist
                 state.userAgentDraft = playlist.userAgentOverride ?? ""
+                state.channelZappingDelayDraft = playlist.channelZappingDelayMilliseconds ?? 0
                 state.userAgentValidationMessage = nil
                 return .none
 
-            case .saveUserAgentOverride:
+            case .savePlaylistSettings:
                 guard let playlist = state.playlistBeingEdited else { return .none }
                 let value = state.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard
@@ -90,21 +92,25 @@ public struct PlaylistManagementFeature {
                     state.userAgentValidationMessage = "User-Agent 512 baytı aşamaz ve kontrol karakteri içeremez."
                     return .none
                 }
-                playlistRepository.updatePlaylist(playlist.replacingUserAgentOverride(value.isEmpty ? nil : value))
-                let updatedPlaylist = playlist.replacingUserAgentOverride(value.isEmpty ? nil : value)
+                let updatedPlaylist = playlist
+                    .replacingUserAgentOverride(value.isEmpty ? nil : value)
+                    .replacingChannelZappingDelayMilliseconds(state.channelZappingDelayDraft)
+                playlistRepository.updatePlaylist(updatedPlaylist)
                 state.playlists = playlistRepository.getPlaylists()
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
+                state.channelZappingDelayDraft = 0
                 state.userAgentValidationMessage = nil
                 guard
                     state.activePlaylistID == updatedPlaylist.id,
                     let config = updatedPlaylist.toPlaylistConfig()
                 else { return .none }
-                return .send(.delegate(.didUpdateActivePlaylistUserAgent(config)))
+                return .send(.delegate(.didUpdateActivePlaylistSettings(config)))
 
-            case .cancelUserAgentOverride:
+            case .cancelPlaylistSettings:
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
+                state.channelZappingDelayDraft = 0
                 state.userAgentValidationMessage = nil
                 return .none
 

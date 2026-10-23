@@ -30,6 +30,7 @@ public struct PlayerFeature {
         public static let dynamicRangeHUD = "PlayerFeature.dynamicRangeHUD"
         public static let afrToast = "PlayerFeature.afrToast"
         public static let epgBrowse = "PlayerFeature.epgBrowse"
+        public static let channelSwitch = "PlayerFeature.channelSwitch"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -100,6 +101,27 @@ public struct PlayerFeature {
                 tvArchive: tvArchive,
                 categoryID: categoryID,
                 userAgentOverride: value
+            )
+        }
+
+        public func replacingPlaylistConfig(_ value: PlaylistConfig) -> Self {
+            guard config?.playlistID == value.playlistID else { return self }
+            return Self(
+                id: id,
+                title: title,
+                seriesTitle: seriesTitle,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                seriesID: seriesID,
+                startPosition: startPosition,
+                initialDuration: initialDuration,
+                initialProgress: initialProgress,
+                isLive: isLive,
+                config: value,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                categoryID: categoryID,
+                userAgentOverride: value.userAgentOverride
             )
         }
     }
@@ -375,6 +397,7 @@ public struct PlayerFeature {
 
     public enum Action {
         case onAppear
+        case startSelectedChannel(id: String)
         case onDisappear
         case play
         case pause
@@ -736,6 +759,25 @@ public struct PlayerFeature {
                 .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
             )
 
+        case let .startSelectedChannel(id):
+            guard state.item.id == id else { return .none }
+            let appearanceEffect = Self.reduceHelper(
+                state: &state,
+                action: .onAppear,
+                playerClient: playerClient,
+                databaseClient: databaseClient,
+                iptvClient: iptvClient,
+                settingsClient: settingsClient,
+                recentChannelsClient: recentChannelsClient,
+                streamHealthClient: streamHealthClient,
+                traktClient: traktClient,
+                pipClient: pipClient,
+                parentalControlClient: parentalControlClient,
+                displayModeClient: displayModeClient,
+                customEPGMappingClient: customEPGMappingClient
+            )
+            return .merge(appearanceEffect, .send(.fetchEPG))
+
         case .onDisappear:
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
@@ -749,6 +791,7 @@ public struct PlayerFeature {
             }
 
             return .merge(
+                .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
@@ -1650,6 +1693,19 @@ public struct PlayerFeature {
 
         case let .selectChannel(newItem):
             let currentItem = state.item
+            let channelZappingDelay: Int = if
+                !state.isReconnecting,
+                !state.isFallbackSwitching,
+                currentItem.isLive,
+                newItem.isLive,
+                newItem.id != currentItem.id,
+                let currentPlaylistID = currentItem.config?.playlistID,
+                currentPlaylistID == newItem.config?.playlistID
+            {
+                newItem.config?.channelZappingDelayMilliseconds ?? 0
+            } else {
+                0
+            }
             if newItem.id != currentItem.id {
                 state.previousChannel = currentItem
                 state.zappingHistory.removeAll(where: { $0.id == currentItem.id })
@@ -1698,16 +1754,26 @@ public struct PlayerFeature {
             state.isUpNextVisible = false
             state.isUpNextDismissed = false
 
-            return .merge(
+            return .concatenate(
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
+                .cancel(id: CancelID.playerEvents),
                 .run { send in
                     try await playerClient.stop()
-                    await send(.onAppear)
-                    await send(.fetchEPG)
+                    guard !Task.isCancelled else { return }
+                    if channelZappingDelay > 0 {
+                        do {
+                            try await Task.sleep(for: .milliseconds(Int64(channelZappingDelay)))
+                        } catch {
+                            return
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    await send(.startSelectedChannel(id: newItem.id))
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                     await send(.hideZappingHUD)
                 }
+                .cancellable(id: CancelID.channelSwitch, cancelInFlight: true)
             )
 
         case .recallLastChannel:

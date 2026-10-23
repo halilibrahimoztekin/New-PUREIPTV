@@ -13,6 +13,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
     /// M3U fields
     public let m3uURL: String?
     public let userAgentOverride: String?
+    /// Optional to decode playlists saved before this setting existed.
+    public let channelZappingDelayMilliseconds: Int?
 
     public init(
         id: UUID = UUID(),
@@ -22,7 +24,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         username: String? = nil,
         password: String? = nil,
         m3uURL: String? = nil,
-        userAgentOverride: String? = nil
+        userAgentOverride: String? = nil,
+        channelZappingDelayMilliseconds: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -32,6 +35,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.password = password
         self.m3uURL = m3uURL
         self.userAgentOverride = userAgentOverride
+        self.channelZappingDelayMilliseconds = channelZappingDelayMilliseconds.map { min(max($0, 0), 3000) }
     }
 
     /// Converts SavedPlaylist to an active PlaylistConfig instance if valid credentials exist.
@@ -50,7 +54,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 serverURL: url,
                 username: username,
                 password: password,
-                userAgentOverride: userAgentOverride
+                userAgentOverride: userAgentOverride,
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
             )
         } else if type == .m3u {
             guard let m3uURLStr = m3uURL,
@@ -62,7 +67,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 playlistID: id,
                 type: .m3u,
                 m3uURL: url,
-                userAgentOverride: userAgentOverride
+                userAgentOverride: userAgentOverride,
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
             )
         }
         return nil
@@ -77,7 +83,22 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             username: username,
             password: password,
             m3uURL: m3uURL,
-            userAgentOverride: value
+            userAgentOverride: value,
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+        )
+    }
+
+    public func replacingChannelZappingDelayMilliseconds(_ value: Int) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            m3uURL: m3uURL,
+            userAgentOverride: userAgentOverride,
+            channelZappingDelayMilliseconds: value
         )
     }
 }

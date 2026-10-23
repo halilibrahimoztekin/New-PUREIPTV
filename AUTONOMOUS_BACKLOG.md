@@ -172,10 +172,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** Reviewer `[NO-GO]` bulgusunu onayladı. Mevcut altyapı zamanlanmış EPG kaydını güvenli biçimde karşılayamaz; bunun için ayrı provider/server DVR entegrasyonu veya kapsamı açıkça “aktif kanalı belirli süre yerel kaydet” ile sınırlı arka plan/recording mimarisi gerekir. Kod değişmedi; uygulama akışı/test/build çalıştırılmadı.
 - **Durum:** `[DONE — NO-GO]` — Reviewer onayladı; kapsam mevcut kodla uygulanabilir değil.
 
-### 46. [IN_PROGRESS] Kanal Geçişi Gecikmesini Sağlayıcıya Göre Ayarlama
+### 46. [DONE] Kanal Geçişi Gecikmesini Sağlayıcıya Göre Ayarlama
 - **Bulgu:** UHF 1.101.2 sürüm notları, kanal değişiminde aktif bağlantı sorunları yaşayan kullanıcıların kapatılan ve açılan stream arasındaki gecikmeyi artırabilmesi için “Channel zapping delay” ayarı eklediğini bildiriyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=mac
 - **İnceleme odağı:** Hızlı geçiş isteyenleri yavaşlatmadan, bağlantı çakışan sağlayıcılar için playlist/sağlayıcı bazında geçiş gecikmesi sun; AFR tercihi ve alternatif-source değişimiyle etkileşimini kontrol et.
+- **Uygulama:** Playlist bazında kapalı varsayılan 0–3000 ms gecikme; iOS’ta 250 ms adımlı Stepper, tvOS’ta aynı aralığı seçen Picker. Geçişte önceki stream durdurulur, iptal edilebilir gecikme beklenir ve seçili kanal kimliği tekrar doğrulanmadan yeni stream başlamaz. Yalnız aynı playlist içindeki manuel canlı kanal değişimine uygulanır.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; tvOS Release ve bağlı iOS 26.5 iPhone 17 Release build’leri başarılı. `git diff --check` temiz. Test ve uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — playlist’e özel geçiş ayarı, iptal güvenliği ve platform kontrolleri tamamlandı.
 
 ### 47. [DONE] Aktif Audio Session’da Gereksiz Kategori Değişimini Önle
 - **Bulgu:** Kullanıcı iOS 26.5 iPhone 17 loglarında `setCategory` sırasında aktif AVAudioSession’ın main-thread hang uyarısını ve SwiftVLC kaynaklı `defaultToSpeaker`/`playAndRecord` kategori uyumsuzluğu hatasını paylaştı.
@@ -184,9 +187,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; bağlı iOS 26.5 iPhone 17 için Release compile-only build exit code 0. Debug build, `TCACoordinators 0.16.0` bağımlılığında XCTest sembolleri çözülmediği için başarısız oldu. App akışı/test edilmedi.
 - **Durum:** `[DONE]` — audio-session kategori ayarı idempotent hale getirildi; reviewer onayladı.
 
-### 48. [PENDING] Takım Etkinliği Araması ve Takip Edilen Maçlar Rafı
+### 48. [IN_PROGRESS] Aktif Playlist EPG Program Rafı (Daraltılmış Kapsam)
 - **Bulgu:** UHF 2.3.0, playlist’ler arasında etkinlik araması ve takip edilen takım/turnuvalar için Home etkinlik rafı ekledi.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Kapsam kararı:** Kaynak kodunda bağlı etkinlik API’si veya kalıcı takım takip modeli yok; `SportsHubManager` EPG adlarından güvenilmez biçimde takım/lig çıkarıyor. Reviewer’ın önerisiyle yalnız aktif playlist’ten sınırlı EPG isteği yapıp sağlayıcının ham program başlıklarını kanal ve saatle göstereceğiz; takım takibi ve playlist’ler arası etkinlik araması yapılmayacak.
+- **Güvenlik/perf sınırları:** Programlar doğrulanmış maç gibi etiketlenmeyecek; küçük kanal kümesi, sınırlı eşzamanlılık ve yenilemede iptal uygulanacak.
 
 ### 49. [PENDING] VOD Zaman Çizelgesinde Önizleme Küçük Resimleri
 - **Bulgu:** UHF’in App Store sürüm geçmişi, VOD scrub sırasında thumbnail önizlemesi sunduğunu belirtiyor; bu, kullanıcının hedef sahneye daha hızlı ulaşmasını sağlar.
