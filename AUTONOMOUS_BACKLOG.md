@@ -133,12 +133,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED — NO-GO]`; kaynak incelemesi. Kullanıcı akışı veya test çalıştırılmadı; kod değişmedi.
 - **Durum:** `[DONE]` — Mevcut mimaride bu kapsamla uygulanmaması reviewer tarafından onaylandı; backend soyutlaması ayrı iş olarak gerekli.
 
-### 41. [IN_PROGRESS] Arama Sonuçlarında EPG Programı ve Kayıt Eylemi
+### 41. [DONE] Arama Sonuçlarında EPG Programı ve Kayıt Eylemi — uygulanabilirlik kararı
 - **Bulgu:** IPTVX 22.3 sürüm notları arama sonuçlarındaki EPG programları için doğrudan kayıt seçeneklerini eklediğini belirtiyor. Program araması ile eylem arasındaki gezinmeyi azaltıyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** Global arama EPG programlarını içeriyor mu; program satırından mevcut catch-up oynatma veya kayıt altyapısı kullanılabiliyor mu? Kayıt varsa UHF Server ve yerel DVR kapsamlarını ayır.
+- **Kod incelemesi:** Global Search yalnız kanal/VOD/dizi kataloglarını indeksliyor; “EPG Programları” filtresi eşleşen programları değil EPG ID’si olan kanalları sayıyor. Kısa EPG/catch-up yalnız oynatıcıdaki seçili kanal için çalışıyor. UHF recording client yok. `LocalDVRManager` çağrı yeri olmayan, gözlemlenmeyen ve yalnız iptal/ağ bitimine kadar ham URLSession yanıtı yazan bir sınıf; planlı bitiş, TCA lifecycle ve playlist UA taşıması yok.
+- **Uygulanabilirlik kararı:** Güvenilir tam özellik küçük bir search UI işi değil; playlist/kanal/tarih aralığı EPG index/cache/cancellation ve planlı kayıt için kalıcı, gözlemlenebilir, iptal edilebilir bir kayıt motoru gerektiriyor. Mevcut ham stream writer’ı arama eylemine bağlamak yanıltıcı ve güvenilmez olur.
+- **Doğrulama:** PR Reviewer `[APPROVED — NO-GO]`; analist ve reviewer kaynak incelemesi. Kod değişmedi; yalnız akış/test/derleme çalıştırılmadı.
+- **Durum:** `[DONE]` — Tam program arama/kayıt mimarisi ayrı iş olarak gerektiğinden bu kapsam reviewer tarafından NO-GO onaylandı.
 
-### 42. [PENDING] EPG Yüklenirken Boşlukları Azalt ve Kısmi Sonuç Göster
+### 42. [IN_PROGRESS] EPG Yüklenirken Boşlukları Azalt ve Kısmi Sonuç Göster
 - **Bulgu:** IPTVX 22.2 sürüm notları büyük EPG yüklemesinde placeholder boşluklarını azaltıp rehber güvenilirliğini iyileştirdiğini; UHF kullanıcıları ise Apple TV’de EPG’nin çok uzun sürmesi ve cihazlar arasında eski/farklı bilgi göstermesi sorununu paylaşıyor.
 - **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/uhf_app/comments/1q1edqo/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
 - **İnceleme odağı:** EPG cache kapsamı playlist/cihaz bazında mı, kısmi yükleme UI’ı veriyi bekliyor mu; eski cache güncellik damgasıyla gösterilebilir mi?
