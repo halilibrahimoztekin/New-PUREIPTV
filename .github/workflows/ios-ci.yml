@@ -36,4 +36,5 @@ jobs:
           -project PureIPTV.xcodeproj
           -scheme PureIPTV
           -destination 'generic/platform=iOS Simulator'
+          -skipMacroValidation
           CODE_SIGNING_ALLOWED=NO
