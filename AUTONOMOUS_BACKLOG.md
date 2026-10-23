@@ -156,17 +156,23 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 ve tvOS Release Xcode build; `git diff --check`. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — EPG mini-preview’den aynı oynatıcıyla tam ekrana geçiş tamamlandı.
 
-### 44. [IN_PROGRESS] TV Rehberinde EPG Yenileme ve Yaş Damgası
+### 44. [DONE] TV Rehberinde EPG Yenileme ve Yaş Damgası
 - **Bulgu:** Kullanıcılar Apple TV rehberinin hiç yüklenmemesi veya iOS cihazdaki rehberden farklı/eski içerik göstermesi sorununu bildiriyor; sağlayıcıyı silip tekrar eklemenin geçici çözüm olduğuna dair rapor da var.
 - **Kaynaklar:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
 - **İnceleme odağı:** Kullanıcıya playlist/EPG kaynağı başına son başarılı güncelleme zamanı, kısmi hata ve yalnız EPG’yi yenile eylemi sun; tam playlist silme/yeniden ekleme gerektirmesin.
+- **Uygulama:** Son başarılı yenileme zamanı playlist ID’sine göre kalıcı saklanıyor ve TV rehberinde geri yükleniyor. Yenileme yalnız aktif playlist’in XMLTV cache’ini temizliyor; başarılı/başarısız kanal sayılarıyla kısmi ve tam hata durumu gösteriliyor. Xtream’ın iki EPG endpoint’i de başarısız veya çözümlenemeyen yanıt verirse, M3U’da kaynak yoksa ya da XMLTV parse edilemezse hata artık boş program listesi gibi raporlanmıyor; geçerli boş program yanıtı başarı olarak kalıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED` ile tamamlandı; ilk tvOS denemesi geçici DerivedData alanı yetersizliğinde durdu, geçici build çıktıları temizlendikten sonra mevcut DerivedData ile başarılı oldu. `git diff --check` başarılı. Yalnızca Xcode derlemeleri alındı; uygulama akışı/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı.
 
-### 45. [PENDING] EPG Programında Kayıt Süresini Serbest Belirleme
+### 45. [DONE — NO-GO] EPG Programında Kayıt Süresini Serbest Belirleme
 - **Bulgu:** UHF 1.95 sürüm notları kayıt süresini 15 dakikalık aralıklara bağlı olmadan seçme ve 24 saate kadar kayıt başlatma özelliğini duyuruyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=mac
 - **İnceleme odağı:** Uygulamadaki `LocalDVRManager` yalnızca ham URL dosyasını kaydediyor; EPG program zamanlaması, uçta pay bırakma ve kayıt çakışması çözümleme ayrı TCA akışı gerektirir.
+- **Kod incelemesi:** EPG satırlarında kayıt eylemi yok; `ReminderClient` yalnızca bildirim planlıyor. `LocalDVRManager` çağrı yeri olmayan, tek bir manuel stream’i ikinci bir URLSession ile kopyalayan yardımcı sınıf; EPG program zamanı, süre, zamanlanmış iş, arka plan kaydı, kota/eviction veya playlist User-Agent desteği yok. Catch-up yalnızca hemen oynatma yapıyor ve provider/server DVR istemcisi bulunmuyor.
+- **Karar:** Reviewer `[NO-GO]` bulgusunu onayladı. Mevcut altyapı zamanlanmış EPG kaydını güvenli biçimde karşılayamaz; bunun için ayrı provider/server DVR entegrasyonu veya kapsamı açıkça “aktif kanalı belirli süre yerel kaydet” ile sınırlı arka plan/recording mimarisi gerekir. Kod değişmedi; uygulama akışı/test/build çalıştırılmadı.
+- **Durum:** `[DONE — NO-GO]` — Reviewer onayladı; kapsam mevcut kodla uygulanabilir değil.
 
-### 46. [PENDING] Kanal Geçişi Gecikmesini Sağlayıcıya Göre Ayarlama
+### 46. [IN_PROGRESS] Kanal Geçişi Gecikmesini Sağlayıcıya Göre Ayarlama
 - **Bulgu:** UHF 1.101.2 sürüm notları, kanal değişiminde aktif bağlantı sorunları yaşayan kullanıcıların kapatılan ve açılan stream arasındaki gecikmeyi artırabilmesi için “Channel zapping delay” ayarı eklediğini bildiriyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=mac
 - **İnceleme odağı:** Hızlı geçiş isteyenleri yavaşlatmadan, bağlantı çakışan sağlayıcılar için playlist/sağlayıcı bazında geçiş gecikmesi sun; AFR tercihi ve alternatif-source değişimiyle etkileşimini kontrol et.

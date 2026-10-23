@@ -30,10 +30,8 @@ actor M3UCache {
         entries[key, default: Entry()].xmltvData = data
     }
 
-    func clearXmltvData() {
-        for key in Array(entries.keys) {
-            entries[key]?.xmltvData = nil
-        }
+    func clearXmltvData(for key: String) {
+        entries[key]?.xmltvData = nil
     }
 }
 
@@ -83,7 +81,20 @@ public struct IPTVClient {
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
     public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
-    public var clearEPGCache: @Sendable () async -> Void = {}
+    public var clearEPGCache: @Sendable (_ config: PlaylistConfig) async -> Void = { _ in }
+}
+
+private func decodeEPGItems(_ data: Data) throws -> [EPGItemDTO] {
+    let decoder = JSONDecoder()
+    do {
+        return try decoder.decode(EPGResponseDTO.self, from: data).epgListings
+    } catch {
+        do {
+            return try decoder.decode([EPGItemDTO].self, from: data)
+        } catch {
+            throw NetworkError.decodingFailed(description: error.localizedDescription)
+        }
+    }
 }
 
 extension IPTVClient: DependencyKey {
@@ -390,7 +401,9 @@ extension IPTVClient: DependencyKey {
                 if config.type == .m3u {
                     _ = await ensureM3UCache(config)
                     let cacheKey = m3uCacheKey(config)
-                    guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else { return [] }
+                    guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
+                        throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
+                    }
                     var currentXMLTV = await m3uCache.getXmltvData(for: cacheKey)
                     if currentXMLTV == nil {
                         let data = try await networkClient.fetchData(url: epgURL, userAgentOverride: config.userAgentOverride)
@@ -399,7 +412,9 @@ extension IPTVClient: DependencyKey {
                             await m3uCache.setXmltvData(parsed, for: cacheKey)
                         }
                     }
-                    guard let xmlData = currentXMLTV else { return [] }
+                    guard let xmlData = currentXMLTV else {
+                        throw NetworkError.decodingFailed(description: "The XMLTV source could not be parsed.")
+                    }
 
                     let now = Date()
                     let programmes = xmlData.programmes[streamID] ?? []
@@ -415,31 +430,34 @@ extension IPTVClient: DependencyKey {
                     }
                 }
 
-                guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
+                guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
+                    throw NetworkError.invalidResponse
+                }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
 
                 var response: [EPGItemDTO] = []
+                var receivedValidResponse = false
+                var lastRequestError: Error = NetworkError.invalidResponse
 
                 // Strategy 1: Attempt action=get_short_epg
-                if let url = try? XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig),
-                   let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
-                {
-                    if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
-                        response = dto.epgListings
-                    } else if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
-                        response = array
-                    }
+                do {
+                    let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
+                    let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                    response = try decodeEPGItems(data)
+                    receivedValidResponse = true
+                } catch {
+                    lastRequestError = error
                 }
 
                 // Strategy 2: If empty, attempt action=get_simple_data_table
-                if response.isEmpty,
-                   let url = try? XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig),
-                   let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
-                {
-                    if let dto = try? JSONDecoder().decode(EPGResponseDTO.self, from: data) {
-                        response = dto.epgListings
-                    } else if let array = try? JSONDecoder().decode([EPGItemDTO].self, from: data) {
-                        response = array
+                if response.isEmpty {
+                    do {
+                        let url = try XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig)
+                        let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                        response = try decodeEPGItems(data)
+                        receivedValidResponse = true
+                    } catch {
+                        lastRequestError = error
                     }
                 }
 
@@ -450,6 +468,7 @@ extension IPTVClient: DependencyKey {
                     if !customPrograms.isEmpty {
                         return customPrograms
                     }
+                    guard receivedValidResponse else { throw lastRequestError }
                     return []
                 }
 
@@ -534,8 +553,8 @@ extension IPTVClient: DependencyKey {
 
                 return result
             },
-            clearEPGCache: {
-                await m3uCache.clearXmltvData()
+            clearEPGCache: { config in
+                await m3uCache.clearXmltvData(for: m3uCacheKey(config))
             }
         )
     }()
@@ -551,7 +570,7 @@ extension IPTVClient: DependencyKey {
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
         fetchShortEPG: { _, _, _ in [] },
-        clearEPGCache: {}
+        clearEPGCache: { _ in }
     )
 }
 

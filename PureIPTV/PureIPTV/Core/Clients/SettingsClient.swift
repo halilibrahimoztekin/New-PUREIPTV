@@ -57,6 +57,8 @@ public struct SettingsClient: Sendable {
 
     public var autoUpdateEPG: @Sendable () -> Bool = { true }
     public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
+    public var getLastEPGRefreshDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
+    public var setLastEPGRefreshDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
 
     public var hideAdultContent: @Sendable () -> Bool = { false }
     public var setHideAdultContent: @Sendable (Bool) -> Void = { _ in }
@@ -120,6 +122,7 @@ extension SettingsClient: DependencyKey {
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
+        let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
@@ -256,6 +259,19 @@ extension SettingsClient: DependencyKey {
             setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
             autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },
             setAutoUpdateEPG: { defaults.set($0, forKey: autoUpdateEpgKey) },
+            getLastEPGRefreshDate: { playlistID in
+                guard let playlistID else { return nil }
+                return defaults.object(forKey: lastEPGRefreshPrefix + playlistID.uuidString) as? Date
+            },
+            setLastEPGRefreshDate: { playlistID, date in
+                guard let playlistID else { return }
+                let key = lastEPGRefreshPrefix + playlistID.uuidString
+                if let date {
+                    defaults.set(date, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
             hideAdultContent: { defaults.bool(forKey: hideAdultKey) },
             setHideAdultContent: { defaults.set($0, forKey: hideAdultKey) },
             defaultStartupTab: { defaults.string(forKey: startupTabKey) ?? "Keşfet" },

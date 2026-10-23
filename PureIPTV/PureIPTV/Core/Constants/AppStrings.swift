@@ -225,6 +225,12 @@ public enum AppStrings {
         public static let refreshEPG = "Yayın Akışını Yenile".localized
         public static let syncing = "Senkronize ediliyor...".localized
         public static let epgUpdated = "Yayın akışı güncellendi".localized
+        public static func epgPartiallyUpdated(failedChannels: Int) -> String {
+            "Yayın akışının bazı kanalları güncellenemedi (%lld)".localized(Int64(failedChannels))
+        }
+
+        public static let epgRefreshFailed = "Yayın akışı güncellenemedi".localized
+        public static let epgNoChannelsToRefresh = "Güncellenecek kanal bulunamadı".localized
         public static func lastSynced(_ timeString: String) -> String {
             "Son güncelleme: %@".localized(timeString)
         }

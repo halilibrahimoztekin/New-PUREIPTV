@@ -30,6 +30,8 @@ public struct EPGTimelineFeature {
         public var isFavoritesOnly: Bool = false
         public var isSyncingEPG: Bool = false
         public var lastSyncTimestamp: Date?
+        public var successfulEPGChannelCount = 0
+        public var failedEPGChannelCount = 0
         public var syncStatusMessage: String?
 
         // PiP-in-EPG Live Mini-Preview (Madde #25)
@@ -192,6 +194,9 @@ public struct EPGTimelineFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                if state.lastSyncTimestamp == nil {
+                    state.lastSyncTimestamp = settingsClient.getLastEPGRefreshDate(state.config.playlistID)
+                }
                 let shouldAutoSync = settingsClient.autoUpdateEPG()
                 var effects: [Effect<Action>] = [
                     .send(.loadReminders),
@@ -216,6 +221,8 @@ public struct EPGTimelineFeature {
                 guard !state.isSyncingEPG else { return .none }
                 state.isSyncingEPG = true
                 state.syncStatusMessage = AppStrings.Player.syncing
+                state.successfulEPGChannelCount = 0
+                state.failedEPGChannelCount = 0
 
                 let channelsToPrewarm = Array(state.filteredChannels.prefix(20))
                 state.syncPendingEPGChannels = Set(channelsToPrewarm.map(\.id))
@@ -226,10 +233,11 @@ public struct EPGTimelineFeature {
                     )
                 }
 
+                let config = state.config
                 return .merge(
                     .cancel(id: EPGTimelineCancelID.clearSyncStatusMessage),
-                    .run { send in
-                        await iptvClient.clearEPGCache()
+                    .run { [iptvClient] send in
+                        await iptvClient.clearEPGCache(config)
                         for ch in channelsToPrewarm {
                             await send(.refreshEPG(streamID: ch.id))
                         }
@@ -239,9 +247,20 @@ public struct EPGTimelineFeature {
             case let .syncCompleted(date):
                 guard state.isSyncingEPG else { return .none }
                 state.isSyncingEPG = false
-                state.lastSyncTimestamp = date
                 state.syncPendingEPGChannels = []
-                state.syncStatusMessage = AppStrings.Player.epgUpdated
+                if state.successfulEPGChannelCount > 0 {
+                    state.lastSyncTimestamp = date
+                    settingsClient.setLastEPGRefreshDate(state.config.playlistID, date)
+                }
+                if state.failedEPGChannelCount > 0 {
+                    state.syncStatusMessage = state.successfulEPGChannelCount > 0
+                        ? AppStrings.Player.epgPartiallyUpdated(failedChannels: state.failedEPGChannelCount)
+                        : AppStrings.Player.epgRefreshFailed
+                } else if state.successfulEPGChannelCount > 0 {
+                    state.syncStatusMessage = AppStrings.Player.epgUpdated
+                } else {
+                    state.syncStatusMessage = AppStrings.Player.epgNoChannelsToRefresh
+                }
                 return .run { [clock] send in
                     try? await clock.sleep(for: .seconds(3))
                     await send(.clearSyncStatusMessage)
@@ -352,6 +371,9 @@ public struct EPGTimelineFeature {
                 state.isLoading[streamID] = false
                 state.epgData[streamID] = programs
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
+                if responseCompletedSyncChannel {
+                    state.successfulEPGChannelCount += 1
+                }
                 if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
                     return .send(.syncCompleted(Date()))
                 }
@@ -366,6 +388,9 @@ public struct EPGTimelineFeature {
                     state.epgData[streamID] = []
                 }
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
+                if responseCompletedSyncChannel {
+                    state.failedEPGChannelCount += 1
+                }
                 if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
                     return .send(.syncCompleted(Date()))
                 }
