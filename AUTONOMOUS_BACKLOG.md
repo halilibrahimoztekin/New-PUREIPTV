@@ -59,9 +59,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode projede mevcut Swift 6 concurrency uyarıları ve SwiftFormat script phase notu yazdı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 32. [PENDING] Tema, Simge, Avatar ve Oynatıcı Kontrol Eklentileri
-- **Bulgu:** Görünümü ve kontrol düzenini eklenti temalarıyla kişiselleştirme; IPTVX yakın zamanda tema/add-on özelleştirmesi yayınladı.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+### 32. [DONE] Profil Avatarı Seçimi ve Görünüm Kişiselleştirme
+- **Bulgu:** Tema rengi ve uygulama simgesi ayarları zaten var; yeni profil yaratırken avatar seçilemiyordu. Yeni profil formuna mevcut `UserProfile.avatarIcon` alanına kaydeden yerel SF Symbols avatar kataloğu eklendi.
+- **Canlı keşif (23 Ekim 2026):** IPTVX 24.1.1 sürüm notları tema görselleri/animasyonları ve add-on görsellerini, 24.1.3 ise playlist avatarı ve tema yüzeylerini iyileştirdi. IPTVX’in resmi add-on sayfası temaların skin, ikon, avatar ve arka planı paket olarak uyumlu hale getirdiğini doğruluyor. Mevcut PureIPTV app icon/accent-color seçimini ve UserProfile.avatarIcon alanını da taradım.
+- **Uygulama:** `ProfileAvatarCatalog` whitelist’i ve çocuk/yetişkin varsayılan avatarları eklendi; TCA aksiyonu seçimi doğrulayıp saklıyor. iOS’ta erişilebilir etiket ve seçili durumlu avatar ızgarası, tvOS’ta odak gezintili yatay seçici eklendi. Profil modu değişince yalnızca varsayılan avatar otomatik değişiyor; özel seçim korunuyor.
+- **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024 · https://iptvx.app/addons/index.html · https://iptvx.app/features/index.html
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 33. [PENDING] Xtream İçe Aktarma ve Kategori Tutarlılık Tanılaması
 - **Bulgu:** Kullanıcı değerlendirmesinde bazı film/dizilerin sonuçlarda eksik olduğu, başka oynatıcıda göründüğü bildiriliyor; içe aktarma sonrası sayım ve eksik kategori tanılaması keşfedilebilirliği artırabilir.

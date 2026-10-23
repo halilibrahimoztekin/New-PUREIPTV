@@ -8,6 +8,7 @@
         @Bindable var store: StoreOf<ProfileSelectionFeature>
         @State private var newProfileName = ""
         @State private var newProfileIsKids = false
+        @State private var newProfileAvatar = ProfileAvatarCatalog.adultDefault
 
         public init(store: StoreOf<ProfileSelectionFeature>) {
             self.store = store
@@ -108,15 +109,22 @@
                 TVAddProfileSheet(
                     name: $newProfileName,
                     isKids: $newProfileIsKids,
+                    avatarIcon: $newProfileAvatar,
                     onCancel: {
                         store.send(.binding(.set(\.showingAddProfile, false)))
                         newProfileName = ""
                         newProfileIsKids = false
+                        newProfileAvatar = ProfileAvatarCatalog.adultDefault
                     },
                     onAdd: {
-                        store.send(.addProfile(name: newProfileName, isKidsMode: newProfileIsKids))
+                        store.send(.addProfile(
+                            name: newProfileName,
+                            isKidsMode: newProfileIsKids,
+                            avatarIcon: newProfileAvatar
+                        ))
                         newProfileName = ""
                         newProfileIsKids = false
+                        newProfileAvatar = ProfileAvatarCatalog.adultDefault
                     }
                 )
             }
@@ -416,6 +424,7 @@
     private struct TVAddProfileSheet: View {
         @Binding var name: String
         @Binding var isKids: Bool
+        @Binding var avatarIcon: String
         let onCancel: () -> Void
         let onAdd: () -> Void
 
@@ -442,6 +451,55 @@
                         Toggle(AppStrings.Profile.kidsProfileDesc, isOn: $isKids)
                             .font(.system(size: 22))
                             .padding(.vertical, 8)
+                            .onChange(of: isKids) { _, newValue in
+                                if avatarIcon == ProfileAvatarCatalog.adultDefault
+                                    || avatarIcon == ProfileAvatarCatalog.kidsDefault
+                                {
+                                    avatarIcon = ProfileAvatarCatalog.defaultAvatar(isKidsMode: newValue)
+                                }
+                            }
+
+                        Text(AppStrings.Profile.profileAvatar)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.7))
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 14) {
+                                ForEach(ProfileAvatarCatalog.options) { option in
+                                    Button {
+                                        avatarIcon = option.symbolName
+                                    } label: {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: option.symbolName)
+                                                .font(.system(size: 30, weight: .semibold))
+                                            Text(option.name)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .lineLimit(1)
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(width: 96, height: 92)
+                                        .background(
+                                            avatarIcon == option.symbolName
+                                                ? Color(hex: "#0A84FF").opacity(0.85)
+                                                : Color.white.opacity(0.08),
+                                            in: RoundedRectangle(cornerRadius: 16)
+                                        )
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .strokeBorder(
+                                                    avatarIcon == option.symbolName ? Color.white : Color.white.opacity(0.12),
+                                                    lineWidth: avatarIcon == option.symbolName ? 2.5 : 1
+                                                )
+                                        }
+                                    }
+                                    .buttonStyle(.tvGridCard)
+                                    .accessibilityLabel(option.name)
+                                    .accessibilityAddTraits(avatarIcon == option.symbolName ? .isSelected : [])
+                                }
+                            }
+                            .padding(.vertical, 10)
+                        }
+                        .focusSection()
                     }
                     .frame(maxWidth: 600)
 

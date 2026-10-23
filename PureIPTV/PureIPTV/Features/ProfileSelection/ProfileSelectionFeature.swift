@@ -21,7 +21,7 @@ public struct ProfileSelectionFeature: Sendable {
         case toggleEditMode
         case addProfileTapped
         case deleteProfile(UserProfile)
-        case addProfile(name: String, isKidsMode: Bool)
+        case addProfile(name: String, isKidsMode: Bool, avatarIcon: String)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -79,9 +79,14 @@ public struct ProfileSelectionFeature: Sendable {
                     await send(.loadProfiles(newProfiles))
                 }
 
-            case let .addProfile(name, isKidsMode):
+            case let .addProfile(name, isKidsMode, avatarIcon):
                 state.showingAddProfile = false
-                let newProfile = UserProfile(id: uuid(), name: name, avatarIcon: isKidsMode ? "face.smiling.fill" : "person.crop.circle.fill", isKidsMode: isKidsMode)
+                let newProfile = UserProfile(
+                    id: uuid(),
+                    name: name,
+                    avatarIcon: ProfileAvatarCatalog.validated(avatarIcon, isKidsMode: isKidsMode),
+                    isKidsMode: isKidsMode
+                )
                 return .run { send in
                     try await saveProfile(newProfile)
                     let newProfiles = try await fetchProfiles()

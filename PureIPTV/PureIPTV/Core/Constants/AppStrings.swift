@@ -322,6 +322,7 @@ public enum AppStrings {
         public static let profileName = "Profil Adı".localized
         public static let enterProfileName = "Profil Adı Girin".localized
         public static let profileInfo = "Profil Bilgileri".localized
+        public static let profileAvatar = "Profil Avatarı".localized
         public static let kidsBadge = "ÇOCUK".localized
         public static let kidsProfileInfo = "Çocuk Profili (Sadece Çocuk İçerikleri)".localized
         public static let kidsProfileDesc = "Çocuk Profili (Sadece çocuk içerikleri)".localized
