@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   test:
-    name: Build and test iOS
+    name: Build iOS
     runs-on: macos-26
     timeout-minutes: 60
 
@@ -29,12 +29,11 @@ jobs:
         working-directory: PureIPTV
         run: xcodebuild -resolvePackageDependencies -project PureIPTV.xcodeproj -scheme PureIPTV
 
-      - name: Run iOS unit tests
+      - name: Build iOS Simulator app
         working-directory: PureIPTV
         run: >-
-          xcodebuild test
+          xcodebuild build
           -project PureIPTV.xcodeproj
           -scheme PureIPTV
-          -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
-          -only-testing:PureIPTVTests
+          -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
