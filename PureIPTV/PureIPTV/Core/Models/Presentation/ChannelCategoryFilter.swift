@@ -13,6 +13,7 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
     case ultraHD4K
     case music
     case history
+    case alternatives
     case custom(String)
 
     public var id: String {
@@ -26,6 +27,7 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
         case .ultraHD4K: "4k"
         case .music: "music"
         case .history: "history"
+        case .alternatives: "alternatives"
         case let .custom(cat): "cat_\(cat)"
         }
     }
@@ -41,6 +43,7 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
         case .ultraHD4K: AppStrings.LiveTV.category4K
         case .music: AppStrings.LiveTV.categoryMusic
         case .history: AppStrings.LiveTV.recentChannels
+        case .alternatives: "Alternatif Kaynaklar".localized
         case let .custom(cat): cat
         }
     }
@@ -56,6 +59,7 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
         case .ultraHD4K: "sparkles.tv.fill"
         case .music: "music.note"
         case .history: "clock.arrow.circlepath"
+        case .alternatives: "arrow.triangle.branch"
         case .custom: "folder.fill"
         }
     }
@@ -71,6 +75,7 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
         case .ultraHD4K: "#64D2FF" // Electric Cyan
         case .music: "#FF375F" // Music Pink
         case .history: "#5E5CE6" // Indigo
+        case .alternatives: "#FF9F0A" // Orange
         case .custom: "#0A84FF" // Default Blue
         }
     }
@@ -89,6 +94,8 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
 
         case .history:
             return false // Handled directly via history array
+        case .alternatives:
+            return false // Matched against the currently playing channel in the player drawer.
         case .sports:
             let keywords = [
                 "spor", "sport", "bein", "ssport", "s sport", "espn", "futbol", "football",

@@ -40,9 +40,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 30. [PENDING] Canlı Eşleşen Alternatif Kaynağa Kesintisiz Geçiş
+### 30. [DONE] Canlı Eşleşen Alternatif Kaynağa Kesintisiz Geçiş
 - **Bulgu:** Aynı kanalın alternatif canlı kaynaklarını oynatıcıdan, yayın akışını kapatmadan seçme; IPTVX’in son sürüm notlarında yer alıyor.
-- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **Canlı keşif (23 Ekim 2026):** IPTVX 23.3 sürüm notları oynatıcı içinden eşleşen Live TV kanallarına geçişi doğruluyor. Kullanıcı örneği aynı maçın farklı sağlayıcılarda farklı yayınlara yönlenebildiğini gösteriyor.
+- **Kaynaklar:** https://apps.apple.com/rs/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/IPTVGroupBuy/comments/1ihdujj/
+- **Analiz:** Mevcut player sidebar’ı tüm yüklü kanal satırlarını gösteriyor; aynı başlıklı varyantı bulmak için özel filtre veya kaynak grubu yok. Sağlıklı akışta da seçilebilen kaynak grupları ekleniyor. Stream değişimi oynatıcı ekranını kapatmadan yapılacak ancak player yeniden başlatıldığı için kısa tamponlama aralığı olabilir.
+- **Uygulama:** Player kanal çekmecesine yalnızca mevcut kaynakla tam eşleşen, canlı ve farklı ID’li varyantlar varsa görünen “Alternatif Kaynaklar” filtresi eklendi. Eşleştirme kalite/codec token’larını temizleyip kalan başlıkların tamamını karşılaştırıyor; kanal adındaki tekil H/264/265 gibi token’lar korunuyor. Bir kaynak seçilince mevcut Player route içinde kanal değişiyor; gerçek stream restart’ı nedeniyle kısa buffering olabilir.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 31. [PENDING] Açılışta Son Kullanılan Çalma Listesini Açma Tercihi
 - **Bulgu:** Kullanıcıya başlangıçta son playlist’i otomatik açma veya seçimi kendisine bırakma tercihi sunma; IPTVX bunu güncel sürümünde sunuyor.

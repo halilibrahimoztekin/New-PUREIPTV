@@ -2862,6 +2862,35 @@ public struct PlayerFeature {
         return false
     }
 
+    /// Matches source variants only when their normalized channel names agree
+    /// exactly. The broader relation above remains reserved for automatic
+    /// recovery, where a fuzzy best-effort match is preferable to a dead end.
+    static func areAlternativeSources(_ titleA: String, _ titleB: String) -> Bool {
+        let ignoredTokens: Set = [
+            "fhd", "uhd", "4k", "8k", "hevc", "h265", "h264", "hd", "sd",
+            "1080p", "1080i", "2160p", "720p", "50fps", "60fps", "raw", "vip", "backup",
+        ]
+        func key(_ title: String) -> String {
+            var tokens = title
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+
+            var index = 0
+            while index + 1 < tokens.count {
+                if tokens[index] == "h", tokens[index + 1] == "264" || tokens[index + 1] == "265" {
+                    tokens.removeSubrange(index ... index + 1)
+                } else {
+                    index += 1
+                }
+            }
+
+            return tokens.filter { !ignoredTokens.contains($0) }.joined(separator: " ")
+        }
+        let lhs = key(titleA)
+        return !lhs.isEmpty && lhs == key(titleB)
+    }
+
     // MARK: - Up Next Episode State Synchronization Helper
 
     private static func updateUpNextState(state: inout State, settingsClient: SettingsClient) -> Effect<Action> {

@@ -751,6 +751,14 @@ public struct PlayerSidebarDrawer: View {
 
         var chips: [ChannelCategoryFilter] = [.all]
 
+        let hasAlternatives = list.contains { candidate in
+            candidate.isLive && candidate.id != store.item.id
+                && PlayerFeature.areAlternativeSources(candidate.title, store.item.title)
+        }
+        if hasAlternatives {
+            chips.append(.alternatives)
+        }
+
         if !store.zappingHistory.isEmpty {
             chips.append(.history)
         }
@@ -799,6 +807,11 @@ public struct PlayerSidebarDrawer: View {
             return list.count
         case .history:
             return store.zappingHistory.count
+        case .alternatives:
+            return list.filter {
+                $0.isLive && $0.id != store.item.id
+                    && PlayerFeature.areAlternativeSources($0.title, store.item.title)
+            }.count
         default:
             return list.filter { filter.matches(title: $0.title, categoryID: $0.categoryID) }.count
         }
@@ -810,6 +823,11 @@ public struct PlayerSidebarDrawer: View {
             store.playlist ?? [store.item]
         case .history:
             store.zappingHistory
+        case .alternatives:
+            (store.playlist ?? []).filter {
+                $0.isLive && $0.id != store.item.id
+                    && PlayerFeature.areAlternativeSources($0.title, store.item.title)
+            }
         default:
             (store.playlist ?? [store.item]).filter {
                 selectedFilter.matches(title: $0.title, categoryID: $0.categoryID)
