@@ -49,9 +49,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 31. [PENDING] Açılışta Son Kullanılan Çalma Listesini Açma Tercihi
-- **Bulgu:** Kullanıcıya başlangıçta son playlist’i otomatik açma veya seçimi kendisine bırakma tercihi sunma; IPTVX bunu güncel sürümünde sunuyor.
-- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+### 31. [IN_PROGRESS] Dashboard Raflarını Hızlı Açılış için Önbellekleme
+- **Bulgu:** Son aktif playlist zaten `PlaylistRepository` ile kalıcı tutuluyor ve açılışta otomatik seçiliyor; bu nedenle yeni playlist açılış tercihi eklemek mevcut davranışı yineleyecekti. Profil seçimi ebeveyn/çocuk profili güvenliği için korunmalı. Gerçek gecikme kaynağı Dashboard’ın her uygulama açılışında üç tam kataloğu tekrar istemesi.
+- **Canlı keşif (23 Ekim 2026):** IPTVX 23.2 sürüm notları başlangıçta son playlist’i otomatik açma tercihini doğruluyor. Büyük playlist’lerin açılışta gereksiz yenilenmesiyle ilgili Apple TV kullanıcı şikayeti de hızlı açılış / manuel kontrol ihtiyacını destekliyor.
+- **Kaynaklar:** https://apps.apple.com/ly/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ufhnhh/
+- **Analiz:** `DashboardFeature.onAppear` boş durumla oluşturulduğunda tüm canlı yayın, VOD ve dizi kataloglarını paralel indiriyor. Kalıcı catalog cache yok. Önceki öneri, mevcut playlist auto-seçimi nedeniyle tekrar olurdu; profil atlama da ebeveyn denetimi katmanını bozardı.
+- **Kapsam:** Playlist ve yetişkin içeriği filtre tercihine göre anahtarlandırılan küçük Dashboard raf snapshot’ını kalıcı tut; sonraki açılışta rafları hemen gösterip güncel içerikleri arka planda yenile. Tam kataloğu kalıcı saklama bu madde kapsamında değil.
+- **Uygulama:** Dashboard’ın ilk çiziminde seçili playlist ve yetişkin filtresine ait en son raf snapshot’ı yükleniyor; tam katalog arka planda yenileniyor. Snapshot playlist UUID’si ve filtre durumu ile ayrılıyor, iOS dosya koruması uygulanan Caches dosyasında saklanıyor. Her raf yalnızca kendi endpoint’i başarılıysa güncelleniyor; başarısız endpoint eski rafı/cache’i boşaltmıyor. Yanıtlar playlist, filtre ve istek UUID’si ile doğrulanıp eski istekler eleniyor. Dashboard tekrar açıldığında 15 dakikayı geçen raflar yenileniyor. Cache görüntülenmeden önce güncel yetişkin sınıflandırması tekrar uygulanıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode projede mevcut Swift 6 concurrency uyarıları ve SwiftFormat script phase notu yazdı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 32. [PENDING] Tema, Simge, Avatar ve Oynatıcı Kontrol Eklentileri
 - **Bulgu:** Görünümü ve kontrol düzenini eklenti temalarıyla kişiselleştirme; IPTVX yakın zamanda tema/add-on özelleştirmesi yayınladı.

@@ -12,6 +12,10 @@ public struct DashboardFeature {
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
         public var recommendedVODs: [MediaModels.Item] = []
+        public var hasLoadedRemoteData = false
+        public var activePlaylistID: UUID?
+        public var lastRemoteRefreshAt: Date?
+        public var activeRefreshID: UUID?
 
         public var favoriteItems: [FavoriteItem] = []
         public var watchHistoryItems: [WatchHistoryItem] = []
@@ -36,11 +40,11 @@ public struct DashboardFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case openManagePlaylistsTapped
-        case loadFeaturedData(config: PlaylistConfig)
+        case loadFeaturedData(config: PlaylistConfig, playlistID: UUID?, hideAdult: Bool, refreshID: UUID)
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], recommendations: [MediaModels.Item])
-        case dataFailed(Error)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?)
+        case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
@@ -85,11 +89,49 @@ public struct DashboardFeature {
                 state.activePlaylistName = playlistRepository.getActivePlaylist()?.name ?? ""
                 let localEffect: Effect<Action> = .send(.loadLocalData)
                 let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
-                let shouldReload = (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty) || state.lastAdultHidden != currentAdultHidden
+                let isAdult = settingsClient.isAdultContent
+                let playlistID = playlistRepository.getActivePlaylistID()
+                let playlistChanged = state.activePlaylistID != playlistID
+                let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
+                if !state.hasLoadedRemoteData || playlistChanged || preferencesChanged {
+                    let snapshot = DashboardFeaturedCache.load(
+                        playlistID: playlistID,
+                        hideAdult: currentAdultHidden
+                    )
+                    state.featuredChannels = snapshot?.channels.compactMap(\.mediaItem).filter {
+                        !currentAdultHidden || !isAdult($0.title)
+                    } ?? []
+                    state.featuredVODs = snapshot?.vods.compactMap(\.mediaItem).filter {
+                        !currentAdultHidden || !isAdult($0.title)
+                    } ?? []
+                    state.featuredSeries = snapshot?.series.compactMap(\.mediaItem).filter {
+                        !currentAdultHidden || !isAdult($0.title)
+                    } ?? []
+                    state.recommendedVODs = snapshot?.recommendations.compactMap(\.mediaItem).filter {
+                        !currentAdultHidden || !isAdult($0.title)
+                    } ?? []
+                    state.isLoading = snapshot == nil
+                }
+                let shouldReload = !state.hasLoadedRemoteData
+                    || playlistChanged
+                    || preferencesChanged
+                    || (state.lastRemoteRefreshAt.map { Date().timeIntervalSince($0) >= 15 * 60 } ?? true)
+                    || (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                state.activePlaylistID = playlistID
                 state.lastAdultHidden = currentAdultHidden
-                let remoteEffect: Effect<Action> = shouldReload
-                    ? .send(.loadFeaturedData(config: config))
-                    : .none
+                let remoteEffect: Effect<Action>
+                if shouldReload {
+                    let refreshID = UUID()
+                    state.activeRefreshID = refreshID
+                    remoteEffect = .send(.loadFeaturedData(
+                        config: config,
+                        playlistID: playlistID,
+                        hideAdult: currentAdultHidden,
+                        refreshID: refreshID
+                    ))
+                } else {
+                    remoteEffect = .none
+                }
                 let notificationEffect: Effect<Action> = .run { send in
                     for await _ in NotificationCenter.default.notifications(named: .watchHistoryDidChange) {
                         await send(.loadLocalData)
@@ -114,10 +156,11 @@ public struct DashboardFeature {
                 Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
                 return .none
 
-            case let .loadFeaturedData(config):
-                state.isLoading = true
+            case let .loadFeaturedData(config, playlistID, hideAdult, refreshID):
+                state.isLoading = state.featuredChannels.isEmpty
+                    && state.featuredVODs.isEmpty
+                    && state.featuredSeries.isEmpty
                 state.errorMessage = nil
-                let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
                 return .run { send in
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
@@ -129,17 +172,20 @@ public struct DashboardFeature {
                     let history = await historyReq
                     let favorites = await favoritesReq
 
-                    var channels: [MediaModels.Item] = []
-                    var vods: [MediaModels.Item] = []
-                    var series: [MediaModels.Item] = []
-                    var recommendations: [MediaModels.Item] = []
+                    let fetchedChannels = await liveStreams
+                    let fetchedVODs = await allVODs
+                    let fetchedSeries = await allSeries
+                    var channels: [MediaModels.Item]?
+                    var vods: [MediaModels.Item]?
+                    var series: [MediaModels.Item]?
+                    var recommendations: [MediaModels.Item]?
 
-                    if let fetchedChannels = await liveStreams {
+                    if let fetchedChannels {
                         let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
                         channels = Array(filtered.prefix(10))
                     }
 
-                    if let fetchedVODs = await allVODs {
+                    if let fetchedVODs {
                         let safeVODs = hideAdult ? fetchedVODs.filter { !isAdult($0.title) } : fetchedVODs
                         let sorted = safeVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         vods = Array(sorted.prefix(10))
@@ -153,29 +199,90 @@ public struct DashboardFeature {
                         )
                     }
 
-                    if let fetchedSeries = await allSeries {
+                    if let fetchedSeries {
                         let safeSeries = hideAdult ? fetchedSeries.filter { !isAdult($0.title) } : fetchedSeries
                         let sorted = safeSeries.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         series = Array(sorted.prefix(10))
                     }
 
-                    await send(.dataLoaded(channels: channels, vods: vods, series: series, recommendations: recommendations))
+                    if channels == nil, vods == nil, series == nil {
+                        await send(.dataFailed(
+                            playlistID: playlistID,
+                            hideAdult: hideAdult,
+                            refreshID: refreshID,
+                            URLError(.cannotLoadFromNetwork)
+                        ))
+                    } else {
+                        await send(.dataLoaded(
+                            playlistID: playlistID,
+                            hideAdult: hideAdult,
+                            refreshID: refreshID,
+                            channels: channels,
+                            vods: vods,
+                            series: series,
+                            recommendations: recommendations
+                        ))
+                    }
                 } catch: { error, send in
-                    await send(.dataFailed(error))
+                    await send(.dataFailed(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: refreshID,
+                        error
+                    ))
                 }
 
-            case let .dataLoaded(channels, vods, series, recommendations):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, vods, series, recommendations):
+                guard
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult,
+                    state.activeRefreshID == refreshID
+                else { return .none }
                 state.isLoading = false
-                state.featuredChannels = channels
-                state.featuredVODs = vods
-                state.featuredSeries = series
-                state.recommendedVODs = recommendations
-                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: vods)
-                return .none
+                state.hasLoadedRemoteData = true
+                state.lastRemoteRefreshAt = Date()
+                state.activeRefreshID = nil
+                if let channels {
+                    state.featuredChannels = channels
+                }
+                if let vods {
+                    state.featuredVODs = vods
+                }
+                if let series {
+                    state.featuredSeries = series
+                }
+                if let recommendations {
+                    state.recommendedVODs = recommendations
+                }
+                Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
+                let cachedChannels = state.featuredChannels
+                let cachedVODs = state.featuredVODs
+                let cachedSeries = state.featuredSeries
+                let cachedRecommendations = state.recommendedVODs
+                return .run { _ in
+                    await DashboardFeaturedCache.save(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        channels: cachedChannels,
+                        vods: cachedVODs,
+                        series: cachedSeries,
+                        recommendations: cachedRecommendations
+                    )
+                }
 
-            case let .dataFailed(error):
+            case let .dataFailed(playlistID, hideAdult, refreshID, error):
+                guard
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult,
+                    state.activeRefreshID == refreshID
+                else { return .none }
                 state.isLoading = false
-                state.errorMessage = error.localizedDescription
+                state.activeRefreshID = nil
+                state.errorMessage = state.featuredChannels.isEmpty
+                    && state.featuredVODs.isEmpty
+                    && state.featuredSeries.isEmpty
+                    ? error.localizedDescription
+                    : nil
                 return .none
 
             case let .channelSelected(channel):
