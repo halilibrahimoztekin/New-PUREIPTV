@@ -92,8 +92,10 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 36. [PENDING] Canlı Yayın Duraklatma ve Yerel Geri Sarma Tamponu
-- **Bulgu:** Apple TV’de canlı yayın duraklatma/geri sarma tutarsızlığı ve yerel buffer/DVR beklentisi kullanıcı şikâyetlerinde tekrar ediyor.
-- **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1o4d2da/appletv_os_skip_forward_backforward_not_possible/
+- **Bulgu:** Apple TV’de kullanıcılar canlı yayın duraklatıldığında konum göstergesi/geri sarma olmamasını, başka platformlarda pause/rewind çalışmasını bildiriyor. PureIPTV’de VLC’nin canlı yayın state/position API’si var, fakat normal network buffer gerçek DVR zaman çizgisi değil; anlamlı geri sarma için dosya/segment yakalama, süre ve depolama sınırı, seek destekleme ve canlı noktaya dönüş yönetimi gerekiyor.
+- **Canlı keşif (24 Ekim 2026):** UHF Apple TV şikâyeti pause ayarı açık olsa da timeline/geri sarma olmadığını belirtiyor; bir diğer kullanıcı hizmet değiştirmenin nedeni olarak pause’un çalışmamasını aktarıyor. Timeshift/yerel tampon kaynakları, buffer’ın player/protokole bağlı olduğunu ve yerel disk yönetiminin gerektiğini açıklıyor.
+- **Kaynaklar:** https://www.reddit.com/r/uhf_app/comments/1o4d2da/appletv_os_skip_forward_backforward_not_possible/ · https://www.reddit.com/r/localtvplus/comments/1u5jgbv/pause_rewind_on_apple_tv/ · https://orbitai.tv/en/docs/timeshift-catch-up
+- **Kod taraması:** Player VLC için pause, relative seek ve buffer-health metriklerini sunuyor; `totalTime == 0` canlı durumda scrubber’ı gizliyor. Entegrasyondaki mevcut network buffer göstergesi local DVR kapasitesi sağlamıyor. Güvenli kapsam için önce SwiftVLC/libVLC’nin iOS/tvOS’ta erişilebilir kayıt/caching kabiliyetini ve depolama politikasını araştırmak gerekiyor.
 
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)
 - **Açıklama:** Canlı yayın izlerken Siri Remote aşağı basıldığında veya iOS'ta buton/menü ile ekranın altında beliren, son izlenen 10 kanalı logo, canlı badge, aktif oynatma halkası ve odaklanabilir kartlarla gösteren hızlı zapping rulosu.
