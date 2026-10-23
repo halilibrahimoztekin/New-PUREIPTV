@@ -115,6 +115,15 @@
                                 }
                             }
 
+                            if store.isSportsHubVisible, !store.epgEvents.isEmpty {
+                                featuredSection(title: AppStrings.Dashboard.epgPrograms, items: store.epgEvents) { event in
+                                    DashboardEPGEventCard(event: event) {
+                                        store.send(.channelSelected(event.channel))
+                                    }
+                                    .frame(width: 260)
+                                }
+                            }
+
                             if !store.recommendedVODs.isEmpty {
                                 featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
                                     VODCardView(vod: vod, isSelected: false) {
@@ -148,6 +157,9 @@
             }
             .onAppear {
                 store.send(.onAppear(config: config))
+            }
+            .onDisappear {
+                store.send(.onDisappear)
             }
         }
 

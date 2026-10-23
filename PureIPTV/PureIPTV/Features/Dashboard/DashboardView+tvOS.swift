@@ -144,6 +144,17 @@
                                 }
                             }
 
+                            if store.isSportsHubVisible, !store.epgEvents.isEmpty {
+                                TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
+                                    ForEach(store.epgEvents) { event in
+                                        DashboardEPGEventCard(event: event) {
+                                            store.send(.channelSelected(event.channel))
+                                        }
+                                        .frame(width: 380)
+                                    }
+                                }
+                            }
+
                             // Smart Recommendations (Madde #8 & #42)
                             if !store.recommendedVODs.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
@@ -239,6 +250,9 @@
             }
             .onAppear {
                 store.send(.onAppear(config: config))
+            }
+            .onDisappear {
+                store.send(.onDisappear)
             }
         }
 

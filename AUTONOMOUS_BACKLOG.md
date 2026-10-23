@@ -187,11 +187,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; bağlı iOS 26.5 iPhone 17 için Release compile-only build exit code 0. Debug build, `TCACoordinators 0.16.0` bağımlılığında XCTest sembolleri çözülmediği için başarısız oldu. App akışı/test edilmedi.
 - **Durum:** `[DONE]` — audio-session kategori ayarı idempotent hale getirildi; reviewer onayladı.
 
-### 48. [IN_PROGRESS] Aktif Playlist EPG Program Rafı (Daraltılmış Kapsam)
+### 48. [DONE] Aktif Playlist EPG Program Rafı (Daraltılmış Kapsam)
 - **Bulgu:** UHF 2.3.0, playlist’ler arasında etkinlik araması ve takip edilen takım/turnuvalar için Home etkinlik rafı ekledi.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Canlı keşif:** App Store sürüm metni, etkinliğin playlist’ler arası canlı kanal bulduğunu söylüyor. Bir TiviMate kullanıcısı spor rehber verisinin bir uygulamada eksik, diğerinde bulunduğunu bildirmiş; bu, sağlayıcı EPG kapsamı değişkenliğinin sonucu etkileyebileceğini gösteriyor: https://www.reddit.com/r/TiviMate/comments/1sktke4/i_have_an_epg_question/
 - **Kapsam kararı:** Kaynak kodunda bağlı etkinlik API’si veya kalıcı takım takip modeli yok; `SportsHubManager` EPG adlarından güvenilmez biçimde takım/lig çıkarıyor. Reviewer’ın önerisiyle yalnız aktif playlist’ten sınırlı EPG isteği yapıp sağlayıcının ham program başlıklarını kanal ve saatle göstereceğiz; takım takibi ve playlist’ler arası etkinlik araması yapılmayacak.
 - **Güvenlik/perf sınırları:** Programlar doğrulanmış maç gibi etiketlenmeyecek; küçük kanal kümesi, sınırlı eşzamanlılık ve yenilemede iptal uygulanacak.
+- **Uygulama:** Dashboard’a aktif playlist’in EPG verisinden kanal adı, ham program başlığı ve saat gösteren bir raf eklendi. En fazla 8 kanal sorgulanıyor; Xtream istekleri 2, M3U/XMLTV istekleri 1 eşzamanlı görevle sınırlandı. Raf Home bölüm tercihiyle gizlenebiliyor; oynatıcı olmayan hedefler ve sağlayıcının boş rehberi güvenli biçimde ele alınıyor. Yetişkin içerik tercihi veya playlist değişince EPG adayları ve eski sonuçlar geçersiz kılınıyor; iptal/stale-request kontrolleri eklendi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız Xcode build alındı; test ve uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — sınırlandırılmış aktif-playlist EPG rafı tamamlandı ve reviewer onayladı.
 
 ### 49. [PENDING] VOD Zaman Çizelgesinde Önizleme Küçük Resimleri
 - **Bulgu:** UHF’in App Store sürüm geçmişi, VOD scrub sırasında thumbnail önizlemesi sunduğunu belirtiyor; bu, kullanıcının hedef sahneye daha hızlı ulaşmasını sağlar.

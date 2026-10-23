@@ -476,6 +476,8 @@ public enum AppStrings {
         public static let continueWatching = "Kaldığın Yerden İzle".localized
         public static let myFavorites = "Favorilerim".localized
         public static let featuredLiveTV = "Canlı TV (Önerilen)".localized
+        public static let epgPrograms = "Rehberdeki Programlar".localized
+        public static let nowAiring = "ŞU AN".localized
         public static let newMovies = "Yeni Eklenen Filmler".localized
         public static let newSeries = "Yeni Eklenen Diziler".localized
         public static let recommendedForYou = "Sana Özel Öneriler".localized
