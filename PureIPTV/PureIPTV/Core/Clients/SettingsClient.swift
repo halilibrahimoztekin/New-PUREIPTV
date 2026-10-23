@@ -1,0 +1,363 @@
+import ComposableArchitecture
+import Foundation
+#if os(iOS)
+    import LocalAuthentication
+#endif
+
+public enum SortMethod: String, CaseIterable, Equatable, Identifiable {
+    case defaultOrder = "Varsayılan"
+    case alphabetical = "A-Z (Alfabetik)"
+    case rating = "IMDb Puanı"
+    case dateAdded = "Eklenme Tarihi"
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .defaultOrder: AppStrings.Settings.defaultSort
+        case .alphabetical: AppStrings.Settings.alphabeticalSort
+        case .rating: AppStrings.Settings.ratingSort
+        case .dateAdded: AppStrings.Settings.dateAddedSort
+        }
+    }
+}
+
+public struct SettingsClient: Sendable {
+    public var isParentalControlEnabled: @Sendable () -> Bool = { false }
+    public var getParentalPIN: @Sendable () -> String? = { nil }
+    public var setParentalControl: @Sendable (_ enabled: Bool, _ pin: String?) async throws -> Void = { _, _ in }
+    public var verifyPIN: @Sendable (_ pin: String) -> Bool = { _ in false }
+    public var isAdultContent: @Sendable (_ text: String) -> Bool = { _ in false }
+    public var authenticateWithBiometrics: @Sendable (_ reason: String) async throws -> Bool = { _ in false }
+
+    public var getVODSortMethod: @Sendable () -> SortMethod = { .defaultOrder }
+    public var setVODSortMethod: @Sendable (SortMethod) -> Void = { _ in }
+
+    public var getSeriesSortMethod: @Sendable () -> SortMethod = { .defaultOrder }
+    public var setSeriesSortMethod: @Sendable (SortMethod) -> Void = { _ in }
+
+    public var getLiveTVSortOption: @Sendable () -> ChannelSortOption = { .defaultOrder }
+    public var setLiveTVSortOption: @Sendable (ChannelSortOption) -> Void = { _ in }
+
+    // MARK: - New Settings
+
+    public var autoPlayNextEpisode: @Sendable () -> Bool = { true }
+    public var setAutoPlayNextEpisode: @Sendable (Bool) -> Void = { _ in }
+
+    public var startMuted: @Sendable () -> Bool = { false }
+    public var setStartMuted: @Sendable (Bool) -> Void = { _ in }
+
+    public var hardwareAcceleration: @Sendable () -> Bool = { true }
+    public var setHardwareAcceleration: @Sendable (Bool) -> Void = { _ in }
+
+    public var epgTimeShift: @Sendable () -> Int = { 0 }
+    public var setEpgTimeShift: @Sendable (Int) -> Void = { _ in }
+
+    public var autoUpdateEPG: @Sendable () -> Bool = { true }
+    public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
+
+    public var hideAdultContent: @Sendable () -> Bool = { false }
+    public var setHideAdultContent: @Sendable (Bool) -> Void = { _ in }
+
+    public var defaultStartupTab: @Sendable () -> String = { "Keşfet" }
+    public var setDefaultStartupTab: @Sendable (String) -> Void = { _ in }
+
+    public var preferredAudioLanguage: @Sendable () -> String = { "tr" }
+    public var setPreferredAudioLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var secondaryAudioLanguage: @Sendable () -> String = { "en" }
+    public var setSecondaryAudioLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var preferredSubtitleLanguage: @Sendable () -> String = { "off" }
+    public var setPreferredSubtitleLanguage: @Sendable (String) -> Void = { _ in }
+
+    public var getChannelPreferredAudioTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
+    public var setChannelPreferredAudioTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
+
+    public var getChannelPreferredSubtitleTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
+    public var setChannelPreferredSubtitleTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
+
+    public var rememberMediaTrackPreferences: @Sendable () -> Bool = { true }
+    public var setRememberMediaTrackPreferences: @Sendable (Bool) -> Void = { _ in }
+
+    public var isICloudSyncEnabled: @Sendable () -> Bool = { true }
+    public var setIsICloudSyncEnabled: @Sendable (Bool) -> Void = { _ in }
+
+    public var isOLEDDimmingEnabled: @Sendable () -> Bool = { true }
+    public var setIsOLEDDimmingEnabled: @Sendable (Bool) -> Void = { _ in }
+
+    // MARK: - Channel Lip-Sync (Audio & Subtitle Delay) Persistence
+
+    public var getChannelAudioDelay: @Sendable (_ channelID: String) -> Int? = { _ in nil }
+    public var setChannelAudioDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
+    public var getChannelSubtitleDelay: @Sendable (_ channelID: String) -> Int? = { _ in nil }
+    public var setChannelSubtitleDelay: @Sendable (_ channelID: String, _ delay: Int?) -> Void = { _, _ in }
+
+    // MARK: - Audio Equalizer & Dialogue Enhancer (Madde #14)
+
+    public var audioEQPreset: @Sendable () -> AudioEQPreset = { .flat }
+    public var setAudioEQPreset: @Sendable (AudioEQPreset) -> Void = { _ in }
+    public var getChannelAudioEQPreset: @Sendable (_ channelID: String) -> AudioEQPreset? = { _ in nil }
+    public var setChannelAudioEQPreset: @Sendable (_ channelID: String, _ preset: AudioEQPreset?) -> Void = { _, _ in }
+
+    // MARK: - Smart Channel Name Cleaner
+
+    public var isChannelNameCleaningEnabled: @Sendable () -> Bool = { true }
+    public var setIsChannelNameCleaningEnabled: @Sendable (Bool) -> Void = { _ in }
+}
+
+extension SettingsClient: DependencyKey {
+    public static let liveValue: SettingsClient = {
+        let defaults = UserDefaults.standard
+        let pinKey = "com.pureiptv.parentalPIN"
+        let enabledKey = "com.pureiptv.parentalControlEnabled"
+        let vodSortKey = "com.pureiptv.vodSortMethod"
+        let seriesSortKey = "com.pureiptv.seriesSortMethod"
+        let autoPlayKey = "com.pureiptv.autoPlayNextEpisode"
+        let startMutedKey = "com.pureiptv.startMuted"
+        let hwAccelKey = "com.pureiptv.hardwareAcceleration"
+        let epgShiftKey = "com.pureiptv.epgTimeShift"
+        let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
+        let hideAdultKey = "com.pureiptv.hideAdultContent"
+        let startupTabKey = "com.pureiptv.defaultStartupTab"
+        let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
+        let secondaryAudioKey = "com.pureiptv.secondaryAudioLanguage"
+        let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
+        let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
+        let iCloudSyncKey = "com.pureiptv.isICloudSyncEnabled"
+        let oledDimmingKey = "com.pureiptv.isOLEDDimmingEnabled"
+        let channelAudioDelayPrefix = "com.pureiptv.channelAudioDelay."
+        let channelSubDelayPrefix = "com.pureiptv.channelSubDelay."
+        let channelAudioTrackPrefix = "com.pureiptv.channelAudioTrack."
+        let channelSubTrackPrefix = "com.pureiptv.channelSubTrack."
+        let liveTVSortKey = "com.pureiptv.liveTVSortOption"
+        let audioEQKey = "com.pureiptv.audioEQPreset"
+        let channelEQPrefix = "com.pureiptv.channelAudioEQ."
+        let channelNameCleaningKey = "com.pureiptv.isChannelNameCleaningEnabled"
+
+        // Set defaults for some keys
+        defaults.register(defaults: [
+            autoPlayKey: true,
+            hwAccelKey: true,
+            autoUpdateEpgKey: true,
+            startupTabKey: "Keşfet",
+            preferredAudioKey: "tr",
+            secondaryAudioKey: "en",
+            preferredSubtitleKey: "off",
+            rememberTracksKey: true,
+            iCloudSyncKey: true,
+            oledDimmingKey: true,
+            audioEQKey: "flat",
+            channelNameCleaningKey: true,
+        ])
+
+        return SettingsClient(
+            isParentalControlEnabled: {
+                defaults.bool(forKey: enabledKey)
+            },
+            getParentalPIN: {
+                if let pin = try? KeychainManager.shared.retrieve(for: pinKey, as: String.self) {
+                    return pin
+                }
+                // Fallback & Migration: Check legacy UserDefaults
+                if let legacyPin = defaults.string(forKey: pinKey) {
+                    try? KeychainManager.shared.save(legacyPin, for: pinKey)
+                    defaults.removeObject(forKey: pinKey)
+                    return legacyPin
+                }
+                return nil
+            },
+            setParentalControl: { enabled, pin in
+                defaults.set(enabled, forKey: enabledKey)
+                if let pin, enabled {
+                    try? KeychainManager.shared.save(pin, for: pinKey)
+                    defaults.removeObject(forKey: pinKey)
+                } else {
+                    try? KeychainManager.shared.delete(for: pinKey)
+                    defaults.removeObject(forKey: pinKey)
+                }
+            },
+            verifyPIN: { inputPin in
+                guard defaults.bool(forKey: enabledKey) else {
+                    return true // If not enabled, always verify
+                }
+                let savedPin = (try? KeychainManager.shared.retrieve(for: pinKey, as: String.self)) ?? defaults.string(forKey: pinKey)
+                guard let savedPin else {
+                    return true
+                }
+                return savedPin == inputPin
+            },
+            isAdultContent: { text in
+                let lowercased = text.lowercased()
+                let adultKeywords = ["adult", "xxx", "18+", "yetişkin", "porn", "erotic"]
+                return adultKeywords.contains { lowercased.contains($0) }
+            },
+            authenticateWithBiometrics: { reason in
+                #if os(tvOS)
+                    // LocalAuthentication (Biometrics/FaceID) is not available on Apple TV
+                    return false
+                #else
+                    let context = LAContext()
+                    var error: NSError?
+
+                    if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+                        do {
+                            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+                        } catch {
+                            return false
+                        }
+                    } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+                        // Fallback to passcode if biometrics are not available
+                        do {
+                            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
+                        } catch {
+                            return false
+                        }
+                    }
+                    return false
+                #endif
+            },
+            getVODSortMethod: {
+                if let raw = defaults.string(forKey: vodSortKey), let method = SortMethod(rawValue: raw) {
+                    return method
+                }
+                return .defaultOrder
+            },
+            setVODSortMethod: { method in
+                defaults.set(method.rawValue, forKey: vodSortKey)
+            },
+            getSeriesSortMethod: {
+                if let raw = defaults.string(forKey: seriesSortKey), let method = SortMethod(rawValue: raw) {
+                    return method
+                }
+                return .defaultOrder
+            },
+            setSeriesSortMethod: { method in
+                defaults.set(method.rawValue, forKey: seriesSortKey)
+            },
+            getLiveTVSortOption: {
+                if let raw = defaults.string(forKey: liveTVSortKey), let opt = ChannelSortOption(rawValue: raw) {
+                    return opt
+                }
+                return .defaultOrder
+            },
+            setLiveTVSortOption: { opt in
+                defaults.set(opt.rawValue, forKey: liveTVSortKey)
+            },
+            autoPlayNextEpisode: { defaults.bool(forKey: autoPlayKey) },
+            setAutoPlayNextEpisode: { defaults.set($0, forKey: autoPlayKey) },
+            startMuted: { defaults.bool(forKey: startMutedKey) },
+            setStartMuted: { defaults.set($0, forKey: startMutedKey) },
+            hardwareAcceleration: { defaults.bool(forKey: hwAccelKey) },
+            setHardwareAcceleration: { defaults.set($0, forKey: hwAccelKey) },
+            epgTimeShift: { defaults.integer(forKey: epgShiftKey) },
+            setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
+            autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },
+            setAutoUpdateEPG: { defaults.set($0, forKey: autoUpdateEpgKey) },
+            hideAdultContent: { defaults.bool(forKey: hideAdultKey) },
+            setHideAdultContent: { defaults.set($0, forKey: hideAdultKey) },
+            defaultStartupTab: { defaults.string(forKey: startupTabKey) ?? "Keşfet" },
+            setDefaultStartupTab: { defaults.set($0, forKey: startupTabKey) },
+            preferredAudioLanguage: { defaults.string(forKey: preferredAudioKey) ?? "tr" },
+            setPreferredAudioLanguage: { defaults.set($0, forKey: preferredAudioKey) },
+            secondaryAudioLanguage: { defaults.string(forKey: secondaryAudioKey) ?? "en" },
+            setSecondaryAudioLanguage: { defaults.set($0, forKey: secondaryAudioKey) },
+            preferredSubtitleLanguage: { defaults.string(forKey: preferredSubtitleKey) ?? "off" },
+            setPreferredSubtitleLanguage: { defaults.set($0, forKey: preferredSubtitleKey) },
+            getChannelPreferredAudioTrack: { channelID in
+                defaults.string(forKey: channelAudioTrackPrefix + channelID)
+            },
+            setChannelPreferredAudioTrack: { channelID, track in
+                let key = channelAudioTrackPrefix + channelID
+                if let track {
+                    defaults.set(track, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getChannelPreferredSubtitleTrack: { channelID in
+                defaults.string(forKey: channelSubTrackPrefix + channelID)
+            },
+            setChannelPreferredSubtitleTrack: { channelID, track in
+                let key = channelSubTrackPrefix + channelID
+                if let track {
+                    defaults.set(track, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            rememberMediaTrackPreferences: { defaults.bool(forKey: rememberTracksKey) },
+            setRememberMediaTrackPreferences: { defaults.set($0, forKey: rememberTracksKey) },
+            isICloudSyncEnabled: { defaults.bool(forKey: iCloudSyncKey) },
+            setIsICloudSyncEnabled: { defaults.set($0, forKey: iCloudSyncKey) },
+            isOLEDDimmingEnabled: {
+                defaults.object(forKey: oledDimmingKey) == nil ? true : defaults.bool(forKey: oledDimmingKey)
+            },
+            setIsOLEDDimmingEnabled: { defaults.set($0, forKey: oledDimmingKey) },
+            getChannelAudioDelay: { channelID in
+                guard defaults.object(forKey: channelAudioDelayPrefix + channelID) != nil else { return nil }
+                return defaults.integer(forKey: channelAudioDelayPrefix + channelID)
+            },
+            setChannelAudioDelay: { channelID, delay in
+                let key = channelAudioDelayPrefix + channelID
+                if let delay {
+                    defaults.set(delay, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getChannelSubtitleDelay: { channelID in
+                guard defaults.object(forKey: channelSubDelayPrefix + channelID) != nil else { return nil }
+                return defaults.integer(forKey: channelSubDelayPrefix + channelID)
+            },
+            setChannelSubtitleDelay: { channelID, delay in
+                let key = channelSubDelayPrefix + channelID
+                if let delay {
+                    defaults.set(delay, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            audioEQPreset: {
+                guard let raw = defaults.string(forKey: audioEQKey),
+                      let preset = AudioEQPreset(rawValue: raw)
+                else {
+                    return .flat
+                }
+                return preset
+            },
+            setAudioEQPreset: { preset in
+                defaults.set(preset.rawValue, forKey: audioEQKey)
+            },
+            getChannelAudioEQPreset: { channelID in
+                guard let raw = defaults.string(forKey: channelEQPrefix + channelID) else { return nil }
+                return AudioEQPreset(rawValue: raw)
+            },
+            setChannelAudioEQPreset: { channelID, preset in
+                let key = channelEQPrefix + channelID
+                if let preset {
+                    defaults.set(preset.rawValue, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            isChannelNameCleaningEnabled: {
+                defaults.object(forKey: channelNameCleaningKey) == nil ? true : defaults.bool(forKey: channelNameCleaningKey)
+            },
+            setIsChannelNameCleaningEnabled: { enabled in
+                defaults.set(enabled, forKey: channelNameCleaningKey)
+            }
+        )
+    }()
+
+    public static let testValue: SettingsClient = .liveValue
+}
+
+public extension DependencyValues {
+    var settingsClient: SettingsClient {
+        get { self[SettingsClient.self] }
+        set { self[SettingsClient.self] = newValue }
+    }
+}

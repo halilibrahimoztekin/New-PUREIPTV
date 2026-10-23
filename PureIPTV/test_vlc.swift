@@ -1,0 +1,3 @@
+import SwiftVLC
+
+print("OK")
