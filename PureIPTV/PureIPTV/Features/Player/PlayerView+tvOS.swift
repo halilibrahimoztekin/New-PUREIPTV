@@ -12,6 +12,7 @@
         @FocusState private var focusableField: FocusableField?
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
+        @State private var focusBeforeEPG: FocusableField?
 
         fileprivate enum FocusableField: Hashable {
             case play
@@ -188,12 +189,23 @@
                         VStack {
                             Spacer()
                             PlayerEPGTimelineView(
-                                programs: store.epgListings,
+                                programs: store.epgBrowseListings,
                                 currentPosition: store.position,
-                                hasArchive: store.item.tvArchive == 1,
+                                hasArchive: store.epgBrowseChannel?.tvArchive == 1,
+                                channels: store.liveChannels,
+                                selectedChannel: store.epgBrowseChannel,
+                                playingChannelID: store.item.id,
+                                isLoading: store.isEPGBrowseLoading,
+                                canSelectPrograms: store.epgBrowseChannel?.id == store.item.id,
                                 onClose: {
                                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                     resetIdleTimer()
+                                },
+                                onBrowseChannel: { channel in
+                                    store.send(.selectEPGBrowseChannel(channel))
+                                },
+                                onWatchChannel: {
+                                    store.send(.watchEPGBrowseChannel)
                                 },
                                 onSelect: { program in
                                     store.send(.playArchive(program))
@@ -505,6 +517,14 @@
             }
             .onAppear {
                 showMask()
+            }
+            .onChange(of: store.isEPGVisible) { _, isVisible in
+                if isVisible {
+                    focusBeforeEPG = focusableField
+                } else if let focusBeforeEPG {
+                    focusableField = focusBeforeEPG
+                    self.focusBeforeEPG = nil
+                }
             }
             .onDisappear {
                 idleTimer?.invalidate()

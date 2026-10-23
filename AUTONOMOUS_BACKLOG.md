@@ -21,9 +21,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Akış ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 28. [PENDING] Canlı Yayını Kesmeden EPG’de Gezinme
+### 28. [DONE] Canlı Yayını Kesmeden EPG’de Gezinme
 - **Bulgu:** Kullanıcı mevcut kanalı izlemeye devam ederken rehberde dolaşmak, yalnızca vurgulanan kanalın sessiz önizlemesine geçmemek istiyor.
-- **Kaynak:** https://www.reddit.com/r/IPTV_Help_Desk/comments/1uzehpu/apple_tv_iptv_player_with_persistent_live_preview/
+- **Canlı keşif:** 23 Ekim 2026 araştırmasında, Apple TV kullanıcıları mevcut kanal sürerken rehberde gezinme ve kanal seçilmeden stream’in değişmemesini talep ediyor; bazı mevcut EPG preview davranışlarında gecikme, ses düzeyi ve görüntü kararması bildiriliyor. Rakip dokümanları TV rehberinde odak/preview tetikleyicisini ve gecikmesini ayarlanabilir gösteriyor.
+- **Kaynaklar:** https://www.reddit.com/r/IPTV_Help_Desk/comments/1uzehpu/apple_tv_iptv_app_with_persistent_live_preview/ · https://www.reddit.com/r/dionapp/comments/1uq27s2/mini_preview_in_epg/ · https://iptvx.app/features/feature.html?feature=app-personalization
+- **Analiz:** Oynatıcı EPG timeline’ı yalnızca o anki kanalın programlarını gösteriyordu; geniş EPG rehberi ise LiveTV ekranından açılıp odaklanan kanala ayrı preview akışı başlatıyordu. Player modal/full-screen iken LiveTV rehberine erişilemiyordu.
+- **Uygulama:** Oynatıcıdaki EPG paneline kanal seçici eklendi. Kanalda gezinme yalnızca o kanalın EPG listesini yükler; VLC’de çalan mevcut kanal değiştirilmez. “Bu Kanalı İzle” eylemiyle yayın açıkça değişir. iOS ve tvOS aynı TCA durumunu kullanır.
+- **Kalite düzeltmeleri:** Canlı kanallar playlist yüklendiğinde cache’lenir; tvOS picker lazy render edilir ve EPG focus section’ı açılış odağını belirleyip kapanışta önceki odağa döner. EPG yükleme efektleri kanal değişimi, kapanış ve yayına geçişte iptal edilir; stale yanıtlar UI’yı güncellemez.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve bir script-phase notu yazdı; derleme hatası yok. Akış ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 29. [PENDING] Kanal Bazlı Catch-up Zaman Ofseti
 - **Bulgu:** Farklı sağlayıcıların arşiv zaman farklarını kanal başına düzeltme ihtiyacı; UHF bunu kanal bilgi düzenleme ekranına ekledi.

@@ -29,6 +29,7 @@ public struct PlayerFeature {
         public static let traktScrobbleHUD = "PlayerFeature.traktScrobbleHUD"
         public static let dynamicRangeHUD = "PlayerFeature.dynamicRangeHUD"
         public static let afrToast = "PlayerFeature.afrToast"
+        public static let epgBrowse = "PlayerFeature.epgBrowse"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -84,6 +85,7 @@ public struct PlayerFeature {
     public struct State: Equatable {
         public var item: PlayableItem
         public var playlist: [PlayableItem]?
+        public var liveChannels: [PlayableItem] = []
         public var isChannelListVisible: Bool = false
         public var isMinimized: Bool = false
 
@@ -104,6 +106,9 @@ public struct PlayerFeature {
         public var epgListings: [EPGProgram] = []
         public var isEPGVisible: Bool = false
         public var isEPGLoading: Bool = false
+        public var epgBrowseChannel: PlayableItem?
+        public var epgBrowseListings: [EPGProgram] = []
+        public var isEPGBrowseLoading = false
 
         // Tracks
         public var audioTracks: [Track] = []
@@ -325,6 +330,7 @@ public struct PlayerFeature {
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
             self.playlist = playlist
+            liveChannels = playlist?.filter(\.isLive) ?? []
             let drInfo = ColorSpaceDetector.detectFromText(title: item.title, urlString: item.streamURL.absoluteString)
             dynamicRangeInfo = drInfo
             videoDynamicRange = drInfo.range
@@ -415,6 +421,9 @@ public struct PlayerFeature {
         case setPlaybackRate(Float)
         case toggleInfo
         case toggleEPG
+        case selectEPGBrowseChannel(PlayableItem)
+        case epgBrowseResponse(channelID: String, Result<[EPGProgram], Error>)
+        case watchEPGBrowseChannel
 
         // Aspect Ratio & Zoom Actions (Madde #14)
         case setVideoAspectRatioMode(VideoAspectRatioMode)
@@ -1839,7 +1848,69 @@ public struct PlayerFeature {
 
         case .toggleEPG:
             state.isEPGVisible.toggle()
+            guard state.isEPGVisible else { return .cancel(id: CancelID.epgBrowse) }
+            let currentChannel = state.item
+            state.epgBrowseChannel = currentChannel
+            state.epgBrowseListings = state.epgListings
+            state.isEPGBrowseLoading = false
+            return state.epgListings.isEmpty ? .send(.fetchEPG) : .none
+
+        case let .selectEPGBrowseChannel(channel):
+            guard state.isEPGVisible, channel.isLive else { return .none }
+            state.epgBrowseChannel = channel
+            if channel.id == state.item.id {
+                state.epgBrowseListings = state.epgListings
+                state.isEPGBrowseLoading = false
+                return .cancel(id: CancelID.epgBrowse)
+            }
+            guard let config = channel.config else {
+                state.epgBrowseListings = []
+                state.isEPGBrowseLoading = false
+                return .cancel(id: CancelID.epgBrowse)
+            }
+            state.epgBrowseListings = []
+            state.isEPGBrowseLoading = true
+            let channelID = channel.id
+            let channelTitle = channel.title
+            let epgID = channel.epgChannelID ?? channel.id
+            return .run { [iptvClient, customEPGMappingClient] send in
+                let customPrograms = await customEPGMappingClient.fetchProgramsForChannel(
+                    channelID, channelTitle, channel.epgChannelID
+                )
+                let programs: [EPGProgram] = if !customPrograms.isEmpty {
+                    customPrograms
+                } else {
+                    try await iptvClient.fetchShortEPG(config, epgID, 10)
+                }
+                await send(.epgBrowseResponse(
+                    channelID: channelID,
+                    .success(customEPGMappingClient.applyTimeShift(programs, channelID))
+                ))
+            } catch: { error, send in
+                await send(.epgBrowseResponse(channelID: channelID, .failure(error)))
+            }
+            .cancellable(id: CancelID.epgBrowse, cancelInFlight: true)
+
+        case let .epgBrowseResponse(channelID, result):
+            guard
+                state.isEPGVisible,
+                state.epgBrowseChannel?.id == channelID
+            else { return .none }
+            state.isEPGBrowseLoading = false
+            if case let .success(programs) = result {
+                state.epgBrowseListings = programs
+            } else {
+                state.epgBrowseListings = []
+            }
             return .none
+
+        case .watchEPGBrowseChannel:
+            guard let channel = state.epgBrowseChannel else { return .none }
+            state.isEPGVisible = false
+            return .merge(
+                .cancel(id: CancelID.epgBrowse),
+                .send(.selectChannel(channel))
+            )
 
         case let .setVideoAspectRatioMode(mode):
             state.videoAspectRatioMode = mode
@@ -1922,6 +1993,9 @@ public struct PlayerFeature {
         case let .fetchEPGResponse(.success(listings)):
             state.isEPGLoading = false
             state.epgListings = customEPGMappingClient.applyTimeShift(listings, state.item.id)
+            if state.epgBrowseChannel?.id == state.item.id {
+                state.epgBrowseListings = state.epgListings
+            }
             return .none
 
         case let .fetchEPGResponse(.failure(error)):
@@ -1966,6 +2040,7 @@ public struct PlayerFeature {
         case let .seriesPlaylistResponse(.success(playlist)):
             if !playlist.isEmpty {
                 state.playlist = playlist
+                state.liveChannels = playlist.filter(\.isLive)
             }
             return .none
 

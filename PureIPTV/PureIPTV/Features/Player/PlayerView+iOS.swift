@@ -892,12 +892,23 @@
                             }
 
                         PlayerEPGTimelineView(
-                            programs: store.epgListings,
+                            programs: store.epgBrowseListings,
                             currentPosition: store.position,
-                            hasArchive: store.item.tvArchive == 1,
+                            hasArchive: store.epgBrowseChannel?.tvArchive == 1,
+                            channels: store.liveChannels,
+                            selectedChannel: store.epgBrowseChannel,
+                            playingChannelID: store.item.id,
+                            isLoading: store.isEPGBrowseLoading,
+                            canSelectPrograms: store.epgBrowseChannel?.id == store.item.id,
                             onClose: {
                                 HapticManager.shared.trigger(.light)
                                 store.send(.toggleEPG, animation: .spring(response: 0.35, dampingFraction: 0.75))
+                            },
+                            onBrowseChannel: { channel in
+                                store.send(.selectEPGBrowseChannel(channel))
+                            },
+                            onWatchChannel: {
+                                store.send(.watchEPGBrowseChannel)
                             },
                             onSelect: { program in
                                 store.send(.playArchive(program))
