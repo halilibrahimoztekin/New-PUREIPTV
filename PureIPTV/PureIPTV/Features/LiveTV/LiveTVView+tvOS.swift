@@ -138,6 +138,11 @@
                         if store.isLoadingCategories {
                             PureLoadingView(size: .small)
                                 .padding(.top, 40)
+                        } else if store.categories.isEmpty, let errorMessage = store.errorMessage {
+                            RetryableSectionEmptyState(message: errorMessage) {
+                                store.send(.reloadCategories(config: config))
+                            }
+                            .frame(height: 280)
                         } else {
                             ForEach(store.categories) { category in
                                 TVCategoryRow(

@@ -116,7 +116,8 @@ public struct SeriesFeature {
                 return .merge(loadFavorites, .send(.reloadCategories(config: config)))
 
             case let .reloadCategories(config):
-                state.isLoadingCategories = true
+                state.isLoadingCategories = state.categories.isEmpty
+                state.errorMessage = nil
                 state.config = config
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
@@ -124,7 +125,7 @@ public struct SeriesFeature {
                     async let categoriesResult = Result { try await iptvClient.fetchSeriesCategories(config) }
                     async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue) }
 
-                    let categories = await (try? categoriesResult.get()) ?? []
+                    let categories = try await categoriesResult.get()
                     let prefs = await (try? prefsResult.get()) ?? []
 
                     var dict: [String: CategoryPreferenceDTO] = [:]

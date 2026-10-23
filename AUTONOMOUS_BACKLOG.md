@@ -100,10 +100,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Sonuç:** Mevcut SwiftVLC entegrasyonunda bounded segment-ring buffer, VLC’ye seek edilebilir kaynak, dosya yaş/kapasite eviction’ı ve live-edge geçişi bulunmuyor. UI-only scrubber yanlış seek vaadi olur. Bu nedenle bu altyapıyla özellik için **NO-GO**; ayrı playback/DVR mimarisi gerekir. Kullanıcı akışları çalıştırılmadı. **Canlı pause/rewind özelliği gönderilmedi.**
 - **Durum:** `[DONE]` — yalnızca uygulanabilirlik kararı kapatıldı; DVR özelliği tamamlanmadı.
 
-### 37. [PENDING] Hatalı Xtream Bölümü İçin Tekrar Dene
+### 37. [IN_PROGRESS] Hatalı Xtream Bölümü İçin Tekrar Dene
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları, yüklenemeyen Xtream bölümüne playlist’in tamamını yeniden yüklemeden bölüm bazlı Retry eylemi eklediğini belirtiyor. Bu, büyük kataloglarda hata kurtarmayı daha hızlı ve düşük maliyetli yapıyor.
 - **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
-- **İnceleme odağı:** Xtream bölüm yükleme hataları bölüm düzeyinde görünür mü; retry yalnız ilgili endpoint’i çağırıp eski başarılı bölümleri koruyor mu?
+- **Kod incelemesi:** Live TV, VOD ve Series kategori istekleri hataları boş listeye çeviriyordu; bu yüzden ağ/API hatası “kategori yok” gibi görünüyordu. Mevcut reducer’lar kategori yükleme hatasını `errorMessage` durumuna iletiyor ve `reloadCategories(config:)` ile yalnız o içerik türünün kategori endpoint’ini tekrar çağırıyor.
+- **Uygulama:** iOS ve tvOS kategori boş durumlarına bölüm bazlı Retry eylemi eklendi. Başarısız ilk yükleme artık kategorileri sessizce boş göstermiyor; hata ve retry butonu gösteriliyor. Retry sırasında mevcut kategoriler korunuyor ve yükleme göstergesi yalnız ilk boş yüklemede çıkıyor. Ortak empty-state metni, ikon ve buton ölçüleri Dynamic Type ile ölçekleniyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS 26.5 iPhone 17 Release ve tvOS 26.5 Simulator Release Xcode build’leri exit code 0 ile tamamlandı. Mevcut Swift 6 concurrency uyarıları derleme çıktısında yer aldı. Akış veya test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Live TV, VOD ve Series kategori hataları için yerel retry eklendi; reviewer onayladı.
 
 ### 38. [PENDING] Playlist Başına Özel User-Agent
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları hazır User-Agent seçeneklerine ek olarak özel değer girişi sunduğunu bildiriyor. Sağlayıcı uyumluluğunda istemci başlığını değiştirmek kullanıcıya pratik bir çözüm veriyor.

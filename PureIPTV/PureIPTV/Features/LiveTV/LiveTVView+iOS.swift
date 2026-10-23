@@ -270,16 +270,23 @@
             .padding(.top, 20)
         }
 
+        @ViewBuilder
         private var emptyView: some View {
-            VStack(spacing: 12) {
-                Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(.system(size: 40))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                Text(AppStrings.Common.categoryNotFound)
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+            if let errorMessage = store.errorMessage {
+                RetryableSectionEmptyState(message: errorMessage) {
+                    store.send(.reloadCategories(config: config))
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                        .font(.system(size: 40))
+                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                    Text(AppStrings.Common.categoryNotFound)
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
