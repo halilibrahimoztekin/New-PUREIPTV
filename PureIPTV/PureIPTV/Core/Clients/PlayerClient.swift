@@ -72,29 +72,24 @@ extension PlayerClient: DependencyKey {
                 if let p = player {
                     return p
                 }
-                let p = Player()
+                let p = PlaybackVLC.makePlayer()
                 player = p
                 return p
             }
         }
         let box = Box()
 
-        // Configure AVAudioSession for AirPlay and Media Playback
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
-            try session.setActive(true)
-        } catch {
-            print("Failed to configure AVAudioSession: \(error)")
-        }
-
         return PlayerClient(
             vlcPlayer: { box.getPlayer() },
             play: { url in
+                try await PlaybackAudioSession.setActive(true)
+                try Task.checkCancellation()
                 let player = box.getPlayer()
                 try player.play(url: url)
             },
             resume: {
+                try await PlaybackAudioSession.setActive(true)
+                try Task.checkCancellation()
                 try box.getPlayer().play()
             },
             pause: {

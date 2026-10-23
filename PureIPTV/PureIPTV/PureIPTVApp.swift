@@ -12,7 +12,7 @@ struct PureIPTVApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var themeManager = ThemeManager.shared
     init() {
-        VLCInstance.prewarmShared()
+        PlaybackVLC.prewarm()
 
         // Initialize RevenueCat
         PurchasesClient.liveValue.configure("appl_bSAnxGvXpdPeSquSYsatWQrNwOG")
@@ -39,15 +39,12 @@ struct PureIPTVApp: App {
             }
         #endif
 
-        do {
-            #if os(tvOS)
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
-            #else
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay, .defaultToSpeaker])
-            #endif
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("Failed to set audio session category: \(error)")
+        Task {
+            do {
+                try await PlaybackAudioSession.setActive(true)
+            } catch {
+                print("Failed to configure audio session: \(error)")
+            }
         }
 
         // Cross-device iCloud watch progress sync (Madde #43)

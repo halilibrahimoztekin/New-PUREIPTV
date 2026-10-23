@@ -843,6 +843,12 @@ public struct PlayerFeature {
         case .toggleStreamHealthHUD:
             state.isStreamHealthHUDVisible.toggle()
             if state.isStreamHealthHUDVisible {
+                state.isTracksMenuVisible = false
+                state.isInfoVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+                state.isCatchupTimelineVisible = false
+                state.isRecentChannelsHUDVisible = false
                 let timerEffect: Effect<Action> = .run { [item = state.item, isPlaying = (state.playerState == .playing), mediaBitrate = state.mediaInfo?.bitrate] send in
                     var prevCounters: PlayerPlaybackCounters?
                     while !Task.isCancelled {
@@ -869,7 +875,14 @@ public struct PlayerFeature {
 
         case let .setStreamHealthHUDVisible(visible):
             state.isStreamHealthHUDVisible = visible
-            if !visible, !state.isShowingStats {
+            if visible {
+                state.isTracksMenuVisible = false
+                state.isInfoVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+                state.isCatchupTimelineVisible = false
+                state.isRecentChannelsHUDVisible = false
+            } else if !state.isShowingStats {
                 return .cancel(id: CancelID.statsTimer)
             }
             return .none
@@ -1808,6 +1821,12 @@ public struct PlayerFeature {
         case .toggleInfo:
             state.isInfoVisible.toggle()
             if state.isInfoVisible {
+                state.isTracksMenuVisible = false
+                state.isStreamHealthHUDVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+                state.isCatchupTimelineVisible = false
+                state.isRecentChannelsHUDVisible = false
                 return .send(.fetchMediaInfo)
             }
             return .none
@@ -1992,8 +2011,16 @@ public struct PlayerFeature {
 
         case .toggleCatchupTimeline:
             state.isCatchupTimelineVisible.toggle()
-            if state.isCatchupTimelineVisible, state.epgListings.isEmpty {
-                return .send(.fetchEPG)
+            if state.isCatchupTimelineVisible {
+                state.isTracksMenuVisible = false
+                state.isInfoVisible = false
+                state.isStreamHealthHUDVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+                state.isRecentChannelsHUDVisible = false
+                if state.epgListings.isEmpty {
+                    return .send(.fetchEPG)
+                }
             }
             return .none
 
@@ -2016,8 +2043,16 @@ public struct PlayerFeature {
 
         case .toggleTracksMenu:
             state.isTracksMenuVisible.toggle()
-            if state.isTracksMenuVisible, state.audioTracks.isEmpty, state.subtitleTracks.isEmpty {
-                return .send(.fetchTracks)
+            if state.isTracksMenuVisible {
+                state.isInfoVisible = false
+                state.isStreamHealthHUDVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+                state.isCatchupTimelineVisible = false
+                state.isRecentChannelsHUDVisible = false
+                if state.audioTracks.isEmpty, state.subtitleTracks.isEmpty {
+                    return .send(.fetchTracks)
+                }
             }
             return .none
 
@@ -2152,6 +2187,14 @@ public struct PlayerFeature {
 
         case .toggleAudioEQHUD:
             state.isAudioEQHUDVisible.toggle()
+            if state.isAudioEQHUDVisible {
+                state.isTracksMenuVisible = false
+                state.isInfoVisible = false
+                state.isStreamHealthHUDVisible = false
+                state.isAudioSyncHUDVisible = false
+                state.isCatchupTimelineVisible = false
+                state.isRecentChannelsHUDVisible = false
+            }
             return .none
 
         case let .setAudioEQHUDVisible(visible):

@@ -17,7 +17,7 @@ extension PlayerFactoryClient: DependencyKey {
                     if let p = player {
                         return p
                     }
-                    let p = Player()
+                    let p = PlaybackVLC.makePlayer()
                     player = p
                     return p
                 }
@@ -28,10 +28,14 @@ extension PlayerFactoryClient: DependencyKey {
             return PlayerClient(
                 vlcPlayer: { box.getPlayer() },
                 play: { url in
+                    try await PlaybackAudioSession.setActive(true)
+                    try Task.checkCancellation()
                     let player = box.getPlayer()
                     try player.play(url: url)
                 },
                 resume: {
+                    try await PlaybackAudioSession.setActive(true)
+                    try Task.checkCancellation()
                     try box.getPlayer().play()
                 },
                 pause: {

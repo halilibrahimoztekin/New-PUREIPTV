@@ -113,13 +113,7 @@ extension PiPClient: DependencyKey {
             },
             configureAudioSession: { active in
                 #if os(iOS) || os(tvOS)
-                    let session = AVAudioSession.sharedInstance()
-                    #if os(iOS)
-                        try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay, .defaultToSpeaker])
-                    #else
-                        try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
-                    #endif
-                    try session.setActive(active)
+                    try await PlaybackAudioSession.setActive(active)
                 #endif
             }
         )

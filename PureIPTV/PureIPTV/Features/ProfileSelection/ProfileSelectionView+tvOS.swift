@@ -93,8 +93,11 @@
                     Spacer().frame(height: 20)
                 }
             }
-            .onAppear {
-                store.send(.onAppear)
+            .task {
+                // Navigation can mount this view while the store is processing a route action.
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                await store.send(.onAppear).finish()
             }
             .onExitCommand {
                 if store.isEditing {

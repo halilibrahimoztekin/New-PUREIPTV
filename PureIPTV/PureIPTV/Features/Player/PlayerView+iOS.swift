@@ -55,6 +55,19 @@
             case swipeToMiniPlayer
         }
 
+        private var isAnyHUDOrOverlayVisible: Bool {
+            store.isTracksMenuVisible ||
+                store.isInfoVisible ||
+                store.isStreamHealthHUDVisible ||
+                store.isAudioSyncHUDVisible ||
+                store.isAudioEQHUDVisible ||
+                store.isCatchupTimelineVisible ||
+                store.isRecentChannelsHUDVisible ||
+                store.isChannelListVisible ||
+                store.isEPGVisible ||
+                store.isChannelDialerVisible
+        }
+
         public var body: some View {
             ZStack {
                 // Gesture Areas
@@ -452,53 +465,6 @@
                         }
                         .padding()
 
-                        // Overlays (Stream Health / Info / Tracks)
-                        ZStack(alignment: .topTrailing) {
-                            if store.isStreamHealthHUDVisible {
-                                HStack {
-                                    Spacer()
-                                    StreamHealthHUDView(
-                                        store: store,
-                                        onClose: {
-                                            store.send(.setStreamHealthHUDVisible(false))
-                                        }
-                                    )
-                                    .padding(.trailing, 16)
-                                }
-                                .transition(.scale(scale: 0.92).combined(with: .opacity))
-                                .zIndex(100)
-                            }
-
-                            if store.isInfoVisible {
-                                HStack {
-                                    Spacer()
-                                    NerdStatsHUDView(
-                                        item: store.item,
-                                        mediaInfo: store.mediaInfo,
-                                        playerState: store.playerState,
-                                        audioDelay: store.audioDelay,
-                                        subtitleDelay: store.subtitleDelay,
-                                        playbackRate: store.playbackRate,
-                                        aspectRatioMode: store.videoAspectRatioMode,
-                                        selectedAudioTrack: store.selectedAudioTrack,
-                                        selectedSubtitleTrack: store.selectedSubtitleTrack,
-                                        currentAudioRoute: store.currentAudioRoute,
-                                        playerStats: store.playerStats,
-                                        streamHealthMetrics: store.streamHealthMetrics,
-                                        onClose: {
-                                            store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        }
-                                    )
-                                    .padding(.trailing, 16)
-                                }
-                                .transition(.scale(scale: 0.92).combined(with: .opacity))
-                            }
-
-                            if store.isTracksMenuVisible {
-                                tracksMenuOverlay
-                            }
-                        }
-
                         Spacer()
 
                         // Center Controls
@@ -550,6 +516,9 @@
                                     .background(.ultraThinMaterial, in: Circle())
                             }
                         }
+                        .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
+                        .allowsHitTesting(!isAnyHUDOrOverlayVisible)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
 
                         Spacer()
 
@@ -717,6 +686,9 @@
                         }
                         .padding(.bottom, 24)
                         .padding(.top, 8)
+                        .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
+                        .allowsHitTesting(!isAnyHUDOrOverlayVisible)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
                     }
                     .background(
                         Color.black.opacity(0.4)
@@ -1023,6 +995,83 @@
                     .zIndex(99)
                 }
 
+                // Stream Health & Buffer Diagnostics (Feature #3)
+                if store.isStreamHealthHUDVisible {
+                    ZStack {
+                        Color.black.opacity(0.2)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                store.send(.setStreamHealthHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+
+                        VStack {
+                            HStack {
+                                Spacer()
+                                StreamHealthHUDView(
+                                    store: store,
+                                    onClose: {
+                                        store.send(.setStreamHealthHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    }
+                                )
+                                .padding(.trailing, 16)
+                                .padding(.top, 64)
+                                .padding(.bottom, 24)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isStreamHealthHUDVisible)
+                    .zIndex(100)
+                }
+
+                // Technical Diagnostics (Nerd Stats)
+                if store.isInfoVisible {
+                    ZStack {
+                        Color.black.opacity(0.2)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                            }
+
+                        VStack {
+                            HStack {
+                                Spacer()
+                                NerdStatsHUDView(
+                                    item: store.item,
+                                    mediaInfo: store.mediaInfo,
+                                    playerState: store.playerState,
+                                    audioDelay: store.audioDelay,
+                                    subtitleDelay: store.subtitleDelay,
+                                    playbackRate: store.playbackRate,
+                                    aspectRatioMode: store.videoAspectRatioMode,
+                                    selectedAudioTrack: store.selectedAudioTrack,
+                                    selectedSubtitleTrack: store.selectedSubtitleTrack,
+                                    currentAudioRoute: store.currentAudioRoute,
+                                    playerStats: store.playerStats,
+                                    streamHealthMetrics: store.streamHealthMetrics,
+                                    onClose: {
+                                        store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                    }
+                                )
+                                .padding(.trailing, 16)
+                                .padding(.top, 64)
+                                .padding(.bottom, 24)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.isInfoVisible)
+                    .zIndex(100)
+                }
+
+                // Audio & Subtitle Tracks Overlay
+                if store.isTracksMenuVisible {
+                    tracksMenuOverlay
+                        .zIndex(101)
+                }
+
                 // Edge-Swipe Channel Sidebar Drawer
                 if store.isChannelListVisible {
                     PlayerSidebarDrawer(store: store) {
@@ -1174,241 +1223,284 @@
         }
 
         private var tracksMenuOverlay: some View {
-            HStack {
-                Spacer()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if !store.audioTracks.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(AppStrings.Player.audioTracks, systemImage: "waveform.circle.fill")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
+            ZStack {
+                Color.black.opacity(0.2)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                    }
 
-                                ForEach(store.audioTracks) { track in
-                                    let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
-                                    let isSelected = store.selectedAudioTrack?.id == track.id
-                                    Button(action: {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.selectAudioTrack(track))
-                                    }) {
-                                        HStack(spacing: 8) {
-                                            if let flag = formatted.flag {
-                                                Text(flag)
-                                                    .font(.body)
-                                            }
-                                            Text(formatted.displayName)
-                                                .font(.subheadline)
-                                            if let detail = formatted.formatDetail {
-                                                Text(detail)
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white.opacity(0.85))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(Color.white.opacity(0.18), in: Capsule())
-                                            }
-                                            Spacer()
-                                            if isSelected {
-                                                Image(systemName: "checkmark")
-                                                    .font(.subheadline.bold())
-                                            }
-                                        }
-                                        .foregroundColor(isSelected ? .accentColor : .white)
-                                    }
-                                    .padding(.vertical, 4)
-                                }
+                HStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header Bar with Title and Close Button
+                        HStack {
+                            Label(AppStrings.Player.tracks, systemImage: "captions.bubble.fill")
+                                .font(.headline.bold())
+                                .foregroundColor(.white)
 
-                                Divider().background(Color.white.opacity(0.2))
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(AppStrings.Player.audioSync)
-                                        .font(.caption.bold())
-                                        .foregroundColor(.white.opacity(0.8))
-                                    HStack(spacing: 8) {
-                                        Button("-250ms") {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.setAudioDelay(store.audioDelay - 250))
-                                        }
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.15), in: Capsule())
+                            Spacer()
 
-                                        Button(AppStrings.Player.resetAudioDelay) {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.setAudioDelay(0))
-                                        }
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.15), in: Capsule())
-
-                                        Button("+250ms") {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.setAudioDelay(store.audioDelay + 250))
-                                        }
-                                        .font(.caption2.bold())
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.15), in: Capsule())
-
-                                        Spacer()
-                                        Text(AppStrings.Player.audioDelayMs(store.audioDelay))
-                                            .font(.caption2.monospacedDigit())
-                                            .foregroundColor(.accentColor)
-                                    }
-
-                                    Button {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.toggleTracksMenu)
-                                        store.send(.setAudioSyncHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "slider.horizontal.2.square")
-                                                .font(.caption2)
-                                            Text(AppStrings.Player.lipSyncAdjustment)
-                                                .font(.caption2.bold())
-                                        }
-                                        .foregroundColor(Color(hex: "#0A84FF"))
-                                        .padding(.top, 2)
-                                    }
-
-                                    Button {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.toggleTracksMenu)
-                                        store.send(.setAudioEQHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "waveform.badge.magnifyingglass")
-                                                .font(.caption2)
-                                            Text("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))")
-                                                .font(.caption2.bold())
-                                        }
-                                        .foregroundColor(store.audioEQPreset.accentColor)
-                                        .padding(.top, 2)
-                                    }
-                                }
-                                .padding(.top, 4)
+                            Button {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.white.opacity(0.7))
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
 
-                        if !store.subtitleTracks.isEmpty {
-                            if !store.audioTracks.isEmpty {
-                                Divider().background(Color.white.opacity(0.3))
+                        Divider().background(Color.white.opacity(0.2))
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                if !store.audioTracks.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Label(AppStrings.Player.audioTracks, systemImage: "waveform.circle.fill")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+
+                                        ForEach(store.audioTracks) { track in
+                                            let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
+                                            let isSelected = store.selectedAudioTrack?.id == track.id
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.selectAudioTrack(track))
+                                            }) {
+                                                HStack(spacing: 8) {
+                                                    if let flag = formatted.flag {
+                                                        Text(flag)
+                                                            .font(.body)
+                                                    }
+                                                    Text(formatted.displayName)
+                                                        .font(.subheadline)
+                                                    if let detail = formatted.formatDetail {
+                                                        Text(detail)
+                                                            .font(.system(size: 10, weight: .bold))
+                                                            .foregroundColor(.white.opacity(0.85))
+                                                            .padding(.horizontal, 6)
+                                                            .padding(.vertical, 2)
+                                                            .background(Color.white.opacity(0.18), in: Capsule())
+                                                    }
+                                                    Spacer()
+                                                    if isSelected {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.subheadline.bold())
+                                                    }
+                                                }
+                                                .foregroundColor(isSelected ? .accentColor : .white)
+                                            }
+                                            .padding(.vertical, 4)
+                                        }
+
+                                        Divider().background(Color.white.opacity(0.2))
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            Text(AppStrings.Player.audioSync)
+                                                .font(.caption.bold())
+                                                .foregroundColor(.white.opacity(0.8))
+                                            HStack(spacing: 8) {
+                                                Button("-250ms") {
+                                                    HapticManager.shared.trigger(.light)
+                                                    store.send(.setAudioDelay(store.audioDelay - 250))
+                                                }
+                                                .font(.caption2.bold())
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                Button(AppStrings.Player.resetAudioDelay) {
+                                                    HapticManager.shared.trigger(.light)
+                                                    store.send(.setAudioDelay(0))
+                                                }
+                                                .font(.caption2.bold())
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                Button("+250ms") {
+                                                    HapticManager.shared.trigger(.light)
+                                                    store.send(.setAudioDelay(store.audioDelay + 250))
+                                                }
+                                                .font(.caption2.bold())
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                Spacer()
+                                                Text(AppStrings.Player.audioDelayMs(store.audioDelay))
+                                                    .font(.caption2.monospacedDigit())
+                                                    .foregroundColor(.accentColor)
+                                            }
+
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleTracksMenu)
+                                                store.send(.setAudioSyncHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "slider.horizontal.2.square")
+                                                        .font(.caption2)
+                                                    Text(AppStrings.Player.lipSyncAdjustment)
+                                                        .font(.caption2.bold())
+                                                }
+                                                .foregroundColor(Color(hex: "#0A84FF"))
+                                                .padding(.top, 2)
+                                            }
+
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleTracksMenu)
+                                                store.send(.setAudioEQHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "waveform.badge.magnifyingglass")
+                                                        .font(.caption2)
+                                                    Text("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))")
+                                                        .font(.caption2.bold())
+                                                }
+                                                .foregroundColor(store.audioEQPreset.accentColor)
+                                                .padding(.top, 2)
+                                            }
+                                        }
+                                        .padding(.top, 4)
+                                    }
+                                }
+
+                                if !store.subtitleTracks.isEmpty {
+                                    if !store.audioTracks.isEmpty {
+                                        Divider().background(Color.white.opacity(0.3))
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Label(AppStrings.Player.subtitles, systemImage: "captions.bubble.fill")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+
+                                        let isSubtitlesOff = store.selectedSubtitleTrack == nil || store.subtitleTracks.isEmpty || (store.selectedSubtitleTrack?.id == "-1")
+
+                                        Button(action: {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.selectSubtitleTrack(nil))
+                                        }) {
+                                            HStack {
+                                                Text(AppStrings.Player.off)
+                                                    .font(.subheadline)
+                                                Spacer()
+                                                if isSubtitlesOff {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.subheadline.bold())
+                                                }
+                                            }
+                                            .foregroundColor(isSubtitlesOff ? .accentColor : .white)
+                                        }
+                                        .padding(.vertical, 4)
+
+                                        ForEach(store.subtitleTracks) { track in
+                                            let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
+                                            let isSelected = store.selectedSubtitleTrack?.id == track.id
+                                            Button(action: {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.selectSubtitleTrack(track))
+                                            }) {
+                                                HStack(spacing: 8) {
+                                                    if let flag = formatted.flag {
+                                                        Text(flag)
+                                                            .font(.body)
+                                                    }
+                                                    Text(formatted.displayName)
+                                                        .font(.subheadline)
+                                                    if let detail = formatted.formatDetail {
+                                                        Text(detail)
+                                                            .font(.system(size: 10, weight: .bold))
+                                                            .foregroundColor(.white.opacity(0.85))
+                                                            .padding(.horizontal, 6)
+                                                            .padding(.vertical, 2)
+                                                            .background(Color.white.opacity(0.18), in: Capsule())
+                                                    }
+                                                    Spacer()
+                                                    if isSelected {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.subheadline.bold())
+                                                    }
+                                                }
+                                                .foregroundColor(isSelected ? .accentColor : .white)
+                                            }
+                                            .padding(.vertical, 4)
+                                        }
+
+                                        if store.selectedSubtitleTrack != nil, !isSubtitlesOff {
+                                            Divider().background(Color.white.opacity(0.2))
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text(AppStrings.Player.subtitleSync)
+                                                    .font(.caption.bold())
+                                                    .foregroundColor(.white.opacity(0.8))
+                                                HStack(spacing: 8) {
+                                                    Button("-250ms") {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setSubtitleDelay(store.subtitleDelay - 250))
+                                                    }
+                                                    .font(.caption2.bold())
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                    Button(AppStrings.Player.resetSubtitleDelay) {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setSubtitleDelay(0))
+                                                    }
+                                                    .font(.caption2.bold())
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                    Button("+250ms") {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setSubtitleDelay(store.subtitleDelay + 250))
+                                                    }
+                                                    .font(.caption2.bold())
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color.white.opacity(0.15), in: Capsule())
+
+                                                    Spacer()
+                                                    Text(AppStrings.Player.subtitleDelayMs(store.subtitleDelay))
+                                                        .font(.caption2.monospacedDigit())
+                                                        .foregroundColor(.accentColor)
+                                                }
+                                            }
+                                            .padding(.top, 4)
+                                        }
+                                    }
+                                }
+
+                                if store.audioTracks.isEmpty, store.subtitleTracks.isEmpty {
+                                    Text(AppStrings.Player.noOptions)
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .font(.caption)
+                                }
                             }
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label(AppStrings.Player.subtitles, systemImage: "captions.bubble.fill")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-
-                                let isSubtitlesOff = store.selectedSubtitleTrack == nil || store.subtitleTracks.isEmpty || (store.selectedSubtitleTrack?.id == "-1")
-
-                                Button(action: {
-                                    HapticManager.shared.trigger(.light)
-                                    store.send(.selectSubtitleTrack(nil))
-                                }) {
-                                    HStack {
-                                        Text(AppStrings.Player.off)
-                                            .font(.subheadline)
-                                        Spacer()
-                                        if isSubtitlesOff {
-                                            Image(systemName: "checkmark")
-                                                .font(.subheadline.bold())
-                                        }
-                                    }
-                                    .foregroundColor(isSubtitlesOff ? .accentColor : .white)
-                                }
-                                .padding(.vertical, 4)
-
-                                ForEach(store.subtitleTracks) { track in
-                                    let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
-                                    let isSelected = store.selectedSubtitleTrack?.id == track.id
-                                    Button(action: {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.selectSubtitleTrack(track))
-                                    }) {
-                                        HStack(spacing: 8) {
-                                            if let flag = formatted.flag {
-                                                Text(flag)
-                                                    .font(.body)
-                                            }
-                                            Text(formatted.displayName)
-                                                .font(.subheadline)
-                                            if let detail = formatted.formatDetail {
-                                                Text(detail)
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white.opacity(0.85))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(Color.white.opacity(0.18), in: Capsule())
-                                            }
-                                            Spacer()
-                                            if isSelected {
-                                                Image(systemName: "checkmark")
-                                                    .font(.subheadline.bold())
-                                            }
-                                        }
-                                        .foregroundColor(isSelected ? .accentColor : .white)
-                                    }
-                                    .padding(.vertical, 4)
-                                }
-
-                                if store.selectedSubtitleTrack != nil, !isSubtitlesOff {
-                                    Divider().background(Color.white.opacity(0.2))
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(AppStrings.Player.subtitleSync)
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white.opacity(0.8))
-                                        HStack(spacing: 8) {
-                                            Button("-250ms") {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.setSubtitleDelay(store.subtitleDelay - 250))
-                                            }
-                                            .font(.caption2.bold())
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.white.opacity(0.15), in: Capsule())
-
-                                            Button(AppStrings.Player.resetSubtitleDelay) {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.setSubtitleDelay(0))
-                                            }
-                                            .font(.caption2.bold())
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.white.opacity(0.15), in: Capsule())
-
-                                            Button("+250ms") {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.setSubtitleDelay(store.subtitleDelay + 250))
-                                            }
-                                            .font(.caption2.bold())
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.white.opacity(0.15), in: Capsule())
-
-                                            Spacer()
-                                            Text(AppStrings.Player.subtitleDelayMs(store.subtitleDelay))
-                                                .font(.caption2.monospacedDigit())
-                                                .foregroundColor(.accentColor)
-                                        }
-                                    }
-                                    .padding(.top, 4)
-                                }
-                            }
-                        }
-
-                        if store.audioTracks.isEmpty, store.subtitleTracks.isEmpty {
-                            Text(AppStrings.Player.noOptions)
-                                .foregroundColor(.white.opacity(0.7))
-                                .font(.caption)
+                            .padding(16)
                         }
                     }
-                    .padding()
+                    .frame(maxWidth: 320, maxHeight: 380)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+                    .padding(.trailing, 16)
+                    .padding(.top, 64)
+                    .padding(.bottom, 24)
                 }
-                .frame(maxWidth: 320, maxHeight: 340)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.trailing, 16)
             }
+            .transition(.scale(scale: 0.94).combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: store.isTracksMenuVisible)
         }
 
         // MARK: - Smart Double-Tap Seek Handlers

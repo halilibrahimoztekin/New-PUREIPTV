@@ -55,7 +55,7 @@ extension PreviewPlayerClient: DependencyKey {
                 if let p = player {
                     return p
                 }
-                let p = Player()
+                let p = PlaybackVLC.makePlayer()
                 _ = try? p.setAudioVolume(Volume(0.0))
                 player = p
                 return p
@@ -128,6 +128,8 @@ extension PreviewPlayerClient: DependencyKey {
 
         return PreviewPlayerClient(
             playPreview: { channel in
+                try await PlaybackAudioSession.setActive(true)
+                try Task.checkCancellation()
                 try box.play(channel: channel)
             },
             stopPreview: {
