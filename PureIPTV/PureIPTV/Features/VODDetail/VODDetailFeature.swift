@@ -92,6 +92,7 @@ public struct VODDetailFeature {
         case downloadStatusLoaded(Bool)
         case downloadTapped
         case historyStatusLoaded(WatchHistoryItem?)
+        case markUnwatched
         case actorTapped(TMDBCastMemberDTO)
         case actorDetailsResponse(Result<TMDBPersonDetailsDTO, Error>)
         case dismissActorDetails
@@ -510,6 +511,17 @@ public struct VODDetailFeature {
             case let .historyStatusLoaded(history):
                 state.historyItem = history
                 return .none
+
+            case .markUnwatched:
+                guard
+                    let history = state.historyItem,
+                    history.duration > 0,
+                    history.progress / history.duration >= 0.90
+                else { return .none }
+                state.historyItem = nil
+                return .run { [id = history.id] _ in
+                    try? await databaseClient.deleteWatchProgress(id)
+                }
 
             case let .favoriteStatusLoaded(isFav):
                 state.isFavorite = isFav

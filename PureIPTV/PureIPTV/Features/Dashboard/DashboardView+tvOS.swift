@@ -70,9 +70,9 @@
                             }
 
                             // Continue Watching
-                            if !store.watchHistoryItems.isEmpty {
+                            if !store.continueWatchingItems.isEmpty {
                                 TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
-                                    ForEach(store.watchHistoryItems) { hist in
+                                    ForEach(store.continueWatchingItems) { hist in
                                         ResumeWatchingCardView(
                                             item: hist,
                                             onResume: {

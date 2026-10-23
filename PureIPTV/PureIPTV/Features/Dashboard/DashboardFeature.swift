@@ -20,6 +20,13 @@ public struct DashboardFeature {
             Set(favoriteItems.map(\.id))
         }
 
+        public var continueWatchingItems: [WatchHistoryItem] {
+            watchHistoryItems.filter { item in
+                guard item.duration > 0 else { return true }
+                return item.progress / item.duration < 0.90
+            }
+        }
+
         public var errorMessage: String?
         public var lastAdultHidden: Bool?
 
@@ -282,7 +289,9 @@ public struct DashboardFeature {
         favorites: [FavoriteItem],
         vods: [MediaModels.Item]
     ) {
-        let continueWatching = history.prefix(10).map { item in
+        let continueWatching = history.filter { item in
+            item.duration <= 0 || item.progress / item.duration < 0.90
+        }.prefix(10).map { item in
             let prog = item.duration > 0 ? (item.progress / item.duration) : nil
             let link = TopShelfService.makeDeepLink(
                 id: item.id,

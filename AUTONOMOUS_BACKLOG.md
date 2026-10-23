@@ -14,9 +14,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1pauyyl/iptv_on_appletv/
 
-### 27. [PENDING] İzlenen İçeriği Manuel Olarak İzlenmedi İşaretleme
+### 27. [DONE] İzlenen İçeriği Manuel Olarak İzlenmedi İşaretleme
 - **Bulgu:** Kullanıcılar dizi/bölüm/film izleme durumunu sıfırlamak istiyor; ortak aile profilleri aynı watch history’yi etkileyebiliyor.
 - **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1w6hkes/remove_watched_history/
+- **Uygulama:** İzlenmiş film ve bölümlere “İzlenmedi Olarak İşaretle” eylemi eklendi; tamamlanan içerik geçmişte korunurken Devam Et rafından filtreleniyor. Silmeler iCloud’a tombstone olarak gidiyor. KVS depolaması cihaz başına ve toplam kota için sınırlandırıldı; kapasite baskısında eski uzak kayıtlar senkron dışına alınır, cihazdaki yerel geçmiş korunur.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Akış ve test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 28. [PENDING] Canlı Yayını Kesmeden EPG’de Gezinme
 - **Bulgu:** Kullanıcı mevcut kanalı izlemeye devam ederken rehberde dolaşmak, yalnızca vurgulanan kanalın sessiz önizlemesine geçmemek istiyor.

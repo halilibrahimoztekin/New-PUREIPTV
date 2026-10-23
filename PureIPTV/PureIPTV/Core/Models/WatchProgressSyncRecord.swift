@@ -15,6 +15,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
     public let playlistID: UUID?
     public let seriesID: String?
     public let deviceId: String?
+    public let isDeleted: Bool?
 
     public init(
         id: String,
@@ -28,7 +29,8 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         lastWatchedAt: Date = Date(),
         playlistID: UUID? = nil,
         seriesID: String? = nil,
-        deviceId: String? = nil
+        deviceId: String? = nil,
+        isDeleted: Bool? = false
     ) {
         self.id = id
         self.type = type
@@ -42,6 +44,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         self.playlistID = playlistID
         self.seriesID = seriesID
         self.deviceId = deviceId
+        self.isDeleted = isDeleted
     }
 
     public init(from item: WatchHistoryItem, deviceId: String? = nil) {
@@ -57,6 +60,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         playlistID = item.playlistID
         seriesID = item.seriesID
         self.deviceId = deviceId
+        isDeleted = false
     }
 
     public func toWatchHistoryItem() -> WatchHistoryItem {

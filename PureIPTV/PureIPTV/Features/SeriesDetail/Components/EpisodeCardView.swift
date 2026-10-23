@@ -7,6 +7,7 @@ public struct EpisodeCardView: View {
     public let layoutMode: SeriesDetailFeature.State.EpisodeLayoutMode
     public let onPlay: () -> Void
     public let onDownload: () -> Void
+    public let onMarkUnwatched: () -> Void
 
     public init(
         episode: DetailModels.Episode,
@@ -14,7 +15,8 @@ public struct EpisodeCardView: View {
         isDownloaded: Bool,
         layoutMode: SeriesDetailFeature.State.EpisodeLayoutMode = .list,
         onPlay: @escaping () -> Void,
-        onDownload: @escaping () -> Void
+        onDownload: @escaping () -> Void,
+        onMarkUnwatched: @escaping () -> Void = {}
     ) {
         self.episode = episode
         self.progressItem = progressItem
@@ -22,6 +24,7 @@ public struct EpisodeCardView: View {
         self.layoutMode = layoutMode
         self.onPlay = onPlay
         self.onDownload = onDownload
+        self.onMarkUnwatched = onMarkUnwatched
     }
 
     private var ratio: Double {
@@ -43,10 +46,24 @@ public struct EpisodeCardView: View {
     }
 
     public var body: some View {
-        if layoutMode == .list {
-            listView
-        } else {
-            gridView
+        Group {
+            if layoutMode == .list {
+                listView
+            } else {
+                gridView
+            }
+        }
+        .contextMenu {
+            if isWatched {
+                Button {
+                    #if os(iOS)
+                        HapticManager.shared.trigger(.light)
+                    #endif
+                    onMarkUnwatched()
+                } label: {
+                    Label(AppStrings.SeriesDetail.markAsUnwatched, systemImage: "eye.slash")
+                }
+            }
         }
     }
 

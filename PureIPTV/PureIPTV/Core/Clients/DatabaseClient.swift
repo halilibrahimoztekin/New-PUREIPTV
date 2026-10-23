@@ -146,15 +146,22 @@ extension DatabaseClient: DependencyKey {
                     context.delete(item)
                 }
                 try context.save()
+                try? await WatchProgressSyncClient.liveValue.markUnwatched(id)
+                NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
             },
             clearWatchHistory: {
                 let context = ModelContext(modelContainer)
                 let descriptor = FetchDescriptor<WatchHistoryItem>()
                 let existing = try context.fetch(descriptor)
+                let ids = existing.map(\.id)
                 for item in existing {
                     context.delete(item)
                 }
                 try context.save()
+                for id in ids {
+                    try? await WatchProgressSyncClient.liveValue.markUnwatched(id)
+                }
+                NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
             },
             getWatchProgress: { id in
                 let context = ModelContext(modelContainer)

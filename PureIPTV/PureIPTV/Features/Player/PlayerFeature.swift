@@ -738,11 +738,10 @@ public struct PlayerFeature {
                             duration: totalSecs,
                             seriesID: item.seriesID
                         )
-                        if totalSecs > 0, currentSecs / totalSecs >= 0.90 {
-                            try? await databaseClient.deleteWatchProgress(item.id)
-                        } else {
-                            try? await databaseClient.saveWatchProgress(historyItem)
-                        }
+                        // Keep completed progress so detail screens can expose
+                        // an explicit mark-as-unwatched action. Continue
+                        // Watching surfaces filter completed entries.
+                        try? await databaseClient.saveWatchProgress(historyItem)
 
                         // Trakt.tv scrobble stop on close (Madde #17)
                         if !item.isLive {
@@ -2382,11 +2381,9 @@ public struct PlayerFeature {
                             duration: totalSecs,
                             seriesID: item.seriesID
                         )
-                        if totalSecs > 0, currentSecs / totalSecs >= 0.90 {
-                            try? await databaseClient.deleteWatchProgress(item.id)
-                        } else {
-                            try? await databaseClient.saveWatchProgress(historyItem)
-                        }
+                        // Retain completed progress as the watched marker;
+                        // detail screens can then let the user reset it.
+                        try? await databaseClient.saveWatchProgress(historyItem)
 
                         // Trakt.tv scrobble stop on close (Madde #17)
                         if !item.isLive {

@@ -1,12 +1,190 @@
 import ComposableArchitecture
+import CryptoKit
 import Foundation
 import SwiftData
+
+private actor WatchProgressSyncWriter {
+    private let store: NSUbiquitousKeyValueStore
+    private let deviceID: String
+    private let itemPrefix = "pureiptv_watch_item_"
+    private let deletionPrefix = "pureiptv_watch_del_"
+    private let fencePrefix = "pureiptv_watch_del_fence_"
+    private let retentionFloorPrefix = "pureiptv_watch_retention_floor_"
+    private let maxRecordsPerDevice = 200
+    private let maxManagedKeys = 700
+    private let maxKVSKeys = 900
+    private let maxKVSBytes = 700 * 1024
+
+    init(store: NSUbiquitousKeyValueStore, deviceID: String) {
+        self.store = store
+        self.deviceID = deviceID
+    }
+
+    func write(_ record: WatchProgressSyncRecord) throws {
+        store.synchronize()
+        guard let data = try? JSONEncoder().encode(record), data.count <= 16 * 1024 else { return }
+        let itemKey = itemPrefix + encoded(deviceID) + "_" + keyDigest(record.id)
+        let deletionKey = deletionPrefix + encoded(deviceID) + "_" + keyDigest(record.id)
+        let targetKey = record.isDeleted == true ? deletionKey : itemKey
+        guard pruneGlobalStorage(reservingBytes: data.count, reservingKey: store.object(forKey: targetKey) == nil) else {
+            return
+        }
+
+        if record.isDeleted == true {
+            let existingDate = store.data(forKey: deletionKey)
+                .flatMap { try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: $0) }
+                .map(\.lastWatchedAt) ?? .distantPast
+            guard record.lastWatchedAt >= existingDate else { return }
+            store.set(data, forKey: deletionKey)
+            pruneTombstones()
+        } else {
+            let currentDate = store.data(forKey: itemKey)
+                .flatMap { try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: $0) }
+                .map(\.lastWatchedAt) ?? .distantPast
+            guard record.lastWatchedAt >= currentDate else { return }
+            store.set(data, forKey: itemKey)
+            pruneItems()
+        }
+        _ = pruneGlobalStorage()
+        store.synchronize()
+    }
+
+    private func pruneItems() {
+        let records = records(withPrefix: itemPrefix).filter { $0.value.deviceId == deviceID }
+            .sorted { $0.value.lastWatchedAt < $1.value.lastWatchedAt }
+        if records.count > maxRecordsPerDevice {
+            for (key, _) in records.prefix(records.count - maxRecordsPerDevice) {
+                store.removeObject(forKey: key)
+            }
+        }
+    }
+
+    private func pruneTombstones() {
+        let records = records(withPrefix: deletionPrefix).filter { $0.value.deviceId == deviceID }
+            .sorted { $0.value.lastWatchedAt < $1.value.lastWatchedAt }
+        guard records.count > maxRecordsPerDevice else { return }
+        let expired = records.prefix(records.count - maxRecordsPerDevice)
+        for (key, record) in expired {
+            let fenceKey = fencePrefix + encoded(deviceID) + ":" + keyDigest(record.id)
+            let existingDate = store.data(forKey: fenceKey)
+                .flatMap { try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: $0) }
+                .map(\.lastWatchedAt) ?? .distantPast
+            let latest = record.lastWatchedAt >= existingDate ? record : WatchProgressSyncRecord(
+                id: record.id, type: "deleted", title: "", progress: 0, duration: 0,
+                lastWatchedAt: existingDate, deviceId: deviceID, isDeleted: true
+            )
+            if let fenceData = try? JSONEncoder().encode(latest) {
+                store.set(fenceData, forKey: fenceKey)
+            }
+            store.removeObject(forKey: key)
+        }
+        let fencePrefixForDevice = fencePrefix + encoded(deviceID) + ":"
+        let fences = store.dictionaryRepresentation.compactMap { key, value -> (String, Date)? in
+            guard key.hasPrefix(fencePrefixForDevice), let data = value as? Data,
+                  let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+            else { return nil }
+            return (key, record.lastWatchedAt)
+        }.sorted { $0.1 < $1.1 }
+        if fences.count > maxRecordsPerDevice {
+            let expiredFences = fences.prefix(fences.count - maxRecordsPerDevice)
+            let floorKey = retentionFloorPrefix + encoded(deviceID)
+            let existingFloor = store.object(forKey: floorKey) as? Date ?? .distantPast
+            let newFloor = expiredFences.map(\.1).max() ?? existingFloor
+            store.set(max(existingFloor, newFloor), forKey: floorKey)
+            // This is the bounded KVS retention policy: remote history older
+            // than this floor is no longer synchronized, while local history
+            // remains available on each device.
+            for (key, _) in expiredFences {
+                store.removeObject(forKey: key)
+            }
+        }
+    }
+
+    private func records(withPrefix prefix: String) -> [(key: String, value: WatchProgressSyncRecord)] {
+        store.dictionaryRepresentation.compactMap { key, value in
+            guard
+                key.hasPrefix(prefix),
+                let data = value as? Data,
+                let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+            else { return nil }
+            return (key, record)
+        }
+    }
+
+    private func pruneGlobalStorage(reservingBytes: Int = 0, reservingKey: Bool = false) -> Bool {
+        while true {
+            let values = store.dictionaryRepresentation
+            var managed: [(key: String, date: Date, size: Int, kind: Int, deviceID: String)] = []
+            for (key, value) in values {
+                if key.hasPrefix(itemPrefix) || key.hasPrefix(deletionPrefix),
+                   let data = value as? Data,
+                   let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data),
+                   let sourceDeviceID = record.deviceId
+                {
+                    managed.append((key, record.lastWatchedAt, data.count, record.isDeleted == true ? 1 : 0, sourceDeviceID))
+                } else if key.hasPrefix(fencePrefix), let data = value as? Data,
+                          let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data),
+                          let sourceDeviceID = record.deviceId
+                {
+                    managed.append((key, record.lastWatchedAt, data.count, 2, sourceDeviceID))
+                }
+            }
+            let totalBytes = (try? PropertyListSerialization.data(
+                fromPropertyList: values,
+                format: .binary,
+                options: 0
+            ).count) ?? values.values.reduce(0) { partial, value in
+                partial + ((value as? Data)?.count ?? (value as? String)?.utf8.count ?? MemoryLayout<Int>.size)
+            }
+            let overBudget = managed.count + (reservingKey ? 1 : 0) > maxManagedKeys
+                || values.count + (reservingKey ? 1 : 0) > maxKVSKeys
+                || totalBytes + reservingBytes > maxKVSBytes
+            guard overBudget else { return true }
+            guard let oldest = managed.min(by: {
+                $0.kind == $1.kind ? $0.date < $1.date : $0.kind < $1.kind
+            }) else { return false }
+            if oldest.kind > 0 {
+                advanceRetentionFloor(for: oldest.deviceID, through: oldest.date)
+            }
+            store.removeObject(forKey: oldest.key)
+        }
+    }
+
+    private func advanceRetentionFloor(for sourceDeviceID: String, through date: Date) {
+        let key = retentionFloorPrefix + encoded(sourceDeviceID)
+        let current = store.object(forKey: key) as? Date ?? .distantPast
+        store.set(max(current, date), forKey: key)
+    }
+
+    private func encoded(_ value: String) -> String {
+        Data(value.utf8).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private func keyDigest(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).prefix(16)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private func decoded(_ value: String) -> String? {
+        let padded = value
+            .replacingOccurrences(of: "_", with: "/")
+            .replacingOccurrences(of: "-", with: "+")
+        let base64 = padded + String(repeating: "=", count: (4 - padded.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+}
 
 /// Client responsible for cross-device watch progress synchronization via iCloud Key-Value Store (Madde #43).
 public struct WatchProgressSyncClient: Sendable {
     public var isSyncEnabled: @Sendable () -> Bool
     public var setSyncEnabled: @Sendable (Bool) -> Void
     public var syncItem: @Sendable (_ item: WatchHistoryItem) async throws -> Void
+    public var markUnwatched: @Sendable (_ id: String) async throws -> Void
     public var pullAndMergeRemoteChanges: @Sendable () async throws -> Int
     public var observeRemoteChanges: @Sendable () -> AsyncStream<[WatchProgressSyncRecord]>
 
@@ -14,12 +192,14 @@ public struct WatchProgressSyncClient: Sendable {
         isSyncEnabled: @escaping @Sendable () -> Bool,
         setSyncEnabled: @escaping @Sendable (Bool) -> Void,
         syncItem: @escaping @Sendable (WatchHistoryItem) async throws -> Void,
+        markUnwatched: @escaping @Sendable (String) async throws -> Void,
         pullAndMergeRemoteChanges: @escaping @Sendable () async throws -> Int,
         observeRemoteChanges: @escaping @Sendable () -> AsyncStream<[WatchProgressSyncRecord]>
     ) {
         self.isSyncEnabled = isSyncEnabled
         self.setSyncEnabled = setSyncEnabled
         self.syncItem = syncItem
+        self.markUnwatched = markUnwatched
         self.pullAndMergeRemoteChanges = pullAndMergeRemoteChanges
         self.observeRemoteChanges = observeRemoteChanges
     }
@@ -30,7 +210,6 @@ extension WatchProgressSyncClient: DependencyKey {
     private nonisolated static let indexKey = "pureiptv_watch_prog_index"
     private nonisolated static let enabledKey = "com.pureiptv.isICloudSyncEnabled"
     private nonisolated static let deviceIDKey = "com.pureiptv.iCloudSyncDeviceUUID"
-    private nonisolated static let maxIndexCount = 200
 
     private static var deviceUUID: String {
         let defaults = UserDefaults.standard
@@ -44,6 +223,8 @@ extension WatchProgressSyncClient: DependencyKey {
 
     public static let liveValue: WatchProgressSyncClient = {
         let store = NSUbiquitousKeyValueStore.default
+        let localDeviceID = deviceUUID
+        let writer = WatchProgressSyncWriter(store: store, deviceID: localDeviceID)
         let modelContainer = SharedDatabaseConfig.shared
 
         // Default to enabled if not explicitly set
@@ -65,69 +246,138 @@ extension WatchProgressSyncClient: DependencyKey {
             syncItem: { item in
                 guard isEnabled() else { return }
 
-                let record = WatchProgressSyncRecord(from: item, deviceId: deviceUUID)
-                guard let data = try? JSONEncoder().encode(record) else { return }
-
-                let itemKey = "\(keyPrefix)\(record.id)"
-                store.set(data, forKey: itemKey)
-
-                // Update index
-                var index = (store.array(forKey: indexKey) as? [String]) ?? []
-                if let existingPos = index.firstIndex(of: record.id) {
-                    index.remove(at: existingPos)
-                }
-                index.insert(record.id, at: 0)
-
-                // Prune old entries past max limit to respect iCloud KVS 1MB storage quota
-                if index.count > maxIndexCount {
-                    let toRemove = index.suffix(from: maxIndexCount)
-                    for oldId in toRemove {
-                        store.removeObject(forKey: "\(keyPrefix)\(oldId)")
-                    }
-                    index = Array(index.prefix(maxIndexCount))
-                }
-
-                store.set(index, forKey: indexKey)
-                store.synchronize()
+                let record = WatchProgressSyncRecord(from: item, deviceId: localDeviceID)
+                try await writer.write(record)
+            },
+            markUnwatched: { id in
+                guard isEnabled() else { return }
+                let record = WatchProgressSyncRecord(
+                    id: id,
+                    type: "deleted",
+                    title: "",
+                    progress: 0,
+                    duration: 0,
+                    lastWatchedAt: Date(),
+                    deviceId: localDeviceID,
+                    isDeleted: true
+                )
+                try await writer.write(record)
             },
             pullAndMergeRemoteChanges: {
                 guard isEnabled() else { return 0 }
 
                 store.synchronize()
-                let index = (store.array(forKey: indexKey) as? [String]) ?? []
-                guard !index.isEmpty else { return 0 }
+                let values = store.dictionaryRepresentation
+                var remoteRecords: [WatchProgressSyncRecord] = values.compactMap { key, value in
+                    guard
+                        key.hasPrefix("pureiptv_watch_item_") || key.hasPrefix("pureiptv_watch_del_"),
+                        let data = value as? Data,
+                        let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+                    else { return nil }
+                    return record
+                }
+                // Migrate records written by earlier app versions.
+                let legacyIDs = (store.array(forKey: indexKey) as? [String]) ?? []
+                for id in legacyIDs {
+                    guard
+                        let data = store.data(forKey: "\(keyPrefix)\(id)"),
+                        let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+                    else { continue }
+                    remoteRecords.append(record)
+                }
+
+                var newestLive: [String: WatchProgressSyncRecord] = [:]
+                var newestDeletion: [String: WatchProgressSyncRecord] = [:]
+                for record in remoteRecords {
+                    if record.isDeleted == true {
+                        if record.lastWatchedAt > (newestDeletion[record.id]?.lastWatchedAt ?? .distantPast) {
+                            newestDeletion[record.id] = record
+                        }
+                    } else if record.lastWatchedAt > (newestLive[record.id]?.lastWatchedAt ?? .distantPast) {
+                        newestLive[record.id] = record
+                    }
+                }
+                var deletionFences: [String: Date] = [:]
+                var retentionFloors: [String: Date] = [:]
+                for (key, value) in values {
+                    if key.hasPrefix("pureiptv_watch_retention_floor_"), let floor = value as? Date {
+                        let encodedDeviceID = String(key.dropFirst("pureiptv_watch_retention_floor_".count))
+                        let paddedDeviceID = encodedDeviceID
+                            .replacingOccurrences(of: "_", with: "/")
+                            .replacingOccurrences(of: "-", with: "+")
+                        let base64DeviceID = paddedDeviceID
+                            + String(repeating: "=", count: (4 - paddedDeviceID.count % 4) % 4)
+                        if let deviceData = Data(base64Encoded: base64DeviceID),
+                           let sourceDeviceID = String(data: deviceData, encoding: .utf8)
+                        {
+                            retentionFloors[sourceDeviceID] = max(retentionFloors[sourceDeviceID] ?? .distantPast, floor)
+                        }
+                        continue
+                    }
+                    guard
+                        key.hasPrefix("pureiptv_watch_del_fence_"),
+                        let data = value as? Data,
+                        let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+                    else { continue }
+                    deletionFences[record.id] = max(
+                        deletionFences[record.id] ?? .distantPast,
+                        record.lastWatchedAt
+                    )
+                }
+                // Apply each source device's retention floor before conflict
+                // resolution so a suppressed row cannot hide another device's
+                // newer eligible progress for the same content.
+                newestLive.removeAll(keepingCapacity: true)
+                for record in remoteRecords where record.isDeleted != true {
+                    let sourceFloor = retentionFloors[record.deviceId ?? ""] ?? .distantPast
+                    guard record.lastWatchedAt > sourceFloor else { continue }
+                    if record.lastWatchedAt > (newestLive[record.id]?.lastWatchedAt ?? .distantPast) {
+                        newestLive[record.id] = record
+                    }
+                }
+                let allIDs = Set(newestLive.keys).union(newestDeletion.keys).union(deletionFences.keys)
 
                 var mergedCount = 0
                 let context = ModelContext(modelContainer)
 
-                for id in index {
-                    let itemKey = "\(keyPrefix)\(id)"
-                    guard let data = store.data(forKey: itemKey),
-                          let remoteRecord = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
-                    else {
+                for id in allIDs {
+                    if let remoteRecord = newestLive[id],
+                       remoteRecord.lastWatchedAt <= (retentionFloors[remoteRecord.deviceId ?? ""] ?? .distantPast)
+                    {
+                        // Never delete local history when the bounded remote
+                        // synchronization horizon suppresses an older record.
                         continue
                     }
-
-                    // Skip self-echoed records from the exact same device UUID
-                    if remoteRecord.deviceId == deviceUUID {
-                        continue
-                    }
-
-                    // Check local record in SwiftData
-                    let descriptor = FetchDescriptor<WatchHistoryItem>(
-                        predicate: #Predicate { $0.id == id }
+                    let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate { $0.id == id })
+                    let localItem = try? context.fetch(descriptor).first
+                    let tombstoneDate = max(
+                        newestDeletion[id]?.lastWatchedAt ?? .distantPast,
+                        deletionFences[id] ?? .distantPast
                     )
+                    guard let remoteRecord = newestLive[id] else {
+                        if let localItem, tombstoneDate >= localItem.lastWatchedAt {
+                            context.delete(localItem)
+                            mergedCount += 1
+                        }
+                        continue
+                    }
 
-                    if let localItem = try? context.fetch(descriptor).first {
-                        // Conflict resolution: only update if remote timestamp is strictly newer
+                    guard remoteRecord.lastWatchedAt > tombstoneDate else {
+                        let deletionDate = tombstoneDate
+                        if let localItem, localItem.lastWatchedAt <= deletionDate {
+                            context.delete(localItem)
+                            mergedCount += 1
+                        }
+                        continue
+                    }
+
+                    if let localItem {
                         if remoteRecord.lastWatchedAt > localItem.lastWatchedAt {
                             remoteRecord.apply(to: localItem)
                             mergedCount += 1
                         }
                     } else {
-                        // New remote entry, insert locally
-                        let newItem = remoteRecord.toWatchHistoryItem()
-                        context.insert(newItem)
+                        context.insert(remoteRecord.toWatchHistoryItem())
                         mergedCount += 1
                     }
                 }
@@ -157,7 +407,10 @@ extension WatchProgressSyncClient: DependencyKey {
                             }
 
                             var records: [WatchProgressSyncRecord] = []
-                            for key in changedKeys where key.hasPrefix(keyPrefix) {
+                            for key in changedKeys where key.hasPrefix(keyPrefix)
+                                || key.hasPrefix("pureiptv_watch_item_")
+                                || key.hasPrefix("pureiptv_watch_del_")
+                            {
                                 if let data = store.data(forKey: key),
                                    let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
                                 {
@@ -193,6 +446,7 @@ extension WatchProgressSyncClient: DependencyKey {
         isSyncEnabled: { true },
         setSyncEnabled: { _ in },
         syncItem: { _ in },
+        markUnwatched: { _ in },
         pullAndMergeRemoteChanges: { 0 },
         observeRemoteChanges: { .finished }
     )

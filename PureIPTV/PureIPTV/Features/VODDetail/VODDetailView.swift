@@ -349,6 +349,24 @@ public struct VODDetailView: View {
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
                             .foregroundStyle(.white)
                         }
+                        if history.progress / history.duration >= 0.90 {
+                            Button {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.markUnwatched)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "eye.slash")
+                                        .font(.system(size: 16, weight: .medium))
+                                    Text(AppStrings.SeriesDetail.unwatched)
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
+                                .foregroundStyle(.white)
+                            }
+                        }
                     }
 
                     if store.resolvedTrailerKey != nil {
@@ -1285,6 +1303,15 @@ public struct VODDetailView: View {
                                         }
                                         .padding(.horizontal, 28)
                                         .padding(.vertical, 16)
+                                    }
+                                    if history.progress / history.duration >= 0.90 {
+                                        Button {
+                                            store.send(.markUnwatched)
+                                        } label: {
+                                            Label(AppStrings.SeriesDetail.unwatched, systemImage: "eye.slash")
+                                                .padding(.horizontal, 20)
+                                                .padding(.vertical, 16)
+                                        }
                                     }
                                 } else {
                                     Button {

@@ -120,6 +120,7 @@ public struct SeriesDetailFeature {
         case favoriteStatusLoaded(Bool)
         case downloadedEpisodesLoaded([String: Bool])
         case episodeProgressLoaded([WatchHistoryItem])
+        case markEpisodeUnwatched(String)
         case downloadEpisode(DetailModels.Episode)
         case historyStatusLoaded(WatchHistoryItem?)
         case resumeTapped
@@ -310,6 +311,21 @@ public struct SeriesDetailFeature {
             case let .episodeProgressLoaded(items):
                 state.episodeProgressMap = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
                 return .none
+
+            case let .markEpisodeUnwatched(id):
+                guard
+                    let history = state.episodeProgressMap[id],
+                    history.duration > 0,
+                    history.progress / history.duration >= 0.90
+                else { return .none }
+                state.episodeProgressMap.removeValue(forKey: id)
+                if state.historyItem?.id == id {
+                    state.historyItem = nil
+                }
+                state.updateNextUpEpisode()
+                return .run { _ in
+                    try? await databaseClient.deleteWatchProgress(id)
+                }
 
             case let .episodeSelected(episode):
                 // Ensure selectedSeasonNumber matches the played episode's season

@@ -537,6 +537,7 @@ public enum AppStrings {
         public static let playNextEpisode = "Sıradaki Bölümü İzle".localized
         public static let watched = "İzlendi".localized
         public static let unwatched = "İzlenmedi".localized
+        public static let markAsUnwatched = "İzlenmedi Olarak İşaretle".localized
         public static let listView = "Liste".localized
         public static let gridView = "Izgara".localized
         public static let selectSeason = "Sezon Seç".localized

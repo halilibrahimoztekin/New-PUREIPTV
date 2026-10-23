@@ -434,6 +434,9 @@
                                         },
                                         onDownload: {
                                             store.send(.downloadEpisode(episode))
+                                        },
+                                        onMarkUnwatched: {
+                                            store.send(.markEpisodeUnwatched(episode.id))
                                         }
                                     )
                                 }
@@ -458,6 +461,9 @@
                                         },
                                         onDownload: {
                                             store.send(.downloadEpisode(episode))
+                                        },
+                                        onMarkUnwatched: {
+                                            store.send(.markEpisodeUnwatched(episode.id))
                                         }
                                     )
                                 }

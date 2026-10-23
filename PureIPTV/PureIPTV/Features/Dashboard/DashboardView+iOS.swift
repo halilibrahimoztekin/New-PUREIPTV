@@ -79,8 +79,8 @@
                                 .padding(.bottom, 8)
                             }
 
-                            if !store.watchHistoryItems.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.watchHistoryItems) { hist in
+                            if !store.continueWatchingItems.isEmpty {
+                                featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.continueWatchingItems) { hist in
                                     ResumeWatchingCardView(
                                         item: hist,
                                         onResume: {

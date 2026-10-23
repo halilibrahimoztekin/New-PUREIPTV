@@ -320,7 +320,8 @@
                                 ForEach(store.currentEpisodes) { episode in
                                     TVEpisodeRow(
                                         episode: episode,
-                                        progressItem: store.episodeProgressMap[episode.id]
+                                        progressItem: store.episodeProgressMap[episode.id],
+                                        onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
                                     }
@@ -332,7 +333,8 @@
                                 ForEach(store.currentEpisodes) { episode in
                                     TVEpisodeGridCard(
                                         episode: episode,
-                                        progressItem: store.episodeProgressMap[episode.id]
+                                        progressItem: store.episodeProgressMap[episode.id],
+                                        onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
                                     }
@@ -424,6 +426,7 @@
     private struct TVEpisodeRow: View {
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
+        var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
         private var ratio: Double {
@@ -548,6 +551,13 @@
                 .padding(12)
             }
             .buttonStyle(TVEpisodeCardButtonStyle())
+            .contextMenu {
+                if isWatched {
+                    Button(action: onMarkUnwatched) {
+                        Label(AppStrings.SeriesDetail.markAsUnwatched, systemImage: "eye.slash")
+                    }
+                }
+            }
         }
     }
 
@@ -556,6 +566,7 @@
     private struct TVEpisodeGridCard: View {
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
+        var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
         private var ratio: Double {
@@ -656,6 +667,13 @@
                 .padding(12)
             }
             .buttonStyle(TVEpisodeCardButtonStyle())
+            .contextMenu {
+                if isWatched {
+                    Button(action: onMarkUnwatched) {
+                        Label(AppStrings.SeriesDetail.markAsUnwatched, systemImage: "eye.slash")
+                    }
+                }
+            }
         }
     }
 
