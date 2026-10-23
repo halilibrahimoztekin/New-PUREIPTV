@@ -124,12 +124,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Simulator Release Xcode build’leri başarılı (`BUILD SUCCEEDED`). `git diff --check` başarılı. Yalnızca derleme yapıldı; uygulama akışı ve test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 40. [IN_PROGRESS] Oyuncu İçinden Playback Engine Seçimi
+### 40. [DONE] Oyuncu İçinden Playback Engine Seçimi — uygulanabilirlik kararı
 - **Bulgu:** IPTVX 22.0.1 sürüm notları oynatıcı içinde yalnız mevcut oturuma uygulanan motor değiştirme seçeneğini tanıtıyor; resmi App Store açıklaması da çoklu oynatıcı uyumluluğunu vurguluyor.
 - **Kaynaklar:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** PureIPTV’nin VLC sarmalayıcısı içerik/codec uyumsuzluğunda alternatif playback backend açabiliyor mu; sağlayıcı parolası ve playback konumu dışarı sızmadan oturuma özel seçim tasarla.
+- **Kod incelemesi:** `PlayerClient`, `PlayerFactoryClient`, Player view’ları, PiP render yüzeyi ve `PlayerFeature` doğrudan SwiftVLC `Player`, `VideoView`, olay, track, EQ ve stats API’lerine bağlı. `ExternalPlayerManager` ayrı uygulama açıyor ve credential içeren stream URL’sini panoya kopyalıyor; bu, oturum içi backend seçimi değil.
+- **Uygulanabilirlik kararı:** Küçük bir ayar/eylem bu gereksinimi güvenli biçimde karşılayamaz. Gelecekteki ayrı mimari işi backend-neutral playback protokolü, engine-specific render/PiP/audio lifecycle, normalize event/capability modeli ve credential-safe harici handoff gerektirir. Mevcut harici URL şemaları alternatif motor gibi sunulmamalı.
+- **Doğrulama:** PR Reviewer `[APPROVED — NO-GO]`; kaynak incelemesi. Kullanıcı akışı veya test çalıştırılmadı; kod değişmedi.
+- **Durum:** `[DONE]` — Mevcut mimaride bu kapsamla uygulanmaması reviewer tarafından onaylandı; backend soyutlaması ayrı iş olarak gerekli.
 
-### 41. [PENDING] Arama Sonuçlarında EPG Programı ve Kayıt Eylemi
+### 41. [IN_PROGRESS] Arama Sonuçlarında EPG Programı ve Kayıt Eylemi
 - **Bulgu:** IPTVX 22.3 sürüm notları arama sonuçlarındaki EPG programları için doğrudan kayıt seçeneklerini eklediğini belirtiyor. Program araması ile eylem arasındaki gezinmeyi azaltıyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 - **İnceleme odağı:** Global arama EPG programlarını içeriyor mu; program satırından mevcut catch-up oynatma veya kayıt altyapısı kullanılabiliyor mu? Kayıt varsa UHF Server ve yerel DVR kapsamlarını ayır.
