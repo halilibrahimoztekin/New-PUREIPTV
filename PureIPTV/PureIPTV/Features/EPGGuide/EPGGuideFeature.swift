@@ -51,6 +51,8 @@ public struct EPGGuideFeature {
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.previewPlayerClient) var previewPlayerClient
+    @Dependency(\.settingsClient) var settingsClient
+    @Injected(\.playerClient) var playerClient
     @Dependency(\.continuousClock) var clock
 
     public init() {}
@@ -140,7 +142,7 @@ public struct EPGGuideFeature {
                 return .none
 
             case .closeTapped:
-                return .merge(
+                return .concatenate(
                     .run { [previewPlayerClient] _ in
                         await previewPlayerClient.stopPreview()
                     },
@@ -148,12 +150,17 @@ public struct EPGGuideFeature {
                 )
 
             case let .playTapped(channel):
-                return .merge(
-                    .run { [previewPlayerClient] _ in
+                let startsMuted = settingsClient.startMuted()
+                return .run { [previewPlayerClient, playerClient] send in
+                    if let streamURL = channel.streamURL,
+                       let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
+                    {
+                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                    } else {
                         await previewPlayerClient.stopPreview()
-                    },
-                    .send(.delegate(.playChannel(channel)))
-                )
+                    }
+                    await send(.delegate(.playChannel(channel)))
+                }
 
             case let .playCatchUp(program, channel):
                 let config = state.config
@@ -181,9 +188,10 @@ public struct EPGGuideFeature {
                         coverURL: channel.coverURL,
                         categoryID: channel.categoryID,
                         type: .live,
-                        epgChannelID: channel.epgChannelID
+                        epgChannelID: channel.epgChannelID,
+                        userAgentOverride: channel.userAgentOverride
                     )
-                    return .merge(
+                    return .concatenate(
                         .run { [previewPlayerClient] _ in
                             await previewPlayerClient.stopPreview()
                         },

@@ -698,7 +698,14 @@ public struct PlayerFeature {
 
                     // Structured concurrency: event stream and playback run inside a task group
                     // so cooperative cancellation immediately cancels the event stream listener!
+                    let isPreviewPromotion = await playerClient.consumePreviewPromotion(url)
                     let eventsStream = await playerClient.events()
+                    if isPreviewPromotion {
+                        // The preview may have reached `.playing` before this
+                        // feature subscribed. Reconcile its current state once,
+                        // then keep listening for subsequent transport changes.
+                        await send(.handlePlayerEvent(.stateChanged(.playing)))
+                    }
                     await withTaskGroup(of: Void.self) { group in
                         group.addTask {
                             for await event in eventsStream {
@@ -707,7 +714,7 @@ public struct PlayerFeature {
                         }
 
                         group.addTask {
-                            if !isAlreadyPlaying {
+                            if !isAlreadyPlaying, !isPreviewPromotion {
                                 do {
                                     try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
                                     if settingsClient.startMuted() {

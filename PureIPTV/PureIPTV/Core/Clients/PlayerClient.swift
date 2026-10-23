@@ -38,6 +38,8 @@ public struct PlayerPlaybackCounters: Equatable, Sendable {
 
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
+    public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool) -> Void = { _, _, _ in }
+    public var consumePreviewPromotion: @MainActor @Sendable (_ streamURL: URL) -> Bool = { _ in false }
     public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?, _ networkCachingMilliseconds: Int?) async throws -> Void
     public var resume: @MainActor @Sendable () async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
@@ -68,6 +70,7 @@ extension PlayerClient: DependencyKey {
     public nonisolated static let liveValue: PlayerClient = {
         final class Box: @unchecked Sendable {
             @MainActor var player: Player?
+            @MainActor var promotedStreamURL: URL?
             @MainActor func getPlayer() -> Player {
                 if let p = player {
                     return p
@@ -81,10 +84,31 @@ extension PlayerClient: DependencyKey {
 
         return PlayerClient(
             vlcPlayer: { box.getPlayer() },
+            adoptPreviewPlayer: { player, streamURL, startsMuted in
+                if let currentPlayer = box.player, currentPlayer !== player {
+                    currentPlayer.stop()
+                }
+                box.player = player
+                box.promotedStreamURL = streamURL
+                try? player.setAudioVolume(Volume(startsMuted ? 0.0 : 1.0))
+            },
+            consumePreviewPromotion: { streamURL in
+                guard box.promotedStreamURL == streamURL,
+                      let player = box.player,
+                      player.isPlaying
+                else { return false }
+                box.promotedStreamURL = nil
+                return true
+            },
             play: { url, userAgentOverride, networkCachingMilliseconds in
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
                 let player = box.getPlayer()
+                if box.promotedStreamURL == url, player.isPlaying {
+                    box.promotedStreamURL = nil
+                    return
+                }
+                box.promotedStreamURL = nil
                 let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let media = try Media(
                     url: url,
@@ -110,6 +134,7 @@ extension PlayerClient: DependencyKey {
             release: {
                 box.player?.stop()
                 box.player = nil
+                box.promotedStreamURL = nil
             },
             setVolume: { volume in
                 try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))

@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import FactoryKit
 import Foundation
 
 private nonisolated enum EPGTimelineCancelID: Hashable, Sendable {
@@ -182,6 +183,7 @@ public struct EPGTimelineFeature {
     @Dependency(\.continuousClock) var clock
     @Dependency(\.dismiss) var dismiss
     @Dependency(\.previewPlayerClient) var previewPlayerClient
+    @Injected(\.playerClient) var playerClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
 
     public init() {}
@@ -433,7 +435,8 @@ public struct EPGTimelineFeature {
                             coverURL: channel.coverURL,
                             categoryID: channel.categoryID,
                             type: .live,
-                            epgChannelID: channel.epgChannelID
+                            epgChannelID: channel.epgChannelID,
+                            userAgentOverride: channel.userAgentOverride
                         )
                         return .concatenate(
                             .run { [previewPlayerClient] _ in
@@ -446,15 +449,24 @@ public struct EPGTimelineFeature {
                 return .none
 
             case let .channelTapped(channel):
-                return .concatenate(
-                    .run { [previewPlayerClient] _ in
+                state.activePreviewChannel = nil
+                state.isPiPActive = false
+                state.isPreviewLoading = false
+                state.previewErrorMessage = nil
+                let startsMuted = settingsClient.startMuted()
+                return .run { [previewPlayerClient, playerClient] send in
+                    if let streamURL = channel.streamURL,
+                       let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
+                    {
+                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                    } else {
                         await previewPlayerClient.stopPreview()
-                    },
-                    .send(.delegate(.playChannel(channel)))
-                )
+                    }
+                    await send(.delegate(.playChannel(channel)))
+                }
 
             case .closeTapped:
-                return .merge(
+                return .concatenate(
                     .run { [previewPlayerClient] _ in
                         await previewPlayerClient.stopPreview()
                     },
@@ -522,12 +534,16 @@ public struct EPGTimelineFeature {
                 guard let channel = state.activePreviewChannel else { return .none }
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
-                return .merge(
-                    .run { [previewPlayerClient] _ in
+                guard let streamURL = channel.streamURL else { return .none }
+                let startsMuted = settingsClient.startMuted()
+                return .run { [previewPlayerClient, playerClient] send in
+                    if let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL) {
+                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                    } else {
                         await previewPlayerClient.stopPreview()
-                    },
-                    .send(.delegate(.playChannel(channel)))
-                )
+                    }
+                    await send(.delegate(.playChannel(channel)))
+                }
 
             case let .togglePiPPreview(channel):
                 if state.activePreviewChannel?.id == channel?.id, state.isPiPActive {

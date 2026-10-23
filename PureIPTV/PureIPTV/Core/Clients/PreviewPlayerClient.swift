@@ -33,12 +33,24 @@ public struct PreviewPlaybackStatus: Equatable, Sendable {
     }
 }
 
+@MainActor
+public struct PreviewPlayerHandoff: Sendable {
+    public let player: Player
+    public let streamURL: URL
+
+    public init(player: Player, streamURL: URL) {
+        self.player = player
+        self.streamURL = streamURL
+    }
+}
+
 // MARK: - PreviewPlayerClient (TCA)
 
 @DependencyClient
 public struct PreviewPlayerClient: Sendable {
     public var playPreview: @MainActor @Sendable (_ channel: MediaModels.Item) async throws -> Void
     public var stopPreview: @MainActor @Sendable () async -> Void
+    public var takePreviewForPromotion: @MainActor @Sendable (_ channelID: String, _ streamURL: URL) -> PreviewPlayerHandoff? = { _, _ in nil }
     public var toggleMute: @MainActor @Sendable () async -> Bool = { true }
     public var setMuted: @MainActor @Sendable (_ isMuted: Bool) async -> Void
     public var getStatus: @MainActor @Sendable () -> PreviewPlaybackStatus = { PreviewPlaybackStatus() }
@@ -113,6 +125,23 @@ extension PreviewPlayerClient: DependencyKey {
                 )
             }
 
+            @MainActor func takeForPromotion(channelID: String, streamURL: URL) -> PreviewPlayerHandoff? {
+                guard
+                    status.isPlaying,
+                    status.currentChannelID == channelID,
+                    status.currentStreamURL == streamURL,
+                    let currentPlayer = player,
+                    currentPlayer.isPlaying
+                else { return nil }
+
+                player = nil
+                status = PreviewPlaybackStatus(
+                    isPlaying: false,
+                    isMuted: status.isMuted
+                )
+                return PreviewPlayerHandoff(player: currentPlayer, streamURL: streamURL)
+            }
+
             @MainActor func setMuted(_ isMuted: Bool) {
                 status.isMuted = isMuted
                 let targetVol: Float = isMuted ? 0.0 : 0.85
@@ -140,6 +169,9 @@ extension PreviewPlayerClient: DependencyKey {
             },
             stopPreview: {
                 box.stop()
+            },
+            takePreviewForPromotion: { channelID, streamURL in
+                box.takeForPromotion(channelID: channelID, streamURL: streamURL)
             },
             toggleMute: {
                 box.toggleMute()
@@ -178,6 +210,7 @@ extension PreviewPlayerClient: DependencyKey {
                     isMuted: box.status.isMuted
                 )
             },
+            takePreviewForPromotion: { _, _ in nil },
             toggleMute: {
                 let newMute = !box.status.isMuted
                 box.status.isMuted = newMute

@@ -149,12 +149,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 ve tvOS Release Xcode build; `git diff --check`. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — Kısmi EPG yenileme ve istek nesli koruması tamamlandı.
 
-### 43. [IN_PROGRESS] Canlı Önizlemeyi Tam Ekrana Yeniden Bağlanmadan Terfi Ettir
+### 43. [DONE] Canlı Önizlemeyi Tam Ekrana Yeniden Bağlanmadan Terfi Ettir
 - **Bulgu:** IPTVX 22.3 App Store notları önizlenen kanalı tam ekrana geçirirken mümkün olduğunda yeniden bağlantıyı önlediğini ve kategori değişiminde eski preview akışını kapattığını bildiriyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
-- **İnceleme odağı:** PureIPTV’de EPG mini-preview ile ana VLC player ayrı oturum kullanıyor; preview→player terfisi mevcut native handle’ı güvenle devredebilir mi, ses/abonelik kaynaklarını doğru kapatıyor mu?
+- **Uygulama:** EPG preview aynı SwiftVLC `Player` örneğini `PlayerClient`’a devrediyor; tam ekran açılışında eş URL için yeni `play` çağrısı atlanıp mevcut playback state reconcile ediliyor. Devredilen kanal Start Muted tercihini koruyor. Önizleme aynı kanal/URL değilse normal stop-then-play fallback’i uygulanıyor; catch-up dönüşü playlist User-Agent değerini koruyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 ve tvOS Release Xcode build; `git diff --check`. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — EPG mini-preview’den aynı oynatıcıyla tam ekrana geçiş tamamlandı.
 
-### 44. [PENDING] TV Rehberinde EPG Yenileme ve Yaş Damgası
+### 44. [IN_PROGRESS] TV Rehberinde EPG Yenileme ve Yaş Damgası
 - **Bulgu:** Kullanıcılar Apple TV rehberinin hiç yüklenmemesi veya iOS cihazdaki rehberden farklı/eski içerik göstermesi sorununu bildiriyor; sağlayıcıyı silip tekrar eklemenin geçici çözüm olduğuna dair rapor da var.
 - **Kaynaklar:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
 - **İnceleme odağı:** Kullanıcıya playlist/EPG kaynağı başına son başarılı güncelleme zamanı, kısmi hata ve yalnız EPG’yi yenile eylemi sun; tam playlist silme/yeniden ekleme gerektirmesin.
