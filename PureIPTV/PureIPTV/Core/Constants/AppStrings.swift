@@ -188,6 +188,15 @@ public enum AppStrings {
         public static let jumpToNow = "Şu Ana Git".localized
         public static let returnToLive = "Canlı Yayına Dön".localized
         public static let catchUp = "Geriye Dönük".localized
+        public static func catchUpArchiveDays(_ days: Int) -> String {
+            "%lld gün arşiv".localized(Int64(days))
+        }
+
+        public static func catchUpDescription(archiveDays: Int?) -> String {
+            guard let archiveDays, archiveDays > 0 else { return catchUp }
+            return "%@ · %@".localized(catchUp, catchUpArchiveDays(archiveDays))
+        }
+
         public static let watchCatchUp = "Tekrarı İzle".localized
         public static let catchupTimelineTitle = "Arşiv Zaman Çizelgesi (Timeshift)".localized
         public static let timelineBookmarks = "Program İmleri".localized

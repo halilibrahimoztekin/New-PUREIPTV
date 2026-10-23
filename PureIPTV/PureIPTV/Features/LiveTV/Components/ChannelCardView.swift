@@ -75,7 +75,7 @@ public struct ChannelCardView: View {
                     Spacer(minLength: 4)
 
                     if channel.tvArchive == 1 {
-                        CatchUpBadge(isCompact: true)
+                        CatchUpBadge(isCompact: true, archiveDays: channel.tvArchiveDuration)
                     }
 
                     LiveBadge()

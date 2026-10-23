@@ -83,9 +83,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 35. [PENDING] Kullanıcının Sağladığı Catch-up Süresini Keşfetme
-- **Bulgu:** Kullanıcı geri bildiriminde sağlayıcının 6–7 günlük arşivine rağmen uygulamanın daha kısa geçmiş göstermesi şikâyeti var; sabit pencere yerine sağlayıcı kapasitesini görünür kılmak değerlendirilmeli.
-- **Kaynak:** https://www.reddit.com/r/appletv/comments/1hlb7nk/just_tried_swiptv_app_and_its_my_new_favorite_app/
+### 35. [DONE] Kullanıcının Sağladığı Catch-up Süresini Keşfetme
+- **Bulgu:** Xtream `tv_archive_duration` ve M3U `catchup-days` sağlayıcının gün cinsinden arşiv derinliğini taşıyor. `MediaModels.Item.tvArchiveDuration` alanı akıştan geçiriliyor ancak EPG ve kanal kartları sadece genel catch-up rozeti göstererek mevcut bilgiyi kullanıcıdan saklıyor.
+- **Canlı keşif (24 Ekim 2026):** Xtream/M3U catch-up açıklamaları kanal arşiv derinliğinin sağlayıcıdan geldiğini ve oynatıcının bunu gösterge olarak kullanabileceğini teyit ediyor. Neverlag’in ürün belgesi kanal başına “Archive · N days” görünümünü sunuyor; kullanıcılar da EPG’nin sağlayıcıdaki geçmiş günleri göstermediğini bildiriyor.
+- **Kaynaklar:** https://uniplayer.net/docs/specs/catchup/ · https://neverlag.app/archive-catch-up/ · https://www.reddit.com/r/appletv/comments/1hlb7nk/just_tried_swiptv_app_and_its_my_new_favorite_app/
+- **Uygulama:** Paylaşılan `CatchUpBadge` isteğe bağlı arşiv gününü kompakt olarak gösteriyor ve VoiceOver için tam yerelleştirilmiş arşiv ifadesi sağlıyor. Kanal kartları ve EPG satırı sağlayıcı değerini kullanıyor; EPG satırı tek erişilebilir öğe ve okunaklı 10pt metin olarak sunuluyor. Bilinmeyen/boş sürelerde mevcut genel catch-up göstergesi kalıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS Simulator ve tvOS Simulator Release compile-only Xcode build’leri exit code 0 ile tamamlandı. Projedeki mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu vardı; derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 36. [PENDING] Canlı Yayın Duraklatma ve Yerel Geri Sarma Tamponu
 - **Bulgu:** Apple TV’de canlı yayın duraklatma/geri sarma tutarsızlığı ve yerel buffer/DVR beklentisi kullanıcı şikâyetlerinde tekrar ediyor.

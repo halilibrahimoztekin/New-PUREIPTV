@@ -29,9 +29,11 @@ public struct LiveBadge: View {
 
 public struct CatchUpBadge: View {
     public var isCompact: Bool
+    public var archiveDays: Int?
 
-    public init(isCompact: Bool = false) {
+    public init(isCompact: Bool = false, archiveDays: Int? = nil) {
         self.isCompact = isCompact
+        self.archiveDays = archiveDays.flatMap { $0 > 0 ? $0 : nil }
     }
 
     public var body: some View {
@@ -40,9 +42,12 @@ public struct CatchUpBadge: View {
                 .font(.system(size: isCompact ? 8 : 9, weight: .bold))
 
             if !isCompact {
-                Text(AppStrings.Player.catchUp)
+                Text(label)
                     .font(.system(size: 9, weight: .bold))
                     .tracking(0.3)
+            } else if let archiveDays {
+                Text("\(archiveDays)d")
+                    .font(.system(size: 8, weight: .heavy, design: .rounded))
             }
         }
         .foregroundStyle(.white)
@@ -63,5 +68,10 @@ public struct CatchUpBadge: View {
                 )
         )
         .shadow(color: Color(hex: "#AF52DE").opacity(0.4), radius: 3)
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        AppStrings.Player.catchUpDescription(archiveDays: archiveDays)
     }
 }

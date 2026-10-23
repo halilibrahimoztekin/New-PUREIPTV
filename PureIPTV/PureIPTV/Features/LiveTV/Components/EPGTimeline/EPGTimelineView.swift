@@ -588,8 +588,16 @@ public struct EPGTimelineView: View {
                                 .font(.system(size: 8, weight: .bold))
                             Text(AppStrings.Player.catchUp)
                                 .font(.system(size: 8, weight: .bold))
+                            if let days = channel.tvArchiveDuration, days > 0 {
+                                Text(AppStrings.Player.catchUpArchiveDays(days))
+                                    .font(.system(size: 10, weight: .bold))
+                            }
                         }
                         .foregroundColor(.purple)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(
+                            AppStrings.Player.catchUpDescription(archiveDays: channel.tvArchiveDuration)
+                        )
                     }
                 }
 
