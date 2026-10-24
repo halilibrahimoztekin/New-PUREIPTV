@@ -12,6 +12,7 @@
     public struct LiveTVView_tvOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
+        @State private var isSmartGroupManagerPresented = false
 
         @FocusState private var focusedCategory: String?
         @FocusState private var focusedChannelID: String?
@@ -65,11 +66,17 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .onDisappear {
+                store.send(.onDisappear)
+            }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
             }
             .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
                 CategoryManagementView(store: store)
+            }
+            .sheet(isPresented: $isSmartGroupManagerPresented) {
+                SmartChannelGroupManagementView(store: store)
             }
             .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
                 EPGTimelineView(store: store)
@@ -102,6 +109,17 @@
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
                             HStack(spacing: 8) {
+                                Button {
+                                    isSmartGroupManagerPresented = true
+                                } label: {
+                                    Image(systemName: "square.stack.3d.up")
+                                        .font(.system(size: 18))
+                                        .padding(8)
+                                }
+                                .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel(AppStrings.LiveTV.smartGroups)
+                                .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+
                                 Button {
                                     store.send(.editCategoriesTapped)
                                 } label: {
@@ -144,6 +162,18 @@
                             }
                             .frame(height: 280)
                         } else {
+                            ForEach(store.smartChannelGroups) { group in
+                                TVCategoryRow(
+                                    category: MediaModels.Category(id: "smart-group:\(group.id)", name: group.name),
+                                    isSelected: store.selectedSmartGroupID == group.id,
+                                    isLocked: false
+                                ) {
+                                    store.send(.smartGroupSelected(group.id))
+                                }
+                                .padding(.horizontal, 16)
+                                .focused($focusedCategory, equals: "smart-group:\(group.id)")
+                                .id("smart-group:\(group.id)")
+                            }
                             ForEach(store.categories) { category in
                                 TVCategoryRow(
                                     category: category,
@@ -168,13 +198,25 @@
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
                     }
                 }
+                .onChange(of: store.selectedSmartGroupID) { _, newGroupID in
+                    if let newGroupID {
+                        let focusID = "smart-group:\(newGroupID)"
+                        focusedCategory = focusID
+                        withAnimation { catProxy.scrollTo(focusID, anchor: .center) }
+                    }
+                }
                 .onChange(of: focusedCategory) { _, newCatID in
-                    if let newCatID {
+                    if let newCatID, !newCatID.hasPrefix("smart-group:") {
                         TVFocusMemory.shared.lastSelectedLiveCategoryID = newCatID
                     }
                 }
                 .onAppear {
-                    let targetCatID = store.selectedCategoryID ?? TVFocusMemory.shared.lastSelectedLiveCategoryID ?? store.categories.first?.id
+                    let targetCatID = store.selectedSmartGroupID.map { "smart-group:\($0)" }
+                        ?? store.selectedCategoryID
+                        ?? TVFocusMemory.shared.lastSelectedLiveCategoryID.flatMap { remembered in
+                            store.categories.contains(where: { $0.id == remembered }) ? remembered : nil
+                        }
+                        ?? store.categories.first?.id
                     if let targetCatID {
                         focusedCategory = targetCatID
                         withAnimation { catProxy.scrollTo(targetCatID, anchor: .center) }

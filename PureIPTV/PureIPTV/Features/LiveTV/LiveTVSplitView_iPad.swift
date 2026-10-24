@@ -8,6 +8,7 @@ import SwiftUI
 
         @State private var categorySearchQuery: String = ""
         @State private var channelSearchQuery: String = ""
+        @State private var isSmartGroupManagerPresented = false
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -37,6 +38,9 @@ import SwiftUI
                 Divider().background(Color.white.opacity(0.15))
                 detailView
             }
+            .sheet(isPresented: $isSmartGroupManagerPresented) {
+                SmartChannelGroupManagementView(store: store)
+            }
         }
 
         // MARK: - Column 1: Category Sidebar
@@ -48,6 +52,14 @@ import SwiftUI
                         .font(.title3.bold())
                         .foregroundColor(.white)
                     Spacer()
+                    Button {
+                        isSmartGroupManagerPresented = true
+                    } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppStrings.LiveTV.smartGroups)
+                    .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
                     Text("\(store.categories.count)")
                         .font(.caption.bold())
                         .foregroundColor(.white.opacity(0.6))
@@ -84,6 +96,27 @@ import SwiftUI
 
                 ScrollView {
                     LazyVStack(spacing: 4) {
+                        ForEach(store.smartChannelGroups) { group in
+                            let isSelected = store.selectedSmartGroupID == group.id
+                            Button {
+                                store.send(.smartGroupSelected(group.id))
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isSelected ? "square.stack.3d.up.fill" : "square.stack.3d.up")
+                                        .foregroundColor(isSelected ? .accentColor : .white.opacity(0.7))
+                                    Text(group.name)
+                                        .font(.subheadline.weight(isSelected ? .bold : .regular))
+                                        .foregroundColor(isSelected ? .white : .white.opacity(0.85))
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(isSelected ? Color.accentColor.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+                        }
                         ForEach(filteredCategories) { category in
                             let isSelected = store.selectedCategoryID == category.id
                             Button {

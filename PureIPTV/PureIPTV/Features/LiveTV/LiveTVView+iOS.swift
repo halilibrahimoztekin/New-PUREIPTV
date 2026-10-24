@@ -10,6 +10,7 @@
     public struct LiveTVView_iOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
+        @State private var isSmartGroupManagerPresented = false
 
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
@@ -42,8 +43,14 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .onDisappear {
+                store.send(.onDisappear)
+            }
             .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
                 CategoryManagementView(store: store)
+            }
+            .sheet(isPresented: $isSmartGroupManagerPresented) {
+                SmartChannelGroupManagementView(store: store)
             }
             .sheet(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
                 EPGGuideView_iOS(store: store)
@@ -72,6 +79,19 @@
                         Spacer()
 
                         HStack(spacing: 10) {
+                            Button {
+                                isSmartGroupManagerPresented = true
+                            } label: {
+                                Image(systemName: "square.stack.3d.up")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(AppStrings.LiveTV.smartGroups)
+                            .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+
                             Button {
                                 HapticManager.shared.trigger(.light)
                                 store.send(.openMultiViewTapped)
@@ -105,6 +125,8 @@
                         .padding(.bottom, 10)
 
                     if store.selectedTabMode == .channels {
+                        smartGroupBar
+                            .padding(.bottom, 8)
                         // ── Category horizontal scroll ─────────────────────
                         categoryBar
                             .padding(.bottom, 12)
@@ -188,6 +210,23 @@
                     }
                 }
                 .padding(.horizontal, 16)
+            }
+        }
+
+        @ViewBuilder
+        private var smartGroupBar: some View {
+            if !store.smartChannelGroups.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(store.smartChannelGroups) { group in
+                            CategoryPill(name: group.name, isSelected: store.selectedSmartGroupID == group.id) {
+                                store.send(.smartGroupSelected(group.id))
+                            }
+                            .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
             }
         }
 

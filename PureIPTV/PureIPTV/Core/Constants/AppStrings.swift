@@ -14,6 +14,7 @@ public enum AppStrings {
         public static let loading = "Yükleniyor...".localized
         public static let loadingAlt = "Yükleniyor…".localized
         public static let done = "Bitti".localized
+        public static let edit = "Düzenle".localized
         public static let close = "Kapat".localized
         public static let add = "Ekle".localized
         public static let create = "Oluştur".localized
@@ -85,6 +86,18 @@ public enum AppStrings {
         public static let channelLogoURL = "Logo URL’si".localized
         public static let channelLogoURLHint = "HTTP veya HTTPS adresi girin.".localized
         public static let invalidChannelLogoURL = "Geçerli bir HTTP veya HTTPS logo adresi girin.".localized
+        public static let smartGroups = "Akıllı Gruplar".localized
+        public static let newSmartGroup = "Yeni Akıllı Grup".localized
+        public static let editSmartGroup = "Akıllı Grubu Düzenle".localized
+        public static let smartGroupName = "Grup Adı".localized
+        public static let smartGroupPrivacyHint = "Gruplar yalnızca seçili profil ve playlist için kaydedilir. Kanallar seçilen playlist kategorilerinden oluşturulur.".localized
+        public static let unavailableSmartGroupCategory = "Artık kullanılmayan kategori".localized
+        public static let selected = "Seçili".localized
+        public static let notSelected = "Seçili değil".localized
+        public static func smartGroupCategoryCount(_ count: Int) -> String {
+            String(format: "%d kategori".localized, count)
+        }
+
         public static let resetChannelLogo = "Kaynak logosuna dön".localized
         public static let nowPlayingBadge = "OYNATILIYOR".localized
         public static let allChannels = "Tümü".localized
