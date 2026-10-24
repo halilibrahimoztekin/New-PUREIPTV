@@ -45,6 +45,10 @@ public struct DashboardFeature {
         public var featuredSeries: [MediaModels.Item] = []
         public var recommendedVODs: [MediaModels.Item] = []
         public var recommendationReasons: [String: SmartRecommendationEngine.Reason] = [:]
+        public var actorRecommendationCollections: [ActorRecommendationEngine.Collection] = []
+        public var actorRecommendationMovieCandidates: [MediaModels.Item] = []
+        public var actorRecommendationSeriesCandidates: [MediaModels.Item] = []
+        public var activeActorRecommendationRefreshID: UUID?
         public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
@@ -82,7 +86,8 @@ public struct DashboardFeature {
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
+        case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection])
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case epgEventsLoaded(playlistID: UUID?, refreshID: UUID, events: [EPGEvent], succeeded: Bool)
         case channelSelected(MediaModels.Item)
@@ -111,18 +116,21 @@ public struct DashboardFeature {
     private nonisolated enum CancelID: Hashable, Sendable {
         case watchHistoryObserver
         case remoteData
+        case actorRecommendations
     }
 
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.tmdbClient) var tmdbClient
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let playlistRepository = playlistRepository
         let settingsClient = settingsClient
+        let tmdbClient = tmdbClient
 
         Reduce { state, action in
             switch action {
@@ -135,6 +143,10 @@ public struct DashboardFeature {
                 let playlistChanged = state.activePlaylistID != playlistID
                 if playlistChanged {
                     state.exploreCollections = []
+                    state.actorRecommendationCollections = []
+                    state.actorRecommendationMovieCandidates = []
+                    state.actorRecommendationSeriesCandidates = []
+                    state.activeActorRecommendationRefreshID = nil
                     state.epgEvents = []
                     state.hasLoadedEPGEvents = false
                     state.epgCandidateChannels = []
@@ -149,6 +161,10 @@ public struct DashboardFeature {
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
                     state.exploreCollections = []
+                    state.actorRecommendationCollections = []
+                    state.actorRecommendationMovieCandidates = []
+                    state.actorRecommendationSeriesCandidates = []
+                    state.activeActorRecommendationRefreshID = nil
                     state.epgEvents = state.epgEvents.filter {
                         !currentAdultHidden || (!isAdult($0.channel.title) && !isAdult($0.program.title))
                     }
@@ -243,8 +259,10 @@ public struct DashboardFeature {
                 }
                 state.activeRefreshID = nil
                 state.activeEPGRefreshID = nil
+                state.activeActorRecommendationRefreshID = nil
                 return .merge(
                     .cancel(id: CancelID.remoteData),
+                    .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.watchHistoryObserver)
                 )
 
@@ -262,7 +280,38 @@ public struct DashboardFeature {
                 state.favoriteItems = favorites
                 state.watchHistoryItems = history
                 Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
-                return .none
+                guard
+                    state.hasLoadedRemoteData,
+                    let playlistID = state.activePlaylistID,
+                    let hideAdult = state.lastAdultHidden
+                else { return .none }
+                let refreshID = UUID()
+                state.activeActorRecommendationRefreshID = refreshID
+                let movies = state.actorRecommendationMovieCandidates
+                let series = state.actorRecommendationSeriesCandidates
+                let isAdult = settingsClient.isAdultContent
+                let eligibleHistory = hideAdult
+                    ? history.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                    : history
+                return .run { send in
+                    let safeMovies = hideAdult ? movies.filter { !isAdult($0.title) } : movies
+                    let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
+                    let collections = await ActorRecommendationEngine.collections(
+                        history: eligibleHistory,
+                        playlistID: playlistID,
+                        movies: safeMovies,
+                        series: safeSeries,
+                        tmdbClient: tmdbClient
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.actorRecommendationsLoaded(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: refreshID,
+                        collections: collections
+                    ))
+                }
+                .cancellable(id: CancelID.actorRecommendations, cancelInFlight: true)
 
             case let .loadFeaturedData(config, playlistID, hideAdult, loadEPGEvents, refreshID):
                 guard
@@ -270,6 +319,7 @@ public struct DashboardFeature {
                     state.activeRefreshID == refreshID
                 else { return .none }
                 state.activeEPGRefreshID = loadEPGEvents ? refreshID : nil
+                state.activeActorRecommendationRefreshID = refreshID
                 if loadEPGEvents {
                     state.hasLoadedEPGEvents = false
                 } else {
@@ -283,7 +333,7 @@ public struct DashboardFeature {
                 let isAdult = settingsClient.isAdultContent
                 let movieCollectionPrefix = "Filmler".localized
                 let seriesCollectionPrefix = "Diziler".localized
-                return .run { send in
+                let remoteEffect = Effect<Action>.run { send in
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
                     async let allVODs = try? iptvClient.fetchVODs(config, nil)
                     async let allSeries = try? iptvClient.fetchSeries(config, nil)
@@ -312,6 +362,15 @@ public struct DashboardFeature {
                     var vodExploreCollections: [ExploreCollection]?
                     var seriesExploreCollections: [ExploreCollection]?
                     var yearExploreCollections: [ExploreCollection]?
+                    let actorMovieCandidates = fetchedVODs.map {
+                        hideAdult ? $0.filter { !isAdult($0.title) } : $0
+                    } ?? []
+                    let actorSeriesCandidates = fetchedSeries.map {
+                        hideAdult ? $0.filter { !isAdult($0.title) } : $0
+                    } ?? []
+                    let eligibleHistory = hideAdult
+                        ? history.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                        : history
 
                     if let fetchedChannels {
                         let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
@@ -387,6 +446,8 @@ public struct DashboardFeature {
                             epgSourceLoaded: fetchedChannels != nil,
                             vods: vods,
                             series: series,
+                            actorMovieCandidates: actorMovieCandidates,
+                            actorSeriesCandidates: actorSeriesCandidates,
                             recommendations: recommendations,
                             recommendationReasons: recommendationReasons,
                             vodExploreCollections: vodExploreCollections,
@@ -394,27 +455,59 @@ public struct DashboardFeature {
                             yearExploreCollections: yearExploreCollections
                         ))
                     }
-                    guard loadEPGEvents, !Task.isCancelled else { return }
-                    guard fetchedChannels != nil else {
+                    if loadEPGEvents {
+                        guard !Task.isCancelled else { return }
+                        guard fetchedChannels != nil else {
+                            await send(.epgEventsLoaded(
+                                playlistID: playlistID,
+                                refreshID: refreshID,
+                                events: [],
+                                succeeded: false
+                            ))
+                            // The actor recommendation shelves use the VOD/series
+                            // catalogues and may still succeed without live data.
+                            let actorCollections = await ActorRecommendationEngine.collections(
+                                history: eligibleHistory,
+                                playlistID: playlistID,
+                                movies: actorMovieCandidates,
+                                series: actorSeriesCandidates,
+                                tmdbClient: tmdbClient
+                            )
+                            guard !Task.isCancelled else { return }
+                            await send(.actorRecommendationsLoaded(
+                                playlistID: playlistID,
+                                hideAdult: hideAdult,
+                                refreshID: refreshID,
+                                collections: actorCollections
+                            ))
+                            return
+                        }
+                        let result = await Self.fetchEPGEvents(
+                            config: config,
+                            channels: epgCandidateChannels,
+                            iptvClient: iptvClient
+                        )
+                        guard !Task.isCancelled else { return }
                         await send(.epgEventsLoaded(
                             playlistID: playlistID,
                             refreshID: refreshID,
-                            events: [],
-                            succeeded: false
+                            events: result.events,
+                            succeeded: result.succeeded
                         ))
-                        return
                     }
-                    let result = await Self.fetchEPGEvents(
-                        config: config,
-                        channels: epgCandidateChannels,
-                        iptvClient: iptvClient
+                    let actorCollections = await ActorRecommendationEngine.collections(
+                        history: eligibleHistory,
+                        playlistID: playlistID,
+                        movies: actorMovieCandidates,
+                        series: actorSeriesCandidates,
+                        tmdbClient: tmdbClient
                     )
                     guard !Task.isCancelled else { return }
-                    await send(.epgEventsLoaded(
+                    await send(.actorRecommendationsLoaded(
                         playlistID: playlistID,
+                        hideAdult: hideAdult,
                         refreshID: refreshID,
-                        events: result.events,
-                        succeeded: result.succeeded
+                        collections: actorCollections
                     ))
                 } catch: { error, send in
                     await send(.dataFailed(
@@ -424,7 +517,11 @@ public struct DashboardFeature {
                         error
                     ))
                 }
-                .cancellable(id: CancelID.remoteData, cancelInFlight: true)
+                let cancellableRemoteEffect = remoteEffect.cancellable(
+                    id: CancelID.remoteData,
+                    cancelInFlight: true
+                )
+                return .concatenate(.cancel(id: CancelID.actorRecommendations), cancellableRemoteEffect)
 
             case let .loadEPGEvents(config, playlistID, refreshID, channels):
                 guard
@@ -459,7 +556,7 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
@@ -481,6 +578,8 @@ public struct DashboardFeature {
                 if let series {
                     state.featuredSeries = series
                 }
+                state.actorRecommendationMovieCandidates = actorMovieCandidates
+                state.actorRecommendationSeriesCandidates = actorSeriesCandidates
                 if let recommendations {
                     state.recommendedVODs = recommendations
                 }
@@ -517,6 +616,16 @@ public struct DashboardFeature {
                     )
                 }
 
+            case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections):
+                guard
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult,
+                    state.activeActorRecommendationRefreshID == refreshID
+                else { return .none }
+                state.actorRecommendationCollections = collections
+                state.activeActorRecommendationRefreshID = nil
+                return .none
+
             case let .dataFailed(playlistID, hideAdult, refreshID, error):
                 guard
                     state.activePlaylistID == playlistID,
@@ -526,6 +635,7 @@ public struct DashboardFeature {
                 state.isLoading = false
                 state.activeRefreshID = nil
                 state.activeEPGRefreshID = nil
+                state.activeActorRecommendationRefreshID = nil
                 state.hasLoadedEPGEvents = false
                 state.errorMessage = state.featuredChannels.isEmpty
                     && state.featuredVODs.isEmpty

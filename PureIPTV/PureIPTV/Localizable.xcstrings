@@ -21770,6 +21770,136 @@
           }
         }
       }
+    },
+    "Ortak oyuncu: %@ • İzlediğin: %@ • %@" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الممثل المشترك: %@ • شاهدت: %@ • %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemeinsamer Darsteller: %@ • Gesehen: %@ • %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared actor: %@ • Watched: %@ • %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actor compartido: %@ • Viste: %@ • %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acteur commun : %@ • Vu dans : %@ • %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "साझा अभिनेता: %@ • आपने देखा: %@ • %@"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktor yang sama: %@ • Ditonton: %@ • %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attore in comune: %@ • Hai visto: %@ • %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共通の出演者: %@ • 視聴済み: %@ • %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공통 출연 배우: %@ • 시청한 작품: %@ • %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gedeelde acteur: %@ • Gezien: %@ • %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wspólny aktor: %@ • Obejrzano: %@ • %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ator em comum: %@ • Você assistiu: %@ • %@"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ator em comum: %@ • Viu: %@ • %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Общий актер: %@ • Вы смотрели: %@ • %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemensam skådespelare: %@ • Du såg: %@ • %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "นักแสดงร่วม: %@ • คุณรับชม: %@ • %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ortak oyuncu: %@ • İzlediğin: %@ • %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diễn viên chung: %@ • Đã xem: %@ • %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共同演员：%@ • 看过：%@ • %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共同演員：%@ • 看過：%@ • %@"
+          }
+        }
+      }
     }
 
   },

@@ -822,15 +822,17 @@ public struct PlayerFeature {
                         }
                     #endif
                     if currentSecs > 10 {
-                        let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod"
+                        let type = item.seriesTitle == nil ? "vod" : "episode"
                         let historyItem = WatchHistoryItem(
                             id: item.id,
                             type: type,
                             title: item.title,
+                            seriesTitle: item.seriesTitle,
                             coverURL: item.coverURL?.absoluteString,
                             streamURL: item.streamURL.absoluteString,
                             progress: currentSecs,
                             duration: totalSecs,
+                            playlistID: item.config?.playlistID,
                             seriesID: item.seriesID
                         )
                         // Keep completed progress so detail screens can expose
@@ -2621,15 +2623,17 @@ public struct PlayerFeature {
                 .run { send in
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
-                        let type = item.title.contains("S") && item.title.contains("E") ? "episode" : "vod" // Basic detection
+                        let type = item.seriesTitle == nil ? "vod" : "episode"
                         let historyItem = WatchHistoryItem(
                             id: item.id,
                             type: type,
                             title: item.title,
+                            seriesTitle: item.seriesTitle,
                             coverURL: item.coverURL?.absoluteString,
                             streamURL: item.streamURL.absoluteString,
                             progress: currentSecs,
                             duration: totalSecs,
+                            playlistID: item.config?.playlistID,
                             seriesID: item.seriesID
                         )
                         // Retain completed progress as the watched marker;

@@ -157,6 +157,32 @@ public struct TMDBPersonDetailsDTO: Codable, Equatable, Sendable {
     }
 }
 
+/// Combined film and television credits for an actor, used only to intersect
+/// known credits with the active provider catalogue.
+public struct TMDBPersonCreditsDTO: Codable, Equatable, Sendable {
+    public let cast: [TMDBPersonCreditDTO]?
+}
+
+public struct TMDBPersonCreditDTO: Codable, Equatable, Sendable {
+    public let id: Int
+    public let mediaType: String?
+    public let title: String?
+    public let name: String?
+    public let originalTitle: String?
+    public let originalName: String?
+    public let releaseDate: String?
+    public let firstAirDate: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, name
+        case mediaType = "media_type"
+        case originalTitle = "original_title"
+        case originalName = "original_name"
+        case releaseDate = "release_date"
+        case firstAirDate = "first_air_date"
+    }
+}
+
 public struct TMDBTVDetailsDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String?

@@ -8,6 +8,7 @@ public struct TMDBClient {
     public var searchTV: @Sendable (_ query: String) async throws -> TMDBSearchResponseDTO // Reusing search response DTO, we can add a new one if fields differ significantly, but TMDB search tv returns similar structure
     public var fetchTVDetails: @Sendable (_ tvID: Int) async throws -> TMDBTVDetailsDTO
     public var fetchPersonDetails: @Sendable (_ personID: Int) async throws -> TMDBPersonDetailsDTO
+    public var fetchPersonCombinedCredits: @Sendable (_ personID: Int) async throws -> TMDBPersonCreditsDTO
 }
 
 extension TMDBClient: DependencyKey {
@@ -87,6 +88,19 @@ extension TMDBClient: DependencyKey {
                 guard let url = components.url else { throw NetworkError.invalidURL }
                 let data = try await networkClient.fetchData(url: url)
                 return try await MainActor.run { try JSONDecoder().decode(TMDBPersonDetailsDTO.self, from: data) }
+            },
+            fetchPersonCombinedCredits: { personID in
+                guard var components = URLComponents(string: "\(baseURLString)/person/\(personID)/combined_credits") else {
+                    throw NetworkError.invalidURL
+                }
+                components.queryItems = [
+                    URLQueryItem(name: "api_key", value: apiKey),
+                    URLQueryItem(name: "language", value: "tr-TR"),
+                ]
+
+                guard let url = components.url else { throw NetworkError.invalidURL }
+                let data = try await networkClient.fetchData(url: url)
+                return try JSONDecoder().decode(TMDBPersonCreditsDTO.self, from: data)
             }
         )
     }()

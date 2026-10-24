@@ -194,6 +194,23 @@
                         }
                     }
                 }
+                ForEach(store.actorRecommendationCollections) { collection in
+                    let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
+                                       collection.actorName,
+                                       collection.sourceTitle,
+                                       collection.kind.title)
+                    TVShelfSection(title: title) {
+                        ForEach(collection.items) { item in
+                            if collection.kind == .movie {
+                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                    .frame(width: 220)
+                            } else {
+                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                    .frame(width: 220)
+                            }
+                        }
+                    }
+                }
             case .recentlyAddedVOD:
                 if !newMovieItems.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.newMovies) {

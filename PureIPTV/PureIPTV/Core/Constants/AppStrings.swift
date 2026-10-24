@@ -485,6 +485,7 @@ public enum AppStrings {
         public static let newMovies = "Yeni Eklenen Filmler".localized
         public static let newSeries = "Yeni Eklenen Diziler".localized
         public static let recommendedForYou = "Sana Özel Öneriler".localized
+        public static let actorRecommendationTitle = "Ortak oyuncu: %@ • İzlediğin: %@ • %@".localized
         public static let hdBadge = "HD".localized
         public static let movieBadge = "Film".localized
         public static let details = "Detaylar".localized

@@ -299,13 +299,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` ve String Catalog JSON doğrulaması başarılı. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 60. [IN_PROGRESS] İzleme Geçmişinden Oyuncu Tabanlı Öneriler
+### 60. [DONE] İzleme Geçmişinden Oyuncu Tabanlı Öneriler
 - **Bulgu:** IPTVX, izlenen filmlerin oyuncularından kitaplıktaki başka film ve dizilere ayrı keşif yolları oluşturuyor.
 - **Canlı keşif:** IPTVX 25 newsroom, izleme geçmişindeki oyunculardan “More movies or shows with an actor” önerilerini ayrı film/dizi yolları olarak doğruluyor; öneriler kullanıcı playlist’inde mevcut olanlarla sınırlandırılıyor.
 - **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://iptvx.app/
 - **Kod taraması:** Watch history modeli playlistID, seriesTitle ve seriesID alanlarını desteklese de Player kayıt yolları playlistID/seriesTitle yazmıyor ve içerik türünü başlıktaki “S”/“E” benzeri sezgisel kontrollerle çıkarıyor. TMDB detail DTO oyuncu kimlik/adı taşıyor; fakat provider kataloğunda TMDB kimliği/oyuncu tutulmuyor. Tüm katalog için detay isteği uygun değil.
 - **Kapsam planı:** Önce Player kayıtlarını gerçek playlist kimliği ve VOD/dizi türüyle yaz; sonraki aşamada aktif playlist’in az sayıda son VOD/dizi geçmişini TMDB’de çözümle, sınırlı oyuncu kredisi al, sonuçları mevcut provider kataloğuyla başlık/yıl doğrulaması üzerinden yerelde kesiştir. İzlenmiş/tamamlanmış, yinelenen ve yaş filtresi dışı öğeleri çıkar; yalnız eşleşme varsa ayrı film/dizi rafı göster. İstekleri sınırla, cache’le ve playlist değişiminde iptal et. Belirsiz TMDB eşleşmelerini sessizce atla.
 - **Risk:** Eski geçmiş kayıtları playlist bağlamı ve güvenilir tür bilgisi içermeyebilir; bu kayıtlar kişisel aktör önerisi için kullanılmamalı. Eşleştirme için içerik başlığı ve varsa yıl doğrulaması zorunlu.
+- **Uygulama:** Player geçmişi artık playlistID, seriesTitle ve gerçek vod/episode türünü kaydediyor. Dashboard son 3 aktif-playlist başlığını güvenli TMDB eşleşmesiyle çözüyor; en fazla 6 oyuncu kredisi isteyip bulunanları tam yerel katalogla kesiştiriyor. İzlenenler, yetişkin içerik filtresindeki kaynak ve adaylar eleniyor; sınırlı raflar iOS/tvOS’ta gösteriliyor. Bellek cache’i 24 saat ve 200 kayıtla sınırlı. Geçmiş değişimi tam katalog üzerinden yeniden hesaplanıyor; playlist/tercih değişimi ve ekran kapanışında istekler iptal ediliyor.
+- **PR Reviewer:** İlk incelemede yetişkin başlık sızıntısı ve 10 öğelik vitrin kataloğuyla yeniden hesaplama düzeltildi; kredi JSON çözümlemesi ana aktör dışına alındı. İkinci inceleme `[APPROVED]`; iptal ve yeni yükleme sıralaması `Effect.concatenate` ile garanti edildi.
+- **Doğrulama:** iPhone 17 hedefi ve tvOS Release Xcode build’leri exit code 0 ile tamamlandı; `git diff --check` ve `Localizable.xcstrings` JSON doğrulaması başarılı. Kullanıcı talimatı gereği yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca Xcode build’leri alındı.
 
 ### 61. [PENDING] En Çok İzlenen Oyuncular Koleksiyonu
 - **Bulgu:** IPTVX For You, oyuncu portrelerini izleme davranışına göre sıralı bir giriş noktası olarak kullanıyor; geçmiş yoksa popüler aktörlerle başlıyor.
