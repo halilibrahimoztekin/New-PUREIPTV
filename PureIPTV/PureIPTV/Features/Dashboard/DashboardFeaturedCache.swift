@@ -9,6 +9,7 @@ enum DashboardFeaturedCache {
         let vods: [Item]
         let series: [Item]
         let recommendations: [Item]
+        let recommendationReasons: [String: String]?
     }
 
     struct Item: Codable, Sendable {
@@ -75,14 +76,16 @@ enum DashboardFeaturedCache {
         channels: [MediaModels.Item],
         vods: [MediaModels.Item],
         series: [MediaModels.Item],
-        recommendations: [MediaModels.Item]
+        recommendations: [MediaModels.Item],
+        recommendationReasons: [String: String] = [:]
     ) {
         guard let playlistID else { return }
         let snapshot = Snapshot(
             channels: channels.map(Item.init),
             vods: vods.map(Item.init),
             series: series.map(Item.init),
-            recommendations: recommendations.map(Item.init)
+            recommendations: recommendations.map(Item.init),
+            recommendationReasons: recommendationReasons
         )
         guard let data = try? JSONEncoder().encode(snapshot),
               let url = fileURL(playlistID: playlistID, hideAdult: hideAdult)

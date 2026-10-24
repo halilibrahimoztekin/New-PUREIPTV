@@ -151,8 +151,16 @@
             case .recommendations:
                 if !store.recommendedVODs.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
-                        VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
-                            .frame(width: 140)
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                            if let reason = store.recommendationReasons[vod.id] {
+                                Text(reason.title)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(width: 140, alignment: .leading)
                     }
                 }
             case .recentlyAddedVOD:

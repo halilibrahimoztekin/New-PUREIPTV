@@ -168,20 +168,29 @@
                 if !store.recommendedVODs.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
                         ForEach(store.recommendedVODs) { vod in
-                            TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
-                                .frame(width: 220)
-                                .contextMenu {
-                                    Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
-                                        Label(
-                                            store.favoriteIDs.contains(vod.id)
-                                                ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                            systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
-                                        )
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                                    .frame(width: 220)
+                                    .contextMenu {
+                                        Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
+                                            Label(
+                                                store.favoriteIDs.contains(vod.id)
+                                                    ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                                systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
+                                            )
+                                        }
+                                        Button { store.send(.vodSelected(vod)) } label: {
+                                            Label("Detayları Gör", systemImage: "info.circle")
+                                        }
                                     }
-                                    Button { store.send(.vodSelected(vod)) } label: {
-                                        Label("Detayları Gör", systemImage: "info.circle")
-                                    }
+                                if let reason = store.recommendationReasons[vod.id] {
+                                    Text(reason.title)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.78))
+                                        .lineLimit(1)
                                 }
+                            }
+                            .frame(width: 220, alignment: .leading)
                         }
                     }
                 }

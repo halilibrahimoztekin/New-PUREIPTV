@@ -9,144 +9,187 @@ import Foundation
 /// - Deduplication against completed movies (watched >= 85%)
 /// - Catalog Diversity (prevents single-category saturation)
 public enum SmartRecommendationEngine: Sendable {
-    /// Generates tailored VOD recommendations.
-    public static func recommendVODs(
+    public enum Reason: String, Codable, Sendable {
+        case watchHistory
+        case favorites
+        case highlyRated
+        case recentlyAdded
+
+        public var title: String {
+            switch self {
+            case .watchHistory: "İzleme geçmişine göre".localized
+            case .favorites: "Favorilerine göre".localized
+            case .highlyRated: "Yüksek puanlı".localized
+            case .recentlyAdded: "Yeni eklenen".localized
+            }
+        }
+    }
+
+    public struct Recommendation: Equatable, Sendable, Identifiable {
+        public let item: MediaModels.Item
+        public let reason: Reason?
+
+        public nonisolated var id: String {
+            item.id
+        }
+
+        public nonisolated init(item: MediaModels.Item, reason: Reason?) {
+            self.item = item
+            self.reason = reason
+        }
+    }
+
+    /// Generates a concise explanation alongside each item, based on the scoring signal that actually contributed.
+    public nonisolated static func recommendations(
         from candidates: [MediaModels.Item],
         history: [WatchHistoryItem],
         favorites: [FavoriteItem],
         limit: Int = 14
-    ) -> [MediaModels.Item] {
-        guard !candidates.isEmpty else { return [] }
+    ) -> [Recommendation] {
+        var candidateIDs = Set<String>()
+        let uniqueCandidates = candidates.filter { candidateIDs.insert($0.id).inserted }
+        guard !uniqueCandidates.isEmpty else { return [] }
 
-        // 1. Calculate Category Affinity Scores
-        var categoryScores: [String: Double] = [:]
+        var historyCategoryScores: [String: Double] = [:]
+        var favoriteCategoryScores: [String: Double] = [:]
         var watchedIDs = Set<String>()
         var completedIDs = Set<String>()
-
         let now = Date()
+        let candidatesByID = Dictionary(uniqueCandidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
-        for item in history {
+        for (index, item) in history.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return []
+            }
             watchedIDs.insert(item.id)
-
-            // Calculate watch completion ratio
             let ratio: Double = if item.duration > 0 {
                 min(1.0, max(0.0, item.progress / item.duration))
             } else {
                 0.5
             }
-
-            // If watched >= 85%, mark as completed to avoid recommending the same movie again
             if ratio >= 0.85 {
                 completedIDs.insert(item.id)
             }
-
-            // Recency decay: items watched in the last 7 days have higher affinity weight
             let daysSinceWatch = max(1.0, now.timeIntervalSince(item.lastWatchedAt) / 86400.0)
             let recencyWeight = max(0.4, 1.0 / (1.0 + (daysSinceWatch * 0.1)))
-
-            // Find matching VOD category if present
-            if let matchingCandidate = candidates.first(where: { $0.id == item.id }) {
-                let catID = matchingCandidate.categoryID
+            if let matchingCandidate = candidatesByID[item.id] {
                 let watchWeight = ratio > 0.5 ? 3.0 : 1.5
-                categoryScores[catID, default: 0.0] += (watchWeight * recencyWeight)
+                historyCategoryScores[matchingCandidate.categoryID, default: 0.0] += watchWeight * recencyWeight
             }
         }
 
-        // Add Favorite affinities
-        for fav in favorites where fav.type.lowercased() == "vod" {
-            if let matchingCandidate = candidates.first(where: { $0.id == fav.id }) {
-                let catID = matchingCandidate.categoryID
-                categoryScores[catID, default: 0.0] += 2.5
+        for (index, favorite) in favorites.enumerated() where favorite.type.lowercased() == "vod" {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return []
+            }
+            if let matchingCandidate = candidatesByID[favorite.id] {
+                favoriteCategoryScores[matchingCandidate.categoryID, default: 0.0] += 2.5
             }
         }
 
-        // 2. Filter out already completed movies
-        let availablePool = candidates.filter { !completedIDs.contains($0.id) }
-
-        // If user has zero history and zero favorites, recommend top-rated & newest items with diversity
-        if categoryScores.isEmpty {
-            return topRatedDiverseVODs(from: availablePool, limit: limit)
+        let availablePool = uniqueCandidates.filter { !completedIDs.contains($0.id) }
+        if historyCategoryScores.isEmpty, favoriteCategoryScores.isEmpty {
+            return topRatedDiverseRecommendations(from: availablePool, limit: limit)
         }
 
-        // 3. Score candidates based on Category Affinity, Rating, and Freshness
         struct ScoredItem {
-            let item: MediaModels.Item
+            let recommendation: Recommendation
             let score: Double
         }
 
         var scoredItems: [ScoredItem] = []
-
-        for candidate in availablePool {
-            var itemScore = 0.0
-
-            // Category match bonus
-            let catScore = categoryScores[candidate.categoryID] ?? 0.0
-            itemScore += (catScore * 4.0)
-
-            // Rating score (0.0 ... 10.0 scale)
-            if let rating = candidate.rating, rating > 0 {
-                itemScore += (rating * 1.5)
-                if rating >= 7.5 {
-                    itemScore += 3.0 // High quality critically acclaimed bonus
-                }
-            } else {
-                itemScore += 4.5 // Baseline for unrated
+        for (index, candidate) in availablePool.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return []
             }
-
-            // Freshness / Recency score
+            let historyAffinity = historyCategoryScores[candidate.categoryID] ?? 0
+            let favoriteAffinity = favoriteCategoryScores[candidate.categoryID] ?? 0
+            let categoryAffinity = historyAffinity + favoriteAffinity
+            let rating = candidate.rating.flatMap { $0 > 0 ? $0 : nil }
+            let ratingContribution = rating.map { $0 * 1.5 + ($0 >= 7.5 ? 3.0 : 0) } ?? 4.5
+            let historyContribution = historyAffinity * 4
+            let favoriteContribution = favoriteAffinity * 4
+            let nowFreshnessContribution: Double
             if let added = candidate.addedDate {
                 let daysOld = now.timeIntervalSince(added) / 86400.0
                 if daysOld < 30 {
-                    itemScore += 3.0
+                    nowFreshnessContribution = 3.0
                 } else if daysOld < 90 {
-                    itemScore += 1.5
+                    nowFreshnessContribution = 1.5
+                } else {
+                    nowFreshnessContribution = 0
                 }
+            } else {
+                nowFreshnessContribution = 0
             }
-
-            // Down-rank if already watched recently (partially watched)
+            let reason: Reason? = if historyContribution > 0,
+                                     historyContribution >= favoriteContribution,
+                                     historyContribution >= ratingContribution,
+                                     historyContribution >= nowFreshnessContribution
+            {
+                .watchHistory
+            } else if favoriteContribution > 0,
+                      favoriteContribution >= ratingContribution,
+                      favoriteContribution >= nowFreshnessContribution
+            {
+                .favorites
+            } else if (rating ?? 0) >= 7.5, ratingContribution >= nowFreshnessContribution {
+                .highlyRated
+            } else if nowFreshnessContribution > 0 {
+                .recentlyAdded
+            } else {
+                nil
+            }
+            var score = categoryAffinity * 4 + ratingContribution + nowFreshnessContribution
             if watchedIDs.contains(candidate.id) {
-                itemScore *= 0.5
+                score *= 0.5
             }
-
-            scoredItems.append(ScoredItem(item: candidate, score: itemScore))
+            scoredItems.append(ScoredItem(
+                recommendation: Recommendation(item: candidate, reason: reason),
+                score: score
+            ))
         }
 
-        // Sort descending by score
-        let sortedCandidates = scoredItems.sorted { $0.score > $1.score }
-
-        // 4. Ensure diversity: max 3 items from the exact same category
-        var result: [MediaModels.Item] = []
-        var categoryUsage: [String: Int] = [:]
-
-        for scored in sortedCandidates {
-            let cat = scored.item.categoryID
-            let currentCount = categoryUsage[cat, default: 0]
-            if currentCount < 3 {
-                result.append(scored.item)
-                categoryUsage[cat] = currentCount + 1
+        let sorted = scoredItems.sorted {
+            if $0.score != $1.score {
+                return $0.score > $1.score
             }
+            return $0.recommendation.id.localizedStandardCompare($1.recommendation.id) == .orderedAscending
+        }
+        var result: [Recommendation] = []
+        var categoryUsage: [String: Int] = [:]
+        for scored in sorted {
+            let category = scored.recommendation.item.categoryID
+            guard categoryUsage[category, default: 0] < 3 else { continue }
+            result.append(scored.recommendation)
+            categoryUsage[category, default: 0] += 1
             if result.count >= limit {
                 break
             }
         }
-
-        // Fallback fill if strict diversity didn't reach limit
         if result.count < limit {
-            for scored in sortedCandidates {
-                if !result.contains(where: { $0.id == scored.item.id }) {
-                    result.append(scored.item)
-                }
+            for scored in sorted where !result.contains(where: { $0.id == scored.recommendation.id }) {
+                result.append(scored.recommendation)
                 if result.count >= limit {
                     break
                 }
             }
         }
-
         return result
     }
 
+    /// Generates tailored VOD recommendations.
+    public nonisolated static func recommendVODs(
+        from candidates: [MediaModels.Item],
+        history: [WatchHistoryItem],
+        favorites: [FavoriteItem],
+        limit: Int = 14
+    ) -> [MediaModels.Item] {
+        recommendations(from: candidates, history: history, favorites: favorites, limit: limit).map(\.item)
+    }
+
     /// Fallback ranking for new users: high ratings and diversity.
-    private static func topRatedDiverseVODs(from candidates: [MediaModels.Item], limit: Int) -> [MediaModels.Item] {
+    private nonisolated static func topRatedDiverseRecommendations(from candidates: [MediaModels.Item], limit: Int) -> [Recommendation] {
         let sorted = candidates.sorted {
             let r0 = $0.rating ?? 0.0
             let r1 = $1.rating ?? 0.0
@@ -158,14 +201,25 @@ public enum SmartRecommendationEngine: Sendable {
             return d0 > d1
         }
 
-        var result: [MediaModels.Item] = []
+        var result: [Recommendation] = []
         var categoryUsage: [String: Int] = [:]
 
-        for item in sorted {
+        for (index, item) in sorted.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return []
+            }
             let cat = item.categoryID
             let count = categoryUsage[cat, default: 0]
             if count < 3 {
-                result.append(item)
+                let daysOld = item.addedDate.map { Date().timeIntervalSince($0) / 86400 } ?? .infinity
+                let reason: Reason? = if (item.rating ?? 0) >= 7.5 {
+                    .highlyRated
+                } else if daysOld < 90 {
+                    .recentlyAdded
+                } else {
+                    nil
+                }
+                result.append(Recommendation(item: item, reason: reason))
                 categoryUsage[cat] = count + 1
             }
             if result.count >= limit {

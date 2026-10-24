@@ -44,6 +44,7 @@ public struct DashboardFeature {
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
         public var recommendedVODs: [MediaModels.Item] = []
+        public var recommendationReasons: [String: SmartRecommendationEngine.Reason] = [:]
         public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
@@ -81,7 +82,7 @@ public struct DashboardFeature {
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case epgEventsLoaded(playlistID: UUID?, refreshID: UUID, events: [EPGEvent], succeeded: Bool)
         case channelSelected(MediaModels.Item)
@@ -178,6 +179,14 @@ public struct DashboardFeature {
                     state.recommendedVODs = snapshot?.recommendations.compactMap(\.mediaItem).filter {
                         !currentAdultHidden || !isAdult($0.title)
                     } ?? []
+                    let recommendedIDs = Set(state.recommendedVODs.map(\.id))
+                    state.recommendationReasons = (snapshot?.recommendationReasons ?? [:]).reduce(into: [:]) {
+                        guard
+                            recommendedIDs.contains($1.key),
+                            let reason = SmartRecommendationEngine.Reason(rawValue: $1.value)
+                        else { return }
+                        $0[$1.key] = reason
+                    }
                     state.isLoading = snapshot == nil
                 }
                 let shouldReload = !state.hasLoadedRemoteData
@@ -299,6 +308,7 @@ public struct DashboardFeature {
                     var vods: [MediaModels.Item]?
                     var series: [MediaModels.Item]?
                     var recommendations: [MediaModels.Item]?
+                    var recommendationReasons: [String: SmartRecommendationEngine.Reason]?
                     var vodExploreCollections: [ExploreCollection]?
                     var seriesExploreCollections: [ExploreCollection]?
                     var yearExploreCollections: [ExploreCollection]?
@@ -314,11 +324,18 @@ public struct DashboardFeature {
                         vods = Array(sorted.prefix(10))
 
                         // Smart Content-based and collaborative recommendations (Madde #8 & #42)
-                        recommendations = SmartRecommendationEngine.recommendVODs(
+                        let scoredRecommendations = SmartRecommendationEngine.recommendations(
                             from: safeVODs,
                             history: history,
                             favorites: favorites,
                             limit: 12
+                        )
+                        recommendations = scoredRecommendations.map(\.item)
+                        recommendationReasons = Dictionary(
+                            scoredRecommendations.compactMap { recommendation in
+                                recommendation.reason.map { (recommendation.id, $0) }
+                            },
+                            uniquingKeysWith: { first, _ in first }
                         )
                     }
 
@@ -371,6 +388,7 @@ public struct DashboardFeature {
                             vods: vods,
                             series: series,
                             recommendations: recommendations,
+                            recommendationReasons: recommendationReasons,
                             vodExploreCollections: vodExploreCollections,
                             seriesExploreCollections: seriesExploreCollections,
                             yearExploreCollections: yearExploreCollections
@@ -441,7 +459,7 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, recommendations, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
@@ -466,6 +484,9 @@ public struct DashboardFeature {
                 if let recommendations {
                     state.recommendedVODs = recommendations
                 }
+                if let recommendationReasons {
+                    state.recommendationReasons = recommendationReasons
+                }
                 if let vodExploreCollections {
                     state.exploreCollections.removeAll { $0.id.hasPrefix("movie-category:") }
                     state.exploreCollections.append(contentsOf: vodExploreCollections)
@@ -483,6 +504,7 @@ public struct DashboardFeature {
                 let cachedVODs = state.featuredVODs
                 let cachedSeries = state.featuredSeries
                 let cachedRecommendations = state.recommendedVODs
+                let cachedRecommendationReasons = state.recommendationReasons.mapValues(\.rawValue)
                 return .run { _ in
                     await DashboardFeaturedCache.save(
                         playlistID: playlistID,
@@ -490,7 +512,8 @@ public struct DashboardFeature {
                         channels: cachedChannels,
                         vods: cachedVODs,
                         series: cachedSeries,
-                        recommendations: cachedRecommendations
+                        recommendations: cachedRecommendations,
+                        recommendationReasons: cachedRecommendationReasons
                     )
                 }
 

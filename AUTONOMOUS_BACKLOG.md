@@ -288,13 +288,24 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Projede mevcut Swift 6 actor-isolation uyarıları var; bu değişikliğin izolasyon uyarıları giderildi. Kullanıcı isteği gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — katalogdan güvenle türetilebilen keşif rafları eklendi; reviewer onayladı.
 
-### 59. [PENDING] Öneri Bağlantısının Nedenini Açıklama
+### 59. [IN_PROGRESS] Öneri Bağlantısının Nedenini Açıklama
 - **Bulgu:** IPTVX öneri rafı, “çünkü izledin” başlığında çıkış filmini/dizisini gösteriyor; genel bir öneri listesi yerine ilişkiyi kullanıcıya açıklıyor.
 - **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+- **Kod taraması:** `SmartRecommendationEngine` kategori yakınlığı, rating ve eklenme zamanını puanlıyor ama yalnız medya öğelerini döndürüyordu. Dashboard state ve kalıcı cache de açıklama taşımıyordu; kartlar standart VOD kartları.
+- **Uygulama planı:** Öneri skoru ile aynı veri üzerinden, en yüksek katkıyı ve kullanılabilir içerik alanlarını açıklayan kısa etiket döndür. Ham kategori ID’sini veya ölçülmeyen “popüler” iddiasını gösterme. Nedeni cache’le, iOS’ta kompakt alt satır; tvOS’ta odakta okunaklı alt satır göster.
+- **PR Reviewer:** İlk inceleme `[CHANGES REQUESTED]`: duplicate provider item ID’leri `uniqueKeysWithValues` ile trap oluşturabilir; nedeni olmayan eski/rating’siz içerikte “Sana özel” iddiası temelsiz kalabilir. Öneri kaynağı ID’ye göre tekilleştirildi, sözlük collision-safe hale getirildi ve güçlü bir gerekçe yoksa UI etiketi boş bırakılıyor.
+- **Reviewer:** `[APPROVED]` — tekrar eden kimliklerin güvenli tekilleştirilmesi, kanıtsız etiketlerin gizlenmesi, cache geriye uyumluluğu ve tvOS yazı okunabilirliği onaylandı.
+- **Uygulama:** Motor, puana anlamlı katkı veren izleme geçmişi, favori, yüksek puan veya yeni eklenme sinyali için gerekçe döndürüyor. Dashboard gerekçeleri state ve eski cache ile uyumlu opsiyonel cache alanında tutuyor. iOS ve tvOS kartlarında yalnız gerekçesi kanıtlanabilen öneriler açıklanıyor.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` ve String Catalog JSON doğrulaması başarılı. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 60. [PENDING] İzleme Geçmişinden Oyuncu Tabanlı Öneriler
+### 60. [IN_PROGRESS] İzleme Geçmişinden Oyuncu Tabanlı Öneriler
 - **Bulgu:** IPTVX, izlenen filmlerin oyuncularından kitaplıktaki başka film ve dizilere ayrı keşif yolları oluşturuyor.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+- **Canlı keşif:** IPTVX 25 newsroom, izleme geçmişindeki oyunculardan “More movies or shows with an actor” önerilerini ayrı film/dizi yolları olarak doğruluyor; öneriler kullanıcı playlist’inde mevcut olanlarla sınırlandırılıyor.
+- **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://iptvx.app/
+- **Kod taraması:** Watch history modeli playlistID, seriesTitle ve seriesID alanlarını desteklese de Player kayıt yolları playlistID/seriesTitle yazmıyor ve içerik türünü başlıktaki “S”/“E” benzeri sezgisel kontrollerle çıkarıyor. TMDB detail DTO oyuncu kimlik/adı taşıyor; fakat provider kataloğunda TMDB kimliği/oyuncu tutulmuyor. Tüm katalog için detay isteği uygun değil.
+- **Kapsam planı:** Önce Player kayıtlarını gerçek playlist kimliği ve VOD/dizi türüyle yaz; sonraki aşamada aktif playlist’in az sayıda son VOD/dizi geçmişini TMDB’de çözümle, sınırlı oyuncu kredisi al, sonuçları mevcut provider kataloğuyla başlık/yıl doğrulaması üzerinden yerelde kesiştir. İzlenmiş/tamamlanmış, yinelenen ve yaş filtresi dışı öğeleri çıkar; yalnız eşleşme varsa ayrı film/dizi rafı göster. İstekleri sınırla, cache’le ve playlist değişiminde iptal et. Belirsiz TMDB eşleşmelerini sessizce atla.
+- **Risk:** Eski geçmiş kayıtları playlist bağlamı ve güvenilir tür bilgisi içermeyebilir; bu kayıtlar kişisel aktör önerisi için kullanılmamalı. Eşleştirme için içerik başlığı ve varsa yıl doğrulaması zorunlu.
 
 ### 61. [PENDING] En Çok İzlenen Oyuncular Koleksiyonu
 - **Bulgu:** IPTVX For You, oyuncu portrelerini izleme davranışına göre sıralı bir giriş noktası olarak kullanıyor; geçmiş yoksa popüler aktörlerle başlıyor.
