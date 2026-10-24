@@ -557,7 +557,7 @@ public struct EPGTimelineView: View {
     // MARK: - Sticky Channel Cell
 
     private func stickyChannelCell(_ channel: MediaModels.Item) -> some View {
-        let isFav = store.favoriteIDs.contains(channel.id)
+        let isFav = store.defaultFavoriteIDs.contains(channel.id)
         let favoriteIndex = store.filteredChannels.firstIndex(where: { $0.id == channel.id }) ?? 0
         let favoriteCount = store.filteredChannels.count
 
@@ -1057,7 +1057,7 @@ public struct EPGTimelineView: View {
                 HapticManager.shared.trigger(.light)
                 store.send(.toggleFavorite(channel))
             } label: {
-                let isFav = store.favoriteIDs.contains(channel.id)
+                let isFav = store.defaultFavoriteIDs.contains(channel.id)
                 Label(
                     isFav ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
                     systemImage: isFav ? "star.slash.fill" : "star.fill"

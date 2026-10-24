@@ -87,6 +87,17 @@ public enum AppStrings {
         public static let channelLogoURLHint = "HTTP veya HTTPS adresi girin.".localized
         public static let invalidChannelLogoURL = "Geçerli bir HTTP veya HTTPS logo adresi girin.".localized
         public static let smartGroups = "Akıllı Gruplar".localized
+        public static let favoriteLists = "Favori Listeleri".localized
+        public static let manageFavoriteLists = "Listeleri Yönet".localized
+        public static let addToFavoriteList = "Listeye Ekle/Kaldır".localized
+        public static let createFavoriteList = "Liste Oluştur".localized
+        public static let newFavoriteList = "Yeni Liste".localized
+        public static let favoriteListName = "Liste Adı".localized
+        public static let favoriteListsSection = "Listeler".localized
+        public static let editFavoriteList = "Listeyi Düzenle".localized
+        public static let deleteFavoriteList = "Listeyi Sil".localized
+        public static let saveFavoriteListName = "Adı Kaydet".localized
+        public static let manageFavoriteListsHint = "Favori kanal listeleri oluşturun ve düzenleyin.".localized
         public static let newSmartGroup = "Yeni Akıllı Grup".localized
         public static let editSmartGroup = "Akıllı Grubu Düzenle".localized
         public static let smartGroupName = "Grup Adı".localized

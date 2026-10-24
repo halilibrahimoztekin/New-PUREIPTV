@@ -92,6 +92,9 @@ import SwiftUI
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
 
+                FavoriteChannelListSwitcher(store: store)
+                    .padding(.bottom, 10)
+
                 Divider().background(Color.white.opacity(0.15))
 
                 ScrollView {
@@ -342,6 +345,18 @@ import SwiftUI
                     }
                 }
 
+                if !store.favoriteLists.isEmpty {
+                    Menu(AppStrings.LiveTV.addToFavoriteList) {
+                        ForEach(store.favoriteLists) { list in
+                            Button {
+                                store.send(.toggleNamedFavorite(channel, listID: list.id))
+                            } label: {
+                                Label(list.name, systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                            }
+                        }
+                    }
+                }
+
                 Button {
                     store.send(.sendToMultiView(channel))
                 } label: {
@@ -490,6 +505,18 @@ import SwiftUI
                             .background(Color.white.opacity(0.08), in: Capsule())
                         }
                         .buttonStyle(.plain)
+
+                        if !store.favoriteLists.isEmpty {
+                            Menu(AppStrings.LiveTV.addToFavoriteList) {
+                                ForEach(store.favoriteLists) { list in
+                                    Button {
+                                        store.send(.toggleNamedFavorite(selected, listID: list.id))
+                                    } label: {
+                                        Label(list.name, systemImage: list.channelIDs.contains(selected.id) ? "checkmark.circle.fill" : "circle")
+                                    }
+                                }
+                            }
+                        }
 
                         Button {
                             store.send(.sendToMultiView(selected))

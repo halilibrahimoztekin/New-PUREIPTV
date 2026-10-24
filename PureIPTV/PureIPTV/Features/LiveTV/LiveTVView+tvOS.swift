@@ -227,25 +227,26 @@
 
         // MARK: – Channel Area
 
-        @ViewBuilder
         private var channelArea: some View {
-            if store.isLoadingChannels {
-                VStack {
+            VStack(spacing: 0) {
+                FavoriteChannelListSwitcher(store: store)
+                    .padding(.top, 8)
+                if store.isLoadingChannels {
                     PureLoadingView(size: .large, text: AppStrings.LiveTV.loadingChannels)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if store.currentChannels.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                            .font(.system(size: 60))
+                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                        Text(AppStrings.LiveTV.noChannels)
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    channelScrollView
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if store.currentChannels.isEmpty {
-                VStack(spacing: 20) {
-                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                        .font(.system(size: 60))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                    Text(AppStrings.LiveTV.noChannels)
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                channelScrollView
             }
         }
 
@@ -360,6 +361,18 @@
                     Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                 } else {
                     Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                }
+            }
+
+            if !store.favoriteLists.isEmpty {
+                Menu(AppStrings.LiveTV.addToFavoriteList) {
+                    ForEach(store.favoriteLists) { list in
+                        Button {
+                            store.send(.toggleNamedFavorite(channel, listID: list.id))
+                        } label: {
+                            Label(list.name, systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                        }
+                    }
                 }
             }
 

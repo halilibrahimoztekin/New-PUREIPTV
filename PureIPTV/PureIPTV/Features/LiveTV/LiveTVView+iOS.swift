@@ -127,6 +127,8 @@
                     if store.selectedTabMode == .channels {
                         smartGroupBar
                             .padding(.bottom, 8)
+                        FavoriteChannelListSwitcher(store: store)
+                            .padding(.bottom, 8)
                         // ── Category horizontal scroll ─────────────────────
                         categoryBar
                             .padding(.bottom, 12)
@@ -264,6 +266,19 @@
                                         Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                     } else {
                                         Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                    }
+                                }
+
+                                if !store.favoriteLists.isEmpty {
+                                    Menu(AppStrings.LiveTV.addToFavoriteList) {
+                                        ForEach(store.favoriteLists) { list in
+                                            Button {
+                                                store.send(.toggleNamedFavorite(channel, listID: list.id))
+                                            } label: {
+                                                Label(list.name,
+                                                      systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                                            }
+                                        }
                                     }
                                 }
 

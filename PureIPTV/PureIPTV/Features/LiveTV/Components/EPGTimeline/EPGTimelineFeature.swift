@@ -35,6 +35,8 @@ public struct EPGTimelineFeature {
         public var pendingReminderRequestIDs: [String: UUID] = [:]
         public var reminderLoadRequestID: UUID?
         public var favoriteIDs: Set<String> = []
+        public var defaultFavoriteIDs: Set<String> = []
+        public var favoriteListID: UUID?
         public var isFavoritesOnly: Bool = false
         public var favoriteSortMode: FavoriteChannelSortMode = .defaultOrder
         public var favoriteOrderIDs: [String] = []
@@ -144,7 +146,8 @@ public struct EPGTimelineFeature {
             categories: [MediaModels.Category] = [],
             selectedCategoryID: String? = nil,
             selectedDate: Date = .init(),
-            favoriteIDs: Set<String> = []
+            favoriteIDs: Set<String> = [],
+            favoriteListID: UUID? = nil
         ) {
             self.config = config
             self.channels = channels
@@ -153,6 +156,7 @@ public struct EPGTimelineFeature {
             self.selectedCategoryID = selectedCategoryID
             self.selectedDate = selectedDate
             self.favoriteIDs = favoriteIDs
+            self.favoriteListID = favoriteListID
         }
     }
 
@@ -183,7 +187,7 @@ public struct EPGTimelineFeature {
         case logoOverridePropagated(channelID: String, playlistID: UUID, url: URL?)
         case toggleFavoritesOnly
         case loadFavorites
-        case favoritesLoaded(requestID: UUID, ids: Set<String>, order: FavoriteChannelOrderSnapshot, playlistID: UUID, scope: ProfileContextSnapshot)
+        case favoritesLoaded(requestID: UUID, ids: Set<String>, defaultIDs: Set<String>, order: FavoriteChannelOrderSnapshot, playlistID: UUID, scope: ProfileContextSnapshot)
         case setFavoriteSortMode(FavoriteChannelSortMode)
         case moveFavorite(channelID: String, offset: Int)
         case updateCurrentTime
@@ -357,20 +361,24 @@ public struct EPGTimelineFeature {
                 let requestID = UUID()
                 state.favoriteLoadRequestID = requestID
                 let orderClient = favoriteChannelOrderClient
+                let favoriteListID = state.favoriteListID
+                let currentFavoriteIDs = state.favoriteIDs
                 return .run { send in
                     guard let favs = try? await databaseClient.fetchFavoritesByType("live", profileScope) else { return }
-                    let visible = favs.filter { $0.playlistID == playlistID }
-                    let order = await orderClient.load(profileScope.profileID, playlistID)
+                    let defaultIDs = Set(favs.filter { $0.playlistID == playlistID }.map(\.id))
+                    let favoriteIDs = favoriteListID == nil ? defaultIDs : currentFavoriteIDs
+                    let order = await orderClient.load(profileScope.profileID, playlistID, favoriteListID)
                     await send(.favoritesLoaded(
                         requestID: requestID,
-                        ids: Set(visible.map(\.id)),
+                        ids: favoriteIDs,
+                        defaultIDs: defaultIDs,
                         order: order,
                         playlistID: playlistID,
                         scope: profileScope
                     ))
                 }
 
-            case let .favoritesLoaded(requestID, ids, storedOrder, playlistID, scope):
+            case let .favoritesLoaded(requestID, ids, defaultIDs, storedOrder, playlistID, scope):
                 guard
                     state.favoriteLoadRequestID == requestID,
                     profileContextClient.snapshot() == scope,
@@ -378,6 +386,7 @@ public struct EPGTimelineFeature {
                 else { return .none }
                 state.favoriteLoadRequestID = nil
                 state.favoriteIDs = ids
+                state.defaultFavoriteIDs = defaultIDs
                 let providerIDs = (state.providerOrderChannels.isEmpty ? state.channels : state.providerOrderChannels).map(\.id)
                 let normalizedIDs = FavoriteChannelSortMode.normalizedManualIDs(
                     favoriteIDs: ids,
@@ -397,8 +406,9 @@ public struct EPGTimelineFeature {
                 )
                 let profileID = scope.profileID
                 let orderClient = favoriteChannelOrderClient
+                let favoriteListID = state.favoriteListID
                 return .run { _ in
-                    await orderClient.save(order, profileID, playlistID)
+                    await orderClient.save(order, profileID, playlistID, favoriteListID)
                 }
 
             case let .setFavoriteSortMode(mode):
@@ -418,8 +428,9 @@ public struct EPGTimelineFeature {
                 state.favoriteOrderRevision = order.revision
                 let scope = profileContextClient.snapshot()
                 let orderClient = favoriteChannelOrderClient
+                let favoriteListID = state.favoriteListID
                 return .run { _ in
-                    await orderClient.save(order, scope.profileID, playlistID)
+                    await orderClient.save(order, scope.profileID, playlistID, favoriteListID)
                 }
 
             case let .moveFavorite(channelID, offset):
@@ -444,33 +455,46 @@ public struct EPGTimelineFeature {
                 state.favoriteOrderRevision = order.revision
                 let scope = profileContextClient.snapshot()
                 let orderClient = favoriteChannelOrderClient
+                let favoriteListID = state.favoriteListID
                 return .run { _ in
-                    await orderClient.save(order, scope.profileID, playlistID)
+                    await orderClient.save(order, scope.profileID, playlistID, favoriteListID)
                 }
 
             case let .toggleFavorite(channel):
                 state.favoriteLoadRequestID = nil
                 guard let playlistID = state.config.playlistID else { return .none }
-                let isFav = state.favoriteIDs.contains(channel.id)
+                let isFav = state.defaultFavoriteIDs.contains(channel.id)
                 if isFav {
-                    state.favoriteIDs.remove(channel.id)
-                    state.favoriteOrderIDs.removeAll { $0 == channel.id }
+                    state.defaultFavoriteIDs.remove(channel.id)
                 } else {
-                    state.favoriteIDs.insert(channel.id)
-                    state.favoriteOrderIDs.append(channel.id)
+                    state.defaultFavoriteIDs.insert(channel.id)
+                }
+                if state.favoriteListID == nil {
+                    state.favoriteIDs = state.defaultFavoriteIDs
                 }
                 let profileScope = profileContextClient.snapshot()
-                let order = FavoriteChannelOrderSnapshot(
-                    mode: state.favoriteSortMode,
-                    orderedIDs: FavoriteChannelSortMode.normalizedManualIDs(
-                        favoriteIDs: state.favoriteIDs,
-                        providerIDs: (state.providerOrderChannels.isEmpty ? state.channels : state.providerOrderChannels).map(\.id),
-                        storedIDs: state.favoriteOrderIDs
-                    ),
-                    revision: nextFavoriteChannelOrderRevision(after: state.favoriteOrderRevision)
-                )
-                state.favoriteOrderIDs = order.orderedIDs
-                state.favoriteOrderRevision = order.revision
+                let order: FavoriteChannelOrderSnapshot?
+                if state.favoriteListID == nil {
+                    if isFav {
+                        state.favoriteOrderIDs.removeAll { $0 == channel.id }
+                    } else {
+                        state.favoriteOrderIDs.append(channel.id)
+                    }
+                    let updatedOrder = FavoriteChannelOrderSnapshot(
+                        mode: state.favoriteSortMode,
+                        orderedIDs: FavoriteChannelSortMode.normalizedManualIDs(
+                            favoriteIDs: state.defaultFavoriteIDs,
+                            providerIDs: (state.providerOrderChannels.isEmpty ? state.channels : state.providerOrderChannels).map(\.id),
+                            storedIDs: state.favoriteOrderIDs
+                        ),
+                        revision: nextFavoriteChannelOrderRevision(after: state.favoriteOrderRevision)
+                    )
+                    state.favoriteOrderIDs = updatedOrder.orderedIDs
+                    state.favoriteOrderRevision = updatedOrder.revision
+                    order = updatedOrder
+                } else {
+                    order = nil
+                }
                 let favItem = FavoriteItem(
                     id: channel.id,
                     type: "live",
@@ -482,7 +506,9 @@ public struct EPGTimelineFeature {
                 let orderClient = favoriteChannelOrderClient
                 return .run { _ in
                     _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
-                    await orderClient.save(order, profileScope.profileID, playlistID)
+                    if let order {
+                        await orderClient.save(order, profileScope.profileID, playlistID, nil)
+                    }
                 }
 
             case let .saveChannelLogoOverride(channelID, rawValue):
