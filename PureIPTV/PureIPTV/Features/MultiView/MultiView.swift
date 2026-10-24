@@ -537,7 +537,7 @@ private struct ChannelSelectionSheet: View {
             List(filteredChannels) { channel in
                 Button(action: { onSelect(channel) }) {
                     HStack(spacing: 12) {
-                        if let url = channel.coverURL {
+                        if let url = channel.displayLogoURL {
                             PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                                 if let img = phase.image {
                                     img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)

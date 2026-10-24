@@ -118,7 +118,7 @@ public struct GlobalSearchResultCard: View {
 
     @ViewBuilder
     private var mediaCoverImage: some View {
-        if let url = result.item.coverURL {
+        if let url = result.item.displayLogoURL {
             KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: result.item.userAgentOverride))
                 .requestModifier { request in
                     UserAgentManager.applyHeaders(to: &request, override: result.item.userAgentOverride)

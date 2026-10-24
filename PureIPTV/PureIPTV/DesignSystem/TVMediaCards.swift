@@ -44,7 +44,7 @@
                 } floatingContent: {
                     // Katman 3: Öne fırlayan Parallax Logo & Bilgiler
                     ZStack(alignment: .bottomLeading) {
-                        if let logoURL = channel.coverURL {
+                        if let logoURL = channel.displayLogoURL {
                             KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride))
                                 .requestModifier { request in
                                     UserAgentManager.applyHeaders(to: &request, override: channel.userAgentOverride)

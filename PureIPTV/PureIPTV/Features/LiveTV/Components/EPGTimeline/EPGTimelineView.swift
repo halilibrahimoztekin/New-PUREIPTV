@@ -26,6 +26,8 @@ public struct EPGTimelineView: View {
     @State private var isUserDragging: Bool = false
     @State private var hasCenteredOnNow: Bool = false
     @State private var shimmerPhase: CGFloat = 0
+    @State private var logoEditorChannel: MediaModels.Item?
+    @State private var logoURLDraft = ""
 
     // Focus state for tvOS
     #if os(tvOS)
@@ -191,6 +193,9 @@ public struct EPGTimelineView: View {
                             }
                         #endif
                     }
+                }
+                .sheet(item: $logoEditorChannel) { channel in
+                    channelLogoEditorSheet(for: channel)
                 }
             #if os(tvOS)
                 .onExitCommand {
@@ -547,7 +552,7 @@ public struct EPGTimelineView: View {
         } label: {
             HStack(spacing: 8) {
                 // Channel Logo
-                if let url = channel.coverURL {
+                if let url = channel.displayLogoURL {
                     PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                         if let image = phase.image {
                             image.resizable().aspectRatio(contentMode: .fit)
@@ -628,6 +633,60 @@ public struct EPGTimelineView: View {
                 store.send(.togglePiPPreview(channel))
             } label: {
                 Label("Canlı Mini Önizleme", systemImage: "pip.enter")
+            }
+
+            Button {
+                logoURLDraft = channel.logoURLOverride?.absoluteString ?? ""
+                logoEditorChannel = channel
+            } label: {
+                Label(AppStrings.LiveTV.editChannelLogo, systemImage: "photo")
+            }
+        }
+    }
+
+    private func channelLogoEditorSheet(for channel: MediaModels.Item) -> some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("https://example.com/logo.png", text: $logoURLDraft)
+                    #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    #endif
+                    Text(AppStrings.LiveTV.channelLogoURLHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !logoURLDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil
+                    {
+                        Text(AppStrings.LiveTV.invalidChannelLogoURL)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text(AppStrings.LiveTV.channelLogoURL)
+                }
+
+                Section {
+                    Button(AppStrings.LiveTV.resetChannelLogo, role: .destructive) {
+                        store.send(.saveChannelLogoOverride(channelID: channel.id, rawValue: nil))
+                        logoEditorChannel = nil
+                    }
+                }
+            }
+            .navigationTitle(AppStrings.LiveTV.editChannelLogo)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.cancel) { logoEditorChannel = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(AppStrings.Common.save) {
+                        guard ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) != nil else { return }
+                        store.send(.saveChannelLogoOverride(channelID: channel.id, rawValue: logoURLDraft))
+                        logoEditorChannel = nil
+                    }
+                    .disabled(ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil)
+                }
             }
         }
     }
@@ -1070,7 +1129,7 @@ public struct EPGTimelineView: View {
             // Sheet Header with Channel Info & Close Button
             HStack {
                 HStack(spacing: 10) {
-                    if let url = channel.coverURL {
+                    if let url = channel.displayLogoURL {
                         PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                             if let img = phase.image {
                                 img.resizable().scaledToFit()
@@ -1229,7 +1288,7 @@ public struct EPGTimelineView: View {
                 )
 
                 // Blurred channel artwork backdrop if available
-                if let url = channel.coverURL {
+                if let url = channel.displayLogoURL {
                     PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
                         if let img = phase.image {
                             img.resizable()

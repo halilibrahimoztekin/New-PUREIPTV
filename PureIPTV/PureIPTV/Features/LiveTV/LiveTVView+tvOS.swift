@@ -58,7 +58,7 @@
             }
             .background(
                 DynamicMeshBackgroundView(
-                    imageURL: focusedChannel?.coverURL,
+                    imageURL: focusedChannel?.displayLogoURL,
                     titleSeed: focusedChannel?.title ?? "LiveTV"
                 )
             )

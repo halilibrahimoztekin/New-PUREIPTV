@@ -161,7 +161,7 @@ public struct LiveEPGMiniPreviewView: View {
             HStack(spacing: 8) {
                 // Logo
                 Group {
-                    if let coverURL = channel.coverURL {
+                    if let coverURL = channel.displayLogoURL {
                         PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
                             switch phase {
                             case let .success(img):

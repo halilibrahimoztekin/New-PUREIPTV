@@ -795,3 +795,48 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Reviewer `[APPROVED]`; yalnızca istenen iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Xcode SwiftFormat script’inin “exit code 0” mesajı ve mevcut Swift 6 actor-isolation/deprecation uyarıları yazıldı. Build’de iki yeni koleksiyon tür çıkarımı hatası açık türlerle düzeltildi ve yeniden başarılı derlendi. Test, simulator veya app akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
+### 78. [DONE] Kanala Özel Logo Atama
+- **Canlı keşif (24 Ekim 2026):** TiviMate kullanıcıları playlist/EPG’de eksik veya yanlış kanal logosu için kanala PNG logo atama isteğini tekrarlıyor; mevcut öneriler klasör dosya adı eşlemesi gibi kırılgan yöntemlere yöneltiyor: https://www.reddit.com/r/TiviMate/comments/1rffy5z/tv_logo/ · https://www.reddit.com/r/TiviMate/comments/1lj4b4q
+- **Kod taraması:** M3U `tvg-logo` ve Xtream `streamIcon` doğrudan `coverURL`’a aktarılıyordu; kalıcı kanal bazlı override modeli, client veya arayüz yoktu.
+- **Kapsam:** Provider logosu cache/parser’da olduğu gibi korunacak; görünüm katmanına playlist + kanal kimliğiyle anahtarlanan, scheme/uzunluk sınırları doğrulanmış URL override’ı uygulanacak. iOS/tvOS kanal bağlam menüsünden URL girme ve sıfırlama sunulacak; yeni ağ keşfi veya provider playlist yazımı yok.
+- **Uygulama:** `ChannelLogoOverrideClient` playlist UUID + kanal ID altında HTTP(S) ve 2 KiB sınırıyla doğrulanmış URL saklıyor. `IPTVClient.fetchLiveChannels` ve `resolveLiveItem` override’ı DTO/cache değiştirmeden `MediaModels.Item.logoURLOverride` alanına ekliyor; provider `coverURL` korunuyor. EPG kanal satırı context menu, URL düzenleme/sıfırlama sheet’i, EPG/LiveTV state güncellemesi ve channel-card logo tüketicileri eklendi; Kingfisher cache key URL üzerinden değişiyor. Beş yeni metin 21 locale’e eklendi.
+- **PR Reviewer:** İlk review tvOS backdrop, tvOS EPG detay ve iPad seçili kanal hero’sundaki son üç provider-logo tüketimini, ayrıca kanallar arasında tek request UUID çakışmasını buldu. Üç yüzey override-aware oldu, istek nesilleri kanal başına ayrıldı; son review `[APPROVED]`.
+- **Doğrulama:** Yalnızca iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Xcode SwiftFormat script phase’i “exit code 0” mesajı yazdı; derleme hatası yok. Kullanıcı talimatı gereği test, simulator veya app akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
+
+### 79. [PENDING] Gizlilik Korumalı Destek Tanılama Raporu
+- **Keşif sinyali:** IPTV kullanıcıları çalışmayan stream/formatlarda sağlayıcıya hata ayıklama bilgisi iletmekte zorlanıyor; Tunvio ve Neptune kullanıcı onaylı, kimlik bilgilerini temizleyen rapor akışı sunuyor: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/ · https://tunv.io/iptv/guides/send-diagnostic-information/ · https://docs.neptuneplayer.com/settings/diagnostics
+- **Aday gap:** Uygulama içi rapor dışa aktarma, credential-redaction ve açık gönderim onayı incelenecek.
+
+### 80. [PENDING] Canlı Yayın FPS ve Ağ Bant Genişliği Göstergesi
+- **Keşif sinyali:** Apple TV kullanıcıları kanal seçerken 4K/FPS ve o anki bandwidth bilgisini görmek istediklerini yazmış: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/
+- **Aday gap:** Mevcut Nerd Stats çözünürlük/bitrate gösteriyor; gerçek ölçülen frame rate ve ağ throughput kaynağı olup olmadığı, başlıktan tahmin edilen FPS’ten ayrılarak incelenecek.
+
+### 81. [PENDING] Farklı İçerik Türleriyle Multiview
+- **Keşif sinyali:** TiviMate kullanıcısı çoklu ekranda canlı kanala sessiz eşlikçi olarak dizi bölümü izleme kısıtını dile getirmiş: https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1wnk8x0/whats_one_small_thing_iptv_players_do_that_drives/
+- **Aday gap:** PureIPTV MultiView slotlarının sadece canlı kanala mı bağlandığı ve decode/network limitlerinin iOS/tvOS’ta güvenli destek verip vermediği incelenecek.
+
+### 82. [PENDING] Kaynak Seçiciyi Atlayarak İlk Uygun Kaynağı Oynatma
+- **Keşif sinyali:** NowSeen güncel App Store sürüm notları ilk kullanılabilir kaynağı otomatik oynatmayı kullanıcı tarafından kapatılabilir Player ayarı olarak sunuyor: https://apps.apple.com/my/app/nowseen-iptv-player/id6780634050
+- **Aday gap:** PureIPTV’nin alternatif/duplikat stream çözümünde kaynak seçici ve ilk kaynağı sessizce seçme tercihi araştırılacak.
+
+### 83. [PENDING] Favori Kanallara Bağımsız Sıralama
+- **Keşif sinyali:** IPTV kullanıcıları favorilerin gruplanması ve ana listede yönetimi hakkında soru/şikayet iletiyor; TiviMate’te favorileri kanal sırasının başında gösterme ayarını anlatan kullanıcı desteği ve yakın tarihli oyuncu sürümünde özel favorites sort raporu var: https://www.reddit.com/r/TiviMate/comments/1db53r1 · https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv_yes_iptv/
+- **Aday gap:** Favorites görünümü kendi manuel/A–Z/son izlenen sırasını playlist genel sıralamasından bağımsız saklıyor mu kontrol edilecek.
+
+### 84. [PENDING] Ana Sayfa Bölümlerini Kişisel Sıralama ve Sabitleme
+- **Keşif sinyali:** Yeni tvOS IPTV tanıtımlarında özel Home rail ve kullanıcı küratörlüğündeki kategori satırları öne çıkarılıyor: https://www.reddit.com/r/iptvPlayerStream/comments/1xd0fnm/iptv_player_for_appletv/
+- **Aday gap:** Mevcut modular home ayarları var; bölümlerin sürükleyerek sıralanması ve seçili kategori satırlarının pinlenmesi ayrıca kontrol edilecek.
+
+### 85. [PENDING] Birden Çok Kategoriyi Akıllı Kanal Grubunda Birleştirme
+- **Keşif sinyali:** tvOS IPTV kullanıcılarına yönelik yeni oyuncu, ülke/dil/kategori filtrelerinden “Sports Favorites” gibi Smart Suite oluşturmayı ve Home’a sabitlemeyi öne çıkarıyor: https://www.reddit.com/r/iptvPlayerStream/comments/1xd0fnm/iptv_player_for_appletv/
+- **Aday gap:** PureIPTV’de playlist kategorilerini yeniden yazmadan çoklu kategori filtrelerini kaydedip kaydedememe incelenecek.
+
+### 86. [PENDING] Kullanıcı Onaylı Ağ Hızı ve Oynatma Tanılaması
+- **Keşif sinyali:** Neptune diagnostics ağ hız testi ile gerçek medya oynatma benchmark’ını ayrı sunuyor; kaynak özellikle bu iki ölçümün farklı sorunları ayırdığını belirtiyor: https://docs.neptuneplayer.com/settings/diagnostics
+- **Aday gap:** Player’ın mevcut stream health verileri gerçek servis erişim testi/okunabilir benchmark olarak dışarı açık mı ve yeni ölçüm kullanıcı başlatmalı mı incelenecek.
+
+### 87. [PENDING] Canlı Yayını Yerel Kaydetme ve Zaman Kaydırma
+- **Keşif sinyali:** TiviMate kullanıcıları duraklatılmış canlı yayını USB/NAS’a kaydetme ve kayıt sürerken oynatma isteklerini dile getiriyor; diğer IPTV oyuncuları yerel recording/DVR’ı öne çıkarıyor: https://www.reddit.com/r/TiviMate/comments/1qgm07m/if_tivimate_adds_one_feature_in_2026_what_should/ · https://www.reddit.com/r/tmiptvplayer/comments/1wbmy6g/tm_iptv_player_now_available_on_ios_and_ipad/
+- **Aday gap:** iOS/tvOS dosya sistemi, arka plan süresi, sağlayıcı catch-up ve mevcut indirme mimarisinin sınırları incelenmeden uygulanmayacak.
+

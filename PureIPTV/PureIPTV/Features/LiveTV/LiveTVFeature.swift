@@ -463,6 +463,18 @@ public struct LiveTVFeature {
             case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
                 return .send(.channelSelected(channel))
 
+            case let .epgTimeline(.presented(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url)))):
+                guard state.config?.playlistID == playlistID else { return .none }
+                for categoryID in Array(state.channelsByCategory.keys) {
+                    state.channelsByCategory[categoryID] = state.channelsByCategory[categoryID]?.map { channel in
+                        channel.id == channelID ? channel.replacingLogoURLOverride(url) : channel
+                    }
+                }
+                if state.selectedChannel?.id == channelID {
+                    state.selectedChannel = state.selectedChannel?.replacingLogoURLOverride(url)
+                }
+                return .none
+
             case .epgTimeline:
                 return .none
 

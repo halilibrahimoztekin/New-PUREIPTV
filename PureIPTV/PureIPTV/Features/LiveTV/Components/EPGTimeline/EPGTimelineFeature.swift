@@ -30,6 +30,7 @@ public struct EPGTimelineFeature {
         public var reminderLoadRequestID: UUID?
         public var favoriteIDs: Set<String> = []
         public var isFavoritesOnly: Bool = false
+        public var channelLogoOverrideRequestIDs: [String: UUID] = [:]
         public var isSyncingEPG: Bool = false
         public var lastSyncTimestamp: Date?
         public var successfulEPGChannelCount = 0
@@ -154,6 +155,14 @@ public struct EPGTimelineFeature {
         case toggleReminder(EPGProgram, MediaModels.Item)
         case reminderScheduleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
         case toggleFavorite(MediaModels.Item)
+        case saveChannelLogoOverride(channelID: String, rawValue: String?)
+        case channelLogoOverrideSaved(
+            channelID: String,
+            playlistID: UUID,
+            requestID: UUID,
+            url: URL?
+        )
+        case logoOverridePropagated(channelID: String, playlistID: UUID, url: URL?)
         case toggleFavoritesOnly
         case loadFavorites
         case favoritesLoaded(Set<String>, ProfileContextSnapshot)
@@ -179,6 +188,7 @@ public struct EPGTimelineFeature {
         public enum Delegate: Equatable {
             case close
             case playChannel(MediaModels.Item)
+            case channelLogoOverrideChanged(channelID: String, playlistID: UUID, url: URL?)
         }
     }
 
@@ -192,6 +202,7 @@ public struct EPGTimelineFeature {
     @Dependency(\.previewPlayerClient) var previewPlayerClient
     @Injected(\.playerClient) var playerClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
+    @Dependency(\.channelLogoOverrideClient) var channelLogoOverrideClient
 
     public init() {}
 
@@ -344,6 +355,55 @@ public struct EPGTimelineFeature {
                 return .run { _ in
                     _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                 }
+
+            case let .saveChannelLogoOverride(channelID, rawValue):
+                guard
+                    let playlistID = state.config.playlistID,
+                    state.channels.contains(where: { $0.id == channelID && $0.type == .live })
+                else { return .none }
+                let overrideURL: URL?
+                if let rawValue {
+                    guard let validated = ChannelLogoOverrideURL.validatedURL(from: rawValue) else { return .none }
+                    overrideURL = validated
+                } else {
+                    overrideURL = nil
+                }
+                let requestID = UUID()
+                state.channelLogoOverrideRequestIDs[channelID] = requestID
+                let channelLogoOverrideClient = channelLogoOverrideClient
+                return .run { send in
+                    let storedURL = await channelLogoOverrideClient.setOverride(playlistID, channelID, rawValue)
+                    await send(.channelLogoOverrideSaved(
+                        channelID: channelID,
+                        playlistID: playlistID,
+                        requestID: requestID,
+                        url: overrideURL == nil ? nil : storedURL
+                    ))
+                }
+
+            case let .channelLogoOverrideSaved(channelID, playlistID, requestID, url):
+                guard
+                    state.channelLogoOverrideRequestIDs[channelID] == requestID,
+                    state.config.playlistID == playlistID
+                else { return .none }
+                state.channelLogoOverrideRequestIDs[channelID] = nil
+                state.channels = state.channels.map { channel in
+                    channel.id == channelID ? channel.replacingLogoURLOverride(url) : channel
+                }
+                if state.activePreviewChannel?.id == channelID {
+                    state.activePreviewChannel = state.activePreviewChannel?.replacingLogoURLOverride(url)
+                }
+                if state.selectedProgramChannel?.id == channelID {
+                    state.selectedProgramChannel = state.selectedProgramChannel?.replacingLogoURLOverride(url)
+                }
+                return .send(.logoOverridePropagated(channelID: channelID, playlistID: playlistID, url: url))
+
+            case let .logoOverridePropagated(channelID, playlistID, url):
+                return .send(.delegate(.channelLogoOverrideChanged(
+                    channelID: channelID,
+                    playlistID: playlistID,
+                    url: url
+                )))
 
             case .toggleFavoritesOnly:
                 state.isFavoritesOnly.toggle()
@@ -555,6 +615,7 @@ public struct EPGTimelineFeature {
                             title: "\(channel.title) (Tekrar: \(program.title))",
                             streamURL: finalURL,
                             coverURL: channel.coverURL,
+                            logoURLOverride: channel.logoURLOverride,
                             categoryID: channel.categoryID,
                             type: .live,
                             epgChannelID: channel.epgChannelID,

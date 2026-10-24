@@ -12,6 +12,11 @@ public enum MediaModels: Sendable {
         public let title: String
         public let streamURL: URL? // Nil for Series until an episode is selected
         public let coverURL: URL?
+        public let logoURLOverride: URL?
+        public var displayLogoURL: URL? {
+            logoURLOverride ?? coverURL
+        }
+
         public let categoryID: String
         public let type: ItemType
 
@@ -30,6 +35,7 @@ public enum MediaModels: Sendable {
             title: String,
             streamURL: URL? = nil,
             coverURL: URL? = nil,
+            logoURLOverride: URL? = nil,
             categoryID: String,
             type: ItemType,
             rating: Double? = nil,
@@ -45,6 +51,7 @@ public enum MediaModels: Sendable {
             self.title = title
             self.streamURL = streamURL
             self.coverURL = coverURL
+            self.logoURLOverride = logoURLOverride
             self.categoryID = categoryID
             self.type = type
             self.rating = rating
@@ -63,6 +70,7 @@ public enum MediaModels: Sendable {
                 title: title,
                 streamURL: streamURL,
                 coverURL: coverURL,
+                logoURLOverride: logoURLOverride,
                 categoryID: categoryID,
                 type: type,
                 rating: rating,
@@ -73,6 +81,26 @@ public enum MediaModels: Sendable {
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
                 userAgentOverride: value
+            )
+        }
+
+        public func replacingLogoURLOverride(_ value: URL?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                logoURLOverride: value,
+                categoryID: categoryID,
+                type: type,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: userAgentOverride
             )
         }
     }

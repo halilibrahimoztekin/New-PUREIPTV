@@ -132,6 +132,7 @@ extension IPTVClient: DependencyKey {
     public nonisolated static let liveValue: IPTVClient = {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
+        let logoOverrideClient = ChannelLogoOverrideClient.liveValue
 
         let m3uCacheKey: @Sendable (PlaylistConfig) -> String = { config in
             let identity = config.playlistID?.uuidString ?? config.m3uURL?.absoluteString ?? "unidentified"
@@ -200,7 +201,7 @@ extension IPTVClient: DependencyKey {
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
-                    return filtered.map { item in
+                    let channels = filtered.map { item in
                         MediaModels.Item(
                             id: item.id,
                             title: item.title,
@@ -212,13 +213,16 @@ extension IPTVClient: DependencyKey {
                             userAgentOverride: config.userAgentOverride
                         )
                     }
+                    guard let playlistID = config.playlistID else { return channels }
+                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, channels.map(\.id))
+                    return channels.map { $0.replacingLogoURLOverride(overrides[$0.id]) }
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveStreams(categoryID: categoryID).url(with: xtreamConfig)
                 let dtos: [XtreamLiveStreamDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
-                return dtos.map { dto in
+                let channels = dtos.map { dto in
                     let streamURL = xtreamConfig.baseURL.appendingPathComponent("live/\(xtreamConfig.username)/\(xtreamConfig.password)/\(dto.streamId).ts")
                     return MediaModels.Item(
                         id: String(dto.streamId),
@@ -233,25 +237,38 @@ extension IPTVClient: DependencyKey {
                         userAgentOverride: config.userAgentOverride
                     )
                 }
+                guard let playlistID = config.playlistID else { return channels }
+                let overrides = await logoOverrideClient.fetchOverrides(playlistID, channels.map(\.id))
+                return channels.map { $0.replacingLogoURLOverride(overrides[$0.id]) }
             },
             resolveLiveItem: { config, itemID, categoryID in
                 guard !itemID.isEmpty, itemID.count <= 512 else { return nil }
                 if config.type == .m3u {
-                    return await ensureM3UCache(config)
-                        .filter { $0.resolvedMediaType == .live && (categoryID == nil || $0.groupTitle == categoryID) }
-                        .first(where: { $0.id == itemID })
-                        .map { item in
-                            MediaModels.Item(
-                                id: item.id,
-                                title: item.title,
-                                streamURL: item.streamURL,
-                                coverURL: item.coverURL,
-                                categoryID: item.groupTitle,
-                                type: .live,
-                                epgChannelID: item.tvgID,
-                                userAgentOverride: config.userAgentOverride
-                            )
+                    let cachedItems = await ensureM3UCache(config)
+                    var matchingItem: M3UItemDTO?
+                    for candidate in cachedItems {
+                        guard candidate.id == itemID else { continue }
+                        guard candidate.resolvedMediaType == .live else { continue }
+                        if let categoryID, candidate.groupTitle != categoryID {
+                            continue
                         }
+                        matchingItem = candidate
+                        break
+                    }
+                    guard let item = matchingItem else { return nil }
+                    let resolved = MediaModels.Item(
+                        id: item.id,
+                        title: item.title,
+                        streamURL: item.streamURL,
+                        coverURL: item.coverURL,
+                        categoryID: item.groupTitle,
+                        type: .live,
+                        epgChannelID: item.tvgID,
+                        userAgentOverride: config.userAgentOverride
+                    )
+                    guard let playlistID = config.playlistID else { return resolved }
+                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, [itemID])
+                    return resolved.replacingLogoURLOverride(overrides[itemID])
                 }
                 guard itemID.count <= 32,
                       itemID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
@@ -266,7 +283,7 @@ extension IPTVClient: DependencyKey {
                           password: password,
                           path: ["live", username, password, "\(itemID).ts"]
                       ) else { return nil }
-                return MediaModels.Item(
+                let resolved = MediaModels.Item(
                     id: itemID,
                     title: itemID,
                     streamURL: streamURL,
@@ -274,6 +291,9 @@ extension IPTVClient: DependencyKey {
                     type: .live,
                     userAgentOverride: config.userAgentOverride
                 )
+                guard let playlistID = config.playlistID else { return resolved }
+                let overrides = await logoOverrideClient.fetchOverrides(playlistID, [itemID])
+                return resolved.replacingLogoURLOverride(overrides[itemID])
             },
             fetchVODCategories: { config in
                 if config.type == .m3u {

@@ -81,6 +81,11 @@ public enum AppStrings {
         public static let noRecentChannels = "Henüz izlenmiş kanal bulunmuyor".localized
         public static let pinRecentChannel = "Geçmişin başına sabitle".localized
         public static let unpinRecentChannel = "Sabitlemeyi kaldır".localized
+        public static let editChannelLogo = "Kanal logosunu düzenle".localized
+        public static let channelLogoURL = "Logo URL’si".localized
+        public static let channelLogoURLHint = "HTTP veya HTTPS adresi girin.".localized
+        public static let invalidChannelLogoURL = "Geçerli bir HTTP veya HTTPS logo adresi girin.".localized
+        public static let resetChannelLogo = "Kaynak logosuna dön".localized
         public static let nowPlayingBadge = "OYNATILIYOR".localized
         public static let allChannels = "Tümü".localized
         public static let categorySports = "Spor".localized

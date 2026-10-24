@@ -186,6 +186,7 @@ public struct EPGGuideFeature {
                         title: "\(channel.title) (Tekrar: \(program.title))",
                         streamURL: finalURL,
                         coverURL: channel.coverURL,
+                        logoURLOverride: channel.logoURLOverride,
                         categoryID: channel.categoryID,
                         type: .live,
                         epgChannelID: channel.epgChannelID,
