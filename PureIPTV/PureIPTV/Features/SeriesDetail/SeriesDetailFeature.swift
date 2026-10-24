@@ -26,6 +26,8 @@ public struct SeriesDetailFeature {
         public var downloadedEpisodes: [String: Bool] = [:]
         public var historyItem: WatchHistoryItem?
         public var episodeProgressMap: [String: WatchHistoryItem] = [:]
+        public var hasUserSelectedSeason = false
+        public var pendingEpisodeReveal: EpisodeRevealRequest?
         public var episodeLayoutMode: EpisodeLayoutMode = .list
         public var errorMessage: String?
 
@@ -75,6 +77,34 @@ public struct SeriesDetailFeature {
             return all.isEmpty ? currentEpisodes : all
         }
 
+        public var currentEpisodeRevealTarget: DetailModels.Episode? {
+            guard let history = historyItem else { return nil }
+            let episodes = allEpisodes.values.flatMap(\.self).sorted {
+                if $0.season != $1.season {
+                    return $0.season < $1.season
+                }
+                return $0.episodeNum < $1.episodeNum
+            }
+            guard let index = episodes.firstIndex(where: { $0.id == history.id }) else { return nil }
+            let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
+            if isFinished, episodes.index(after: index) < episodes.endIndex {
+                return episodes[episodes.index(after: index)]
+            }
+            return episodes[index]
+        }
+
+        public struct EpisodeRevealRequest: Equatable, Sendable {
+            public let id: UUID
+            public let episodeID: String
+            public let seasonNumber: Int
+
+            public init(id: UUID = UUID(), episodeID: String, seasonNumber: Int) {
+                self.id = id
+                self.episodeID = episodeID
+                self.seasonNumber = seasonNumber
+            }
+        }
+
         public mutating func updateNextUpEpisode() {
             let allEps = allEpisodes.values.flatMap(\.self).sorted {
                 if $0.season != $1.season {
@@ -112,6 +142,8 @@ public struct SeriesDetailFeature {
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBTVDetailsDTO, Error>)
         case seasonSelected(Int)
+        case revealCurrentEpisodeTapped
+        case episodeRevealHandled(UUID)
         case episodeSelected(DetailModels.Episode)
         case toggleLayoutMode
         case playNextEpisodeTapped
@@ -215,12 +247,23 @@ public struct SeriesDetailFeature {
                 return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, episodesHistoryEffect)
 
             case let .infoResponse(.success(result)):
+                let previousSeason = state.selectedSeasonNumber
                 state.info = result.info
                 state.seasons = result.seasons
                 state.allEpisodes = result.allEpisodes
 
-                // Auto-select first season
-                if let firstSeason = state.seasons.first {
+                let availableSeasons = Set(
+                    result.seasons.map(\.seasonNumber)
+                        + result.allEpisodes.keys.compactMap(Int.init)
+                )
+                let historySeason = state.historyItem.flatMap { history in
+                    result.allEpisodes.values.flatMap(\.self).first(where: { $0.id == history.id })?.season
+                }
+                if let previousSeason, availableSeasons.contains(previousSeason) {
+                    state.selectedSeasonNumber = previousSeason
+                } else if let historySeason {
+                    state.selectedSeasonNumber = historySeason
+                } else if let firstSeason = state.seasons.first {
                     state.selectedSeasonNumber = firstSeason.seasonNumber
                 } else if let firstKey = state.allEpisodes.keys.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 }).first {
                     state.selectedSeasonNumber = Int(firstKey)
@@ -295,7 +338,23 @@ public struct SeriesDetailFeature {
 
             case let .seasonSelected(seasonNum):
                 state.selectedSeasonNumber = seasonNum
+                state.hasUserSelectedSeason = true
+                state.pendingEpisodeReveal = nil
                 state.updateNextUpEpisode()
+                return .none
+
+            case .revealCurrentEpisodeTapped:
+                guard let episode = state.currentEpisodeRevealTarget else { return .none }
+                state.selectedSeasonNumber = episode.season
+                state.pendingEpisodeReveal = State.EpisodeRevealRequest(
+                    episodeID: episode.id,
+                    seasonNumber: episode.season
+                )
+                return .none
+
+            case let .episodeRevealHandled(requestID):
+                guard state.pendingEpisodeReveal?.id == requestID else { return .none }
+                state.pendingEpisodeReveal = nil
                 return .none
 
             case .toggleLayoutMode:
@@ -332,6 +391,8 @@ public struct SeriesDetailFeature {
                 if state.selectedSeasonNumber != episode.season {
                     state.selectedSeasonNumber = episode.season
                 }
+                state.hasUserSelectedSeason = true
+                state.pendingEpisodeReveal = nil
 
                 let streamURL = episode.streamURL
                 let history = state.episodeProgressMap[episode.id]
@@ -383,6 +444,10 @@ public struct SeriesDetailFeature {
                 if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
                     state.selectedSeasonNumber = ep.season
                 }
+                if matchingEpisode != nil {
+                    state.hasUserSelectedSeason = true
+                }
+                state.pendingEpisodeReveal = nil
 
                 let startPosition = history.duration > 0 ? (history.progress / history.duration) : 0.0
                 let playable = PlayerFeature.PlayableItem(
@@ -418,6 +483,10 @@ public struct SeriesDetailFeature {
                     if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
                         state.selectedSeasonNumber = ep.season
                     }
+                    if matchingEpisode != nil {
+                        state.hasUserSelectedSeason = true
+                    }
+                    state.pendingEpisodeReveal = nil
 
                     let playable = PlayerFeature.PlayableItem(
                         id: history.id,
@@ -462,6 +531,12 @@ public struct SeriesDetailFeature {
 
             case let .historyStatusLoaded(history):
                 state.historyItem = history
+                if !state.hasUserSelectedSeason,
+                   let history,
+                   let episode = state.allEpisodes.values.flatMap(\.self).first(where: { $0.id == history.id })
+                {
+                    state.selectedSeasonNumber = episode.season
+                }
                 state.updateNextUpEpisode()
                 return .none
 
@@ -524,6 +599,7 @@ public struct SeriesDetailFeature {
                 return .send(.delegate(.close))
 
             case .viewDidDisappear:
+                state.pendingEpisodeReveal = nil
                 return .none
 
             case .delegate:

@@ -378,8 +378,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
 - **Durum:** `[DONE]` — #65 kapsamındaki kişi araması portreli, erişilebilir ve doğrudan oynatılabilir sonuç kartlarıyla tamamlandığından bu madde #65 ile birleştirildi.
 
-### 67. [PENDING] Dizi Sayfasında Sezon Seçimini ve Güncel Bölümü Koruma
+### 67. [DONE] Dizi Sayfasında Sezon Seçimini ve Güncel Bölümü Koruma
 - **Bulgu:** IPTVX’in yenilenmiş dizi sayfası, yükleme sırasında seçilen sezonu koruyor ve “Current Episode” kısayoluyla devam bölümünü açmadan gösteriyor.
+- **Canlı doğrulama (24 Ekim 2026):** IPTVX 25 Series açıklaması, bilerek seçilen sezonun ek bilgi yüklenirken korunmasını ve Current Episode kısayolunun playback başlatmadan devam bölümünü göstermesini açıkça belirtiyor: https://iptvx.app/newsroom/iptvx-25-for-you-redesign/. tvOS kullanıcı raporu, farklı sezon seçiminin sayfa yeniden açıldığında yanlış sezona atlaması sorununu doğruluyor: https://github.com/Stremio/stremio-bugs/issues/2084.
+- **İlk kod taraması:** `SeriesDetailFeature.infoResponse(.success)` her veri yanıtında seçili sezonu koşulsuz olarak ilk sezona çekiyor. `nextUpEpisode` geçmişten bulunabiliyor; iOS ve tvOS `NextUpEpisodeBannerView` ise doğrudan `.playNextEpisodeTapped` ile playback başlatıyor. Ekranda mevcut sezonu seçmeden devam bölümünü yalnızca ortaya çıkaran kısayol görünmüyor.
+- **Önerilen kapsam:** Asenkron veri yanıtı daha önce seçilmiş, hâlâ mevcut sezonu sıfırlamasın; ilk açılışta mümkünse devam edilen bölümün sezonunu seç. Current Episode eylemi playback başlatmadan doğru sezonu seçip devam bölümünü görünür/odaklı hale getirsin. Mevcut Play/Resume davranışını koru ve iOS/tvOS odağını erişilebilir tut.
+- **Uygulama:** Provider sezon yanıtı hâlâ mevcut olan seçimi koruyor; ilk seçimde devam edilen bölümün sezonu, ardından ilk mevcut sezon kullanılıyor. Geç gelen geçmiş yanıtı yalnızca kullanıcı sezonu veya playback seçmediyse varsayılanı düzeltiyor. iOS/tvOS Current Episode kısayolu geçmişteki devam bölümünü ve bitmişse sıradaki bölümü oynatmadan seçili sezona kaydırıyor; tvOS hedef bölüme odağı taşıyor. Görünüm kapanışı ve iptal istekleri bekleyen reveal eylemini temizliyor.
+- **PR Reviewer:** İlk inceleme `[CHANGES REQUESTED]` (tvOS görünüm kapanışı/iptalinde geç odak); iptal ve disappear temizliği eklendikten sonra `[APPROVED]`.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0 ile tamamlandı; String Catalog JSON ve `git diff --check` başarılı. Xcode mevcut Swift concurrency uyarıları ve SwiftFormat script-phase notu verdi. Yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone build’i alındı.
 - **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
 
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)

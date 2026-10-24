@@ -7,6 +7,7 @@
 
     public struct SeriesDetailView_tvOS: View {
         @Bindable var store: StoreOf<SeriesDetailFeature>
+        @FocusState private var focusedEpisodeID: String?
 
         public init(store: StoreOf<SeriesDetailFeature>) {
             self.store = store
@@ -16,15 +17,40 @@
             ZStack {
                 Color(hex: "#0F0F13").ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        headerView
-                        contentView
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            headerView
+                            contentView
+                        }
+                    }
+                    .task(id: store.pendingEpisodeReveal?.id) {
+                        guard let request = store.pendingEpisodeReveal else { return }
+                        await Task.yield()
+                        guard !Task.isCancelled,
+                              store.pendingEpisodeReveal?.id == request.id,
+                              store.selectedSeasonNumber == request.seasonNumber
+                        else { return }
+                        proxy.scrollTo(request.episodeID, anchor: .center)
+                        do {
+                            try await Task.sleep(for: .milliseconds(120))
+                        } catch {
+                            return
+                        }
+                        guard !Task.isCancelled,
+                              store.pendingEpisodeReveal?.id == request.id,
+                              store.selectedSeasonNumber == request.seasonNumber
+                        else { return }
+                        focusedEpisodeID = request.episodeID
+                        store.send(.episodeRevealHandled(request.id))
                     }
                 }
             }
             .onAppear {
                 store.send(.onAppear)
+            }
+            .onDisappear {
+                store.send(.viewDidDisappear)
             }
             .sheet(isPresented: Binding(
                 get: { store.isTrailerPresented },
@@ -180,6 +206,16 @@
                                 }
                             }
 
+                            if store.currentEpisodeRevealTarget != nil {
+                                TVHeaderActionButton(
+                                    title: AppStrings.SeriesDetail.currentEpisode,
+                                    icon: "dot.scope",
+                                    isPrimary: false
+                                ) {
+                                    store.send(.revealCurrentEpisodeTapped)
+                                }
+                            }
+
                             TVHeaderFavoriteButton(isFavorite: store.isFavorite) {
                                 store.send(.toggleFavorite)
                             }
@@ -329,10 +365,12 @@
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         userAgentOverride: store.config.userAgentOverride,
+                                        focusedEpisodeID: $focusedEpisodeID,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
                                     }
+                                    .id(episode.id)
                                 }
                             }
                             .padding(.horizontal, 80)
@@ -343,10 +381,12 @@
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         userAgentOverride: store.config.userAgentOverride,
+                                        focusedEpisodeID: $focusedEpisodeID,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
                                         store.send(.episodeSelected(episode))
                                     }
+                                    .id(episode.id)
                                 }
                             }
                             .padding(.horizontal, 80)
@@ -436,6 +476,7 @@
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
         let userAgentOverride: String?
+        @FocusState.Binding var focusedEpisodeID: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
@@ -566,6 +607,7 @@
                 .padding(12)
             }
             .buttonStyle(TVEpisodeCardButtonStyle())
+            .focused($focusedEpisodeID, equals: episode.id)
             .contextMenu {
                 if isWatched {
                     Button(action: onMarkUnwatched) {
@@ -582,6 +624,7 @@
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
         let userAgentOverride: String?
+        @FocusState.Binding var focusedEpisodeID: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
 
@@ -688,6 +731,7 @@
                 .padding(12)
             }
             .buttonStyle(TVEpisodeCardButtonStyle())
+            .focused($focusedEpisodeID, equals: episode.id)
             .contextMenu {
                 if isWatched {
                     Button(action: onMarkUnwatched) {

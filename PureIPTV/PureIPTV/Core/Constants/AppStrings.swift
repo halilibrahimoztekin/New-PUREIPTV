@@ -568,6 +568,7 @@ public enum AppStrings {
     public enum SeriesDetail {
         public static let watch = "İzle".localized
         public static let continueWatching = "Devam Et".localized
+        public static let currentEpisode = "Mevcut Bölüm".localized
         public static let restart = "Baştan Başlat".localized
         public static let seasons = "Sezonlar".localized
         public static let episodes = "Bölümler".localized

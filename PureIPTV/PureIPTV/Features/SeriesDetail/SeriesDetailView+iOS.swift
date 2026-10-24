@@ -13,15 +13,35 @@
             ZStack(alignment: .top) {
                 Color(hex: "#0F0F13").ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        headerView
-                        contentView
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            headerView
+                            contentView
+                        }
+                    }
+                    .task(id: store.pendingEpisodeReveal?.id) {
+                        guard let request = store.pendingEpisodeReveal else { return }
+                        await Task.yield()
+                        guard !Task.isCancelled,
+                              store.pendingEpisodeReveal?.id == request.id,
+                              store.selectedSeasonNumber == request.seasonNumber
+                        else { return }
+                        proxy.scrollTo(request.episodeID, anchor: .center)
+                        await Task.yield()
+                        guard !Task.isCancelled,
+                              store.pendingEpisodeReveal?.id == request.id,
+                              store.selectedSeasonNumber == request.seasonNumber
+                        else { return }
+                        store.send(.episodeRevealHandled(request.id))
                     }
                 }
             }
             .onAppear {
                 store.send(.onAppear)
+            }
+            .onDisappear {
+                store.send(.viewDidDisappear)
             }
             #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -258,6 +278,27 @@
 
                 // 2. Secondary Symmetrical Action Row (Zero-Scroll Above-the-Fold)
                 HStack(spacing: 8) {
+                    if store.currentEpisodeRevealTarget != nil {
+                        Button {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.revealCurrentEpisodeTapped)
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "dot.scope")
+                                    .font(.system(size: 16, weight: .medium))
+                                Text(AppStrings.SeriesDetail.currentEpisode)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
+                            .foregroundStyle(.white)
+                        }
+                    }
+
                     if let history = store.historyItem, history.duration > 0 {
                         Button {
                             HapticManager.shared.trigger(.light)
@@ -441,6 +482,7 @@
                                             store.send(.markEpisodeUnwatched(episode.id))
                                         }
                                     )
+                                    .id(episode.id)
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -469,6 +511,7 @@
                                             store.send(.markEpisodeUnwatched(episode.id))
                                         }
                                     )
+                                    .id(episode.id)
                                 }
                             }
                             .padding(.horizontal, 24)
