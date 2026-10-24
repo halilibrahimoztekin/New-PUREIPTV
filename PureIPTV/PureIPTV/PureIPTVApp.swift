@@ -101,6 +101,12 @@ struct PureIPTVApp: App {
             .onOpenURL { url in
                 store.send(.handleDeepLink(url))
             }
+            #if os(tvOS)
+            .onContinueUserActivity(StreamHandoffManager.activityType) { activity in
+                guard let request = StreamHandoffManager.shared.parseHandoff(from: activity) else { return }
+                store.send(.receiveStreamHandoff(request))
+            }
+            #endif
         }
     }
 }

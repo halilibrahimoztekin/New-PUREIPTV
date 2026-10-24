@@ -74,12 +74,14 @@ public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchLiveChannels: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
+    public var resolveLiveItem: @Sendable (_ config: PlaylistConfig, _ itemID: String, _ categoryID: String?) async throws -> MediaModels.Item?
     public var fetchVODCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchVODs: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var fetchSeriesCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchSeries: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
+    public var resolveVODItem: @Sendable (_ config: PlaylistConfig, _ vodID: String, _ categoryID: String?) async throws -> MediaModels.Item?
     public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
     public var searchCachedEPGPrograms: @Sendable (_ config: PlaylistConfig, _ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _, _ in [] }
     public var clearEPGCache: @Sendable (_ config: PlaylistConfig) async -> Void = { _ in }
@@ -96,6 +98,33 @@ private func decodeEPGItems(_ data: Data) throws -> [EPGItemDTO] {
             throw NetworkError.decodingFailed(description: error.localizedDescription)
         }
     }
+}
+
+private func makeXtreamStreamURL(
+    baseURL: URL,
+    username _: String,
+    password _: String,
+    path: [String]
+) -> URL? {
+    guard let baseHost = baseURL.host, let scheme = baseURL.scheme?.lowercased(),
+          scheme == "http" || scheme == "https",
+          var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
+    var allowed = CharacterSet.alphanumerics
+    allowed.formUnion(CharacterSet(charactersIn: "-._~"))
+    let encodedSegments = path.compactMap { $0.addingPercentEncoding(withAllowedCharacters: allowed) }
+    guard encodedSegments.count == path.count else { return nil }
+    var basePath = components.percentEncodedPath
+    if !basePath.hasSuffix("/") {
+        basePath += "/"
+    }
+    components.percentEncodedPath = basePath + encodedSegments.joined(separator: "/")
+    components.query = nil
+    components.fragment = nil
+    guard let result = components.url,
+          result.host?.caseInsensitiveCompare(baseHost) == .orderedSame,
+          result.scheme?.lowercased() == scheme,
+          result.user == nil, result.password == nil else { return nil }
+    return result
 }
 
 extension IPTVClient: DependencyKey {
@@ -203,6 +232,47 @@ extension IPTVClient: DependencyKey {
                         userAgentOverride: config.userAgentOverride
                     )
                 }
+            },
+            resolveLiveItem: { config, itemID, categoryID in
+                guard !itemID.isEmpty, itemID.count <= 512 else { return nil }
+                if config.type == .m3u {
+                    return await ensureM3UCache(config)
+                        .filter { $0.resolvedMediaType == .live && (categoryID == nil || $0.groupTitle == categoryID) }
+                        .first(where: { $0.id == itemID })
+                        .map { item in
+                            MediaModels.Item(
+                                id: item.id,
+                                title: item.title,
+                                streamURL: item.streamURL,
+                                coverURL: item.coverURL,
+                                categoryID: item.groupTitle,
+                                type: .live,
+                                epgChannelID: item.tvgID,
+                                userAgentOverride: config.userAgentOverride
+                            )
+                        }
+                }
+                guard itemID.count <= 32,
+                      itemID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                      Int(itemID) != nil else { return nil }
+                guard config.type == .xtream,
+                      let serverURL = config.serverURL,
+                      let username = config.username,
+                      let password = config.password,
+                      let streamURL = makeXtreamStreamURL(
+                          baseURL: serverURL,
+                          username: username,
+                          password: password,
+                          path: ["live", username, password, "\(itemID).ts"]
+                      ) else { return nil }
+                return MediaModels.Item(
+                    id: itemID,
+                    title: itemID,
+                    streamURL: streamURL,
+                    categoryID: categoryID ?? "",
+                    type: .live,
+                    userAgentOverride: config.userAgentOverride
+                )
             },
             fetchVODCategories: { config in
                 if config.type == .m3u {
@@ -398,6 +468,64 @@ extension IPTVClient: DependencyKey {
                     rating: dto.info?.rating5based,
                     releaseDate: dto.info?.releaseDate,
                     youtubeTrailer: dto.info?.youtubeTrailer
+                )
+            },
+            resolveVODItem: { config, vodID, categoryID in
+                guard !vodID.isEmpty, vodID.count <= 512 else { return nil }
+
+                if config.type == .m3u {
+                    let item = await ensureM3UCache(config).first {
+                        $0.id == vodID && $0.resolvedMediaType == .vod
+                            && (categoryID == nil || $0.groupTitle == categoryID)
+                    }
+                    guard let item else { return nil }
+                    return MediaModels.Item(
+                        id: item.id,
+                        title: item.title,
+                        streamURL: item.streamURL,
+                        coverURL: item.coverURL,
+                        categoryID: item.groupTitle,
+                        type: .vod,
+                        epgChannelID: item.tvgID,
+                        userAgentOverride: config.userAgentOverride
+                    )
+                }
+
+                guard vodID.count <= 32,
+                      vodID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                      Int(vodID) != nil else { return nil }
+                guard config.type == .xtream,
+                      let serverURL = config.serverURL,
+                      let username = config.username,
+                      let password = config.password else { return nil }
+                let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
+                let endpoint = try XtreamEndpoint.getVODInfo(vodID: vodID).url(with: xtreamConfig)
+                let data = try await networkClient.fetchData(url: endpoint, userAgentOverride: config.userAgentOverride)
+                let dto = try await MainActor.run { try JSONDecoder().decode(XtreamVODInfoDTO.self, from: data) }
+                guard let movieData = dto.movieData,
+                      movieData.streamId > 0,
+                      String(movieData.streamId) == vodID else { return nil }
+                let ext = movieData.containerExtension.flatMap { value -> String? in
+                    guard (1 ... 10).contains(value.count),
+                          value.utf8.allSatisfy({
+                              (48 ... 57).contains($0) || (65 ... 90).contains($0) || (97 ... 122).contains($0)
+                          }) else { return nil }
+                    return value
+                } ?? "mp4"
+                guard let streamURL = makeXtreamStreamURL(
+                    baseURL: serverURL,
+                    username: username,
+                    password: password,
+                    path: ["movie", username, password, "\(vodID).\(ext)"]
+                ) else { return nil }
+                return MediaModels.Item(
+                    id: vodID,
+                    title: movieData.name ?? dto.info?.name ?? vodID,
+                    streamURL: streamURL,
+                    coverURL: dto.info?.movieImage.flatMap(URL.init(string:)),
+                    categoryID: "",
+                    type: .vod,
+                    userAgentOverride: config.userAgentOverride
                 )
             },
             fetchShortEPG: { config, streamID, limit in
@@ -640,12 +768,14 @@ extension IPTVClient: DependencyKey {
         authenticate: { _ in },
         fetchLiveCategories: { _ in [] },
         fetchLiveChannels: { _, _ in [] },
+        resolveLiveItem: { _, _, _ in nil },
         fetchVODCategories: { _ in [] },
         fetchVODs: { _, _ in [] },
         fetchSeriesCategories: { _ in [] },
         fetchSeries: { _, _ in [] },
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
+        resolveVODItem: { _, _, _ in nil },
         fetchShortEPG: { _, _, _ in [] },
         searchCachedEPGPrograms: { _, _, _, _ in [] },
         clearEPGCache: { _ in }

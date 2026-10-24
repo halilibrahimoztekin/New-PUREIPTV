@@ -10,6 +10,10 @@ import TCACoordinators
 
 @Reducer
 public struct AppCoordinator {
+    private enum CancelID {
+        static let streamHandoffResolution = "AppCoordinator.streamHandoffResolution"
+    }
+
     public enum PlayerDisplayMode: Equatable, Sendable {
         case fullScreen
         case miniPlayer
@@ -25,6 +29,8 @@ public struct AppCoordinator {
         public var isPlayerMini: Bool = false
 
         public var isPremium: Bool = false
+        public var activeStreamHandoffRequestID: UUID?
+        public var isStreamHandoffErrorPresented = false
 
         public static var initialState: State {
             State(routes: [.root(.splash(SplashFeature.State()), withNavigation: true)])
@@ -61,9 +67,13 @@ public struct AppCoordinator {
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case handleDeepLink(URL)
+        case receiveStreamHandoff(StreamHandoffRequest)
+        case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
+        case dismissStreamHandoffError
     }
 
     @Injected(\.playlistRepository) var playlistRepository
+    @Injected(\.iptvClient) var iptvClient
     @Dependency(\.purchases) var purchases
 
     public init() {}
@@ -80,6 +90,7 @@ public struct AppCoordinator {
 
     private func core(state: inout State, action: Action) -> Effect<Action> {
         let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
 
         switch action {
         // ── Splash ───────────────────────────────────────────────
@@ -161,6 +172,89 @@ public struct AppCoordinator {
 
         case .presentPaywall:
             state.routes.presentSheet(.paywall(PaywallFeature.State()))
+            return .none
+
+        case let .receiveStreamHandoff(request):
+            let requestID = UUID()
+            state.activeStreamHandoffRequestID = requestID
+            state.isStreamHandoffErrorPresented = false
+            return .run { send in
+                let playlist = playlistRepository.getPlaylists().first { $0.id == request.playlistID }
+                guard let playlist, let config = playlist.toPlaylistConfig() else {
+                    await send(.streamHandoffResolved(requestID: requestID, playable: nil))
+                    return
+                }
+
+                let playable: PlayerFeature.PlayableItem?
+                switch request.mediaKind {
+                case .live:
+                    let item = try? await iptvClient.resolveLiveItem(config, request.itemID, request.categoryID)
+                    playable = item.flatMap { item in
+                        guard let url = item.streamURL else { return nil }
+                        return PlayerFeature.PlayableItem(
+                            id: item.id,
+                            title: request.title,
+                            streamURL: url,
+                            coverURL: item.coverURL,
+                            isLive: true,
+                            config: config,
+                            epgChannelID: item.epgChannelID,
+                            tvArchive: item.tvArchive,
+                            categoryID: item.categoryID
+                        )
+                    }
+                case .vod:
+                    let item = try? await iptvClient.resolveVODItem(config, request.itemID, request.categoryID)
+                    playable = item.flatMap { item in
+                        guard let url = item.streamURL else { return nil }
+                        return PlayerFeature.PlayableItem(
+                            id: item.id,
+                            title: item.title,
+                            streamURL: url,
+                            coverURL: item.coverURL,
+                            startPosition: request.playbackPosition,
+                            config: config,
+                            categoryID: item.categoryID
+                        )
+                    }
+                case .episode:
+                    guard let seriesID = request.seriesID else {
+                        await send(.streamHandoffResolved(requestID: requestID, playable: nil))
+                        return
+                    }
+                    let details = try? await iptvClient.fetchSeriesInfo(config, seriesID)
+                    playable = details?.episodes.first(where: { $0.id == request.itemID }).map { episode in
+                        PlayerFeature.PlayableItem(
+                            id: episode.id,
+                            title: request.title,
+                            seriesTitle: request.seriesTitle,
+                            streamURL: episode.streamURL,
+                            coverURL: episode.coverURL,
+                            seriesID: seriesID,
+                            startPosition: request.playbackPosition,
+                            config: config
+                        )
+                    }
+                }
+                await send(.streamHandoffResolved(requestID: requestID, playable: playable))
+            }
+            .cancellable(id: CancelID.streamHandoffResolution, cancelInFlight: true)
+
+        case let .streamHandoffResolved(requestID, playable):
+            guard state.activeStreamHandoffRequestID == requestID else { return .none }
+            state.activeStreamHandoffRequestID = nil
+            guard let playable else {
+                state.isStreamHandoffErrorPresented = true
+                return .none
+            }
+            let playerState = PlayerFeature.State(item: playable)
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case .dismissStreamHandoffError:
+            state.isStreamHandoffErrorPresented = false
             return .none
 
         case .router(.routeAction(_, .paywall(.dismiss))),
@@ -564,5 +658,22 @@ public struct AppCoordinatorView: View {
             }
         }
         .useNavigationStack(.whenAvailable)
+        .alert(
+            AppStrings.Common.handoffPlaybackUnavailableTitle,
+            isPresented: Binding(
+                get: { store.isStreamHandoffErrorPresented },
+                set: { isPresented in
+                    if !isPresented {
+                        store.send(.dismissStreamHandoffError)
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                store.send(.dismissStreamHandoffError)
+            }
+        } message: {
+            Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
+        }
     }
 }

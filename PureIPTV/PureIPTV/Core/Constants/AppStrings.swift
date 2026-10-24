@@ -42,6 +42,8 @@ public enum AppStrings {
         public static let play = "Oynat".localized
         public static let search = "Ara".localized
         public static let channels = "Kanallar".localized
+        public static let handoffPlaybackUnavailableTitle = "Oynatmaya Devam Edilemiyor".localized
+        public static let handoffPlaybackUnavailableMessage = "Bu içerik bu Apple TV'de kullanılamıyor.".localized
     }
 
     // MARK: - VOD (Movies)

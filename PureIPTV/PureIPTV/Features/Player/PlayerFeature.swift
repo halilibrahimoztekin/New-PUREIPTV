@@ -2501,12 +2501,29 @@ public struct PlayerFeature {
                         programTitle: state.currentEPGProgram?.title,
                         categoryName: state.item.seriesTitle
                     )
-                    StreamHandoffManager.shared.updatePlaybackActivity(
-                        channelTitle: state.item.title,
-                        streamURL: state.item.streamURL,
-                        playbackPosition: state.position,
-                        isLive: state.item.isLive
-                    )
+                    if let playlistID = state.item.config?.playlistID {
+                        let mediaKind: StreamHandoffRequest.MediaKind = if state.item.isLive {
+                            .live
+                        } else if state.item.seriesID != nil {
+                            .episode
+                        } else {
+                            .vod
+                        }
+                        StreamHandoffManager.shared.updatePlaybackActivity(
+                            StreamHandoffRequest(
+                                playlistID: playlistID,
+                                itemID: state.item.id,
+                                mediaKind: mediaKind,
+                                seriesID: state.item.seriesID,
+                                seriesTitle: state.item.seriesTitle,
+                                categoryID: state.item.categoryID?.isEmpty == false ? state.item.categoryID : nil,
+                                playbackPosition: state.position,
+                                title: state.item.title
+                            )
+                        )
+                    } else {
+                        StreamHandoffManager.shared.invalidateActivity()
+                    }
                     CompanionModeManager.shared.broadcastPlayback(
                         info: CompanionPlaybackInfo(
                             channelID: state.item.id,
