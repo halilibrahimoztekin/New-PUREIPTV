@@ -486,6 +486,10 @@ public enum AppStrings {
         public static let newSeries = "Yeni Eklenen Diziler".localized
         public static let recommendedForYou = "Sana Özel Öneriler".localized
         public static let actorRecommendationTitle = "Ortak oyuncu: %@ • İzlediğin: %@ • %@".localized
+        public static let mostWatchedActors = "En Çok İzlediğin Oyuncular".localized
+        public static let popularActors = "Popüler Oyuncular".localized
+        public static let actorFilmographyUnavailable = "Bu oyuncunun kataloğunda eşleşen içerik bulunamadı.".localized
+        public static let actorFilmographyTitle = "%@ • Filmografi • %@"
         public static let hdBadge = "HD".localized
         public static let movieBadge = "Film".localized
         public static let details = "Detaylar".localized

@@ -4,6 +4,23 @@ import Foundation
 /// titles, then intersecting those actors' combined credits with the active
 /// provider catalogue. It never enriches every catalogue item individually.
 public enum ActorRecommendationEngine: Sendable {
+    public struct MostWatchedActor: Equatable, Identifiable, Sendable {
+        public enum Source: Equatable, Sendable { case watchHistory, popularFallback }
+        public let id: Int
+        public let name: String
+        public let profilePath: String?
+        public let watchedTitleCount: Int
+        public let source: Source
+
+        public nonisolated init(id: Int, name: String, profilePath: String?, watchedTitleCount: Int, source: Source) {
+            self.id = id
+            self.name = name
+            self.profilePath = profilePath
+            self.watchedTitleCount = watchedTitleCount
+            self.source = source
+        }
+    }
+
     public enum MediaKind: String, Codable, Sendable {
         case movie
         case series
@@ -122,6 +139,157 @@ public enum ActorRecommendationEngine: Sendable {
         return result
     }
 
+    public nonisolated static func mostWatchedActors(
+        history: [WatchHistoryItem],
+        playlistID: UUID?,
+        movies: [MediaModels.Item],
+        series: [MediaModels.Item],
+        tmdbClient: TMDBClient
+    ) async -> [MostWatchedActor] {
+        var appearances: [Int: (name: String, profilePath: String?, count: Int)] = [:]
+        if let playlistID {
+            for seed in recentSeeds(from: history, playlistID: playlistID) {
+                guard !Task.isCancelled else { return [] }
+                guard let source = await resolve(seed, using: tmdbClient) else { continue }
+                var seenInSource = Set<Int>()
+                for actor in source.credits?.cast ?? [] {
+                    guard
+                        seenInSource.insert(actor.id).inserted,
+                        let name = actor.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                        !name.isEmpty
+                    else { continue }
+                    let existing = appearances[actor.id]
+                    appearances[actor.id] = (
+                        name,
+                        actor.profilePath ?? existing?.profilePath,
+                        (existing?.count ?? 0) + 1
+                    )
+                }
+            }
+        }
+
+        let ranked = appearances.map { id, value in
+            MostWatchedActor(
+                id: id,
+                name: value.name,
+                profilePath: value.profilePath,
+                watchedTitleCount: value.count,
+                source: .watchHistory
+            )
+        }
+        .sorted {
+            if $0.watchedTitleCount != $1.watchedTitleCount {
+                return $0.watchedTitleCount > $1.watchedTitleCount
+            }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+        if !ranked.isEmpty {
+            return await catalogMatchingActors(Array(ranked.prefix(16)), movies: movies, series: series, tmdbClient: tmdbClient)
+        }
+
+        if let cached = await LookupCache.shared.popularActors() {
+            return await catalogMatchingActors(cached, movies: movies, series: series, tmdbClient: tmdbClient)
+        }
+        guard !Task.isCancelled else { return [] }
+        let response: TMDBPopularPeopleResponseDTO
+        do {
+            response = try await tmdbClient.fetchPopularPeople()
+        } catch {
+            return []
+        }
+        var seen = Set<Int>()
+        let people: [TMDBPopularPersonDTO] = response.results ?? []
+        let actors: [MostWatchedActor] = Array(people.compactMap { person -> MostWatchedActor? in
+            guard
+                seen.insert(person.id).inserted,
+                person.knownForDepartment?.caseInsensitiveCompare("Acting") == .orderedSame,
+                let name = person.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                !name.isEmpty
+            else { return nil }
+            return MostWatchedActor(
+                id: person.id,
+                name: name,
+                profilePath: person.profilePath,
+                watchedTitleCount: 0,
+                source: .popularFallback
+            )
+        }.prefix(16))
+        guard !Task.isCancelled else { return [] }
+        await LookupCache.shared.storePopularActors(actors)
+        return await catalogMatchingActors(actors, movies: movies, series: series, tmdbClient: tmdbClient)
+    }
+
+    private nonisolated static func catalogMatchingActors(
+        _ actors: [MostWatchedActor],
+        movies: [MediaModels.Item],
+        series: [MediaModels.Item],
+        tmdbClient: TMDBClient
+    ) async -> [MostWatchedActor] {
+        var result: [MostWatchedActor] = []
+        for actor in actors {
+            guard !Task.isCancelled else { return [] }
+            let credits: TMDBPersonCreditsDTO
+            if let cached = await LookupCache.shared.credits(for: actor.id) {
+                credits = cached
+            } else {
+                guard let fetched = try? await tmdbClient.fetchPersonCombinedCredits(actor.id) else { continue }
+                await LookupCache.shared.store(fetched, for: actor.id)
+                credits = fetched
+            }
+            guard !Task.isCancelled else { return [] }
+            if !matches(credits.cast ?? [], kind: .movie, candidates: movies, excluding: [], limit: 1).isEmpty
+                || !matches(credits.cast ?? [], kind: .series, candidates: series, excluding: [], limit: 1).isEmpty
+            {
+                result.append(actor)
+                if result.count == 8 {
+                    break
+                }
+            }
+        }
+        return result
+    }
+
+    public nonisolated static func filmography(
+        actorID: Int,
+        actorName: String,
+        movies: [MediaModels.Item],
+        series: [MediaModels.Item],
+        tmdbClient: TMDBClient
+    ) async -> [Collection] {
+        guard !Task.isCancelled else { return [] }
+        let credits: TMDBPersonCreditsDTO
+        if let cached = await LookupCache.shared.credits(for: actorID) {
+            credits = cached
+        } else {
+            guard let fetched = try? await tmdbClient.fetchPersonCombinedCredits(actorID) else { return [] }
+            await LookupCache.shared.store(fetched, for: actorID)
+            credits = fetched
+        }
+        guard !Task.isCancelled else { return [] }
+        let movieMatches = matches(credits.cast ?? [], kind: .movie, candidates: movies, excluding: [], limit: 80)
+        let seriesMatches = matches(credits.cast ?? [], kind: .series, candidates: series, excluding: [], limit: 80)
+        var result: [Collection] = []
+        if !movieMatches.isEmpty {
+            result.append(Collection(
+                actorID: actorID,
+                actorName: actorName,
+                sourceTitle: "Filmografi",
+                kind: .movie,
+                items: movieMatches
+            ))
+        }
+        if !seriesMatches.isEmpty {
+            result.append(Collection(
+                actorID: actorID,
+                actorName: actorName,
+                sourceTitle: "Filmografi",
+                kind: .series,
+                items: seriesMatches
+            ))
+        }
+        return result
+    }
+
     private nonisolated static func recentSeeds(from history: [WatchHistoryItem], playlistID: UUID) -> [Seed] {
         var seenIDs = Set<String>()
         var seenSeriesIDs = Set<String>()
@@ -167,6 +335,20 @@ public enum ActorRecommendationEngine: Sendable {
         private let lifetime: TimeInterval = 24 * 60 * 60
         private var sources: [String: (expiresAt: Date, value: ResolvedSource)] = [:]
         private var creditsByActorID: [Int: (expiresAt: Date, value: TMDBPersonCreditsDTO)] = [:]
+        private var popularActorsEntry: (expiresAt: Date, value: [MostWatchedActor])?
+
+        func popularActors() -> [MostWatchedActor]? {
+            guard let entry = popularActorsEntry else { return nil }
+            guard entry.expiresAt > Date() else {
+                popularActorsEntry = nil
+                return nil
+            }
+            return entry.value
+        }
+
+        func storePopularActors(_ actors: [MostWatchedActor]) {
+            popularActorsEntry = (Date().addingTimeInterval(lifetime), actors)
+        }
 
         func source(for key: String) -> ResolvedSource? {
             guard let entry = sources[key] else { return nil }
@@ -263,7 +445,8 @@ public enum ActorRecommendationEngine: Sendable {
         _ credits: [TMDBPersonCreditDTO],
         kind: MediaKind,
         candidates: [MediaModels.Item],
-        excluding watchedIDs: Set<String>
+        excluding watchedIDs: Set<String>,
+        limit: Int = 8
     ) -> [MediaModels.Item] {
         var candidateIndex: [String: [MediaModels.Item]] = [:]
         for item in candidates where !watchedIDs.contains(item.id) {
@@ -290,7 +473,7 @@ public enum ActorRecommendationEngine: Sendable {
             for item in yearMatches where seenIDs.insert(item.id).inserted {
                 result.append(item)
             }
-            if result.count >= 8 {
+            if result.count >= limit {
                 break
             }
         }

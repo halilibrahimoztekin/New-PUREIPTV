@@ -165,6 +165,53 @@
                     }
                 }
             case .recommendations:
+                if !store.mostWatchedActors.isEmpty {
+                    TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
+                        ? AppStrings.Dashboard.popularActors
+                        : AppStrings.Dashboard.mostWatchedActors)
+                    {
+                        ForEach(store.mostWatchedActors) { actor in
+                            Button { store.send(.actorSelected(id: actor.id, name: actor.name)) } label: {
+                                VStack(spacing: 10) {
+                                    AsyncImage(url: actor.profilePath.flatMap {
+                                        URL(string: "https://image.tmdb.org/t/p/w185\($0)")
+                                    }) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        Text(String(actor.name.prefix(1)))
+                                            .font(.largeTitle.bold())
+                                            .foregroundStyle(.white)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                            .background(Color.white.opacity(0.14))
+                                    }
+                                    .frame(width: 132, height: 132)
+                                    .clipShape(Circle())
+
+                                    Text(actor.name)
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(.white)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                        .frame(width: 160, height: 48, alignment: .top)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.card)
+                            .accessibilityLabel(Text(actor.name))
+                        }
+                    }
+                }
+                if store.isLoadingActorFilmography {
+                    ProgressView(AppStrings.Common.loading)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 40)
+                }
+                if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
+                    Text(AppStrings.Dashboard.actorFilmographyUnavailable)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .padding(.horizontal, 40)
+                }
                 if !store.recommendedVODs.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
                         ForEach(store.recommendedVODs) { vod in
@@ -200,6 +247,19 @@
                                        collection.sourceTitle,
                                        collection.kind.title)
                     TVShelfSection(title: title) {
+                        ForEach(collection.items) { item in
+                            if collection.kind == .movie {
+                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                    .frame(width: 220)
+                            } else {
+                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                    .frame(width: 220)
+                            }
+                        }
+                    }
+                }
+                ForEach(store.selectedActorCollections) { collection in
+                    TVShelfSection(title: "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)") {
                         ForEach(collection.items) { item in
                             if collection.kind == .movie {
                                 TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }

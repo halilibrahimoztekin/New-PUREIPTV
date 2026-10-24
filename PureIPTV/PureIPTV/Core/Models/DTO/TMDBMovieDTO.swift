@@ -112,6 +112,23 @@ public struct TMDBCastMemberDTO: Codable, Equatable, Sendable {
     }
 }
 
+public struct TMDBPopularPeopleResponseDTO: Codable, Equatable, Sendable {
+    public let results: [TMDBPopularPersonDTO]?
+}
+
+public struct TMDBPopularPersonDTO: Codable, Equatable, Sendable {
+    public let id: Int
+    public let name: String?
+    public let profilePath: String?
+    public let knownForDepartment: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name
+        case profilePath = "profile_path"
+        case knownForDepartment = "known_for_department"
+    }
+}
+
 public struct TMDBCrewMemberDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let name: String?

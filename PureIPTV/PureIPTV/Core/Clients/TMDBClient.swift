@@ -9,6 +9,7 @@ public struct TMDBClient {
     public var fetchTVDetails: @Sendable (_ tvID: Int) async throws -> TMDBTVDetailsDTO
     public var fetchPersonDetails: @Sendable (_ personID: Int) async throws -> TMDBPersonDetailsDTO
     public var fetchPersonCombinedCredits: @Sendable (_ personID: Int) async throws -> TMDBPersonCreditsDTO
+    public var fetchPopularPeople: @Sendable () async throws -> TMDBPopularPeopleResponseDTO
 }
 
 extension TMDBClient: DependencyKey {
@@ -101,6 +102,19 @@ extension TMDBClient: DependencyKey {
                 guard let url = components.url else { throw NetworkError.invalidURL }
                 let data = try await networkClient.fetchData(url: url)
                 return try JSONDecoder().decode(TMDBPersonCreditsDTO.self, from: data)
+            },
+            fetchPopularPeople: {
+                guard var components = URLComponents(string: "\(baseURLString)/person/popular") else {
+                    throw NetworkError.invalidURL
+                }
+                components.queryItems = [
+                    URLQueryItem(name: "api_key", value: apiKey),
+                    URLQueryItem(name: "language", value: "tr-TR"),
+                    URLQueryItem(name: "page", value: "1"),
+                ]
+                guard let url = components.url else { throw NetworkError.invalidURL }
+                let data = try await networkClient.fetchData(url: url)
+                return try JSONDecoder().decode(TMDBPopularPeopleResponseDTO.self, from: data)
             }
         )
     }()

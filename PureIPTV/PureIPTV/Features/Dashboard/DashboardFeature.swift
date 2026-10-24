@@ -48,6 +48,13 @@ public struct DashboardFeature {
         public var actorRecommendationCollections: [ActorRecommendationEngine.Collection] = []
         public var actorRecommendationMovieCandidates: [MediaModels.Item] = []
         public var actorRecommendationSeriesCandidates: [MediaModels.Item] = []
+        public var mostWatchedActors: [ActorRecommendationEngine.MostWatchedActor] = []
+        public var selectedActorID: Int?
+        public var selectedActorName: String?
+        public var selectedActorCollections: [ActorRecommendationEngine.Collection] = []
+        public var isLoadingActorFilmography = false
+        public var hasLoadedSelectedActorFilmography = false
+        public var selectedActorFilmographyRequestID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
         public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
@@ -87,7 +94,9 @@ public struct DashboardFeature {
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
         case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
-        case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection])
+        case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
+        case actorSelected(id: Int, name: String)
+        case actorFilmographyLoaded(id: Int, requestID: UUID, playlistID: UUID?, hideAdult: Bool, collections: [ActorRecommendationEngine.Collection])
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case epgEventsLoaded(playlistID: UUID?, refreshID: UUID, events: [EPGEvent], succeeded: Bool)
         case channelSelected(MediaModels.Item)
@@ -117,6 +126,7 @@ public struct DashboardFeature {
         case watchHistoryObserver
         case remoteData
         case actorRecommendations
+        case actorFilmography
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -146,6 +156,13 @@ public struct DashboardFeature {
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
                     state.actorRecommendationSeriesCandidates = []
+                    state.mostWatchedActors = []
+                    state.selectedActorID = nil
+                    state.selectedActorFilmographyRequestID = nil
+                    state.selectedActorName = nil
+                    state.selectedActorCollections = []
+                    state.isLoadingActorFilmography = false
+                    state.hasLoadedSelectedActorFilmography = false
                     state.activeActorRecommendationRefreshID = nil
                     state.epgEvents = []
                     state.hasLoadedEPGEvents = false
@@ -164,6 +181,13 @@ public struct DashboardFeature {
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
                     state.actorRecommendationSeriesCandidates = []
+                    state.mostWatchedActors = []
+                    state.selectedActorID = nil
+                    state.selectedActorFilmographyRequestID = nil
+                    state.selectedActorName = nil
+                    state.selectedActorCollections = []
+                    state.isLoadingActorFilmography = false
+                    state.hasLoadedSelectedActorFilmography = false
                     state.activeActorRecommendationRefreshID = nil
                     state.epgEvents = state.epgEvents.filter {
                         !currentAdultHidden || (!isAdult($0.channel.title) && !isAdult($0.program.title))
@@ -260,9 +284,16 @@ public struct DashboardFeature {
                 state.activeRefreshID = nil
                 state.activeEPGRefreshID = nil
                 state.activeActorRecommendationRefreshID = nil
+                state.isLoadingActorFilmography = false
+                state.hasLoadedSelectedActorFilmography = false
+                state.selectedActorID = nil
+                state.selectedActorFilmographyRequestID = nil
+                state.selectedActorName = nil
+                state.selectedActorCollections = []
                 return .merge(
                     .cancel(id: CancelID.remoteData),
                     .cancel(id: CancelID.actorRecommendations),
+                    .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.watchHistoryObserver)
                 )
 
@@ -303,15 +334,73 @@ public struct DashboardFeature {
                         series: safeSeries,
                         tmdbClient: tmdbClient
                     )
+                    let actors = safeMovies.isEmpty && safeSeries.isEmpty
+                        ? []
+                        : await ActorRecommendationEngine.mostWatchedActors(
+                            history: eligibleHistory,
+                            playlistID: playlistID,
+                            movies: safeMovies,
+                            series: safeSeries,
+                            tmdbClient: tmdbClient
+                        )
                     guard !Task.isCancelled else { return }
                     await send(.actorRecommendationsLoaded(
                         playlistID: playlistID,
                         hideAdult: hideAdult,
                         refreshID: refreshID,
-                        collections: collections
+                        collections: collections,
+                        actors: actors
                     ))
                 }
                 .cancellable(id: CancelID.actorRecommendations, cancelInFlight: true)
+
+            case let .actorSelected(id, name):
+                if state.selectedActorID == id {
+                    state.selectedActorID = nil
+                    state.selectedActorFilmographyRequestID = nil
+                    state.selectedActorName = nil
+                    state.selectedActorCollections = []
+                    state.isLoadingActorFilmography = false
+                    state.hasLoadedSelectedActorFilmography = false
+                    state.selectedActorFilmographyRequestID = nil
+                    return .cancel(id: CancelID.actorFilmography)
+                }
+                state.selectedActorID = id
+                state.selectedActorName = name
+                state.selectedActorCollections = []
+                state.isLoadingActorFilmography = true
+                state.hasLoadedSelectedActorFilmography = false
+                let requestID = UUID()
+                state.selectedActorFilmographyRequestID = requestID
+                let playlistID = state.activePlaylistID
+                let hideAdult = state.lastAdultHidden ?? false
+                let movies = state.actorRecommendationMovieCandidates
+                let series = state.actorRecommendationSeriesCandidates
+                return .run { send in
+                    let collections = await ActorRecommendationEngine.filmography(
+                        actorID: id,
+                        actorName: name,
+                        movies: movies,
+                        series: series,
+                        tmdbClient: tmdbClient
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.actorFilmographyLoaded(id: id, requestID: requestID, playlistID: playlistID, hideAdult: hideAdult, collections: collections))
+                }
+                .cancellable(id: CancelID.actorFilmography, cancelInFlight: true)
+
+            case let .actorFilmographyLoaded(id, requestID, playlistID, hideAdult, collections):
+                guard
+                    state.selectedActorID == id,
+                    state.selectedActorFilmographyRequestID == requestID,
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult
+                else { return .none }
+                state.selectedActorFilmographyRequestID = nil
+                state.selectedActorCollections = collections
+                state.isLoadingActorFilmography = false
+                state.hasLoadedSelectedActorFilmography = true
+                return .none
 
             case let .loadFeaturedData(config, playlistID, hideAdult, loadEPGEvents, refreshID):
                 guard
@@ -320,6 +409,12 @@ public struct DashboardFeature {
                 else { return .none }
                 state.activeEPGRefreshID = loadEPGEvents ? refreshID : nil
                 state.activeActorRecommendationRefreshID = refreshID
+                state.isLoadingActorFilmography = false
+                state.hasLoadedSelectedActorFilmography = false
+                state.selectedActorID = nil
+                state.selectedActorFilmographyRequestID = nil
+                state.selectedActorName = nil
+                state.selectedActorCollections = []
                 if loadEPGEvents {
                     state.hasLoadedEPGEvents = false
                 } else {
@@ -473,12 +568,22 @@ public struct DashboardFeature {
                                 series: actorSeriesCandidates,
                                 tmdbClient: tmdbClient
                             )
+                            let watchedActors = actorMovieCandidates.isEmpty && actorSeriesCandidates.isEmpty
+                                ? []
+                                : await ActorRecommendationEngine.mostWatchedActors(
+                                    history: eligibleHistory,
+                                    playlistID: playlistID,
+                                    movies: actorMovieCandidates,
+                                    series: actorSeriesCandidates,
+                                    tmdbClient: tmdbClient
+                                )
                             guard !Task.isCancelled else { return }
                             await send(.actorRecommendationsLoaded(
                                 playlistID: playlistID,
                                 hideAdult: hideAdult,
                                 refreshID: refreshID,
-                                collections: actorCollections
+                                collections: actorCollections,
+                                actors: watchedActors
                             ))
                             return
                         }
@@ -502,12 +607,22 @@ public struct DashboardFeature {
                         series: actorSeriesCandidates,
                         tmdbClient: tmdbClient
                     )
+                    let watchedActors = actorMovieCandidates.isEmpty && actorSeriesCandidates.isEmpty
+                        ? []
+                        : await ActorRecommendationEngine.mostWatchedActors(
+                            history: eligibleHistory,
+                            playlistID: playlistID,
+                            movies: actorMovieCandidates,
+                            series: actorSeriesCandidates,
+                            tmdbClient: tmdbClient
+                        )
                     guard !Task.isCancelled else { return }
                     await send(.actorRecommendationsLoaded(
                         playlistID: playlistID,
                         hideAdult: hideAdult,
                         refreshID: refreshID,
-                        collections: actorCollections
+                        collections: actorCollections,
+                        actors: watchedActors
                     ))
                 } catch: { error, send in
                     await send(.dataFailed(
@@ -521,7 +636,11 @@ public struct DashboardFeature {
                     id: CancelID.remoteData,
                     cancelInFlight: true
                 )
-                return .concatenate(.cancel(id: CancelID.actorRecommendations), cancellableRemoteEffect)
+                let cancellations = Effect<Action>.merge(
+                    .cancel(id: CancelID.actorRecommendations),
+                    .cancel(id: CancelID.actorFilmography)
+                )
+                return .concatenate(cancellations, cancellableRemoteEffect)
 
             case let .loadEPGEvents(config, playlistID, refreshID, channels):
                 guard
@@ -616,13 +735,14 @@ public struct DashboardFeature {
                     )
                 }
 
-            case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections):
+            case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections, actors):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
                     state.activeActorRecommendationRefreshID == refreshID
                 else { return .none }
                 state.actorRecommendationCollections = collections
+                state.mostWatchedActors = actors
                 state.activeActorRecommendationRefreshID = nil
                 return .none
 

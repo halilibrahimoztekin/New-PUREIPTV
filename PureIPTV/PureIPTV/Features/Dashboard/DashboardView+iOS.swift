@@ -149,6 +149,16 @@
                     }
                 }
             case .recommendations:
+                if !store.mostWatchedActors.isEmpty {
+                    actorDiscoverySection
+                }
+                if store.isLoadingActorFilmography {
+                    ProgressView(AppStrings.Common.loading)
+                        .tint(.white)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                }
                 if !store.recommendedVODs.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
                         VStack(alignment: .leading, spacing: 6) {
@@ -177,6 +187,24 @@
                                 .frame(width: 140)
                         }
                     }
+                }
+                ForEach(store.selectedActorCollections) { collection in
+                    let title = "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)"
+                    featuredSection(title: title, items: collection.items) { item in
+                        if collection.kind == .movie {
+                            VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                .frame(width: 140)
+                        } else {
+                            SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                .frame(width: 140)
+                        }
+                    }
+                }
+                if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
+                    Text(AppStrings.Dashboard.actorFilmographyUnavailable)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .padding(.horizontal, 16)
                 }
             case .recentlyAddedVOD:
                 if !newMovieItems.isEmpty {
@@ -222,6 +250,52 @@
                     LazyHStack(spacing: 16) {
                         ForEach(items) { item in
                             content(item)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
+        private var actorDiscoverySection: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(store.mostWatchedActors.first?.source == .popularFallback
+                    ? AppStrings.Dashboard.popularActors
+                    : AppStrings.Dashboard.mostWatchedActors)
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(store.mostWatchedActors) { actor in
+                            Button { store.send(.actorSelected(id: actor.id, name: actor.name)) } label: {
+                                VStack(spacing: 8) {
+                                    AsyncImage(url: actor.profilePath.flatMap {
+                                        URL(string: "https://image.tmdb.org/t/p/w185\($0)")
+                                    }) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        Text(String(actor.name.prefix(1)))
+                                            .font(.title2.bold())
+                                            .foregroundStyle(.white)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                            .background(Color.white.opacity(0.14))
+                                    }
+                                    .frame(width: 82, height: 82)
+                                    .clipShape(Circle())
+
+                                    Text(actor.name)
+                                        .font(.footnote.weight(.medium))
+                                        .foregroundStyle(.white)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                        .frame(width: 96, height: 34, alignment: .top)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Text(actor.name))
                         }
                     }
                     .padding(.horizontal, 16)
