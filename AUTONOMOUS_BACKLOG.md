@@ -780,9 +780,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kaynak reviewer `[APPROVED]`; yalnızca kullanıcının istediği iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Build mevcut Swift 6 actor-isolation/deprecation uyarılarını verdi. Test, simulator/app açılışı veya akış çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
-### 76. [PENDING] Son Kullanılan Playlist’i Açma Tercihi
-- **Bulgu:** IPTVX sürüm notlarında uygulama açılışında son playlist’i otomatik açma davranışı seçenek olarak yer alıyor; PureIPTV aktif playlist’i zaten saklıyor ama giriş akışında kullanıcı seçimiyle otomatik yükleme tercihi ayrıca incelenmeli.
-- **Kaynak:** https://apps.apple.com/ly/app/iptvx/id1451470024?platform=tv
+### 76. [DONE] Son Kullanılan Playlist’i Açma Tercihi (Mevcut Davranış Doğrulandı)
+- **Canlı doğrulama (24 Ekim 2026):** IPTVX App Store sürüm notu 22.8.1’de son playlist’i başlangıçta otomatik açma tercihi duyurulmuş. TiviMate ayrıca başlangıçta son kanalı açma ayarı belgeliyor: https://apps.apple.com/ly/app/iptvx/id1451470024?platform=tv · https://tivimate.me/tivimate-settings
+- **Kod incelemesi:** `PlaylistRepository` aktif playlist UUID’sini saklıyor ve bozuk/eski UUID’yi ilk kayıtlı playlist ile onarıyor; `AppCoordinator.proceedToApp` bu playlist varlığını açılışta çözüyor, profil seçiminin ardından aynı aktif playlist’in Home ekranı açılıyor. Playlist yoksa kurulum ekranı gösteriliyor.
+- **Karar:** İstenen temel davranış uygulamada zaten var. Ek bir opt-out ayarını destekleyen ayrı kullanıcı ihtiyacı kaynaklarda doğrulanmadı; profil/ebeveyn denetimi girişini atlamadan mevcut açılış davranışı korundu, gereksiz ikinci ayar eklenmedi.
+- **Doğrulama:** Reviewer `[APPROVED]`; mevcut kod davranışı doğrulandı. Değişiklik olmadığı için Xcode build’i tekrarlanmadı; test/akış çalıştırılmadı.
+- **Durum:** `[DONE]` — zaten mevcut davranış reviewer tarafından doğrulandı.
 
 ### 77. [PENDING] Canlı Kanal Geçmişinde Sabitlenmiş Favoriler
 - **Bulgu:** TiviMate kullanıcıları sık izlenen favorileri kanal geçmişinin başına sabitlemeyi istiyor; mevcut son kanal dock’u ve sıralama motoru sabit kullanıcı seçimini ayrı bir kolay erişim alanı olarak sunup sunmadığı yönünden incelenmeli.
