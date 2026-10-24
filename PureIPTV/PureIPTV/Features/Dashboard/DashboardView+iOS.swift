@@ -169,6 +169,18 @@
                             .frame(width: 140)
                     }
                 }
+            case .discoverCollections:
+                ForEach(store.exploreCollections) { collection in
+                    featuredSection(title: collection.title, items: collection.items) { item in
+                        if item.type == .series {
+                            SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                .frame(width: 140)
+                        } else {
+                            VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                .frame(width: 140)
+                        }
+                    }
+                }
             }
         }
 

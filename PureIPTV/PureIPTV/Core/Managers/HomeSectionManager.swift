@@ -10,6 +10,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
     case recommendations
     case recentlyAddedVOD
     case trendingSeries
+    case discoverCollections
 
     public var id: String {
         rawValue
@@ -25,6 +26,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
         case .recommendations: "Sana Özel Öneriler"
         case .recentlyAddedVOD: "Yeni Eklenen Filmler"
         case .trendingSeries: "Popüler Diziler"
+        case .discoverCollections: "Keşfet".localized
         }
     }
 
@@ -38,6 +40,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
         case .recommendations: "wand.and.stars"
         case .recentlyAddedVOD: "film.stack.fill"
         case .trendingSeries: "tv.fill"
+        case .discoverCollections: "square.grid.2x2.fill"
         }
     }
 }
@@ -78,6 +81,7 @@ public final class HomeSectionManager: @unchecked Sendable {
         HomeSectionConfig(type: .recommendations, isVisible: true),
         HomeSectionConfig(type: .recentlyAddedVOD, isVisible: true),
         HomeSectionConfig(type: .trendingSeries, isVisible: true),
+        HomeSectionConfig(type: .discoverCollections, isVisible: true),
     ]
 
     public func loadSections() {

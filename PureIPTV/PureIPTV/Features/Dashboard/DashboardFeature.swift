@@ -18,6 +18,18 @@ public struct DashboardFeature {
         }
     }
 
+    public struct ExploreCollection: Equatable, Identifiable, Sendable {
+        public let id: String
+        public let title: String
+        public let items: [MediaModels.Item]
+
+        public nonisolated init(id: String, title: String, items: [MediaModels.Item]) {
+            self.id = id
+            self.title = title
+            self.items = items
+        }
+    }
+
     @ObservableState
     public struct State: Equatable {
         public var isLoading: Bool = false
@@ -32,6 +44,7 @@ public struct DashboardFeature {
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
         public var recommendedVODs: [MediaModels.Item] = []
+        public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
         public var activePlaylistID: UUID?
@@ -68,7 +81,7 @@ public struct DashboardFeature {
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, recommendations: [MediaModels.Item]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case epgEventsLoaded(playlistID: UUID?, refreshID: UUID, events: [EPGEvent], succeeded: Bool)
         case channelSelected(MediaModels.Item)
@@ -120,6 +133,7 @@ public struct DashboardFeature {
                 let playlistID = playlistRepository.getActivePlaylistID()
                 let playlistChanged = state.activePlaylistID != playlistID
                 if playlistChanged {
+                    state.exploreCollections = []
                     state.epgEvents = []
                     state.hasLoadedEPGEvents = false
                     state.epgCandidateChannels = []
@@ -133,6 +147,7 @@ public struct DashboardFeature {
                 state.isSportsHubVisible = isSportsHubVisible
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
+                    state.exploreCollections = []
                     state.epgEvents = state.epgEvents.filter {
                         !currentAdultHidden || (!isAdult($0.channel.title) && !isAdult($0.program.title))
                     }
@@ -257,10 +272,14 @@ public struct DashboardFeature {
                     && state.featuredSeries.isEmpty
                 state.errorMessage = nil
                 let isAdult = settingsClient.isAdultContent
+                let movieCollectionPrefix = "Filmler".localized
+                let seriesCollectionPrefix = "Diziler".localized
                 return .run { send in
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
                     async let allVODs = try? iptvClient.fetchVODs(config, nil)
                     async let allSeries = try? iptvClient.fetchSeries(config, nil)
+                    async let vodCategories = try? iptvClient.fetchVODCategories(config)
+                    async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
                     async let historyReq = (try? databaseClient.fetchWatchHistory()) ?? []
                     async let favoritesReq = (try? databaseClient.fetchFavorites()) ?? []
 
@@ -270,6 +289,9 @@ public struct DashboardFeature {
                     let fetchedChannels = await liveStreams
                     let fetchedVODs = await allVODs
                     let fetchedSeries = await allSeries
+                    let fetchedVODCategories = await vodCategories
+                    let fetchedSeriesCategories = await seriesCategories
+                    guard !Task.isCancelled else { return }
                     let epgCandidateChannels = fetchedChannels.map { channels in
                         Array((hideAdult ? channels.filter { !isAdult($0.title) } : channels).prefix(80))
                     } ?? []
@@ -277,6 +299,9 @@ public struct DashboardFeature {
                     var vods: [MediaModels.Item]?
                     var series: [MediaModels.Item]?
                     var recommendations: [MediaModels.Item]?
+                    var vodExploreCollections: [ExploreCollection]?
+                    var seriesExploreCollections: [ExploreCollection]?
+                    var yearExploreCollections: [ExploreCollection]?
 
                     if let fetchedChannels {
                         let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
@@ -303,7 +328,31 @@ public struct DashboardFeature {
                         series = Array(sorted.prefix(10))
                     }
 
+                    if let fetchedVODs, let fetchedVODCategories {
+                        let safeVODs = hideAdult ? fetchedVODs.filter { !isAdult($0.title) } : fetchedVODs
+                        vodExploreCollections = Self.makeCategoryCollections(
+                            prefix: "movie-category",
+                            label: movieCollectionPrefix,
+                            categories: fetchedVODCategories,
+                            items: safeVODs
+                        )
+                    }
+                    if let fetchedSeries, let fetchedSeriesCategories {
+                        let safeSeries = hideAdult ? fetchedSeries.filter { !isAdult($0.title) } : fetchedSeries
+                        seriesExploreCollections = Self.makeCategoryCollections(
+                            prefix: "series-category",
+                            label: seriesCollectionPrefix,
+                            categories: fetchedSeriesCategories,
+                            items: safeSeries
+                        )
+                    }
+                    if let fetchedSeries {
+                        let safeSeries = hideAdult ? fetchedSeries.filter { !isAdult($0.title) } : fetchedSeries
+                        yearExploreCollections = Self.makeYearCollections(from: safeSeries)
+                    }
+
                     if channels == nil, vods == nil, series == nil {
+                        guard !Task.isCancelled else { return }
                         await send(.dataFailed(
                             playlistID: playlistID,
                             hideAdult: hideAdult,
@@ -311,6 +360,7 @@ public struct DashboardFeature {
                             URLError(.cannotLoadFromNetwork)
                         ))
                     } else {
+                        guard !Task.isCancelled else { return }
                         await send(.dataLoaded(
                             playlistID: playlistID,
                             hideAdult: hideAdult,
@@ -320,7 +370,10 @@ public struct DashboardFeature {
                             epgSourceLoaded: fetchedChannels != nil,
                             vods: vods,
                             series: series,
-                            recommendations: recommendations
+                            recommendations: recommendations,
+                            vodExploreCollections: vodExploreCollections,
+                            seriesExploreCollections: seriesExploreCollections,
+                            yearExploreCollections: yearExploreCollections
                         ))
                     }
                     guard loadEPGEvents, !Task.isCancelled else { return }
@@ -388,7 +441,7 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, recommendations):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, recommendations, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
@@ -412,6 +465,18 @@ public struct DashboardFeature {
                 }
                 if let recommendations {
                     state.recommendedVODs = recommendations
+                }
+                if let vodExploreCollections {
+                    state.exploreCollections.removeAll { $0.id.hasPrefix("movie-category:") }
+                    state.exploreCollections.append(contentsOf: vodExploreCollections)
+                }
+                if let seriesExploreCollections {
+                    state.exploreCollections.removeAll { $0.id.hasPrefix("series-category:") }
+                    state.exploreCollections.append(contentsOf: seriesExploreCollections)
+                }
+                if let yearExploreCollections {
+                    state.exploreCollections.removeAll { $0.id.hasPrefix("year:") }
+                    state.exploreCollections.append(contentsOf: yearExploreCollections)
                 }
                 Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
                 let cachedChannels = state.featuredChannels
@@ -550,6 +615,62 @@ public struct DashboardFeature {
                 return .none
             }
         }
+    }
+
+    private nonisolated static func makeCategoryCollections(
+        prefix: String,
+        label: String,
+        categories: [MediaModels.Category],
+        items: [MediaModels.Item]
+    ) -> [ExploreCollection] {
+        let itemsByCategory = Dictionary(grouping: items, by: \.categoryID)
+        return categories.compactMap { category -> (Int, ExploreCollection)? in
+            guard let matches = itemsByCategory[category.id], matches.count >= 3 else { return nil }
+            let sortedMatches = matches.sorted {
+                let lhsDate = $0.addedDate ?? .distantPast
+                let rhsDate = $1.addedDate ?? .distantPast
+                if lhsDate != rhsDate {
+                    return lhsDate > rhsDate
+                }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+            return (
+                matches.count,
+                ExploreCollection(
+                    id: "\(prefix):\(category.id)",
+                    title: "\(label) · \(category.name)",
+                    items: Array(sortedMatches.prefix(12))
+                )
+            )
+        }
+        .sorted {
+            if $0.0 != $1.0 {
+                return $0.0 > $1.0
+            }
+            return $0.1.id.localizedStandardCompare($1.1.id) == .orderedAscending
+        }
+        .prefix(4)
+        .map(\.1)
+    }
+
+    private nonisolated static func makeYearCollections(from series: [MediaModels.Item]) -> [ExploreCollection] {
+        let datedItems = series.compactMap { item -> (Int, MediaModels.Item)? in
+            guard
+                let date = item.releaseDate,
+                date.count >= 4,
+                let year = Int(date.prefix(4)), (1900 ... Calendar.current.component(.year, from: Date()) + 2).contains(year)
+            else { return nil }
+            return (year, item)
+        }
+        return Dictionary(grouping: datedItems, by: \.0)
+            .compactMap { year, entries -> (Int, ExploreCollection)? in
+                let items = entries.map(\.1).sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                guard items.count >= 3 else { return nil }
+                return (year, ExploreCollection(id: "year:\(year)", title: "\(year)", items: Array(items.prefix(12))))
+            }
+            .sorted { $0.0 > $1.0 }
+            .prefix(4)
+            .map(\.1)
     }
 
     private static func syncTopShelf(

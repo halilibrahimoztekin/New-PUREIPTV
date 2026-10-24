@@ -227,6 +227,20 @@
                         }
                     }
                 }
+            case .discoverCollections:
+                ForEach(store.exploreCollections) { collection in
+                    TVShelfSection(title: collection.title) {
+                        ForEach(collection.items) { item in
+                            if item.type == .series {
+                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                    .frame(width: 220)
+                            } else {
+                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                    .frame(width: 220)
+                            }
+                        }
+                    }
+                }
             }
         }
 
