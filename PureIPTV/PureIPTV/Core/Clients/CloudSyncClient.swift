@@ -13,6 +13,8 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
     public let streamURL: String?
     public let addedAt: Date
     public let playlistID: UUID?
+    public let profileID: UUID?
+    public let removedAt: Date?
 
     public init(
         id: String,
@@ -21,7 +23,9 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
         coverURL: String? = nil,
         streamURL: String? = nil,
         addedAt: Date = Date(),
-        playlistID: UUID? = nil
+        playlistID: UUID? = nil,
+        profileID: UUID? = nil,
+        removedAt: Date? = nil
     ) {
         self.id = id
         self.type = type
@@ -30,6 +34,8 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
         self.streamURL = streamURL
         self.addedAt = addedAt
         self.playlistID = playlistID
+        self.profileID = profileID
+        self.removedAt = removedAt
     }
 
     public init(from favorite: FavoriteItem) {
@@ -40,6 +46,8 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
         streamURL = favorite.streamURL
         addedAt = favorite.addedAt
         playlistID = favorite.playlistID
+        profileID = favorite.profileID
+        removedAt = favorite.removedAt
     }
 
     public func toFavoriteItem() -> FavoriteItem {
@@ -50,9 +58,29 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
             coverURL: coverURL,
             streamURL: streamURL,
             addedAt: addedAt,
-            playlistID: playlistID
+            playlistID: playlistID,
+            profileID: profileID,
+            removedAt: removedAt
         )
     }
+}
+
+private func favoriteSyncVersion(_ dto: FavoriteSyncDTO) -> Date {
+    dto.removedAt ?? dto.addedAt
+}
+
+private func favoriteSyncWins(_ candidate: FavoriteSyncDTO, over current: FavoriteSyncDTO) -> Bool {
+    let candidateVersion = favoriteSyncVersion(candidate)
+    let currentVersion = favoriteSyncVersion(current)
+    if candidateVersion != currentVersion {
+        return candidateVersion > currentVersion
+    }
+    if (candidate.removedAt != nil) != (current.removedAt != nil) {
+        return candidate.removedAt != nil
+    }
+    let candidateStable = "\(candidate.title)|\(candidate.coverURL ?? "")|\(candidate.streamURL ?? "")"
+    let currentStable = "\(current.title)|\(current.coverURL ?? "")|\(current.streamURL ?? "")"
+    return candidateStable > currentStable
 }
 
 // MARK: - CloudSync Models
@@ -152,16 +180,22 @@ extension CloudSyncClient: DependencyKey {
         }
 
         @Sendable func pullRemoteFavorites() -> [FavoriteSyncDTO] {
-            guard let data = store.data(forKey: favoritesKey) else { return [] }
-            return (try? JSONDecoder().decode([FavoriteSyncDTO].self, from: data)) ?? []
+            let keys = store.dictionaryRepresentation.keys.filter { $0 == favoritesKey || $0.hasPrefix(favoritesKey + ".profile.") }
+            return keys.flatMap { key in
+                guard let data = store.data(forKey: key) else { return [FavoriteSyncDTO]() }
+                return (try? JSONDecoder().decode([FavoriteSyncDTO].self, from: data)) ?? [FavoriteSyncDTO]()
+            }
         }
 
         @Sendable func pushLocalFavorites(_ favorites: [FavoriteSyncDTO]) {
-            let pruned = Array(favorites.prefix(maxFavoritesCount))
-            if let data = try? JSONEncoder().encode(pruned) {
-                store.set(data, forKey: favoritesKey)
-                store.synchronize()
+            let grouped = Dictionary(grouping: favorites.prefix(maxFavoritesCount)) { $0.profileID?.uuidString ?? "legacy" }
+            for (scope, records) in grouped {
+                let key = scope == "legacy" ? favoritesKey : favoritesKey + ".profile." + scope
+                if let data = try? JSONEncoder().encode(Array(records)) {
+                    store.set(data, forKey: key)
+                }
             }
+            store.synchronize()
         }
 
         @Sendable func pullRemoteHiddenItems() -> [HiddenItemDTO] {
@@ -199,17 +233,21 @@ extension CloudSyncClient: DependencyKey {
 
             for dto in remote {
                 let id = dto.id
+                let type = dto.type
+                let profileID = dto.profileID
                 let descriptor = FetchDescriptor<FavoriteItem>(
-                    predicate: #Predicate { $0.id == id }
+                    predicate: #Predicate { $0.id == id && $0.type == type && $0.profileID == profileID }
                 )
-                if let local = try? context.fetch(descriptor).first {
-                    // Update if remote was modified more recently
-                    if dto.addedAt > local.addedAt {
+                if let local = try? context.fetch(descriptor).first(where: { $0.playlistID == dto.playlistID }) {
+                    // Preserve timestamped soft-deletes even when addedAt is unchanged.
+                    if favoriteSyncWins(dto, over: FavoriteSyncDTO(from: local)) {
                         local.title = dto.title
                         local.coverURL = dto.coverURL
                         local.streamURL = dto.streamURL
                         local.addedAt = dto.addedAt
                         local.playlistID = dto.playlistID
+                        local.profileID = dto.profileID
+                        local.removedAt = dto.removedAt
                         merged += 1
                     }
                 } else {
@@ -314,15 +352,29 @@ extension CloudSyncClient: DependencyKey {
             // 2. Read all local favorites and push union to cloud
             let context = ModelContext(modelContainer)
             let localFavorites = (try? context.fetch(FetchDescriptor<FavoriteItem>())) ?? []
-            var favoriteMap = Dictionary(uniqueKeysWithValues: remoteFavorites.map { ($0.id, $0) })
-            for local in localFavorites {
-                let dto = FavoriteSyncDTO(from: local)
-                if let existing = favoriteMap[dto.id] {
-                    if dto.addedAt >= existing.addedAt {
-                        favoriteMap[dto.id] = dto
+            func identity(_ dto: FavoriteSyncDTO) -> String {
+                "\(dto.profileID?.uuidString ?? "legacy")|\(dto.type)|\(dto.playlistID?.uuidString ?? "")|\(dto.id)"
+            }
+            var favoriteMap: [String: FavoriteSyncDTO] = [:]
+            for remote in remoteFavorites {
+                let key = identity(remote)
+                if let current = favoriteMap[key] {
+                    if favoriteSyncWins(remote, over: current) {
+                        favoriteMap[key] = remote
                     }
                 } else {
-                    favoriteMap[dto.id] = dto
+                    favoriteMap[key] = remote
+                }
+            }
+            for local in localFavorites {
+                let dto = FavoriteSyncDTO(from: local)
+                let key = identity(dto)
+                if let existing = favoriteMap[key] {
+                    if favoriteSyncWins(dto, over: existing) {
+                        favoriteMap[key] = dto
+                    }
+                } else {
+                    favoriteMap[key] = dto
                 }
             }
             let mergedFavorites = Array(favoriteMap.values)

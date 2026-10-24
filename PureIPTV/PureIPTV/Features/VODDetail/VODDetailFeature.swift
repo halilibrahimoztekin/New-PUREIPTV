@@ -88,10 +88,10 @@ public struct VODDetailFeature {
         case restartTapped
         case tmdbTimeout
         case toggleFavorite
-        case favoriteStatusLoaded(Bool)
+        case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
         case downloadStatusLoaded(Bool)
         case downloadTapped
-        case historyStatusLoaded(id: String, item: WatchHistoryItem?)
+        case historyStatusLoaded(id: String, item: WatchHistoryItem?, scope: ProfileContextSnapshot)
         case markUnwatched
         case actorTapped(TMDBCastMemberDTO)
         case actorDetailsResponse(Result<TMDBPersonDetailsDTO, Error>)
@@ -125,6 +125,7 @@ public struct VODDetailFeature {
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.dismiss) var dismiss
 
@@ -236,6 +237,7 @@ public struct VODDetailFeature {
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
         let tmdbClient = tmdbClient
+        let profileContextClient = profileContextClient
 
         Reduce { state, action in
             switch action {
@@ -252,6 +254,8 @@ public struct VODDetailFeature {
                 let config = state.config
                 let vodID = state.vod.id
                 let searchTitle = state.vod.title.cleanedForTMDBSearch()
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = config.playlistID
 
                 print("Fetching VOD Info and TMDB details for: \(searchTitle)")
 
@@ -273,13 +277,13 @@ public struct VODDetailFeature {
                 }
 
                 let favoriteEffect: Effect<Action> = .run { [id = state.vod.id] send in
-                    let isFav = await (try? databaseClient.isFavorite(id)) ?? false
-                    await send(.favoriteStatusLoaded(isFav))
+                    let isFav = await (try? databaseClient.isFavorite(id, "vod", playlistID, profileScope)) ?? false
+                    await send(.favoriteStatusLoaded(isFav, profileScope))
                 }
 
                 let historyEffect: Effect<Action> = .run { [id = state.vod.id] send in
-                    let history = try? await databaseClient.getWatchProgress(id)
-                    await send(.historyStatusLoaded(id: id, item: history))
+                    let history = try? await databaseClient.getWatchProgress(id, "vod", playlistID, profileScope)
+                    await send(.historyStatusLoaded(id: id, item: history, scope: profileScope))
                 }
                 .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
 
@@ -464,9 +468,11 @@ public struct VODDetailFeature {
                 state.availableVersions = state.availableVersions.map {
                     MovieVersionEdition(item: $0.item, isCurrent: $0.id == version.id)
                 }
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.config.playlistID
                 return .run { [id = version.id] send in
-                    let history = try? await databaseClient.getWatchProgress(id)
-                    await send(.historyStatusLoaded(id: id, item: history))
+                    let history = try? await databaseClient.getWatchProgress(id, "vod", playlistID, profileScope)
+                    await send(.historyStatusLoaded(id: id, item: history, scope: profileScope))
                 }
                 .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
 
@@ -539,8 +545,8 @@ public struct VODDetailFeature {
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
 
-            case let .historyStatusLoaded(id, history):
-                guard state.vod.id == id else { return .none }
+            case let .historyStatusLoaded(id, history, scope):
+                guard state.vod.id == id, profileContextClient.snapshot() == scope else { return .none }
                 state.historyItem = history
                 return .none
 
@@ -551,11 +557,14 @@ public struct VODDetailFeature {
                     history.progress / history.duration >= 0.90
                 else { return .none }
                 state.historyItem = nil
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.config.playlistID
                 return .run { [id = history.id] _ in
-                    try? await databaseClient.deleteWatchProgress(id)
+                    try? await databaseClient.deleteWatchProgress(id, "vod", playlistID, profileScope)
                 }
 
-            case let .favoriteStatusLoaded(isFav):
+            case let .favoriteStatusLoaded(isFav, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.isFavorite = isFav
                 return .none
 
@@ -591,16 +600,18 @@ public struct VODDetailFeature {
                 }
 
             case .toggleFavorite:
+                let profileScope = profileContextClient.snapshot()
                 let item = FavoriteItem(
                     id: state.vod.id,
                     type: "vod",
                     title: state.vod.title,
                     coverURL: state.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.vod.coverURL?.absoluteString,
-                    streamURL: state.vod.streamURL?.absoluteString
+                    streamURL: state.vod.streamURL?.absoluteString,
+                    playlistID: state.config.playlistID
                 )
                 return .run { send in
-                    let isNowFav = await (try? databaseClient.toggleFavorite(item)) ?? false
-                    await send(.favoriteStatusLoaded(isNowFav))
+                    let isNowFav = await (try? databaseClient.toggleFavorite(item, profileScope)) ?? false
+                    await send(.favoriteStatusLoaded(isNowFav, profileScope))
                 }
 
             case .closeTapped:

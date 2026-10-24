@@ -615,6 +615,7 @@ public struct PlayerFeature {
 
     @Injected(\.playerClient) var playerClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.recentChannelsClient) var recentChannelsClient
@@ -630,6 +631,7 @@ public struct PlayerFeature {
     public var body: some Reducer<State, Action> {
         let playerClient = playerClient
         let databaseClient = databaseClient
+        let profileContextClient = profileContextClient
         let settingsClient = settingsClient
         let recentChannelsClient = recentChannelsClient
         let streamHealthClient = streamHealthClient
@@ -640,11 +642,11 @@ public struct PlayerFeature {
         let customEPGMappingClient = customEPGMappingClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, profileContextClient: profileContextClient)
         }
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -780,7 +782,8 @@ public struct PlayerFeature {
                 pipClient: pipClient,
                 parentalControlClient: parentalControlClient,
                 displayModeClient: displayModeClient,
-                customEPGMappingClient: customEPGMappingClient
+                customEPGMappingClient: customEPGMappingClient,
+                profileContextClient: profileContextClient
             )
             return .merge(appearanceEffect, .send(.fetchEPG))
 
@@ -788,6 +791,7 @@ public struct PlayerFeature {
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
+            let profileScope = profileContextClient.snapshot()
             let isPiPActive = state.isPiPActive
             let isMinimized = state.isMinimized
             state.scrubThumbnailRequestID = nil
@@ -838,7 +842,7 @@ public struct PlayerFeature {
                         // Keep completed progress so detail screens can expose
                         // an explicit mark-as-unwatched action. Continue
                         // Watching surfaces filter completed entries.
-                        try? await databaseClient.saveWatchProgress(historyItem)
+                        try? await databaseClient.saveWatchProgress(historyItem, profileScope)
 
                         // Trakt.tv scrobble stop on close (Madde #17)
                         if !item.isLive {
@@ -2630,6 +2634,7 @@ public struct PlayerFeature {
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
+            let profileScope = profileContextClient.snapshot()
             let isPiPActive = state.isPiPActive
             return .merge(
                 .cancel(id: CancelID.playerEvents),
@@ -2655,7 +2660,7 @@ public struct PlayerFeature {
                         )
                         // Retain completed progress as the watched marker;
                         // detail screens can then let the user reset it.
-                        try? await databaseClient.saveWatchProgress(historyItem)
+                        try? await databaseClient.saveWatchProgress(historyItem, profileScope)
 
                         // Trakt.tv scrobble stop on close (Madde #17)
                         if !item.isLive {

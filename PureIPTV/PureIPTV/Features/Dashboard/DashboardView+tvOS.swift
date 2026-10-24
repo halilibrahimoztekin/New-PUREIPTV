@@ -143,9 +143,9 @@
                             .contextMenu {
                                 Button { store.send(.toggleFavorite(item: channel, type: "live")) } label: {
                                     Label(
-                                        store.favoriteIDs.contains(channel.id)
+                                        store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.activePlaylistID, id: channel.id))
                                             ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                        systemImage: store.favoriteIDs.contains(channel.id) ? "heart.slash" : "heart"
+                                        systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.activePlaylistID, id: channel.id)) ? "heart.slash" : "heart"
                                     )
                                 }
                                 Button { store.send(.channelSelected(channel)) } label: {
@@ -297,9 +297,9 @@
                                     .contextMenu {
                                         Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
                                             Label(
-                                                store.favoriteIDs.contains(vod.id)
+                                                store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id))
                                                     ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                                systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
+                                                systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id)) ? "heart.slash" : "heart"
                                             )
                                         }
                                         Button { store.send(.vodSelected(vod)) } label: {
@@ -356,9 +356,9 @@
                                 .contextMenu {
                                     Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
                                         Label(
-                                            store.favoriteIDs.contains(vod.id)
+                                            store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id))
                                                 ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                            systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
+                                            systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id)) ? "heart.slash" : "heart"
                                         )
                                     }
                                     Button { store.send(.vodSelected(vod)) } label: {
@@ -377,9 +377,9 @@
                                 .contextMenu {
                                     Button { store.send(.toggleFavorite(item: series, type: "series")) } label: {
                                         Label(
-                                            store.favoriteIDs.contains(series.id)
+                                            store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.activePlaylistID, id: series.id))
                                                 ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                            systemImage: store.favoriteIDs.contains(series.id) ? "heart.slash" : "heart"
+                                            systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.activePlaylistID, id: series.id)) ? "heart.slash" : "heart"
                                         )
                                     }
                                     Button { store.send(.seriesSelected(series)) } label: {

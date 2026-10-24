@@ -76,7 +76,7 @@ public struct SeriesFeature {
         case seriesSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
         case toggleFavorite(MediaModels.Item)
-        case favoritesLoaded(Set<String>)
+        case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case reloadPreferences
@@ -93,6 +93,7 @@ public struct SeriesFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.hapticClient) var hapticClient
 
@@ -101,13 +102,17 @@ public struct SeriesFeature {
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
 
+        let profileContextClient = profileContextClient
+
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let profileScope = profileContextClient.snapshot()
                 state.lastSortMethod = settingsClient.getSeriesSortMethod()
                 let loadFavorites: Effect<Action> = .run { send in
-                    let favs = await (try? databaseClient.fetchFavoritesByType("series")) ?? []
-                    await send(.favoritesLoaded(Set(favs.map(\.id))))
+                    let favs = await (try? databaseClient.fetchFavoritesByType("series", profileScope)) ?? []
+                    let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }
+                    await send(.favoritesLoaded(Set(visible.map(\.id)), profileScope))
                 }
 
                 guard !state.isLoadingCategories else { return loadFavorites }
@@ -298,17 +303,21 @@ public struct SeriesFeature {
                     .send(.delegate(.didSelectSeries(series)))
                 )
 
-            case let .favoritesLoaded(favIDs):
+            case let .favoritesLoaded(favIDs, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.favoriteIDs = favIDs
                 return .none
 
             case let .toggleFavorite(item):
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.config?.playlistID
                 let favItem = FavoriteItem(
                     id: item.id,
                     type: "series",
                     title: item.title,
                     coverURL: item.coverURL?.absoluteString,
-                    streamURL: item.streamURL?.absoluteString
+                    streamURL: item.streamURL?.absoluteString,
+                    playlistID: playlistID
                 )
                 let isCurrentlyFav = state.favoriteIDs.contains(item.id)
                 if isCurrentlyFav {
@@ -317,7 +326,7 @@ public struct SeriesFeature {
                     state.favoriteIDs.insert(item.id)
                 }
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                     await hapticClient.notification(.success)
                 }
 

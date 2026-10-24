@@ -14,6 +14,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
     public let lastWatchedAt: Date
     public let playlistID: UUID?
     public let seriesID: String?
+    public let profileID: UUID?
     public let deviceId: String?
     public let isDeleted: Bool?
 
@@ -29,6 +30,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         lastWatchedAt: Date = Date(),
         playlistID: UUID? = nil,
         seriesID: String? = nil,
+        profileID: UUID? = nil,
         deviceId: String? = nil,
         isDeleted: Bool? = false
     ) {
@@ -43,6 +45,7 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         self.lastWatchedAt = lastWatchedAt
         self.playlistID = playlistID
         self.seriesID = seriesID
+        self.profileID = profileID
         self.deviceId = deviceId
         self.isDeleted = isDeleted
     }
@@ -59,8 +62,9 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         lastWatchedAt = item.lastWatchedAt
         playlistID = item.playlistID
         seriesID = item.seriesID
+        profileID = item.profileID
         self.deviceId = deviceId
-        isDeleted = false
+        isDeleted = item.removedAt != nil
     }
 
     public func toWatchHistoryItem() -> WatchHistoryItem {
@@ -75,7 +79,9 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
             duration: duration,
             lastWatchedAt: lastWatchedAt,
             playlistID: playlistID,
-            seriesID: seriesID
+            seriesID: seriesID,
+            profileID: profileID,
+            removedAt: isDeleted == true ? lastWatchedAt : nil
         )
     }
 
@@ -100,6 +106,10 @@ public nonisolated struct WatchProgressSyncRecord: Codable, Sendable, Equatable,
         if let seriesID {
             item.seriesID = seriesID
         }
+        if let profileID {
+            item.profileID = profileID
+        }
+        item.removedAt = isDeleted == true ? lastWatchedAt : nil
     }
 }
 

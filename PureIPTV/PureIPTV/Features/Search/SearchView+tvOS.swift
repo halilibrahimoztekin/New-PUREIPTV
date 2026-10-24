@@ -245,9 +245,9 @@
                                         }
 
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "live"))
+                                            store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
-                                            if store.favoriteIDs.contains(result.item.id) {
+                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
@@ -286,9 +286,9 @@
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "vod"))
+                                            store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
-                                            if store.favoriteIDs.contains(result.item.id) {
+                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")
@@ -327,9 +327,9 @@
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "series"))
+                                            store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
-                                            if store.favoriteIDs.contains(result.item.id) {
+                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
                                                 Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                             } else {
                                                 Label(AppStrings.Common.addToFavorites, systemImage: "heart")

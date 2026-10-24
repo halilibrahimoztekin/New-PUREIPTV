@@ -286,13 +286,13 @@
                                         }
 
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "live"))
+                                            store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
                                             Label(
-                                                store.favoriteIDs.contains(result.item.id)
+                                                store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id))
                                                     ? AppStrings.Common.removeFromFavorites
                                                     : AppStrings.Common.addToFavorites,
-                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                                systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) ? "heart.slash" : "heart"
                                             )
                                         }
 
@@ -328,13 +328,13 @@
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "vod"))
+                                            store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
                                             Label(
-                                                store.favoriteIDs.contains(result.item.id)
+                                                store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id))
                                                     ? AppStrings.Common.removeFromFavorites
                                                     : AppStrings.Common.addToFavorites,
-                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                                systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) ? "heart.slash" : "heart"
                                             )
                                         }
 
@@ -370,13 +370,13 @@
                                     }
                                     .contextMenu {
                                         Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "series"))
+                                            store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {
                                             Label(
-                                                store.favoriteIDs.contains(result.item.id)
+                                                store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id))
                                                     ? AppStrings.Common.removeFromFavorites
                                                     : AppStrings.Common.addToFavorites,
-                                                systemImage: store.favoriteIDs.contains(result.item.id) ? "heart.slash" : "heart"
+                                                systemImage: store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) ? "heart.slash" : "heart"
                                             )
                                         }
 

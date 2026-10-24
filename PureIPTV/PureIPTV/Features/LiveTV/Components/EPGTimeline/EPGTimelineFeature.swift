@@ -156,7 +156,7 @@ public struct EPGTimelineFeature {
         case toggleFavorite(MediaModels.Item)
         case toggleFavoritesOnly
         case loadFavorites
-        case favoritesLoaded(Set<String>)
+        case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case updateCurrentTime
         case refreshEPGTapped
         case performSync(forced: Bool)
@@ -184,6 +184,7 @@ public struct EPGTimelineFeature {
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.reminderClient) var reminderClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.continuousClock) var clock
     @Dependency(\.dismiss) var dismiss
@@ -194,6 +195,8 @@ public struct EPGTimelineFeature {
     public init() {}
 
     public var body: some Reducer<State, Action> {
+        let profileContextClient = profileContextClient
+
         Reduce { state, action in
             switch action {
             case .onAppear:
@@ -297,13 +300,15 @@ public struct EPGTimelineFeature {
                 return .none
 
             case .loadFavorites:
+                let profileScope = profileContextClient.snapshot()
                 return .run { send in
-                    if let favs = try? await databaseClient.fetchFavoritesByType("live") {
-                        await send(.favoritesLoaded(Set(favs.map(\.id))))
+                    if let favs = try? await databaseClient.fetchFavoritesByType("live", profileScope) {
+                        await send(.favoritesLoaded(Set(favs.map(\.id)), profileScope))
                     }
                 }
 
-            case let .favoritesLoaded(ids):
+            case let .favoritesLoaded(ids, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.favoriteIDs = ids
                 return .none
 
@@ -314,15 +319,17 @@ public struct EPGTimelineFeature {
                 } else {
                     state.favoriteIDs.insert(channel.id)
                 }
+                let profileScope = profileContextClient.snapshot()
                 let favItem = FavoriteItem(
                     id: channel.id,
                     type: "live",
                     title: channel.title,
                     coverURL: channel.coverURL?.absoluteString,
-                    streamURL: channel.streamURL?.absoluteString
+                    streamURL: channel.streamURL?.absoluteString,
+                    playlistID: state.config.playlistID
                 )
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                 }
 
             case .toggleFavoritesOnly:

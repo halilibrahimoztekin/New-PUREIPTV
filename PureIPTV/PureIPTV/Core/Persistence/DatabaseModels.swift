@@ -1,6 +1,23 @@
 import Foundation
 import SwiftData
 
+/// Stable in-memory identity for a favorite across playlists and media kinds.
+public struct FavoriteIdentity: Hashable, Sendable {
+    public let type: String
+    public let playlistID: UUID?
+    public let id: String
+
+    public init(type: String, playlistID: UUID?, id: String) {
+        self.type = type
+        self.playlistID = playlistID
+        self.id = id
+    }
+
+    public init(_ favorite: FavoriteItem) {
+        self.init(type: favorite.type, playlistID: favorite.playlistID, id: favorite.id)
+    }
+}
+
 /// Represents user preferences for a specific category (hidden status, custom sort order).
 @Model
 public final class CategoryPreference {
@@ -31,6 +48,9 @@ public final class FavoriteItem {
     public var streamURL: String?
     public var addedAt: Date = Date()
     public var playlistID: UUID?
+    public var profileID: UUID?
+    /// Soft deletion keeps CloudKit and legacy profile-less rows recoverable.
+    public var removedAt: Date?
 
     public init(
         id: String,
@@ -39,7 +59,9 @@ public final class FavoriteItem {
         coverURL: String? = nil,
         streamURL: String? = nil,
         addedAt: Date = Date(),
-        playlistID: UUID? = nil
+        playlistID: UUID? = nil,
+        profileID: UUID? = nil,
+        removedAt: Date? = nil
     ) {
         self.id = id
         self.type = type
@@ -48,6 +70,8 @@ public final class FavoriteItem {
         self.streamURL = streamURL
         self.addedAt = addedAt
         self.playlistID = playlistID
+        self.profileID = profileID
+        self.removedAt = removedAt
     }
 }
 
@@ -65,6 +89,9 @@ public final class WatchHistoryItem {
     public var lastWatchedAt: Date = Date()
     public var playlistID: UUID?
     public var seriesID: String?
+    public var profileID: UUID?
+    /// Soft deletion preserves prior history and sync tombstone identity.
+    public var removedAt: Date?
 
     public init(
         id: String,
@@ -77,7 +104,9 @@ public final class WatchHistoryItem {
         duration: Double,
         lastWatchedAt: Date = Date(),
         playlistID: UUID? = nil,
-        seriesID: String? = nil
+        seriesID: String? = nil,
+        profileID: UUID? = nil,
+        removedAt: Date? = nil
     ) {
         self.id = id
         self.type = type
@@ -90,6 +119,8 @@ public final class WatchHistoryItem {
         self.lastWatchedAt = lastWatchedAt
         self.playlistID = playlistID
         self.seriesID = seriesID
+        self.profileID = profileID
+        self.removedAt = removedAt
     }
 }
 

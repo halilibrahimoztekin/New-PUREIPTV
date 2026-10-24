@@ -60,7 +60,7 @@ public struct LiveTVFeature {
         case selectChannelPreview(MediaModels.Item)
         case channelEPGResponse(Result<[EPGProgram], Error>)
         case toggleFavorite(MediaModels.Item)
-        case favoritesLoaded(Set<String>)
+        case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case hideChannel(MediaModels.Item)
         case unhideAllChannels
         case sendToMultiView(MediaModels.Item)
@@ -88,6 +88,7 @@ public struct LiveTVFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.hapticClient) var hapticClient
     @Dependency(\.parentalControlClient) var parentalControlClient
@@ -98,14 +99,18 @@ public struct LiveTVFeature {
         let iptvClient = iptvClient
         let parentalControlClient = parentalControlClient
 
+        let profileContextClient = profileContextClient
+
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let profileScope = profileContextClient.snapshot()
                 state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
 
                 let loadFavorites: Effect<Action> = .run { send in
-                    let favs = await (try? databaseClient.fetchFavoritesByType("live")) ?? []
-                    await send(.favoritesLoaded(Set(favs.map(\.id))))
+                    let favs = await (try? databaseClient.fetchFavoritesByType("live", profileScope)) ?? []
+                    let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }
+                    await send(.favoritesLoaded(Set(visible.map(\.id)), profileScope))
                 }
 
                 guard !state.isLoadingCategories else { return loadFavorites }
@@ -314,17 +319,21 @@ public struct LiveTVFeature {
                 state.isLoadingChannelEPG = false
                 return .none
 
-            case let .favoritesLoaded(favIDs):
+            case let .favoritesLoaded(favIDs, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.favoriteIDs = favIDs
                 return .none
 
             case let .toggleFavorite(item):
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.config?.playlistID
                 let favItem = FavoriteItem(
                     id: item.id,
                     type: "live",
                     title: item.title,
                     coverURL: item.coverURL?.absoluteString,
-                    streamURL: item.streamURL?.absoluteString
+                    streamURL: item.streamURL?.absoluteString,
+                    playlistID: playlistID
                 )
                 let isCurrentlyFav = state.favoriteIDs.contains(item.id)
                 if isCurrentlyFav {
@@ -333,7 +342,7 @@ public struct LiveTVFeature {
                     state.favoriteIDs.insert(item.id)
                 }
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                     await hapticClient.notification(.success)
                 }
 

@@ -79,8 +79,8 @@ public struct DashboardFeature {
         public var favoriteItems: [FavoriteItem] = []
         public var watchHistoryItems: [WatchHistoryItem] = []
 
-        public var favoriteIDs: Set<String> {
-            Set(favoriteItems.map(\.id))
+        public var favoriteIDs: Set<FavoriteIdentity> {
+            Set(favoriteItems.map(FavoriteIdentity.init))
         }
 
         public var continueWatchingItems: [WatchHistoryItem] {
@@ -103,10 +103,10 @@ public struct DashboardFeature {
         case loadFeaturedData(config: PlaylistConfig, playlistID: UUID?, hideAdult: Bool, loadEPGEvents: Bool, refreshID: UUID)
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
-        case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem])
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
-        case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
-        case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
+        case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem], scope: ProfileContextSnapshot)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
+        case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
+        case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
         case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
         case awardShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: AwardDiscoveryEngine.Shelves)
         case actorSelected(id: Int, name: String)
@@ -149,6 +149,7 @@ public struct DashboardFeature {
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.tmdbClient) var tmdbClient
     @Dependency(\.wikidataAwardClient) var wikidataAwardClient
@@ -160,6 +161,8 @@ public struct DashboardFeature {
         let settingsClient = settingsClient
         let tmdbClient = tmdbClient
         let wikidataAwardClient = wikidataAwardClient
+
+        let profileContextClient = profileContextClient
 
         Reduce { state, action in
             switch action {
@@ -395,13 +398,15 @@ public struct DashboardFeature {
                 return .send(.delegate(.openManagePlaylists))
 
             case .loadLocalData:
+                let profileScope = profileContextClient.snapshot()
                 return .run { send in
-                    let favorites = await (try? databaseClient.fetchFavorites()) ?? []
-                    let history = await (try? databaseClient.fetchWatchHistory()) ?? []
-                    await send(.localDataLoaded(favorites: favorites, history: history))
+                    let favorites = await (try? databaseClient.fetchFavorites(profileScope)) ?? []
+                    let history = await (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
+                    await send(.localDataLoaded(favorites: favorites, history: history, scope: profileScope))
                 }
 
-            case let .localDataLoaded(favorites, history):
+            case let .localDataLoaded(favorites, history, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.favoriteItems = favorites
                 state.watchHistoryItems = history
                 Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
@@ -445,6 +450,7 @@ public struct DashboardFeature {
                         playlistID: playlistID,
                         hideAdult: hideAdult,
                         refreshID: refreshID,
+                        profileScope: scope,
                         collections: collections,
                         actors: actors
                     ))
@@ -466,6 +472,7 @@ public struct DashboardFeature {
                             playlistID: playlistID,
                             hideAdult: hideAdult,
                             refreshID: newEpisodeRequestID,
+                            profileScope: scope,
                             series: entries
                         ))
                     }
@@ -525,6 +532,7 @@ public struct DashboardFeature {
                 return .none
 
             case let .loadFeaturedData(config, playlistID, hideAdult, loadEPGEvents, refreshID):
+                let profileScope = profileContextClient.snapshot()
                 guard
                     state.activePlaylistID == playlistID,
                     state.activeRefreshID == refreshID
@@ -561,8 +569,8 @@ public struct DashboardFeature {
                     async let allSeries = try? iptvClient.fetchSeries(config, nil)
                     async let vodCategories = try? iptvClient.fetchVODCategories(config)
                     async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
-                    async let historyReq = (try? databaseClient.fetchWatchHistory()) ?? []
-                    async let favoritesReq = (try? databaseClient.fetchFavorites()) ?? []
+                    async let historyReq = (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
+                    async let favoritesReq = (try? databaseClient.fetchFavorites(profileScope)) ?? []
 
                     let history = await historyReq
                     let favorites = await favoritesReq
@@ -663,6 +671,7 @@ public struct DashboardFeature {
                             playlistID: playlistID,
                             hideAdult: hideAdult,
                             refreshID: refreshID,
+                            profileScope: profileScope,
                             channels: channels,
                             epgCandidateChannels: epgCandidateChannels,
                             epgSourceLoaded: fetchedChannels != nil,
@@ -709,6 +718,7 @@ public struct DashboardFeature {
                                 playlistID: playlistID,
                                 hideAdult: hideAdult,
                                 refreshID: refreshID,
+                                profileScope: profileScope,
                                 collections: actorCollections,
                                 actors: watchedActors
                             ))
@@ -748,6 +758,7 @@ public struct DashboardFeature {
                         playlistID: playlistID,
                         hideAdult: hideAdult,
                         refreshID: refreshID,
+                        profileScope: profileScope,
                         collections: actorCollections,
                         actors: watchedActors
                     ))
@@ -805,11 +816,12 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
-                    state.activeRefreshID == refreshID
+                    state.activeRefreshID == refreshID,
+                    profileContextClient.snapshot() == profileScope
                 else { return .none }
                 state.isLoading = false
                 state.hasLoadedRemoteData = true
@@ -869,7 +881,7 @@ public struct DashboardFeature {
                 let newEpisodeEffect: Effect<Action>
                 if let config = state.activePlaylistConfig {
                     newEpisodeEffect = .run { send in
-                        let history = await (try? databaseClient.fetchWatchHistory()) ?? []
+                        let history = await (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
                         let entries = await NewEpisodeDiscoveryEngine.discover(
                             history: history,
                             playlistID: playlistID,
@@ -882,6 +894,7 @@ public struct DashboardFeature {
                             playlistID: playlistID,
                             hideAdult: hideAdult,
                             refreshID: newEpisodeRequestID,
+                            profileScope: profileScope,
                             series: entries
                         ))
                     }
@@ -916,8 +929,9 @@ public struct DashboardFeature {
                 }.cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
                 return .merge(cacheEffect, newEpisodeEffect, movieRatingEffect, awardEffect)
 
-            case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections, actors):
+            case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, profileScope, collections, actors):
                 guard
+                    profileContextClient.snapshot() == profileScope,
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
                     state.activeActorRecommendationRefreshID == refreshID
@@ -927,11 +941,11 @@ public struct DashboardFeature {
                 state.activeActorRecommendationRefreshID = nil
                 return .none
 
-            case let .newEpisodeSeriesLoaded(playlistID, hideAdult, refreshID, series):
-                guard
-                    state.activePlaylistID == playlistID,
-                    state.lastAdultHidden == hideAdult,
-                    state.activeNewEpisodeRefreshID == refreshID
+            case let .newEpisodeSeriesLoaded(playlistID, hideAdult, refreshID, profileScope, series):
+                guard profileContextClient.snapshot() == profileScope,
+                      state.activePlaylistID == playlistID,
+                      state.lastAdultHidden == hideAdult,
+                      state.activeNewEpisodeRefreshID == refreshID
                 else { return .none }
                 state.newEpisodeSeries = series
                 state.activeNewEpisodeRefreshID = nil
@@ -1008,28 +1022,32 @@ public struct DashboardFeature {
                 }
 
             case let .toggleFavorite(item, type):
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.activePlaylistID
                 let favItem = FavoriteItem(
                     id: item.id,
                     type: type,
                     title: item.title,
                     coverURL: item.coverURL?.absoluteString,
-                    streamURL: item.streamURL?.absoluteString
+                    streamURL: item.streamURL?.absoluteString,
+                    playlistID: playlistID
                 )
-                if let index = state.favoriteItems.firstIndex(where: { $0.id == item.id }) {
+                if let index = state.favoriteItems.firstIndex(where: { $0.id == item.id && $0.type == type && $0.playlistID == playlistID }) {
                     state.favoriteItems.remove(at: index)
                 } else {
                     state.favoriteItems.insert(favItem, at: 0)
                 }
                 Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                 }
 
             case let .deleteFavorite(fav):
-                state.favoriteItems.removeAll { $0.id == fav.id }
+                let profileScope = profileContextClient.snapshot()
+                state.favoriteItems.removeAll { $0.id == fav.id && $0.type == fav.type && $0.playlistID == fav.playlistID }
                 Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(fav)
+                    _ = try? await databaseClient.toggleFavorite(fav, profileScope)
                 }
 
             case let .historySelected(hist):
@@ -1069,10 +1087,11 @@ public struct DashboardFeature {
                 return .send(.delegate(.restartHistoryItem(hist)))
 
             case let .deleteHistorySelected(hist):
-                state.watchHistoryItems.removeAll { $0.id == hist.id }
+                let profileScope = profileContextClient.snapshot()
+                state.watchHistoryItems.removeAll { $0.id == hist.id && $0.type == hist.type && $0.playlistID == hist.playlistID }
                 Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
                 return .run { [id = hist.id] _ in
-                    try? await databaseClient.deleteWatchProgress(id)
+                    try? await databaseClient.deleteWatchProgress(id, hist.type, hist.playlistID, profileScope)
                 }
 
             case .delegate:

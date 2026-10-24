@@ -23,8 +23,9 @@ private actor WatchProgressSyncWriter {
     func write(_ record: WatchProgressSyncRecord) throws {
         store.synchronize()
         guard let data = try? JSONEncoder().encode(record), data.count <= 16 * 1024 else { return }
-        let itemKey = itemPrefix + encoded(deviceID) + "_" + keyDigest(record.id)
-        let deletionKey = deletionPrefix + encoded(deviceID) + "_" + keyDigest(record.id)
+        let scopedIdentity = syncIdentity(record)
+        let itemKey = itemPrefix + encoded(deviceID) + "_" + keyDigest(scopedIdentity)
+        let deletionKey = deletionPrefix + encoded(deviceID) + "_" + keyDigest(scopedIdentity)
         let targetKey = record.isDeleted == true ? deletionKey : itemKey
         guard pruneGlobalStorage(reservingBytes: data.count, reservingKey: store.object(forKey: targetKey) == nil) else {
             return
@@ -65,13 +66,16 @@ private actor WatchProgressSyncWriter {
         guard records.count > maxRecordsPerDevice else { return }
         let expired = records.prefix(records.count - maxRecordsPerDevice)
         for (key, record) in expired {
-            let fenceKey = fencePrefix + encoded(deviceID) + ":" + keyDigest(record.id)
+            let fenceKey = fencePrefix + encoded(deviceID) + ":" + keyDigest(syncIdentity(record))
             let existingDate = store.data(forKey: fenceKey)
                 .flatMap { try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: $0) }
                 .map(\.lastWatchedAt) ?? .distantPast
             let latest = record.lastWatchedAt >= existingDate ? record : WatchProgressSyncRecord(
-                id: record.id, type: "deleted", title: "", progress: 0, duration: 0,
-                lastWatchedAt: existingDate, deviceId: deviceID, isDeleted: true
+                id: record.id, type: record.type, title: record.title,
+                seriesTitle: record.seriesTitle, coverURL: record.coverURL, streamURL: record.streamURL,
+                progress: record.progress, duration: record.duration,
+                lastWatchedAt: existingDate, playlistID: record.playlistID, seriesID: record.seriesID,
+                profileID: record.profileID, deviceId: deviceID, isDeleted: true
             )
             if let fenceData = try? JSONEncoder().encode(latest) {
                 store.set(fenceData, forKey: fenceKey)
@@ -161,6 +165,10 @@ private actor WatchProgressSyncWriter {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "=", with: "")
+    }
+
+    private func syncIdentity(_ record: WatchProgressSyncRecord) -> String {
+        "\(record.profileID?.uuidString ?? "legacy")|\(record.type)|\(record.playlistID?.uuidString ?? "")|\(record.id)"
     }
 
     private func keyDigest(_ value: String) -> String {
@@ -286,18 +294,31 @@ extension WatchProgressSyncClient: DependencyKey {
                     remoteRecords.append(record)
                 }
 
+                func scopedIdentity(_ record: WatchProgressSyncRecord) -> String {
+                    "\(record.profileID?.uuidString ?? "legacy")|\(record.type)|\(record.playlistID?.uuidString ?? "")|\(record.id)"
+                }
                 var newestLive: [String: WatchProgressSyncRecord] = [:]
                 var newestDeletion: [String: WatchProgressSyncRecord] = [:]
+                var legacyWildcardDeletions: [String: Date] = [:]
                 for record in remoteRecords {
                     if record.isDeleted == true {
-                        if record.lastWatchedAt > (newestDeletion[record.id]?.lastWatchedAt ?? .distantPast) {
-                            newestDeletion[record.id] = record
+                        if record.type == "deleted", record.profileID == nil {
+                            legacyWildcardDeletions[record.id] = max(legacyWildcardDeletions[record.id] ?? .distantPast, record.lastWatchedAt)
+                            continue
                         }
-                    } else if record.lastWatchedAt > (newestLive[record.id]?.lastWatchedAt ?? .distantPast) {
-                        newestLive[record.id] = record
+                        let key = scopedIdentity(record)
+                        if record.lastWatchedAt > (newestDeletion[key]?.lastWatchedAt ?? .distantPast) {
+                            newestDeletion[key] = record
+                        }
+                    } else {
+                        let key = scopedIdentity(record)
+                        if record.lastWatchedAt > (newestLive[key]?.lastWatchedAt ?? .distantPast) {
+                            newestLive[key] = record
+                        }
                     }
                 }
                 var deletionFences: [String: Date] = [:]
+                var legacyDeletionFences: [String: Date] = [:]
                 var retentionFloors: [String: Date] = [:]
                 for (key, value) in values {
                     if key.hasPrefix("pureiptv_watch_retention_floor_"), let floor = value as? Date {
@@ -319,10 +340,18 @@ extension WatchProgressSyncClient: DependencyKey {
                         let data = value as? Data,
                         let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
                     else { continue }
-                    deletionFences[record.id] = max(
-                        deletionFences[record.id] ?? .distantPast,
-                        record.lastWatchedAt
-                    )
+                    if record.type == "deleted", record.profileID == nil {
+                        legacyDeletionFences[record.id] = max(
+                            legacyDeletionFences[record.id] ?? .distantPast,
+                            record.lastWatchedAt
+                        )
+                    } else if record.isDeleted == true {
+                        let identity = scopedIdentity(record)
+                        deletionFences[identity] = max(
+                            deletionFences[identity] ?? .distantPast,
+                            record.lastWatchedAt
+                        )
+                    }
                 }
                 // Apply each source device's retention floor before conflict
                 // resolution so a suppressed row cannot hide another device's
@@ -331,32 +360,50 @@ extension WatchProgressSyncClient: DependencyKey {
                 for record in remoteRecords where record.isDeleted != true {
                     let sourceFloor = retentionFloors[record.deviceId ?? ""] ?? .distantPast
                     guard record.lastWatchedAt > sourceFloor else { continue }
-                    if record.lastWatchedAt > (newestLive[record.id]?.lastWatchedAt ?? .distantPast) {
-                        newestLive[record.id] = record
+                    let key = scopedIdentity(record)
+                    if record.lastWatchedAt > (newestLive[key]?.lastWatchedAt ?? .distantPast) {
+                        newestLive[key] = record
                     }
                 }
-                let allIDs = Set(newestLive.keys).union(newestDeletion.keys).union(deletionFences.keys)
+                let allIDs = Set(newestLive.keys).union(newestDeletion.keys)
 
                 var mergedCount = 0
                 let context = ModelContext(modelContainer)
 
-                for id in allIDs {
-                    if let remoteRecord = newestLive[id],
+                for identity in allIDs {
+                    guard let remoteRecord = newestLive[identity] ?? newestDeletion[identity] else { continue }
+                    let id = remoteRecord.id
+                    let type = remoteRecord.type
+                    let profileID = remoteRecord.profileID
+                    let playlistID = remoteRecord.playlistID
+                    if let remoteRecord = newestLive[identity],
                        remoteRecord.lastWatchedAt <= (retentionFloors[remoteRecord.deviceId ?? ""] ?? .distantPast)
                     {
                         // Never delete local history when the bounded remote
                         // synchronization horizon suppresses an older record.
                         continue
                     }
-                    let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate { $0.id == id })
-                    let localItem = try? context.fetch(descriptor).first
+                    let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
+                        $0.id == id && $0.type == type && $0.profileID == profileID
+                    })
+                    let localItem = try? context.fetch(descriptor).first(where: { $0.playlistID == playlistID })
+                    let legacyWildcard = profileID == nil ? (legacyWildcardDeletions[id] ?? .distantPast) : .distantPast
                     let tombstoneDate = max(
-                        newestDeletion[id]?.lastWatchedAt ?? .distantPast,
-                        deletionFences[id] ?? .distantPast
+                        newestDeletion[identity]?.lastWatchedAt ?? .distantPast,
+                        max(
+                            deletionFences[identity] ?? .distantPast,
+                            profileID == nil ? max(legacyDeletionFences[id] ?? .distantPast, legacyWildcard) : .distantPast
+                        )
                     )
-                    guard let remoteRecord = newestLive[id] else {
-                        if let localItem, tombstoneDate >= localItem.lastWatchedAt {
-                            context.delete(localItem)
+                    guard let remoteRecord = newestLive[identity] else {
+                        if let localItem {
+                            if tombstoneDate >= localItem.lastWatchedAt {
+                                localItem.lastWatchedAt = tombstoneDate
+                                localItem.removedAt = tombstoneDate
+                                mergedCount += 1
+                            }
+                        } else {
+                            context.insert(remoteRecord.toWatchHistoryItem())
                             mergedCount += 1
                         }
                         continue
@@ -365,7 +412,8 @@ extension WatchProgressSyncClient: DependencyKey {
                     guard remoteRecord.lastWatchedAt > tombstoneDate else {
                         let deletionDate = tombstoneDate
                         if let localItem, localItem.lastWatchedAt <= deletionDate {
-                            context.delete(localItem)
+                            localItem.lastWatchedAt = deletionDate
+                            localItem.removedAt = deletionDate
                             mergedCount += 1
                         }
                         continue
@@ -378,6 +426,20 @@ extension WatchProgressSyncClient: DependencyKey {
                         }
                     } else {
                         context.insert(remoteRecord.toWatchHistoryItem())
+                        mergedCount += 1
+                    }
+                }
+
+                // Old id-only tombstones are retained as legacy-profile wildcard
+                // markers. They never remove records belonging to a named profile.
+                let legacyMarkers = Dictionary(uniqueKeysWithValues: legacyWildcardDeletions.map { ($0.key, $0.value) })
+                for (id, date) in legacyMarkers {
+                    let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
+                        $0.id == id && $0.profileID == nil
+                    })
+                    for item in (try? context.fetch(descriptor)) ?? [] where item.lastWatchedAt <= date {
+                        item.lastWatchedAt = max(item.lastWatchedAt, date)
+                        item.removedAt = max(item.removedAt ?? .distantPast, date)
                         mergedCount += 1
                     }
                 }

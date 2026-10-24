@@ -30,6 +30,7 @@ public struct ProfileSelectionFeature: Sendable {
     }
 
     @Dependency(\.uuid) var uuid
+    @Dependency(\.profileContextClient) var profileContextClient
 
     public init() {}
 
@@ -59,7 +60,7 @@ public struct ProfileSelectionFeature: Sendable {
                 return .none
 
             case let .selectProfile(profile):
-                UserDefaults.standard.set(profile.id.uuidString, forKey: "currentProfileID")
+                _ = profileContextClient.select(profile.id)
                 UserDefaults.standard.set(profile.isKidsMode, forKey: "currentProfileIsKidsMode")
                 return .send(.delegate(.didSelectProfile(profile)))
 

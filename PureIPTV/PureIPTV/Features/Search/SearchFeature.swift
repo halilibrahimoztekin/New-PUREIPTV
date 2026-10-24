@@ -148,7 +148,7 @@ public struct SearchFeature: Sendable {
         public var liveResults: [MediaModels.Item] = []
         public var vodResults: [MediaModels.Item] = []
         public var seriesResults: [MediaModels.Item] = []
-        public var favoriteIDs: Set<String> = []
+        public var favoriteIDs: Set<FavoriteIdentity> = []
         public var scheduledReminderIDs: Set<String> = []
         public var pendingReminderRequestIDs: [String: UUID] = [:]
         public var reminderLoadRequestID: UUID?
@@ -164,6 +164,20 @@ public struct SearchFeature: Sendable {
         public var activeSearchRequestID: UUID?
         public var filterCounts: [SearchFilter: Int] = [:]
         public var baseAllResultsCount = 0
+
+        public var playlistIDsByBadgeID: [String: UUID] {
+            var identifiers: [String: UUID] = [:]
+            for (index, playlist) in savedPlaylists.enumerated() {
+                guard let config = playlist.toPlaylistConfig() else { continue }
+                identifiers[UnifiedPlaylistManager.shared.badge(for: config, index: index).id] = playlist.id
+            }
+            if let config = lastLoadedConfig, let playlistID = config.playlistID {
+                identifiers[UnifiedPlaylistManager.shared.badge(for: config).id] = playlistID
+                identifiers[EPGReminderIdentifier.playlistIdentity(for: config)] = playlistID
+                identifiers["default"] = playlistID
+            }
+            return identifiers
+        }
 
         public mutating func updateAllResultsCount() {
             filterCounts[.all] = baseAllResultsCount + peopleResults.count + programResults.count
@@ -277,12 +291,12 @@ public struct SearchFeature: Sendable {
         case clearHistoryTapped
         case recentSearchTapped(String)
         case tagSelected(QuickSearchTag)
-        case loadFavoritesResponse([FavoriteItem])
+        case loadFavoritesResponse([FavoriteItem], ProfileContextSnapshot)
         case loadReminders
         case remindersLoaded(requestID: UUID, Set<String>)
         case toggleReminder(EPGProgram, MediaModels.Item, reminderID: String)
         case reminderToggleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
-        case toggleFavorite(item: MediaModels.Item, type: String)
+        case toggleFavorite(item: MediaModels.Item, type: String, playlistID: UUID?)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -296,6 +310,7 @@ public struct SearchFeature: Sendable {
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.continuousClock) var clock
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.reminderClient) var reminderClient
@@ -313,6 +328,8 @@ public struct SearchFeature: Sendable {
         let tmdbClient = tmdbClient
         let customEPGMappingClient = customEPGMappingClient
 
+        let profileContextClient = profileContextClient
+
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
@@ -324,9 +341,10 @@ public struct SearchFeature: Sendable {
                     await send(.loadRecentSearchesResponse(history))
                 }
 
+                let profileScope = profileContextClient.snapshot()
                 let loadFavs: Effect<Action> = .run { send in
-                    let favs = await (try? databaseClient.fetchFavorites()) ?? []
-                    await send(.loadFavoritesResponse(favs))
+                    let favs = await (try? databaseClient.fetchFavorites(profileScope)) ?? []
+                    await send(.loadFavoritesResponse(favs, profileScope))
                 }
 
                 let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
@@ -1046,25 +1064,29 @@ public struct SearchFeature: Sendable {
                 state.debouncedQuery = tag.title
                 return .send(.performSearch(tag.title))
 
-            case let .loadFavoritesResponse(favs):
-                state.favoriteIDs = Set(favs.map(\.id))
+            case let .loadFavoritesResponse(favs, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
+                state.favoriteIDs = Set(favs.map(FavoriteIdentity.init))
                 return .none
 
-            case let .toggleFavorite(item, type):
+            case let .toggleFavorite(item, type, playlistID):
+                let profileScope = profileContextClient.snapshot()
                 let favItem = FavoriteItem(
                     id: item.id,
                     type: type,
                     title: item.title,
                     coverURL: item.coverURL?.absoluteString,
-                    streamURL: item.streamURL?.absoluteString
+                    streamURL: item.streamURL?.absoluteString,
+                    playlistID: playlistID
                 )
-                if state.favoriteIDs.contains(item.id) {
-                    state.favoriteIDs.remove(item.id)
+                let identity = FavoriteIdentity(favItem)
+                if state.favoriteIDs.contains(identity) {
+                    state.favoriteIDs.remove(identity)
                 } else {
-                    state.favoriteIDs.insert(item.id)
+                    state.favoriteIDs.insert(identity)
                 }
                 return .run { _ in
-                    _ = try? await databaseClient.toggleFavorite(favItem)
+                    _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                 }
 
             case .delegate:

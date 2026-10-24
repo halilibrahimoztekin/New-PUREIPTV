@@ -149,12 +149,12 @@ public struct SeriesDetailFeature {
         case playNextEpisodeTapped
         case tmdbTimeout
         case toggleFavorite
-        case favoriteStatusLoaded(Bool)
+        case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
         case downloadedEpisodesLoaded([String: Bool])
-        case episodeProgressLoaded([WatchHistoryItem])
+        case episodeProgressLoaded([WatchHistoryItem], ProfileContextSnapshot)
         case markEpisodeUnwatched(String)
         case downloadEpisode(DetailModels.Episode)
-        case historyStatusLoaded(WatchHistoryItem?)
+        case historyStatusLoaded(WatchHistoryItem?, ProfileContextSnapshot)
         case resumeTapped
         case restartTapped
         case trailerTapped
@@ -172,6 +172,7 @@ public struct SeriesDetailFeature {
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.dismiss) var dismiss
 
@@ -180,6 +181,7 @@ public struct SeriesDetailFeature {
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
         let tmdbClient = tmdbClient
+        let profileContextClient = profileContextClient
 
         Reduce { state, action in
             switch action {
@@ -192,6 +194,8 @@ public struct SeriesDetailFeature {
                 let config = state.config
                 let seriesID = state.series.id
                 let searchTitle = state.series.title.cleanedForTMDBSearch()
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = config.playlistID
 
                 print("Fetching Series Info and TMDB details for: \(searchTitle)")
 
@@ -224,13 +228,13 @@ public struct SeriesDetailFeature {
                 }
 
                 let favoriteEffect: Effect<Action> = .run { [id = state.series.id] send in
-                    let isFav = await (try? databaseClient.isFavorite(id)) ?? false
-                    await send(.favoriteStatusLoaded(isFav))
+                    let isFav = await (try? databaseClient.isFavorite(id, "series", playlistID, profileScope)) ?? false
+                    await send(.favoriteStatusLoaded(isFav, profileScope))
                 }
 
                 let historyEffect: Effect<Action> = .run { [id = state.series.id] send in
-                    let history = try? await databaseClient.getSeriesWatchProgress(id)
-                    await send(.historyStatusLoaded(history))
+                    let history = try? await databaseClient.getSeriesWatchProgress(id, playlistID, profileScope)
+                    await send(.historyStatusLoaded(history, profileScope))
                 }
 
                 let downloadEffect: Effect<Action> = .run { send in
@@ -240,8 +244,8 @@ public struct SeriesDetailFeature {
                 }
 
                 let episodesHistoryEffect: Effect<Action> = .run { [id = state.series.id] send in
-                    let items = await (try? databaseClient.fetchSeriesEpisodesWatchHistory(id)) ?? []
-                    await send(.episodeProgressLoaded(items))
+                    let items = await (try? databaseClient.fetchSeriesEpisodesWatchHistory(id, playlistID, profileScope)) ?? []
+                    await send(.episodeProgressLoaded(items, profileScope))
                 }
 
                 return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, episodesHistoryEffect)
@@ -367,7 +371,8 @@ public struct SeriesDetailFeature {
                 }
                 return .none
 
-            case let .episodeProgressLoaded(items):
+            case let .episodeProgressLoaded(items, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.episodeProgressMap = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
                 return .none
 
@@ -382,8 +387,10 @@ public struct SeriesDetailFeature {
                     state.historyItem = nil
                 }
                 state.updateNextUpEpisode()
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = state.config.playlistID
                 return .run { _ in
-                    try? await databaseClient.deleteWatchProgress(id)
+                    try? await databaseClient.deleteWatchProgress(id, "episode", playlistID, profileScope)
                 }
 
             case let .episodeSelected(episode):
@@ -529,7 +536,8 @@ public struct SeriesDetailFeature {
                 state.trailerTitle = nil
                 return .none
 
-            case let .historyStatusLoaded(history):
+            case let .historyStatusLoaded(history, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.historyItem = history
                 if !state.hasUserSelectedSeason,
                    let history,
@@ -540,7 +548,8 @@ public struct SeriesDetailFeature {
                 state.updateNextUpEpisode()
                 return .none
 
-            case let .favoriteStatusLoaded(isFav):
+            case let .favoriteStatusLoaded(isFav, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
                 state.isFavorite = isFav
                 return .none
 
@@ -583,16 +592,18 @@ public struct SeriesDetailFeature {
                 }
 
             case .toggleFavorite:
+                let profileScope = profileContextClient.snapshot()
                 let item = FavoriteItem(
                     id: state.series.id,
                     type: "series",
                     title: state.series.title,
                     coverURL: state.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.series.coverURL?.absoluteString,
-                    streamURL: nil
+                    streamURL: nil,
+                    playlistID: state.config.playlistID
                 )
                 return .run { send in
-                    let isNowFav = await (try? databaseClient.toggleFavorite(item)) ?? false
-                    await send(.favoriteStatusLoaded(isNowFav))
+                    let isNowFav = await (try? databaseClient.toggleFavorite(item, profileScope)) ?? false
+                    await send(.favoriteStatusLoaded(isNowFav, profileScope))
                 }
 
             case .closeTapped:
