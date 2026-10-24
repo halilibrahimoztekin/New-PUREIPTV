@@ -12,7 +12,7 @@ public struct MovieVersionEdition: Equatable, Identifiable, Sendable {
         item.id
     }
 
-    public init(item: MediaModels.Item, isCurrent: Bool = false) {
+    public nonisolated init(item: MediaModels.Item, isCurrent: Bool = false) {
         self.item = item
         self.isCurrent = isCurrent
 
@@ -31,7 +31,7 @@ public struct MovieVersionEdition: Equatable, Identifiable, Sendable {
 
     // MARK: - Parser Helpers
 
-    public static func detectQuality(from title: String) -> String {
+    public nonisolated static func detectQuality(from title: String) -> String {
         let lower = title.lowercased()
         if lower.contains("4k") || lower.contains("uhd") || lower.contains("2160p") {
             return "4K UHD"
@@ -45,7 +45,7 @@ public struct MovieVersionEdition: Equatable, Identifiable, Sendable {
         return "HD"
     }
 
-    public static func detectEdition(from title: String) -> String {
+    public nonisolated static func detectEdition(from title: String) -> String {
         let lower = title.lowercased()
         var editions: [String] = []
 

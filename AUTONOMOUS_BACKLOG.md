@@ -227,7 +227,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. İlk sandbox build’i GitHub DNS erişimi olmadığı için paketleri çözümleyemedi; mevcut Xcode Swift Package önbelleği kullanılarak iki build de başarıyla tamamlandı. `git diff --check` başarılı. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — Canlı arama hatırlatıcıları tamamlandı ve reviewer onayladı.
 
-### 52. [IN_PROGRESS] Kişiye Göre Ayarlanabilir Keşif Vitrini
+### 52. [DONE] Kişiye Göre Ayarlanabilir Keşif Vitrini
 - **Bulgu:** IPTVX 25 farklı izleme davranışından beslenen For You rafları sunuyor; UHF 2.0 hero vitrinin kişiselleştirilmesine ve kaldırılmasına izin veriyor.
 - **Canlı keşif (24 Ekim 2026):** IPTVX For You açıklaması öneri satırlarının kütüphane geçmişi ve mevcut metadata’ya göre değiştiğini; UHF 2.0 kullanıcı duyurusu hero’nun Home customization’dan ayarlanabildiğini doğruluyor: https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://www.reddit.com/r/uhfapp/comments/1ww274e/new_uhf_update_200/
 - **Kod taraması:** `SmartRecommendationEngine` ve “Sana Özel Öneriler” rafı mevcut; `HomeSectionManager` görünürlük/sıralama saklıyor ve `ModularHomeSettingsView` var. Ancak ayar ekranına hiçbir navigation/sheet bağlantısı yok, model yalnız 5 satır tanımlıyor; dashboard hero, öneri, canlı, devam etme, favoriler ve katalog raflarını sabit sırada çiziyor. `DashboardFeature` yalnız sports hub görünürlüğünü ayardan okuyor.
@@ -241,7 +241,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
 - **Mimari kararı:** Mevcut uygulamada playlist sırları iCloud Keychain’de; web oturumu, kimlik doğrulamalı backend veya güvenli browser-to-device eşleştirmesi yok. QR deep link’i yalnız kod üretiyor ve `setup` handler’ı bulunmuyor; `CloudKitBackupManager` çağrılmıyor, mevcut `.iptvbackup` yalnız tercihleri içeriyor. Reviewer `[NO-GO]`: bu altyapı olmadan sırları yeni web servisine açmak güvenli değil. Web konsolu, hesap/authorization ve credential-transfer tasarımı sağlanana kadar ertelendi. Yakın vadeli uygulanabilir alternatif, credential kapsamını açıkça belirleyen uygulama içi dışa/içe aktarma akışı.
 
-### 54. [IN_PROGRESS] Film Ayrıntısında Sinematik Hero ve Hızlı Oynatım
+### 54. [DONE] Film Ayrıntısında Sinematik Hero ve Hızlı Oynatım
 - **Bulgu:** IPTVX 25, film ayrıntı sayfasını sinematik hero ile yeniden tasarlıyor; içerik bilgisinden oynatmaya geçişi kısaltıyor.
 - **Kaynak:** https://iptvx.app/
 - **Kod incelemesi:** iOS ve tvOS ayrıntı ekranlarında sinematik backdrop ve doğrudan Play/Resume eylemleri zaten var. iOS backdrop’un statik provider resmi `AsyncImage` ile yüklendiğinden, User-Agent isteyen playlist sunucularında poster yüklenemiyordu.
@@ -250,9 +250,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. Projedeki mevcut Swift concurrency uyarıları dışında derleme hatası yok. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — Sinematik hero’daki provider görsel isteği düzeltildi, reviewer onayladı ve yalnızca Xcode derlemeleri alındı.
 
-### 55. [PENDING] Alternatif Dosya/Sürüm Seçimi Oynatmadan Önce
+### 55. [IN_PROGRESS] Alternatif Dosya/Sürüm Seçimi Oynatmadan Önce
 - **Bulgu:** UHF, Jellyfin/Emby/Plex öğesinde birden çok medya dosyası olduğunda oynatma öncesi seçim gösteriyor; farklı kalite sürümleri için benzer ihtiyaç ayrıca incelenebilir.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Kod taraması:** VOD ayrıntısında sürüm/kalite seçici zaten mevcut ve varyantları katalog başlıklarından buluyor. İç içe substring eşleşmesi devam filmi/benzer başlıkları yanlış sürüm sayabiliyor; eşit kalite sıralaması deterministik değil; asenkron geçmiş yanıtı seçilmiş varyant kimliğini taşımadığından hızlı seçimde eski izleme konumunu gösterebiliyor.
+- **Kapsam:** Yalnız normalize edilmiş tam başlık eşleşmelerini sürüm olarak grupla; kalite eşitliğinde tutarlı başlık/ID sırası uygula; izleme geçmişi yanıtını varyant kimliğiyle doğrula ve varyant değişimi/ekran kapanışında isteği iptal et.
+- **Uygulama:** Sürüm listesi yalnız normalize edilmiş tam başlık eşleşmeleriyle oluşturuluyor; kalite, normalize başlık ve item ID üzerinden deterministik sıralanıyor. Seçilen sürüm geçmişi temizlenip ilgili ID ile yeniden yükleniyor; gecikmiş yanıtlar seçili VOD kimliğiyle doğrulanıyor ve ekran kapanırken/variant değişirken önceki istek iptal ediliyor. Saf sürüm model başlatıcısı ve parser’lar `nonisolated` yapılarak Swift 6 isolation uyarısı giderildi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — sürüm eşleşmesi, kararlı sıralama ve varyant geçmişi yarışları düzeltildi; reviewer onayladı.
 
 ### 56. [PENDING] Fuzzy Search Alaka Düzeyi ve Sonuç Sıralama İyileştirmesi
 - **Bulgu:** UHF’in App Store sürüm geçmişi, arama algoritmasının doğruluk ve alaka düzeyini geliştirdiğini belirtiyor; büyük playlist’lerde başlık/kanal/metadata ağırlıkları ölçülebilir.

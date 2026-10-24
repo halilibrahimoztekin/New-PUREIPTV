@@ -91,7 +91,7 @@ public struct VODDetailFeature {
         case favoriteStatusLoaded(Bool)
         case downloadStatusLoaded(Bool)
         case downloadTapped
-        case historyStatusLoaded(WatchHistoryItem?)
+        case historyStatusLoaded(id: String, item: WatchHistoryItem?)
         case markUnwatched
         case actorTapped(TMDBCastMemberDTO)
         case actorDetailsResponse(Result<TMDBPersonDetailsDTO, Error>)
@@ -119,6 +119,7 @@ public struct VODDetailFeature {
 
     private nonisolated enum CancelID: Hashable, Sendable {
         case autoPlayTrailer
+        case versionHistory
     }
 
     @Injected(\.iptvClient) var iptvClient
@@ -163,19 +164,42 @@ public struct VODDetailFeature {
             } else {
                 var matchingItems = catalog.filter { item in
                     let itemNorm = fastNorm(item.title)
-                    return itemNorm == targetNorm || (targetNorm.count >= 5 && (itemNorm.contains(targetNorm) || targetNorm.contains(itemNorm)))
+                    return !itemNorm.isEmpty && itemNorm == targetNorm
                 }
                 if !matchingItems.contains(where: { $0.id == vod.id }) {
                     matchingItems.insert(vod, at: 0)
                 }
                 let currentId = selectedVersionId ?? vod.id
-                let editions = matchingItems.map { MovieVersionEdition(item: $0, isCurrent: $0.id == currentId) }
-                let qualityPriority: [String: Int] = [
-                    "4K UHD": 4, "1080p FHD": 3, "720p HD": 2, "HD": 1, "SD": 0,
-                ]
-                versions = editions.sorted {
-                    (qualityPriority[$0.qualityLabel] ?? 1) > (qualityPriority[$1.qualityLabel] ?? 1)
+                func qualityPriority(for title: String) -> Int {
+                    let lower = title.lowercased()
+                    if lower.contains("4k") || lower.contains("uhd") || lower.contains("2160p") {
+                        return 4
+                    }
+                    if lower.contains("1080p") || lower.contains("fhd") || lower.contains("bluray") || lower.contains("blu-ray") {
+                        return 3
+                    }
+                    if lower.contains("720p") || lower.contains("hd") {
+                        return 2
+                    }
+                    if lower.contains("480p") || lower.contains("sd") || lower.contains("dvdrip") {
+                        return 0
+                    }
+                    return 1
                 }
+                matchingItems.sort { lhs, rhs in
+                    let lhsPriority = qualityPriority(for: lhs.title)
+                    let rhsPriority = qualityPriority(for: rhs.title)
+                    if lhsPriority != rhsPriority {
+                        return lhsPriority > rhsPriority
+                    }
+                    let lhsTitle = fastNorm(lhs.title)
+                    let rhsTitle = fastNorm(rhs.title)
+                    if lhsTitle != rhsTitle {
+                        return lhsTitle < rhsTitle
+                    }
+                    return lhs.id < rhs.id
+                }
+                versions = matchingItems.map { MovieVersionEdition(item: $0, isCurrent: $0.id == currentId) }
             }
 
             // 2. Similar Movies Matching
@@ -255,8 +279,9 @@ public struct VODDetailFeature {
 
                 let historyEffect: Effect<Action> = .run { [id = state.vod.id] send in
                     let history = try? await databaseClient.getWatchProgress(id)
-                    await send(.historyStatusLoaded(history))
+                    await send(.historyStatusLoaded(id: id, item: history))
                 }
+                .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
 
                 let downloadEffect: Effect<Action> = .run { [id = state.vod.id] send in
                     let isDown = await (try? downloadClient.isDownloaded(id)) ?? false
@@ -287,7 +312,9 @@ public struct VODDetailFeature {
                 return .none
 
             case let .backgroundMatchingCompleted(versions, matched):
-                state.availableVersions = versions
+                state.availableVersions = versions.map {
+                    MovieVersionEdition(item: $0.item, isCurrent: $0.id == state.selectedVersionId)
+                }
                 state.matchedVODsByTMDBId = matched
                 return .none
 
@@ -433,13 +460,15 @@ public struct VODDetailFeature {
             case let .selectVersion(version):
                 state.selectedVersionId = version.id
                 state.vod = version.item
+                state.historyItem = nil
                 state.availableVersions = state.availableVersions.map {
                     MovieVersionEdition(item: $0.item, isCurrent: $0.id == version.id)
                 }
                 return .run { [id = version.id] send in
                     let history = try? await databaseClient.getWatchProgress(id)
-                    await send(.historyStatusLoaded(history))
+                    await send(.historyStatusLoaded(id: id, item: history))
                 }
+                .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
 
             case let .similarMovieTapped(movie):
                 if let matched = state.matchedVODsByTMDBId[movie.id] {
@@ -510,7 +539,8 @@ public struct VODDetailFeature {
                 )
                 return .send(.delegate(.didSelectPlay(playable)))
 
-            case let .historyStatusLoaded(history):
+            case let .historyStatusLoaded(id, history):
+                guard state.vod.id == id else { return .none }
                 state.historyItem = history
                 return .none
 
@@ -577,12 +607,16 @@ public struct VODDetailFeature {
                 state.isAutoPlayTrailerActive = false
                 return .merge(
                     .cancel(id: CancelID.autoPlayTrailer),
+                    .cancel(id: CancelID.versionHistory),
                     .send(.delegate(.close))
                 )
 
             case .viewDidDisappear:
                 state.isAutoPlayTrailerActive = false
-                return .cancel(id: CancelID.autoPlayTrailer)
+                return .merge(
+                    .cancel(id: CancelID.autoPlayTrailer),
+                    .cancel(id: CancelID.versionHistory)
+                )
 
             case .delegate:
                 return .none
