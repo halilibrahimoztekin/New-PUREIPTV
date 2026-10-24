@@ -176,7 +176,8 @@ extension PlayerFactoryClient: DependencyKey {
                         decodedFrames: c.decodedVideoFrames,
                         droppedFrames: c.droppedVideoFrames,
                         lateFrames: c.lateVideoFrames,
-                        sourceReadBytes: c.sourceReadBytes
+                        sourceReadBytes: c.sourceReadBytes,
+                        presentedFrames: c.presentedVideoFrames
                     )
                 },
                 setEqualizerPreset: { preset in

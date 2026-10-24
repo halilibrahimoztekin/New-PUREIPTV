@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import CoreGraphics
+import Dispatch
 import FactoryKit
 import Foundation
 import GroupActivities
@@ -168,6 +169,8 @@ public struct PlayerFeature {
         public var isShowingStats: Bool = false
         public var playerStats: String = ""
         public var streamHealthMetrics: StreamHealthMetrics?
+        public var streamHealthGenerationID = UUID()
+        public var activePlaybackURL: URL
         public var isStreamHealthHUDVisible: Bool = false
         public var activeCatchupProgram: EPGProgram?
         public var isPlayingCatchup: Bool {
@@ -382,6 +385,7 @@ public struct PlayerFeature {
 
         public init(item: PlayableItem, playlist: [PlayableItem]? = nil) {
             self.item = item
+            activePlaybackURL = item.streamURL
             self.playlist = playlist
             liveChannels = playlist?.filter(\.isLive) ?? []
             let drInfo = ColorSpaceDetector.detectFromText(title: item.title, urlString: item.streamURL.absoluteString)
@@ -437,10 +441,11 @@ public struct PlayerFeature {
         case setAudioSyncHUDVisible(Bool)
         case setRememberDelayForChannel(Bool)
         case toggleStats
-        case updateStats(String)
+        case updateStats(String, itemID: String, generationID: UUID)
         case toggleStreamHealthHUD
         case setStreamHealthHUDVisible(Bool)
-        case updateStreamHealth(StreamHealthMetrics)
+        case updateStreamHealth(StreamHealthMetrics, itemID: String, generationID: UUID)
+        case startStreamHealthSampling(itemID: String, generationID: UUID)
         case toggleCatchupTimeline
         case setCatchupTimelineVisible(Bool)
         case setCatchupTimeShiftHours(Int)
@@ -661,6 +666,78 @@ public struct PlayerFeature {
         Reduce { state, action in
             Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, profileContextClient: profileContextClient)
         }
+    }
+
+    private static func streamHealthSamplingEffect(
+        itemID: String,
+        streamURL: URL,
+        generationID: UUID,
+        includesStats: Bool,
+        playerClient: PlayerClient,
+        streamHealthClient: StreamHealthClient
+    ) -> Effect<Action> {
+        .run { send in
+            var previousCounters: PlayerPlaybackCounters?
+            var previousSampleUptimeNanoseconds: UInt64?
+            while !Task.isCancelled {
+                var stats: String?
+                if includesStats {
+                    stats = await playerClient.getStats()
+                }
+                let counters = await playerClient.getPlaybackCounters()
+                let now = DispatchTime.now().uptimeNanoseconds
+                let elapsed = previousSampleUptimeNanoseconds.map {
+                    Double(now - $0) / 1_000_000_000
+                } ?? 0
+                let isPlaying = await MainActor.run { playerClient.vlcPlayer().isPlaying }
+                let mediaBitrate = await playerClient.getMediaInfo()?.bitrate
+                let health = await streamHealthClient.evaluateHealth(
+                    streamURL,
+                    isPlaying,
+                    counters,
+                    previousCounters,
+                    elapsed,
+                    mediaBitrate
+                )
+                previousCounters = counters
+                previousSampleUptimeNanoseconds = now
+                if includesStats {
+                    await send(.updateStats(stats ?? "", itemID: itemID, generationID: generationID))
+                }
+                await send(.updateStreamHealth(health, itemID: itemID, generationID: generationID))
+                do {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                } catch {
+                    return
+                }
+            }
+        }
+        .cancellable(id: CancelID.statsTimer, cancelInFlight: true)
+    }
+
+    private static func beginStreamHealthSampling(
+        state: inout State,
+        playerClient: PlayerClient,
+        streamHealthClient: StreamHealthClient
+    ) -> Effect<Action> {
+        let generationID = UUID()
+        state.streamHealthGenerationID = generationID
+        state.streamHealthMetrics = nil
+        return streamHealthSamplingEffect(
+            itemID: state.item.id,
+            streamURL: state.activePlaybackURL,
+            generationID: generationID,
+            includesStats: state.isShowingStats,
+            playerClient: playerClient,
+            streamHealthClient: streamHealthClient
+        )
+    }
+
+    private static func cancelStreamHealthSamplingIfNeeded(state: inout State) -> Effect<Action> {
+        guard !state.isShowingStats, !state.isStreamHealthHUDVisible else { return .none }
+        state.streamHealthGenerationID = UUID()
+        state.streamHealthMetrics = nil
+        return .cancel(id: CancelID.statsTimer)
     }
 
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
@@ -934,33 +1011,26 @@ public struct PlayerFeature {
             state.isShowingStats.toggle()
             if state.isShowingStats {
                 let fetchInfoEffect: Effect<Action> = .send(.fetchMediaInfo)
-                let timerEffect: Effect<Action> = .run { [item = state.item, isPlaying = (state.playerState == .playing), mediaBitrate = state.mediaInfo?.bitrate] send in
-                    var prevCounters: PlayerPlaybackCounters?
-                    while !Task.isCancelled {
-                        let stats = await playerClient.getStats()
-                        let counters = await playerClient.getPlaybackCounters()
-                        let health = await streamHealthClient.evaluateHealth(
-                            item.streamURL,
-                            isPlaying,
-                            counters,
-                            prevCounters,
-                            1.0,
-                            mediaBitrate
-                        )
-                        prevCounters = counters
-                        await send(.updateStats(stats ?? ""))
-                        await send(.updateStreamHealth(health))
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    }
-                }.cancellable(id: CancelID.statsTimer, cancelInFlight: true)
+                let timerEffect = Self.beginStreamHealthSampling(
+                    state: &state,
+                    playerClient: playerClient,
+                    streamHealthClient: streamHealthClient
+                )
                 return .merge(fetchInfoEffect, timerEffect)
             } else if !state.isStreamHealthHUDVisible {
+                state.streamHealthGenerationID = UUID()
+                state.streamHealthMetrics = nil
                 return .cancel(id: CancelID.statsTimer)
             } else {
-                return .none
+                return beginStreamHealthSampling(
+                    state: &state,
+                    playerClient: playerClient,
+                    streamHealthClient: streamHealthClient
+                )
             }
 
-        case let .updateStats(stats):
+        case let .updateStats(stats, itemID, generationID):
+            guard state.item.id == itemID, state.streamHealthGenerationID == generationID else { return .none }
             state.playerStats = stats
             return .none
 
@@ -973,28 +1043,21 @@ public struct PlayerFeature {
                 state.isAudioEQHUDVisible = false
                 state.isCatchupTimelineVisible = false
                 state.isRecentChannelsHUDVisible = false
-                let timerEffect: Effect<Action> = .run { [item = state.item, isPlaying = (state.playerState == .playing), mediaBitrate = state.mediaInfo?.bitrate] send in
-                    var prevCounters: PlayerPlaybackCounters?
-                    while !Task.isCancelled {
-                        let counters = await playerClient.getPlaybackCounters()
-                        let health = await streamHealthClient.evaluateHealth(
-                            item.streamURL,
-                            isPlaying,
-                            counters,
-                            prevCounters,
-                            1.0,
-                            mediaBitrate
-                        )
-                        prevCounters = counters
-                        await send(.updateStreamHealth(health))
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    }
-                }.cancellable(id: CancelID.statsTimer, cancelInFlight: true)
-                return timerEffect
+                return beginStreamHealthSampling(
+                    state: &state,
+                    playerClient: playerClient,
+                    streamHealthClient: streamHealthClient
+                )
             } else if !state.isShowingStats {
+                state.streamHealthGenerationID = UUID()
+                state.streamHealthMetrics = nil
                 return .cancel(id: CancelID.statsTimer)
             } else {
-                return .none
+                return beginStreamHealthSampling(
+                    state: &state,
+                    playerClient: playerClient,
+                    streamHealthClient: streamHealthClient
+                )
             }
 
         case let .setStreamHealthHUDVisible(visible):
@@ -1007,13 +1070,33 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.isRecentChannelsHUDVisible = false
             } else if !state.isShowingStats {
+                state.streamHealthGenerationID = UUID()
+                state.streamHealthMetrics = nil
                 return .cancel(id: CancelID.statsTimer)
             }
-            return .none
+            guard visible || state.isShowingStats else { return .none }
+            return Self.beginStreamHealthSampling(
+                state: &state,
+                playerClient: playerClient,
+                streamHealthClient: streamHealthClient
+            )
 
-        case let .updateStreamHealth(metrics):
+        case let .updateStreamHealth(metrics, itemID, generationID):
+            guard state.item.id == itemID, state.streamHealthGenerationID == generationID else { return .none }
             state.streamHealthMetrics = metrics
             return .none
+
+        case let .startStreamHealthSampling(itemID, generationID):
+            guard
+                state.item.id == itemID,
+                state.streamHealthGenerationID == generationID,
+                state.isShowingStats || state.isStreamHealthHUDVisible
+            else { return .none }
+            return Self.beginStreamHealthSampling(
+                state: &state,
+                playerClient: playerClient,
+                streamHealthClient: streamHealthClient
+            )
 
         case .play:
             state.isUserPaused = false
@@ -1054,43 +1137,48 @@ public struct PlayerFeature {
                 state.failedStreamIDs.removeAll()
             }
             state.isReconnecting = true
-            let url = state.item.streamURL
+            let url = state.activePlaybackURL
+            state.streamHealthGenerationID = UUID()
+            state.streamHealthMetrics = nil
             let isLive = state.item.isLive
             let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
             let currentRate = state.playbackRate
             let userAgentOverride = state.item.userAgentOverride
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
-            return .run { send in
-                // Flush and cleanly reset VLC engine to avoid pipeline lockups
-                try? await playerClient.stop()
-                try? await Task.sleep(nanoseconds: 200_000_000)
+            return .concatenate(
+                .cancel(id: CancelID.statsTimer),
+                .run { send in
+                    // Flush and cleanly reset VLC engine to avoid pipeline lockups
+                    try? await playerClient.stop()
+                    try? await Task.sleep(nanoseconds: 200_000_000)
 
-                let eventsStream = await playerClient.events()
-                await withTaskGroup(of: Void.self) { group in
-                    group.addTask {
-                        for await event in eventsStream {
-                            await send(.handlePlayerEvent(event))
+                    let eventsStream = await playerClient.events()
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask {
+                            for await event in eventsStream {
+                                await send(.handlePlayerEvent(event))
+                            }
                         }
-                    }
 
-                    group.addTask {
-                        do {
-                            try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
-                            if !isLive, position > 0 {
-                                try? await Task.sleep(nanoseconds: 500_000_000)
-                                try? await playerClient.seek(position)
+                        group.addTask {
+                            do {
+                                try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
+                                if !isLive, position > 0 {
+                                    try? await Task.sleep(nanoseconds: 500_000_000)
+                                    try? await playerClient.seek(position)
+                                }
+                                if currentRate != 1.0 {
+                                    try? await playerClient.setPlaybackRate(currentRate)
+                                }
+                            } catch {
+                                print("Player retry error: \(error)")
+                                await send(.handlePlayerEvent(.encounteredError))
                             }
-                            if currentRate != 1.0 {
-                                try? await playerClient.setPlaybackRate(currentRate)
-                            }
-                        } catch {
-                            print("Player retry error: \(error)")
-                            await send(.handlePlayerEvent(.encounteredError))
                         }
                     }
                 }
-            }
-            .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
+                .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
+            )
 
         case .streamStalled:
             guard !state.isUserPaused, !state.isMinimized else { return .none }
@@ -1883,6 +1971,10 @@ public struct PlayerFeature {
             if !state.isReconnecting {
                 state.failedStreamIDs.removeAll()
             }
+            let streamHealthGenerationID = UUID()
+            state.streamHealthGenerationID = streamHealthGenerationID
+            state.streamHealthMetrics = nil
+            state.activePlaybackURL = newItem.streamURL
             state.item = newItem
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
@@ -1922,6 +2014,7 @@ public struct PlayerFeature {
             state.isUpNextDismissed = false
 
             return .concatenate(
+                .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
@@ -2114,7 +2207,10 @@ public struct PlayerFeature {
                 state.isAudioEQHUDVisible = false
                 state.isCatchupTimelineVisible = false
                 state.isRecentChannelsHUDVisible = false
-                return .send(.fetchMediaInfo)
+                return .merge(
+                    .send(.fetchMediaInfo),
+                    cancelStreamHealthSamplingIfNeeded(state: &state)
+                )
             }
             return .none
 
@@ -2347,11 +2443,17 @@ public struct PlayerFeature {
                 state.isEPGVisible = false
                 state.isCatchupTimelineVisible = false
                 state.activeCatchupProgram = program
-                return .run { _ in
-                    try await playerClient.play(catchupURL, userAgentOverride, nil)
-                } catch: { error, _ in
-                    print("Failed to play catchup: \(error)")
-                }
+                state.activePlaybackURL = catchupURL
+                state.streamHealthGenerationID = UUID()
+                state.streamHealthMetrics = nil
+                return .merge(
+                    .cancel(id: CancelID.statsTimer),
+                    .run { _ in
+                        try await playerClient.play(catchupURL, userAgentOverride, nil)
+                    } catch: { error, _ in
+                        print("Failed to play catchup: \(error)")
+                    }
+                )
             }
             return .none
 
@@ -2360,12 +2462,18 @@ public struct PlayerFeature {
             state.isCatchupTimelineVisible = false
             state.playerState = .playing
             let liveURL = state.item.streamURL
+            state.activePlaybackURL = liveURL
+            state.streamHealthGenerationID = UUID()
+            state.streamHealthMetrics = nil
             let userAgentOverride = state.item.userAgentOverride
-            return .run { _ in
-                try await playerClient.play(liveURL, userAgentOverride, nil)
-            } catch: { error, _ in
-                print("Failed to return to live stream: \(error)")
-            }
+            return .merge(
+                .cancel(id: CancelID.statsTimer),
+                .run { _ in
+                    try await playerClient.play(liveURL, userAgentOverride, nil)
+                } catch: { error, _ in
+                    print("Failed to return to live stream: \(error)")
+                }
+            )
 
         case .toggleCatchupTimeline:
             state.isCatchupTimelineVisible.toggle()
@@ -2378,8 +2486,12 @@ public struct PlayerFeature {
                 state.isAudioEQHUDVisible = false
                 state.isRecentChannelsHUDVisible = false
                 if state.epgListings.isEmpty {
-                    return .send(.fetchEPG)
+                    return .merge(
+                        .send(.fetchEPG),
+                        cancelStreamHealthSamplingIfNeeded(state: &state)
+                    )
                 }
+                return cancelStreamHealthSamplingIfNeeded(state: &state)
             }
             return .none
 
@@ -2420,8 +2532,12 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.isRecentChannelsHUDVisible = false
                 if state.audioTracks.isEmpty, state.subtitleTracks.isEmpty {
-                    return .send(.fetchTracks)
+                    return .merge(
+                        .send(.fetchTracks),
+                        cancelStreamHealthSamplingIfNeeded(state: &state)
+                    )
                 }
+                return cancelStreamHealthSamplingIfNeeded(state: &state)
             }
             return .none
 
@@ -2564,7 +2680,7 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.isRecentChannelsHUDVisible = false
             }
-            return .none
+            return cancelStreamHealthSamplingIfNeeded(state: &state)
 
         case let .setAudioEQHUDVisible(visible):
             state.isAudioEQHUDVisible = visible
@@ -2663,6 +2779,12 @@ public struct PlayerFeature {
                     }
                     if state.item.config != nil, state.item.epgChannelID != nil, state.epgListings.isEmpty {
                         actions.append(.send(.fetchEPG))
+                    }
+                    if state.isShowingStats || state.isStreamHealthHUDVisible {
+                        actions.append(.send(.startStreamHealthSampling(
+                            itemID: state.item.id,
+                            generationID: state.streamHealthGenerationID
+                        )))
                     }
                     return .merge(actions)
                 } else if newState == .buffering || newState == .opening {

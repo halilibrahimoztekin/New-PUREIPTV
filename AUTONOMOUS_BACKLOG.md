@@ -815,9 +815,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 - **Karar:** Var olan rapor iskeleti gizli veri dışa çıkarma riski taşıdığı ve kullanıcıya ulaştırılamadığı için güvenli paylaşım akışıyla yeniden düzenlenecek; keyfi log sanitizasyonu yerine hassas kaynakları rapordan tamamen çıkar.
 
-### 80. [PENDING] Canlı Yayın FPS ve Ağ Bant Genişliği Göstergesi
+### 80. [DONE] Canlı Yayın FPS ve Ağ Bant Genişliği Göstergesi
 - **Keşif sinyali:** Apple TV kullanıcıları kanal seçerken 4K/FPS ve o anki bandwidth bilgisini görmek istediklerini yazmış: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/
 - **Aday gap:** Mevcut Nerd Stats çözünürlük/bitrate gösteriyor; gerçek ölçülen frame rate ve ağ throughput kaynağı olup olmadığı, başlıktan tahmin edilen FPS’ten ayrılarak incelenecek.
+- **Kod bulgusu:** SwiftVLC playback counters exposes `presentedVideoFrames` and `sourceReadBytes`; current client wrongly presents stream metadata as measured bitrate, uses a fixed 4.5 Mbps fallback, and hard-codes 50 FPS. `currentFrameRate` is title/URL-derived for display-mode matching, not an observed FPS sample.
+- **Uygulama:** Both counters are mapped into the shared playback DTO. StreamHealthClient derives Mbps and presented FPS independently from deltas over monotonic elapsed time; first/paused/reset/stalled/stale (>5s) samples return unavailable. HUDs label network throughput, stream metadata bitrate, and measured presented FPS separately. Synthetic buffer-duration/health gauges were removed. Sampling tracks the active playback URL through catch-up/live/retry transitions, clears metrics and rotates generation on start/reopen/stop, and rejects prior-item/URL responses. Hiding the health HUD from Info, catch-up timeline, tracks, or EQ cancels sampling only when Nerd Stats is also closed. Failed HEAD probes report unavailable latency/jitter, jitter history is preserved only for the same sanitized scheme/host/port endpoint, and score/grade remain unavailable until latency succeeds. No new probe or HEAD request was added.
+- **PR Reviewer:** Tüm ölçüm doğruluğu, örnekleme oturumu, catch-up/retry URL, ping başarısızlığı, endpoint-jitter ve overlay lifecycle düzeltmelerinden sonra `[APPROVED]`.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Mevcut Swift 6 concurrency uyarıları kaldı. Kullanıcı talimatı gereği test, simulator veya app akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
 ### 81. [PENDING] Farklı İçerik Türleriyle Multiview
 - **Keşif sinyali:** TiviMate kullanıcısı çoklu ekranda canlı kanala sessiz eşlikçi olarak dizi bölümü izleme kısıtını dile getirmiş: https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1wnk8x0/whats_one_small_thing_iptv_players_do_that_drives/

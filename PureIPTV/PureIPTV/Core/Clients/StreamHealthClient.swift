@@ -2,7 +2,7 @@ import ComposableArchitecture
 import Foundation
 
 public struct StreamHealthClient: Sendable {
-    public var measureLatencyAndJitter: @Sendable (_ url: URL) async -> (latencyMs: Int, jitterMs: Int)
+    public var measureLatencyAndJitter: @Sendable (_ url: URL) async -> (latencyMs: Int, jitterMs: Int?)?
     public var evaluateHealth: @Sendable (
         _ url: URL,
         _ isPlaying: Bool,
@@ -15,8 +15,8 @@ public struct StreamHealthClient: Sendable {
 
 extension StreamHealthClient: DependencyKey {
     private actor LatencyTracker {
-        var lastLatencyMs: Int = 32
-        var lastJitterMs: Int = 2
+        var lastLatencyMs: Int?
+        var lastEndpoint: String?
         var session: URLSession
 
         init() {
@@ -27,13 +27,24 @@ extension StreamHealthClient: DependencyKey {
             session = URLSession(configuration: config)
         }
 
-        func ping(url: URL) async -> (latencyMs: Int, jitterMs: Int) {
-            // Determine host URL for lightweight ping
-            guard let host = url.host,
-                  let scheme = url.scheme,
-                  let pingURL = URL(string: "\(scheme)://\(host)")
+        func ping(url: URL) async -> (latencyMs: Int, jitterMs: Int?)? {
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let scheme = components.scheme,
+                  let host = components.host
             else {
-                return (lastLatencyMs, lastJitterMs)
+                return nil
+            }
+            components.user = nil
+            components.password = nil
+            components.path = ""
+            components.query = nil
+            components.fragment = nil
+            guard let pingURL = components.url else { return nil }
+
+            let endpoint = "\(scheme.lowercased())://\(host.lowercased()):\(components.port ?? -1)"
+            if endpoint != lastEndpoint {
+                lastEndpoint = endpoint
+                lastLatencyMs = nil
             }
 
             var request = URLRequest(url: pingURL)
@@ -42,21 +53,19 @@ extension StreamHealthClient: DependencyKey {
 
             let start = CFAbsoluteTimeGetCurrent()
             do {
-                _ = try await session.data(for: request)
+                let (_, response) = try await session.data(for: request)
+                guard let response = response as? HTTPURLResponse,
+                      (200 ..< 400).contains(response.statusCode)
+                else { return nil }
                 let elapsed = CFAbsoluteTimeGetCurrent() - start
                 let currentLatency = max(8, min(999, Int(elapsed * 1000.0)))
-                let currentJitter = abs(currentLatency - lastLatencyMs)
+                let currentJitter = lastLatencyMs.map { abs(currentLatency - $0) }
                 lastLatencyMs = currentLatency
-                lastJitterMs = currentJitter
                 return (currentLatency, currentJitter)
             } catch {
-                // If HEAD fails or host rejects HEAD, simulate light decay or record fallback
-                let elapsed = CFAbsoluteTimeGetCurrent() - start
-                let fallbackLatency = max(15, min(999, Int(elapsed * 1000.0)))
-                let jitter = abs(fallbackLatency - lastLatencyMs)
-                lastLatencyMs = fallbackLatency
-                lastJitterMs = jitter
-                return (fallbackLatency, jitter)
+                // A failed probe is unavailable, not a latency measurement. Keep
+                // the last successful sample so the next success can measure jitter.
+                return nil
             }
         }
     }
@@ -69,81 +78,85 @@ extension StreamHealthClient: DependencyKey {
                 await tracker.ping(url: url)
             },
             evaluateHealth: { url, isPlaying, counters, prevCounters, elapsed, mediaBitrate in
-                let (latency, jitter) = await tracker.ping(url: url)
+                let ping = await tracker.ping(url: url)
+                let latency = ping?.latencyMs
+                let jitter = ping?.jitterMs
 
-                // 1. Bitrate computation
-                var bitrateMbps = 0.0
-                if let mb = mediaBitrate, mb > 0 {
-                    bitrateMbps = Double(mb) / 1_000_000.0
-                } else if let prev = prevCounters, elapsed > 0 {
-                    let bytesDiff = counters.sourceReadBytes > prev.sourceReadBytes
-                        ? counters.sourceReadBytes - prev.sourceReadBytes
-                        : 0
-                    let bitsPerSec = (Double(bytesDiff) * 8.0) / elapsed
-                    bitrateMbps = max(0.2, min(50.0, bitsPerSec / 1_000_000.0))
+                // Counter deltas are valid only for a recent, advancing playback window.
+                // A reset, pause, first sample, or stalled source deliberately reports no rate.
+                let validWindow = isPlaying && elapsed > 0 && elapsed <= 5
+                let networkThroughputMbps: Double?
+                let presentedFPS: Double?
+                if validWindow, let previous = prevCounters {
+                    if counters.sourceReadBytes > previous.sourceReadBytes {
+                        let bytesPerSecond = Double(counters.sourceReadBytes - previous.sourceReadBytes) / elapsed
+                        networkThroughputMbps = bytesPerSecond.isFinite ? bytesPerSecond * 8 / 1_000_000 : nil
+                    } else {
+                        networkThroughputMbps = nil
+                    }
+                    if counters.presentedFrames > previous.presentedFrames {
+                        let framesPerSecond = Double(counters.presentedFrames - previous.presentedFrames) / elapsed
+                        presentedFPS = framesPerSecond.isFinite ? framesPerSecond : nil
+                    } else {
+                        presentedFPS = nil
+                    }
                 } else {
-                    bitrateMbps = 4.5
+                    networkThroughputMbps = nil
+                    presentedFPS = nil
+                }
+                let streamBitrateMbps = mediaBitrate.flatMap { $0 > 0 ? Double($0) / 1_000_000 : nil }
+
+                // A health score is meaningful only when latency came from a
+                // successful probe. No score or grade is emitted otherwise.
+                let finalScore: Int? = latency.map { latency in
+                    var score = 100
+                    if latency > 60 {
+                        score -= min(30, (latency - 60) / 6)
+                    }
+                    if let jitter, jitter > 10 {
+                        score -= min(20, (jitter - 10) * 2)
+                    }
+                    if counters.droppedFrames > 0 {
+                        score -= min(25, Int(counters.droppedFrames) * 3)
+                    }
+                    if !isPlaying {
+                        score = min(score, 40)
+                    }
+                    return max(15, min(100, score))
                 }
 
-                // 2. Buffer Seconds & Health Percentage
-                var bufferSeconds = 4.8
-                var bufferPercentage = 0.96
+                let grade: HealthGrade? = finalScore.map { score in
+                    switch score {
+                    case 88 ... 100: .excellent
+                    case 70 ..< 88: .good
+                    case 50 ..< 70: .fair
+                    default: .critical
+                    }
+                }
 
-                if !isPlaying {
-                    bufferSeconds = 0.8
-                    bufferPercentage = 0.20
-                } else if latency > 300 || jitter > 60 {
-                    bufferSeconds = max(1.2, 5.0 - (Double(latency) / 100.0))
-                    bufferPercentage = max(0.25, bufferSeconds / 5.0)
+                let stability: String? = if let latency, let jitter {
+                    if jitter <= 5, latency <= 70 {
+                        "Ultra Kararlı"
+                    } else if jitter <= 20, latency <= 160 {
+                        "İyi & Dengeli"
+                    } else if jitter <= 45 {
+                        "Hafif Dalgalı"
+                    } else {
+                        "Yüksek Jitter / Risk"
+                    }
                 } else {
-                    let dropPenalty = Double(counters.droppedFrames) * 0.1
-                    bufferSeconds = max(2.5, min(5.5, 5.0 - dropPenalty))
-                    bufferPercentage = min(1.0, bufferSeconds / 5.0)
-                }
-
-                // 3. Health Score & Classification
-                var score = 100
-                if latency > 60 {
-                    score -= min(30, (latency - 60) / 6)
-                }
-                if jitter > 10 {
-                    score -= min(20, (jitter - 10) * 2)
-                }
-                if counters.droppedFrames > 0 {
-                    score -= min(25, Int(counters.droppedFrames) * 3)
-                }
-                if !isPlaying {
-                    score = min(score, 40)
-                }
-                let finalScore = max(15, min(100, score))
-
-                let grade: HealthGrade = switch finalScore {
-                case 88 ... 100: .excellent
-                case 70 ..< 88: .good
-                case 50 ..< 70: .fair
-                default: .critical
-                }
-
-                let stability = if jitter <= 5, latency <= 70 {
-                    "Ultra Kararlı"
-                } else if jitter <= 20, latency <= 160 {
-                    "İyi & Dengeli"
-                } else if jitter <= 45 {
-                    "Hafif Dalgalı"
-                } else {
-                    "Yüksek Jitter / Risk"
+                    nil
                 }
 
                 return StreamHealthMetrics(
-                    bufferHealth: bufferPercentage,
-                    bufferDurationSeconds: (bufferSeconds * 10).rounded() / 10,
                     networkLatencyMs: latency,
                     networkJitterMs: jitter,
                     droppedFrames: counters.droppedFrames,
                     decodedFrames: counters.decodedFrames,
                     lateFrames: counters.lateFrames,
-                    bitrateMbps: (bitrateMbps * 10).rounded() / 10,
-                    fps: 50.0,
+                    networkThroughputMbps: networkThroughputMbps.map { ($0 * 10).rounded() / 10 },
+                    streamBitrateMbps: streamBitrateMbps.map { ($0 * 10).rounded() / 10 },
+                    fps: presentedFPS.map { ($0 * 10).rounded() / 10 },
                     healthScore: finalScore,
                     healthGrade: grade,
                     connectionStability: stability

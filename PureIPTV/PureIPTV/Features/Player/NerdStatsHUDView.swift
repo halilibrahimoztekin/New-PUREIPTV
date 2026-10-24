@@ -89,53 +89,6 @@ public struct NerdStatsHUDView: View {
             Divider()
                 .overlay(Color.white.opacity(0.15))
 
-            // ── Live Stream Health & Buffer Gauge (Feature #3) ───────
-            if let metrics = streamHealthMetrics {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        HStack(spacing: 5) {
-                            Image(systemName: "gauge.with.needle.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(metrics.healthGrade.color)
-                            Text(AppStrings.Player.bufferHealth)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 6) {
-                            Text("\(String(format: "%.1f", metrics.bufferDurationSeconds))s Tampon")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundColor(metrics.healthGrade.color)
-                            Text("• \(metrics.healthScore)/100 \(metrics.healthGrade.rawValue)")
-                                .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                                .foregroundColor(metrics.healthGrade.color)
-                        }
-                    }
-
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.12))
-                                .frame(height: 6)
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "#0A84FF"), metrics.healthGrade.color],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: max(4, geo.size.width * CGFloat(min(1.0, max(0.0, metrics.bufferHealth)))), height: 6)
-                        }
-                    }
-                    .frame(height: 6)
-                }
-                .padding(10)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-
             // ── Metrics Grid ─────────────────────────────────────────
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 // Video Resolution
@@ -162,12 +115,28 @@ public struct NerdStatsHUDView: View {
                     accentColor: Color(hex: "#BF5AF2")
                 )
 
-                // Bitrate
+                // Measured network throughput
+                StatCard(
+                    icon: "arrow.down.circle.fill",
+                    title: AppStrings.Player.networkThroughput,
+                    value: streamHealthMetrics?.networkThroughputMbps.map { "\(String(format: "%.1f", $0)) Mbps" }
+                        ?? AppStrings.Player.sampleUnavailable,
+                    accentColor: Color.yellow
+                )
+
                 StatCard(
                     icon: "speedometer",
-                    title: AppStrings.Player.bitrate,
-                    value: streamHealthMetrics != nil ? "\(String(format: "%.1f", streamHealthMetrics!.bitrateMbps)) Mbps" : bitrateString,
-                    accentColor: Color.yellow
+                    title: AppStrings.Player.streamBitrate,
+                    value: streamHealthMetrics?.streamBitrateMbps.map { "\(String(format: "%.1f", $0)) Mbps" } ?? bitrateString,
+                    accentColor: Color.orange
+                )
+
+                StatCard(
+                    icon: "film",
+                    title: AppStrings.Player.renderedFPS,
+                    value: streamHealthMetrics?.fps.map { "\(String(format: "%.1f", $0)) FPS" }
+                        ?? AppStrings.Player.sampleUnavailable,
+                    accentColor: Color(hex: "#00F5D4")
                 )
 
                 if let metrics = streamHealthMetrics {
@@ -175,8 +144,12 @@ public struct NerdStatsHUDView: View {
                     StatCard(
                         icon: "bolt.horizontal.fill",
                         title: AppStrings.Player.networkLatency,
-                        value: "\(metrics.networkLatencyMs) ms (±\(metrics.networkJitterMs)ms)",
-                        accentColor: metrics.networkLatencyMs < 80 ? Color(hex: "#00F5D4") : Color.orange
+                        value: metrics.networkLatencyMs.map { latency in
+                            let jitter = metrics.networkJitterMs.map { " (±\($0)ms)" } ?? ""
+                            return "\(latency) ms\(jitter)"
+                        } ?? AppStrings.Player.sampleUnavailable,
+                        accentColor: metrics.networkLatencyMs.map { $0 < 80 ? Color(hex: "#00F5D4") : Color.orange }
+                            ?? Color.white.opacity(0.55)
                     )
 
                     // Frame Drops
@@ -373,7 +346,7 @@ public struct NerdStatsHUDView: View {
                 return "\(bitrate / 1000) kbps"
             }
         }
-        return "Dinamik VBR (Adaptive)"
+        return AppStrings.Player.sampleUnavailable
     }
 
     private var streamFormatString: String {

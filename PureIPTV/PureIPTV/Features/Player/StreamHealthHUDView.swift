@@ -23,37 +23,22 @@ public struct StreamHealthHUDView: View {
     }
 
     private var metrics: StreamHealthMetrics {
-        store.streamHealthMetrics ?? StreamHealthMetrics(
-            bufferHealth: 0.95,
-            bufferDurationSeconds: 4.8,
-            networkLatencyMs: 32,
-            networkJitterMs: 2,
-            droppedFrames: 0,
-            decodedFrames: 1840,
-            lateFrames: 0,
-            bitrateMbps: 5.2,
-            fps: 50.0,
-            healthScore: 98,
-            healthGrade: .excellent,
-            connectionStability: "Ultra Kararlı"
-        )
+        store.streamHealthMetrics ?? StreamHealthMetrics()
+    }
+
+    private var statusTint: Color {
+        store.streamHealthMetrics?.healthGrade?.color ?? Color.white.opacity(0.65)
     }
 
     public var body: some View {
         VStack(spacing: 16) {
-            // Header Bar
             headerBar
-
-            // Health Score & Stability Banner
-            healthScoreCard
-
-            // Live Buffer Gauge Bar
-            bufferGaugeSection
-
-            // Network & Playback Diagnostics Grid
-            diagnosticsGrid
-
-            // Footer / Toggle Full Nerd Stats Button
+            if store.streamHealthMetrics == nil {
+                waitingForSampleCard
+            } else {
+                healthScoreCard
+                diagnosticsGrid
+            }
             footerActions
         }
         #if os(tvOS)
@@ -70,7 +55,7 @@ public struct StreamHealthHUDView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [metrics.healthGrade.color.opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
+                        colors: [statusTint.opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -78,7 +63,7 @@ public struct StreamHealthHUDView: View {
                 )
         )
         .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
-        .shadow(color: metrics.healthGrade.color.opacity(0.15), radius: 20, x: 0, y: 8)
+        .shadow(color: statusTint.opacity(0.15), radius: 20, x: 0, y: 8)
         .focusSection()
         .onExitCommand {
             onClose()
@@ -97,7 +82,7 @@ public struct StreamHealthHUDView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [metrics.healthGrade.color.opacity(0.5), Color.white.opacity(0.12)],
+                        colors: [statusTint.opacity(0.5), Color.white.opacity(0.12)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -105,21 +90,37 @@ public struct StreamHealthHUDView: View {
                 )
         )
         .shadow(color: .black.opacity(0.65), radius: 24, x: 0, y: 12)
-        .shadow(color: metrics.healthGrade.color.opacity(0.12), radius: 18, x: 0, y: 6)
+        .shadow(color: statusTint.opacity(0.12), radius: 18, x: 0, y: 6)
         #endif
     }
 
     // MARK: - Header Bar
 
+    private var waitingForSampleCard: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.white.opacity(0.8))
+            Text(AppStrings.Player.sampleUnavailable)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+            Spacer(minLength: 0)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(AppStrings.Player.sampleUnavailable)
+    }
+
     private var headerBar: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(metrics.healthGrade.color.opacity(0.18))
+                    .fill(statusTint.opacity(0.18))
                     .frame(width: 36, height: 36)
                 Image(systemName: "waveform.path.ecg")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(metrics.healthGrade.color)
+                    .foregroundColor(statusTint)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -157,46 +158,52 @@ public struct StreamHealthHUDView: View {
     // MARK: - Health Score Card
 
     private var healthScoreCard: some View {
-        HStack(spacing: 16) {
-            // Big Score
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(metrics.healthScore)")
-                        .font(.system(size: 38, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-
-                    Text("/100")
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.5))
+        Group {
+            if let score = metrics.healthScore, let grade = metrics.healthGrade {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(score)")
+                                .font(.system(size: 38, weight: .heavy, design: .rounded))
+                                .foregroundColor(.white)
+                            Text("/100")
+                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        Text("Genel Sağlık Skoru")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.55))
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: grade.systemIcon)
+                                .font(.system(size: 13, weight: .bold))
+                            Text(grade.rawValue)
+                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                        }
+                        .foregroundColor(grade.color)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(grade.color.opacity(0.16), in: Capsule())
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(grade.color)
+                                .frame(width: 6, height: 6)
+                            Text(metrics.connectionStability ?? AppStrings.Player.sampleUnavailable)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
                 }
-
-                Text("Genel Sağlık Skoru")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.55))
-            }
-
-            Spacer()
-
-            // Grade Badge & Stability
-            VStack(alignment: .trailing, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: metrics.healthGrade.systemIcon)
-                        .font(.system(size: 13, weight: .bold))
-                    Text(metrics.healthGrade.rawValue)
-                        .font(.system(size: 13, weight: .heavy, design: .monospaced))
-                }
-                .foregroundColor(metrics.healthGrade.color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(metrics.healthGrade.color.opacity(0.16), in: Capsule())
-
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(metrics.healthGrade.color)
-                        .frame(width: 6, height: 6)
-                    Text(metrics.connectionStability)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: "waveform.path.ecg")
+                        .foregroundColor(.white.opacity(0.6))
+                    Text(AppStrings.Player.sampleUnavailable)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer(minLength: 0)
                 }
             }
         }
@@ -208,72 +215,6 @@ public struct StreamHealthHUDView: View {
         )
     }
 
-    // MARK: - Live Buffer Gauge Section
-
-    private var bufferGaugeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "gauge.with.needle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: "#0A84FF"))
-
-                    Text(AppStrings.Player.bufferHealth)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
-                Spacer()
-
-                Text("\(String(format: "%.1f", metrics.bufferDurationSeconds))s Tampon")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundColor(metrics.bufferHealth > 0.4 ? Color(hex: "#00F5D4") : Color(hex: "#FF453A"))
-            }
-
-            // Animated Buffer Bar Gauge
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    // Track
-                    Capsule()
-                        .fill(Color.white.opacity(0.12))
-                        .frame(height: 10)
-
-                    // Fill
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), metrics.healthGrade.color],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(8, geo.size.width * CGFloat(min(1.0, max(0.0, metrics.bufferHealth)))), height: 10)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: metrics.bufferHealth)
-                }
-            }
-            .frame(height: 10)
-
-            HStack {
-                Text("0s (Kritik)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-                Spacer()
-                Text("2.5s (Güvenli)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-                Spacer()
-                Text("5.0s+ (Maksimum)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-        }
-        .padding(14)
-        .background(
-            Color.white.opacity(0.04),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-    }
-
     // MARK: - Diagnostics Grid
 
     private var diagnosticsGrid: some View {
@@ -282,28 +223,54 @@ public struct StreamHealthHUDView: View {
             metricTile(
                 icon: "bolt.horizontal.fill",
                 title: AppStrings.Player.networkLatency,
-                value: "\(metrics.networkLatencyMs) ms",
-                subtitle: metrics.networkLatencyMs < 60 ? "Ultra Hızlı" : (metrics.networkLatencyMs < 150 ? "Normal" : "Yüksek Ping"),
-                tintColor: metrics.networkLatencyMs < 60 ? Color(hex: "#00F5D4") : (metrics.networkLatencyMs < 150 ? Color(hex: "#0A84FF") : Color(hex: "#FF453A"))
+                value: metrics.networkLatencyMs.map { "\($0) ms" } ?? AppStrings.Player.sampleUnavailable,
+                subtitle: metrics.networkLatencyMs.map {
+                    $0 < 60 ? "Ultra Hızlı" : ($0 < 150 ? "Normal" : "Yüksek Ping")
+                } ?? AppStrings.Player.sampleUnavailable,
+                tintColor: metrics.networkLatencyMs.map {
+                    $0 < 60 ? Color(hex: "#00F5D4") : ($0 < 150 ? Color(hex: "#0A84FF") : Color(hex: "#FF453A"))
+                } ?? Color.white.opacity(0.55)
             )
 
             // Jitter
             metricTile(
                 icon: "arrow.triangle.swap",
                 title: AppStrings.Player.networkJitter,
-                value: "±\(metrics.networkJitterMs) ms",
-                subtitle: metrics.networkJitterMs < 8 ? "Çok Kararlı" : "Dalgalanma Var",
-                tintColor: metrics.networkJitterMs < 8 ? Color(hex: "#00F5D4") : Color(hex: "#FFD60A")
+                value: metrics.networkJitterMs.map { "±\($0) ms" } ?? AppStrings.Player.sampleUnavailable,
+                subtitle: metrics.networkJitterMs.map { $0 < 8 ? "Çok Kararlı" : "Dalgalanma Var" }
+                    ?? AppStrings.Player.sampleUnavailable,
+                tintColor: metrics.networkJitterMs.map { $0 < 8 ? Color(hex: "#00F5D4") : Color(hex: "#FFD60A") }
+                    ?? Color.white.opacity(0.55)
             )
 
-            // Bitrate
+            // Measured network throughput
             metricTile(
-                icon: "speedometer",
-                title: AppStrings.Player.bitrate,
-                value: "\(String(format: "%.1f", metrics.bitrateMbps)) Mbps",
-                subtitle: store.mediaInfo?.resolution ?? "Canlı Veri Akışı",
+                icon: "arrow.down.circle.fill",
+                title: AppStrings.Player.networkThroughput,
+                value: metrics.networkThroughputMbps.map { "\(String(format: "%.1f", $0)) Mbps" }
+                    ?? AppStrings.Player.sampleUnavailable,
+                subtitle: AppStrings.Player.networkThroughput,
                 tintColor: Color(hex: "#64D2FF")
             )
+
+            metricTile(
+                icon: "film",
+                title: AppStrings.Player.renderedFPS,
+                value: metrics.fps.map { "\(String(format: "%.1f", $0)) FPS" }
+                    ?? AppStrings.Player.sampleUnavailable,
+                subtitle: AppStrings.Player.renderedFPS,
+                tintColor: Color(hex: "#00F5D4")
+            )
+
+            if let streamBitrateMbps = metrics.streamBitrateMbps {
+                metricTile(
+                    icon: "speedometer",
+                    title: AppStrings.Player.streamBitrate,
+                    value: "\(String(format: "%.1f", streamBitrateMbps)) Mbps",
+                    subtitle: store.mediaInfo?.resolution ?? AppStrings.Player.videoCodec,
+                    tintColor: Color(hex: "#FFD60A")
+                )
+            }
 
             // Frame Drops
             metricTile(

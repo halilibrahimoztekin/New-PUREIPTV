@@ -141,6 +141,10 @@ public enum AppStrings {
         public static let audioCodec = "Ses Kod Çözücü".localized
         public static let resolution = "Çözünürlük".localized
         public static let bitrate = "Bit Hızı (Bitrate)".localized
+        public static let networkThroughput = "Ölçülen Ağ Veri Hızı".localized
+        public static let streamBitrate = "Yayın Bit Hızı".localized
+        public static let renderedFPS = "Ölçülen Gösterilen Kare Hızı".localized
+        public static let sampleUnavailable = "Örnek bekleniyor".localized
         public static let bufferHealth = "Tampon Durumu".localized
         public static let streamHealthTitle = "Yayın Sağlığı & Tampon".localized
         public static let networkLatency = "Ağ Gecikmesi (Ping)".localized

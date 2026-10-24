@@ -22,17 +22,20 @@ public struct PlayerPlaybackCounters: Equatable, Sendable {
     public var droppedFrames: UInt64
     public var lateFrames: UInt64
     public var sourceReadBytes: UInt64
+    public var presentedFrames: UInt64
 
     public nonisolated init(
         decodedFrames: UInt64 = 0,
         droppedFrames: UInt64 = 0,
         lateFrames: UInt64 = 0,
-        sourceReadBytes: UInt64 = 0
+        sourceReadBytes: UInt64 = 0,
+        presentedFrames: UInt64 = 0
     ) {
         self.decodedFrames = decodedFrames
         self.droppedFrames = droppedFrames
         self.lateFrames = lateFrames
         self.sourceReadBytes = sourceReadBytes
+        self.presentedFrames = presentedFrames
     }
 }
 
@@ -347,7 +350,8 @@ extension PlayerClient: DependencyKey {
                     decodedFrames: c.decodedVideoFrames,
                     droppedFrames: c.droppedVideoFrames,
                     lateFrames: c.lateVideoFrames,
-                    sourceReadBytes: c.sourceReadBytes
+                    sourceReadBytes: c.sourceReadBytes,
+                    presentedFrames: c.presentedVideoFrames
                 )
             },
             setEqualizerPreset: { preset in
