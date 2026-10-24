@@ -207,7 +207,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız build alındı; test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — VOD scrub thumbnail desteği tamamlandı ve reviewer onayladı.
 
-### 50. [IN_PROGRESS] İndirme Kuyruğunda Eşzamanlı İndirme Sınırı
+### 50. [DONE] İndirme Kuyruğunda Eşzamanlı İndirme Sınırı
 - **Bulgu:** IPTVX 22.10.2, otomatik resume/retry ve Live Activity yanında isteğe bağlı eşzamanlı indirme sayısı ekledi.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
 - **Canlı keşif (24 Ekim 2026):** IPTVX’in güncel App Store notları isteğe bağlı eşzamanlı indirmeleri duyuruyor; resmi FAQ bunun iPhone/iPad’e özel olduğunu ve sağlayıcıların bağlantı sınırlarına dikkat edilmesi gerektiğini açıklıyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=mac · https://iptvx.app/faq/
@@ -236,13 +236,19 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Kullanıcı talimatı gereği test, kurulu uygulama akışı veya login akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 53. [PENDING] Web Konsolundan Playlist ve Yedek Yönetimi
+### 53. [DEFERRED] Web Konsolundan Playlist ve Yedek Yönetimi
 - **Bulgu:** UHF’in App Store sürüm geçmişi, PRO kullanıcıları için playlist ve yedeklerin tarayıcıdan yönetildiği web konsolunu listeliyor.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Mimari kararı:** Mevcut uygulamada playlist sırları iCloud Keychain’de; web oturumu, kimlik doğrulamalı backend veya güvenli browser-to-device eşleştirmesi yok. QR deep link’i yalnız kod üretiyor ve `setup` handler’ı bulunmuyor; `CloudKitBackupManager` çağrılmıyor, mevcut `.iptvbackup` yalnız tercihleri içeriyor. Reviewer `[NO-GO]`: bu altyapı olmadan sırları yeni web servisine açmak güvenli değil. Web konsolu, hesap/authorization ve credential-transfer tasarımı sağlanana kadar ertelendi. Yakın vadeli uygulanabilir alternatif, credential kapsamını açıkça belirleyen uygulama içi dışa/içe aktarma akışı.
 
-### 54. [PENDING] Film Ayrıntısında Sinematik Hero ve Hızlı Oynatım
+### 54. [IN_PROGRESS] Film Ayrıntısında Sinematik Hero ve Hızlı Oynatım
 - **Bulgu:** IPTVX 25, film ayrıntı sayfasını sinematik hero ile yeniden tasarlıyor; içerik bilgisinden oynatmaya geçişi kısaltıyor.
 - **Kaynak:** https://iptvx.app/
+- **Kod incelemesi:** iOS ve tvOS ayrıntı ekranlarında sinematik backdrop ve doğrudan Play/Resume eylemleri zaten var. iOS backdrop’un statik provider resmi `AsyncImage` ile yüklendiğinden, User-Agent isteyen playlist sunucularında poster yüklenemiyordu.
+- **Kapsam:** Var olan hero ve hızlı oynatma hiyerarşisini koru; iOS statik backdrop isteğine playlist User-Agent’ını geçir ve başarısız provider fallback’ını diğer playlist görselleriyle tutarlı hale getir.
+- **Uygulama:** `InlineTrailerHeroView` playlist User-Agent’ını alıp statik backdrop’u `PlaylistAsyncImage` ile yüklüyor; fragman oynatımı değişmedi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. Projedeki mevcut Swift concurrency uyarıları dışında derleme hatası yok. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — Sinematik hero’daki provider görsel isteği düzeltildi, reviewer onayladı ve yalnızca Xcode derlemeleri alındı.
 
 ### 55. [PENDING] Alternatif Dosya/Sürüm Seçimi Oynatmadan Önce
 - **Bulgu:** UHF, Jellyfin/Emby/Plex öğesinde birden çok medya dosyası olduğunda oynatma öncesi seçim gösteriyor; farklı kalite sürümleri için benzer ihtiyaç ayrıca incelenebilir.
@@ -255,6 +261,46 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 57. [PENDING] tvOS EPG Kartında Erişilebilir Program Özeti
 - **Bulgu:** IPTVX’in TV Guide, Live Search ve Apple TV sürüm notları daha zengin program bilgisi, okunabilir satırlar ve focus sorunlarının giderilmesini öne çıkarıyor; odak kartı program/kanal/saat bilgisini erişilebilir tek özet olarak sunabilir.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+
+### 58. [PENDING] Tür ve Yıla Göre Görsel Keşif Koleksiyonları
+- **Bulgu:** IPTVX 25 Explore koleksiyonlarını sağlayıcı kataloglarından türetilen tür ve yıl/onyıl girişlerine bölüyor; aday içerik yalnızca kütüphanede mevcutsa açılıyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 59. [PENDING] Öneri Bağlantısının Nedenini Açıklama
+- **Bulgu:** IPTVX öneri rafı, “çünkü izledin” başlığında çıkış filmini/dizisini gösteriyor; genel bir öneri listesi yerine ilişkiyi kullanıcıya açıklıyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 60. [PENDING] İzleme Geçmişinden Oyuncu Tabanlı Öneriler
+- **Bulgu:** IPTVX, izlenen filmlerin oyuncularından kitaplıktaki başka film ve dizilere ayrı keşif yolları oluşturuyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 61. [PENDING] En Çok İzlenen Oyuncular Koleksiyonu
+- **Bulgu:** IPTVX For You, oyuncu portrelerini izleme davranışına göre sıralı bir giriş noktası olarak kullanıyor; geçmiş yoksa popüler aktörlerle başlıyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 62. [PENDING] İzlenen Diziler İçin Yeni Bölüm Rafı
+- **Bulgu:** IPTVX, sağlayıcıda yeni bölüm bildirilen ve kullanıcı tarafından daha önce izlenmiş dizileri genel katalog güncellemesinden ayrı gösteriyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 63. [PENDING] Puan ve Oy Sayısından Ayrı Film Keşfi
+- **Bulgu:** IPTVX “Most Rated” ve “Highest Rated” koleksiyonlarını ayrı sinyaller olarak sunuyor; oy hacmiyle puan ortalamasını karıştırmıyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 64. [PENDING] Ödüllü İçerik Koleksiyonları
+- **Bulgu:** IPTVX kullanılabilir ödül metadata’sını kazanan eserler ve daha geniş ödül tanınırlığı olarak ayırıyor; veri yoksa boş raf göstermiyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 65. [PENDING] Aramada Alan Filtreleri ve Sonuç Sayıları
+- **Bulgu:** IPTVX 25 aramayı All, Movies, Shows, People, Live ve Programs olarak altı alana ayırıyor; sayılar kullanıcının eşleşme alanını görmesini sağlıyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 66. [PENDING] Kişi Aramasında Portreli Sonuç Sunumu
+- **Bulgu:** IPTVX arama sonuçlarında oyuncuları poster kartı gibi göstermeyip portreleriyle ayırıyor; filtre seçimi ilgili alanın tam sonuç ızgarasına gidiyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+
+### 67. [PENDING] Dizi Sayfasında Sezon Seçimini ve Güncel Bölümü Koruma
+- **Bulgu:** IPTVX’in yenilenmiş dizi sayfası, yükleme sırasında seçilen sezonu koruyor ve “Current Episode” kısayoluyla devam bölümünü açmadan gösteriyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
 
 ### 1. [DONE] Quick Recent Channels Carousel HUD (Quick-Zap Dock for tvOS & iOS)
 - **Açıklama:** Canlı yayın izlerken Siri Remote aşağı basıldığında veya iOS'ta buton/menü ile ekranın altında beliren, son izlenen 10 kanalı logo, canlı badge, aktif oynatma halkası ve odaklanabilir kartlarla gösteren hızlı zapping rulosu.

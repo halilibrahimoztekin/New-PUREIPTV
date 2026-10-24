@@ -137,6 +137,7 @@ public struct VODDetailView: View {
                 ZStack(alignment: .topTrailing) {
                     InlineTrailerHeroView(
                         backdropURL: backdropURL,
+                        userAgentOverride: store.config.userAgentOverride,
                         trailerKey: store.resolvedTrailerKey,
                         isAutoPlayActive: store.isAutoPlayTrailerActive,
                         isMuted: store.isTrailerMuted,

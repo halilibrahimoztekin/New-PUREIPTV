@@ -3,6 +3,7 @@ import SwiftUI
 /// Hero backdrop view for VOD detail supporting seamless muted inline trailer auto-play (Madde #46).
 public struct InlineTrailerHeroView: View {
     public let backdropURL: URL?
+    public let userAgentOverride: String?
     public let trailerKey: String?
     public let isAutoPlayActive: Bool
     public let isMuted: Bool
@@ -14,6 +15,7 @@ public struct InlineTrailerHeroView: View {
 
     public init(
         backdropURL: URL?,
+        userAgentOverride: String? = nil,
         trailerKey: String?,
         isAutoPlayActive: Bool,
         isMuted: Bool,
@@ -22,6 +24,7 @@ public struct InlineTrailerHeroView: View {
         onOpenTrailerSheet: @escaping () -> Void
     ) {
         self.backdropURL = backdropURL
+        self.userAgentOverride = userAgentOverride
         self.trailerKey = trailerKey
         self.isAutoPlayActive = isAutoPlayActive
         self.isMuted = isMuted
@@ -104,7 +107,7 @@ public struct InlineTrailerHeroView: View {
         ZStack(alignment: .bottomLeading) {
             GeometryReader { proxy in
                 if let url = backdropURL {
-                    AsyncImage(url: url) { phase in
+                    PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
                         switch phase {
                         case let .success(image):
                             image
