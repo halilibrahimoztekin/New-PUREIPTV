@@ -3,7 +3,7 @@ import Foundation
 /// Fast, thread-safe fuzzy search and relevance ranking engine.
 /// Optimized for large catalogs (10,000 - 50,000+ items) without blocking the MainActor.
 public nonisolated enum FuzzySearchEngine: Sendable {
-    /// Normalizes a string for fast case-insensitive, diacritic-insensitive matching across all locales.
+    /// Normalizes case, diacritics, punctuation, and whitespace for consistent title matching.
     public static func normalize(_ text: String) -> String {
         var str = text.lowercased()
         if str.contains("ı") {
@@ -25,9 +25,22 @@ public nonisolated enum FuzzySearchEngine: Sendable {
             str = str.replacingOccurrences(of: "ç", with: "c")
         }
 
-        return str
+        let folded = str
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US"))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var normalized = String.UnicodeScalarView()
+        var pendingSpace = false
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                if pendingSpace, !normalized.isEmpty {
+                    normalized.append(" ")
+                }
+                normalized.append(scalar)
+                pendingSpace = false
+            } else {
+                pendingSpace = true
+            }
+        }
+        return String(normalized)
     }
 
     /// Evaluates match score between normalized query and normalized target.
@@ -46,11 +59,20 @@ public nonisolated enum FuzzySearchEngine: Sendable {
             return 800 - lengthPenalty
         }
 
+        let compactQuery = query.filter { !$0.isWhitespace }
+        let compactTarget = target.filter { !$0.isWhitespace }
+        if !compactQuery.isEmpty, compactTarget == compactQuery {
+            return 950
+        }
+        if !compactQuery.isEmpty, compactTarget.hasPrefix(compactQuery) {
+            return 760 - min(compactTarget.count - compactQuery.count, 200)
+        }
+
         // 3. Tokenize both query and target (words separated by spaces, punctuation, brackets)
-        let queryTokens = query.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let queryTokens = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard !queryTokens.isEmpty else { return nil }
 
-        let targetTokens = target.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let targetTokens = target.split(whereSeparator: { $0.isWhitespace }).map(String.init)
 
         // If query is a single short token (< 3 chars), require either target prefix or word prefix
         if queryTokens.count == 1, query.count < 3 {
@@ -61,77 +83,104 @@ public nonisolated enum FuzzySearchEngine: Sendable {
             return nil
         }
 
-        // 4. Multi-token scoring (e.g. "bein 1" matches "beIN SPORTS 1 HD")
-        var totalScore = 0
-        var matchedTokenIndexes: Set<Int> = []
-
+        // Match each query term to a distinct target term. Prefer constrained
+        // terms first so a broad prefix cannot consume the only exact match for
+        // another query term.
+        var candidatesByQuery: [[(targetIndex: Int, score: Int)]] = []
+        candidatesByQuery.reserveCapacity(queryTokens.count)
         for qToken in queryTokens {
-            var bestTokenScore = 0
-            var bestTokenIndex: Int?
+            var candidates: [(targetIndex: Int, score: Int)] = []
             for (index, tToken) in targetTokens.enumerated() {
-                guard !matchedTokenIndexes.contains(index) else { continue }
                 if tToken == qToken {
-                    // Exact word match
-                    let candidateScore = 150 - min(index * 10, 50)
-                    if candidateScore > bestTokenScore {
-                        bestTokenScore = candidateScore
-                        bestTokenIndex = index
-                    }
+                    candidates.append((index, 150 - min(index * 10, 50)))
                 } else if tToken.hasPrefix(qToken) {
-                    // Word prefix match
-                    let candidateScore = 120 - min(index * 10, 50)
-                    if candidateScore > bestTokenScore {
-                        bestTokenScore = candidateScore
-                        bestTokenIndex = index
-                    }
+                    candidates.append((index, 120 - min(index * 10, 50)))
                 } else if tToken.contains(qToken) {
-                    // Substring in word
-                    let candidateScore = 60 - min(index * 5, 30)
-                    if candidateScore > bestTokenScore {
-                        bestTokenScore = candidateScore
-                        bestTokenIndex = index
+                    candidates.append((index, 60 - min(index * 5, 30)))
+                }
+            }
+            candidates.sort {
+                if $0.score != $1.score {
+                    return $0.score > $1.score
+                }
+                return $0.targetIndex < $1.targetIndex
+            }
+            candidatesByQuery.append(candidates)
+        }
+
+        let queryOrder = queryTokens.indices.sorted {
+            if candidatesByQuery[$0].count != candidatesByQuery[$1].count {
+                return candidatesByQuery[$0].count < candidatesByQuery[$1].count
+            }
+            if queryTokens[$0].count != queryTokens[$1].count {
+                return queryTokens[$0].count > queryTokens[$1].count
+            }
+            if queryTokens[$0] != queryTokens[$1] {
+                return queryTokens[$0] < queryTokens[$1]
+            }
+            return $0 < $1
+        }
+        var assignedTargets = Set<Int>()
+        var matchedIndexes = [Int?](repeating: nil, count: queryTokens.count)
+        var matchedScores = [Int](repeating: 0, count: queryTokens.count)
+        for queryIndex in queryOrder {
+            guard let candidate = candidatesByQuery[queryIndex].first(where: { !assignedTargets.contains($0.targetIndex) }) else {
+                continue
+            }
+            assignedTargets.insert(candidate.targetIndex)
+            matchedIndexes[queryIndex] = candidate.targetIndex
+            matchedScores[queryIndex] = candidate.score
+        }
+
+        let unmatchedQueryIndexes = queryTokens.indices.filter { matchedIndexes[$0] == nil }
+        if unmatchedQueryIndexes.count == 1 {
+            let queryIndex = unmatchedQueryIndexes[0]
+            let token = queryTokens[queryIndex]
+            if (3 ... 32).contains(token.count) {
+                let maximumDistance = token.count <= 4 ? 1 : 2
+                var bestFuzzyMatch: (targetIndex: Int, distance: Int)?
+                for (targetIndex, targetToken) in targetTokens.enumerated() where !assignedTargets.contains(targetIndex) {
+                    guard abs(targetToken.count - token.count) <= maximumDistance,
+                          let distance = boundedLevenshteinDistance(
+                              between: token,
+                              and: targetToken,
+                              maximumDistance: maximumDistance
+                          )
+                    else { continue }
+                    if bestFuzzyMatch == nil
+                        || distance < bestFuzzyMatch!.distance
+                        || (distance == bestFuzzyMatch!.distance && targetIndex < bestFuzzyMatch!.targetIndex)
+                    {
+                        bestFuzzyMatch = (targetIndex, distance)
                     }
                 }
-            }
-
-            if let bestTokenIndex, bestTokenScore > 0 {
-                totalScore += bestTokenScore
-                matchedTokenIndexes.insert(bestTokenIndex)
-            }
-        }
-
-        // If all query tokens matched, award a strong multi-match bonus
-        if matchedTokenIndexes.count == queryTokens.count {
-            // Contiguous substring sequence bonus
-            if target.contains(query) {
-                totalScore += 200
-            }
-            return 300 + totalScore
-        }
-
-        // 5. Fallback substring match if query isn't broken up
-        if target.contains(query) {
-            return 200
-        }
-
-        // 6. tvOS Voice Dictation / Levenshtein Distance Match (Madde #62)
-        // Helps catch phonetic dictation errors (e.g. "bein" vs "beyin", "spor" vs "spo")
-        if (3 ... 32).contains(query.count) {
-            let maxAllowedDistance = query.count <= 4 ? 1 : 2
-            // Compare bounded query-sized tokens only. Running full edit distance
-            // against an entire channel title needlessly scales with title length.
-            for tToken in targetTokens where abs(tToken.count - query.count) <= maxAllowedDistance {
-                if let tokenDist = boundedLevenshteinDistance(
-                    between: query,
-                    and: tToken,
-                    maximumDistance: maxAllowedDistance
-                ) {
-                    return 160 - (tokenDist * 30)
+                if let bestFuzzyMatch {
+                    matchedIndexes[queryIndex] = bestFuzzyMatch.targetIndex
+                    matchedScores[queryIndex] = 90 - bestFuzzyMatch.distance * 25
+                    assignedTargets.insert(bestFuzzyMatch.targetIndex)
                 }
             }
         }
 
-        return nil
+        guard matchedIndexes.allSatisfy({ $0 != nil }) else {
+            // Keep the legacy whole-query substring fallback for unusual input
+            // that tokenization cannot otherwise represent.
+            return target.contains(query) ? 200 : nil
+        }
+
+        var totalScore = 300 + matchedScores.reduce(0, +)
+        if target.contains(query) {
+            totalScore += 200
+        }
+        let positions = matchedIndexes.compactMap(\.self)
+        if zip(positions, positions.dropFirst()).allSatisfy({ pair in pair.0 < pair.1 }) {
+            totalScore += 40
+        }
+        if let first = positions.min(), let last = positions.max() {
+            let extraGap = max(0, last - first + 1 - queryTokens.count)
+            totalScore += max(0, 60 - extraGap * 15)
+        }
+        return totalScore
     }
 
     /// Computes Levenshtein Distance for typo and dictation tolerance (Madde #62)
