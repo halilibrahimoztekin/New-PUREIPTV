@@ -13,6 +13,32 @@ public struct TMDBSearchResponseDTO: Codable, Equatable, Sendable {
     }
 }
 
+public struct TMDBMovieDiscoveryResponseDTO: Codable, Equatable, Sendable {
+    public let results: [TMDBMovieDiscoveryDTO]?
+
+    public init(results: [TMDBMovieDiscoveryDTO]?) {
+        self.results = results
+    }
+}
+
+public struct TMDBMovieDiscoveryDTO: Codable, Equatable, Sendable {
+    public let id: Int
+    public let title: String?
+    public let originalTitle: String?
+    public let releaseDate: String?
+    public let voteAverage: Double?
+    public let voteCount: Int?
+    public let adult: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, adult
+        case originalTitle = "original_title"
+        case releaseDate = "release_date"
+        case voteAverage = "vote_average"
+        case voteCount = "vote_count"
+    }
+}
+
 public struct TMDBMovieSearchResultDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let title: String? // For movies

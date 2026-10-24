@@ -152,6 +152,34 @@
                 if !store.newEpisodeSeries.isEmpty {
                     newEpisodeDiscoverySection
                 }
+                if !store.mostRatedMovies.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.mostRatedMovies, items: store.mostRatedMovies) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: entry.item, isSelected: false) {
+                                store.send(.vodSelected(entry.item))
+                            }
+                            Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.76))
+                                .lineLimit(1)
+                        }
+                        .frame(width: 140, alignment: .leading)
+                    }
+                }
+                if !store.highestRatedMovies.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.highestRatedMovies, items: store.highestRatedMovies) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: entry.item, isSelected: false) {
+                                store.send(.vodSelected(entry.item))
+                            }
+                            Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.76))
+                                .lineLimit(1)
+                        }
+                        .frame(width: 140, alignment: .leading)
+                    }
+                }
                 if !store.mostWatchedActors.isEmpty {
                     actorDiscoverySection
                 }

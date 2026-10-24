@@ -185,6 +185,40 @@
                         }
                     }
                 }
+                if !store.mostRatedMovies.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.mostRatedMovies) {
+                        ForEach(store.mostRatedMovies) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVVODCard(vod: entry.item, isSelected: false) {
+                                    store.send(.vodSelected(entry.item))
+                                }
+                                .frame(width: 220)
+                                Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.76))
+                                    .lineLimit(1)
+                                    .frame(width: 220, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                if !store.highestRatedMovies.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.highestRatedMovies) {
+                        ForEach(store.highestRatedMovies) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVVODCard(vod: entry.item, isSelected: false) {
+                                    store.send(.vodSelected(entry.item))
+                                }
+                                .frame(width: 220)
+                                Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.76))
+                                    .lineLimit(1)
+                                    .frame(width: 220, alignment: .leading)
+                            }
+                        }
+                    }
+                }
                 if !store.mostWatchedActors.isEmpty {
                     TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
                         ? AppStrings.Dashboard.popularActors

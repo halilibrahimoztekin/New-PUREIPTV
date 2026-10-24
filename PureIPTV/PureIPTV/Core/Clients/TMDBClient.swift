@@ -4,6 +4,7 @@ import ComposableArchitecture
 @DependencyClient
 public struct TMDBClient {
     public var searchMovie: @Sendable (_ query: String) async throws -> TMDBSearchResponseDTO
+    public var discoverMovies: @Sendable (_ sortBy: String, _ minimumVoteCount: Int, _ page: Int) async throws -> TMDBMovieDiscoveryResponseDTO
     public var fetchMovieDetails: @Sendable (_ movieID: Int) async throws -> TMDBMovieDetailsDTO
     public var searchTV: @Sendable (_ query: String) async throws -> TMDBSearchResponseDTO // Reusing search response DTO, we can add a new one if fields differ significantly, but TMDB search tv returns similar structure
     public var fetchTVDetails: @Sendable (_ tvID: Int) async throws -> TMDBTVDetailsDTO
@@ -33,6 +34,22 @@ extension TMDBClient: DependencyKey {
                 guard let url = components.url else { throw NetworkError.invalidURL }
                 let data = try await networkClient.fetchData(url: url)
                 return try await MainActor.run { try JSONDecoder().decode(TMDBSearchResponseDTO.self, from: data) }
+            },
+            discoverMovies: { sortBy, minimumVoteCount, page in
+                guard var components = URLComponents(string: "\(baseURLString)/discover/movie") else {
+                    throw NetworkError.invalidURL
+                }
+                components.queryItems = [
+                    URLQueryItem(name: "api_key", value: apiKey),
+                    URLQueryItem(name: "language", value: "tr-TR"),
+                    URLQueryItem(name: "sort_by", value: sortBy),
+                    URLQueryItem(name: "vote_count.gte", value: String(max(0, minimumVoteCount))),
+                    URLQueryItem(name: "include_adult", value: "false"),
+                    URLQueryItem(name: "page", value: String(max(1, page))),
+                ]
+                guard let url = components.url else { throw NetworkError.invalidURL }
+                let data = try await networkClient.fetchData(url: url)
+                return try await MainActor.run { try JSONDecoder().decode(TMDBMovieDiscoveryResponseDTO.self, from: data) }
             },
             fetchMovieDetails: { movieID in
                 guard var components = URLComponents(string: "\(baseURLString)/movie/\(movieID)") else {

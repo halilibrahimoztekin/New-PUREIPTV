@@ -44,6 +44,9 @@ public struct DashboardFeature {
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
         public var newEpisodeSeries: [NewEpisodeDiscoveryEngine.SeriesEntry] = []
+        public var mostRatedMovies: [MovieRatingDiscoveryEngine.RankedMovie] = []
+        public var highestRatedMovies: [MovieRatingDiscoveryEngine.RankedMovie] = []
+        public var hasLoadedMovieRatingDiscovery = false
         public var recommendedVODs: [MediaModels.Item] = []
         public var recommendationReasons: [String: SmartRecommendationEngine.Reason] = [:]
         public var actorRecommendationCollections: [ActorRecommendationEngine.Collection] = []
@@ -57,6 +60,7 @@ public struct DashboardFeature {
         public var hasLoadedSelectedActorFilmography = false
         public var selectedActorFilmographyRequestID: UUID?
         public var activeNewEpisodeRefreshID: UUID?
+        public var activeMovieRatingRefreshID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
         public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
@@ -99,6 +103,7 @@ public struct DashboardFeature {
         case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
         case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
+        case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
         case actorSelected(id: Int, name: String)
         case actorFilmographyLoaded(id: Int, requestID: UUID, playlistID: UUID?, hideAdult: Bool, collections: [ActorRecommendationEngine.Collection])
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
@@ -132,6 +137,7 @@ public struct DashboardFeature {
         case actorRecommendations
         case actorFilmography
         case newEpisodeDiscovery
+        case movieRatingDiscovery
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -160,6 +166,10 @@ public struct DashboardFeature {
                 if playlistChanged {
                     state.newEpisodeSeries = []
                     state.activeNewEpisodeRefreshID = nil
+                    state.mostRatedMovies = []
+                    state.highestRatedMovies = []
+                    state.hasLoadedMovieRatingDiscovery = false
+                    state.activeMovieRatingRefreshID = nil
                     state.exploreCollections = []
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
@@ -187,6 +197,10 @@ public struct DashboardFeature {
                 if preferencesChanged {
                     state.newEpisodeSeries = []
                     state.activeNewEpisodeRefreshID = nil
+                    state.mostRatedMovies = []
+                    state.highestRatedMovies = []
+                    state.hasLoadedMovieRatingDiscovery = false
+                    state.activeMovieRatingRefreshID = nil
                     state.exploreCollections = []
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
@@ -279,13 +293,38 @@ public struct DashboardFeature {
                 } else {
                     remoteEffect = .none
                 }
+                let movieRatingEffect: Effect<Action>
+                if !shouldReload,
+                   !state.hasLoadedMovieRatingDiscovery,
+                   !state.actorRecommendationMovieCandidates.isEmpty
+                {
+                    let requestID = UUID()
+                    let movieCandidates = state.actorRecommendationMovieCandidates
+                    state.activeMovieRatingRefreshID = requestID
+                    movieRatingEffect = .run { send in
+                        let shelves = await MovieRatingDiscoveryEngine.discover(
+                            from: movieCandidates,
+                            using: tmdbClient
+                        )
+                        guard !Task.isCancelled else { return }
+                        await send(.movieRatingShelvesLoaded(
+                            playlistID: playlistID,
+                            hideAdult: currentAdultHidden,
+                            refreshID: requestID,
+                            shelves: shelves
+                        ))
+                    }
+                    .cancellable(id: CancelID.movieRatingDiscovery, cancelInFlight: true)
+                } else {
+                    movieRatingEffect = .none
+                }
                 let notificationEffect: Effect<Action> = .run { send in
                     for await _ in NotificationCenter.default.notifications(named: .watchHistoryDidChange) {
                         await send(.loadLocalData)
                     }
                 }
                 .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
-                return .merge(localEffect, remoteEffect, notificationEffect)
+                return .merge(localEffect, remoteEffect, notificationEffect, movieRatingEffect)
 
             case .onDisappear:
                 if state.activeEPGRefreshID != nil {
@@ -302,11 +341,19 @@ public struct DashboardFeature {
                 state.selectedActorCollections = []
                 state.newEpisodeSeries = []
                 state.activeNewEpisodeRefreshID = nil
+                if state.activeMovieRatingRefreshID != nil,
+                   state.mostRatedMovies.isEmpty,
+                   state.highestRatedMovies.isEmpty
+                {
+                    state.hasLoadedMovieRatingDiscovery = false
+                }
+                state.activeMovieRatingRefreshID = nil
                 return .merge(
                     .cancel(id: CancelID.remoteData),
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.newEpisodeDiscovery),
+                    .cancel(id: CancelID.movieRatingDiscovery),
                     .cancel(id: CancelID.watchHistoryObserver)
                 )
 
@@ -451,6 +498,8 @@ public struct DashboardFeature {
                 state.activeEPGRefreshID = loadEPGEvents ? refreshID : nil
                 state.activeActorRecommendationRefreshID = refreshID
                 state.activeNewEpisodeRefreshID = nil
+                state.activeMovieRatingRefreshID = nil
+                state.hasLoadedMovieRatingDiscovery = false
                 state.isLoadingActorFilmography = false
                 state.hasLoadedSelectedActorFilmography = false
                 state.selectedActorID = nil
@@ -681,7 +730,8 @@ public struct DashboardFeature {
                 let cancellations = Effect<Action>.merge(
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
-                    .cancel(id: CancelID.newEpisodeDiscovery)
+                    .cancel(id: CancelID.newEpisodeDiscovery),
+                    .cancel(id: CancelID.movieRatingDiscovery)
                 )
                 return .concatenate(cancellations, cancellableRemoteEffect)
 
@@ -803,7 +853,23 @@ public struct DashboardFeature {
                     state.activeNewEpisodeRefreshID = nil
                     newEpisodeEffect = .none
                 }
-                return .merge(cacheEffect, newEpisodeEffect)
+                let movieRatingRequestID = UUID()
+                state.activeMovieRatingRefreshID = movieRatingRequestID
+                let movieRatingEffect = Effect<Action>.run { send in
+                    let shelves = await MovieRatingDiscoveryEngine.discover(
+                        from: actorMovieCandidates,
+                        using: tmdbClient
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.movieRatingShelvesLoaded(
+                        playlistID: playlistID,
+                        hideAdult: hideAdult,
+                        refreshID: movieRatingRequestID,
+                        shelves: shelves
+                    ))
+                }
+                .cancellable(id: CancelID.movieRatingDiscovery, cancelInFlight: true)
+                return .merge(cacheEffect, newEpisodeEffect, movieRatingEffect)
 
             case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections, actors):
                 guard
@@ -824,6 +890,18 @@ public struct DashboardFeature {
                 else { return .none }
                 state.newEpisodeSeries = series
                 state.activeNewEpisodeRefreshID = nil
+                return .none
+
+            case let .movieRatingShelvesLoaded(playlistID, hideAdult, refreshID, shelves):
+                guard
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult,
+                    state.activeMovieRatingRefreshID == refreshID
+                else { return .none }
+                state.mostRatedMovies = shelves.mostRated
+                state.highestRatedMovies = shelves.highestRated
+                state.activeMovieRatingRefreshID = nil
+                state.hasLoadedMovieRatingDiscovery = true
                 return .none
 
             case let .dataFailed(playlistID, hideAdult, refreshID, error):
