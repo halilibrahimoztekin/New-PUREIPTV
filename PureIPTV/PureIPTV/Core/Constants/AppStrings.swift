@@ -495,6 +495,10 @@ public enum AppStrings {
         public static let highestRatedMovies = "En Yüksek Puanlı Filmler".localized
         public static let ratingVotesSummary = "★ %1$.1f · %2$d oy".localized
         public static let mostVotesSummary = "%1$d oy · ★ %2$.1f".localized
+        public static let awardWinningMovies = "Ödül Kazanan Filmler".localized
+        public static let awardNomineeMovies = "Ödüle Aday Filmler".localized
+        public static let awardRecognitionCount = "%d ödül".localized
+        public static let awardNominationCount = "%d adaylık".localized
         public static let actorFilmographyTitle = "%@ • Filmografi • %@"
         public static let hdBadge = "HD".localized
         public static let movieBadge = "Film".localized

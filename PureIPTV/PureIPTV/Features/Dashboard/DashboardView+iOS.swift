@@ -180,6 +180,24 @@
                         .frame(width: 140, alignment: .leading)
                     }
                 }
+                if !store.awardWinningMovies.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.awardWinningMovies, items: store.awardWinningMovies) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                            Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
+                                .font(.caption2.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                        }.frame(width: 140, alignment: .leading)
+                    }
+                }
+                if !store.awardNomineeMovies.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.awardNomineeMovies, items: store.awardNomineeMovies) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                            Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
+                                .font(.caption2.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                        }.frame(width: 140, alignment: .leading)
+                    }
+                }
                 if !store.mostWatchedActors.isEmpty {
                     actorDiscoverySection
                 }

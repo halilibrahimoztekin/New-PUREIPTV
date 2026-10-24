@@ -219,6 +219,28 @@
                         }
                     }
                 }
+                if !store.awardWinningMovies.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.awardWinningMovies) {
+                        ForEach(store.awardWinningMovies) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
+                                Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
+                                    .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                            }
+                        }
+                    }
+                }
+                if !store.awardNomineeMovies.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.awardNomineeMovies) {
+                        ForEach(store.awardNomineeMovies) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
+                                Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
+                                    .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                            }
+                        }
+                    }
+                }
                 if !store.mostWatchedActors.isEmpty {
                     TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
                         ? AppStrings.Dashboard.popularActors

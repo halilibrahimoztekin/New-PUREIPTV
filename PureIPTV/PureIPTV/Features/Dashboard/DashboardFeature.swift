@@ -47,6 +47,9 @@ public struct DashboardFeature {
         public var mostRatedMovies: [MovieRatingDiscoveryEngine.RankedMovie] = []
         public var highestRatedMovies: [MovieRatingDiscoveryEngine.RankedMovie] = []
         public var hasLoadedMovieRatingDiscovery = false
+        public var awardWinningMovies: [AwardDiscoveryEngine.MovieEntry] = []
+        public var awardNomineeMovies: [AwardDiscoveryEngine.MovieEntry] = []
+        public var hasLoadedAwardDiscovery = false
         public var recommendedVODs: [MediaModels.Item] = []
         public var recommendationReasons: [String: SmartRecommendationEngine.Reason] = [:]
         public var actorRecommendationCollections: [ActorRecommendationEngine.Collection] = []
@@ -61,6 +64,7 @@ public struct DashboardFeature {
         public var selectedActorFilmographyRequestID: UUID?
         public var activeNewEpisodeRefreshID: UUID?
         public var activeMovieRatingRefreshID: UUID?
+        public var activeAwardRefreshID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
         public var exploreCollections: [ExploreCollection] = []
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
@@ -104,6 +108,7 @@ public struct DashboardFeature {
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
         case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
         case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
+        case awardShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: AwardDiscoveryEngine.Shelves)
         case actorSelected(id: Int, name: String)
         case actorFilmographyLoaded(id: Int, requestID: UUID, playlistID: UUID?, hideAdult: Bool, collections: [ActorRecommendationEngine.Collection])
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
@@ -138,6 +143,7 @@ public struct DashboardFeature {
         case actorFilmography
         case newEpisodeDiscovery
         case movieRatingDiscovery
+        case awardDiscovery
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -145,6 +151,7 @@ public struct DashboardFeature {
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.tmdbClient) var tmdbClient
+    @Dependency(\.wikidataAwardClient) var wikidataAwardClient
 
     public init() {}
 
@@ -152,6 +159,7 @@ public struct DashboardFeature {
         let playlistRepository = playlistRepository
         let settingsClient = settingsClient
         let tmdbClient = tmdbClient
+        let wikidataAwardClient = wikidataAwardClient
 
         Reduce { state, action in
             switch action {
@@ -170,6 +178,10 @@ public struct DashboardFeature {
                     state.highestRatedMovies = []
                     state.hasLoadedMovieRatingDiscovery = false
                     state.activeMovieRatingRefreshID = nil
+                    state.awardWinningMovies = []
+                    state.awardNomineeMovies = []
+                    state.hasLoadedAwardDiscovery = false
+                    state.activeAwardRefreshID = nil
                     state.exploreCollections = []
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
@@ -201,6 +213,10 @@ public struct DashboardFeature {
                     state.highestRatedMovies = []
                     state.hasLoadedMovieRatingDiscovery = false
                     state.activeMovieRatingRefreshID = nil
+                    state.awardWinningMovies = []
+                    state.awardNomineeMovies = []
+                    state.hasLoadedAwardDiscovery = false
+                    state.activeAwardRefreshID = nil
                     state.exploreCollections = []
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
@@ -324,7 +340,20 @@ public struct DashboardFeature {
                     }
                 }
                 .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
-                return .merge(localEffect, remoteEffect, notificationEffect, movieRatingEffect)
+                let awardEffect: Effect<Action>
+                if !shouldReload, !state.hasLoadedAwardDiscovery, !state.actorRecommendationMovieCandidates.isEmpty {
+                    let requestID = UUID()
+                    let candidates = state.actorRecommendationMovieCandidates
+                    state.activeAwardRefreshID = requestID
+                    awardEffect = .run { send in
+                        let shelves = await AwardDiscoveryEngine.discover(from: candidates, using: tmdbClient, awardClient: wikidataAwardClient)
+                        guard !Task.isCancelled else { return }
+                        await send(.awardShelvesLoaded(playlistID: playlistID, hideAdult: currentAdultHidden, refreshID: requestID, shelves: shelves))
+                    }.cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
+                } else {
+                    awardEffect = .none
+                }
+                return .merge(localEffect, remoteEffect, notificationEffect, movieRatingEffect, awardEffect)
 
             case .onDisappear:
                 if state.activeEPGRefreshID != nil {
@@ -348,12 +377,17 @@ public struct DashboardFeature {
                     state.hasLoadedMovieRatingDiscovery = false
                 }
                 state.activeMovieRatingRefreshID = nil
+                if state.activeAwardRefreshID != nil, state.awardWinningMovies.isEmpty, state.awardNomineeMovies.isEmpty {
+                    state.hasLoadedAwardDiscovery = false
+                }
+                state.activeAwardRefreshID = nil
                 return .merge(
                     .cancel(id: CancelID.remoteData),
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.newEpisodeDiscovery),
                     .cancel(id: CancelID.movieRatingDiscovery),
+                    .cancel(id: CancelID.awardDiscovery),
                     .cancel(id: CancelID.watchHistoryObserver)
                 )
 
@@ -500,6 +534,8 @@ public struct DashboardFeature {
                 state.activeNewEpisodeRefreshID = nil
                 state.activeMovieRatingRefreshID = nil
                 state.hasLoadedMovieRatingDiscovery = false
+                state.activeAwardRefreshID = nil
+                state.hasLoadedAwardDiscovery = false
                 state.isLoadingActorFilmography = false
                 state.hasLoadedSelectedActorFilmography = false
                 state.selectedActorID = nil
@@ -731,7 +767,8 @@ public struct DashboardFeature {
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.newEpisodeDiscovery),
-                    .cancel(id: CancelID.movieRatingDiscovery)
+                    .cancel(id: CancelID.movieRatingDiscovery),
+                    .cancel(id: CancelID.awardDiscovery)
                 )
                 return .concatenate(cancellations, cancellableRemoteEffect)
 
@@ -869,7 +906,15 @@ public struct DashboardFeature {
                     ))
                 }
                 .cancellable(id: CancelID.movieRatingDiscovery, cancelInFlight: true)
-                return .merge(cacheEffect, newEpisodeEffect, movieRatingEffect)
+                let awardRequestID = UUID()
+                state.activeAwardRefreshID = awardRequestID
+                state.hasLoadedAwardDiscovery = false
+                let awardEffect = Effect<Action>.run { send in
+                    let shelves = await AwardDiscoveryEngine.discover(from: actorMovieCandidates, using: tmdbClient, awardClient: wikidataAwardClient)
+                    guard !Task.isCancelled else { return }
+                    await send(.awardShelvesLoaded(playlistID: playlistID, hideAdult: hideAdult, refreshID: awardRequestID, shelves: shelves))
+                }.cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
+                return .merge(cacheEffect, newEpisodeEffect, movieRatingEffect, awardEffect)
 
             case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, collections, actors):
                 guard
@@ -902,6 +947,14 @@ public struct DashboardFeature {
                 state.highestRatedMovies = shelves.highestRated
                 state.activeMovieRatingRefreshID = nil
                 state.hasLoadedMovieRatingDiscovery = true
+                return .none
+
+            case let .awardShelvesLoaded(playlistID, hideAdult, refreshID, shelves):
+                guard state.activePlaylistID == playlistID, state.lastAdultHidden == hideAdult, state.activeAwardRefreshID == refreshID else { return .none }
+                state.awardWinningMovies = shelves.winners
+                state.awardNomineeMovies = shelves.nominees
+                state.activeAwardRefreshID = nil
+                state.hasLoadedAwardDiscovery = true
                 return .none
 
             case let .dataFailed(playlistID, hideAdult, refreshID, error):
