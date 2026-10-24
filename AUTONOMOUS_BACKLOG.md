@@ -754,9 +754,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Yalnızca iPhone 17 için Release Xcode build’i çalıştırıldı; son çalıştırma exit code 0 ile tamamlandı. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase `exit code 0` notunu yazdı. Kullanıcı talimatı gereği test/app akışı çalıştırılmadı. tvOS koşullu kod bu iPhone build’inde derlenmedi; CloudKit geliştirme ortamında migration/sync doğrulaması ayrıca yapılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
-### 73. [PENDING] İndirme Depolama Alanı Özeti ve Toplu Temizlik
-- **Bulgu:** IPTVX’in iOS Downloads ekranı aktif ve tamamlanmış indirmeleri tek yerde topluyor; mevcut PureIPTV genel cache temizliği indirilmiş dosya başına depolama/temizlik görünürlüğü sunmuyor.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://iptvx.app/features/index.html
+### 73. [IN_PROGRESS] Tamamlanmış İndirmeleri Onaylı Toplu Temizleme
+- **Canlı doğrulama (24 Ekim 2026):** IPTVX, cihaz içi indirmelerin uygulama içinde yönetilip silindiğini ve son sürümde Downloads ekranını geliştirdiğini belirtiyor: https://iptvx.app/faq/index.html · https://apps.apple.com/us/app/iptvx/id1451470024
+- **Kod taraması:** iOS Downloads ekranı toplam saklama alanını ve tamamlanmış dosya sayısını zaten gösteriyor; her dosya ayrı silinebiliyor. tvOS’ta depolama özeti ve toplu temizleme yok. DownloadManager’ın aktif işleri/queue’su ve Documents altındaki dosya + SwiftData kaydı birlikte yönetiliyor; dosya yolu silmeden önce sınırlandırılmalı.
+- **Kapsam:** iOS ve tvOS Downloads ekranlarında tamamlanmış indirmelerin toplam boyutunu göster ve “tamamlanmışları sil” eylemini onay diyaloğuyla sun. Aktif/sıradaki indirmelere dokunma; yalnızca app Documents içindeki doğrulanmış indirme dosyalarını ve bunların offline kayıtlarını temizle. Başarısız dosya silmelerini başarı olarak göstermeme.
+- **Uygulama notu:** DownloadManager toplu silmede background URLSession görevlerini önce geri yükleyip aktif/kuyruk ID’lerini korur; temizleme yolunda kuyruk çalıştırma/iptal etme yapmaz. Yalnızca Documents içindeki tam olarak `<id>.mp4` olan canonical dosya silinir; geçersiz yol veya dosya silme hatasında SwiftData satırı korunur. Eksik dosyanın satırı temizlenebilir. Dosya silinip SwiftData kaydı kaydedilemezse işlem başarısız sayılır ve UI kısmi hata gösterir. iOS/tvOS’ta boyut/sayı ve onaylı toplu temizleme sunulur; yeni metinler kataloğun tüm desteklenen locale’lerine eklendi.
+- **PR Reviewer:** `[APPROVED]`; actor serialization, restore/active task koruması, canonical path/symlink sınırı, dosya/SwiftData hata davranışı, onay akışı ve 21 locale kontrol edildi.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0; Xcode SwiftFormat script phase’inden “command failed with exit code 0” satırı ve mevcut Swift 6 concurrency uyarıları yazdı. `git diff --check` başarılı. Kullanıcı talimatı gereği test veya app akışı çalıştırılmadı; tvOS koşullu UI bu iPhone build’inde derlenmedi.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone Xcode build’i alındı.
 
 ### 74. [PENDING] Yedek Geri Yüklemede Son İyi EPG’yi Koruma
 - **Bulgu:** TiviMate kullanıcıları yedek geri yüklenirken var olan EPG verisinin silinmemesini veya koruma seçeneğini talep ediyor; büyük rehberlerde yeniden indirme açılışı yavaşlatabiliyor.

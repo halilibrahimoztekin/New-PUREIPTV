@@ -44,33 +44,48 @@
                         // Storage Summary Header
                         if !store.downloadedItems.isEmpty {
                             Section {
-                                HStack(spacing: 16) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.blue.opacity(0.15))
-                                            .frame(width: 44, height: 44)
-                                        Image(systemName: "internaldrive")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundStyle(.blue)
-                                    }
+                                VStack(alignment: .leading, spacing: 12) {
+                                    HStack(spacing: 16) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.blue.opacity(0.15))
+                                                .frame(width: 44, height: 44)
+                                            Image(systemName: "internaldrive")
+                                                .font(.system(size: 20, weight: .semibold))
+                                                .foregroundStyle(.blue)
+                                        }
 
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(AppStrings.Downloads.totalStorage)
-                                            .font(.caption)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(AppStrings.Downloads.totalStorage)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text(totalStorageUsedString)
+                                                .font(.headline)
+                                                .fontWeight(.bold)
+                                        }
+
+                                        Spacer()
+
+                                        Text("\(store.downloadedItems.count) \(AppStrings.Downloads.completedDownloads.lowercased())")
+                                            .font(.caption2)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
                                             .foregroundStyle(.secondary)
-                                        Text(totalStorageUsedString)
-                                            .font(.headline)
-                                            .fontWeight(.bold)
                                     }
 
-                                    Spacer()
-
-                                    Text("\(store.downloadedItems.count) \(AppStrings.Downloads.completedDownloads.lowercased())")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(Capsule().fill(Color.secondary.opacity(0.15)))
-                                        .foregroundStyle(.secondary)
+                                    Button(role: .destructive) {
+                                        store.send(.clearCompletedTapped)
+                                    } label: {
+                                        if store.isClearingCompleted {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        } else {
+                                            Label(AppStrings.Downloads.clearCompleted, systemImage: "trash")
+                                        }
+                                    }
+                                    .disabled(store.isClearingCompleted)
                                 }
                                 .padding(.vertical, 4)
                             }
@@ -224,6 +239,42 @@
                 }
             }
             .navigationTitle(AppStrings.Downloads.title)
+            .confirmationDialog(
+                AppStrings.Downloads.clearCompletedTitle,
+                isPresented: Binding(
+                    get: { store.isConfirmingClearCompleted },
+                    set: {
+                        if !$0 {
+                            store.send(.clearCompletedCancelled)
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(AppStrings.Downloads.clearCompleted, role: .destructive) {
+                    store.send(.clearCompletedConfirmed)
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    store.send(.clearCompletedCancelled)
+                }
+            } message: {
+                Text(AppStrings.Downloads.clearCompletedMessage)
+            }
+            .alert(
+                AppStrings.Downloads.clearCompletedTitle,
+                isPresented: Binding(
+                    get: { store.clearFailureMessage != nil },
+                    set: {
+                        if !$0 {
+                            store.send(.dismissClearFailure)
+                        }
+                    }
+                )
+            ) {
+                Button(AppStrings.Common.ok) { store.send(.dismissClearFailure) }
+            } message: {
+                Text(store.clearFailureMessage ?? AppStrings.Downloads.clearCompletedFailure)
+            }
             .onAppear {
                 store.send(.onAppear)
             }

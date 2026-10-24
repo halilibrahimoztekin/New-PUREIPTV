@@ -1,6 +1,18 @@
 import ComposableArchitecture
 import Foundation
 
+public struct DownloadBulkDeleteResult: Equatable, Sendable {
+    public let removedCount: Int
+    public let bytesFreed: Int64
+    public let failureCount: Int
+
+    public init(removedCount: Int, bytesFreed: Int64, failureCount: Int) {
+        self.removedCount = removedCount
+        self.bytesFreed = bytesFreed
+        self.failureCount = failureCount
+    }
+}
+
 @DependencyClient
 public struct DownloadClient {
     public var startDownload: @Sendable (_ id: String, _ title: String, _ url: URL, _ coverURL: URL?, _ userAgentOverride: String?) async throws -> Void
@@ -8,6 +20,7 @@ public struct DownloadClient {
     public var getDownloadProgress: @Sendable (_ id: String) -> AsyncStream<Double> = { _ in .finished }
     public var getDownloadedMedia: @Sendable () async throws -> [OfflineMedia]
     public var deleteDownloadedMedia: @Sendable (_ id: String) async throws -> Void
+    public var deleteAllCompletedDownloads: @Sendable () async throws -> DownloadBulkDeleteResult
     public var isDownloaded: @Sendable (_ id: String) async throws -> Bool
     public var getActiveDownloads: @Sendable () async -> [DownloadProgressItem] = { [] }
     public var observeDownloads: @Sendable () -> AsyncStream<DownloadProgressItem> = { .finished }
@@ -40,6 +53,9 @@ extension DownloadClient: DependencyKey {
         },
         deleteDownloadedMedia: { id in
             try await DownloadManager.shared.deleteDownloadedMedia(id: id)
+        },
+        deleteAllCompletedDownloads: {
+            try await DownloadManager.shared.deleteAllCompletedDownloads()
         },
         isDownloaded: { id in
             let downloaded = try await DownloadManager.shared.getDownloadedMedia()

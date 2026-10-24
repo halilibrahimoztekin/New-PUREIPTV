@@ -100,7 +100,7 @@ actor DownloadManager {
         resumeQueuedDownloads()
     }
 
-    func getActiveDownloads() async -> [DownloadProgressItem] {
+    func getActiveDownloads(scheduleQueuedTasks: Bool = true) async -> [DownloadProgressItem] {
         guard !hasRestoredBackgroundTasks else {
             return Array(activeDownloads.values)
         }
@@ -157,8 +157,10 @@ actor DownloadManager {
         if backgroundTaskRestorationsInProgress == 0 {
             invalidatedDownloadIDs.removeAll()
         }
-        suspendExcessRunningTasks()
-        resumeQueuedDownloads()
+        if scheduleQueuedTasks {
+            suspendExcessRunningTasks()
+            resumeQueuedDownloads()
+        }
         return Array(activeDownloads.values)
     }
 
@@ -359,6 +361,93 @@ actor DownloadManager {
             context.delete(existing)
             try context.save()
         }
+    }
+
+    func deleteAllCompletedDownloads() async throws -> DownloadBulkDeleteResult {
+        // Restore URLSession state before taking the protected-ID snapshot.
+        // There are no suspension points after this await, so actor state and
+        // SwiftData mutation remain serialized throughout the deletion pass.
+        let restoredActiveDownloads = await getActiveDownloads(scheduleQueuedTasks: false)
+        let protectedIDs = Set(tasks.keys)
+            .union(queuedDownloadIDs)
+            .union(activeDownloads.keys)
+            .union(restoredActiveDownloads.map(\.id))
+        let context = ModelContext(SharedDatabaseConfig.shared)
+        let records = try context.fetch(FetchDescriptor<OfflineMedia>())
+        var removedCount = 0
+        var bytesFreed: Int64 = 0
+        var failureCount = 0
+        let fileManager = FileManager.default
+
+        for media in records where !protectedIDs.contains(media.id) {
+            guard let fileURL = canonicalCompletedDownloadURL(for: media) else {
+                failureCount += 1
+                continue
+            }
+
+            let fileExists = fileManager.fileExists(atPath: fileURL.path)
+            if fileExists {
+                do {
+                    try fileManager.removeItem(at: fileURL)
+                } catch {
+                    failureCount += 1
+                    continue
+                }
+            }
+
+            context.delete(media)
+            do {
+                try context.save()
+                removedCount += 1
+                if fileExists {
+                    bytesFreed += max(0, media.fileSize)
+                }
+            } catch {
+                // The file may already be gone, but do not count this row as
+                // removed. A later pass can safely reconcile the missing file.
+                context.rollback()
+                failureCount += 1
+            }
+        }
+
+        return DownloadBulkDeleteResult(
+            removedCount: removedCount,
+            bytesFreed: bytesFreed,
+            failureCount: failureCount
+        )
+    }
+
+    private func canonicalCompletedDownloadURL(for media: OfflineMedia) -> URL? {
+        guard
+            !media.id.isEmpty,
+            media.id != ".",
+            media.id != "..",
+            !media.id.contains("/"),
+            !media.id.contains("\\"),
+            !media.id.hasPrefix(".download-")
+        else { return nil }
+
+        let documentsURL = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let expectedURL = documentsURL
+            .appendingPathComponent("\(media.id).mp4", isDirectory: false)
+            .standardizedFileURL
+        let resolvedExpectedURL = expectedURL.resolvingSymlinksInPath().standardizedFileURL
+        let recordedURL = URL(fileURLWithPath: media.localFilePath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+
+        // The download manager writes only <id>.mp4 directly in Documents.
+        // Exact path equality also excludes temporary staging files and
+        // symlinks that resolve outside the app's Documents directory.
+        guard
+            expectedURL.deletingLastPathComponent() == documentsURL,
+            resolvedExpectedURL == expectedURL,
+            recordedURL == expectedURL
+        else { return nil }
+        return expectedURL
     }
 }
 

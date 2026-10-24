@@ -520,6 +520,10 @@ public enum AppStrings {
         public static let queued = "Kuyrukta".localized
         public static let completedDownloads = "İndirilen İçerikler".localized
         public static let totalStorage = "Kullanılan Alan".localized
+        public static let clearCompleted = "Tamamlananları Sil".localized
+        public static let clearCompletedTitle = "Tamamlanan İndirmeleri Sil".localized
+        public static let clearCompletedMessage = "Tamamlanmış tüm indirmeler bu cihazdan silinir. Devam eden ve sıradaki indirmeler korunur.".localized
+        public static let clearCompletedFailure = "Bazı tamamlanmış indirmeler silinemedi. Depolama alanını kontrol edip yeniden deneyin.".localized
         public static let downloadSpeed = "Hız".localized
         public static let tvOSNotice = "Çevrimdışı indirme özelliği Apple TV kısıtlamaları nedeniyle yalnızca iOS ve iPadOS cihazlarında desteklenmektedir.".localized
     }

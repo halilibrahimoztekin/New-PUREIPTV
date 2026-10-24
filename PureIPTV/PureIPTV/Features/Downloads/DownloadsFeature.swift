@@ -8,6 +8,9 @@ public struct DownloadsFeature {
         public var downloadedItems: [OfflineMedia] = []
         public var activeDownloads: [DownloadProgressItem] = []
         public var isLoading = false
+        public var isClearingCompleted = false
+        public var isConfirmingClearCompleted = false
+        public var clearFailureMessage: String?
         public var errorMessage: String?
 
         public init() {}
@@ -21,6 +24,11 @@ public struct DownloadsFeature {
         case downloadProgressUpdated(DownloadProgressItem)
         case cancelActiveDownload(String)
         case deleteDownload(String)
+        case clearCompletedTapped
+        case clearCompletedCancelled
+        case clearCompletedConfirmed
+        case clearCompletedResponse(DownloadBulkDeleteResult)
+        case dismissClearFailure
         case playDownload(OfflineMedia)
         case delegate(Delegate)
 
@@ -89,6 +97,41 @@ public struct DownloadsFeature {
                     try? await downloadClient.deleteDownloadedMedia(id: id)
                     await send(.loadDownloads)
                 }
+
+            case .clearCompletedTapped:
+                guard !state.downloadedItems.isEmpty, !state.isClearingCompleted else { return .none }
+                state.isConfirmingClearCompleted = true
+                return .none
+
+            case .clearCompletedCancelled:
+                state.isConfirmingClearCompleted = false
+                return .none
+
+            case .clearCompletedConfirmed:
+                guard !state.isClearingCompleted else { return .none }
+                state.isConfirmingClearCompleted = false
+                state.isClearingCompleted = true
+                state.clearFailureMessage = nil
+                return .run { send in
+                    let result: DownloadBulkDeleteResult
+                    do {
+                        result = try await downloadClient.deleteAllCompletedDownloads()
+                    } catch {
+                        result = DownloadBulkDeleteResult(removedCount: 0, bytesFreed: 0, failureCount: 1)
+                    }
+                    await send(.clearCompletedResponse(result))
+                }
+
+            case let .clearCompletedResponse(result):
+                state.isClearingCompleted = false
+                if result.failureCount > 0 {
+                    state.clearFailureMessage = AppStrings.Downloads.clearCompletedFailure
+                }
+                return .send(.loadDownloads)
+
+            case .dismissClearFailure:
+                state.clearFailureMessage = nil
+                return .none
 
             case let .playDownload(item):
                 return .send(.delegate(.playOfflineMedia(item)))
