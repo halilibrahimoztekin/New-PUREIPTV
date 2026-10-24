@@ -13,6 +13,9 @@
         private let mediaColumns: [GridItem] = [
             GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 40),
         ]
+        private let personColumns: [GridItem] = [
+            GridItem(.adaptive(minimum: 360, maximum: 480), spacing: 40),
+        ]
 
         public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
             self.store = store
@@ -55,7 +58,7 @@
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
                         emptySearchDiscoveryView
-                    } else if store.isSearching, store.totalResultsCount == 0 {
+                    } else if store.isSearching || store.isCurrentScopeSearching, store.totalResultsCount == 0 {
                         searchingView
                     } else if store.totalResultsCount == 0 {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
@@ -83,7 +86,7 @@
                     .textInputAutocapitalization(.never)
                     .font(.system(size: 32))
 
-                if store.isSearching {
+                if store.isSearching || store.isCurrentScopeSearching {
                     PureLoadingView(size: .small)
                         .padding(.trailing, 10)
                 }
@@ -188,6 +191,7 @@
                 }
                 .padding(.horizontal, 60)
             }
+            .focusSection()
         }
 
         // MARK: - Results Scroll View
@@ -342,10 +346,64 @@
                             }
                         }
                     }
+
+                    if store.filter == .all || store.filter == .people, !store.peopleResults.isEmpty {
+                        resultSection(title: AppStrings.Search.people, count: store.peopleResults.count) {
+                            LazyVGrid(columns: personColumns, spacing: 28) {
+                                ForEach(store.peopleResults) { credit in
+                                    Button {
+                                        store.send(.personCreditSelected(credit))
+                                    } label: {
+                                        HStack(spacing: 18) {
+                                            AsyncImage(url: credit.portraitURL) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().scaledToFill()
+                                                } else {
+                                                    ZStack {
+                                                        Color(hex: "#25252B")
+                                                        Image(systemName: "person.fill").font(.system(size: 38)).foregroundStyle(Color(hex: "#9B9BA5"))
+                                                    }
+                                                }
+                                            }
+                                            .frame(width: 112, height: 156)
+                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                            VStack(alignment: .leading, spacing: 10) {
+                                                Text(credit.personName).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
+                                                Text(credit.result.item.title).font(.system(size: 20)).foregroundStyle(Color(hex: "#C0C6D6")).lineLimit(2)
+                                                Text(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies)
+                                                    .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(hex: "#64D2FF"))
+                                            }
+                                            Spacer(minLength: 0)
+                                            Image(systemName: "play.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(Color(hex: "#0A84FF"))
+                                        }
+                                        .padding(18)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    }
+                                    .buttonStyle(.card)
+                                    .accessibilityLabel("\(credit.personName), \(credit.result.item.title)")
+                                    .accessibilityHint(AppStrings.Common.watchNow)
+                                }
+                            }
+                        }
+                    }
+
+                    if store.filter == .all || store.filter == .programs, !store.programResults.isEmpty {
+                        resultSection(title: AppStrings.Search.programs, count: store.programResults.count) {
+                            LazyVGrid(columns: channelColumns, spacing: 40) {
+                                ForEach(store.programResults) { match in
+                                    ProgramSearchResultCard(program: match.program, channel: match.result.item, playlistName: store.savedPlaylists.count > 1 ? match.result.playlistBadge.playlistName : nil) {
+                                        store.send(.programSelected(match))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, 60)
                 .padding(.bottom, 60)
             }
+            .focusSection()
         }
 
         // MARK: - Discovery & Empty Views

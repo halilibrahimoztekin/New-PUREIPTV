@@ -120,6 +120,10 @@ public actor CustomEPGStore {
         parsedSources[sourceID]
     }
 
+    public func getAllSourceData() -> [String: XMLTVData] {
+        parsedSources
+    }
+
     public func getAllChannels() -> [XMLTVChannel] {
         parsedSources.values.flatMap(\.channels.values)
     }
@@ -162,6 +166,7 @@ public struct CustomEPGMappingClient: Sendable {
     public var setGlobalTimeShift: @Sendable (_ hours: Int) -> Void
 
     public var getAvailableEPGChannels: @Sendable () async -> [XMLTVChannel] = { [] }
+    public var searchCachedPrograms: @Sendable (_ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _ in [] }
     public var fetchProgramsForChannel: @Sendable (_ channelID: String, _ channelName: String, _ fallbackEPGID: String?) async -> [EPGProgram] = { _, _, _ in [] }
     public var applyTimeShift: @Sendable (_ programs: [EPGProgram], _ channelID: String) -> [EPGProgram] = { programs, _ in programs }
 }
@@ -352,6 +357,97 @@ extension CustomEPGMappingClient: DependencyKey {
             },
             getAvailableEPGChannels: {
                 await CustomEPGStore.shared.getAllChannels()
+            },
+            searchCachedPrograms: { query, channels, limit in
+                guard limit > 0 else { return [] }
+                let terms = query
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+                    .split(whereSeparator: \.isWhitespace)
+                    .map(String.init)
+                guard !terms.isEmpty else { return [] }
+                let sources = loadSources().filter(\.isEnabled)
+                guard !sources.isEmpty else { return [] }
+                let mappings = loadMappings()
+                let sourceData = await CustomEPGStore.shared.getAllSourceData()
+                let now = Date()
+                var results: [CachedEPGProgramMatch] = []
+                var scannedProgrammes = 0
+
+                for source in sources {
+                    guard !Task.isCancelled, let data = sourceData[source.id] else { continue }
+                    let epgIDByNormalizedName = Dictionary(data.channels.values.map { channel in
+                        (channel.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR")), channel.id)
+                    }, uniquingKeysWith: { first, _ in first })
+                    var scannedChannels = 0
+                    for channel in channels where channel.type == .live {
+                        scannedChannels += 1
+                        if scannedChannels.isMultiple(of: 64), Task.isCancelled {
+                            return []
+                        }
+                        if scannedChannels > 20000 {
+                            break
+                        }
+                        let mapping = mappings[channel.id]
+                        if let sourceID = mapping?.customSourceID, sourceID != source.id {
+                            continue
+                        }
+                        let names = [channel.title, mapping?.channelName ?? ""]
+                            .map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR")) }
+                        let preferredID = mapping?.customEPGChannelID ?? channel.epgChannelID ?? channel.id
+                        let fallbackID = names.lazy.compactMap { epgIDByNormalizedName[$0] }.first
+                        guard let epgID = data.programmes[preferredID] != nil ? preferredID : fallbackID,
+                              let programmes = data.programmes[epgID]
+                        else { continue }
+                        let mappingShift = mapping?.timeShiftHours ?? 0
+                        let shiftHours = mappingShift != 0 ? mappingShift : defaults.integer(forKey: globalShiftKey)
+                        let shift = TimeInterval(shiftHours * 3600)
+                        let shiftedPrograms = programmes.map { programme in
+                            let start = programme.start.addingTimeInterval(shift)
+                            let end = programme.end.addingTimeInterval(shift)
+                            return EPGProgram(
+                                id: "\(epgID)_\(Int(start.timeIntervalSince1970))",
+                                title: programme.title,
+                                description: programme.description,
+                                startTime: start,
+                                endTime: end,
+                                isPlayingNow: start <= now && now <= end
+                            )
+                        }
+                        for program in shiftedPrograms {
+                            scannedProgrammes += 1
+                            if scannedProgrammes.isMultiple(of: 64), Task.isCancelled {
+                                return []
+                            }
+                            if scannedProgrammes > 50000 {
+                                break
+                            }
+                            let searchable = (program.title + " " + program.description)
+                                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+                            guard terms.allSatisfy({ searchable.localizedStandardContains($0) }) else { continue }
+                            results.append(CachedEPGProgramMatch(program: program, channel: channel))
+                            if results.count >= max(limit * 4, limit) {
+                                break
+                            }
+                        }
+                        if results.count >= max(limit * 4, limit) || scannedProgrammes > 50000 {
+                            break
+                        }
+                    }
+                    if results.count >= max(limit * 4, limit) || scannedProgrammes > 50000 {
+                        break
+                    }
+                }
+                return Array(results.sorted { lhs, rhs in
+                    let lhsLive = lhs.program.startTime <= now && lhs.program.endTime >= now
+                    let rhsLive = rhs.program.startTime <= now && rhs.program.endTime >= now
+                    if lhsLive != rhsLive {
+                        return lhsLive
+                    }
+                    if lhs.program.startTime != rhs.program.startTime {
+                        return lhs.program.startTime < rhs.program.startTime
+                    }
+                    return lhs.program.title.localizedStandardCompare(rhs.program.title) == .orderedAscending
+                }.prefix(limit))
             },
             fetchProgramsForChannel: { channelID, _, fallbackEPGID in
                 let mappings = loadMappings()

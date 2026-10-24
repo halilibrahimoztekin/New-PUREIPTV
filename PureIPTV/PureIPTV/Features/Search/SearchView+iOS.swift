@@ -13,6 +13,9 @@
         private let mediaColumns: [GridItem] = [
             GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 12),
         ]
+        private let personColumns: [GridItem] = [
+            GridItem(.adaptive(minimum: 190, maximum: 300), spacing: 12),
+        ]
 
         public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
             self.store = store
@@ -56,7 +59,7 @@
                         errorView(error)
                     } else if store.hasLoaded, store.searchQuery.isEmpty {
                         emptySearchDiscoveryView
-                    } else if store.isSearching, store.totalResultsCount == 0 {
+                    } else if store.isSearching || store.isCurrentScopeSearching, store.totalResultsCount == 0 {
                         searchingView
                     } else if store.totalResultsCount == 0 {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
@@ -86,7 +89,7 @@
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
 
-                if store.isSearching {
+                if store.isSearching || store.isCurrentScopeSearching {
                     PureLoadingView(size: .small)
                         .padding(.trailing, 4)
                 }
@@ -382,6 +385,60 @@
                                         } label: {
                                             Label(AppStrings.Common.watchNow, systemImage: "play.fill")
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if store.filter == .all || store.filter == .people, !store.peopleResults.isEmpty {
+                        resultSection(title: AppStrings.Search.people, count: store.peopleResults.count) {
+                            LazyVGrid(columns: personColumns, spacing: 12) {
+                                ForEach(store.peopleResults) { credit in
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.personCreditSelected(credit))
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            AsyncImage(url: credit.portraitURL) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().scaledToFill()
+                                                } else {
+                                                    ZStack {
+                                                        Color(hex: "#25252B")
+                                                        Image(systemName: "person.fill").foregroundStyle(Color(hex: "#9B9BA5"))
+                                                    }
+                                                }
+                                            }
+                                            .frame(width: 64, height: 88)
+                                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text(credit.personName).font(.body.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
+                                                Text(credit.result.item.title).font(.subheadline).foregroundStyle(Color(hex: "#C0C6D6")).lineLimit(2)
+                                                Text(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies)
+                                                    .font(.caption.weight(.medium)).foregroundStyle(Color(hex: "#64D2FF"))
+                                            }
+                                            Spacer(minLength: 0)
+                                            Image(systemName: "play.fill").font(.caption.weight(.bold)).foregroundStyle(Color(hex: "#0A84FF"))
+                                        }
+                                        .padding(10)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("\(credit.personName), \(credit.result.item.title)")
+                                    .accessibilityHint(AppStrings.Common.watchNow)
+                                }
+                            }
+                        }
+                    }
+
+                    if store.filter == .all || store.filter == .programs, !store.programResults.isEmpty {
+                        resultSection(title: AppStrings.Search.programs, count: store.programResults.count) {
+                            LazyVGrid(columns: channelColumns, spacing: 12) {
+                                ForEach(store.programResults) { match in
+                                    ProgramSearchResultCard(program: match.program, channel: match.result.item, playlistName: store.savedPlaylists.count > 1 ? match.result.playlistBadge.playlistName : nil) {
+                                        store.send(.programSelected(match))
                                     }
                                 }
                             }

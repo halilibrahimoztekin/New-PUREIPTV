@@ -9,6 +9,8 @@ import SwiftUI
 /// main-actor isolation conflicts with the @Reducer macro.
 private let searchCancelID = "SearchFeature.search"
 private let searchEPGCancelID = "SearchFeature.searchEPG"
+private let searchPeopleCancelID = "SearchFeature.searchPeople"
+private let searchProgramsCancelID = "SearchFeature.searchPrograms"
 
 @Reducer
 public struct SearchFeature: Sendable {
@@ -19,6 +21,8 @@ public struct SearchFeature: Sendable {
         case series = "Diziler"
         case uhd4k = "4K / UHD"
         case epgMatches = "EPG Programları"
+        case people = "Kişiler"
+        case programs = "Programlar"
 
         public var title: String {
             switch self {
@@ -28,6 +32,8 @@ public struct SearchFeature: Sendable {
             case .series: AppStrings.Search.series
             case .uhd4k: AppStrings.Search.filter4K
             case .epgMatches: AppStrings.Search.filterEPG
+            case .people: AppStrings.Search.people
+            case .programs: AppStrings.Search.programs
             }
         }
 
@@ -39,6 +45,8 @@ public struct SearchFeature: Sendable {
             case .series: "play.tv.fill"
             case .uhd4k: "sparkles.tv.fill"
             case .epgMatches: "clock.badge.checkmark.fill"
+            case .people: "person.crop.rectangle.stack.fill"
+            case .programs: "list.bullet.rectangle.fill"
             }
         }
 
@@ -50,6 +58,8 @@ public struct SearchFeature: Sendable {
             case .series: "#FF9F0A" // Sunset Amber
             case .uhd4k: "#FFD60A" // Radiant Gold
             case .epgMatches: "#30D158" // Stadium Green
+            case .people: "#FF375F"
+            case .programs: "#64D2FF"
             }
         }
 
@@ -85,6 +95,24 @@ public struct SearchFeature: Sendable {
         ]
     }
 
+    public struct PersonCreditResult: Identifiable, Equatable, Sendable {
+        public let personID: Int
+        public let personName: String
+        public let portraitURL: URL?
+        public let result: GlobalSearchResultItem
+        public var id: String {
+            "\(personID)|\(result.playlistBadge.id)|\(result.item.id)"
+        }
+    }
+
+    public struct ProgramResult: Identifiable, Equatable, Sendable {
+        public let program: EPGProgram
+        public let result: GlobalSearchResultItem
+        public var id: String {
+            "\(program.id)|\(result.playlistBadge.id)"
+        }
+    }
+
     @ObservableState
     public struct State: Equatable {
         // Data sources (everything fetched once)
@@ -109,6 +137,8 @@ public struct SearchFeature: Sendable {
         // UI state
         public var isLoading = false
         public var isSearching = false
+        public var isPeopleSearchLoading = false
+        public var isProgramsSearchLoading = false
         public var hasLoaded = false
         public var errorMessage: String?
         public var lastLoadedConfig: PlaylistConfig?
@@ -127,13 +157,43 @@ public struct SearchFeature: Sendable {
         public var enrichedLiveResults: [GlobalSearchResultItem] = []
         public var enrichedVODResults: [GlobalSearchResultItem] = []
         public var enrichedSeriesResults: [GlobalSearchResultItem] = []
+        public var peopleResults: [PersonCreditResult] = []
+        public var programResults: [ProgramResult] = []
+        public var activePeopleSearchRequestID: UUID?
+        public var activeProgramsSearchRequestID: UUID?
+        public var activeSearchRequestID: UUID?
         public var filterCounts: [SearchFilter: Int] = [:]
+        public var baseAllResultsCount = 0
+
+        public mutating func updateAllResultsCount() {
+            filterCounts[.all] = baseAllResultsCount + peopleResults.count + programResults.count
+        }
 
         public var totalResultsCount: Int {
-            if !enrichedLiveResults.isEmpty || !enrichedVODResults.isEmpty || !enrichedSeriesResults.isEmpty {
-                return enrichedLiveResults.count + enrichedVODResults.count + enrichedSeriesResults.count
+            switch filter {
+            case .people:
+                return peopleResults.count
+            case .programs:
+                return programResults.count
+            case .all:
+                let liveCount = enrichedLiveResults.isEmpty ? liveResults.count : enrichedLiveResults.count
+                let vodCount = enrichedVODResults.isEmpty ? vodResults.count : enrichedVODResults.count
+                let seriesCount = enrichedSeriesResults.isEmpty ? seriesResults.count : enrichedSeriesResults.count
+                return liveCount + vodCount + seriesCount + peopleResults.count + programResults.count
+            default:
+                if !enrichedLiveResults.isEmpty || !enrichedVODResults.isEmpty || !enrichedSeriesResults.isEmpty {
+                    return enrichedLiveResults.count + enrichedVODResults.count + enrichedSeriesResults.count
+                }
+                return liveResults.count + vodResults.count + seriesResults.count
             }
-            return liveResults.count + vodResults.count + seriesResults.count
+        }
+
+        public var isCurrentScopeSearching: Bool {
+            switch filter {
+            case .people: isPeopleSearchLoading
+            case .programs: isProgramsSearchLoading
+            default: false
+            }
         }
 
         public mutating func updateResults() {
@@ -145,7 +205,10 @@ public struct SearchFeature: Sendable {
                 enrichedLiveResults = []
                 enrichedVODResults = []
                 enrichedSeriesResults = []
+                peopleResults = []
+                programResults = []
                 filterCounts = [:]
+                baseAllResultsCount = 0
                 return
             }
 
@@ -179,6 +242,8 @@ public struct SearchFeature: Sendable {
             enrichedVODResults = output.vods
             enrichedSeriesResults = output.series
             filterCounts = output.counts
+            baseAllResultsCount = output.counts[.all, default: 0]
+            updateAllResultsCount()
 
             liveResults = output.live.map(\.item)
             vodResults = output.vods.map(\.item)
@@ -197,14 +262,18 @@ public struct SearchFeature: Sendable {
         case queryChanged(String)
         case performSearch(String)
         case searchCompleted(query: String, filter: SearchFilter, live: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
-        case searchEnrichedCompleted(query: String, filter: SearchFilter, output: GlobalSearchEngine.SearchResultOutput)
+        case searchEnrichedCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, output: GlobalSearchEngine.SearchResultOutput)
         case liveEPGEnriched(query: String, filter: SearchFilter, playlistID: UUID?, results: [GlobalSearchResultItem])
+        case peopleSearchCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, results: [PersonCreditResult])
+        case programsSearchCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, results: [ProgramResult])
         case filterChanged(SearchFilter)
         case selectPlaylistFilter(UUID?)
         case resetCache
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
+        case personCreditSelected(PersonCreditResult)
+        case programSelected(ProgramResult)
         case clearHistoryTapped
         case recentSearchTapped(String)
         case tagSelected(QuickSearchTag)
@@ -230,6 +299,8 @@ public struct SearchFeature: Sendable {
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.reminderClient) var reminderClient
+    @Dependency(\.tmdbClient) var tmdbClient
+    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
 
     public init() {}
 
@@ -239,6 +310,8 @@ public struct SearchFeature: Sendable {
         let settingsClient = settingsClient
         let parentalControlClient = parentalControlClient
         let reminderClient = reminderClient
+        let tmdbClient = tmdbClient
+        let customEPGMappingClient = customEPGMappingClient
 
         Reduce { state, action in
             switch action {
@@ -271,10 +344,18 @@ public struct SearchFeature: Sendable {
                     state.enrichedLiveResults = []
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
+                    state.peopleResults = []
+                    state.programResults = []
+                    state.activePeopleSearchRequestID = nil
+                    state.activeProgramsSearchRequestID = nil
+                    state.activeSearchRequestID = nil
                     state.filterCounts = [:]
+                    state.baseAllResultsCount = 0
                     state.searchQuery = ""
                     state.debouncedQuery = ""
                     state.isSearching = false
+                    state.isPeopleSearchLoading = false
+                    state.isProgramsSearchLoading = false
                     state.lastLoadedConfig = config
                     state.lastAdultHidden = currentAdultHidden
                 }
@@ -419,52 +500,90 @@ public struct SearchFeature: Sendable {
 
             case let .queryChanged(query):
                 state.searchQuery = query
+                state.activePeopleSearchRequestID = nil
+                state.activeProgramsSearchRequestID = nil
+                state.activeSearchRequestID = nil
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty {
                     state.debouncedQuery = ""
                     state.isSearching = false
+                    state.isPeopleSearchLoading = false
+                    state.isProgramsSearchLoading = false
                     state.liveResults = []
                     state.vodResults = []
                     state.seriesResults = []
                     state.enrichedLiveResults = []
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
+                    state.peopleResults = []
+                    state.programResults = []
+                    state.activePeopleSearchRequestID = nil
+                    state.activeProgramsSearchRequestID = nil
+                    state.activeSearchRequestID = nil
                     state.filterCounts = [:]
+                    state.baseAllResultsCount = 0
                     return .merge(
                         .cancel(id: searchCancelID),
-                        .cancel(id: searchEPGCancelID)
+                        .cancel(id: searchEPGCancelID),
+                        .cancel(id: searchPeopleCancelID),
+                        .cancel(id: searchProgramsCancelID)
                     )
                 }
 
                 state.isSearching = true
+                state.isPeopleSearchLoading = trimmed.count >= 2
+                state.isProgramsSearchLoading = true
                 let debounceEffect: Effect<Action> = .run { send in
                     try await clock.sleep(for: .milliseconds(250))
                     await send(.performSearch(query))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
-                return .merge(.cancel(id: searchEPGCancelID), debounceEffect)
+                return .merge(.cancel(id: searchEPGCancelID), .cancel(id: searchPeopleCancelID), .cancel(id: searchProgramsCancelID), debounceEffect)
 
             case let .performSearch(query):
                 state.debouncedQuery = query
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty {
                     state.isSearching = false
+                    state.isPeopleSearchLoading = false
+                    state.isProgramsSearchLoading = false
                     state.liveResults = []
                     state.vodResults = []
                     state.seriesResults = []
                     state.enrichedLiveResults = []
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
+                    state.peopleResults = []
+                    state.programResults = []
+                    state.activePeopleSearchRequestID = nil
+                    state.activeProgramsSearchRequestID = nil
+                    state.activeSearchRequestID = nil
                     state.filterCounts = [:]
+                    state.baseAllResultsCount = 0
                     return .merge(
                         .cancel(id: searchCancelID),
-                        .cancel(id: searchEPGCancelID)
+                        .cancel(id: searchEPGCancelID),
+                        .cancel(id: searchPeopleCancelID),
+                        .cancel(id: searchProgramsCancelID)
                     )
                 }
 
                 state.isSearching = true
                 let filter = state.filter
                 let selectedPID = state.selectedPlaylistID
+                let searchRequestID = UUID()
+                let peopleRequestID = UUID()
+                let programsRequestID = UUID()
+                state.activeSearchRequestID = searchRequestID
+                state.activePeopleSearchRequestID = peopleRequestID
+                state.activeProgramsSearchRequestID = programsRequestID
+                state.isPeopleSearchLoading = trimmed.count >= 2
+                state.isProgramsSearchLoading = true
+
+                // These two supplemental scopes have independent cancellation so
+                // a slow metadata request cannot hold up the local catalogue search.
+                state.peopleResults = []
+                state.programResults = []
 
                 let channels: [GlobalSearchResultItem]
                 let vods: [GlobalSearchResultItem]
@@ -498,10 +617,129 @@ public struct SearchFeature: Sendable {
                         isCancelled: { Task.isCancelled }
                     )
                     guard !Task.isCancelled else { return }
-                    await send(.searchEnrichedCompleted(query: query, filter: filter, output: output))
+                    await send(.searchEnrichedCompleted(requestID: searchRequestID, query: query, filter: filter, playlistID: selectedPID, output: output))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
-                return .merge(.cancel(id: searchEPGCancelID), searchEffect)
+                var configsByBadgeID: [String: (config: PlaylistConfig, badge: PlaylistSourceBadge)] = [:]
+                let primaryBadge = PlaylistSourceBadge(
+                    id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
+                    playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
+                    colorHex: "#0A84FF"
+                )
+                if let primaryConfig = state.lastLoadedConfig {
+                    configsByBadgeID[primaryBadge.id] = (primaryConfig, primaryBadge)
+                }
+                for (index, playlist) in state.savedPlaylists.enumerated() {
+                    guard let config = playlist.toPlaylistConfig() else { continue }
+                    let badge = UnifiedPlaylistManager.shared.badge(for: config, index: index)
+                    configsByBadgeID[badge.id] = (config, badge)
+                }
+                let scopedConfigs = Array(configsByBadgeID.values
+                    .filter { selectedPID == nil || $0.badge.id == selectedPID?.uuidString }
+                    .sorted { $0.badge.id < $1.badge.id })
+                let catalog = (vods + series).filter {
+                    selectedPID == nil || $0.playlistBadge.id == selectedPID?.uuidString
+                }
+                let allLiveChannels = state.allChannels
+                let personSearchEffect: Effect<Action> = .run { send in
+                    guard trimmed.count >= 2, !Task.isCancelled else {
+                        await send(.peopleSearchCompleted(requestID: peopleRequestID, query: query, filter: filter, playlistID: selectedPID, results: []))
+                        return
+                    }
+                    guard let response = try? await tmdbClient.searchPeople(trimmed) else {
+                        guard !Task.isCancelled else { return }
+                        await send(.peopleSearchCompleted(requestID: peopleRequestID, query: query, filter: filter, playlistID: selectedPID, results: []))
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    let catalogByNormalizedTitle = Dictionary(grouping: catalog, by: { FuzzySearchEngine.normalize($0.item.title) })
+                    var seen = Set<String>()
+                    var matches: [PersonCreditResult] = []
+                    for person in Array(response.results ?? []).prefix(30) {
+                        guard !Task.isCancelled, let name = person.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { continue }
+                        let portraitURL = person.profilePath.flatMap { URL(string: "https://image.tmdb.org/t/p/w185/\($0.trimmingCharacters(in: CharacterSet(charactersIn: "/")))") }
+                        for credit in person.knownFor ?? [] {
+                            let creditTitles = [credit.title, credit.originalTitle, credit.name, credit.originalName]
+                                .compactMap(\.self)
+                                .map(FuzzySearchEngine.normalize)
+                                .filter { !$0.isEmpty }
+                            var playable: [GlobalSearchResultItem] = []
+                            var seenCandidates = Set<String>()
+                            let expectedType: MediaModels.ItemType? = switch credit.mediaType?.lowercased() {
+                            case "movie": .vod
+                            case "tv": .series
+                            default: nil
+                            }
+                            let creditYear = (credit.releaseDate ?? credit.firstAirDate).flatMap { Int($0.prefix(4)) }
+                            for title in creditTitles {
+                                for result in catalogByNormalizedTitle[title] ?? [] {
+                                    let key = "\(result.playlistBadge.id)|\(result.item.id)"
+                                    guard seenCandidates.insert(key).inserted else { continue }
+                                    if let expectedType {
+                                        guard result.item.type == expectedType else { continue }
+                                    }
+                                    if let creditYear {
+                                        guard Int((result.item.releaseDate ?? "").prefix(4)) == creditYear else { continue }
+                                    }
+                                    playable.append(result)
+                                }
+                            }
+                            if expectedType == nil || creditYear == nil {
+                                let distinctTitles = Set(playable.map {
+                                    "\($0.item.type.rawValue)|\(FuzzySearchEngine.normalize($0.item.title))|\(($0.item.releaseDate ?? "").prefix(4))"
+                                })
+                                guard distinctTitles.count == 1 else { continue }
+                            }
+                            for result in playable where seen.insert("\(person.id)|\(result.playlistBadge.id)|\(result.item.id)").inserted {
+                                matches.append(PersonCreditResult(personID: person.id, personName: name, portraitURL: portraitURL, result: result))
+                                if matches.count >= 80 {
+                                    break
+                                }
+                            }
+                            if matches.count >= 80 {
+                                break
+                            }
+                        }
+                        if matches.count >= 80 {
+                            break
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    await send(.peopleSearchCompleted(requestID: peopleRequestID, query: query, filter: filter, playlistID: selectedPID, results: matches))
+                }
+                .cancellable(id: searchPeopleCancelID, cancelInFlight: true)
+
+                let channelsByBadgeID = Dictionary(grouping: channels, by: { $0.playlistBadge.id })
+                let programsEffect: Effect<Action> = .run { send in
+                    var matches: [ProgramResult] = []
+                    var seen = Set<String>()
+                    for source in scopedConfigs {
+                        guard !Task.isCancelled else { return }
+                        let sourceChannels = channelsByBadgeID[source.badge.id]?.map(\.item)
+                            ?? (source.badge.id == primaryBadge.id ? allLiveChannels : [])
+                        let found: [CachedEPGProgramMatch] = if source.config.type == .m3u {
+                            await iptvClient.searchCachedEPGPrograms(source.config, trimmed, sourceChannels, 100 - matches.count)
+                        } else {
+                            await customEPGMappingClient.searchCachedPrograms(trimmed, sourceChannels, 100 - matches.count)
+                        }
+                        for match in found {
+                            let result = GlobalSearchResultItem(item: match.channel, playlistBadge: source.badge, matchedEPGTitle: match.program.title, matchedEPGProgram: match.program)
+                            if seen.insert("\(match.program.id)|\(source.badge.id)").inserted {
+                                matches.append(ProgramResult(program: match.program, result: result))
+                            }
+                            if matches.count >= 100 {
+                                break
+                            }
+                        }
+                        if matches.count >= 100 {
+                            break
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    await send(.programsSearchCompleted(requestID: programsRequestID, query: query, filter: filter, playlistID: selectedPID, results: matches))
+                }
+                .cancellable(id: searchProgramsCancelID, cancelInFlight: true)
+                return .merge(.cancel(id: searchEPGCancelID), searchEffect, personSearchEffect, programsEffect)
 
             case let .searchCompleted(query, filter, live, vods, series):
                 guard state.debouncedQuery == query, state.filter == filter else { return .none }
@@ -511,18 +749,23 @@ public struct SearchFeature: Sendable {
                 state.seriesResults = series
                 return .none
 
-            case let .searchEnrichedCompleted(query, filter, output):
-                guard state.debouncedQuery == query, state.filter == filter else { return .none }
+            case let .searchEnrichedCompleted(requestID, query, filter, playlistID, output):
+                guard state.activeSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                state.activeSearchRequestID = nil
                 state.isSearching = false
                 state.enrichedLiveResults = output.live
                 state.enrichedVODResults = output.vods
                 state.enrichedSeriesResults = output.series
                 state.filterCounts = output.counts
+                state.baseAllResultsCount = output.counts[.all, default: 0]
 
                 // Maintain backward compatibility
                 state.liveResults = output.live.map(\.item)
                 state.vodResults = output.vods.map(\.item)
                 state.seriesResults = output.series.map(\.item)
+                state.filterCounts[.people] = state.peopleResults.count
+                state.filterCounts[.programs] = state.programResults.count
+                state.updateAllResultsCount()
                 guard let primaryConfig = state.lastLoadedConfig, !output.live.isEmpty else { return .none }
                 var playlistConfigs: [String: PlaylistConfig] = [:]
                 let primaryBadgeID = EPGReminderIdentifier.playlistIdentity(for: primaryConfig)
@@ -581,6 +824,24 @@ public struct SearchFeature: Sendable {
                     state.selectedPlaylistID == playlistID
                 else { return .none }
                 state.enrichedLiveResults = results
+                return .none
+
+            case let .peopleSearchCompleted(requestID, query, filter, playlistID, results):
+                guard state.activePeopleSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                state.activePeopleSearchRequestID = nil
+                state.isPeopleSearchLoading = false
+                state.peopleResults = results
+                state.filterCounts[.people] = results.count
+                state.updateAllResultsCount()
+                return .none
+
+            case let .programsSearchCompleted(requestID, query, filter, playlistID, results):
+                guard state.activeProgramsSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                state.activeProgramsSearchRequestID = nil
+                state.isProgramsSearchLoading = false
+                state.programResults = results
+                state.filterCounts[.programs] = results.count
+                state.updateAllResultsCount()
                 return .none
 
             case .loadReminders:
@@ -696,14 +957,21 @@ public struct SearchFeature: Sendable {
                 state.enrichedLiveResults = []
                 state.enrichedVODResults = []
                 state.enrichedSeriesResults = []
+                state.peopleResults = []
+                state.programResults = []
+                state.filterCounts[.people] = 0
+                state.filterCounts[.programs] = 0
                 state.filterCounts = [:]
+                state.baseAllResultsCount = 0
                 state.searchQuery = ""
                 state.debouncedQuery = ""
                 state.lastLoadedConfig = nil
                 state.selectedPlaylistID = nil
                 return .merge(
                     .cancel(id: searchCancelID),
-                    .cancel(id: searchEPGCancelID)
+                    .cancel(id: searchEPGCancelID),
+                    .cancel(id: searchPeopleCancelID),
+                    .cancel(id: searchProgramsCancelID)
                 )
 
             case let .channelSelected(channel):
@@ -731,6 +999,35 @@ public struct SearchFeature: Sendable {
                         _ = try? await databaseClient.saveSearchHistory(query)
                     }
                     await send(.delegate(.didSelectSeries(series)))
+                }
+
+            case let .personCreditSelected(personCredit):
+                let item = personCredit.result.item
+                let query = state.debouncedQuery
+                return .run { send in
+                    if !query.isEmpty {
+                        _ = try? await databaseClient.saveSearchHistory(query)
+                    }
+                    if item.type == .series {
+                        await send(.delegate(.didSelectSeries(item)))
+                    } else {
+                        await send(.delegate(.didSelectVOD(item)))
+                    }
+                }
+
+            case let .programSelected(programResult):
+                let result = programResult.result
+                let channelPlaylist = state.indexedChannels
+                    .filter { $0.playlistBadge.id == result.playlistBadge.id }
+                    .map(\.item)
+                let fallback = state.allChannels
+                let playlist = channelPlaylist.isEmpty ? (fallback.isEmpty ? [result.item] : fallback) : channelPlaylist
+                let query = state.debouncedQuery
+                return .run { send in
+                    if !query.isEmpty {
+                        _ = try? await databaseClient.saveSearchHistory(query)
+                    }
+                    await send(.delegate(.didSelectChannel(result.item, playlist: playlist)))
                 }
 
             case .clearHistoryTapped:

@@ -150,20 +150,22 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         sortByRelevance(&matchedSeries)
 
         // 5. Calculate 4K and EPG totals across all results
-        let uhdChannelsCount = matchedChannels.filter(\.is4K).count
-        let uhdVodsCount = matchedVODs.filter(\.is4K).count
-        let uhdSeriesCount = matchedSeries.filter(\.is4K).count
+        let uhdChannelsCount = matchedChannels.filter(\.is4K).prefix(limitPerCategory).count
+        let uhdVodsCount = matchedVODs.filter(\.is4K).prefix(limitPerCategory).count
+        let uhdSeriesCount = matchedSeries.filter(\.is4K).prefix(limitPerCategory).count
         let totalUHDCount = uhdChannelsCount + uhdVodsCount + uhdSeriesCount
 
-        let epgChannelsCount = matchedChannels.filter { $0.matchedEPGTitle != nil || $0.item.epgChannelID != nil }.count
+        let epgChannelsCount = matchedChannels.filter { $0.matchedEPGTitle != nil || $0.item.epgChannelID != nil }.prefix(limitPerCategory).count
 
         let counts: [SearchFeature.SearchFilter: Int] = [
-            .all: matchedChannels.count + matchedVODs.count + matchedSeries.count,
-            .live: matchedChannels.count,
-            .vod: matchedVODs.count,
-            .series: matchedSeries.count,
+            .all: min(matchedChannels.count, limitPerCategory) + min(matchedVODs.count, limitPerCategory) + min(matchedSeries.count, limitPerCategory),
+            .live: min(matchedChannels.count, limitPerCategory),
+            .vod: min(matchedVODs.count, limitPerCategory),
+            .series: min(matchedSeries.count, limitPerCategory),
             .uhd4k: totalUHDCount,
             .epgMatches: epgChannelsCount,
+            .people: 0,
+            .programs: 0,
         ]
 
         // 6. Apply Filter Selection
@@ -199,6 +201,11 @@ public nonisolated enum GlobalSearchEngine: Sendable {
 
         case .epgMatches:
             finalLive = Array(matchedChannels.filter { $0.matchedEPGTitle != nil || $0.item.epgChannelID != nil }.prefix(limitPerCategory))
+            finalVODs = []
+            finalSeries = []
+
+        case .people, .programs:
+            finalLive = []
             finalVODs = []
             finalSeries = []
         }

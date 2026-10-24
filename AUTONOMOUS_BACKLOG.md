@@ -351,7 +351,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 bağlı cihaz hedefi Release build ve generic tvOS Release build exit code 0 ile tamamlandı; iPhoneOS/tvOS `.app` ürünleri üretildi. Xcode mevcut Swift 6 concurrency uyarıları ve SwiftFormat script-phase notu yazdı. `git diff --check` ve yeni String Catalog girdilerinin JSON / 21-locale doğrulaması başarılı. Kullanıcı talimatı gereği yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone ve tvOS build’leri alındı.
 
-### 64. [IN_PROGRESS] Ödüllü İçerik Koleksiyonları
+### 64. [DONE] Ödüllü İçerik Koleksiyonları
 - **Bulgu:** IPTVX ödül kazananlarını ve diğer ödül tanınırlığını ayrı keşif satırlarında tutuyor; metadata’sı bulunmayan katalog içeriği için boş satır göstermiyor.
 - **Canlı keşif (24 Ekim 2026):** IPTVX resmi For You açıklaması “Award-Winning and Critically Acclaimed” satırlarında kazanan tanımanın diğer anlamlı ödül tanımalarından ayrı olduğunu belirtiyor. TMDB’nin app’teki film/details ve discover modellerinde award alanı yok. Wikidata P4947 TMDB movie ID dış tanımlayıcısını taşıyor; Wikidata Query Service kendi SPARQL endpoint’inden toplu sorgu destekliyor.
 - **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://www.wikidata.org/wiki/Property:P4947 · https://www.wikidata.org/wiki/Help:Data_access
@@ -362,13 +362,21 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build `** BUILD SUCCEEDED **`. Generic tvOS Release build iki denemede de sistem diskinde boş alan kalmadığı için tamamlanamadı (`No space left on device`, 117 MiB başlangıç boş alanı); birinci build `UIKit` explicit PCM çıktısında, tekrar denemesi Swift package ara çıktıları yazılırken durdu. Test veya uygulama akışı çalıştırılmadı. `git diff --check` ve String Catalog JSON/21 locale doğrulaması başarılı.
 - **Durum:** `[DONE]` — Kod reviewer onaylı ve iOS build başarılı; tvOS build depolama alanı nedeniyle doğrulanamadı.
 
-### 65. [PENDING] Aramada Alan Filtreleri ve Sonuç Sayıları
-- **Bulgu:** IPTVX 25 aramayı All, Movies, Shows, People, Live ve Programs olarak altı alana ayırıyor; sayılar kullanıcının eşleşme alanını görmesini sağlıyor.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+### 65. [DONE] Aramada Alan Filtreleri ve Sonuç Sayıları
+- **Canlı keşif (24 Ekim 2026):** IPTVX 25 aramayı All, Movies, Shows, People, Live ve Programs kapsamlarına ayırıyor; eşleşme sayıları alanı seçmeden önce sonuç dağılımını gösteriyor. UHF ve iPlayTV kaynaklarında global katalog/kanal araması da temel davranış olarak yer alıyor.
+- **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://getuhf.com/ · https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801
+- **Kod taraması:** `SearchFeature.SearchFilter` hâlihazırda All, Live, Movies, Series, 4K/UHD ve EPG filtrelerine sahip; `GlobalSearchEngine` bu kategoriler için sayıları hesaplıyor. People ve gerçek program sonuçları ayrı kapsamlar olarak yok. EPG eşleşme filtresi kanal eşleşmelerini sayıyor ve EPG programını `matchedEPGProgram` metaverisiyle sunuyor; bu, EPG programları için bağımsız tam sonuç kapsamıyla aynı değil. iOS ve tvOS arayüzleri mevcut `filterCounts` badge’lerini gösteriyor.
+- **Kapsam:** Mevcut Live/Movies/Series/4K/EPG filtrelerini koruyarak People ve Programs kapsamlarını tamamla; sonuç sayısını gerçek seçilebilir grid sayısıyla tutarlı yap. People sonuçları TMDB actor aramasından, Programs playlist/EPG metadata’sından sağlansın; iki platformda filtre seçimi klavye/remote odak akışını korusun.
+- **Analist incelemesi:** Sayılar eşleşen tüm kayıtları sayıyor, ancak mevcut `limitPerCategory=100` nedeniyle UI grid’inde görünen öğe sayısını geçebiliyor. People ve Programs yok; EPG zenginleştirmesi yalnızca ilk altı canlı kanalın kısa rehberini getiriyor. Arama motorunda 64 kayıtta cancellation kontrolü, reducer’da query/filter stale-result guard’ı mevcut. Programs kapsamını başlık aramasından ayrı bir schedule index kullanmadan taklit etme.
+- **Uygulama:** People ve Programs kapsamları mevcut arama filtrelerine eklendi. TMDB kişi araması yalnızca oynatılabilir film/dizi katalog öğelerine, medya türü ve yıl eşleşmesini gözeterek bağlanıyor; XMLTV Programlar araması sadece önceden yüklenmiş rehber verisini ve mevcut kanal eşlemelerini tarıyor. Her iki platformda seçilebilir sonuç kartları, gerçek görünür sonuç sayıları, erişilebilir açıklamalar ve tvOS focus section’ları eklendi. İstek kimlikleri ve playlist/query/filter kontrolleri eski yanıtları eliyor; All sayımı idempotent biçimde temel, People ve Programs sonuçlarından hesaplanıyor.
+- **PR Reviewer:** İlk incelemede `[CHANGES REQUESTED]` (live kanalın VOD olarak yönlendirilmesi, title-only eşleşme ve stale request riski); ikinci incelemede `[CHANGES REQUESTED]` (per-credit katalog taraması ve yerel sonuç nesil kimliği). Düzeltmeler sonrasında `[APPROVED]`.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build’i `BUILD SUCCEEDED`; son kaynaklar için artımlı build exit code 0 ile tamamlandı. String Catalog JSON ve `git diff --check` başarılı. Kullanıcı isteği gereği yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone build’i alındı.
 
-### 66. [PENDING] Kişi Aramasında Portreli Sonuç Sunumu
+### 66. [DONE] Kişi Aramasında Portreli Sonuç Sunumu
 - **Bulgu:** IPTVX arama sonuçlarında oyuncuları poster kartı gibi göstermeyip portreleriyle ayırıyor; filtre seçimi ilgili alanın tam sonuç ızgarasına gidiyor.
 - **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+- **Durum:** `[DONE]` — #65 kapsamındaki kişi araması portreli, erişilebilir ve doğrudan oynatılabilir sonuç kartlarıyla tamamlandığından bu madde #65 ile birleştirildi.
 
 ### 67. [PENDING] Dizi Sayfasında Sezon Seçimini ve Güncel Bölümü Koruma
 - **Bulgu:** IPTVX’in yenilenmiş dizi sayfası, yükleme sırasında seçilen sezonu koruyor ve “Current Episode” kısayoluyla devam bölümünü açmadan gösteriyor.
@@ -688,7 +696,43 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
   - `EPGGuideFeature.swift` ve Apple TV `EPGGuideView_tvOS.swift` Siri Remote Focus Engine ile kanal seçildiğinde üst başlık alanında canlı video önizlemesi ve ses açma/kapama butonu sunacak şekilde modernize edildi.
   - 9 adet kapsamlı birim testi (`LiveEPGPreviewEngineTests.swift`) yazıldı; hem iOS Simulator (9/9 passed) hem de tvOS Simulator platformlarında sıfır hata ile doğrulandı.
 
+### 68. [PENDING] Çok Kelimeli Aramada Boşluk ve Terim Eşleşmesi
+- **Bulgu:** IPTVX App Store değerlendirmesinde birden çok kelimeli kanal aramasının boşluklarla eşleşmediği bildirilmiş; fuzzy normalization ve token eşlemesinde gerçek arama davranışını koruyup iyileştirme fırsatı var.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=iphone&see-all=reviews · https://www.reddit.com/r/TiviMate/comments/1le2vfz/
 
+### 69. [PENDING] EPG Yenilemesinde Kategori Görünürlüğünü ve Sırasını Koruma
+- **Bulgu:** Apple TV kullanıcıları IPTVX kanal favorilerinin EPG güncellemesinden sonra sıfırlanabildiğini ve gizli kategori tercihlerinin yenileme sonrası geri döndüğünü bildiriyor.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/ · https://www.reddit.com/r/appletv/comments/1pauyyl/
 
+### 70. [PENDING] Apple TV’de Kanal Adı Uzunluğunu Ayarlama
+- **Bulgu:** UHF kullanıcı değerlendirmesinde uzun kanal adlarının kesilmesi ve kaç karakter gösterileceğinin ayarlanamaması Mac/TV’de kullanım şikâyeti olarak geçiyor.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/ · https://apps.apple.com/ie/app/uhf-love-your-iptv/id6443751726?platform=iphone&see-all=reviews
 
+### 71. [PENDING] iPhone’dan Apple TV’ye İçerik Gönderme
+- **Bulgu:** Apple TV IPTV kullanıcıları, uzaktan yazma/arama güçlüğünü azaltmak için iPhone’dan film, dizi veya canlı kanal gönderip TV’de açma özelliğini paylaşıyor.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv_yes_iptv/
+
+### 72. [PENDING] Profiller Arasında İzleme Geçmişini ve Favorileri Ayırma
+- **Bulgu:** UHF App Store değerlendirmesi aile üyeleri için kullanıcı profili talep ediyor. Mevcut profil avatarı/giriş akışı, izleme geçmişinin ve favorilerin profil bazlı olması gereksinimini çözmüyor.
+- **Kaynak:** https://apps.apple.com/ie/app/uhf-love-your-iptv/id6443751726?platform=iphone&see-all=reviews
+
+### 73. [PENDING] İndirme Depolama Alanı Özeti ve Toplu Temizlik
+- **Bulgu:** IPTVX’in iOS Downloads ekranı aktif ve tamamlanmış indirmeleri tek yerde topluyor; mevcut PureIPTV genel cache temizliği indirilmiş dosya başına depolama/temizlik görünürlüğü sunmuyor.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://iptvx.app/features/index.html
+
+### 74. [PENDING] Yedek Geri Yüklemede Son İyi EPG’yi Koruma
+- **Bulgu:** TiviMate kullanıcıları yedek geri yüklenirken var olan EPG verisinin silinmemesini veya koruma seçeneğini talep ediyor; büyük rehberlerde yeniden indirme açılışı yavaşlatabiliyor.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1qgm07m/if_tivimate_adds_one_feature_in_2026_what_should/
+
+### 75. [PENDING] İsteğe Bağlı Tema ve Görsel Paketleri
+- **Bulgu:** IPTVX’in tema/add-on kataloğu görünüm kişiselleştirmesini ikon, arka plan ve skin seviyesine taşıyor; PureIPTV profil avatarı ve vurgu rengi seçenekleri bu paketlenmiş sunumları kapsamıyor.
+- **Kaynak:** https://iptvx.app/addons/index.html · https://iptvx.app/features/index.html
+
+### 76. [PENDING] Son Kullanılan Playlist’i Açma Tercihi
+- **Bulgu:** IPTVX sürüm notlarında uygulama açılışında son playlist’i otomatik açma davranışı seçenek olarak yer alıyor; PureIPTV aktif playlist’i zaten saklıyor ama giriş akışında kullanıcı seçimiyle otomatik yükleme tercihi ayrıca incelenmeli.
+- **Kaynak:** https://apps.apple.com/ly/app/iptvx/id1451470024?platform=tv
+
+### 77. [PENDING] Canlı Kanal Geçmişinde Sabitlenmiş Favoriler
+- **Bulgu:** TiviMate kullanıcıları sık izlenen favorileri kanal geçmişinin başına sabitlemeyi istiyor; mevcut son kanal dock’u ve sıralama motoru sabit kullanıcı seçimini ayrı bir kolay erişim alanı olarak sunup sunmadığı yönünden incelenmeli.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1qgm07m/if_tivimate_adds_one_feature_in_2026_what_should/
 

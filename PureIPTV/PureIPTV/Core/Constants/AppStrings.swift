@@ -443,6 +443,8 @@ public enum AppStrings {
         public static let all = "Tümü".localized
         public static let filter4K = "4K / UHD 🌟".localized
         public static let filterEPG = "EPG Programları 🕒".localized
+        public static let people = "Kişiler".localized
+        public static let programs = "Programlar".localized
         public static let allPlaylists = "Tüm Çalma Listeleri (Global 🌐)".localized
         public static let allPlaylistsShort = "Tümü (Global)".localized
         public static let liveProgramMatch = "Canlı Program:".localized

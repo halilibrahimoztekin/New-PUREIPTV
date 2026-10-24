@@ -81,6 +81,7 @@ public struct IPTVClient {
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
     public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
+    public var searchCachedEPGPrograms: @Sendable (_ config: PlaylistConfig, _ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _, _ in [] }
     public var clearEPGCache: @Sendable (_ config: PlaylistConfig) async -> Void = { _ in }
 }
 
@@ -556,6 +557,79 @@ extension IPTVClient: DependencyKey {
 
                 return result
             },
+            searchCachedEPGPrograms: { config, query, channels, limit in
+                guard config.type == .m3u, limit > 0 else { return [] }
+                let cacheKey = m3uCacheKey(config)
+                guard let xmlData = await m3uCache.getXmltvData(for: cacheKey) else { return [] }
+                let terms = query
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+                    .split(whereSeparator: \.isWhitespace)
+                    .map(String.init)
+                guard !terms.isEmpty else { return [] }
+
+                var channelByEPGID: [String: MediaModels.Item] = [:]
+                var channelByNormalizedName: [String: MediaModels.Item] = [:]
+                for channel in channels where channel.type == .live {
+                    if let epgID = channel.epgChannelID, !epgID.isEmpty {
+                        channelByEPGID[epgID] = channel
+                    }
+                    channelByEPGID[channel.id] = channel
+                    let name = channel.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+                    channelByNormalizedName[name] = channel
+                }
+
+                var results: [CachedEPGProgramMatch] = []
+                let now = Date()
+                var scannedProgrammes = 0
+                for epgID in xmlData.programmes.keys.sorted() {
+                    guard !Task.isCancelled, scannedProgrammes < 50000 else { break }
+                    let programmes = xmlData.programmes[epgID] ?? []
+                    let channel = channelByEPGID[epgID] ?? xmlData.channels[epgID].flatMap { epgChannel in
+                        channelByNormalizedName[epgChannel.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))]
+                    }
+                    guard let channel else { continue }
+                    for programme in programmes {
+                        scannedProgrammes += 1
+                        if scannedProgrammes.isMultiple(of: 64), Task.isCancelled {
+                            return []
+                        }
+                        if scannedProgrammes > 50000 {
+                            break
+                        }
+                        let searchable = (programme.title + " " + programme.description)
+                            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+                        guard terms.allSatisfy({ searchable.localizedStandardContains($0) }) else { continue }
+                        results.append(CachedEPGProgramMatch(
+                            program: EPGProgram(
+                                id: "m3u-\(epgID)-\(Int(programme.start.timeIntervalSince1970))-\(Int(programme.end.timeIntervalSince1970))",
+                                title: programme.title,
+                                description: programme.description,
+                                startTime: programme.start,
+                                endTime: programme.end,
+                                isPlayingNow: programme.start <= now && programme.end >= now
+                            ),
+                            channel: channel
+                        ))
+                        if results.count >= max(limit * 4, limit) {
+                            break
+                        }
+                    }
+                    if results.count >= max(limit * 4, limit) {
+                        break
+                    }
+                }
+                return Array(results.sorted { lhs, rhs in
+                    let lhsLive = lhs.program.startTime <= now && lhs.program.endTime >= now
+                    let rhsLive = rhs.program.startTime <= now && rhs.program.endTime >= now
+                    if lhsLive != rhsLive {
+                        return lhsLive
+                    }
+                    if lhs.program.startTime != rhs.program.startTime {
+                        return lhs.program.startTime < rhs.program.startTime
+                    }
+                    return lhs.program.title.localizedStandardCompare(rhs.program.title) == .orderedAscending
+                }.prefix(limit))
+            },
             clearEPGCache: { config in
                 await m3uCache.clearXmltvData(for: m3uCacheKey(config))
             }
@@ -573,8 +647,22 @@ extension IPTVClient: DependencyKey {
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
         fetchShortEPG: { _, _, _ in [] },
+        searchCachedEPGPrograms: { _, _, _, _ in [] },
         clearEPGCache: { _ in }
     )
+}
+
+public struct CachedEPGProgramMatch: Equatable, Sendable, Identifiable {
+    public let program: EPGProgram
+    public let channel: MediaModels.Item
+    public var id: String {
+        program.id + "|" + channel.id
+    }
+
+    public init(program: EPGProgram, channel: MediaModels.Item) {
+        self.program = program
+        self.channel = channel
+    }
 }
 
 public extension DependencyValues {

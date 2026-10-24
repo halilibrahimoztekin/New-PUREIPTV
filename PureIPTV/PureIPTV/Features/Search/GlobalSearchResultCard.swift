@@ -342,3 +342,91 @@ public struct GlobalSearchResultCard: View {
         return isSelected ? 2 : 1
     }
 }
+
+public struct ProgramSearchResultCard: View {
+    let program: EPGProgram
+    let channel: MediaModels.Item
+    let playlistName: String?
+    let action: () -> Void
+
+    public init(program: EPGProgram, channel: MediaModels.Item, playlistName: String?, action: @escaping () -> Void) {
+        self.program = program
+        self.channel = channel
+        self.playlistName = playlistName
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: program.isPlayingNow ? "dot.radiowaves.left.and.right" : "clock")
+                    Text(program.isPlayingNow ? AppStrings.Player.nowPlaying : program.startTime.formatted(date: .omitted, time: .shortened))
+                    Spacer(minLength: 0)
+                    if let playlistName {
+                        Text(playlistName).lineLimit(1)
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(program.isPlayingNow ? Color(hex: "#FF453A") : Color(hex: "#64D2FF"))
+
+                Text(program.title)
+                    .font(titleFont)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Label(channel.title, systemImage: "tv.fill")
+                    .font(channelFont)
+                    .foregroundStyle(Color(hex: "#C0C6D6"))
+                    .lineLimit(1)
+
+                if !program.description.isEmpty {
+                    Text(program.description)
+                        .font(.caption)
+                        .foregroundStyle(Color(hex: "#9B9BA5"))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: cardMinimumHeight, alignment: .leading)
+            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            }
+        }
+        #if os(tvOS)
+        .buttonStyle(.card)
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityLabel("\(program.title), \(channel.title), \(program.startTime.formatted(date: .omitted, time: .shortened))")
+        .accessibilityHint(AppStrings.Common.watchNow)
+    }
+
+    private var titleFont: Font {
+        #if os(tvOS)
+            .title3.weight(.semibold)
+        #else
+            .headline.weight(.semibold)
+        #endif
+    }
+
+    private var channelFont: Font {
+        #if os(tvOS)
+            .body
+        #else
+            .subheadline
+        #endif
+    }
+
+    private var cardMinimumHeight: CGFloat {
+        #if os(tvOS)
+            170
+        #else
+            118
+        #endif
+    }
+}
