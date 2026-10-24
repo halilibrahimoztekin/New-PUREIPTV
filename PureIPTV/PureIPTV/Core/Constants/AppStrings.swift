@@ -412,6 +412,8 @@ public enum AppStrings {
         public static let vodSorting = "Filmler (VOD)".localized
         public static let playerSettings = "Oynatıcı (Player) Ayarları".localized
         public static let autoPlayNextEpisode = "Sonraki Bölüme Otomatik Geç".localized
+        public static let autoSelectFirstAlternativeSource = "İlk Alternatif Kaynağı Otomatik Oynat".localized
+        public static let autoSelectFirstAlternativeSourceDescription = "Alternatif kaynaklar seçildiğinde listeyi açmadan playlist sırasındaki ilk eşleşmeyi oynatır.".localized
         public static let startMuted = "Kanalları Sessiz Başlat".localized
         public static let hardwareAcceleration = "Donanım Hızlandırma".localized
         public static let downloadConcurrencyLimit = "Eşzamanlı İndirme Sayısı".localized

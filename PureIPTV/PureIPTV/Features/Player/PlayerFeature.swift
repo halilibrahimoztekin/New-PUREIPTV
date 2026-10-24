@@ -222,6 +222,7 @@ public struct PlayerFeature {
 
         /// Smart Channel Name Cleaner (Madde #16)
         public var isChannelNameCleaningEnabled: Bool = true
+        public var autoSelectFirstAlternativeSource: Bool = false
 
         /// Trakt.tv Watchlist & Scrobble Sync Engine (Madde #17)
         public var isTraktScrobbleStarted: Bool = false
@@ -745,6 +746,7 @@ public struct PlayerFeature {
         case .onAppear:
             state.isMinimized = false
             state.isUserPaused = false
+            state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
             state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
             state.isPiPSupported = pipClient.isPiPSupported()

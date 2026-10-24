@@ -199,6 +199,14 @@ public struct SettingsView: View {
                     set: { store.send(.setAutoPlayNextEpisode($0)) }
                 ))
 
+                Toggle(AppStrings.Settings.autoSelectFirstAlternativeSource, isOn: Binding(
+                    get: { store.autoSelectFirstAlternativeSource },
+                    set: { store.send(.setAutoSelectFirstAlternativeSource($0)) }
+                ))
+                Text(AppStrings.Settings.autoSelectFirstAlternativeSourceDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle(AppStrings.Settings.startMuted, isOn: Binding(
                     get: { store.startMuted },
                     set: { store.send(.setStartMuted($0)) }

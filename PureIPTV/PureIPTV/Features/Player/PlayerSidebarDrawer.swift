@@ -387,6 +387,13 @@ public struct PlayerSidebarDrawer: View {
             #if !os(tvOS)
                 HapticManager.shared.trigger(.light)
             #endif
+            if filter == .alternatives,
+               store.autoSelectFirstAlternativeSource,
+               let firstSource = firstAlternativeSource
+            {
+                store.send(.selectChannel(firstSource))
+                return
+            }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
                 selectedFilter = filter
             }
@@ -864,6 +871,19 @@ public struct PlayerSidebarDrawer: View {
             )
         } else {
             return FuzzySearchEngine.search(baseList, titleKeyPath: \.title, query: trimmed, limit: 120)
+        }
+    }
+
+    /// Returns the first eligible match in provider playlist order. Availability
+    /// is intentionally determined by normal playback and retry behavior; no
+    /// network probe is issued before selecting this candidate.
+    private var firstAlternativeSource: PlayerFeature.PlayableItem? {
+        (store.playlist ?? []).first { candidate in
+            candidate.isLive
+                && candidate.id != store.item.id
+                && !store.hiddenChannelIDs.contains(candidate.id)
+                && !store.blacklistedCategoryIDs.contains(candidate.categoryID ?? "")
+                && PlayerFeature.areAlternativeSources(candidate.title, store.item.title)
         }
     }
 }

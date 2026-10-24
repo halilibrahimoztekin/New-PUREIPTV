@@ -46,6 +46,9 @@ public struct SettingsClient: Sendable {
     public var autoPlayNextEpisode: @Sendable () -> Bool = { true }
     public var setAutoPlayNextEpisode: @Sendable (Bool) -> Void = { _ in }
 
+    public var autoSelectFirstAlternativeSource: @Sendable () -> Bool = { false }
+    public var setAutoSelectFirstAlternativeSource: @Sendable (Bool) -> Void = { _ in }
+
     public var startMuted: @Sendable () -> Bool = { false }
     public var setStartMuted: @Sendable (Bool) -> Void = { _ in }
 
@@ -122,6 +125,7 @@ extension SettingsClient: DependencyKey {
         let vodSortKey = "com.pureiptv.vodSortMethod"
         let seriesSortKey = "com.pureiptv.seriesSortMethod"
         let autoPlayKey = "com.pureiptv.autoPlayNextEpisode"
+        let autoSelectAlternativeSourceKey = "com.pureiptv.autoSelectFirstAlternativeSource"
         let startMutedKey = "com.pureiptv.startMuted"
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
@@ -259,6 +263,8 @@ extension SettingsClient: DependencyKey {
             },
             autoPlayNextEpisode: { defaults.bool(forKey: autoPlayKey) },
             setAutoPlayNextEpisode: { defaults.set($0, forKey: autoPlayKey) },
+            autoSelectFirstAlternativeSource: { defaults.bool(forKey: autoSelectAlternativeSourceKey) },
+            setAutoSelectFirstAlternativeSource: { defaults.set($0, forKey: autoSelectAlternativeSourceKey) },
             startMuted: { defaults.bool(forKey: startMutedKey) },
             setStartMuted: { defaults.set($0, forKey: startMutedKey) },
             hardwareAcceleration: { defaults.bool(forKey: hwAccelKey) },

@@ -44,6 +44,7 @@ public struct SettingsFeature {
 
         // New Settings
         public var autoPlayNextEpisode: Bool = true
+        public var autoSelectFirstAlternativeSource = false
         public var startMuted: Bool = false
         public var hardwareAcceleration: Bool = true
         public var isOLEDDimmingEnabled: Bool = true
@@ -149,6 +150,7 @@ public struct SettingsFeature {
 
         // New Setting Actions
         case setAutoPlayNextEpisode(Bool)
+        case setAutoSelectFirstAlternativeSource(Bool)
         case setStartMuted(Bool)
         case setHardwareAcceleration(Bool)
         case setOLEDDimmingEnabled(Bool)
@@ -257,6 +259,7 @@ public struct SettingsFeature {
                 state.seriesSortMethod = settingsClient.getSeriesSortMethod()
 
                 state.autoPlayNextEpisode = settingsClient.autoPlayNextEpisode()
+                state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
                 state.startMuted = settingsClient.startMuted()
                 state.hardwareAcceleration = settingsClient.hardwareAcceleration()
                 state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
@@ -398,6 +401,10 @@ public struct SettingsFeature {
             case let .setAutoPlayNextEpisode(val):
                 state.autoPlayNextEpisode = val
                 return .run { _ in settingsClient.setAutoPlayNextEpisode(val) }
+
+            case let .setAutoSelectFirstAlternativeSource(val):
+                state.autoSelectFirstAlternativeSource = val
+                return .run { _ in settingsClient.setAutoSelectFirstAlternativeSource(val) }
 
             case let .setDownloadConcurrencyLimit(value):
                 let limit = min(4, max(1, value))
