@@ -260,6 +260,10 @@ public struct PlayerFeature {
         /// Quick Recent Channels Carousel HUD (Quick-Zap Dock)
         public var isRecentChannelsHUDVisible: Bool = false
         public var recentChannels: [PlayableItem] = []
+        public var pinnedRecentChannelIDs: [String] = []
+        public var pinnableRecentChannelIDs: Set<String> = []
+        public var recentChannelsRequestID: UUID?
+        public var recentChannelPinRequestID: UUID?
 
         /// Smart Channel Sorting & Watch Counts (Madde #12)
         public var channelSortOption: ChannelSortOption = .defaultOrder
@@ -575,8 +579,21 @@ public struct PlayerFeature {
         case toggleRecentChannelsHUD
         case setRecentChannelsHUDVisible(Bool)
         case selectRecentChannel(PlayableItem)
+        case togglePinnedRecentChannel(String)
+        case recentChannelPinMutationCompleted(
+            requestID: UUID,
+            playlistID: UUID,
+            profileScope: ProfileContextSnapshot
+        )
         case loadRecentChannels
-        case recentChannelsLoaded([PlayableItem])
+        case recentChannelsLoaded(
+            items: [PlayableItem],
+            pinnedIDs: [String],
+            pinnableIDs: Set<String>,
+            requestID: UUID,
+            playlistID: UUID?,
+            profileScope: ProfileContextSnapshot
+        )
 
         // Trakt.tv Scrobbler (Madde #17)
         case traktScrobbleStart
@@ -1723,31 +1740,120 @@ public struct PlayerFeature {
             state.isRecentChannelsHUDVisible = false
             return .send(.selectChannel(targetItem))
 
-        case .loadRecentChannels:
-            return .run { [playlist = state.playlist, config = state.item.config] send in
-                let recentDTOs = await recentChannelsClient.fetchRecentChannels()
-                let items: [PlayableItem] = recentDTOs.compactMap { dto in
-                    if let match = playlist?.first(where: { $0.id == dto.id }) {
-                        return match
-                    }
-                    return PlayableItem(
-                        id: dto.id,
-                        title: dto.title,
-                        seriesTitle: dto.seriesTitle,
-                        streamURL: dto.streamURL,
-                        coverURL: dto.coverURL,
-                        isLive: true,
-                        config: config,
-                        epgChannelID: dto.epgChannelID,
-                        tvArchive: dto.tvArchive,
-                        categoryID: dto.categoryID
-                    )
-                }
-                await send(.recentChannelsLoaded(items))
+        case let .togglePinnedRecentChannel(channelID):
+            let hiddenIDs = state.hiddenChannelIDs
+            let blacklistedCategoryIDs = state.blacklistedCategoryIDs
+            guard
+                let playlistID = state.item.config?.playlistID,
+                state.playlist?.contains(where: {
+                    $0.id == channelID
+                        && $0.isLive
+                        && !hiddenIDs.contains($0.id)
+                        && !($0.categoryID.map(blacklistedCategoryIDs.contains) ?? false)
+                }) == true
+            else { return .none }
+            let profileScope = profileContextClient.snapshot()
+            let requestID = UUID()
+            state.recentChannelPinRequestID = requestID
+            state.recentChannelsRequestID = nil
+            return .run { send in
+                _ = await recentChannelsClient.togglePinnedChannel(
+                    channelID,
+                    profileScope.profileID,
+                    playlistID
+                )
+                guard profileContextClient.snapshot() == profileScope else { return }
+                await send(.recentChannelPinMutationCompleted(
+                    requestID: requestID,
+                    playlistID: playlistID,
+                    profileScope: profileScope
+                ))
             }
 
-        case let .recentChannelsLoaded(items):
+        case let .recentChannelPinMutationCompleted(requestID, playlistID, profileScope):
+            guard
+                state.recentChannelPinRequestID == requestID,
+                profileContextClient.snapshot() == profileScope,
+                state.item.config?.playlistID == playlistID
+            else { return .none }
+            state.recentChannelPinRequestID = nil
+            return .send(.loadRecentChannels)
+
+        case .loadRecentChannels:
+            let requestID = UUID()
+            state.recentChannelsRequestID = requestID
+            let playlistID = state.item.config?.playlistID
+            let profileScope = profileContextClient.snapshot()
+            let hiddenIDs = state.hiddenChannelIDs
+            let blacklistedCategoryIDs = state.blacklistedCategoryIDs
+            return .run { [playlist = state.playlist, config = state.item.config] send in
+                let recentDTOs = await recentChannelsClient.fetchRecentChannels()
+                let pinnedIDs: [String] = if let playlistID {
+                    await recentChannelsClient.fetchPinnedChannelIDs(profileScope.profileID, playlistID)
+                } else {
+                    []
+                }
+                let pinnedItems: [PlayableItem] = pinnedIDs.compactMap { id in
+                    playlist?.first(where: {
+                        $0.id == id
+                            && $0.isLive
+                            && !hiddenIDs.contains($0.id)
+                            && !($0.categoryID.map(blacklistedCategoryIDs.contains) ?? false)
+                    })
+                }
+                let recentItems: [PlayableItem] = recentDTOs.compactMap { dto in
+                    let item: PlayableItem = if let match = playlist?.first(where: { $0.id == dto.id }) {
+                        match
+                    } else {
+                        PlayableItem(
+                            id: dto.id,
+                            title: dto.title,
+                            seriesTitle: dto.seriesTitle,
+                            streamURL: dto.streamURL,
+                            coverURL: dto.coverURL,
+                            isLive: true,
+                            config: config,
+                            epgChannelID: dto.epgChannelID,
+                            tvArchive: dto.tvArchive,
+                            categoryID: dto.categoryID
+                        )
+                    }
+                    guard
+                        !hiddenIDs.contains(item.id),
+                        !(item.categoryID.map(blacklistedCategoryIDs.contains) ?? false)
+                    else { return nil }
+                    return item
+                }
+                let pinnedSet = Set(pinnedItems.map(\.id))
+                let items = pinnedItems + recentItems.filter { !pinnedSet.contains($0.id) }
+                let eligibleIDs: Set<String> = Set((playlist ?? []).compactMap { item in
+                    guard
+                        item.isLive,
+                        !hiddenIDs.contains(item.id),
+                        !(item.categoryID.map(blacklistedCategoryIDs.contains) ?? false)
+                    else { return nil }
+                    return item.id
+                })
+                guard profileContextClient.snapshot() == profileScope else { return }
+                await send(.recentChannelsLoaded(
+                    items: items,
+                    pinnedIDs: pinnedItems.map(\.id),
+                    pinnableIDs: eligibleIDs,
+                    requestID: requestID,
+                    playlistID: playlistID,
+                    profileScope: profileScope
+                ))
+            }
+
+        case let .recentChannelsLoaded(items, pinnedIDs, pinnableIDs, requestID, playlistID, profileScope):
+            guard
+                state.recentChannelsRequestID == requestID,
+                profileContextClient.snapshot() == profileScope,
+                state.item.config?.playlistID == playlistID
+            else { return .none }
             state.recentChannels = items
+            state.pinnedRecentChannelIDs = pinnedIDs
+            state.pinnableRecentChannelIDs = pinnableIDs
             return .none
 
         case let .selectChannel(newItem):

@@ -1,12 +1,39 @@
 import ComposableArchitecture
 import Foundation
 
+private actor PinnedRecentChannelStore {
+    static let shared = PinnedRecentChannelStore()
+    private let defaults = UserDefaults.standard
+
+    func fetch(profileID: UUID?, playlistID: UUID) -> [String] {
+        defaults.stringArray(forKey: storageKey(profileID: profileID, playlistID: playlistID)) ?? []
+    }
+
+    func toggle(id: String, profileID: UUID?, playlistID: UUID) -> [String] {
+        let key = storageKey(profileID: profileID, playlistID: playlistID)
+        var ids = defaults.stringArray(forKey: key) ?? []
+        if let index = ids.firstIndex(of: id) {
+            ids.remove(at: index)
+        } else {
+            ids.append(id)
+        }
+        defaults.set(ids, forKey: key)
+        return ids
+    }
+
+    private func storageKey(profileID: UUID?, playlistID: UUID) -> String {
+        "PureIPTV.PinnedRecentChannels.v1.\(profileID?.uuidString ?? "default").\(playlistID.uuidString)"
+    }
+}
+
 @DependencyClient
 public struct RecentChannelsClient: Sendable {
     public var fetchRecentChannels: @Sendable () async -> [RecentChannelDTO] = { [] }
     public var recordChannel: @Sendable (_ item: RecentChannelDTO) async -> Void
     public var clearRecentChannels: @Sendable () async -> Void
     public var fetchWatchCounts: @Sendable () async -> [String: Int] = { [:] }
+    public var fetchPinnedChannelIDs: @Sendable (_ profileID: UUID?, _ playlistID: UUID) async -> [String] = { _, _ in [] }
+    public var togglePinnedChannel: @Sendable (_ id: String, _ profileID: UUID?, _ playlistID: UUID) async -> [String] = { _, _, _ in [] }
 }
 
 extension RecentChannelsClient: DependencyKey {
@@ -55,6 +82,12 @@ extension RecentChannelsClient: DependencyKey {
             },
             fetchWatchCounts: {
                 (defaults.dictionary(forKey: watchCountsKey) as? [String: Int]) ?? [:]
+            },
+            fetchPinnedChannelIDs: { profileID, playlistID in
+                await PinnedRecentChannelStore.shared.fetch(profileID: profileID, playlistID: playlistID)
+            },
+            togglePinnedChannel: { id, profileID, playlistID in
+                await PinnedRecentChannelStore.shared.toggle(id: id, profileID: profileID, playlistID: playlistID)
             }
         )
     }()

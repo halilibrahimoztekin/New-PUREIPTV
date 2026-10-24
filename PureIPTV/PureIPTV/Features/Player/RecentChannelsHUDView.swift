@@ -172,6 +172,7 @@ public struct RecentChannelsHUDView: View {
     private func recentChannelCard(channel: PlayerFeature.PlayableItem) -> some View {
         let isCurrent = channel.id == store.item.id
         let isFocused = focusedChannelID == channel.id
+        let isPinned = store.pinnedRecentChannelIDs.contains(channel.id)
 
         Button {
             #if !os(tvOS)
@@ -207,6 +208,14 @@ public struct RecentChannelsHUDView: View {
 
                     // Top Badges Overlay
                     HStack(spacing: 4) {
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.orange.opacity(0.9), in: Capsule())
+                        }
                         if isCurrent {
                             HStack(spacing: 3) {
                                 Circle()
@@ -306,8 +315,21 @@ public struct RecentChannelsHUDView: View {
             #endif
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if store.pinnableRecentChannelIDs.contains(channel.id) {
+                Button {
+                    cancelDismissTimer()
+                    store.send(.togglePinnedRecentChannel(channel.id))
+                } label: {
+                    Label(
+                        isPinned ? AppStrings.LiveTV.unpinRecentChannel : AppStrings.LiveTV.pinRecentChannel,
+                        systemImage: isPinned ? "pin.slash" : "pin"
+                    )
+                }
+            }
+        }
         #if os(tvOS)
-            .focused($focusedChannelID, equals: channel.id)
+        .focused($focusedChannelID, equals: channel.id)
         #endif
     }
 
