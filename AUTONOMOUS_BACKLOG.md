@@ -311,7 +311,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 hedefi ve tvOS Release Xcode build’leri exit code 0 ile tamamlandı; `git diff --check` ve `Localizable.xcstrings` JSON doğrulaması başarılı. Kullanıcı talimatı gereği yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca Xcode build’leri alındı.
 
-### 61. [IN_PROGRESS] En Çok İzlenen Oyuncular Koleksiyonu
+### 61. [DONE] En Çok İzlenen Oyuncular Koleksiyonu
 - **Bulgu:** IPTVX For You, oyuncu portrelerini izleme davranışına göre sıralı bir giriş noktası olarak kullanıyor; geçmiş yoksa popüler aktörlerle başlıyor.
 - **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
 - **Canlı keşif (24 Ekim 2026):** IPTVX 25 resmi newsroom actor discovery’yi geçmişte görülen oyuncu kredilerinden ayrı bir giriş noktası olarak açıklıyor: izleme geçmişi varsa oyuncu sıklığı sıralanıyor; yoksa popüler oyuncular başlangıç sağlıyor. Actor seçimi filmografiye açılıyor; sonuçlar mevcut playlist erişimi ve metadata ile sınırlı.
@@ -327,9 +327,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 bağlı cihaz hedefi Release build ve generic tvOS Release build exit code 0 ile tamamlandı; iki ürün de üretildi. Xcode mevcut Swift 6 concurrency uyarıları yazdı. `git diff --check` ve string catalog JSON / 21-locale doğrulaması başarılı. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone ve tvOS build’leri alındı.
 
-### 62. [PENDING] İzlenen Diziler İçin Yeni Bölüm Rafı
+### 62. [DONE] İzlenen Diziler İçin Yeni Bölüm Rafı
 - **Bulgu:** IPTVX, sağlayıcıda yeni bölüm bildirilen ve kullanıcı tarafından daha önce izlenmiş dizileri genel katalog güncellemesinden ayrı gösteriyor.
-- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/
+- **Canlı keşif (24 Ekim 2026):** IPTVX 25 newsroom “New episodes for you” rafını daha önce izlenmiş dizilerle ve provider’ın yeni bölüm bildirmesiyle sınırlıyor; genel katalog güncellemesinden ayırıyor. Reddit’te Apple TV kullanıcıları izleme geçmişi güncellenmediği için yeni bölüm/continue watching raflarının kaybolduğundan şikayet ediyor.
+- **Kaynaklar:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://www.reddit.com/r/appletv/comments/1umz3it/apple_tv_app_not_updating_episode_history/
+- **Kod taraması:** `WatchHistoryItem` playlistID, seriesID, episodeID ve lastWatchedAt sağlıyor; XtreamSeriesInfoDTO bölüm `added` zamanını içeriyor, ancak presentation modeline aktarılmıyordu. Dashboard’da izleme geçmişine dayalı yeni bölüm rafı yoktu. M3U flat content’te bölüm metadata’sı yok.
+- **Kapsam:** Yalnızca Xtream playlist’inde, aktif playlist geçmişinde episode’ı bulunan ve provider `added` zamanı son kayıtlı izleme zamanından sonra olan dizileri adult filtresiyle göster. En fazla 8 son izlenmiş dizi detayı sorgula; yeni bölüm yoksa rafı gizle. Kart Series Detail’e gider; iOS ve tvOS’ta bölüm bilgisi görünür.
+- **Uygulama:** Bölüm `added` tarihi presentation modeline taşındı. Yeni keşif motoru playlist’e bağlı bölüm geçmişini gruplayıp izlenmiş bölümleri dışlıyor, son izlenen 8 diziyi Xtream metadata’sıyla karşılaştırıyor ve en yeni bölüm/yenilerin sayısını Dashboard rafı için üretiyor. Watch history değişince ve katalog yenilenince işlem iptal edilebilir şekilde başlıyor; sonuçlar playlist, adult filtresi ve request UUID ile doğrulanıyor. iOS/tvOS kartları var olan dizi detay rotasını kullanıyor; 21 locale için başlık ve bölüm etiketi eklendi.
+- **PR Reviewer:** `[APPROVED]`. Bilinen sınırlama: sağlayıcı çağrıları seri olduğu için raf en fazla 8 kısa detay isteği tamamlanana kadar gecikebilir; diğer Dashboard rafları bağımsız yüklenir. `added` timestamp’i sağlayıcının metadata kalitesine bağlıdır. Son izleme zamanı bölüm tamamlanma zamanı değildir.
+- **Doğrulama:** iPhone 17 bağlı cihaz hedefi Release build ve generic tvOS Release build exit code 0 ile tamamlandı; iPhoneOS/tvOS `.app` ürünleri üretildi. Xcode mevcut Swift 6 concurrency uyarıları ve “failed with exit code 0” biçiminde bir script-phase mesajı yazdı, ancak iki build komutu da exit code 0 döndürdü. `git diff --check` ve yeni String Catalog girdilerinin JSON / 21-locale doğrulaması başarılı. Kullanıcı talimatı gereği yalnızca build alındı; test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone ve tvOS build’leri alındı.
 
 ### 63. [PENDING] Puan ve Oy Sayısından Ayrı Film Keşfi
 - **Bulgu:** IPTVX “Most Rated” ve “Highest Rated” koleksiyonlarını ayrı sinyaller olarak sunuyor; oy hacmiyle puan ortalamasını karıştırmıyor.

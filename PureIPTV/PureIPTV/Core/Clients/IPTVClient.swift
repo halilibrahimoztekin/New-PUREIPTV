@@ -358,7 +358,10 @@ extension IPTVClient: DependencyKey {
                                 coverURL: ep.info?.movieImage.flatMap { URL(string: $0) } ?? nil,
                                 season: seasonNum,
                                 duration: ep.info?.duration,
-                                plot: ep.info?.plot
+                                plot: ep.info?.plot,
+                                addedDate: ep.added.flatMap { TimeInterval($0) }.map {
+                                    Date(timeIntervalSince1970: $0)
+                                }
                             ))
                         }
                     }

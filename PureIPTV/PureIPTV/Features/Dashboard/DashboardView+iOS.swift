@@ -149,6 +149,9 @@
                     }
                 }
             case .recommendations:
+                if !store.newEpisodeSeries.isEmpty {
+                    newEpisodeDiscoverySection
+                }
                 if !store.mostWatchedActors.isEmpty {
                     actorDiscoverySection
                 }
@@ -296,6 +299,37 @@
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(Text(actor.name))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
+        private var newEpisodeDiscoverySection: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(AppStrings.Dashboard.newEpisodesForYou)
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 16) {
+                        ForEach(store.newEpisodeSeries) { entry in
+                            VStack(alignment: .leading, spacing: 6) {
+                                SeriesCardView(series: entry.series, isSelected: false) {
+                                    store.send(.seriesSelected(entry.series))
+                                }
+                                .frame(width: 140)
+                                Text(String(format: AppStrings.Dashboard.newEpisodeCardSummary,
+                                            entry.latestSeason,
+                                            entry.latestEpisodeNumber,
+                                            entry.newEpisodeCount))
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.76))
+                                    .lineLimit(1)
+                                    .frame(width: 140, alignment: .leading)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)

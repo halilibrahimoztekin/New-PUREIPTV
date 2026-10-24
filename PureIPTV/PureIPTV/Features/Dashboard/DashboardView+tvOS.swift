@@ -165,6 +165,26 @@
                     }
                 }
             case .recommendations:
+                if !store.newEpisodeSeries.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.newEpisodesForYou) {
+                        ForEach(store.newEpisodeSeries) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVSeriesCard(series: entry.series, isSelected: false) {
+                                    store.send(.seriesSelected(entry.series))
+                                }
+                                .frame(width: 220)
+                                Text(String(format: AppStrings.Dashboard.newEpisodeCardSummary,
+                                            entry.latestSeason,
+                                            entry.latestEpisodeNumber,
+                                            entry.newEpisodeCount))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.76))
+                                    .lineLimit(1)
+                                    .frame(width: 220, alignment: .leading)
+                            }
+                        }
+                    }
+                }
                 if !store.mostWatchedActors.isEmpty {
                     TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
                         ? AppStrings.Dashboard.popularActors
