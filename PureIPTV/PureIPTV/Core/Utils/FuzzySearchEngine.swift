@@ -58,39 +58,50 @@ public nonisolated enum FuzzySearchEngine: Sendable {
             if let wordIndex = targetTokens.firstIndex(where: { $0.hasPrefix(single) }) {
                 return 600 - (wordIndex * 20)
             }
-            if target.contains(single) {
-                return 250
-            }
             return nil
         }
 
         // 4. Multi-token scoring (e.g. "bein 1" matches "beIN SPORTS 1 HD")
         var totalScore = 0
-        var matchedTokensCount = 0
+        var matchedTokenIndexes: Set<Int> = []
 
         for qToken in queryTokens {
             var bestTokenScore = 0
+            var bestTokenIndex: Int?
             for (index, tToken) in targetTokens.enumerated() {
+                guard !matchedTokenIndexes.contains(index) else { continue }
                 if tToken == qToken {
                     // Exact word match
-                    bestTokenScore = max(bestTokenScore, 150 - min(index * 10, 50))
+                    let candidateScore = 150 - min(index * 10, 50)
+                    if candidateScore > bestTokenScore {
+                        bestTokenScore = candidateScore
+                        bestTokenIndex = index
+                    }
                 } else if tToken.hasPrefix(qToken) {
                     // Word prefix match
-                    bestTokenScore = max(bestTokenScore, 120 - min(index * 10, 50))
+                    let candidateScore = 120 - min(index * 10, 50)
+                    if candidateScore > bestTokenScore {
+                        bestTokenScore = candidateScore
+                        bestTokenIndex = index
+                    }
                 } else if tToken.contains(qToken) {
                     // Substring in word
-                    bestTokenScore = max(bestTokenScore, 60 - min(index * 5, 30))
+                    let candidateScore = 60 - min(index * 5, 30)
+                    if candidateScore > bestTokenScore {
+                        bestTokenScore = candidateScore
+                        bestTokenIndex = index
+                    }
                 }
             }
 
-            if bestTokenScore > 0 {
+            if let bestTokenIndex, bestTokenScore > 0 {
                 totalScore += bestTokenScore
-                matchedTokensCount += 1
+                matchedTokenIndexes.insert(bestTokenIndex)
             }
         }
 
         // If all query tokens matched, award a strong multi-match bonus
-        if matchedTokensCount == queryTokens.count {
+        if matchedTokenIndexes.count == queryTokens.count {
             // Contiguous substring sequence bonus
             if target.contains(query) {
                 totalScore += 200
@@ -105,17 +116,16 @@ public nonisolated enum FuzzySearchEngine: Sendable {
 
         // 6. tvOS Voice Dictation / Levenshtein Distance Match (Madde #62)
         // Helps catch phonetic dictation errors (e.g. "bein" vs "beyin", "spor" vs "spo")
-        if query.count >= 3 {
+        if (3 ... 32).contains(query.count) {
             let maxAllowedDistance = query.count <= 4 ? 1 : 2
-            let dist = levenshteinDistance(between: query, and: target)
-            if dist <= maxAllowedDistance {
-                return 180 - (dist * 40)
-            }
-
-            // Word-level Levenshtein check
+            // Compare bounded query-sized tokens only. Running full edit distance
+            // against an entire channel title needlessly scales with title length.
             for tToken in targetTokens where abs(tToken.count - query.count) <= maxAllowedDistance {
-                let tokenDist = levenshteinDistance(between: query, and: tToken)
-                if tokenDist <= maxAllowedDistance {
+                if let tokenDist = boundedLevenshteinDistance(
+                    between: query,
+                    and: tToken,
+                    maximumDistance: maxAllowedDistance
+                ) {
                     return 160 - (tokenDist * 30)
                 }
             }
@@ -150,6 +160,50 @@ public nonisolated enum FuzzySearchEngine: Sendable {
         return prev[n]
     }
 
+    private static func boundedLevenshteinDistance(
+        between s1: String,
+        and s2: String,
+        maximumDistance: Int
+    ) -> Int? {
+        let a = Array(s1)
+        let b = Array(s2)
+        let (m, n) = (a.count, b.count)
+        guard abs(m - n) <= maximumDistance else { return nil }
+        guard m > 0 else { return n <= maximumDistance ? n : nil }
+        guard n > 0 else { return m <= maximumDistance ? m : nil }
+
+        let sentinel = maximumDistance + 1
+        var previous = [Int](repeating: sentinel, count: n + 1)
+        for column in 0 ... min(n, maximumDistance) {
+            previous[column] = column
+        }
+
+        for row in 1 ... m {
+            var current = [Int](repeating: sentinel, count: n + 1)
+            if row <= maximumDistance {
+                current[0] = row
+            }
+            let firstColumn = max(1, row - maximumDistance)
+            let lastColumn = min(n, row + maximumDistance)
+            guard firstColumn <= lastColumn else { return nil }
+
+            for column in firstColumn ... lastColumn {
+                let substitutionCost = a[row - 1] == b[column - 1] ? 0 : 1
+                current[column] = min(
+                    previous[column] + 1,
+                    current[column - 1] + 1,
+                    previous[column - 1] + substitutionCost
+                )
+            }
+            if current[firstColumn ... lastColumn].min() ?? sentinel > maximumDistance {
+                return nil
+            }
+            previous = current
+        }
+
+        return previous[n] <= maximumDistance ? previous[n] : nil
+    }
+
     /// Generic fuzzy search on any collection of items with a title keypath, ranking by relevance.
     /// Returns at most `limit` items, preventing SwiftUI rendering stalls.
     public static func search<T: Sendable>(
@@ -162,13 +216,14 @@ public nonisolated enum FuzzySearchEngine: Sendable {
         guard !trimmed.isEmpty else { return [] }
 
         let normalizedQuery = normalize(trimmed)
-        var scoredResults: [(item: T, score: Int)] = []
+        var scoredResults: [(item: T, score: Int, title: String, offset: Int)] = []
         scoredResults.reserveCapacity(min(items.count, limit * 2))
 
-        for item in items {
-            let normalizedTitle = normalize(item[keyPath: titleKeyPath])
+        for (offset, item) in items.enumerated() {
+            let title = item[keyPath: titleKeyPath]
+            let normalizedTitle = normalize(title)
             if let score = score(query: normalizedQuery, target: normalizedTitle) {
-                scoredResults.append((item, score))
+                scoredResults.append((item, score, title, offset))
             }
         }
 
@@ -177,12 +232,14 @@ public nonisolated enum FuzzySearchEngine: Sendable {
             if lhs.score != rhs.score {
                 return lhs.score > rhs.score
             }
-            let lhsTitle = lhs.item[keyPath: titleKeyPath]
-            let rhsTitle = rhs.item[keyPath: titleKeyPath]
-            if lhsTitle.count != rhsTitle.count {
-                return lhsTitle.count < rhsTitle.count
+            if lhs.title.count != rhs.title.count {
+                return lhs.title.count < rhs.title.count
             }
-            return lhsTitle.localizedStandardCompare(rhsTitle) == .orderedAscending
+            let titleOrder = lhs.title.localizedStandardCompare(rhs.title)
+            if titleOrder != .orderedSame {
+                return titleOrder == .orderedAscending
+            }
+            return lhs.offset < rhs.offset
         }
 
         if scoredResults.count > limit {

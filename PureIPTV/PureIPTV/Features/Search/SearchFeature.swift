@@ -494,7 +494,8 @@ public struct SearchFeature: Sendable {
                         channels: channels,
                         vods: vods,
                         series: series,
-                        limitPerCategory: 100
+                        limitPerCategory: 100,
+                        isCancelled: { Task.isCancelled }
                     )
                     guard !Task.isCancelled else { return }
                     await send(.searchEnrichedCompleted(query: query, filter: filter, output: output))

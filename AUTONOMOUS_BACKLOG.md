@@ -259,9 +259,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — sürüm eşleşmesi, kararlı sıralama ve varyant geçmişi yarışları düzeltildi; reviewer onayladı.
 
-### 56. [PENDING] Fuzzy Search Alaka Düzeyi ve Sonuç Sıralama İyileştirmesi
+### 56. [DONE] Fuzzy Search Alaka Düzeyi ve Sonuç Sıralama İyileştirmesi
 - **Bulgu:** UHF’in App Store sürüm geçmişi, arama algoritmasının doğruluk ve alaka düzeyini geliştirdiğini belirtiyor; büyük playlist’lerde başlık/kanal/metadata ağırlıkları ölçülebilir.
 - **Kaynak:** https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+- **Kod taraması:** `FuzzySearchEngine` kanal drawer/MultiView için; `GlobalSearchEngine` iOS/tvOS ortak araması için kullanılıyor. Tek bir target kelimesi tekrar eden query token’larını birden fazla kez karşılayabiliyor; kısa 1–2 harfli arama kelime içi her alt parçayı bulabiliyor; typo fallback her adayda tam başlık Levenshtein’i hesaplıyor. Global aramada kategori eşleşmeleri başlıkla aynı 200 puanı alıyor, EPG başlığı skora katılmıyor, eşit puan sıraları kararsız ve büyük tarama yalnız başta/sonda iptal kontrolü yapıyor.
+- **Uygulama:** Query token’ları ayrı target kelimelerini tüketiyor; kısa tek kelime araması yalnız kelime başlangıcında eşleşiyor. Typo toleransı en fazla 32 karakterlik sorguda, benzer uzunluktaki token’lara banded edit distance ile uygulanıyor. Global arama EPG başlığına sınırlı ikincil puan, kategoriye düşük puan veriyor; sonuçlar başlık/playlist/item kimliğiyle kararlı sıralanıyor. Katalog taraması 64 öğede bir iptal durumunu denetliyor.
+- **Reviewer:** `[APPROVED]` — edit-distance bandı, kısa query sınırı, düşük kategori puanı, deterministik tie-break ve tarama iptali statik incelemeden geçti.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Kullanıcı isteği gereği test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — ortak arama alaka puanları ve büyük katalog sıralaması iyileştirildi; reviewer onayladı.
 
 ### 57. [PENDING] tvOS EPG Kartında Erişilebilir Program Özeti
 - **Bulgu:** IPTVX’in TV Guide, Live Search ve Apple TV sürüm notları daha zengin program bilgisi, okunabilir satırlar ve focus sorunlarının giderilmesini öne çıkarıyor; odak kartı program/kanal/saat bilgisini erişilebilir tek özet olarak sunabilir.

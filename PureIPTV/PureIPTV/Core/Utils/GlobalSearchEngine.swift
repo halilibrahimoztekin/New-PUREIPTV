@@ -31,7 +31,8 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         channels: [GlobalSearchResultItem],
         vods: [GlobalSearchResultItem],
         series: [GlobalSearchResultItem],
-        limitPerCategory: Int = 100
+        limitPerCategory: Int = 100,
+        isCancelled: @Sendable () -> Bool = { false }
     ) -> SearchResultOutput {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -54,18 +55,24 @@ public nonisolated enum GlobalSearchEngine: Sendable {
 
         // 2. Score and search Channels
         var matchedChannels: [GlobalSearchResultItem] = []
-        for ch in scopedChannels {
+        for (index, ch) in scopedChannels.enumerated() {
+            if index.isMultiple(of: 64), isCancelled() {
+                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+            }
             let normalizedTitle = FuzzySearchEngine.normalize(ch.item.title)
             var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
 
-            // Check if title has EPG hint or category matches
+            // EPG metadata is searchable with a lower field weight than a title match.
             let epgMatchTitle: String? = ch.matchedEPGTitle
-            if baseScore == nil {
-                // Secondary check: query matches channel category or epgChannelID
-                let catNorm = FuzzySearchEngine.normalize(ch.item.categoryID)
-                if catNorm.contains(normalizedQuery) {
-                    baseScore = 200
+            if let epgMatchTitle {
+                let epgNorm = FuzzySearchEngine.normalize(epgMatchTitle)
+                if let epgScore = FuzzySearchEngine.score(query: normalizedQuery, target: epgNorm) {
+                    baseScore = max(baseScore ?? 0, min(epgScore / 3, 220))
                 }
+            }
+            let channelCategoryScore = categoryScore(query: normalizedQuery, category: ch.item.categoryID)
+            if channelCategoryScore > 0 {
+                baseScore = max(baseScore ?? 0, channelCategoryScore)
             }
 
             if let score = baseScore {
@@ -82,19 +89,20 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                 )
             }
         }
-        matchedChannels.sort { $0.score > $1.score }
+        sortByRelevance(&matchedChannels)
 
         // 3. Score and search VODs
         var matchedVODs: [GlobalSearchResultItem] = []
-        for v in scopedVods {
+        for (index, v) in scopedVods.enumerated() {
+            if index.isMultiple(of: 64), isCancelled() {
+                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+            }
             let normalizedTitle = FuzzySearchEngine.normalize(v.item.title)
             var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
 
-            if baseScore == nil {
-                let catNorm = FuzzySearchEngine.normalize(v.item.categoryID)
-                if catNorm.contains(normalizedQuery) {
-                    baseScore = 200
-                }
+            let vodCategoryScore = categoryScore(query: normalizedQuery, category: v.item.categoryID)
+            if vodCategoryScore > 0 {
+                baseScore = max(baseScore ?? 0, vodCategoryScore)
             }
 
             if let score = baseScore {
@@ -110,19 +118,20 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                 )
             }
         }
-        matchedVODs.sort { $0.score > $1.score }
+        sortByRelevance(&matchedVODs)
 
         // 4. Score and search Series
         var matchedSeries: [GlobalSearchResultItem] = []
-        for s in scopedSeries {
+        for (index, s) in scopedSeries.enumerated() {
+            if index.isMultiple(of: 64), isCancelled() {
+                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+            }
             let normalizedTitle = FuzzySearchEngine.normalize(s.item.title)
             var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
 
-            if baseScore == nil {
-                let catNorm = FuzzySearchEngine.normalize(s.item.categoryID)
-                if catNorm.contains(normalizedQuery) {
-                    baseScore = 200
-                }
+            let seriesCategoryScore = categoryScore(query: normalizedQuery, category: s.item.categoryID)
+            if seriesCategoryScore > 0 {
+                baseScore = max(baseScore ?? 0, seriesCategoryScore)
             }
 
             if let score = baseScore {
@@ -138,7 +147,7 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                 )
             }
         }
-        matchedSeries.sort { $0.score > $1.score }
+        sortByRelevance(&matchedSeries)
 
         // 5. Calculate 4K and EPG totals across all results
         let uhdChannelsCount = matchedChannels.filter(\.is4K).count
@@ -200,5 +209,29 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             series: finalSeries,
             counts: counts
         )
+    }
+
+    private static func categoryScore(query: String, category: String?) -> Int {
+        guard
+            let category,
+            let score = FuzzySearchEngine.score(query: query, target: FuzzySearchEngine.normalize(category))
+        else { return 0 }
+        return min(score / 4, 100)
+    }
+
+    private static func sortByRelevance(_ results: inout [GlobalSearchResultItem]) {
+        results.sort { lhs, rhs in
+            if lhs.score != rhs.score {
+                return lhs.score > rhs.score
+            }
+            let titleOrder = lhs.item.title.localizedStandardCompare(rhs.item.title)
+            if titleOrder != .orderedSame {
+                return titleOrder == .orderedAscending
+            }
+            if lhs.playlistBadge.id != rhs.playlistBadge.id {
+                return lhs.playlistBadge.id < rhs.playlistBadge.id
+            }
+            return lhs.item.id < rhs.item.id
+        }
     }
 }
