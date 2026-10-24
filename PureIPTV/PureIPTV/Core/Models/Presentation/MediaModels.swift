@@ -29,6 +29,9 @@ public enum MediaModels: Sendable {
         public let tvArchive: Int?
         public let tvArchiveDuration: Int?
         public let userAgentOverride: String?
+        public let seriesID: String?
+        /// Normalized playback position restored when this item enters a MultiView slot.
+        public let resumePosition: Double?
 
         public init(
             id: String,
@@ -45,7 +48,9 @@ public enum MediaModels: Sendable {
             epgChannelID: String? = nil,
             tvArchive: Int? = nil,
             tvArchiveDuration: Int? = nil,
-            userAgentOverride: String? = nil
+            userAgentOverride: String? = nil,
+            seriesID: String? = nil,
+            resumePosition: Double? = nil
         ) {
             self.id = id
             self.title = title
@@ -62,6 +67,8 @@ public enum MediaModels: Sendable {
             self.tvArchive = tvArchive
             self.tvArchiveDuration = tvArchiveDuration
             self.userAgentOverride = userAgentOverride
+            self.seriesID = seriesID
+            self.resumePosition = resumePosition.map { min(1, max(0, $0)) }
         }
 
         public func replacingUserAgentOverride(_ value: String?) -> Self {
@@ -80,7 +87,9 @@ public enum MediaModels: Sendable {
                 epgChannelID: epgChannelID,
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
-                userAgentOverride: value
+                userAgentOverride: value,
+                seriesID: seriesID,
+                resumePosition: resumePosition
             )
         }
 
@@ -100,7 +109,31 @@ public enum MediaModels: Sendable {
                 epgChannelID: epgChannelID,
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
-                userAgentOverride: userAgentOverride
+                userAgentOverride: userAgentOverride,
+                seriesID: seriesID,
+                resumePosition: resumePosition
+            )
+        }
+
+        public func replacingResumePosition(_ value: Double?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                logoURLOverride: logoURLOverride,
+                categoryID: categoryID,
+                type: type,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: userAgentOverride,
+                seriesID: seriesID,
+                resumePosition: value
             )
         }
     }

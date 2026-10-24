@@ -361,7 +361,7 @@ public struct LiveTVFeature {
                 }
 
             case let .sendToMultiView(channel):
-                var mvState = MultiViewFeature.State(channels: state.currentChannels)
+                var mvState = MultiViewFeature.State(channels: state.currentChannels, config: state.config)
                 if !mvState.slots.isEmpty {
                     mvState.slots[0].item = channel
                 }
@@ -510,7 +510,7 @@ public struct LiveTVFeature {
                 return .none
 
             case .openMultiViewTapped:
-                state.multiView = MultiViewFeature.State(channels: state.currentChannels)
+                state.multiView = MultiViewFeature.State(channels: state.currentChannels, config: state.config)
                 return .none
 
             case .multiView(.presented(.delegate(.close))):

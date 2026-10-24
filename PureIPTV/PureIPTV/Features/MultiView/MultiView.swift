@@ -48,6 +48,8 @@ public struct MultiView: View {
             }
         }
         .background(Color(hex: "#000000").ignoresSafeArea())
+        .onAppear { store.send(.onAppear) }
+        .onDisappear { store.send(.onDisappear) }
         #if os(tvOS)
             .onExitCommand {
                 if let focused = store.focusedSlotID {
@@ -73,7 +75,7 @@ public struct MultiView: View {
                 )
             ) {
                 ChannelSelectionSheet(
-                    channels: store.channels,
+                    store: store,
                     onSelect: { store.send(.channelSelected($0)) },
                     onDismiss: { store.send(.channelSelectionDismissed) }
                 )
@@ -352,24 +354,29 @@ public struct MultiView: View {
 
         return Group {
             if let item = slot.item {
-                Button {
-                    #if !os(tvOS)
-                        HapticManager.shared.trigger(.light)
-                    #endif
-                    store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.28, dampingFraction: 0.75))
-                } label: {
-                    ZStack {
-                        MultiViewPlayer(
-                            item: item,
-                            isActiveAudio: isAudioActive,
-                            isPiPActive: store.isPiPActive && isAudioActive,
-                            instanceID: slot.instanceID
-                        )
+                ZStack {
+                    MultiViewPlayer(
+                        item: item,
+                        isActiveAudio: isAudioActive,
+                        isPiPActive: store.isPiPActive && isAudioActive,
+                        instanceID: slot.instanceID,
+                        onRetry: { store.send(.retrySlotTapped(slotID: slot.id)) }
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        #if !os(tvOS)
+                            HapticManager.shared.trigger(.light)
+                        #endif
+                        store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.28, dampingFraction: 0.75))
+                    }
 
-                        // Top Controls Overlay
-                        VStack {
-                            HStack {
-                                // Audio Status Badge
+                    // Slot controls are sibling controls over the video surface,
+                    // so their actions remain reachable without nested Buttons.
+                    VStack {
+                        HStack {
+                            Button {
+                                store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.28, dampingFraction: 0.75))
+                            } label: {
                                 HStack(spacing: 5) {
                                     Image(systemName: isAudioActive ? "speaker.wave.3.fill" : "speaker.slash.fill")
                                         .font(.system(size: 11, weight: .bold))
@@ -383,76 +390,74 @@ public struct MultiView: View {
                                     isAudioActive ? Color(hex: "#0A84FF").opacity(0.85) : Color.black.opacity(0.6),
                                     in: Capsule()
                                 )
-
-                                Spacer()
-
-                                // Remove / Clear Channel Button
-                                Button(action: {
-                                    #if !os(tvOS)
-                                        HapticManager.shared.trigger(.light)
-                                    #endif
-                                    store.send(.removeChannelTapped(slotID: slot.id))
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                        .padding(6)
-                                }
-                                .buttonStyle(.plain)
                             }
-                            .padding(8)
+                            .buttonStyle(.plain)
 
                             Spacer()
 
-                            // Bottom Info & Quick Swap Pill
-                            HStack(alignment: .bottom) {
-                                Text(item.title)
-                                    .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
+                            Button {
+                                #if !os(tvOS)
+                                    HapticManager.shared.trigger(.light)
+                                #endif
+                                store.send(.removeChannelTapped(slotID: slot.id))
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .padding(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(8)
+
+                        Spacer()
+
+                        HStack(alignment: .bottom) {
+                            Text(item.title)
+                                .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+
+                            Spacer()
+
+                            if isCompanion {
+                                Button {
+                                    #if !os(tvOS)
+                                        HapticManager.shared.trigger(.medium)
+                                    #endif
+                                    store.send(.swapToPrimary(slotID: slot.id), animation: .spring(response: 0.35, dampingFraction: 0.75))
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                            .font(.system(size: 10, weight: .bold))
+                                        Text(AppStrings.MultiView.swapToPrimary)
+                                            .font(.system(size: 10, weight: .bold))
+                                    }
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
-
-                                Spacer()
-
-                                // If this is a companion slot in 1+3 layout, show Swap to Primary button
-                                if isCompanion {
-                                    Button {
-                                        #if !os(tvOS)
-                                            HapticManager.shared.trigger(.medium)
-                                        #endif
-                                        store.send(.swapToPrimary(slotID: slot.id), animation: .spring(response: 0.35, dampingFraction: 0.75))
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                                .font(.system(size: 10, weight: .bold))
-                                            Text(AppStrings.MultiView.swapToPrimary)
-                                                .font(.system(size: 10, weight: .bold))
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color(hex: "#BF5AF2").opacity(0.85), in: Capsule())
-                                        .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 6)
-                                    }
-                                    .buttonStyle(.plain)
+                                    .background(Color(hex: "#BF5AF2").opacity(0.85), in: Capsule())
+                                    .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 6)
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .padding(8)
                         }
+                        .padding(8)
                     }
                 }
-                .buttonStyle(.plain)
                 #if os(tvOS)
-                    .focused($tvFocusedSlotID, equals: slot.id)
-                    .onPlayPauseCommand {
-                        if isCompanion {
-                            store.send(.swapToPrimary(slotID: slot.id), animation: .spring(response: 0.35, dampingFraction: 0.75))
-                        } else {
-                            store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
-                        }
+                .focusable()
+                .focused($tvFocusedSlotID, equals: slot.id)
+                .onPlayPauseCommand {
+                    if isCompanion {
+                        store.send(.swapToPrimary(slotID: slot.id), animation: .spring(response: 0.35, dampingFraction: 0.75))
+                    } else {
+                        store.send(.toggleFullscreen(slotID: slot.id), animation: .spring(response: 0.3, dampingFraction: 0.7))
                     }
+                }
                 #endif
             } else {
                 // Empty Slot Placeholder with + Button
@@ -518,59 +523,127 @@ public struct MultiView: View {
 // MARK: - Channel Selection Sheet
 
 private struct ChannelSelectionSheet: View {
-    let channels: [MediaModels.Item]
+    let store: StoreOf<MultiViewFeature>
     let onSelect: (MediaModels.Item) -> Void
     let onDismiss: () -> Void
 
     @State private var searchText = ""
+    @State private var selectedSource: Source = .live
+    @State private var selectedSeries: MediaModels.Item?
+
+    private enum Source: String, CaseIterable, Hashable, Identifiable {
+        case live
+        case movies
+        case series
+
+        var id: Self {
+            self
+        }
+
+        var title: String {
+            switch self {
+            case .live: AppStrings.Search.liveTV
+            case .movies: AppStrings.Search.movies
+            case .series: AppStrings.Search.series
+            }
+        }
+    }
 
     var filteredChannels: [MediaModels.Item] {
+        let items: [MediaModels.Item] = if selectedSeries != nil {
+            store.episodeItems
+        } else {
+            switch selectedSource {
+            case .live: store.channels
+            case .movies: store.vodItems
+            case .series: store.seriesItems
+            }
+        }
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            return channels
+            return items
         }
-        return FuzzySearchEngine.searchItems(channels, query: trimmed, limit: 100)
+        return FuzzySearchEngine.searchItems(items, query: trimmed, limit: 100)
     }
 
     var body: some View {
         NavigationStack {
-            List(filteredChannels) { channel in
-                Button(action: { onSelect(channel) }) {
-                    HStack(spacing: 12) {
-                        if let url = channel.displayLogoURL {
-                            PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
-                                if let img = phase.image {
-                                    img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)
+            VStack(spacing: 8) {
+                if selectedSeries == nil {
+                    Picker(AppStrings.MultiView.selectChannel, selection: $selectedSource) {
+                        ForEach(Source.allCases) { source in
+                            Text(source.title).tag(source)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                }
+
+                if store.isLoadingSources || store.isLoadingEpisodes {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(filteredChannels) { channel in
+                        Button {
+                            if channel.type == .series, channel.streamURL == nil {
+                                selectedSeries = channel
+                                searchText = ""
+                                store.send(.loadEpisodes(channel))
+                            } else {
+                                onSelect(channel)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                if let url = channel.displayLogoURL {
+                                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
+                                        if let img = phase.image {
+                                            img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)
+                                        } else {
+                                            Image(systemName: "tv").frame(width: 34, height: 34)
+                                        }
+                                    }
                                 } else {
                                     Image(systemName: "tv").frame(width: 34, height: 34)
                                 }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(channel.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                }
                             }
-                        } else {
-                            Image(systemName: "tv").frame(width: 34, height: 34)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(channel.title)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.primary)
                         }
                     }
                 }
             }
-            .navigationTitle(AppStrings.MultiView.selectChannel)
+            .navigationTitle(selectedSeries?.title ?? AppStrings.MultiView.selectChannel)
             #if !os(tvOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
                 .toolbar {
+                    if selectedSeries != nil {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(AppStrings.Common.back) {
+                                selectedSeries = nil
+                                searchText = ""
+                                store.send(.backFromEpisodes)
+                            }
+                        }
+                    }
                     ToolbarItem(placement: .cancellationAction) {
                         Button(AppStrings.Common.cancel) {
                             onDismiss()
                         }
                     }
                 }
-                .searchable(text: $searchText, prompt: AppStrings.Search.channelSearchPlaceholder)
+                .searchable(text: $searchText, prompt: AppStrings.Common.search)
             #if os(tvOS)
                 .onExitCommand {
-                    onDismiss()
+                    if selectedSeries != nil {
+                        selectedSeries = nil
+                        store.send(.backFromEpisodes)
+                    } else {
+                        onDismiss()
+                    }
                 }
             #endif
         }
@@ -584,15 +657,33 @@ private struct MultiViewPlayer: View {
     let isActiveAudio: Bool
     let isPiPActive: Bool
     let instanceID: UUID
+    let onRetry: () -> Void
 
     @State private var playerClient: PlayerClient?
+    @State private var playbackFailed = false
+    @State private var latestIsActiveAudio = false
+    @State private var hasStartedPlayback = false
+    @State private var volumeGeneration = UUID()
+    @State private var volumeUpdateTask: Task<Void, Never>?
+    @State private var playerRunGeneration = UUID()
     #if os(iOS)
         @State private var pipController: PiPController?
     #endif
 
     var body: some View {
         Group {
-            if let client = playerClient {
+            if playbackFailed {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Button(AppStrings.Common.retry, action: onRetry)
+                        .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+            } else if let client = playerClient {
                 #if os(iOS)
                     PiPVideoView(client.vlcPlayer(), controller: $pipController)
                 #else
@@ -605,8 +696,10 @@ private struct MultiViewPlayer: View {
         .task(id: instanceID) {
             await runPlayer()
         }
-        .task(id: isActiveAudio) {
-            try? await playerClient?.setVolume(isActiveAudio ? 100 : 0)
+        .onChange(of: isActiveAudio) { _, active in
+            latestIsActiveAudio = active
+            guard hasStartedPlayback, let client = playerClient else { return }
+            enqueueVolumeUpdate(active, for: client)
         }
         .onChange(of: isPiPActive) { _, newValue in
             #if os(iOS)
@@ -621,12 +714,93 @@ private struct MultiViewPlayer: View {
 
     private func runPlayer() async {
         @Dependency(\.playerFactoryClient) var factory
+        await cancelVolumeUpdates()
+        let runGeneration = UUID()
+        playerRunGeneration = runGeneration
+        playbackFailed = false
+        hasStartedPlayback = false
+        latestIsActiveAudio = isActiveAudio
         let client = factory.createPlayer()
         playerClient = client
 
-        if let url = item.streamURL {
-            try? await client.play(url, item.userAgentOverride, nil)
-            try? await client.setVolume(isActiveAudio ? 100 : 0)
+        guard let url = item.streamURL else {
+            playerClient = nil
+            return
         }
+
+        do {
+            // Establish mute before starting transport so a companion stream
+            // cannot briefly become audible during decoder startup.
+            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
+            let events = await client.events()
+            try await client.play(url, item.userAgentOverride, nil)
+            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
+            hasStartedPlayback = true
+            if let position = item.resumePosition, position > 0, item.type != .live {
+                try await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                try? await client.seek(position)
+            }
+            for await event in events {
+                guard !Task.isCancelled else { break }
+                switch event {
+                case .encounteredError, .stateChanged(.error):
+                    playbackFailed = true
+                default:
+                    continue
+                }
+                break
+            }
+        } catch {
+            guard !Task.isCancelled else {
+                await stopPlayer(client, runGeneration: runGeneration)
+                clearPlayerClient(ifMatching: client)
+                return
+            }
+            playbackFailed = true
+        }
+        await stopPlayer(client, runGeneration: runGeneration)
+        if !Task.isCancelled {
+            clearPlayerClient(ifMatching: client)
+        }
+    }
+
+    private func enqueueVolumeUpdate(_ active: Bool, for client: PlayerClient) {
+        volumeGeneration = UUID()
+        let generation = volumeGeneration
+        let runGeneration = playerRunGeneration
+        let previousTask = volumeUpdateTask
+        previousTask?.cancel()
+        volumeUpdateTask = Task { @MainActor in
+            await previousTask?.value
+            guard
+                !Task.isCancelled,
+                volumeGeneration == generation,
+                playerRunGeneration == runGeneration,
+                playerClient?.vlcPlayer() === client.vlcPlayer()
+            else { return }
+            try? await client.setVolume(active ? 100 : 0)
+        }
+    }
+
+    private func cancelVolumeUpdates() async {
+        volumeGeneration = UUID()
+        let task = volumeUpdateTask
+        volumeUpdateTask = nil
+        task?.cancel()
+        await task?.value
+    }
+
+    private func stopPlayer(_ client: PlayerClient, runGeneration: UUID) async {
+        if playerRunGeneration == runGeneration {
+            hasStartedPlayback = false
+            await cancelVolumeUpdates()
+        }
+        try? await client.stop()
+    }
+
+    private func clearPlayerClient(ifMatching client: PlayerClient) {
+        guard let current = playerClient, current.vlcPlayer() === client.vlcPlayer() else { return }
+        playerClient = nil
     }
 }
