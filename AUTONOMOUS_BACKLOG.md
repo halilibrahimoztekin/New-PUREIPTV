@@ -804,9 +804,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Yalnızca iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Xcode SwiftFormat script phase’i “exit code 0” mesajı yazdı; derleme hatası yok. Kullanıcı talimatı gereği test, simulator veya app akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
-### 79. [PENDING] Gizlilik Korumalı Destek Tanılama Raporu
+### 79. [IN_PROGRESS] Gizlilik Korumalı Destek Tanılama Raporu
 - **Keşif sinyali:** IPTV kullanıcıları çalışmayan stream/formatlarda sağlayıcıya hata ayıklama bilgisi iletmekte zorlanıyor; Tunvio ve Neptune kullanıcı onaylı, kimlik bilgilerini temizleyen rapor akışı sunuyor: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/ · https://tunv.io/iptv/guides/send-diagnostic-information/ · https://docs.neptuneplayer.com/settings/diagnostics
-- **Aday gap:** Uygulama içi rapor dışa aktarma, credential-redaction ve açık gönderim onayı incelenecek.
+- **Canlı doğrulama (24 Ekim 2026):** Tunvio rapor akışında gönderileceklerin incelemesini ve ikinci onayı, Neptune ise kullanıcı başlattığında sanitize edilmiş raporu tarif ediyor: https://tunv.io/iptv/guides/send-diagnostic-information/ · https://docs.neptuneplayer.com/settings/diagnostics
+- **Kod incelemesi:** `FeedbackReportManager` son dakika OSLog kayıtlarını topluyor, yalnızca `password=`, `token=`, `username=` değerlerini maskeliyor; IPTV kimlik bilgileri URL path/user-info içinde de bulunabiliyor. Ham hata metni maskelenmeden rapora ekleniyor. Ayarlar dosya URL’sini tutsa da paylaşım/önizleme arayüzü göstermiyor. OSLog toplama `@MainActor` üzerinde sınırsız sayıda entry dolaşıyor, plaintext geçici rapor dosyası da temizlenmiyor.
+- **Kapsam:** Tanılama dışa aktarımını allowlist ile sınırla: yalnızca uygulama/işletim sistemi sürümü, platform ve rapor zamanı; log, hesap/playlist/stream URL’si, kanal adı ve ham hata metni ekleme. Raporu kullanıcıya paylaşmadan önce önizle; ShareLink sistem paylaşım sayfası kullanıcı seçimini/eylemini beklesin, otomatik upload olmasın. Temp dosyayı eşsiz adla oluştur, koru ve sunum kapandığında temizle.
+- **Uygulama:** OSLog toplaması kaldırıldı. Üretici yalnızca uygulama/build, OS sürümü, platform ve zaman alanlarını sınırlandırıp korumalı UUID temp dosyasına yazar; Ayarlar'da okunabilir önizleme ve açıkça plain-text dosya olarak aktarılan ShareLink var, önizleme kapatıldığında dosya silinir. Rapor oluşturma tekrarlı dokunuşlara karşı korunur; altı yeni arayüz metni 21 dile eklendi.
+- **PR Reviewer:** Tüm güvenlik, paylaşım, lifecycle, tvOS ve yerelleştirme düzeltmelerinden sonra `[APPROVED]`. İlk compile custom `ShareLink` için bu SDK’nın istediği `SharePreview` parametresini işaret etti; eklendi, reviewer yeniden onayladı.
+- **Doğrulama:** Yalnızca iPhone 17 / iOS 26.5 Release Xcode build’i başarıyla tamamlandı (exit code 0); mevcut Swift concurrency uyarıları kaldı. Test, simulator açılışı veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
+- **Karar:** Var olan rapor iskeleti gizli veri dışa çıkarma riski taşıdığı ve kullanıcıya ulaştırılamadığı için güvenli paylaşım akışıyla yeniden düzenlenecek; keyfi log sanitizasyonu yerine hassas kaynakları rapordan tamamen çıkar.
 
 ### 80. [PENDING] Canlı Yayın FPS ve Ağ Bant Genişliği Göstergesi
 - **Keşif sinyali:** Apple TV kullanıcıları kanal seçerken 4K/FPS ve o anki bandwidth bilgisini görmek istediklerini yazmış: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/

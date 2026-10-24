@@ -1,81 +1,57 @@
 import Foundation
-import OSLog
 
-public struct FeedbackDiagnosticReport: Sendable {
-    public let timestamp: Date
-    public let osVersion: String
-    public let appVersion: String
-    public let vpnActive: Bool
-    public let sanitizedLogs: String
-}
-
-@MainActor
-public final class FeedbackReportManager: Sendable {
+/// Creates a deliberately small support report from an explicit allowlist.
+/// No app logs, playback state, account data, URLs, or error text are read.
+public actor FeedbackReportManager {
     public static let shared = FeedbackReportManager()
 
     private init() {}
 
-    public func generateDiagnosticReport(activeChannelName: String? = nil, lastErrorMessage: String? = nil) async -> URL? {
-        var logLines: [String] = []
-
-        if #available(iOS 15.0, tvOS 15.0, *) {
-            do {
-                let store = try OSLogStore(scope: .currentProcessIdentifier)
-                let oneMinuteAgo = store.position(date: Date().addingTimeInterval(-60))
-                let entries = try store.getEntries(at: oneMinuteAgo)
-
-                for entry in entries {
-                    if let logEntry = entry as? OSLogEntryLog {
-                        logLines.append("[\(logEntry.date.formatted(date: .omitted, time: .standard))] [\(logEntry.category)] \(logEntry.composedMessage)")
-                    }
-                }
-            } catch {
-                logLines.append("OSLog okuma hatası: \(error.localizedDescription)")
-            }
-        }
-
-        // Sanitize sensitive credentials
-        let joinedLogs = logLines.joined(separator: "\n")
-        let sanitized = sanitizeCredentials(in: joinedLogs)
-
-        let isVPN = VPNMonitor.shared.isConnected
-        let osInfo = ProcessInfo.processInfo.operatingSystemVersionString
+    public func generateDiagnosticReport() -> URL? {
+        let bundle = Bundle.main
+        let appVersion = bounded(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, limit: 32) ?? "Unknown"
+        let build = bounded(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String, limit: 32) ?? "Unknown"
+        let osVersion = bounded(ProcessInfo.processInfo.operatingSystemVersionString, limit: 64) ?? "Unknown"
+        #if os(tvOS)
+            let platform = "tvOS"
+        #elseif os(iOS)
+            let platform = "iOS"
+        #else
+            let platform = "Apple platform"
+        #endif
+        let generatedAt = ISO8601DateFormatter().string(from: Date())
 
         let report = """
-        # PureIPTV Hata Teşhis Raporu
-        Tarih: \(Date().formatted(date: .abbreviated, time: .standard))
-        İşletim Sistemi: \(osInfo)
-        VPN Durumu: \(isVPN ? "Aktif" : "Pasif")
-        Aktif Kanal: \(activeChannelName ?? "Yok")
-        Son Hata: \(lastErrorMessage ?? "Yok")
+        PureIPTV Gizlilik Korumalı Tanılama Raporu
+        Oluşturulma: \(generatedAt)
+        Uygulama sürümü: \(appVersion) (\(build))
+        Platform: \(platform)
+        İşletim sistemi: \(osVersion)
 
-        ## Son 1 Dakikalık Sistem Günlükleri (Maskelenmiş):
-        ```
-        \(sanitized.isEmpty ? "Kritik log kaydı bulunamadı." : sanitized)
-        ```
+        Gizlilik: Bu rapor yalnızca yukarıdaki bilgileri içerir. Günlükler, etkin kanal,
+        oynatma adresleri, hesap veya kullanıcı kimlikleri, ağ bilgileri ve hata metinleri eklenmemiştir.
         """
-
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("PureIPTV_Report_\(Int(Date().timeIntervalSince1970)).txt")
+        // Constant-sized allowlisted fields and strict per-field bounds keep report generation bounded.
+        guard report.utf8.count <= 2048 else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PureIPTV-Diagnostic-\(UUID().uuidString).txt", isDirectory: false)
         do {
-            try report.write(to: tempURL, atomically: true, encoding: .utf8)
-            return tempURL
+            try Data(report.utf8).write(to: url, options: .atomic)
+            #if os(iOS) || os(tvOS)
+                try FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: url.path
+                )
+            #endif
+            return url
         } catch {
+            try? FileManager.default.removeItem(at: url)
             return nil
         }
     }
 
-    private func sanitizeCredentials(in raw: String) -> String {
-        var sanitized = raw
-        // Mask passwords in query params or json
-        let passwordRegex = try? NSRegularExpression(pattern: #"(password=)[^& \n]+"#, options: .caseInsensitive)
-        sanitized = passwordRegex?.stringByReplacingMatches(in: sanitized, range: NSRange(location: 0, length: sanitized.utf16.count), withTemplate: "$1***") ?? sanitized
-
-        let tokenRegex = try? NSRegularExpression(pattern: #"(token=)[^& \n]+"#, options: .caseInsensitive)
-        sanitized = tokenRegex?.stringByReplacingMatches(in: sanitized, range: NSRange(location: 0, length: sanitized.utf16.count), withTemplate: "$1***") ?? sanitized
-
-        let userRegex = try? NSRegularExpression(pattern: #"(username=)[^& \n]+"#, options: .caseInsensitive)
-        sanitized = userRegex?.stringByReplacingMatches(in: sanitized, range: NSRange(location: 0, length: sanitized.utf16.count), withTemplate: "$1***") ?? sanitized
-
-        return sanitized
+    private func bounded(_ value: String?, limit: Int) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return String(value.prefix(limit)).filter { !$0.isNewline && !$0.isWhitespace || $0 == " " }
     }
 }

@@ -1,5 +1,7 @@
 import ComposableArchitecture
+import CoreTransferable
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct SettingsView: View {
     @ObservedObject private var theme = ThemeManager.shared
@@ -11,6 +13,8 @@ public struct SettingsView: View {
     @State private var backupExportURL: URL? = nil
     @State private var backupAlertMessage: String? = nil
     @State private var isShowingBackupAlert: Bool = false
+    @State private var diagnosticReportURL: URL?
+    @State private var isGeneratingDiagnosticReport = false
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
@@ -622,19 +626,32 @@ public struct SettingsView: View {
 
                 Button(action: {
                     Task {
+                        guard !isGeneratingDiagnosticReport else { return }
+                        isGeneratingDiagnosticReport = true
+                        defer { isGeneratingDiagnosticReport = false }
                         if let reportURL = await FeedbackReportManager.shared.generateDiagnosticReport() {
-                            backupExportURL = reportURL
-                            backupAlertMessage = "Hata teşhis raporu oluşturuldu:\n\(reportURL.lastPathComponent)"
-                            isShowingBackupAlert = true
+                            if let previousURL = diagnosticReportURL {
+                                try? FileManager.default.removeItem(at: previousURL)
+                            }
+                            diagnosticReportURL = reportURL
                         }
                     }
                 }) {
                     HStack {
-                        Image(systemName: "envelope.badge.fill")
-                            .foregroundColor(.indigo)
-                        Text("Hata Günlüğü Raporla (OSLog)")
+                        if isGeneratingDiagnosticReport {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .foregroundColor(.indigo)
+                        }
+                        Text(isGeneratingDiagnosticReport
+                            ? AppStrings.Settings.diagnosticReportGenerating
+                            : AppStrings.Settings.createDiagnosticReport)
                     }
                 }
+                .disabled(isGeneratingDiagnosticReport)
+                .accessibilityLabel(AppStrings.Settings.createDiagnosticReport)
+                .accessibilityHint(AppStrings.Settings.diagnosticReportHint)
                 .foregroundColor(.primary)
             }
 
@@ -709,6 +726,18 @@ public struct SettingsView: View {
         )) {
             CustomEPGSettingsView(store: store)
         }
+        .sheet(isPresented: Binding(
+            get: { diagnosticReportURL != nil },
+            set: {
+                if !$0 {
+                    removeDiagnosticReport()
+                }
+            }
+        ), onDismiss: removeDiagnosticReport) {
+            if let diagnosticReportURL {
+                DiagnosticReportPreviewView(url: diagnosticReportURL)
+            }
+        }
         .alert(
             "PureIPTV Bildirimi",
             isPresented: $isShowingBackupAlert
@@ -716,6 +745,63 @@ public struct SettingsView: View {
             Button(AppStrings.Common.ok, role: .cancel) {}
         } message: {
             Text(backupAlertMessage ?? "")
+        }
+    }
+
+    private func removeDiagnosticReport() {
+        if let diagnosticReportURL {
+            try? FileManager.default.removeItem(at: diagnosticReportURL)
+        }
+        diagnosticReportURL = nil
+    }
+}
+
+private struct DiagnosticReportPreviewView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    private var reportText: String {
+        (try? String(contentsOf: url, encoding: .utf8)) ?? AppStrings.Settings.diagnosticReportUnavailable
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(reportText)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding()
+            }
+            .navigationTitle(AppStrings.Settings.diagnosticReportTitle)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.close) { dismiss() }
+                        .accessibilityLabel(AppStrings.Common.close)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    ShareLink(
+                        item: DiagnosticReportFile(url: url),
+                        preview: SharePreview(
+                            AppStrings.Settings.diagnosticReportTitle,
+                            image: Image(systemName: "doc.text")
+                        )
+                    ) {
+                        Label(AppStrings.Settings.shareDiagnosticReport, systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel(AppStrings.Settings.shareDiagnosticReport)
+                }
+            }
+        }
+    }
+}
+
+private struct DiagnosticReportFile: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .plainText) { report in
+            SentTransferredFile(report.url)
         }
     }
 }

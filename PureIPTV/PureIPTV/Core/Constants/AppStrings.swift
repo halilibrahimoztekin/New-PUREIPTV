@@ -390,6 +390,12 @@ public enum AppStrings {
         public static let appIcon = "Uygulama İkonu".localized
         public static let about = "HAKKINDA".localized
         public static let appVersion = "PureIPTV v1.0.0".localized
+        public static let createDiagnosticReport = "Gizlilik Korumalı Tanılama Raporu Oluştur".localized
+        public static let diagnosticReportGenerating = "Tanılama raporu hazırlanıyor...".localized
+        public static let diagnosticReportTitle = "Tanılama Raporu".localized
+        public static let diagnosticReportHint = "Yalnızca sürüm ve işletim sistemi bilgileri gösterilir; hiçbir yere otomatik gönderilmez.".localized
+        public static let diagnosticReportUnavailable = "Rapor önizlemesi açılamadı.".localized
+        public static let shareDiagnosticReport = "Raporu Dışa Aktar veya Paylaş".localized
         public static let version = "Sürüm".localized
         public static let versionNumber = "1.0.0".localized
         public static let setNewPIN = "Yeni PIN Belirleyin".localized
