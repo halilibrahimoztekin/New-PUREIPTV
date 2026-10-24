@@ -132,3 +132,27 @@ public final class HomeSectionManager: @unchecked Sendable {
         saveSections()
     }
 }
+
+/// Stores the user's pinned Dashboard category rows without modifying playlist categories.
+public enum HomeCategoryPinStore {
+    private static let keyPrefix = "pureiptv_home_category_pins_v1"
+
+    public static func load(profileID: UUID?, playlistID: UUID?) -> [String] {
+        guard let profileID, let playlistID else { return [] }
+        return normalized(UserDefaults.standard.stringArray(forKey: key(profileID, playlistID)) ?? [])
+    }
+
+    public static func save(_ collectionIDs: [String], profileID: UUID?, playlistID: UUID?) {
+        guard let profileID, let playlistID else { return }
+        UserDefaults.standard.set(normalized(collectionIDs), forKey: key(profileID, playlistID))
+    }
+
+    private static func normalized(_ collectionIDs: [String]) -> [String] {
+        var seen = Set<String>()
+        return collectionIDs.filter { seen.insert($0).inserted }
+    }
+
+    private static func key(_ profileID: UUID, _ playlistID: UUID) -> String {
+        "\(keyPrefix).\(profileID.uuidString).\(playlistID.uuidString)"
+    }
+}

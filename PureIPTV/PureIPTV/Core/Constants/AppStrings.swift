@@ -518,6 +518,14 @@ public enum AppStrings {
 
     public enum Dashboard {
         public static let title = "Keşfet".localized
+        public static let pinHomeCategory = "Kategoriyi Ana Sayfaya Sabitle".localized
+        public static let unpinHomeCategory = "Ana Sayfadan Kategoriyi Kaldır".localized
+        public static let movePinnedCategoryUp = "Sabit Kategoriyi Yukarı Taşı".localized
+        public static let movePinnedCategoryDown = "Sabit Kategoriyi Aşağı Taşı".localized
+        public static let pinnedCategoryHint = "Bu kategori yalnızca seçili profil ve playlist için ana sayfada gösterilir.".localized
+        public static let manageHomeCategories = "Ana Sayfa Kategorilerini Yönet".localized
+        public static let noHomeCategories = "Henüz kategori yok".localized
+        public static let homeCategoriesLoadHint = "Kategoriler playlist yüklemesi tamamlandıktan sonra burada görünür.".localized
         public static let continueWatching = "Kaldığın Yerden İzle".localized
         public static let myFavorites = "Favorilerim".localized
         public static let featuredLiveTV = "Canlı TV (Önerilen)".localized

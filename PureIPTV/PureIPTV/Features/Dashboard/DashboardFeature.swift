@@ -67,6 +67,21 @@ public struct DashboardFeature {
         public var activeAwardRefreshID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
         public var exploreCollections: [ExploreCollection] = []
+        public var availableHomeCategoryCollections: [ExploreCollection] = []
+        public var pinnedHomeCategoryIDs: [String] = []
+
+        public var pinnedHomeCategoryCollections: [ExploreCollection] {
+            let byID = Dictionary(availableHomeCategoryCollections.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            return pinnedHomeCategoryIDs.compactMap { byID[$0] }
+        }
+
+        public var visibleExploreCollections: [ExploreCollection] {
+            let pinnedIDs = Set(pinnedHomeCategoryIDs)
+            let pinned = pinnedHomeCategoryCollections
+            let automatic = exploreCollections.filter { !pinnedIDs.contains($0.id) }
+            return pinned + automatic
+        }
+
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
         public var activePlaylistID: UUID?
@@ -104,7 +119,7 @@ public struct DashboardFeature {
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem], scope: ProfileContextSnapshot)
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
         case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
         case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
@@ -116,6 +131,8 @@ public struct DashboardFeature {
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
+        case toggleHomeCategoryPin(String)
+        case moveHomeCategoryPin(String, Int)
 
         // Navigation from local items
         case favoriteSelected(FavoriteItem)
@@ -173,6 +190,8 @@ public struct DashboardFeature {
                 let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
                 let playlistID = playlistRepository.getActivePlaylistID()
+                let profileScope = profileContextClient.snapshot()
+                state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
                 let playlistChanged = state.activePlaylistID != playlistID
                 if playlistChanged {
                     state.newEpisodeSeries = []
@@ -186,6 +205,7 @@ public struct DashboardFeature {
                     state.hasLoadedAwardDiscovery = false
                     state.activeAwardRefreshID = nil
                     state.exploreCollections = []
+                    state.availableHomeCategoryCollections = []
                     state.actorRecommendationCollections = []
                     state.actorRecommendationMovieCandidates = []
                     state.actorRecommendationSeriesCandidates = []
@@ -210,6 +230,9 @@ public struct DashboardFeature {
                 state.isSportsHubVisible = isSportsHubVisible
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
+                    // Drop both rendered and pin-management candidates before
+                    // the refreshed adult-filtered catalog arrives.
+                    state.availableHomeCategoryCollections = []
                     state.newEpisodeSeries = []
                     state.activeNewEpisodeRefreshID = nil
                     state.mostRatedMovies = []
@@ -592,6 +615,7 @@ public struct DashboardFeature {
                     var vodExploreCollections: [ExploreCollection]?
                     var seriesExploreCollections: [ExploreCollection]?
                     var yearExploreCollections: [ExploreCollection]?
+                    var homeCategoryCollections: [ExploreCollection]?
                     let actorMovieCandidates = fetchedVODs.map {
                         hideAdult ? $0.filter { !isAdult($0.title) } : $0
                     } ?? []
@@ -642,6 +666,13 @@ public struct DashboardFeature {
                             categories: fetchedVODCategories,
                             items: safeVODs
                         )
+                        homeCategoryCollections = Self.makeCategoryCollections(
+                            prefix: "movie-category",
+                            label: movieCollectionPrefix,
+                            categories: fetchedVODCategories,
+                            items: safeVODs,
+                            limit: Int.max
+                        )
                     }
                     if let fetchedSeries, let fetchedSeriesCategories {
                         let safeSeries = hideAdult ? fetchedSeries.filter { !isAdult($0.title) } : fetchedSeries
@@ -650,6 +681,13 @@ public struct DashboardFeature {
                             label: seriesCollectionPrefix,
                             categories: fetchedSeriesCategories,
                             items: safeSeries
+                        )
+                        homeCategoryCollections = (homeCategoryCollections ?? []) + Self.makeCategoryCollections(
+                            prefix: "series-category",
+                            label: seriesCollectionPrefix,
+                            categories: fetchedSeriesCategories,
+                            items: safeSeries,
+                            limit: Int.max
                         )
                     }
                     if let fetchedSeries {
@@ -683,7 +721,8 @@ public struct DashboardFeature {
                             recommendationReasons: recommendationReasons,
                             vodExploreCollections: vodExploreCollections,
                             seriesExploreCollections: seriesExploreCollections,
-                            yearExploreCollections: yearExploreCollections
+                            yearExploreCollections: yearExploreCollections,
+                            homeCategoryCollections: homeCategoryCollections
                         ))
                     }
                     if loadEPGEvents {
@@ -816,7 +855,7 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
@@ -858,6 +897,20 @@ public struct DashboardFeature {
                 if let yearExploreCollections {
                     state.exploreCollections.removeAll { $0.id.hasPrefix("year:") }
                     state.exploreCollections.append(contentsOf: yearExploreCollections)
+                }
+                if let homeCategoryCollections {
+                    var merged = state.availableHomeCategoryCollections
+                    if vodExploreCollections != nil {
+                        merged.removeAll { $0.id.hasPrefix("movie-category:") }
+                    }
+                    if seriesExploreCollections != nil {
+                        merged.removeAll { $0.id.hasPrefix("series-category:") }
+                    }
+                    for collection in homeCategoryCollections {
+                        merged.removeAll { $0.id == collection.id }
+                        merged.append(collection)
+                    }
+                    state.availableHomeCategoryCollections = merged
                 }
                 Self.syncTopShelf(history: state.watchHistoryItems, favorites: state.favoriteItems, vods: state.featuredVODs)
                 let cachedChannels = state.featuredChannels
@@ -1094,6 +1147,41 @@ public struct DashboardFeature {
                     try? await databaseClient.deleteWatchProgress(id, hist.type, hist.playlistID, profileScope)
                 }
 
+            case let .toggleHomeCategoryPin(collectionID):
+                let profileID = profileContextClient.snapshot().profileID
+                guard
+                    let playlistID = state.activePlaylistID,
+                    let profileID,
+                    state.availableHomeCategoryCollections.contains(where: { $0.id == collectionID })
+                else { return .none }
+                if let index = state.pinnedHomeCategoryIDs.firstIndex(of: collectionID) {
+                    state.pinnedHomeCategoryIDs.remove(at: index)
+                } else {
+                    state.pinnedHomeCategoryIDs.append(collectionID)
+                }
+                HomeCategoryPinStore.save(
+                    state.pinnedHomeCategoryIDs,
+                    profileID: profileID,
+                    playlistID: playlistID
+                )
+                return .none
+
+            case let .moveHomeCategoryPin(collectionID, offset):
+                let profileID = profileContextClient.snapshot().profileID
+                guard
+                    let playlistID = state.activePlaylistID,
+                    let profileID,
+                    let index = state.pinnedHomeCategoryIDs.firstIndex(of: collectionID),
+                    state.pinnedHomeCategoryIDs.indices.contains(index + offset)
+                else { return .none }
+                state.pinnedHomeCategoryIDs.swapAt(index, index + offset)
+                HomeCategoryPinStore.save(
+                    state.pinnedHomeCategoryIDs,
+                    profileID: profileID,
+                    playlistID: playlistID
+                )
+                return .none
+
             case .delegate:
                 return .none
             }
@@ -1104,7 +1192,8 @@ public struct DashboardFeature {
         prefix: String,
         label: String,
         categories: [MediaModels.Category],
-        items: [MediaModels.Item]
+        items: [MediaModels.Item],
+        limit: Int = 4
     ) -> [ExploreCollection] {
         let itemsByCategory = Dictionary(grouping: items, by: \.categoryID)
         return categories.compactMap { category -> (Int, ExploreCollection)? in
@@ -1132,7 +1221,7 @@ public struct DashboardFeature {
             }
             return $0.1.id.localizedStandardCompare($1.1.id) == .orderedAscending
         }
-        .prefix(4)
+        .prefix(limit)
         .map(\.1)
     }
 

@@ -9,6 +9,7 @@
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
         @State private var isHomeSettingsPresented = false
+        @State private var isCategoryManagementPresented = false
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -40,6 +41,13 @@
                             HStack(spacing: 20) {
                                 Spacer()
                                 VPNStatusBadge(compact: false)
+                                Button {
+                                    isCategoryManagementPresented = true
+                                } label: {
+                                    Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
+                                        .font(.system(size: 20, weight: .semibold))
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                                 Button {
                                     isHomeSettingsPresented = true
                                 } label: {
@@ -89,6 +97,9 @@
                 store.send(.onAppear(config: config))
             }) {
                 ModularHomeSettingsView()
+            }
+            .sheet(isPresented: $isCategoryManagementPresented) {
+                HomeCategoryPinManagementView(store: store)
             }
         }
 
@@ -390,8 +401,55 @@
                     }
                 }
             case .discoverCollections:
-                ForEach(store.exploreCollections) { collection in
-                    TVShelfSection(title: collection.title) {
+                ForEach(store.visibleExploreCollections) { collection in
+                    homeCategorySection(collection)
+                }
+            }
+        }
+
+        private func homeCategorySection(_ collection: DashboardFeature.ExploreCollection) -> some View {
+            let isPinned = store.pinnedHomeCategoryIDs.contains(collection.id)
+            let canPin = collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 18) {
+                    Text(collection.title)
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(.white)
+                    if canPin {
+                        Button {
+                            store.send(.toggleHomeCategoryPin(collection.id))
+                        } label: {
+                            Label(
+                                isPinned ? AppStrings.Dashboard.unpinHomeCategory : AppStrings.Dashboard.pinHomeCategory,
+                                systemImage: isPinned ? "pin.slash.fill" : "pin.fill"
+                            )
+                        }
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                        .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
+                        .contextMenu {
+                            if isPinned, let index = store.pinnedHomeCategoryIDs.firstIndex(of: collection.id) {
+                                if index > 0 {
+                                    Button {
+                                        store.send(.moveHomeCategoryPin(collection.id, -1))
+                                    } label: {
+                                        Label(AppStrings.Dashboard.movePinnedCategoryUp, systemImage: "arrow.up")
+                                    }
+                                }
+                                if index + 1 < store.pinnedHomeCategoryIDs.count {
+                                    Button {
+                                        store.send(.moveHomeCategoryPin(collection.id, 1))
+                                    } label: {
+                                        Label(AppStrings.Dashboard.movePinnedCategoryDown, systemImage: "arrow.down")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 60)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 40) {
                         ForEach(collection.items) { item in
                             if item.type == .series {
                                 TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
@@ -402,7 +460,11 @@
                             }
                         }
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 40)
                 }
+                .focusSection()
+                .focusGuideBoundary()
             }
         }
 

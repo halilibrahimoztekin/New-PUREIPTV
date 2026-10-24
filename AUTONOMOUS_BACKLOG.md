@@ -856,9 +856,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** `git diff --check` başarılı. iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Kullanıcı talimatı gereği test, simulator veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
-### 84. [PENDING] Ana Sayfa Bölümlerini Kişisel Sıralama ve Sabitleme
-- **Keşif sinyali:** Yeni tvOS IPTV tanıtımlarında özel Home rail ve kullanıcı küratörlüğündeki kategori satırları öne çıkarılıyor: https://www.reddit.com/r/iptvPlayerStream/comments/1xd0fnm/iptv_player_for_appletv/
-- **Aday gap:** Mevcut modular home ayarları var; bölümlerin sürükleyerek sıralanması ve seçili kategori satırlarının pinlenmesi ayrıca kontrol edilecek.
+### 84. [DONE] Ana Sayfa Bölümlerini Kişisel Sıralama ve Sabitleme
+- **Keşif sinyali:** IPTV Deck kullanıcıları Home satırı görünürlüğü/sıralaması ve playlist kategori pinlemeyi istiyor; yanıt özelliklerin gönderildiğini belirtiyor: https://www.reddit.com/r/iptvdeck/comments/1wsly7i/categories_home_screen_pinning/ . Multiview 1.8 de custom lineup sıralama ve hızlı aksiyonları duyuruyor (analist canlı araştırması).
+- **Kod doğrulaması:** ModularHomeSettingsView zaten Home section görünürlüğü ve sırası için iOS drag reorder, tvOS context-menu yukarı/aşağı taşı ve reset içeriyor; bu alan yeniden yazılmayacak. Dashboard keşif satırları yalnız en yoğun dört VOD/Series kategorisini otomatik gösteriyor; kullanıcı seçtiği kategori satırını profile + playlist kapsamında pinleyemiyor.
+- **Uygulama:** — Home keşif kategorileri için iOS/tvOS pin/unpin ve pinned category sırası eklendi; ID listesi UserDefaults’ta profile UUID + playlist UUID anahtarıyla yerel tutuluyor. Varsayılan dört dinamik keşif sırası korunuyor; kullanıcı pinlediyse kategori bu sınır dışında da Home’da üstte görünür. Dashboard araç çubuğundan açılan ortak kategori yönetimi ekranı tüm uygun kategori adaylarını listeler; böylece otomatik ilk dört dışında kalanlar da bulunup sabitlenebilir. Adult-content tercihi değişince görünür keşif satırları ve yönetim adayları eşzamanlı temizlenir, filtrelenmiş katalog yanıtı geldiğinde yeniden doldurulur. İçerik playlist’ten yeniden üretilir, kayda yalnız kategori kimliği gider. Existing Home section ordering/visibility global kalır ve değiştirilmez. Reviewer onayladı; yalnızca iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Test, simulator veya app flow çalıştırılmadı.
+
+- **PR Reviewer:** Adult preference cache invalidation, top-four dışı aday keşfi ve sınırda geçersiz Move Up/Down menü aksiyonları düzeltildikten sonra `[APPROVED]`.
+- **Doğrulama:** `git diff --check` başarılı. iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Kullanıcı talimatı gereği test, simulator veya app flow çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
 ### 85. [PENDING] Birden Çok Kategoriyi Akıllı Kanal Grubunda Birleştirme
 - **Keşif sinyali:** tvOS IPTV kullanıcılarına yönelik yeni oyuncu, ülke/dil/kategori filtrelerinden “Sports Favorites” gibi Smart Suite oluşturmayı ve Home’a sabitlemeyi öne çıkarıyor: https://www.reddit.com/r/iptvPlayerStream/comments/1xd0fnm/iptv_player_for_appletv/
@@ -871,4 +876,44 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 87. [PENDING] Canlı Yayını Yerel Kaydetme ve Zaman Kaydırma
 - **Keşif sinyali:** TiviMate kullanıcıları duraklatılmış canlı yayını USB/NAS’a kaydetme ve kayıt sürerken oynatma isteklerini dile getiriyor; diğer IPTV oyuncuları yerel recording/DVR’ı öne çıkarıyor: https://www.reddit.com/r/TiviMate/comments/1qgm07m/if_tivimate_adds_one_feature_in_2026_what_should/ · https://www.reddit.com/r/tmiptvplayer/comments/1wbmy6g/tm_iptv_player_now_available_on_ios_and_ipad/
 - **Aday gap:** iOS/tvOS dosya sistemi, arka plan süresi, sağlayıcı catch-up ve mevcut indirme mimarisinin sınırları incelenmeden uygulanmayacak.
+
+### 88. [PENDING] Birden Fazla Adlandırılmış Favori Kanal Listesi
+- **Canlı keşif (24 Ekim 2026):** TiviMate kullanıcıları ülke/spor/haber gibi farklı izleme amaçlarına özel birden fazla Favorites listesi istiyor; UHF Wishlist’te aynı kanalı birden fazla favori listesine ekleme ve favori kategorilerini sıralama talebi var: https://www.reddit.com/r/TiviMate/comments/erqlw5 · https://www.reddit.com/r/TiviMate/comments/w95mhg · https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** PureIPTV’de profile-scoped tek favorite boolean/ID seti var; named lists ve bir kanalın çoklu liste üyeliği bulunup bulunmadığı, Playlist/Category düzenleme modeliyle çakışma yaratmadan araştırılmalı.
+
+### 89. [PENDING] Çoklu Kanal Seçimiyle Toplu Favori Yönetimi
+- **Canlı keşif (24 Ekim 2026):** UHF kullanıcıları kanal kanal favori eklemenin yüzlerce kanallı playlistlerde çok yavaş olduğunu, birden fazla kanalı tek işlemde listeye eklemek istediklerini belirtiyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** EPG/grid/list üzerinde çoklu seçim, erişilebilir seçim modu ve tek DB işleminde ekle/çıkar davranışı olup olmadığı kontrol edilmeli; #88’deki named-list mimarisiyle aynı aşamada tasarlanabilir fakat bağımsız görev olarak tutulmalı.
+
+### 90. [PENDING] Kanal Başına Oynatıcı Motoru Tercihi
+- **Canlı keşif (24 Ekim 2026):** UHF Wishlist’te belirli kanal için belirli player seçebilme açık talep; aynı listede kullanıcı VOD ve live içerik için farklı player engine tercihinden de bahsediyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** PureIPTV’de global player backend/decoder seçimi olsa da kanal veya playlist başına override bulunup bulunmadığı araştırılmalı. Kanal kimliği/playlist kapsamı, desteklenmeyen codec’te geri dönüş ve iOS/tvOS backend farkları önemli.
+
+### 91. [PENDING] TV Rehberinde EPG Program Türüne Göre Filtreleme
+- **Canlı keşif (24 Ekim 2026):** TiviMate kullanıcıları EPG XMLTV `category` değerlerine (ör. NFL oyunları) göre yan panel filtresi istiyor; talep, kanal playlist gruplarından farklı olarak o an yayınlanan programların metadata’sına dayanıyor: https://www.reddit.com/r/TiviMate/comments/dbgprk
+- **Aday gap:** EPG parser `category` alanını koruyor mu, timeline araması/filtre state’i program kategorisini kanal filtresinden ayrı temsil edebiliyor mu incelenmeli; XMLTV sağlayıcılarının kategorileri tutarsız olduğundan boş kategori ve localization durumu ele alınmalı.
+
+### 92. [PENDING] Program Başlangıcında Hatırlatma ve Kanala Geçiş
+- **Canlı keşif (24 Ekim 2026):** TiviMate önerilerinde yaklaşan programa hatırlatma bildirimi ve program başlarken otomatik kanala geçiş isteği tekrar ediyor; kullanıcı mevcut lineer TV alışkanlığını örnek veriyor: https://www.reddit.com/r/TiviMate/comments/cgntyd
+- **Aday gap:** EPG reminder varlığı/işlevi ve foreground/background bildirim yetenekleri incelensin. Dar ve güvenli kapsam kullanıcı onaylı yerel bildirim olur; otomatik kanal değiştirme yalnız app foreground’da ve açık tercih varsa değerlendirilmeli.
+
+### 93. [PENDING] EPG İçinden Son İzlenen Kanalı Geçmişten Kaldırma
+- **Canlı keşif (24 Ekim 2026):** UHF kullanıcıları yakın izlenen kanalı doğrudan TV Guide’dan kaldırmak istiyor; mevcut workflow için ayrı history paneline gitmek zahmetli bulunuyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** PureIPTV’de EPG channel context menu’sü recent history silme aksiyonunu sunuyor mu kontrol edilmeli. Silme sadece ilgili profile+playlist recent kaydını kaldırmalı; favorite/playlist channel kaydını etkilememeli.
+
+### 94. [PENDING] Kanal Yukarı/Aşağı Yönünü Ters Çevirme Tercihi
+- **Canlı keşif (24 Ekim 2026):** Apple TV remote kullanıcıları CH+ tuşunun listede aşağı yöne gitmesinden şikâyet edip kanal gezinme yönünü ters çevirebilecek bir ayar istiyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/ . NowSeen 1.7.1 sürüm notlarında “Reverse zapping direction” ayarı yer alıyor: https://apps.apple.com/us/app/nowseen-iptv-player/id6780634050
+- **Aday gap:** Up/down, swipe, Siri Remote click ve fiziksel CH+/CH− eşlemelerinin ortak yön tercihi var mı denetlensin; uygulama içi liste sırası ve EPG navigation order değiştirilmeden yalnızca playback zapping yönü ters çevrilebilir.
+
+### 95. [PENDING] Çoklu Görünümde Her Akış İçin Ayrı Player Kontrolleri
+- **Canlı keşif (24 Ekim 2026):** UHF Wishlist kullanıcıları MultiView’in her akışına tekli oynatıcıdaki stream options/settings kontrollerini uygulama ve pencerelerin yerini elle belirleme talebini yazıyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** MultiView slotlarında audio/focus/removal var; deinterlace, aspect ratio, audio/subtitle track ve per-slot layout customization mevcut mu kontrol edilmeli. Slot bazlı engine state, decoder yükü ve Siri Remote focus kaybolması başlıca risk.
+
+### 96. [PENDING] Playlist ve EPG İçin Ayrı Yenileme Takvimleri
+- **Canlı keşif (24 Ekim 2026):** UHF kullanıcıları yalnız Live TV’yi her gün, Movies/Series içeriğini daha seyrek yenileme ve EPG’yi arka planda takvimle eşitleme isteklerini bildiriyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** PureIPTV’de content/EPG refresh tetikleyicileri playlist başına ayrı takvim, minimum aralık, ağ/enerji kısıtı ve son başarı zamanını destekliyor mu incelensin. Aynı sağlayıcıyı sık çağırarak server yükü yaratmamak için minimum interval ve seri istek sınırı olmalı.
+
+### 97. [PENDING] Favori Serilerde Yeni Bölüm ve Kalan Bölüm Sayısı Rozeti
+- **Canlı keşif (24 Ekim 2026):** UHF Wishlist’te favori dizinin posterinde izlenmemiş bölüm sayısı ile en son yayınlanan bölüme göre sıralama talep ediliyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
+- **Aday gap:** Series favorites modelinde provider’daki bölüm sayısı, kullanıcı watch history’si ve yayınlanma durumu nasıl birleştiriliyor araştırılmalı; mevcut server’ın eksik/unreleased episode listesini metadata ile tamamlaması ve stale cache üzerinde doğru sayı göstermesi temel doğruluk riski.
 

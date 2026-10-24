@@ -7,6 +7,7 @@
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
         @State private var isHomeSettingsPresented = false
+        @State private var isCategoryManagementPresented = false
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -37,6 +38,19 @@
                             Spacer()
 
                             VPNStatusBadge(compact: true)
+
+                            Button {
+                                isCategoryManagementPresented = true
+                            } label: {
+                                Image(systemName: "pin")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .frame(width: 44, height: 44)
+                                    .background(Color(hex: "#1F1F23"), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(AppStrings.Dashboard.manageHomeCategories)
+                            .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
 
                             Button {
                                 isHomeSettingsPresented = true
@@ -103,6 +117,9 @@
                 store.send(.onAppear(config: config))
             }) {
                 ModularHomeSettingsView()
+            }
+            .sheet(isPresented: $isCategoryManagementPresented) {
+                HomeCategoryPinManagementView(store: store)
             }
         }
 
@@ -270,16 +287,66 @@
                     }
                 }
             case .discoverCollections:
-                ForEach(store.exploreCollections) { collection in
-                    featuredSection(title: collection.title, items: collection.items) { item in
-                        if item.type == .series {
-                            SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                .frame(width: 140)
-                        } else {
-                            VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                .frame(width: 140)
+                ForEach(store.visibleExploreCollections) { collection in
+                    homeCategorySection(collection)
+                }
+            }
+        }
+
+        private func homeCategorySection(_ collection: DashboardFeature.ExploreCollection) -> some View {
+            let isPinned = store.pinnedHomeCategoryIDs.contains(collection.id)
+            let canPin = collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
+            return VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(collection.title)
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                    Spacer()
+                    if canPin {
+                        Button {
+                            store.send(.toggleHomeCategoryPin(collection.id))
+                        } label: {
+                            Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+                                .font(.body.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isPinned ? AppStrings.Dashboard.unpinHomeCategory : AppStrings.Dashboard.pinHomeCategory)
+                        .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
+                        .contextMenu {
+                            if isPinned, let index = store.pinnedHomeCategoryIDs.firstIndex(of: collection.id) {
+                                if index > 0 {
+                                    Button {
+                                        store.send(.moveHomeCategoryPin(collection.id, -1))
+                                    } label: {
+                                        Label(AppStrings.Dashboard.movePinnedCategoryUp, systemImage: "arrow.up")
+                                    }
+                                }
+                                if index + 1 < store.pinnedHomeCategoryIDs.count {
+                                    Button {
+                                        store.send(.moveHomeCategoryPin(collection.id, 1))
+                                    } label: {
+                                        Label(AppStrings.Dashboard.movePinnedCategoryDown, systemImage: "arrow.down")
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+                .padding(.horizontal, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(collection.items) { item in
+                            if item.type == .series {
+                                SeriesCardView(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                    .frame(width: 140)
+                            } else {
+                                VODCardView(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                    .frame(width: 140)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
             }
         }
