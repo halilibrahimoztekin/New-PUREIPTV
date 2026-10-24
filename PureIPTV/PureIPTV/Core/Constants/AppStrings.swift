@@ -115,6 +115,7 @@ public enum AppStrings {
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
         public static let nextUp = "Sıradaki:".localized
+        public static let upcoming = "Yaklaşan".localized
         public static let nextLabel = "SONRAKİ".localized
         public static func minutesRemaining(_ minutes: Int) -> String {
             "%lld dk kaldı".localized(Int64(minutes))

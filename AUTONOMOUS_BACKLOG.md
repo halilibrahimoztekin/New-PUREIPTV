@@ -268,9 +268,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Kullanıcı isteği gereği test veya uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — ortak arama alaka puanları ve büyük katalog sıralaması iyileştirildi; reviewer onayladı.
 
-### 57. [PENDING] tvOS EPG Kartında Erişilebilir Program Özeti
+### 57. [IN_PROGRESS] tvOS EPG Kartında Erişilebilir Program Özeti
 - **Bulgu:** IPTVX’in TV Guide, Live Search ve Apple TV sürüm notları daha zengin program bilgisi, okunabilir satırlar ve focus sorunlarının giderilmesini öne çıkarıyor; odak kartı program/kanal/saat bilgisini erişilebilir tek özet olarak sunabilir.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+- **Kod taraması:** EPG zaman çizelgesindeki tvOS program düğmesi başlık/saat ve renkli durum ikonlarını ayrı çocuklar olarak sunuyor; VoiceOver kart başına program, kanal, saat, yayın durumu ve hatırlatıcıyı tek açıklamada alamıyor. Ayrıntı sheet’i zengin metaveriyi sağlıyor ama yalnızca seçimle açılıyor. tvOS’ta kart başlığı 11 pt, saat 9.5 pt ve odak kontrastı zayıftı.
+- **Uygulama:** Her EPG düğmesi kanal + program + saat aralığı + canlı/yaklaşan/arşiv durumu + hatırlatıcı + en fazla 240 karakter açıklamayı tek VoiceOver etiketinde birleştiriyor; eyleme uygun hint ekleniyor ve dekoratif çocuklar gizleniyor. tvOS’ta odak kartının kontrastı artırıldı, yeterli genişlikte başlık ve saat boyutu büyütülüyor. “Yaklaşan” durumu String Catalog’da tüm desteklenen dillere çevrildi.
+- **Reviewer:** `[APPROVED]` — VoiceOver özeti, localization ve tvOS odak stili statik incelemeden geçti; iOS derlemesindeki sabit-focus dalları da platform koşuluna alındı.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Kullanıcı talimatı gereği test veya uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — tvOS EPG program kartları erişilebilir, odakta okunaklı özet sunuyor; reviewer onayladı.
 
 ### 58. [PENDING] Tür ve Yıla Göre Görsel Keşif Koleksiyonları
 - **Bulgu:** IPTVX 25 Explore koleksiyonlarını sağlayıcı kataloglarından türetilen tür ve yıl/onyıl girişlerine bölüyor; aday içerik yalnızca kütüphanede mevcutsa açılıyor.

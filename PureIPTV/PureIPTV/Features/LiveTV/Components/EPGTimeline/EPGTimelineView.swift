@@ -774,8 +774,76 @@ public struct EPGTimelineView: View {
         let isReminderPending = store.pendingReminderRequestIDs[reminderID] != nil
         let isSearchMatch = isProgramMatchingSearch(program)
         let isFallback = program.id.hasPrefix("fallback_") || program.id.hasPrefix("gap_")
+        var accessibilitySummaryParts = [channel.title, program.title]
+        accessibilitySummaryParts.append("\(formatTime(program.startTime)) – \(formatTime(program.endTime))")
+        if isNow {
+            accessibilitySummaryParts.append(AppStrings.Player.liveLabelNormal)
+        } else if isCatchUp {
+            accessibilitySummaryParts.append(AppStrings.Player.catchUp)
+        } else if isFuture {
+            accessibilitySummaryParts.append(AppStrings.Player.upcoming)
+        } else {
+            accessibilitySummaryParts.append(AppStrings.Player.completed)
+        }
+        if isReminderPending {
+            accessibilitySummaryParts.append(AppStrings.Player.reminderScheduling)
+        } else if isScheduled {
+            accessibilitySummaryParts.append(AppStrings.Player.reminderSet)
+        }
+        if !program.description.isEmpty {
+            accessibilitySummaryParts.append(String(program.description.prefix(240)))
+        }
+        let accessibilityHint = isNow
+            ? AppStrings.EPG.watch
+            : (isCatchUp ? AppStrings.Player.watchCatchUp : AppStrings.Player.programDetails)
 
         let genre = genrePastelColor(for: program)
+        var cardBackgroundColor: Color = if isSearchMatch {
+            .cyan.opacity(0.18)
+        } else if isNow {
+            Color.accentColor.opacity(0.22)
+        } else if isCatchUp {
+            .purple.opacity(0.15)
+        } else if isScheduled {
+            .yellow.opacity(0.12)
+        } else if isFallback {
+            .white.opacity(0.035)
+        } else {
+            genre.background
+        }
+
+        var cardBorderColor: Color = if isSearchMatch {
+            .cyan
+        } else if isNow {
+            Color.accentColor.opacity(0.8)
+        } else if isCatchUp {
+            .purple.opacity(0.4)
+        } else if isScheduled {
+            .yellow.opacity(0.5)
+        } else if isFallback {
+            .white.opacity(0.04)
+        } else {
+            .white.opacity(0.08)
+        }
+        var cardBorderLineWidth: CGFloat = (isSearchMatch || isNow) ? 1.5 : 1
+        let titleFontSize: CGFloat
+        let titleFontWeight: Font.Weight
+        let timeFontSize: CGFloat
+        #if os(tvOS)
+            let isFocused = focusedProgramId == program.id
+            titleFontSize = isFocused && width >= 140 ? 14 : 11
+            titleFontWeight = isFocused || isNow || isSearchMatch ? .bold : .medium
+            timeFontSize = isFocused && width >= 120 ? 11 : 9.5
+            if isFocused {
+                cardBackgroundColor = .white.opacity(0.22)
+                cardBorderColor = .white
+                cardBorderLineWidth = 3
+            }
+        #else
+            titleFontSize = 11
+            titleFontWeight = isNow || isSearchMatch ? .bold : .medium
+            timeFontSize = 9.5
+        #endif
 
         return Button {
             HapticManager.shared.trigger(.light)
@@ -790,19 +858,7 @@ public struct EPGTimelineView: View {
             ZStack(alignment: .bottomLeading) {
                 // Card Background (Madde #28: Renk Kodlu EPG Kategorileri)
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(
-                        isSearchMatch
-                            ? Color.cyan.opacity(0.18)
-                            : (isNow
-                                ? Color.accentColor.opacity(0.22)
-                                : (isCatchUp
-                                    ? Color.purple.opacity(0.15)
-                                    : (isScheduled
-                                        ? Color.yellow.opacity(0.12)
-                                        : (isFallback
-                                            ? Color.white.opacity(0.035)
-                                            : genre.background))))
-                    )
+                    .fill(cardBackgroundColor)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(genre.border.opacity(genre.badgeText != nil ? 0.5 : 0.0), lineWidth: 1)
@@ -863,13 +919,13 @@ public struct EPGTimelineView: View {
                         }
 
                         Text(program.title)
-                            .font(.system(size: 11, weight: (isNow || isSearchMatch) ? .bold : .medium))
+                            .font(.system(size: titleFontSize, weight: titleFontWeight))
                             .foregroundColor(isSearchMatch ? .cyan : .white)
                             .lineLimit(1)
                     }
 
                     Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
-                        .font(.system(size: 9.5).monospacedDigit())
+                        .font(.system(size: timeFontSize).monospacedDigit())
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(1)
 
@@ -882,22 +938,15 @@ public struct EPGTimelineView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(
-                        isSearchMatch
-                            ? Color.cyan
-                            : (isNow
-                                ? Color.accentColor.opacity(0.8)
-                                : (isCatchUp
-                                    ? Color.purple.opacity(0.4)
-                                    : (isScheduled
-                                        ? Color.yellow.opacity(0.5)
-                                        : (isFallback
-                                            ? Color.white.opacity(0.04)
-                                            : Color.white.opacity(0.08))))),
-                        lineWidth: (isSearchMatch || isNow) ? 1.5 : 1
+                        cardBorderColor,
+                        lineWidth: cardBorderLineWidth
                     )
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilitySummaryParts.joined(separator: ". ")))
+        .accessibilityHint(Text(accessibilityHint))
         .contextMenu {
             if isFuture {
                 Button {

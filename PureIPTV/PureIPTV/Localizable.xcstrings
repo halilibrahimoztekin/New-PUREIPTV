@@ -19740,6 +19740,32 @@
         }
       }
     },
+    "Yaklaşan" : {
+      "comment" : "A VoiceOver status for a program scheduled to start in the future.",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "قادم" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bevorstehend" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Upcoming" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Próximamente" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "À venir" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "आगामी" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Mendatang" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "In arrivo" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "今後の番組" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "예정" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Aankomend" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "Nadchodzące" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Em breve" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Próximos" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предстоящая программа" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Kommande" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "รายการที่กำลังจะมาถึง" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yaklaşan" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Sắp tới" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "即将播出" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "即將播出" } }
+      }
+    },
     "Yakında geliyor…" : {
       "extractionState" : "manual",
       "localizations" : {
