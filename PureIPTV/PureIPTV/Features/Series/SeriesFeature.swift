@@ -119,6 +119,7 @@ public struct SeriesFeature {
                 state.isLoadingCategories = state.categories.isEmpty
                 state.errorMessage = nil
                 state.config = config
+                let existingPreferences = state.categoryPreferences
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
@@ -126,7 +127,9 @@ public struct SeriesFeature {
                     async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue) }
 
                     let categories = try await categoriesResult.get()
-                    let prefs = await (try? prefsResult.get()) ?? []
+                    // Retain the last applied category policy during a
+                    // transient persistence read failure.
+                    let prefs = await (try? prefsResult.get()) ?? Array(existingPreferences.values)
 
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
@@ -138,7 +141,7 @@ public struct SeriesFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
-                    var finalCategories = categories.filter { category in
+                    var finalCategories = categories.enumerated().filter { _, category in
                         if hideAdult, isAdultContent(category.name) {
                             return false
                         }
@@ -154,16 +157,18 @@ public struct SeriesFeature {
 
                         return true
                     }
-                    finalCategories.sort { a, b in
-                        let orderA = dict[a.id]?.orderIndex ?? Int.max
-                        let orderB = dict[b.id]?.orderIndex ?? Int.max
-                        if orderA == orderB {
-                            return a.name < b.name
+                    finalCategories.sort { lhs, rhs in
+                        let orderA = dict[lhs.element.id]?.orderIndex
+                        let orderB = dict[rhs.element.id]?.orderIndex
+                        switch (orderA, orderB) {
+                        case let (a?, b?) where a != b: return a < b
+                        case (_?, nil): return true
+                        case (nil, _?): return false
+                        default: return lhs.offset < rhs.offset
                         }
-                        return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
+                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
                 } catch: { error, send in
                     await send(.categoriesResponse(.failure(error), preferences: [:]))
                 }
@@ -173,7 +178,12 @@ public struct SeriesFeature {
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
-                    let prefs = await (try? databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue)) ?? []
+                    let prefs: [CategoryPreferenceDTO]
+                    do {
+                        prefs = try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.series.rawValue)
+                    } catch {
+                        return
+                    }
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
@@ -182,7 +192,7 @@ public struct SeriesFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
-                    var finalCategories = currentCats.filter { category in
+                    var finalCategories = currentCats.enumerated().filter { _, category in
                         if hideAdult, isAdultContent(category.name) {
                             return false
                         }
@@ -198,16 +208,18 @@ public struct SeriesFeature {
 
                         return true
                     }
-                    finalCategories.sort { a, b in
-                        let orderA = dict[a.id]?.orderIndex ?? Int.max
-                        let orderB = dict[b.id]?.orderIndex ?? Int.max
-                        if orderA == orderB {
-                            return a.name < b.name
+                    finalCategories.sort { lhs, rhs in
+                        let orderA = dict[lhs.element.id]?.orderIndex
+                        let orderB = dict[rhs.element.id]?.orderIndex
+                        switch (orderA, orderB) {
+                        case let (a?, b?) where a != b: return a < b
+                        case (_?, nil): return true
+                        case (nil, _?): return false
+                        default: return lhs.offset < rhs.offset
                         }
-                        return orderA < orderB
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories), preferences: dict))
+                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
                 }
 
             case .applySortIfChanged:

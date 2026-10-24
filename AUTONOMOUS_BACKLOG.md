@@ -714,9 +714,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Bulgu:** IPTVX App Store değerlendirmesinde birden çok kelimeli kanal aramasının boşluklarla eşleşmediği bildirilmiş; fuzzy normalization ve token eşlemesinde gerçek arama davranışını koruyup iyileştirme fırsatı var.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=iphone&see-all=reviews · https://www.reddit.com/r/TiviMate/comments/1le2vfz/
 
-### 69. [PENDING] EPG Yenilemesinde Kategori Görünürlüğünü ve Sırasını Koruma
-- **Bulgu:** Apple TV kullanıcıları IPTVX kanal favorilerinin EPG güncellemesinden sonra sıfırlanabildiğini ve gizli kategori tercihlerinin yenileme sonrası geri döndüğünü bildiriyor.
-- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/ · https://www.reddit.com/r/appletv/comments/1pauyyl/
+### 69. [IN_PROGRESS] Playlist Yenilemesinde Kategori Tercihlerini ve Sağlayıcı Sırasını Koruma
+- **Canlı doğrulama (24 Ekim 2026):** TiviMate kullanıcıları playlist/grup yenilemesi sonrası gizli grupların geri geldiğini ve kategori sıralamasının bozulduğunu bildiriyor. UHF kategori adlarını ve sırasını düzenleme desteği sunuyor: https://www.reddit.com/r/TiviMate/comments/12cjbmu · https://www.reddit.com/r/TiviMate/comments/n3b78m · https://www.reddit.com/r/TiviMate/comments/1bx62v9/v5_has_ruined_my_playlist/ · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=watch
+- **Kod taraması:** EPG güncelleme yolları kategori listesini veya `CategoryPreference` kayıtlarını değiştirmiyor; önceki EPG kaynak iddiası bu depoda doğrulanmadı. LiveTV, Series ve VOD kategori yüklemeleri tercihler deposu okuma hatasını boş listeye çevirip state'e yayımlıyor; geçici hata gizleme/kilit/sıra tercihlerini ekrandan düşürebilir. Yeni kategorilerde kayıtlı `orderIndex` olmadığında mevcut alfabetik tie-break sağlayıcı sırasını kaybettiriyor.
+- **Kapsam:** Üç kategori yükleyicisinde tercih okuma başarısız olduğunda bellekteki son uygulanmış tercihleri kullan; kayıtlı kategori sırasını koru ve yeni kategorileri sağlayıcı sırasıyla sona ekle. `reloadPreferences` okuma hatasında state'i değiştirme. EPG yenileme koduna dokunma ve tercih şemasını/migrasyonunu değiştirme.
+- **Uygulama:** LiveTV, Series ve VOD `reloadCategories` yolları kategori tercihleri deposu hata verdiğinde son uygulanmış state tercihlerini kullanıyor. Kayıtlı `orderIndex` değerleri önce uygulanıyor; yeni/eşit sıralı kategoriler sağlayıcıdan gelen mevcut sıralarını koruyor. `reloadPreferences` okuma hatasında state'i değiştirmiyor ve başarılı okumada aynı kararlı sıralamayı uyguluyor.
+- **PR Reviewer:** İlk incelemede preference-only yenilemede provider sırasını korumayan tie-break bulundu; düzeltildi. İkinci inceleme `[APPROVED]` verdi, üç feature ve hata yolları kontrol edildi.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0. Xcode mevcut Swift 6 moduna dönüşecek concurrency uyarıları ve her build'de çalışan SwiftFormat script-phase notu yazdı. Kullanıcı talimatı gereği yalnızca build alındı; test/app akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone build’i alındı.
 
 ### 70. [PENDING] Apple TV’de Kanal Adı Uzunluğunu Ayarlama
 - **Bulgu:** UHF kullanıcı değerlendirmesinde uzun kanal adlarının kesilmesi ve kaç karakter gösterileceğinin ayarlanamaması Mac/TV’de kullanım şikâyeti olarak geçiyor.
