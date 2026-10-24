@@ -183,6 +183,16 @@ import SwiftUI
                             .foregroundColor(.white.opacity(0.6))
                     }
 
+                    Button {
+                        store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
+                    } label: {
+                        Label(
+                            store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels,
+                            systemImage: store.isChannelSelectionMode ? "xmark" : "checklist"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+
                     Spacer()
 
                     HStack(spacing: 8) {
@@ -267,8 +277,13 @@ import SwiftUI
 
         private func channelRow(channel: MediaModels.Item) -> some View {
             let isSelected = store.selectedChannel?.id == channel.id
+            let isBulkSelected = store.selectedCurrentChannelIDs.contains(channel.id)
             return Button {
-                store.send(.selectChannelPreview(channel))
+                if store.isChannelSelectionMode {
+                    store.send(.toggleChannelSelection(channel))
+                } else {
+                    store.send(.selectChannelPreview(channel))
+                }
             } label: {
                 HStack(spacing: 12) {
                     ZStack {
@@ -312,15 +327,31 @@ import SwiftUI
 
                     Spacer()
 
+                    if store.isChannelSelectionMode {
+                        Image(systemName: isBulkSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(isBulkSelected ? Color.accentColor : .white.opacity(0.7))
+                            .accessibilityHidden(true)
+                    }
+
                     Button {
                         HapticManager.shared.trigger(.medium)
-                        store.send(.channelSelected(channel))
+                        store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
                     } label: {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 24))
                             .foregroundColor(isSelected ? .accentColor : .white.opacity(0.5))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(channel.title)
+                    .accessibilityValue(store.isChannelSelectionMode
+                        ? (isBulkSelected ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                        : AppStrings.LiveTV.title)
+                    .accessibilityHint(store.isChannelSelectionMode
+                        ? (isBulkSelected
+                            ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                            : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                        : AppStrings.Common.play)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -334,6 +365,15 @@ import SwiftUI
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityValue(store.isChannelSelectionMode
+                ? (isBulkSelected ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                : "")
+            .accessibilityHint(store.isChannelSelectionMode
+                ? (isBulkSelected
+                    ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                    : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                : "")
+            .accessibilityAddTraits(store.isChannelSelectionMode && isBulkSelected ? .isSelected : [])
             .contextMenu {
                 Button {
                     store.send(.toggleFavorite(channel))

@@ -88,6 +88,26 @@ public enum AppStrings {
         public static let invalidChannelLogoURL = "Geçerli bir HTTP veya HTTPS logo adresi girin.".localized
         public static let smartGroups = "Akıllı Gruplar".localized
         public static let favoriteLists = "Favori Listeleri".localized
+        public static let selectChannels = "Kanalları Seç".localized
+        public static let cancelChannelSelection = "Seçimi İptal Et".localized
+        public static let selectAllChannels = "Tümünü Seç".localized
+        public static let clearChannelSelection = "Seçimi Temizle".localized
+        public static let selectedChannelCountFormat = "Seçilen kanal sayısı: %d".localized
+        public static func selectedChannelCount(_ count: Int) -> String {
+            String(format: selectedChannelCountFormat, locale: Locale.current, arguments: [count])
+        }
+
+        public static let addSelectedToFavorites = "Seçilenleri Favorilere Ekle".localized
+        public static let removeSelectedFromFavorites = "Favorilerden Kaldır".localized
+        public static let addSelectedToList = "Listeye Ekle".localized
+        public static let removeSelectedFromList = "Listeden Kaldır".localized
+        public static let favoriteListCapacityReached = "Bir listede en fazla 2.000 kanal olabilir.".localized
+        public static let favoriteListChannelIDTooLong = "Bu kanal kimliği favori listesine kaydedilemeyecek kadar uzun.".localized
+        public static let bulkFavoritesAdded = "Kanallar favorilere eklendi.".localized
+        public static let bulkFavoritesRemoved = "Kanallar favorilerden kaldırıldı.".localized
+        public static let bulkFavoritesFailed = "Favoriler güncellenemedi.".localized
+        public static let selectChannelAccessibilityHint = "Bu kanalı seçmek için etkinleştirin.".localized
+        public static let deselectChannelAccessibilityHint = "Bu kanalın seçimini kaldırmak için etkinleştirin.".localized
         public static let manageFavoriteLists = "Listeleri Yönet".localized
         public static let addToFavoriteList = "Listeye Ekle/Kaldır".localized
         public static let createFavoriteList = "Liste Oluştur".localized

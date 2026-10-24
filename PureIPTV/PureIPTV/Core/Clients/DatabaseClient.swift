@@ -8,6 +8,7 @@ public struct DatabaseClient {
     public var fetchFavoritesByType: @Sendable (_ type: String, _ scope: ProfileContextSnapshot) async throws -> [FavoriteItem]
     public var isFavorite: @Sendable (_ id: String, _ type: String, _ playlistID: UUID?, _ scope: ProfileContextSnapshot) async throws -> Bool
     public var toggleFavorite: @Sendable (_ item: FavoriteItem, _ scope: ProfileContextSnapshot) async throws -> Bool // Returns true if added, false if removed
+    public var setFavorites: @Sendable (_ items: [FavoriteItem], _ isFavorite: Bool, _ scope: ProfileContextSnapshot) async throws -> Bool
 
     public var fetchWatchHistory: @Sendable (_ scope: ProfileContextSnapshot) async throws -> [WatchHistoryItem]
     public var saveWatchProgress: @Sendable (_ item: WatchHistoryItem, _ scope: ProfileContextSnapshot) async throws -> Void
@@ -97,6 +98,90 @@ private func favorites(in context: ModelContext, profileID: UUID?, type: String?
         .sorted { $0.addedAt > $1.addedAt }
 }
 
+private func setFavoriteItems(
+    _ items: [FavoriteItem],
+    isFavorite: Bool,
+    scope: ProfileContextSnapshot,
+    modelContainer: ModelContainer,
+    profileContextClient: ProfileContextClient
+) throws -> Bool {
+    let profileID = scope.profileID
+    let eligibleItems = items.filter { $0.type == "live" }
+    guard !eligibleItems.isEmpty else { return true }
+
+    let context = ModelContext(modelContainer)
+    let descriptor = FetchDescriptor<FavoriteItem>(predicate: #Predicate { $0.profileID == profileID })
+    let ownedRows = try context.fetch(descriptor)
+    let ownsLegacyRows = profileID == legacyDataOwnerID(in: context)
+    let legacyRows: [FavoriteItem] = if ownsLegacyRows {
+        try context.fetch(FetchDescriptor<FavoriteItem>(predicate: #Predicate { $0.profileID == nil }))
+    } else {
+        []
+    }
+
+    var ownedByKey: [String: FavoriteItem] = [:]
+    ownedByKey.reserveCapacity(ownedRows.count)
+    for row in ownedRows {
+        let key = favoriteScopeKey(row)
+        if ownedByKey[key] == nil {
+            ownedByKey[key] = row
+        }
+    }
+    var legacyByKey: [String: FavoriteItem] = [:]
+    legacyByKey.reserveCapacity(legacyRows.count)
+    for row in legacyRows {
+        let key = favoriteScopeKey(row)
+        if legacyByKey[key] == nil {
+            legacyByKey[key] = row
+        }
+    }
+
+    var changed = false
+    let now = Date()
+    var seen = Set<String>()
+    for item in eligibleItems where seen.insert(favoriteScopeKey(item)).inserted {
+        let key = favoriteScopeKey(item)
+        let owned = ownedByKey[key]
+        let legacy = owned == nil ? legacyByKey[key] : nil
+
+        if let row = owned ?? legacy {
+            if legacy != nil {
+                row.profileID = profileID; changed = true
+            }
+            if isFavorite {
+                if row.removedAt != nil {
+                    row.removedAt = nil
+                    row.title = item.title
+                    row.coverURL = item.coverURL
+                    row.streamURL = item.streamURL
+                    row.addedAt = now
+                    changed = true
+                }
+            } else if row.removedAt == nil {
+                row.removedAt = now
+                changed = true
+            }
+        } else if isFavorite {
+            context.insert(FavoriteItem(
+                id: item.id,
+                type: item.type,
+                title: item.title,
+                coverURL: item.coverURL,
+                streamURL: item.streamURL,
+                addedAt: now,
+                playlistID: item.playlistID,
+                profileID: profileID
+            ))
+            changed = true
+        }
+    }
+
+    guard changed else { return true }
+    guard profileContextClient.snapshot() == scope else { return false }
+    try context.save()
+    return true
+}
+
 private func watchHistory(in context: ModelContext, profileID: UUID?) throws -> [WatchHistoryItem] {
     let ownedDescriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate { $0.profileID == profileID })
     let owned = try context.fetch(ownedDescriptor)
@@ -177,6 +262,15 @@ extension DatabaseClient: DependencyKey {
                 guard profileContextClient.snapshot() == scope else { return false }
                 try context.save()
                 return true
+            },
+            setFavorites: { items, isFavorite, scope in
+                try setFavoriteItems(
+                    items,
+                    isFavorite: isFavorite,
+                    scope: scope,
+                    modelContainer: modelContainer,
+                    profileContextClient: profileContextClient
+                )
             },
             fetchWatchHistory: { scope in
                 let profileID = scope.profileID

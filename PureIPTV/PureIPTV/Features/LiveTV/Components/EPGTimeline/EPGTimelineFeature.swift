@@ -177,6 +177,7 @@ public struct EPGTimelineFeature {
         case toggleReminder(EPGProgram, MediaModels.Item)
         case reminderScheduleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
         case toggleFavorite(MediaModels.Item)
+        case bulkDefaultFavoritesChanged(defaultIDs: Set<String>, changedIDsInProviderOrder: [String], operation: BulkFavoriteOperation)
         case saveChannelLogoOverride(channelID: String, rawValue: String?)
         case channelLogoOverrideSaved(
             channelID: String,
@@ -509,6 +510,38 @@ public struct EPGTimelineFeature {
                     if let order {
                         await orderClient.save(order, profileScope.profileID, playlistID, nil)
                     }
+                }
+
+            case let .bulkDefaultFavoritesChanged(defaultIDs, changedIDsInProviderOrder, operation):
+                guard let playlistID = state.config.playlistID else { return .none }
+                state.defaultFavoriteIDs = defaultIDs
+                guard state.favoriteListID == nil else { return .none }
+                state.favoriteLoadRequestID = nil
+                state.favoriteIDs = defaultIDs
+                if operation == .add {
+                    for id in changedIDsInProviderOrder where !state.favoriteOrderIDs.contains(id) {
+                        state.favoriteOrderIDs.append(id)
+                    }
+                } else {
+                    state.favoriteOrderIDs.removeAll { changedIDsInProviderOrder.contains($0) }
+                }
+                let providerIDs = (state.providerOrderChannels.isEmpty ? state.channels : state.providerOrderChannels).map(\.id)
+                let normalizedIDs = FavoriteChannelSortMode.normalizedManualIDs(
+                    favoriteIDs: defaultIDs,
+                    providerIDs: providerIDs,
+                    storedIDs: state.favoriteOrderIDs
+                )
+                state.favoriteOrderIDs = normalizedIDs
+                let order = FavoriteChannelOrderSnapshot(
+                    mode: state.favoriteSortMode,
+                    orderedIDs: normalizedIDs,
+                    revision: nextFavoriteChannelOrderRevision(after: state.favoriteOrderRevision)
+                )
+                state.favoriteOrderRevision = order.revision
+                let scope = profileContextClient.snapshot()
+                let orderClient = favoriteChannelOrderClient
+                return .run { _ in
+                    await orderClient.save(order, scope.profileID, playlistID, nil)
                 }
 
             case let .saveChannelLogoOverride(channelID, rawValue):

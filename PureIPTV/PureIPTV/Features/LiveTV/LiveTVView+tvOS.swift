@@ -20,6 +20,7 @@
         @State private var currentScrubLetter: String = ""
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
+        @State private var selectionRestoreChannelID: String?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -57,6 +58,18 @@
                     .focusSection()
                     .focusGuideBoundary()
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if store.isChannelSelectionMode {
+                    ChannelSelectionToolbar(store: store)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !store.isChannelSelectionMode, let notice = store.bulkFavoriteNotice {
+                    FavoriteListNoticeBanner(message: notice) {
+                        store.send(.dismissBulkFavoriteNotice)
+                    }
+                }
+            }
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedChannel?.displayLogoURL,
@@ -68,6 +81,13 @@
             }
             .onDisappear {
                 store.send(.onDisappear)
+            }
+            .onChange(of: store.isChannelSelectionMode) { _, isSelecting in
+                guard !isSelecting, let selectionRestoreChannelID else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    focusedChannelID = selectionRestoreChannelID
+                    self.selectionRestoreChannelID = nil
+                }
             }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
@@ -109,6 +129,23 @@
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
                             HStack(spacing: 8) {
+                                Button {
+                                    if store.isChannelSelectionMode {
+                                        store.send(.exitChannelSelectionMode)
+                                    } else {
+                                        selectionRestoreChannelID = focusedChannelID
+                                            ?? store.selectedChannel?.id
+                                            ?? store.currentChannels.first?.id
+                                        store.send(.enterChannelSelectionMode)
+                                    }
+                                } label: {
+                                    Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
+                                        .font(.system(size: 18))
+                                        .padding(8)
+                                }
+                                .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
+
                                 Button {
                                     isSmartGroupManagerPresented = true
                                 } label: {
@@ -312,8 +349,26 @@
                         channel: channel,
                         isSelected: store.selectedChannel?.id == channel.id
                     ) {
-                        store.send(.channelSelected(channel))
+                        store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
                     }
+                    .overlay(alignment: .topTrailing) {
+                        if store.isChannelSelectionMode {
+                            Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                                .font(.title2)
+                                .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
+                                .padding(12)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityValue(store.isChannelSelectionMode
+                        ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                        : "")
+                    .accessibilityHint(store.isChannelSelectionMode
+                        ? (store.selectedCurrentChannelIDs.contains(channel.id)
+                            ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                            : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                        : "")
+                    .accessibilityAddTraits(store.isChannelSelectionMode && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
                     .focused($focusedChannelID, equals: channel.id)
                     .id(channel.id)
                     .contextMenu {

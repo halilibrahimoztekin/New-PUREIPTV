@@ -40,6 +40,18 @@
                     phoneLayout
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if store.isChannelSelectionMode {
+                    ChannelSelectionToolbar(store: store)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !store.isChannelSelectionMode, let notice = store.bulkFavoriteNotice {
+                    FavoriteListNoticeBanner(message: notice) {
+                        store.send(.dismissBulkFavoriteNotice)
+                    }
+                }
+            }
             .onAppear {
                 store.send(.onAppear(config: config))
             }
@@ -79,6 +91,18 @@
                         Spacer()
 
                         HStack(spacing: 10) {
+                            Button {
+                                store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
+                            } label: {
+                                Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
+
                             Button {
                                 isSmartGroupManagerPresented = true
                             } label: {
@@ -254,9 +278,20 @@
                         ForEach(store.currentChannels) { channel in
                             ChannelCardView(
                                 channel: channel,
-                                isSelected: store.selectedChannel?.id == channel.id
+                                isSelected: store.selectedChannel?.id == channel.id,
+                                selectionMode: store.isChannelSelectionMode,
+                                isMarkedForBulkAction: store.selectedCurrentChannelIDs.contains(channel.id)
                             ) {
-                                store.send(.channelSelected(channel))
+                                store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                if store.isChannelSelectionMode {
+                                    Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                        .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
+                                        .padding(10)
+                                        .accessibilityHidden(true)
+                                }
                             }
                             .contextMenu {
                                 Button {

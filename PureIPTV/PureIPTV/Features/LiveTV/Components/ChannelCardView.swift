@@ -10,11 +10,21 @@ import SwiftUI
 public struct ChannelCardView: View {
     let channel: MediaModels.Item
     let isSelected: Bool
+    var selectionMode = false
+    var isMarkedForBulkAction = false
     var onTap: (() -> Void)?
 
-    public init(channel: MediaModels.Item, isSelected: Bool = false, onTap: (() -> Void)? = nil) {
+    public init(
+        channel: MediaModels.Item,
+        isSelected: Bool = false,
+        selectionMode: Bool = false,
+        isMarkedForBulkAction: Bool = false,
+        onTap: (() -> Void)? = nil
+    ) {
         self.channel = channel
         self.isSelected = isSelected
+        self.selectionMode = selectionMode
+        self.isMarkedForBulkAction = isMarkedForBulkAction
         self.onTap = onTap
     }
 
@@ -99,6 +109,15 @@ public struct ChannelCardView: View {
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
+        .accessibilityValue(selectionMode
+            ? (isMarkedForBulkAction ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+            : "")
+        .accessibilityHint(selectionMode
+            ? (isMarkedForBulkAction
+                ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                : AppStrings.LiveTV.selectChannelAccessibilityHint)
+            : "")
+        .accessibilityAddTraits(selectionMode && isMarkedForBulkAction ? .isSelected : [])
     }
 }
 
