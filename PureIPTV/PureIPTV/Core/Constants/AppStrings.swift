@@ -370,6 +370,7 @@ public enum AppStrings {
         public static let security = "GÜVENLİK".localized
         public static let appearance = "GÖRÜNÜM".localized
         public static let themeColor = "Ana Renk".localized
+        public static let twoLineTVChannelTitles = "Kanal Adlarını İki Satırda Göster".localized
         public static let appIcon = "Uygulama İkonu".localized
         public static let about = "HAKKINDA".localized
         public static let appVersion = "PureIPTV v1.0.0".localized

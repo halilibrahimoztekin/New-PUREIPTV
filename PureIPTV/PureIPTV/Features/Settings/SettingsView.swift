@@ -147,6 +147,13 @@ public struct SettingsView: View {
                     theme.setAppIcon(iconName: newValue == "AppIcon" ? nil : newValue)
                 }
 
+                #if os(tvOS)
+                    Toggle(AppStrings.Settings.twoLineTVChannelTitles, isOn: Binding(
+                        get: { store.showTwoLineTVChannelTitles },
+                        set: { store.send(.setShowTwoLineTVChannelTitles($0)) }
+                    ))
+                #endif
+
                 Picker(AppStrings.Settings.startupScreen, selection: Binding(
                     get: { store.defaultStartupTab },
                     set: { store.send(.setDefaultStartupTab($0)) }

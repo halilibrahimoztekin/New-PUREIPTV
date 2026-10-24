@@ -48,6 +48,7 @@ public struct SettingsFeature {
         public var hardwareAcceleration: Bool = true
         public var isOLEDDimmingEnabled: Bool = true
         public var isChannelNameCleaningEnabled: Bool = true
+        public var showTwoLineTVChannelTitles = false
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
         public var downloadConcurrencyLimit: Int = 1
@@ -152,6 +153,7 @@ public struct SettingsFeature {
         case setHardwareAcceleration(Bool)
         case setOLEDDimmingEnabled(Bool)
         case setChannelNameCleaningEnabled(Bool)
+        case setShowTwoLineTVChannelTitles(Bool)
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
         case setDownloadConcurrencyLimit(Int)
@@ -259,6 +261,7 @@ public struct SettingsFeature {
                 state.hardwareAcceleration = settingsClient.hardwareAcceleration()
                 state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
                 state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
+                state.showTwoLineTVChannelTitles = settingsClient.showTwoLineTVChannelTitles()
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
@@ -419,6 +422,10 @@ public struct SettingsFeature {
             case let .setChannelNameCleaningEnabled(val):
                 state.isChannelNameCleaningEnabled = val
                 return .run { _ in settingsClient.setIsChannelNameCleaningEnabled(val) }
+
+            case let .setShowTwoLineTVChannelTitles(enabled):
+                state.showTwoLineTVChannelTitles = enabled
+                return .run { _ in settingsClient.setShowTwoLineTVChannelTitles(enabled) }
 
             case let .setEpgTimeShift(val), let .setGlobalEPGTimeShift(val):
                 state.epgTimeShift = val

@@ -723,9 +723,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0. Xcode mevcut Swift 6 moduna dönüşecek concurrency uyarıları ve her build'de çalışan SwiftFormat script-phase notu yazdı. Kullanıcı talimatı gereği yalnızca build alındı; test/app akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca iPhone build’i alındı.
 
-### 70. [PENDING] Apple TV’de Kanal Adı Uzunluğunu Ayarlama
-- **Bulgu:** UHF kullanıcı değerlendirmesinde uzun kanal adlarının kesilmesi ve kaç karakter gösterileceğinin ayarlanamaması Mac/TV’de kullanım şikâyeti olarak geçiyor.
-- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/ · https://apps.apple.com/ie/app/uhf-love-your-iptv/id6443751726?platform=iphone&see-all=reviews
+### 70. [IN_PROGRESS] Apple TV’de Kanal Adlarını İki Satır Gösterebilme
+- **Canlı doğrulama (24 Ekim 2026):** UHF/Apple TV kullanıcısı uzun kanal adlarının kesildiğini ve gösterilen harf sayısını ayarlayamadığını bildiriyor; TiviMate kullanıcıları iki satır ve kaydırma seçeneklerini tartışıyor, kaydırmanın yavaş hissettirdiğini belirtiyor: https://www.reddit.com/r/appletv/comments/1ndrj7n/ · https://www.reddit.com/r/TiviMate/comments/1o44c3n/for_the_love_of_god_in_me_i_can_figure_out_how_to/ · https://www.reddit.com/r/TiviMate/comments/1vvatun/is_there_any_way_to_extend_the_first_left_column/. IPTVX’in son tvOS notlarında uzun kanal/kategori adlarının okunabilirliği iyileştirilmiş: https://apps.apple.com/sg/app/iptvx/id1451470024?platform=vision
+- **Kod taraması:** `TVChannelCard` (`DesignSystem/TVMediaCards.swift`) ile `PlayerSidebarDrawer` kanal satırı tek satırda kesiyor; harf sayısına bağlı sabit limit farklı font, ekran eni ve dile göre doğru davranmaz.
+- **Kapsam:** tvOS kanal kartı ve oynatıcı çekmecesinde kullanıcı tercihiyle tek/iki satır başlık göster; varsayılan tek satır kalsın, tam kanal adı VoiceOver etiketinde korunsun. Kart yüksekliğini ve focus ölçeğini koşullu değiştirme; otomatik kaydırma ekleme.
+- **Uygulama:** `SettingsClient`/TCA üzerinden kalıcı tvOS tercihi eklendi; Ayarlar’da erişilebilir iki satır geçişi sunuluyor. `TVChannelCard` ve Player Sidebar aynı tercihi kullanıyor; varsayılan tek satır, VoiceOver etiketi tam kanal adını koruyor. Kart oranı ve odak büyütmesi değişmedi; kaydırma davranışı eklenmedi.
+- **PR Reviewer:** `[APPROVED]`; tvOS koşulları, kalıcı tercih, VoiceOver tam başlığı, kart oranı/focus davranışı ve string katalog çevirileri incelendi.
+- **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0; mevcut Swift concurrency uyarıları ve SwiftFormat script-phase notu var. Kullanıcı isteği doğrultusunda yalnızca build alındı; test veya uygulama akışı çalıştırılmadı. Değişiklik tvOS’e özel olduğu için Apple TV hedefi bu build’de compile edilmedi.
+- **Durum:** `[DONE]` — kaynak reviewer onayladı; yalnızca iPhone build’i alındı.
 
 ### 71. [PENDING] iPhone’dan Apple TV’ye İçerik Gönderme
 - **Bulgu:** Apple TV IPTV kullanıcıları, uzaktan yazma/arama güçlüğünü azaltmak için iPhone’dan film, dizi veya canlı kanal gönderip TV’de açma özelliğini paylaşıyor.

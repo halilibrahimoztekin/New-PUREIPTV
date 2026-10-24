@@ -110,6 +110,8 @@ public struct SettingsClient: Sendable {
 
     public var isChannelNameCleaningEnabled: @Sendable () -> Bool = { true }
     public var setIsChannelNameCleaningEnabled: @Sendable (Bool) -> Void = { _ in }
+    public var showTwoLineTVChannelTitles: @Sendable () -> Bool = { false }
+    public var setShowTwoLineTVChannelTitles: @Sendable (Bool) -> Void = { _ in }
 }
 
 extension SettingsClient: DependencyKey {
@@ -142,6 +144,7 @@ extension SettingsClient: DependencyKey {
         let audioEQKey = "com.pureiptv.audioEQPreset"
         let channelEQPrefix = "com.pureiptv.channelAudioEQ."
         let channelNameCleaningKey = "com.pureiptv.isChannelNameCleaningEnabled"
+        let twoLineTVChannelTitlesKey = "com.pureiptv.tvOSChannelTitlesTwoLines"
 
         // Set defaults for some keys
         defaults.register(defaults: [
@@ -158,6 +161,7 @@ extension SettingsClient: DependencyKey {
             oledDimmingKey: true,
             audioEQKey: "flat",
             channelNameCleaningKey: true,
+            twoLineTVChannelTitlesKey: false,
         ])
 
         return SettingsClient(
@@ -370,7 +374,9 @@ extension SettingsClient: DependencyKey {
             },
             setIsChannelNameCleaningEnabled: { enabled in
                 defaults.set(enabled, forKey: channelNameCleaningKey)
-            }
+            },
+            showTwoLineTVChannelTitles: { defaults.bool(forKey: twoLineTVChannelTitlesKey) },
+            setShowTwoLineTVChannelTitles: { defaults.set($0, forKey: twoLineTVChannelTitlesKey) }
         )
     }()
 

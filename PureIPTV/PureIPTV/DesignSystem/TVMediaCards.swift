@@ -10,6 +10,7 @@
         public let action: () -> Void
 
         @Environment(\.isFocused) private var isFocused
+        @AppStorage("com.pureiptv.tvOSChannelTitlesTwoLines") private var showTwoLineTitles = false
 
         public init(
             channel: MediaModels.Item,
@@ -70,7 +71,7 @@
                             Text(channel.title)
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(.white)
-                                .lineLimit(1)
+                                .lineLimit(showTwoLineTitles ? 2 : 1)
                             Spacer()
                             if channel.tvArchive == 1 {
                                 CatchUpBadge(isCompact: true, archiveDays: channel.tvArchiveDuration)
@@ -84,6 +85,7 @@
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(channel.title)
         }
     }
 

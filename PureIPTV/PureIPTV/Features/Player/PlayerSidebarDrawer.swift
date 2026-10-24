@@ -11,6 +11,9 @@ public struct PlayerSidebarDrawer: View {
     @State private var searchQuery: String = ""
     @FocusState private var focusedItemID: String?
     @FocusState private var focusedFilterID: String?
+    #if os(tvOS)
+        @AppStorage("com.pureiptv.tvOSChannelTitlesTwoLines") private var showTwoLineChannelTitles = false
+    #endif
 
     public init(store: StoreOf<PlayerFeature>, onClose: @escaping () -> Void) {
         self.store = store
@@ -553,7 +556,12 @@ public struct PlayerSidebarDrawer: View {
                         .font(.subheadline.weight(isCurrent ? .bold : .regular))
                     #endif
                         .foregroundStyle(isCurrent ? Color(hex: "#0A84FF") : .white)
+                    #if os(tvOS)
+                        .lineLimit(showTwoLineChannelTitles ? 2 : 1)
+                    #else
                         .lineLimit(1)
+                    #endif
+                        .accessibilityLabel(item.title)
 
                     HStack(spacing: 5) {
                         if let cat = item.categoryID, !cat.isEmpty {
@@ -688,6 +696,7 @@ public struct PlayerSidebarDrawer: View {
         .buttonStyle(.plain)
         #endif
         .focused($focusedItemID, equals: item.id)
+        .accessibilityLabel(item.title)
         .contextMenu {
             Button(role: .destructive) {
                 #if !os(tvOS)
