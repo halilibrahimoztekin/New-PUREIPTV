@@ -133,3 +133,76 @@ public enum ChannelSortOption: String, CaseIterable, Identifiable, Codable, Send
         }
     }
 }
+
+/// A sort preference scoped to the live favorites for one profile and playlist.
+public enum FavoriteChannelSortMode: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
+    case defaultOrder
+    case nameAscending
+    case nameDescending
+    case manual
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .defaultOrder: AppStrings.Favorites.sortDefault
+        case .nameAscending: AppStrings.Favorites.sortNameAscending
+        case .nameDescending: AppStrings.Favorites.sortNameDescending
+        case .manual: AppStrings.Favorites.sortManual
+        }
+    }
+
+    public static func orderedItems(
+        _ items: [MediaModels.Item],
+        mode: Self,
+        providerOrder: [MediaModels.Item],
+        manualIDs: [String]
+    ) -> [MediaModels.Item] {
+        let providerIndex = Dictionary(
+            providerOrder.enumerated().map { ($0.element.id, $0.offset) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        switch mode {
+        case .defaultOrder:
+            return items.sorted {
+                (providerIndex[$0.id] ?? Int.max) < (providerIndex[$1.id] ?? Int.max)
+            }
+        case .nameAscending, .nameDescending:
+            return items.sorted { lhs, rhs in
+                let comparison = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
+                if comparison == .orderedSame {
+                    return (providerIndex[lhs.id] ?? Int.max) < (providerIndex[rhs.id] ?? Int.max)
+                }
+                return mode == .nameAscending
+                    ? comparison == .orderedAscending
+                    : comparison == .orderedDescending
+            }
+        case .manual:
+            var rank: [String: Int] = [:]
+            for (index, id) in manualIDs.enumerated() where rank[id] == nil {
+                rank[id] = index
+            }
+            return items.sorted { lhs, rhs in
+                let left = rank[lhs.id] ?? Int.max
+                let right = rank[rhs.id] ?? Int.max
+                if left != right {
+                    return left < right
+                }
+                return (providerIndex[lhs.id] ?? Int.max) < (providerIndex[rhs.id] ?? Int.max)
+            }
+        }
+    }
+
+    public static func normalizedManualIDs(
+        favoriteIDs: Set<String>,
+        providerIDs: [String],
+        storedIDs: [String]
+    ) -> [String] {
+        var seen = Set<String>()
+        var result = storedIDs.filter { favoriteIDs.contains($0) && seen.insert($0).inserted }
+        result.append(contentsOf: providerIDs.filter { favoriteIDs.contains($0) && seen.insert($0).inserted })
+        return result
+    }
+}

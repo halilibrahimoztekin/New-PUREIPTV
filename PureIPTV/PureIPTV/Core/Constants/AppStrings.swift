@@ -108,6 +108,16 @@ public enum AppStrings {
         public static let sortRecentlyWatched = "Son İzlenenler".localized
     }
 
+    public enum Favorites {
+        public static let sortDefault = "Kanal Sırası".localized
+        public static let sortNameAscending = "İsim (A-Z)".localized
+        public static let sortNameDescending = "İsim (Z-A)".localized
+        public static let sortManual = "Elle Sıralama".localized
+        public static let moveUp = "Favoriyi Yukarı Taşı".localized
+        public static let moveDown = "Favoriyi Aşağı Taşı".localized
+        public static let orderingDescription = "Bu playlist ve profilin favori kanallarının sırasını belirler.".localized
+    }
+
     // MARK: - Player & EPG
 
     public enum Player {

@@ -376,6 +376,19 @@ public struct EPGTimelineView: View {
                         }
                     )
                 }
+
+                if store.isFavoritesOnly {
+                    Picker(AppStrings.LiveTV.sortTitle, selection: Binding(
+                        get: { store.favoriteSortMode },
+                        set: { store.send(.setFavoriteSortMode($0)) }
+                    )) {
+                        ForEach(FavoriteChannelSortMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityHint(AppStrings.Favorites.orderingDescription)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -545,6 +558,8 @@ public struct EPGTimelineView: View {
 
     private func stickyChannelCell(_ channel: MediaModels.Item) -> some View {
         let isFav = store.favoriteIDs.contains(channel.id)
+        let favoriteIndex = store.filteredChannels.firstIndex(where: { $0.id == channel.id }) ?? 0
+        let favoriteCount = store.filteredChannels.count
 
         return Button {
             HapticManager.shared.trigger(.medium)
@@ -626,6 +641,23 @@ public struct EPGTimelineView: View {
                     isFav ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
                     systemImage: isFav ? "star.slash.fill" : "star.fill"
                 )
+            }
+
+            if store.isFavoritesOnly, store.favoriteSortMode == .manual, store.searchQuery.isEmpty {
+                if favoriteIndex > 0 {
+                    Button {
+                        store.send(.moveFavorite(channelID: channel.id, offset: -1))
+                    } label: {
+                        Label(AppStrings.Favorites.moveUp, systemImage: "arrow.up")
+                    }
+                }
+                if favoriteIndex + 1 < favoriteCount {
+                    Button {
+                        store.send(.moveFavorite(channelID: channel.id, offset: 1))
+                    } label: {
+                        Label(AppStrings.Favorites.moveDown, systemImage: "arrow.down")
+                    }
+                }
             }
 
             Button {

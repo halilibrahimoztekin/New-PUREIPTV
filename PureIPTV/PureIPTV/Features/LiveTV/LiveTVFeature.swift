@@ -109,7 +109,7 @@ public struct LiveTVFeature {
 
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("live", profileScope)) ?? []
-                    let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }
+                    let visible = favs.filter { $0.playlistID == config.playlistID && config.playlistID != nil }
                     await send(.favoritesLoaded(Set(visible.map(\.id)), profileScope))
                 }
 
@@ -376,6 +376,7 @@ public struct LiveTVFeature {
                     state.epgTimeline = EPGTimelineFeature.State(
                         config: config,
                         channels: reordered,
+                        providerOrderChannels: state.currentChannels,
                         categories: state.categories,
                         selectedCategoryID: channel.categoryID,
                         favoriteIDs: state.favoriteIDs
@@ -442,11 +443,18 @@ public struct LiveTVFeature {
                 state.selectedTabMode = mode
                 if mode == .epg, state.epgTimeline == nil {
                     if let config = state.config {
-                        let allLoadedChannels = Array(state.channelsByCategory.values.joined())
+                        var allLoadedChannels = state.categories.flatMap { state.channelsByCategory[$0.id] ?? [] }
+                        var seenChannelIDs = Set(allLoadedChannels.map(\.id))
+                        for categoryID in state.channelsByCategory.keys.sorted() {
+                            for channel in state.channelsByCategory[categoryID] ?? [] where seenChannelIDs.insert(channel.id).inserted {
+                                allLoadedChannels.append(channel)
+                            }
+                        }
                         let channelsToUse = allLoadedChannels.isEmpty ? state.currentChannels : allLoadedChannels
                         state.epgTimeline = EPGTimelineFeature.State(
                             config: config,
                             channels: channelsToUse,
+                            providerOrderChannels: channelsToUse,
                             categories: state.categories,
                             selectedCategoryID: state.selectedCategoryID,
                             favoriteIDs: state.favoriteIDs
