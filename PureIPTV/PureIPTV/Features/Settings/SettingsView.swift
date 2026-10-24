@@ -126,17 +126,21 @@ public struct SettingsView: View {
             }
 
             Section(header: Text(AppStrings.Settings.appearance)) {
-                Picker(AppStrings.Settings.themeColor, selection: $theme.themeColorHex) {
-                    ForEach(theme.availableColors, id: \.hex) { color in
-                        HStack {
-                            Circle().fill(Color(hex: color.hex)).frame(width: 16, height: 16)
-                            Text(color.name)
-                        }.tag(color.hex)
+                Picker(AppStrings.Settings.visualThemePreset, selection: Binding(
+                    get: { theme.selectedPresetID },
+                    set: { theme.setThemePreset(id: $0) }
+                )) {
+                    ForEach(theme.availablePresets) { preset in
+                        HStack(spacing: 10) {
+                            Circle().fill(preset.accentColor).frame(width: 16, height: 16)
+                            Text(preset.name)
+                        }
+                        .tag(preset.id)
                     }
                 }
-                .onChange(of: theme.themeColorHex) { _, newValue in
-                    theme.setThemeColor(hex: newValue)
-                }
+                Text(AppStrings.Settings.visualThemePresetDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Picker(AppStrings.Settings.appIcon, selection: $theme.currentAppIconName) {
                     ForEach(theme.availableIcons, id: \.name) { icon in

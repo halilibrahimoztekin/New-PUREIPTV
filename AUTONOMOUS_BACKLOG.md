@@ -772,9 +772,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iPhone 17 / iOS 26.5 Release Xcode build exit code 0. Xcode SwiftFormat script phase’inden “command failed with exit code 0” satırı ve mevcut Swift concurrency uyarıları yazdı. `git diff --check` başarılı. Kullanıcı talimatı gereği test/app akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
-### 75. [PENDING] İsteğe Bağlı Tema ve Görsel Paketleri
-- **Bulgu:** IPTVX’in tema/add-on kataloğu görünüm kişiselleştirmesini ikon, arka plan ve skin seviyesine taşıyor; PureIPTV profil avatarı ve vurgu rengi seçenekleri bu paketlenmiş sunumları kapsamıyor.
-- **Kaynak:** https://iptvx.app/addons/index.html · https://iptvx.app/features/index.html
+### 75. [DONE] Koordineli Görsel Tema Presetleri
+- **Canlı doğrulama (24 Ekim 2026):** IPTVX’in Add-ons/Features sayfaları temaları yalnız vurgu renginden ibaret değil; skin, arka plan, app icon ve avatarı tek görsel kimlikte birleştiriyor. App Store sürüm notları temalı artwork/skin/add-on görsellerinin devam ettiğini doğruluyor: https://iptvx.app/addons/index.html · https://iptvx.app/features/index.html · https://apps.apple.com/us/app/iptvx/id1451470024
+- **Kod taraması:** PureIPTV’de beş global accent rengi, üç app icon seçeneği ve profil başına SF Symbol avatar var; seçilebilir ambient/mesh arka plan tonu veya koordineli tema preset’i yok. tvOS `DynamicMeshBackgroundView` içerik artwork’ünden palette çıkarıyor, bu görseli korumalıyız.
+- **Kapsam:** Hazır, ağsız görsel preset’leriyle accent rengini ve tvOS mesh arka planının hafif atmosferik tonunu tek seçimde eşleştir. İçerikten çıkarılan artwork, mevcut app icon/avatar picker ve profil ayrımı aynen korunsun; indirilebilir paket mağazası, ödeme veya dış görsel asset ekleme yok.
+- **Yapılan:** Beş ağsız preset accent rengini tvOS atmosfer tonuyla eşleştiriyor; eski `appThemeColorHex` en yakın preset’e taşınıyor. iOS/tvOS ana ekran tint’i seçili preset’i izliyor, tvOS mesh artwork paletini koruyup hafif atmosferik wash ekliyor. Ayar etiketleri 21 locale’e eklendi; app icon/avatar seçenekleri korundu.
+- **Doğrulama:** Kaynak reviewer `[APPROVED]`; yalnızca kullanıcının istediği iPhone 17 / iOS 26.5 Release Xcode build’i exit code 0 ile tamamlandı. Build mevcut Swift 6 actor-isolation/deprecation uyarılarını verdi. Test, simulator/app açılışı veya akış çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca istenen iPhone Xcode build’i alındı.
 
 ### 76. [PENDING] Son Kullanılan Playlist’i Açma Tercihi
 - **Bulgu:** IPTVX sürüm notlarında uygulama açılışında son playlist’i otomatik açma davranışı seçenek olarak yer alıyor; PureIPTV aktif playlist’i zaten saklıyor ama giriş akışında kullanıcı seçimiyle otomatik yükleme tercihi ayrıca incelenmeli.

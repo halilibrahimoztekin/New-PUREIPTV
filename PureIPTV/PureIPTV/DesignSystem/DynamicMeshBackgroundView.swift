@@ -160,6 +160,7 @@ public struct DynamicMeshBackgroundView: View {
     let titleSeed: String
 
     @State private var currentPalette: DynamicMeshPalette = .default
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     public init(imageURL: URL? = nil, titleSeed: String = "PureIPTV") {
         self.imageURL = imageURL
@@ -176,6 +177,18 @@ public struct DynamicMeshBackgroundView: View {
             meshLayer
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.85), value: currentPalette)
+
+            #if os(tvOS)
+                RadialGradient(
+                    colors: [themeManager.atmosphereColor.opacity(0.18), .clear],
+                    center: .topLeading,
+                    startRadius: 20,
+                    endRadius: 1050
+                )
+                .blendMode(.screen)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.65), value: themeManager.selectedPresetID)
+            #endif
 
             // Cinematic Dark Vignette & Atmospheric Fog
             LinearGradient(

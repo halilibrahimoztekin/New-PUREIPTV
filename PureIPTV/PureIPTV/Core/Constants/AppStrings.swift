@@ -371,6 +371,13 @@ public enum AppStrings {
         public static let manageAccounts = "Hesap Yönetimi (Playlists)".localized
         public static let security = "GÜVENLİK".localized
         public static let appearance = "GÖRÜNÜM".localized
+        public static let visualThemePreset = "Görsel Tema".localized
+        public static let visualThemePresetDescription = "Vurgu rengini tvOS atmosferik arka plan tonuyla eşleştirir.".localized
+        public static let themePresetClassic = "Klasik".localized
+        public static let themePresetOcean = "Okyanus".localized
+        public static let themePresetAurora = "Aurora".localized
+        public static let themePresetForest = "Orman".localized
+        public static let themePresetEmber = "Kor".localized
         public static let themeColor = "Ana Renk".localized
         public static let twoLineTVChannelTitles = "Kanal Adlarını İki Satırda Göster".localized
         public static let appIcon = "Uygulama İkonu".localized
