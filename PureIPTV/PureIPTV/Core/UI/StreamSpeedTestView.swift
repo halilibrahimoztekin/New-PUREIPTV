@@ -14,11 +14,11 @@ public struct StreamSpeedTestView: View {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("IPTV Sunucu Hız & Ping Testi")
+                    Text("Ağ Hızı ve HTTP Yanıt Süresi")
                         .font(.headline)
                         .foregroundStyle(.primary)
 
-                    Text(targetURL?.host ?? "Aktif Yayın Sunucusu")
+                    Text(targetURL?.host ?? "Google Cloud test sunucusu · IPTV sağlayıcınız değil")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -54,11 +54,11 @@ public struct StreamSpeedTestView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                case .testingPing:
+                case .testingResponseTime:
                     VStack(spacing: 6) {
                         ProgressView()
                             .scaleEffect(1.2)
-                        Text("Ping Ölçülüyor...")
+                        Text("HTTP Yanıt Süresi Ölçülüyor...")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -78,7 +78,7 @@ public struct StreamSpeedTestView: View {
                         .animation(.linear(duration: 0.1), value: progress)
 
                     VStack(spacing: 2) {
-                        Text(String(format: "%.1f", currentMbps))
+                        Text(formattedMbps(currentMbps))
                             .font(.system(size: 36, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
                         Text("Mbps")
@@ -92,7 +92,7 @@ public struct StreamSpeedTestView: View {
                         .frame(width: 170, height: 170)
 
                     VStack(spacing: 2) {
-                        Text(String(format: "%.1f", result.speedMbps))
+                        Text(formattedMbps(result.speedMbps))
                             .font(.system(size: 36, weight: .bold, design: .rounded))
                             .foregroundStyle(.green)
                         Text("Mbps")
@@ -116,38 +116,7 @@ public struct StreamSpeedTestView: View {
 
             // Metrics Row
             if case let .completed(result) = speedTest.state {
-                VStack(spacing: 12) {
-                    HStack(spacing: 24) {
-                        VStack(spacing: 2) {
-                            Text("Gecikme (Ping)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(Int(result.pingMs)) ms")
-                                .font(.headline.bold())
-                                .foregroundStyle(.orange)
-                        }
-
-                        Divider()
-                            .frame(height: 30)
-
-                        VStack(spacing: 2) {
-                            Text("Önerilen Kalite")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(result.recommendedBadge)
-                                .font(.headline.bold())
-                                .foregroundStyle(.cyan)
-                        }
-                    }
-
-                    Text(result.qualityRating)
-                        .font(.caption.bold())
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.15))
-                        .clipShape(Capsule())
-                }
+                StreamSpeedResultMetricsView(result: result)
             }
 
             // Action Button
@@ -184,10 +153,63 @@ public struct StreamSpeedTestView: View {
     }
 }
 
+private struct StreamSpeedResultMetricsView: View {
+    let result: StreamSpeedResult
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 24) {
+                VStack(spacing: 2) {
+                    Text("HTTP Yanıt Süresi")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(responseTimeText(result.responseTimeMs))
+                        .font(.headline.bold())
+                        .foregroundStyle(result.responseTimeMs == nil ? Color.secondary : Color.orange)
+                }
+
+                Divider()
+                    .frame(height: 30)
+
+                VStack(spacing: 2) {
+                    Text("Tahmini Bant Genişliği")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(result.recommendedBadge)
+                        .font(.headline.bold())
+                        .foregroundStyle(.cyan)
+                }
+            }
+
+            Text(result.qualityRating)
+                .font(.caption.bold())
+                .foregroundStyle(.green)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.15))
+                .clipShape(Capsule())
+
+            Text("\(result.endpointLabel) · en fazla 2 MB. Bu ölçüm oynatma kararlılığını test etmez.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+}
+
+private func responseTimeText(_ responseTimeMs: Double?) -> String {
+    guard let responseTimeMs else { return "Ölçülemedi" }
+    return "\(Int(responseTimeMs)) ms"
+}
+
+private func formattedMbps(_ value: Double) -> String {
+    String(format: "%.1f", value)
+}
+
 private extension SpeedTestState {
     var isActive: Bool {
         switch self {
-        case .testingPing, .testingSpeed: true
+        case .testingResponseTime, .testingSpeed: true
         default: false
         }
     }

@@ -2,34 +2,37 @@ import Combine
 import Foundation
 
 public struct StreamSpeedResult: Sendable, Equatable {
-    public let pingMs: Double
+    /// Time to receive a successful HTTP response; this is not ICMP ping.
+    public let responseTimeMs: Double?
     public let speedMbps: Double
     public let qualityRating: String
     public let recommendedBadge: String
+    public let endpointLabel: String
 
-    public init(pingMs: Double, speedMbps: Double) {
-        self.pingMs = pingMs
+    public init(responseTimeMs: Double?, speedMbps: Double, endpointLabel: String) {
+        self.responseTimeMs = responseTimeMs
         self.speedMbps = speedMbps
+        self.endpointLabel = endpointLabel
 
-        if speedMbps >= 25.0, pingMs < 80 {
-            qualityRating = "Mükemmel (4K HDR & 60 FPS)"
-            recommendedBadge = "4K HDR"
-        } else if speedMbps >= 12.0, pingMs < 150 {
-            qualityRating = "Çok İyi (1080p FHD Kesintisiz)"
-            recommendedBadge = "1080p FHD"
+        if speedMbps >= 25.0 {
+            qualityRating = "Yüksek bant genişliği tahmini"
+            recommendedBadge = "25 Mbps+"
+        } else if speedMbps >= 12.0 {
+            qualityRating = "Orta-yüksek bant genişliği tahmini"
+            recommendedBadge = "12 Mbps+"
         } else if speedMbps >= 5.0 {
-            qualityRating = "İyi (720p HD Standart)"
-            recommendedBadge = "720p HD"
+            qualityRating = "Orta bant genişliği tahmini"
+            recommendedBadge = "5 Mbps+"
         } else {
-            qualityRating = "Zayıf (Donma & Tamponlama Riski)"
-            recommendedBadge = "SD / Donma Riski"
+            qualityRating = "Düşük bant genişliği tahmini"
+            recommendedBadge = "5 Mbps altı"
         }
     }
 }
 
 public enum SpeedTestState: Equatable, Sendable {
     case idle
-    case testingPing
+    case testingResponseTime
     case testingSpeed(progress: Double, currentMbps: Double)
     case completed(StreamSpeedResult)
     case failed(String)
@@ -41,54 +44,81 @@ public final class StreamSpeedTestManager: ObservableObject {
 
     @Published public private(set) var state: SpeedTestState = .idle
     private var testTask: Task<Void, Never>?
+    private var throughputTask: Task<Double, Never>?
+    private var activeTestID: UUID?
 
     private init() {}
 
     public func startTest(targetURL: URL? = nil) {
         cancelTest()
+        let testID = UUID()
+        activeTestID = testID
 
-        // Fallback to a fast public CDN/test segment if targetURL is nil
+        // Settings tests the public endpoint. The UI names it explicitly so
+        // results are never mistaken for the user's IPTV provider route.
         let testURL = targetURL ?? URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!
+        let endpointLabel = targetURL?.host ?? "Google Cloud public sample endpoint"
 
-        state = .testingPing
+        state = .testingResponseTime
 
         testTask = Task { [weak self] in
             guard let self else { return }
 
-            // 1. Measure Latency (Ping)
-            let ping = await measurePing(to: testURL)
+            // 1. Measure HTTP response time
+            let responseTime = await measureResponseTime(to: testURL)
 
-            guard !Task.isCancelled else {
-                await MainActor.run { self.state = .idle }
+            guard !Task.isCancelled, activeTestID == testID else { return }
+
+            state = .testingSpeed(progress: 0.05, currentMbps: 0.0)
+
+            // 2. Count bytes off MainActor. Only aggregate progress reaches the UI.
+            let manager = self
+            throughputTask = Task.detached(priority: .utility) {
+                await Self.measureThroughput(from: testURL) { progress, currentMbps in
+                    await manager.publishProgress(
+                        progress: progress,
+                        currentMbps: currentMbps,
+                        testID: testID
+                    )
+                }
+            }
+            guard let throughputTask else { return }
+            let speedMbps = await throughputTask.value
+
+            guard !Task.isCancelled, activeTestID == testID else { return }
+            self.throughputTask = nil
+
+            guard speedMbps > 0 else {
+                activeTestID = nil
+                state = .failed("Bu uç noktadan ölçüm tamamlanamadı. Bağlantıyı veya sunucu yanıtını kontrol edin.")
                 return
             }
 
-            await MainActor.run {
-                self.state = .testingSpeed(progress: 0.05, currentMbps: 0.0)
-            }
-
-            // 2. Measure Throughput
-            let speedMbps = await measureThroughput(from: testURL)
-
-            guard !Task.isCancelled else {
-                await MainActor.run { self.state = .idle }
-                return
-            }
-
-            let result = StreamSpeedResult(pingMs: ping, speedMbps: speedMbps)
-            await MainActor.run {
-                self.state = .completed(result)
-            }
+            let result = StreamSpeedResult(
+                responseTimeMs: responseTime,
+                speedMbps: speedMbps,
+                endpointLabel: endpointLabel
+            )
+            activeTestID = nil
+            state = .completed(result)
         }
     }
 
     public func cancelTest() {
+        activeTestID = nil
         testTask?.cancel()
         testTask = nil
+        throughputTask?.cancel()
+        throughputTask = nil
         state = .idle
     }
 
-    private func measurePing(to url: URL) async -> Double {
+    private func publishProgress(progress: Double, currentMbps: Double, testID: UUID) {
+        guard activeTestID == testID else { return }
+        state = .testingSpeed(progress: progress, currentMbps: currentMbps)
+    }
+
+    private func measureResponseTime(to url: URL) async -> Double? {
         var pings: [Double] = []
 
         for _ in 0 ..< 3 {
@@ -99,34 +129,48 @@ public final class StreamSpeedTestManager: ObservableObject {
             request.timeoutInterval = 3.0
 
             do {
-                _ = try await URLSession.shared.data(for: request)
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let response = response as? HTTPURLResponse,
+                      (200 ..< 400).contains(response.statusCode) else { continue }
                 let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
                 pings.append(elapsed)
             } catch {
-                // If HEAD fails, record high ping fallback
-                pings.append(180.0)
+                // Failed HTTP requests are unavailable measurements, not latency samples.
             }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        if pings.isEmpty {
-            return 150.0
-        }
+        guard !pings.isEmpty else { return nil }
         let average = pings.reduce(0, +) / Double(pings.count)
         return Double(round(10 * average) / 10)
     }
 
-    private func measureThroughput(from url: URL) async -> Double {
+    private nonisolated static func measureThroughput(
+        from url: URL,
+        onProgress: @escaping @Sendable (Double, Double) async -> Void
+    ) async -> Double {
         var request = URLRequest(url: url)
-        request.setValue("bytes=0-10485760", forHTTPHeaderField: "Range") // 10MB chunk
+        let byteLimit: Int64 = 2_097_152
+        request.setValue("bytes=0-\(byteLimit - 1)", forHTTPHeaderField: "Range")
         request.timeoutInterval = 8.0
 
         let start = CFAbsoluteTimeGetCurrent()
         var totalBytes: Int64 = 0
 
         do {
-            let (bytes, response) = try await URLSession.shared.bytes(for: request)
-            let expectedLength = response.expectedContentLength > 0 ? response.expectedContentLength : 10_485_760
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 8
+            configuration.timeoutIntervalForResource = 8
+            configuration.waitsForConnectivity = false
+            let session = URLSession(configuration: configuration)
+            defer { session.invalidateAndCancel() }
+
+            let (bytes, response) = try await session.bytes(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 || httpResponse.statusCode == 206 else { return 0 }
+            let expectedLength = response.expectedContentLength > 0
+                ? min(response.expectedContentLength, byteLimit)
+                : byteLimit
 
             for try await _ in bytes {
                 totalBytes += 1
@@ -137,21 +181,17 @@ public final class StreamSpeedTestManager: ObservableObject {
                         let currentMbps = (Double(totalBytes) * 8.0) / (elapsed * 1_000_000.0)
                         let progress = min(0.95, Double(totalBytes) / Double(expectedLength))
 
-                        await MainActor.run {
-                            self.state = .testingSpeed(progress: progress, currentMbps: Double(round(10 * currentMbps) / 10))
-                        }
+                        await onProgress(progress, Double(round(10 * currentMbps) / 10))
                     }
                 }
 
-                if Task.isCancelled || totalBytes >= 10_485_760 {
+                if Task.isCancelled || totalBytes >= byteLimit {
                     break
                 }
             }
         } catch {
-            // Fallback or network error
-            if totalBytes == 0 {
-                return 0.0
-            }
+            // A partial response is not a valid throughput measurement.
+            return 0
         }
 
         let totalTime = max(0.1, CFAbsoluteTimeGetCurrent() - start)
