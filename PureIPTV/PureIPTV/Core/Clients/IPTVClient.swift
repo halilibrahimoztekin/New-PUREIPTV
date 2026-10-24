@@ -30,8 +30,9 @@ actor M3UCache {
         entries[key, default: Entry()].xmltvData = data
     }
 
-    func clearXmltvData(for key: String) {
-        entries[key]?.xmltvData = nil
+    func replaceXmltvData(_ data: XMLTVData, for key: String) throws {
+        try Task.checkCancellation()
+        entries[key, default: Entry()].xmltvData = data
     }
 }
 
@@ -83,8 +84,8 @@ public struct IPTVClient {
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
     public var resolveVODItem: @Sendable (_ config: PlaylistConfig, _ vodID: String, _ categoryID: String?) async throws -> MediaModels.Item?
     public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
+    public var refreshEPGCache: @Sendable (_ config: PlaylistConfig) async throws -> Void
     public var searchCachedEPGPrograms: @Sendable (_ config: PlaylistConfig, _ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _, _ in [] }
-    public var clearEPGCache: @Sendable (_ config: PlaylistConfig) async -> Void = { _ in }
 }
 
 private func decodeEPGItems(_ data: Data) throws -> [EPGItemDTO] {
@@ -474,9 +475,16 @@ extension IPTVClient: DependencyKey {
                 guard !vodID.isEmpty, vodID.count <= 512 else { return nil }
 
                 if config.type == .m3u {
-                    let item = await ensureM3UCache(config).first {
-                        $0.id == vodID && $0.resolvedMediaType == .vod
-                            && (categoryID == nil || $0.groupTitle == categoryID)
+                    let cachedItems = await ensureM3UCache(config)
+                    var item: M3UItemDTO?
+                    for candidate in cachedItems {
+                        guard candidate.id == vodID else { continue }
+                        guard candidate.resolvedMediaType == .vod else { continue }
+                        if let categoryID, candidate.groupTitle != categoryID {
+                            continue
+                        }
+                        item = candidate
+                        break
                     }
                     guard let item else { return nil }
                     return MediaModels.Item(
@@ -685,6 +693,25 @@ extension IPTVClient: DependencyKey {
 
                 return result
             },
+            refreshEPGCache: { config in
+                guard config.type == .m3u else { return }
+                @Dependency(\.xmltvParser) var xmltvParser
+                _ = await ensureM3UCache(config)
+                let cacheKey = m3uCacheKey(config)
+                guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
+                    throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
+                }
+                let data = try await networkClient.fetchData(
+                    url: epgURL,
+                    userAgentOverride: config.userAgentOverride
+                )
+                // Keep the current parsed XMLTV value intact until parsing has
+                // completed successfully; malformed responses never evict the
+                // last-good cache.
+                let parsedXMLTV = try await xmltvParser.parse(data)
+                try Task.checkCancellation()
+                try await m3uCache.replaceXmltvData(parsedXMLTV, for: cacheKey)
+            },
             searchCachedEPGPrograms: { config, query, channels, limit in
                 guard config.type == .m3u, limit > 0 else { return [] }
                 let cacheKey = m3uCacheKey(config)
@@ -757,9 +784,6 @@ extension IPTVClient: DependencyKey {
                     }
                     return lhs.program.title.localizedStandardCompare(rhs.program.title) == .orderedAscending
                 }.prefix(limit))
-            },
-            clearEPGCache: { config in
-                await m3uCache.clearXmltvData(for: m3uCacheKey(config))
             }
         )
     }()
@@ -777,8 +801,8 @@ extension IPTVClient: DependencyKey {
         fetchVODInfo: { _, _ in DetailModels.Info() },
         resolveVODItem: { _, _, _ in nil },
         fetchShortEPG: { _, _, _ in [] },
-        searchCachedEPGPrograms: { _, _, _, _ in [] },
-        clearEPGCache: { _ in }
+        refreshEPGCache: { _ in },
+        searchCachedEPGPrograms: { _, _, _, _ in [] }
     )
 }
 

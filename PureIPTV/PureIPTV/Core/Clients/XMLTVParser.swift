@@ -33,6 +33,8 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
     private var currentProgrammeEnd: Date?
     private var currentProgrammeTitle: String = ""
     private var currentProgrammeDesc: String = ""
+    private var hasSeenRootElement = false
+    private var hasValidXMLTVRoot = false
 
     private static let formatters: [DateFormatter] = {
         let formats = [
@@ -78,7 +80,15 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
         XMLTVData(channels: channels, programmes: programmes)
     }
 
+    nonisolated func containsValidXMLTVRoot() -> Bool {
+        hasSeenRootElement && hasValidXMLTVRoot
+    }
+
     nonisolated func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+        if !hasSeenRootElement {
+            hasSeenRootElement = true
+            hasValidXMLTVRoot = elementName == "tv"
+        }
         currentElement = elementName
 
         if elementName == "channel" {
@@ -154,11 +164,17 @@ extension XMLTVParserClient: DependencyKey {
                 let parser = XMLParser(data: data)
                 let delegate = XMLTVParserDelegate()
                 parser.delegate = delegate
-                if parser.parse() {
-                    return delegate.getParsedData()
-                } else {
+                guard parser.parse() else {
                     throw NSError(domain: "XMLTVParser", code: 1, userInfo: [NSLocalizedDescriptionKey: "XML parsing failed"])
                 }
+                guard delegate.containsValidXMLTVRoot() else {
+                    throw NSError(
+                        domain: "XMLTVParser",
+                        code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: "XMLTV document root must be <tv>."]
+                    )
+                }
+                return delegate.getParsedData()
             }.value
         }
     )

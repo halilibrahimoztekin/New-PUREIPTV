@@ -160,6 +160,7 @@ public struct EPGTimelineFeature {
         case updateCurrentTime
         case refreshEPGTapped
         case performSync(forced: Bool)
+        case syncEPGCacheRefreshFailed
         case syncCompleted(Date)
         case clearSyncStatusMessage
         case closeTapped
@@ -243,12 +244,24 @@ public struct EPGTimelineFeature {
                 return .merge(
                     .cancel(id: EPGTimelineCancelID.clearSyncStatusMessage),
                     .run { [iptvClient] send in
-                        await iptvClient.clearEPGCache(config)
+                        do {
+                            try await iptvClient.refreshEPGCache(config)
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            await send(.syncEPGCacheRefreshFailed)
+                            return
+                        }
                         for ch in channelsToPrewarm {
                             await send(.refreshEPG(streamID: ch.id))
                         }
                     }
                 )
+
+            case .syncEPGCacheRefreshFailed:
+                guard state.isSyncingEPG else { return .none }
+                state.syncPendingEPGChannels = []
+                state.failedEPGChannelCount = max(1, state.failedEPGChannelCount)
+                return .send(.syncCompleted(Date()))
 
             case let .syncCompleted(date):
                 guard state.isSyncingEPG else { return .none }

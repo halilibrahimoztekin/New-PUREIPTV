@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import Foundation
 
-public struct DownloadBulkDeleteResult: Equatable, Sendable {
+public nonisolated struct DownloadBulkDeleteResult: Equatable, Sendable {
     public let removedCount: Int
     public let bytesFreed: Int64
     public let failureCount: Int
