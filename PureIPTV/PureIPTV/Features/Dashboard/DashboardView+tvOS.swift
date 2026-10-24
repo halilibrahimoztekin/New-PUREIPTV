@@ -8,6 +8,7 @@
     public struct DashboardView_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
+        @State private var isHomeSettingsPresented = false
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -40,6 +41,13 @@
                                 Spacer()
                                 VPNStatusBadge(compact: false)
                                 Button {
+                                    isHomeSettingsPresented = true
+                                } label: {
+                                    Label("Ana Ekranı Düzenle", systemImage: "slider.horizontal.3")
+                                        .font(.system(size: 20, weight: .semibold))
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                                Button {
                                     store.send(.openManagePlaylistsTapped)
                                 } label: {
                                     HStack(spacing: 12) {
@@ -61,185 +69,8 @@
                             .padding(.horizontal, 60)
                             .padding(.top, 20)
 
-                            // Hero Banner with Focus Guide Boundary
-                            if let heroVOD = store.featuredVODs.first {
-                                TVHeroBanner(vod: heroVOD) {
-                                    store.send(.vodSelected(heroVOD))
-                                }
-                                .focusGuideBoundary()
-                            }
-
-                            // Continue Watching
-                            if !store.continueWatchingItems.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
-                                    ForEach(store.continueWatchingItems) { hist in
-                                        ResumeWatchingCardView(
-                                            item: hist,
-                                            userAgentOverride: config.userAgentOverride,
-                                            onResume: {
-                                                store.send(.historySelected(hist))
-                                            },
-                                            onRestart: {
-                                                store.send(.restartHistorySelected(hist))
-                                            },
-                                            onDelete: {
-                                                store.send(.deleteHistorySelected(hist))
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Favorites
-                            if !store.favoriteItems.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
-                                    ForEach(store.favoriteItems) { fav in
-                                        TVFavoriteMediaCard(item: fav, userAgentOverride: config.userAgentOverride) {
-                                            store.send(.favoriteSelected(fav))
-                                        }
-                                        .frame(width: fav.type.lowercased() == "live" ? 340 : 220)
-                                        .contextMenu {
-                                            Button {
-                                                store.send(.favoriteSelected(fav))
-                                            } label: {
-                                                Label(AppStrings.Common.watchNow, systemImage: "play.fill")
-                                            }
-
-                                            Button(role: .destructive) {
-                                                store.send(.deleteFavorite(fav))
-                                            } label: {
-                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Live TV
-                            if !store.featuredChannels.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.featuredLiveTV) {
-                                    ForEach(store.featuredChannels) { channel in
-                                        TVChannelCard(channel: channel, isSelected: false) {
-                                            store.send(.channelSelected(channel))
-                                        }
-                                        .frame(width: 340)
-                                        .contextMenu {
-                                            Button {
-                                                store.send(.toggleFavorite(item: channel, type: "live"))
-                                            } label: {
-                                                if store.favoriteIDs.contains(channel.id) {
-                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                                } else {
-                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                                }
-                                            }
-
-                                            Button {
-                                                store.send(.channelSelected(channel))
-                                            } label: {
-                                                Label(AppStrings.Common.watchNow, systemImage: "play.fill")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            if store.isSportsHubVisible, !store.epgEvents.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
-                                    ForEach(store.epgEvents) { event in
-                                        DashboardEPGEventCard(event: event) {
-                                            store.send(.channelSelected(event.channel))
-                                        }
-                                        .frame(width: 380)
-                                    }
-                                }
-                            }
-
-                            // Smart Recommendations (Madde #8 & #42)
-                            if !store.recommendedVODs.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
-                                    ForEach(store.recommendedVODs) { vod in
-                                        TVVODCard(vod: vod, isSelected: false) {
-                                            store.send(.vodSelected(vod))
-                                        }
-                                        .frame(width: 220)
-                                        .contextMenu {
-                                            Button {
-                                                store.send(.toggleFavorite(item: vod, type: "vod"))
-                                            } label: {
-                                                if store.favoriteIDs.contains(vod.id) {
-                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                                } else {
-                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                                }
-                                            }
-
-                                            Button {
-                                                store.send(.vodSelected(vod))
-                                            } label: {
-                                                Label("Detayları Gör", systemImage: "info.circle")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // New Movies
-                            if store.featuredVODs.count > 1 {
-                                TVShelfSection(title: AppStrings.Dashboard.newMovies) {
-                                    ForEach(Array(store.featuredVODs.dropFirst())) { vod in
-                                        TVVODCard(vod: vod, isSelected: false) {
-                                            store.send(.vodSelected(vod))
-                                        }
-                                        .frame(width: 220)
-                                        .contextMenu {
-                                            Button {
-                                                store.send(.toggleFavorite(item: vod, type: "vod"))
-                                            } label: {
-                                                if store.favoriteIDs.contains(vod.id) {
-                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                                } else {
-                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                                }
-                                            }
-
-                                            Button {
-                                                store.send(.vodSelected(vod))
-                                            } label: {
-                                                Label("Detayları Gör", systemImage: "info.circle")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // New Series
-                            if !store.featuredSeries.isEmpty {
-                                TVShelfSection(title: AppStrings.Dashboard.newSeries) {
-                                    ForEach(store.featuredSeries) { series in
-                                        TVSeriesCard(series: series, isSelected: false) {
-                                            store.send(.seriesSelected(series))
-                                        }
-                                        .frame(width: 220)
-                                        .contextMenu {
-                                            Button {
-                                                store.send(.toggleFavorite(item: series, type: "series"))
-                                            } label: {
-                                                if store.favoriteIDs.contains(series.id) {
-                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                                } else {
-                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                                }
-                                            }
-
-                                            Button {
-                                                store.send(.seriesSelected(series))
-                                            } label: {
-                                                Label("Bölümleri Gör", systemImage: "list.number")
-                                            }
-                                        }
-                                    }
-                                }
+                            ForEach(store.homeSections.filter(\.isVisible)) { section in
+                                homeSectionView(section)
                             }
                         }
                         .padding(.bottom, 80)
@@ -253,6 +84,149 @@
             }
             .onDisappear {
                 store.send(.onDisappear)
+            }
+            .sheet(isPresented: $isHomeSettingsPresented, onDismiss: {
+                store.send(.onAppear(config: config))
+            }) {
+                ModularHomeSettingsView()
+            }
+        }
+
+        @ViewBuilder
+        private func homeSectionView(_ section: HomeSectionConfig) -> some View {
+            let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
+            let newMovieItems = Array(store.featuredVODs.dropFirst(isHeroVisible ? 1 : 0))
+            switch section.type {
+            case .hero:
+                if let heroVOD = store.featuredVODs.first {
+                    TVHeroBanner(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
+                        .focusGuideBoundary()
+                }
+            case .continueWatching:
+                if !store.continueWatchingItems.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
+                        ForEach(store.continueWatchingItems) { item in
+                            ResumeWatchingCardView(item: item, userAgentOverride: config.userAgentOverride,
+                                                   onResume: { store.send(.historySelected(item)) },
+                                                   onRestart: { store.send(.restartHistorySelected(item)) },
+                                                   onDelete: { store.send(.deleteHistorySelected(item)) })
+                        }
+                    }
+                }
+            case .favorites:
+                if !store.favoriteItems.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
+                        ForEach(store.favoriteItems) { item in
+                            TVFavoriteMediaCard(item: item, userAgentOverride: config.userAgentOverride) {
+                                store.send(.favoriteSelected(item))
+                            }
+                            .frame(width: item.type.lowercased() == "live" ? 340 : 220)
+                            .contextMenu {
+                                Button { store.send(.favoriteSelected(item)) } label: {
+                                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                }
+                                Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
+                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+            case .featuredLiveTV:
+                if !store.featuredChannels.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.featuredLiveTV) {
+                        ForEach(store.featuredChannels) { channel in
+                            TVChannelCard(channel: channel, isSelected: false) {
+                                store.send(.channelSelected(channel))
+                            }
+                            .frame(width: 340)
+                            .contextMenu {
+                                Button { store.send(.toggleFavorite(item: channel, type: "live")) } label: {
+                                    Label(
+                                        store.favoriteIDs.contains(channel.id)
+                                            ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                        systemImage: store.favoriteIDs.contains(channel.id) ? "heart.slash" : "heart"
+                                    )
+                                }
+                                Button { store.send(.channelSelected(channel)) } label: {
+                                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                }
+                            }
+                        }
+                    }
+                }
+            case .sportsHub:
+                if store.isSportsHubVisible, !store.epgEvents.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
+                        ForEach(store.epgEvents) { event in
+                            DashboardEPGEventCard(event: event) { store.send(.channelSelected(event.channel)) }
+                                .frame(width: 380)
+                        }
+                    }
+                }
+            case .recommendations:
+                if !store.recommendedVODs.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
+                        ForEach(store.recommendedVODs) { vod in
+                            TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                                .frame(width: 220)
+                                .contextMenu {
+                                    Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
+                                        Label(
+                                            store.favoriteIDs.contains(vod.id)
+                                                ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                            systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
+                                        )
+                                    }
+                                    Button { store.send(.vodSelected(vod)) } label: {
+                                        Label("Detayları Gör", systemImage: "info.circle")
+                                    }
+                                }
+                        }
+                    }
+                }
+            case .recentlyAddedVOD:
+                if !newMovieItems.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.newMovies) {
+                        ForEach(newMovieItems) { vod in
+                            TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                                .frame(width: 220)
+                                .contextMenu {
+                                    Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
+                                        Label(
+                                            store.favoriteIDs.contains(vod.id)
+                                                ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                            systemImage: store.favoriteIDs.contains(vod.id) ? "heart.slash" : "heart"
+                                        )
+                                    }
+                                    Button { store.send(.vodSelected(vod)) } label: {
+                                        Label("Detayları Gör", systemImage: "info.circle")
+                                    }
+                                }
+                        }
+                    }
+                }
+            case .trendingSeries:
+                if !store.featuredSeries.isEmpty {
+                    TVShelfSection(title: AppStrings.Dashboard.newSeries) {
+                        ForEach(store.featuredSeries) { series in
+                            TVSeriesCard(series: series, isSelected: false) { store.send(.seriesSelected(series)) }
+                                .frame(width: 220)
+                                .contextMenu {
+                                    Button { store.send(.toggleFavorite(item: series, type: "series")) } label: {
+                                        Label(
+                                            store.favoriteIDs.contains(series.id)
+                                                ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                            systemImage: store.favoriteIDs.contains(series.id) ? "heart.slash" : "heart"
+                                        )
+                                    }
+                                    Button { store.send(.seriesSelected(series)) } label: {
+                                        Label("Bölümleri Gör", systemImage: "list.number")
+                                    }
+                                }
+                        }
+                    }
+                }
             }
         }
 

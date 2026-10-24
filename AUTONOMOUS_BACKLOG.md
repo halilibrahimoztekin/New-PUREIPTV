@@ -227,9 +227,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. İlk sandbox build’i GitHub DNS erişimi olmadığı için paketleri çözümleyemedi; mevcut Xcode Swift Package önbelleği kullanılarak iki build de başarıyla tamamlandı. `git diff --check` başarılı. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — Canlı arama hatırlatıcıları tamamlandı ve reviewer onayladı.
 
-### 52. [PENDING] Kişiye Göre Ayarlanabilir Keşif Vitrini
-- **Bulgu:** IPTVX 25, izleme davranışından şekillenen öneri rafları ve koleksiyonları tanıtıyor; UHF hero bölümünün özelleştirilip kaldırılmasını sağlıyor.
-- **Kaynaklar:** https://iptvx.app/ · https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv
+### 52. [IN_PROGRESS] Kişiye Göre Ayarlanabilir Keşif Vitrini
+- **Bulgu:** IPTVX 25 farklı izleme davranışından beslenen For You rafları sunuyor; UHF 2.0 hero vitrinin kişiselleştirilmesine ve kaldırılmasına izin veriyor.
+- **Canlı keşif (24 Ekim 2026):** IPTVX For You açıklaması öneri satırlarının kütüphane geçmişi ve mevcut metadata’ya göre değiştiğini; UHF 2.0 kullanıcı duyurusu hero’nun Home customization’dan ayarlanabildiğini doğruluyor: https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://www.reddit.com/r/uhfapp/comments/1ww274e/new_uhf_update_200/
+- **Kod taraması:** `SmartRecommendationEngine` ve “Sana Özel Öneriler” rafı mevcut; `HomeSectionManager` görünürlük/sıralama saklıyor ve `ModularHomeSettingsView` var. Ancak ayar ekranına hiçbir navigation/sheet bağlantısı yok, model yalnız 5 satır tanımlıyor; dashboard hero, öneri, canlı, devam etme, favoriler ve katalog raflarını sabit sırada çiziyor. `DashboardFeature` yalnız sports hub görünürlüğünü ayardan okuyor.
+- **Kapsam:** Mevcut davranış tabanlı öneri algoritmasını koru; ana ekranda hero ve mevcut rafların gizlenip yeniden sıralanmasını iOS/tvOS’ta erişilebilir bir “Ana Ekranı Düzenle” ekranına bağla. Tercihler kalıcı kalsın; önceden kaydedilmiş beşli ayar dizileri yeni raflara güvenli varsayılan eklesin.
+- **Uygulama:** iOS ve tvOS ana ekranlarına erişilebilir ayar girişi eklendi. Hero, devam etme, favoriler, canlı TV, spor, kişisel öneriler, yeni filmler ve diziler rafları kalıcı tercihe göre gizlenip sıralanabiliyor. Eski beşli tercih kayıtları yinelenen türleri temizleyip eksik rafları varsayılan sıralarına ekleyerek taşınıyor. tvOS’ta Siri Remote context menu ile bölüm sıralama, iOS’ta düzenleme modu bulunuyor. Hero gizlenince öne çıkan film yeni filmler rafında kaybolmuyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Kullanıcı talimatı gereği test, kurulu uygulama akışı veya login akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 53. [PENDING] Web Konsolundan Playlist ve Yedek Yönetimi
 - **Bulgu:** UHF’in App Store sürüm geçmişi, PRO kullanıcıları için playlist ve yedeklerin tarayıcıdan yönetildiği web konsolunu listeliyor.

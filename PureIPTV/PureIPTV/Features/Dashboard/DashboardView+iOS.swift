@@ -6,6 +6,7 @@
     public struct DashboardView_iOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
+        @State private var isHomeSettingsPresented = false
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -36,6 +37,18 @@
                             Spacer()
 
                             VPNStatusBadge(compact: true)
+
+                            Button {
+                                isHomeSettingsPresented = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .frame(width: 44, height: 44)
+                                    .background(Color(hex: "#1F1F23"), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Ana Ekranı Düzenle")
 
                             Button {
                                 store.send(.openManagePlaylistsTapped)
@@ -72,83 +85,8 @@
                                 .foregroundColor(.red)
                                 .padding()
                         } else {
-                            if let heroVOD = store.featuredVODs.first {
-                                HeroBannerView(vod: heroVOD) {
-                                    store.send(.vodSelected(heroVOD))
-                                }
-                                .padding(.bottom, 8)
-                            }
-
-                            if !store.continueWatchingItems.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.continueWatchingItems) { hist in
-                                    ResumeWatchingCardView(
-                                        item: hist,
-                                        userAgentOverride: config.userAgentOverride,
-                                        onResume: {
-                                            store.send(.historySelected(hist))
-                                        },
-                                        onRestart: {
-                                            store.send(.restartHistorySelected(hist))
-                                        },
-                                        onDelete: {
-                                            store.send(.deleteHistorySelected(hist))
-                                        }
-                                    )
-                                }
-                            }
-
-                            if !store.favoriteItems.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { fav in
-                                    FavoriteCardView(item: fav, userAgentOverride: config.userAgentOverride) {
-                                        store.send(.favoriteSelected(fav))
-                                    }
-                                    .frame(width: 140)
-                                }
-                            }
-
-                            if !store.featuredChannels.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.featuredLiveTV, items: store.featuredChannels) { channel in
-                                    ChannelCardView(channel: channel, isSelected: false) {
-                                        store.send(.channelSelected(channel))
-                                    }
-                                    .frame(width: 240)
-                                }
-                            }
-
-                            if store.isSportsHubVisible, !store.epgEvents.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.epgPrograms, items: store.epgEvents) { event in
-                                    DashboardEPGEventCard(event: event) {
-                                        store.send(.channelSelected(event.channel))
-                                    }
-                                    .frame(width: 260)
-                                }
-                            }
-
-                            if !store.recommendedVODs.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
-                                    VODCardView(vod: vod, isSelected: false) {
-                                        store.send(.vodSelected(vod))
-                                    }
-                                    .frame(width: 140)
-                                }
-                            }
-
-                            if store.featuredVODs.count > 1 {
-                                featuredSection(title: AppStrings.Dashboard.newMovies, items: Array(store.featuredVODs.dropFirst())) { vod in
-                                    VODCardView(vod: vod, isSelected: false) {
-                                        store.send(.vodSelected(vod))
-                                    }
-                                    .frame(width: 140)
-                                }
-                            }
-
-                            if !store.featuredSeries.isEmpty {
-                                featuredSection(title: AppStrings.Dashboard.newSeries, items: store.featuredSeries) { series in
-                                    SeriesCardView(series: series, isSelected: false) {
-                                        store.send(.seriesSelected(series))
-                                    }
-                                    .frame(width: 140)
-                                }
+                            ForEach(store.homeSections.filter(\.isVisible)) { section in
+                                homeSectionView(section)
                             }
                         }
                     }
@@ -160,6 +98,77 @@
             }
             .onDisappear {
                 store.send(.onDisappear)
+            }
+            .sheet(isPresented: $isHomeSettingsPresented, onDismiss: {
+                store.send(.onAppear(config: config))
+            }) {
+                ModularHomeSettingsView()
+            }
+        }
+
+        @ViewBuilder
+        private func homeSectionView(_ section: HomeSectionConfig) -> some View {
+            let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
+            let newMovieItems = Array(store.featuredVODs.dropFirst(isHeroVisible ? 1 : 0))
+            switch section.type {
+            case .hero:
+                if let heroVOD = store.featuredVODs.first {
+                    HeroBannerView(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
+                        .padding(.bottom, 8)
+                }
+            case .continueWatching:
+                if !store.continueWatchingItems.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.continueWatchingItems) { item in
+                        ResumeWatchingCardView(item: item, userAgentOverride: config.userAgentOverride,
+                                               onResume: { store.send(.historySelected(item)) },
+                                               onRestart: { store.send(.restartHistorySelected(item)) },
+                                               onDelete: { store.send(.deleteHistorySelected(item)) })
+                    }
+                }
+            case .favorites:
+                if !store.favoriteItems.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { item in
+                        FavoriteCardView(item: item, userAgentOverride: config.userAgentOverride) {
+                            store.send(.favoriteSelected(item))
+                        }
+                        .frame(width: 140)
+                    }
+                }
+            case .featuredLiveTV:
+                if !store.featuredChannels.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.featuredLiveTV, items: store.featuredChannels) { channel in
+                        ChannelCardView(channel: channel, isSelected: false) { store.send(.channelSelected(channel)) }
+                            .frame(width: 240)
+                    }
+                }
+            case .sportsHub:
+                if store.isSportsHubVisible, !store.epgEvents.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.epgPrograms, items: store.epgEvents) { event in
+                        DashboardEPGEventCard(event: event) { store.send(.channelSelected(event.channel)) }
+                            .frame(width: 260)
+                    }
+                }
+            case .recommendations:
+                if !store.recommendedVODs.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
+                        VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                            .frame(width: 140)
+                    }
+                }
+            case .recentlyAddedVOD:
+                if !newMovieItems.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.newMovies, items: newMovieItems) { vod in
+                        VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                            .frame(width: 140)
+                    }
+                }
+            case .trendingSeries:
+                if !store.featuredSeries.isEmpty {
+                    featuredSection(title: AppStrings.Dashboard.newSeries, items: store.featuredSeries) { series in
+                        SeriesCardView(series: series, isSelected: false) { store.send(.seriesSelected(series)) }
+                            .frame(width: 140)
+                    }
+                }
             }
         }
 

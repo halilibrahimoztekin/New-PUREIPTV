@@ -32,6 +32,7 @@ public struct DashboardFeature {
         public var featuredVODs: [MediaModels.Item] = []
         public var featuredSeries: [MediaModels.Item] = []
         public var recommendedVODs: [MediaModels.Item] = []
+        public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
         public var activePlaylistID: UUID?
         public var lastRemoteRefreshAt: Date?
@@ -125,7 +126,8 @@ public struct DashboardFeature {
                     state.epgCandidatePlaylistID = nil
                     state.epgCandidateSourceLoaded = false
                 }
-                let isSportsHubVisible = HomeSectionManager.shared.sections.first {
+                state.homeSections = HomeSectionManager.shared.sections
+                let isSportsHubVisible = state.homeSections.first {
                     $0.type == .sportsHub
                 }?.isVisible ?? true
                 state.isSportsHubVisible = isSportsHubVisible

@@ -2,9 +2,12 @@ import Foundation
 import SwiftUI
 
 public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case hero
     case continueWatching
     case favorites
+    case featuredLiveTV
     case sportsHub
+    case recommendations
     case recentlyAddedVOD
     case trendingSeries
 
@@ -14,9 +17,12 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
 
     public var title: String {
         switch self {
+        case .hero: "Öne Çıkan İçerik"
         case .continueWatching: "İzlemeye Devam Et"
         case .favorites: "Favorilerim"
+        case .featuredLiveTV: "Öne Çıkan Canlı TV"
         case .sportsHub: "Günün Maçları (Sports Hub)"
+        case .recommendations: "Sana Özel Öneriler"
         case .recentlyAddedVOD: "Yeni Eklenen Filmler"
         case .trendingSeries: "Popüler Diziler"
         }
@@ -24,9 +30,12 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
 
     public var icon: String {
         switch self {
+        case .hero: "sparkles.rectangle.stack.fill"
         case .continueWatching: "play.circle.fill"
         case .favorites: "star.fill"
+        case .featuredLiveTV: "tv.fill"
         case .sportsHub: "sportscourt.fill"
+        case .recommendations: "wand.and.stars"
         case .recentlyAddedVOD: "film.stack.fill"
         case .trendingSeries: "tv.fill"
         }
@@ -61,9 +70,12 @@ public final class HomeSectionManager: @unchecked Sendable {
     }
 
     public static let defaultSections: [HomeSectionConfig] = [
+        HomeSectionConfig(type: .hero, isVisible: true),
         HomeSectionConfig(type: .continueWatching, isVisible: true),
         HomeSectionConfig(type: .favorites, isVisible: true),
+        HomeSectionConfig(type: .featuredLiveTV, isVisible: true),
         HomeSectionConfig(type: .sportsHub, isVisible: true),
+        HomeSectionConfig(type: .recommendations, isVisible: true),
         HomeSectionConfig(type: .recentlyAddedVOD, isVisible: true),
         HomeSectionConfig(type: .trendingSeries, isVisible: true),
     ]
@@ -72,7 +84,21 @@ public final class HomeSectionManager: @unchecked Sendable {
         if let data = userDefaults.data(forKey: storageKey),
            let saved = try? JSONDecoder().decode([HomeSectionConfig].self, from: data)
         {
-            sections = saved
+            var migrated = saved.reduce(into: [HomeSectionConfig]()) { result, section in
+                guard !result.contains(where: { $0.type == section.type }) else { return }
+                result.append(section)
+            }
+            for (defaultIndex, section) in Self.defaultSections.enumerated()
+                where !migrated.contains(where: { $0.type == section.type })
+            {
+                let nextDefaultTypes = Self.defaultSections.dropFirst(defaultIndex + 1).map(\.type)
+                let insertionIndex = migrated.firstIndex { nextDefaultTypes.contains($0.type) } ?? migrated.endIndex
+                migrated.insert(section, at: insertionIndex)
+            }
+            sections = migrated
+            if migrated != saved {
+                saveSections()
+            }
         } else {
             sections = Self.defaultSections
             saveSections()

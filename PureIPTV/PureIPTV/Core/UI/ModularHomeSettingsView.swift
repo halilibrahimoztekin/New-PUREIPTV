@@ -25,11 +25,31 @@ public struct ModularHomeSettingsView: View {
 
                             Toggle("", isOn: $sec.isVisible)
                                 .labelsHidden()
+                                .accessibilityLabel(sec.type.title)
+                                .accessibilityValue(sec.isVisible ? "Gösteriliyor" : "Gizli")
                                 .onChange(of: sec.isVisible) { _, _ in
                                     HomeSectionManager.shared.toggleSection(type: sec.type)
                                 }
                         }
                         .padding(.vertical, 4)
+                        #if os(tvOS)
+                            .contextMenu {
+                                if sections.first?.type != sec.type {
+                                    Button {
+                                        moveSection(sec.type, direction: -1)
+                                    } label: {
+                                        Label("Yukarı Taşı", systemImage: "arrow.up")
+                                    }
+                                }
+                                if sections.last?.type != sec.type {
+                                    Button {
+                                        moveSection(sec.type, direction: 1)
+                                    } label: {
+                                        Label("Aşağı Taşı", systemImage: "arrow.down")
+                                    }
+                                }
+                            }
+                        #endif
                     }
                     .onMove { source, destination in
                         sections.move(fromOffsets: source, toOffset: destination)
@@ -50,17 +70,30 @@ public struct ModularHomeSettingsView: View {
                 }
             }
             .navigationTitle("Ana Ekranı Düzenle")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+            .toolbar {
+                #if os(iOS)
                     ToolbarItem(placement: .topBarTrailing) {
                         EditButton()
                     }
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Kapat") { dismiss() }
-                    }
+                #endif
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Kapat") { dismiss() }
                 }
+            }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
             #endif
         }
     }
+
+    #if os(tvOS)
+        private func moveSection(_ type: HomeSectionType, direction: Int) {
+            guard let index = sections.firstIndex(where: { $0.type == type }) else { return }
+            let destination = index + (direction < 0 ? -1 : 2)
+            guard destination >= 0, destination <= sections.count else { return }
+            let source = IndexSet(integer: index)
+            sections.move(fromOffsets: source, toOffset: destination)
+            HomeSectionManager.shared.move(from: source, to: destination)
+        }
+    #endif
 }
