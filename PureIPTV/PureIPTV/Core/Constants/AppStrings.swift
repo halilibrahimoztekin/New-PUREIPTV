@@ -205,6 +205,7 @@ public enum AppStrings {
         public static let programDetails = "Program Detayı".localized
         public static let setReminder = "Hatırlatıcı Ekle".localized
         public static let reminderSet = "Hatırlatıcı Eklendi".localized
+        public static let reminderScheduling = "Hatırlatıcı Ayarlanıyor…".localized
         public static let removeReminder = "Hatırlatıcıyı Kaldır".localized
         public static let reminderRemoved = "Hatırlatıcı Kaldırıldı".localized
         public static let reminderNotificationTitle = "Program Başlıyor".localized

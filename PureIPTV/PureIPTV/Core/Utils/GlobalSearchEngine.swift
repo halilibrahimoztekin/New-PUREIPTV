@@ -76,6 +76,7 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                         playlistBadge: ch.playlistBadge,
                         is4K: ch.is4K,
                         matchedEPGTitle: epgMatchTitle,
+                        matchedEPGProgram: ch.matchedEPGProgram,
                         score: finalScore
                     )
                 )

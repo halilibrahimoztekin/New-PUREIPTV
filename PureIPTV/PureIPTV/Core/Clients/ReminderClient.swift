@@ -4,6 +4,36 @@ import Foundation
     import UserNotifications
 #endif
 
+public enum EPGReminderIdentifier {
+    public nonisolated static func playlistIdentity(for config: PlaylistConfig) -> String {
+        config.serverURL?.absoluteString
+            ?? config.m3uURL?.absoluteString
+            ?? config.playlistID?.uuidString
+            ?? "default"
+    }
+
+    public nonisolated static func make(
+        playlistIdentity: String,
+        channelID: String,
+        programID: String
+    ) -> String {
+        let components = [playlistIdentity, channelID, programID]
+        return "epg-reminder-v1|" + components.map { "\($0.utf8.count):\($0)" }.joined()
+    }
+
+    public nonisolated static func make(
+        config: PlaylistConfig,
+        channelID: String,
+        programID: String
+    ) -> String {
+        make(
+            playlistIdentity: playlistIdentity(for: config),
+            channelID: channelID,
+            programID: programID
+        )
+    }
+}
+
 public struct EPGReminder: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let programTitle: String

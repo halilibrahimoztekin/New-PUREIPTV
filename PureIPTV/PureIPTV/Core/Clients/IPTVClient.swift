@@ -420,7 +420,7 @@ extension IPTVClient: DependencyKey {
                     let programmes = xmlData.programmes[streamID] ?? []
                     return programmes.map { p in
                         EPGProgram(
-                            id: UUID().uuidString,
+                            id: "m3u-\(streamID)-\(Int(p.start.timeIntervalSince1970))-\(Int(p.end.timeIntervalSince1970))",
                             title: p.title,
                             description: p.description,
                             startTime: p.start,

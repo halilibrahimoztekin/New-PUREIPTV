@@ -12,13 +12,23 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
     public let playlistBadge: PlaylistSourceBadge
     public let is4K: Bool
     public let matchedEPGTitle: String?
+    public let matchedEPGProgram: EPGProgram?
     public let score: Int
+
+    public func reminderID(for program: EPGProgram) -> String {
+        EPGReminderIdentifier.make(
+            playlistIdentity: playlistBadge.id,
+            channelID: item.id,
+            programID: program.id
+        )
+    }
 
     public nonisolated init(
         item: MediaModels.Item,
         playlistBadge: PlaylistSourceBadge,
         is4K: Bool? = nil,
         matchedEPGTitle: String? = nil,
+        matchedEPGProgram: EPGProgram? = nil,
         score: Int = 0
     ) {
         self.item = item
@@ -31,6 +41,7 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
                 lower.contains("2160p")
         )
         self.matchedEPGTitle = matchedEPGTitle
+        self.matchedEPGProgram = matchedEPGProgram
         self.score = score
     }
 

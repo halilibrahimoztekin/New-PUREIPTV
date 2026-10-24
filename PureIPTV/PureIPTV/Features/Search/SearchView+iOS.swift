@@ -252,11 +252,36 @@
                                     GlobalSearchResultCard(
                                         result: result,
                                         isSelected: false,
-                                        showPlaylistBadge: store.savedPlaylists.count > 1
+                                        showPlaylistBadge: store.savedPlaylists.count > 1,
+                                        isReminderScheduled: result.matchedEPGProgram.map {
+                                            store.scheduledReminderIDs.contains(result.reminderID(for: $0))
+                                                || store.scheduledReminderIDs.contains($0.id)
+                                        } ?? false,
+                                        isReminderPending: result.matchedEPGProgram.map {
+                                            store.pendingReminderRequestIDs[result.reminderID(for: $0)] != nil
+                                        } ?? false
                                     ) {
                                         store.send(.channelSelected(result.item))
                                     }
                                     .contextMenu {
+                                        if let program = result.matchedEPGProgram, program.startTime > Date() {
+                                            Button {
+                                                store.send(.toggleReminder(program, result.item, reminderID: result.reminderID(for: program)))
+                                            } label: {
+                                                Label(
+                                                    store.scheduledReminderIDs.contains(result.reminderID(for: program))
+                                                        || store.scheduledReminderIDs.contains(program.id)
+                                                        ? AppStrings.Player.removeReminder
+                                                        : AppStrings.Player.setReminder,
+                                                    systemImage: (store.scheduledReminderIDs.contains(result.reminderID(for: program))
+                                                        || store.scheduledReminderIDs.contains(program.id))
+                                                        ? "bell.slash.fill"
+                                                        : "bell.fill"
+                                                )
+                                            }
+                                            .disabled(store.pendingReminderRequestIDs[result.reminderID(for: program)] != nil)
+                                        }
+
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "live"))
                                         } label: {

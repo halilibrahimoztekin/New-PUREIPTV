@@ -26,6 +26,8 @@ public struct EPGTimelineFeature {
         public var selectedProgramDetail: EPGProgram?
         public var selectedProgramChannel: MediaModels.Item?
         public var scheduledReminderIDs: Set<String> = []
+        public var pendingReminderRequestIDs: [String: UUID] = [:]
+        public var reminderLoadRequestID: UUID?
         public var favoriteIDs: Set<String> = []
         public var isFavoritesOnly: Bool = false
         public var isSyncingEPG: Bool = false
@@ -148,8 +150,9 @@ public struct EPGTimelineFeature {
         case selectDate(Date)
         case updateSearchQuery(String)
         case loadReminders
-        case remindersLoaded(Set<String>)
+        case remindersLoaded(requestID: UUID, Set<String>)
         case toggleReminder(EPGProgram, MediaModels.Item)
+        case reminderScheduleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
         case toggleFavorite(MediaModels.Item)
         case toggleFavoritesOnly
         case loadFavorites
@@ -272,13 +275,25 @@ public struct EPGTimelineFeature {
                 return .none
 
             case .loadReminders:
+                let requestID = UUID()
+                state.reminderLoadRequestID = requestID
                 return .run { send in
                     let ids = await reminderClient.getScheduledReminderIDs()
-                    await send(.remindersLoaded(ids))
+                    await send(.remindersLoaded(requestID: requestID, ids))
                 }
 
-            case let .remindersLoaded(ids):
-                state.scheduledReminderIDs = ids
+            case let .remindersLoaded(requestID, ids):
+                guard state.reminderLoadRequestID == requestID else { return .none }
+                state.reminderLoadRequestID = nil
+                var reconciledIDs = ids
+                for programID in state.pendingReminderRequestIDs.keys {
+                    if state.scheduledReminderIDs.contains(programID) {
+                        reconciledIDs.insert(programID)
+                    } else {
+                        reconciledIDs.remove(programID)
+                    }
+                }
+                state.scheduledReminderIDs = reconciledIDs
                 return .none
 
             case .loadFavorites:
@@ -320,19 +335,81 @@ public struct EPGTimelineFeature {
                 }
 
             case let .toggleReminder(program, channel):
-                let isScheduled = state.scheduledReminderIDs.contains(program.id)
+                let reminderID = EPGReminderIdentifier.make(
+                    config: state.config,
+                    channelID: channel.id,
+                    programID: program.id
+                )
+                guard state.pendingReminderRequestIDs[reminderID] == nil else { return .none }
+                state.reminderLoadRequestID = nil
+                let requestID = UUID()
+                state.pendingReminderRequestIDs[reminderID] = requestID
+                let isScheduled = state.scheduledReminderIDs.contains(reminderID)
+                    || state.scheduledReminderIDs.contains(program.id)
                 if isScheduled {
+                    state.scheduledReminderIDs.remove(reminderID)
                     state.scheduledReminderIDs.remove(program.id)
-                    return .run { _ in
-                        await reminderClient.removeReminder(program.id)
+                    return .run { send in
+                        await reminderClient.removeReminder(reminderID)
+                        if program.id != reminderID {
+                            await reminderClient.removeReminder(program.id)
+                        }
+                        await send(.reminderScheduleResponse(
+                            programID: reminderID,
+                            legacyProgramID: program.id,
+                            requestID: requestID,
+                            isScheduled: false
+                        ))
                     }
                 } else {
-                    state.scheduledReminderIDs.insert(program.id)
-                    return .run { _ in
-                        _ = try? await reminderClient.requestAuthorization()
-                        try? await reminderClient.scheduleReminder(program, channel, 5)
+                    let namespacedProgram = EPGProgram(
+                        id: reminderID,
+                        title: program.title,
+                        description: program.description,
+                        startTime: program.startTime,
+                        endTime: program.endTime,
+                        isPlayingNow: program.isPlayingNow
+                    )
+                    return .run { send in
+                        do {
+                            guard try await reminderClient.requestAuthorization() else {
+                                await send(.reminderScheduleResponse(
+                                    programID: reminderID,
+                                    legacyProgramID: program.id,
+                                    requestID: requestID,
+                                    isScheduled: false
+                                ))
+                                return
+                            }
+                            try await reminderClient.scheduleReminder(namespacedProgram, channel, 5)
+                            let scheduledIDs = await reminderClient.getScheduledReminderIDs()
+                            await send(.reminderScheduleResponse(
+                                programID: reminderID,
+                                legacyProgramID: program.id,
+                                requestID: requestID,
+                                isScheduled: scheduledIDs.contains(reminderID)
+                            ))
+                        } catch {
+                            await send(.reminderScheduleResponse(
+                                programID: reminderID,
+                                legacyProgramID: program.id,
+                                requestID: requestID,
+                                isScheduled: false
+                            ))
+                        }
                     }
                 }
+
+            case let .reminderScheduleResponse(programID, legacyProgramID, requestID, isScheduled):
+                guard state.pendingReminderRequestIDs[programID] == requestID else { return .none }
+                state.pendingReminderRequestIDs.removeValue(forKey: programID)
+                if isScheduled {
+                    state.scheduledReminderIDs.insert(programID)
+                } else {
+                    state.scheduledReminderIDs.remove(programID)
+                    state.scheduledReminderIDs.remove(legacyProgramID)
+                }
+                return .none
 
             case .updateCurrentTime:
                 state.currentTime = Date()

@@ -8,6 +8,7 @@ import SwiftUI
 /// Cancel ID must be fully Sendable and non-isolated to avoid
 /// main-actor isolation conflicts with the @Reducer macro.
 private let searchCancelID = "SearchFeature.search"
+private let searchEPGCancelID = "SearchFeature.searchEPG"
 
 @Reducer
 public struct SearchFeature: Sendable {
@@ -118,6 +119,9 @@ public struct SearchFeature: Sendable {
         public var vodResults: [MediaModels.Item] = []
         public var seriesResults: [MediaModels.Item] = []
         public var favoriteIDs: Set<String> = []
+        public var scheduledReminderIDs: Set<String> = []
+        public var pendingReminderRequestIDs: [String: UUID] = [:]
+        public var reminderLoadRequestID: UUID?
 
         // Enriched Multi-Playlist Results
         public var enrichedLiveResults: [GlobalSearchResultItem] = []
@@ -146,7 +150,7 @@ public struct SearchFeature: Sendable {
             }
 
             let defaultBadge = PlaylistSourceBadge(
-                id: lastLoadedConfig?.serverURL?.absoluteString ?? "default",
+                id: lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
                 playlistName: lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
                 colorHex: "#0A84FF"
             )
@@ -194,6 +198,7 @@ public struct SearchFeature: Sendable {
         case performSearch(String)
         case searchCompleted(query: String, filter: SearchFilter, live: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
         case searchEnrichedCompleted(query: String, filter: SearchFilter, output: GlobalSearchEngine.SearchResultOutput)
+        case liveEPGEnriched(query: String, filter: SearchFilter, playlistID: UUID?, results: [GlobalSearchResultItem])
         case filterChanged(SearchFilter)
         case selectPlaylistFilter(UUID?)
         case resetCache
@@ -204,6 +209,10 @@ public struct SearchFeature: Sendable {
         case recentSearchTapped(String)
         case tagSelected(QuickSearchTag)
         case loadFavoritesResponse([FavoriteItem])
+        case loadReminders
+        case remindersLoaded(requestID: UUID, Set<String>)
+        case toggleReminder(EPGProgram, MediaModels.Item, reminderID: String)
+        case reminderToggleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
         case toggleFavorite(item: MediaModels.Item, type: String)
         case delegate(Delegate)
 
@@ -220,6 +229,7 @@ public struct SearchFeature: Sendable {
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.parentalControlClient) var parentalControlClient
+    @Dependency(\.reminderClient) var reminderClient
 
     public init() {}
 
@@ -228,6 +238,7 @@ public struct SearchFeature: Sendable {
         let playlistRepository = playlistRepository
         let settingsClient = settingsClient
         let parentalControlClient = parentalControlClient
+        let reminderClient = reminderClient
 
         Reduce { state, action in
             switch action {
@@ -268,7 +279,9 @@ public struct SearchFeature: Sendable {
                     state.lastAdultHidden = currentAdultHidden
                 }
 
-                guard !state.hasLoaded, !state.isLoading else { return .merge(loadHistory, loadFavs) }
+                guard !state.hasLoaded, !state.isLoading else {
+                    return .merge(loadHistory, loadFavs, .send(.loadReminders))
+                }
                 state.isLoading = true
                 state.errorMessage = nil
 
@@ -309,7 +322,7 @@ public struct SearchFeature: Sendable {
                     .none
                 }
 
-                return .merge(loadHistory, loadFavs, primaryFetch, multiPlaylistFetch)
+                return .merge(loadHistory, loadFavs, primaryFetch, multiPlaylistFetch, .send(.loadReminders))
 
             case let .loadSavedPlaylistsResponse(playlists):
                 state.savedPlaylists = playlists
@@ -345,7 +358,7 @@ public struct SearchFeature: Sendable {
                 // Create initial default indexed items if no multi-playlist items yet
                 if state.indexedChannels.isEmpty {
                     let defaultBadge = PlaylistSourceBadge(
-                        id: state.lastLoadedConfig?.serverURL?.absoluteString ?? "default",
+                        id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
                         playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
                         colorHex: "#0A84FF"
                     )
@@ -417,15 +430,19 @@ public struct SearchFeature: Sendable {
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
                     state.filterCounts = [:]
-                    return .cancel(id: searchCancelID)
+                    return .merge(
+                        .cancel(id: searchCancelID),
+                        .cancel(id: searchEPGCancelID)
+                    )
                 }
 
                 state.isSearching = true
-                return .run { send in
+                let debounceEffect: Effect<Action> = .run { send in
                     try await clock.sleep(for: .milliseconds(250))
                     await send(.performSearch(query))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
+                return .merge(.cancel(id: searchEPGCancelID), debounceEffect)
 
             case let .performSearch(query):
                 state.debouncedQuery = query
@@ -439,7 +456,10 @@ public struct SearchFeature: Sendable {
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
                     state.filterCounts = [:]
-                    return .none
+                    return .merge(
+                        .cancel(id: searchCancelID),
+                        .cancel(id: searchEPGCancelID)
+                    )
                 }
 
                 state.isSearching = true
@@ -456,7 +476,7 @@ public struct SearchFeature: Sendable {
                     series = state.indexedSeries
                 } else {
                     let defaultBadge = PlaylistSourceBadge(
-                        id: state.lastLoadedConfig?.serverURL?.absoluteString ?? "default",
+                        id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
                         playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
                         colorHex: "#0A84FF"
                     )
@@ -465,7 +485,7 @@ public struct SearchFeature: Sendable {
                     series = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                 }
 
-                return .run { send in
+                let searchEffect: Effect<Action> = .run { send in
                     guard !Task.isCancelled else { return }
                     let output = GlobalSearchEngine.search(
                         query: trimmed,
@@ -480,6 +500,7 @@ public struct SearchFeature: Sendable {
                     await send(.searchEnrichedCompleted(query: query, filter: filter, output: output))
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
+                return .merge(.cancel(id: searchEPGCancelID), searchEffect)
 
             case let .searchCompleted(query, filter, live, vods, series):
                 guard state.debouncedQuery == query, state.filter == filter else { return .none }
@@ -501,6 +522,147 @@ public struct SearchFeature: Sendable {
                 state.liveResults = output.live.map(\.item)
                 state.vodResults = output.vods.map(\.item)
                 state.seriesResults = output.series.map(\.item)
+                guard let primaryConfig = state.lastLoadedConfig, !output.live.isEmpty else { return .none }
+                var playlistConfigs: [String: PlaylistConfig] = [:]
+                let primaryBadgeID = EPGReminderIdentifier.playlistIdentity(for: primaryConfig)
+                playlistConfigs[primaryBadgeID] = primaryConfig
+                for (index, playlist) in state.savedPlaylists.enumerated() {
+                    guard let config = playlist.toPlaylistConfig() else { continue }
+                    let badge = UnifiedPlaylistManager.shared.badge(for: config, index: index)
+                    playlistConfigs[badge.id] = config
+                }
+                let channelResults = Array(output.live.prefix(6))
+                let selectedPlaylistID = state.selectedPlaylistID
+                return .run { send in
+                    var programByResultID: [String: EPGProgram] = [:]
+                    // M3U channels share one XMLTV feed. Fetch serially so concurrent
+                    // cache misses cannot each download and parse the whole guide.
+                    for result in channelResults {
+                        guard !Task.isCancelled else { return }
+                        guard let config = playlistConfigs[result.playlistBadge.id] else { continue }
+                        let programs = await (try? iptvClient.fetchShortEPG(config, result.item.id, 4)) ?? []
+                        let now = Date()
+                        let selectedProgram = programs
+                            .filter { $0.startTime > now }
+                            .sorted { $0.startTime < $1.startTime }
+                            .first
+                            ?? programs.first(where: \.isPlayingNow)
+                            ?? programs.first(where: { $0.endTime > now })
+                        if let selectedProgram {
+                            programByResultID[result.id] = selectedProgram
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    let results = output.live.map { result -> GlobalSearchResultItem in
+                        guard let program = programByResultID[result.id] else { return result }
+                        return GlobalSearchResultItem(
+                            item: result.item,
+                            playlistBadge: result.playlistBadge,
+                            is4K: result.is4K,
+                            matchedEPGTitle: program.title,
+                            matchedEPGProgram: program,
+                            score: result.score
+                        )
+                    }
+                    await send(.liveEPGEnriched(
+                        query: query,
+                        filter: filter,
+                        playlistID: selectedPlaylistID,
+                        results: results
+                    ))
+                }
+                .cancellable(id: searchEPGCancelID, cancelInFlight: true)
+
+            case let .liveEPGEnriched(query, filter, playlistID, results):
+                guard
+                    state.debouncedQuery == query,
+                    state.filter == filter,
+                    state.selectedPlaylistID == playlistID
+                else { return .none }
+                state.enrichedLiveResults = results
+                return .none
+
+            case .loadReminders:
+                let requestID = UUID()
+                state.reminderLoadRequestID = requestID
+                return .run { send in
+                    let ids = await reminderClient.getScheduledReminderIDs()
+                    await send(.remindersLoaded(requestID: requestID, ids))
+                }
+
+            case let .remindersLoaded(requestID, ids):
+                guard state.reminderLoadRequestID == requestID else { return .none }
+                state.reminderLoadRequestID = nil
+                var reconciledIDs = ids
+                for programID in state.pendingReminderRequestIDs.keys {
+                    if state.scheduledReminderIDs.contains(programID) {
+                        reconciledIDs.insert(programID)
+                    } else {
+                        reconciledIDs.remove(programID)
+                    }
+                }
+                state.scheduledReminderIDs = reconciledIDs
+                return .none
+
+            case let .toggleReminder(program, channel, reminderID):
+                guard state.pendingReminderRequestIDs[reminderID] == nil else { return .none }
+                state.reminderLoadRequestID = nil
+                let requestID = UUID()
+                state.pendingReminderRequestIDs[reminderID] = requestID
+                if state.scheduledReminderIDs.contains(reminderID)
+                    || state.scheduledReminderIDs.contains(program.id)
+                {
+                    state.scheduledReminderIDs.remove(reminderID)
+                    state.scheduledReminderIDs.remove(program.id)
+                    return .run { send in
+                        await reminderClient.removeReminder(reminderID)
+                        if program.id != reminderID {
+                            await reminderClient.removeReminder(program.id)
+                        }
+                        await send(.reminderToggleResponse(
+                            programID: reminderID,
+                            legacyProgramID: program.id,
+                            requestID: requestID,
+                            isScheduled: false
+                        ))
+                    }
+                }
+                let namespacedProgram = EPGProgram(
+                    id: reminderID,
+                    title: program.title,
+                    description: program.description,
+                    startTime: program.startTime,
+                    endTime: program.endTime,
+                    isPlayingNow: program.isPlayingNow
+                )
+                return .run { send in
+                    do {
+                        guard try await reminderClient.requestAuthorization() else {
+                            await send(.reminderToggleResponse(programID: reminderID, legacyProgramID: program.id, requestID: requestID, isScheduled: false))
+                            return
+                        }
+                        try await reminderClient.scheduleReminder(namespacedProgram, channel, 5)
+                        let ids = await reminderClient.getScheduledReminderIDs()
+                        await send(.reminderToggleResponse(
+                            programID: reminderID,
+                            legacyProgramID: program.id,
+                            requestID: requestID,
+                            isScheduled: ids.contains(reminderID)
+                        ))
+                    } catch {
+                        await send(.reminderToggleResponse(programID: reminderID, legacyProgramID: program.id, requestID: requestID, isScheduled: false))
+                    }
+                }
+
+            case let .reminderToggleResponse(programID, legacyProgramID, requestID, isScheduled):
+                guard state.pendingReminderRequestIDs[programID] == requestID else { return .none }
+                state.pendingReminderRequestIDs.removeValue(forKey: programID)
+                if isScheduled {
+                    state.scheduledReminderIDs.insert(programID)
+                } else {
+                    state.scheduledReminderIDs.remove(programID)
+                    state.scheduledReminderIDs.remove(legacyProgramID)
+                }
                 return .none
 
             case let .filterChanged(filter):
@@ -538,7 +700,10 @@ public struct SearchFeature: Sendable {
                 state.debouncedQuery = ""
                 state.lastLoadedConfig = nil
                 state.selectedPlaylistID = nil
-                return .cancel(id: searchCancelID)
+                return .merge(
+                    .cancel(id: searchCancelID),
+                    .cancel(id: searchEPGCancelID)
+                )
 
             case let .channelSelected(channel):
                 let query = state.debouncedQuery

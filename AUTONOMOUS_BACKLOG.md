@@ -217,9 +217,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız build alındı; test ve uygulama akışı çalıştırılmadı.
 - **Durum:** `[DONE]` — eşzamanlı indirme sınırı tamamlandı ve reviewer onayladı.
 
-### 51. [PENDING] Canlı Arama Sonuçlarında Hatırlatıcı Durumu
+### 51. [DONE] Canlı Arama Sonuçlarında Hatırlatıcı Durumu
 - **Bulgu:** IPTVX 22.10.2, Live TV arama kartlarında daha zengin program bilgisiyle birlikte hatırlatma eylemi ve planlandı durumunu sundu.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=appleTV
+- **Canlı keşif (24 Ekim 2026):** IPTVX 22.10.3 duyurusu arama sonuçlarında hatırlatıcı action ve durumunu, resmi FAQ da EPG programına hatırlatıcı ekleme ve cihaz iznini doğruluyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://iptvx.app/faq/
+- **Kod taraması:** `EPGTimelineFeature` program hatırlatıcısını destekliyor; global `SearchFeature` canlı kartlarında ise EPG program nesnesi, scheduled ID state’i veya reminder action yoktu. Karttaki `matchedEPGTitle` alanı da arama indeksinde doldurulmuyordu. Timeline’daki optimistic state, izin reddedilince yanlış bell durumunda kalabiliyordu.
+- **Kapsam:** iOS/tvOS canlı arama kartlarının küçük bir üst kümesine iptal edilebilir EPG zenginleştirmesi bağla; yaklaşan program varsa schedule/remove context action’ı ve scheduled bell göster. İzin reddi, başarısız zamanlama, hızlı tekrar dokunuş ve eski reminder-load cevabı UI durumunu bozmamalı. M3U EPG program ID’leri playlist+zaman üzerinden kararlı olmalı ki yeniden aramada durum korunabilsin.
+- **Uygulama:** iOS/tvOS global canlı arama sonuçları ilk 6 kanal için EPG ile zenginleşiyor; arama değişince iptal ediliyor ve M3U XMLTV yükünün çoğalmaması için seri çalışıyor. Yaklaşan programlara hatırlatıcı ekle/kaldır menüsü ve kartta program/bell durumu eklendi. Arama ve TV rehberi ortak, uzunluk önekli playlist+kanal+program kimliği kullanıyor; yeni bildirim/cache kayıtları çakışmıyor. Bekleyen eylem ayrı gösteriliyor ve başarı yanıtı gelmeden scheduled bell görünmüyor. Eski sürümlerin playlist kapsamı içermeyen ham program kimlikleri görünür ve kaldırılabilir tutuluyor; eski kayıt için playlist eşleşmesi saklanmadığından bu fallback yalnız program ID’sine dayanıyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iPhone 17 / iOS 26.5 Release ve tvOS Release Xcode build’leri `BUILD SUCCEEDED`. İlk sandbox build’i GitHub DNS erişimi olmadığı için paketleri çözümleyemedi; mevcut Xcode Swift Package önbelleği kullanılarak iki build de başarıyla tamamlandı. `git diff --check` başarılı. Kullanıcı isteği gereği test ve uygulama akışı çalıştırılmadı.
+- **Durum:** `[DONE]` — Canlı arama hatırlatıcıları tamamlandı ve reviewer onayladı.
 
 ### 52. [PENDING] Kişiye Göre Ayarlanabilir Keşif Vitrini
 - **Bulgu:** IPTVX 25, izleme davranışından şekillenen öneri rafları ve koleksiyonları tanıtıyor; UHF hero bölümünün özelleştirilip kaldırılmasını sağlıyor.

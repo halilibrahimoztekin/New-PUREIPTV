@@ -768,7 +768,10 @@ public struct EPGTimelineView: View {
         let isNow = program.isPlayingNow
         let isCatchUp = program.endTime < Date() && channel.tvArchive == 1
         let isFuture = program.startTime > Date()
-        let isScheduled = store.scheduledReminderIDs.contains(program.id)
+        let reminderID = EPGReminderIdentifier.make(config: store.config, channelID: channel.id, programID: program.id)
+        let isScheduled = store.scheduledReminderIDs.contains(reminderID)
+            || store.scheduledReminderIDs.contains(program.id)
+        let isReminderPending = store.pendingReminderRequestIDs[reminderID] != nil
         let isSearchMatch = isProgramMatchingSearch(program)
         let isFallback = program.id.hasPrefix("fallback_") || program.id.hasPrefix("gap_")
 
@@ -902,10 +905,13 @@ public struct EPGTimelineView: View {
                     store.send(.toggleReminder(program, channel))
                 } label: {
                     Label(
-                        isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder,
-                        systemImage: isScheduled ? "bell.slash.fill" : "bell.fill"
+                        isReminderPending
+                            ? AppStrings.Player.reminderScheduling
+                            : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder),
+                        systemImage: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill")
                     )
                 }
+                .disabled(isReminderPending)
             }
             Button {
                 HapticManager.shared.trigger(.light)
@@ -1001,7 +1007,10 @@ public struct EPGTimelineView: View {
         let isNow = program.isPlayingNow
         let isCatchUp = program.endTime < Date() && channel.tvArchive == 1
         let isFuture = program.startTime > Date()
-        let isScheduled = store.scheduledReminderIDs.contains(program.id)
+        let reminderID = EPGReminderIdentifier.make(config: store.config, channelID: channel.id, programID: program.id)
+        let isScheduled = store.scheduledReminderIDs.contains(reminderID)
+            || store.scheduledReminderIDs.contains(program.id)
+        let isReminderPending = store.pendingReminderRequestIDs[reminderID] != nil
 
         let totalSecs = max(60, program.endTime.timeIntervalSince(program.startTime))
         let elapsed = max(0, min(totalSecs, store.currentTime.timeIntervalSince(program.startTime)))
@@ -1131,7 +1140,15 @@ public struct EPGTimelineView: View {
                     }
 
                     // Action Buttons Bar
-                    actionButtonsBar(program: program, channel: channel, isNow: isNow, isCatchUp: isCatchUp, isFuture: isFuture, isScheduled: isScheduled)
+                    actionButtonsBar(
+                        program: program,
+                        channel: channel,
+                        isNow: isNow,
+                        isCatchUp: isCatchUp,
+                        isFuture: isFuture,
+                        isScheduled: isScheduled,
+                        isReminderPending: isReminderPending
+                    )
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 28)
@@ -1260,7 +1277,15 @@ public struct EPGTimelineView: View {
         .buttonStyle(.plain)
     }
 
-    private func actionButtonsBar(program: EPGProgram, channel: MediaModels.Item, isNow: Bool, isCatchUp: Bool, isFuture: Bool, isScheduled: Bool) -> some View {
+    private func actionButtonsBar(
+        program: EPGProgram,
+        channel: MediaModels.Item,
+        isNow: Bool,
+        isCatchUp: Bool,
+        isFuture: Bool,
+        isScheduled: Bool,
+        isReminderPending: Bool
+    ) -> some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
                 if isNow {
@@ -1301,8 +1326,10 @@ public struct EPGTimelineView: View {
                         store.send(.toggleReminder(program, channel))
                     } label: {
                         HStack {
-                            Image(systemName: isScheduled ? "bell.slash.fill" : "bell.fill")
-                            Text(isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder)
+                            Image(systemName: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill"))
+                            Text(isReminderPending
+                                ? AppStrings.Player.reminderScheduling
+                                : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder))
                         }
                         .font(.headline)
                         .foregroundColor(isScheduled ? .white : .black)
@@ -1310,6 +1337,7 @@ public struct EPGTimelineView: View {
                         .padding(.vertical, 14)
                         .background(isScheduled ? Color.red.opacity(0.85) : Color.yellow, in: RoundedRectangle(cornerRadius: 12))
                     }
+                    .disabled(isReminderPending)
                 }
             }
 

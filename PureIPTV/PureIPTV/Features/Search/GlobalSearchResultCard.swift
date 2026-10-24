@@ -7,6 +7,8 @@ public struct GlobalSearchResultCard: View {
     public let result: GlobalSearchResultItem
     public let isSelected: Bool
     public let showPlaylistBadge: Bool
+    public let isReminderScheduled: Bool
+    public let isReminderPending: Bool
     public let onTap: () -> Void
 
     #if os(tvOS)
@@ -17,11 +19,15 @@ public struct GlobalSearchResultCard: View {
         result: GlobalSearchResultItem,
         isSelected: Bool = false,
         showPlaylistBadge: Bool = true,
+        isReminderScheduled: Bool = false,
+        isReminderPending: Bool = false,
         onTap: @escaping () -> Void
     ) {
         self.result = result
         self.isSelected = isSelected
         self.showPlaylistBadge = showPlaylistBadge
+        self.isReminderScheduled = isReminderScheduled
+        self.isReminderPending = isReminderPending
         self.onTap = onTap
     }
 
@@ -224,6 +230,17 @@ public struct GlobalSearchResultCard: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color(hex: "#30D158"))
                         .lineLimit(1)
+                    if isReminderPending {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .accessibilityLabel(AppStrings.Player.reminderScheduling)
+                    } else if isReminderScheduled {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .accessibilityLabel(AppStrings.Player.reminderSet)
+                    }
                 }
             } else if !isChannel {
                 HStack(spacing: 6) {
