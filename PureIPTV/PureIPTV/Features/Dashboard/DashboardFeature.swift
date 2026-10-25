@@ -618,8 +618,10 @@ public struct DashboardFeature {
                 let isAdult = settingsClient.isAdultContent
                 let movieCollectionPrefix = "Filmler".localized
                 let seriesCollectionPrefix = "Diziler".localized
+                let liveCollectionPrefix = "Canlı TV".localized
                 let remoteEffect = Effect<Action>.run { send in
                     async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
+                    async let liveCategories = try? iptvClient.fetchLiveCategories(config)
                     async let allVODs = try? iptvClient.fetchVODs(config, nil)
                     async let allSeries = try? iptvClient.fetchSeries(config, nil)
                     async let vodCategories = try? iptvClient.fetchVODCategories(config)
@@ -631,6 +633,7 @@ public struct DashboardFeature {
                     let favorites = await favoritesReq
 
                     let fetchedChannels = await liveStreams
+                    let fetchedLiveCategories = await liveCategories
                     let fetchedVODs = await allVODs
                     let fetchedSeries = await allSeries
                     let fetchedVODCategories = await vodCategories
@@ -661,6 +664,16 @@ public struct DashboardFeature {
                     if let fetchedChannels {
                         let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
                         channels = Array(filtered.prefix(10))
+                        if let fetchedLiveCategories {
+                            homeCategoryCollections = Self.makeCategoryCollections(
+                                prefix: "live-category",
+                                label: liveCollectionPrefix,
+                                categories: fetchedLiveCategories,
+                                items: filtered,
+                                minimumItems: 1,
+                                limit: Int.max
+                            )
+                        }
                     }
 
                     if let fetchedVODs {
@@ -698,7 +711,7 @@ public struct DashboardFeature {
                             categories: fetchedVODCategories,
                             items: safeVODs
                         )
-                        homeCategoryCollections = Self.makeCategoryCollections(
+                        homeCategoryCollections = (homeCategoryCollections ?? []) + Self.makeCategoryCollections(
                             prefix: "movie-category",
                             label: movieCollectionPrefix,
                             categories: fetchedVODCategories,
@@ -938,6 +951,9 @@ public struct DashboardFeature {
                 }
                 if let homeCategoryCollections {
                     var merged = state.availableHomeCategoryCollections
+                    if channels != nil {
+                        merged.removeAll { $0.id.hasPrefix("live-category:") }
+                    }
                     if vodExploreCollections != nil {
                         merged.removeAll { $0.id.hasPrefix("movie-category:") }
                     }
@@ -1239,11 +1255,12 @@ public struct DashboardFeature {
         label: String,
         categories: [MediaModels.Category],
         items: [MediaModels.Item],
+        minimumItems: Int = 3,
         limit: Int = 4
     ) -> [ExploreCollection] {
         let itemsByCategory = Dictionary(grouping: items, by: \.categoryID)
         return categories.compactMap { category -> (Int, ExploreCollection)? in
-            guard let matches = itemsByCategory[category.id], matches.count >= 3 else { return nil }
+            guard let matches = itemsByCategory[category.id], matches.count >= minimumItems else { return nil }
             let sortedMatches = matches.sorted {
                 let lhsDate = $0.addedDate ?? .distantPast
                 let rhsDate = $1.addedDate ?? .distantPast

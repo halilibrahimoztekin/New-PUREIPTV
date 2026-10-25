@@ -415,7 +415,7 @@
 
         private func homeCategorySection(_ collection: DashboardFeature.ExploreCollection) -> some View {
             let isPinned = store.pinnedHomeCategoryIDs.contains(collection.id)
-            let canPin = collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
+            let canPin = collection.id.hasPrefix("live-category:") || collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
             return VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 18) {
                     Text(collection.title)
@@ -457,7 +457,10 @@
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 40) {
                         ForEach(collection.items) { item in
-                            if item.type == .series {
+                            if item.type == .live {
+                                TVChannelCard(channel: item, isSelected: false) { store.send(.channelSelected(item)) }
+                                    .frame(width: 340)
+                            } else if item.type == .series {
                                 TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
                                     .frame(width: 220)
                             } else {

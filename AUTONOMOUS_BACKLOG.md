@@ -1295,11 +1295,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; katalog JSON ve `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Kullanıcı indirmeyi duraklatıp devam ettirebilir.
 
-### 137. [PENDING] Live Playlist Kategorilerini Ana Ekrana Sabitleme
+### 137. [DONE] Live Playlist Kategorilerini Ana Ekrana Sabitleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 herhangi playlist kategorisini, Live dahil, ana ekran Feed Collections’a sabitlemeyi duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Kod incelemesi:** Pin/kaldır/sıralama arayüzü var; `HomeCategoryPinStore` pinleri profile UUID + playlist UUID ile izole ediyor. Dashboard keşif satırları ise yalnızca film ve dizi kategorilerinden yapılıyor; Live kategori verisi çekilmiyor ve yönetim listesine eklenmiyor.
-- **Kalan kapsam:** Live kategorilerini ve kanal öğelerini koleksiyonlara ekleyip iOS/tvOS ana ekran kartı/seçim akışına bağla. Var olan profil/playlist izolasyonunu koru.
-- **Durum:** `[PENDING]` — Film/dizi kategorileri için temel hazır; Live kategori desteği eksik.
+- **Uygulama:** Dashboard artık Live kategorilerini ve kanallarını playlist’ten yükleyip kategori koleksiyonlarına ekliyor. Kategori yönetimi tüm Live kategorilerini gösteriyor; iOS/tvOS koleksiyonları kanal kartlarını kanal seçimiyle açıyor. Pin/kaldır/sıralama mevcut `HomeCategoryPinStore` üzerinden profil UUID + playlist UUID kapsamında kalıyor.
+- **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Live kategori koleksiyonları ana ekranda pinlenebilir.
 
 ### 138. [PENDING] tvOS Arama Sonucunda Klavye Sonrası Odak Geri Yükleme
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.5 Apple TV’de arama klavyesi kapandıktan sonra sonuçların konum ve odağını korumaya yönelik iyileştirmeler bildirdi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
@@ -1316,3 +1316,4 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#137 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu. `SourcePackages` ve SDK önbellekleri korundu.
 - **#138 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; bu statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
 - **#139 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
+- **#137 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) açık dosya olmadığı doğrulandıktan sonra kaldırıldı; `SourcePackages` ve SDK önbellekleri korundu.
