@@ -4,6 +4,49 @@ import Foundation
 
 /// Ultra-fast, thread-safe cross-playlist search engine with instant filter badges and EPG matching.
 public nonisolated enum GlobalSearchEngine: Sendable {
+    private struct SearchIntent: Sendable {
+        var terms: String
+        var itemType: MediaModels.ItemType?
+        var releaseYear: Int?
+        var requires4K = false
+
+        init(query: String) {
+            var words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+            var detectedType: MediaModels.ItemType?
+            var detectedYear: Int?
+            var detected4K = false
+            let currentYear = Calendar(identifier: .gregorian).component(.year, from: Date())
+            words.removeAll { word in
+                let token = FuzzySearchEngine.normalize(word).trimmingCharacters(in: .punctuationCharacters)
+                if ["movie", "movies", "film", "films", "filmler", "sinema"].contains(token) {
+                    detectedType = .vod
+                    return true
+                }
+                if ["series", "serie", "dizi", "diziler", "show", "shows"].contains(token) {
+                    detectedType = .series
+                    return true
+                }
+                if ["live", "tv", "canli", "kanal", "kanallar"].contains(token) {
+                    detectedType = .live
+                    return true
+                }
+                if ["4k", "uhd"].contains(token) {
+                    detected4K = true
+                    return true
+                }
+                if token.count == 4, let year = Int(token), (1900 ... currentYear + 1).contains(year) {
+                    detectedYear = year
+                    return true
+                }
+                return false
+            }
+            terms = words.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            itemType = detectedType
+            releaseYear = detectedYear
+            requires4K = detected4K
+        }
+    }
+
     public struct SearchResultOutput: Sendable {
         public let live: [GlobalSearchResultItem]
         public let vods: [GlobalSearchResultItem]
@@ -39,8 +82,10 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
         }
 
-        let normalizedQuery = FuzzySearchEngine.normalize(trimmed)
-        let isLookingFor4K = normalizedQuery.contains("4k") || normalizedQuery.contains("uhd")
+        let intent = SearchIntent(query: trimmed)
+        let normalizedQuery = FuzzySearchEngine.normalize(intent.terms)
+        let hasTextQuery = !normalizedQuery.isEmpty
+        let isLookingFor4K = intent.requires4K
 
         // 1. Filter by selected playlist if specified
         let scopedChannels = selectedPlaylistID == nil ? channels : channels.filter {
@@ -59,18 +104,20 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             if index.isMultiple(of: 64), isCancelled() {
                 return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
             }
+            guard intent.itemType == nil || intent.itemType == .live else { continue }
+            guard !intent.requires4K || ch.is4K else { continue }
             let normalizedTitle = FuzzySearchEngine.normalize(ch.item.title)
-            var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
+            var baseScore = hasTextQuery ? FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle) : 1
 
             // EPG metadata is searchable with a lower field weight than a title match.
             let epgMatchTitle: String? = ch.matchedEPGTitle
-            if let epgMatchTitle {
+            if hasTextQuery, let epgMatchTitle {
                 let epgNorm = FuzzySearchEngine.normalize(epgMatchTitle)
                 if let epgScore = FuzzySearchEngine.score(query: normalizedQuery, target: epgNorm) {
                     baseScore = max(baseScore ?? 0, min(epgScore / 3, 220))
                 }
             }
-            let channelCategoryScore = categoryScore(query: normalizedQuery, category: ch.item.categoryID)
+            let channelCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: ch.item.categoryID) : 0
             if channelCategoryScore > 0 {
                 baseScore = max(baseScore ?? 0, channelCategoryScore)
             }
@@ -97,10 +144,13 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             if index.isMultiple(of: 64), isCancelled() {
                 return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
             }
+            guard intent.itemType == nil || intent.itemType == .vod else { continue }
+            guard !intent.requires4K || v.is4K else { continue }
+            guard intent.releaseYear == nil || Int((v.item.releaseDate ?? "").prefix(4)) == intent.releaseYear else { continue }
             let normalizedTitle = FuzzySearchEngine.normalize(v.item.title)
-            var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
+            var baseScore = hasTextQuery ? FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle) : 1
 
-            let vodCategoryScore = categoryScore(query: normalizedQuery, category: v.item.categoryID)
+            let vodCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: v.item.categoryID) : 0
             if vodCategoryScore > 0 {
                 baseScore = max(baseScore ?? 0, vodCategoryScore)
             }
@@ -126,10 +176,13 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             if index.isMultiple(of: 64), isCancelled() {
                 return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
             }
+            guard intent.itemType == nil || intent.itemType == .series else { continue }
+            guard !intent.requires4K || s.is4K else { continue }
+            guard intent.releaseYear == nil || Int((s.item.releaseDate ?? "").prefix(4)) == intent.releaseYear else { continue }
             let normalizedTitle = FuzzySearchEngine.normalize(s.item.title)
-            var baseScore = FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle)
+            var baseScore = hasTextQuery ? FuzzySearchEngine.score(query: normalizedQuery, target: normalizedTitle) : 1
 
-            let seriesCategoryScore = categoryScore(query: normalizedQuery, category: s.item.categoryID)
+            let seriesCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: s.item.categoryID) : 0
             if seriesCategoryScore > 0 {
                 baseScore = max(baseScore ?? 0, seriesCategoryScore)
             }
