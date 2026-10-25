@@ -1242,11 +1242,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Sonuç:** İlk temizlik sonrası `df` kullanılabilir alanı 23 GiB’den 37 GiB’ye çıktı; #123 build ve cache temizliği sonrasında 75 GiB gösterildi. Geçici ve PureIPTV DerivedData içinde kullanılmayan build cache bırakılmadı. ContactCleaner gelecekteki temizliklerden hariç tutulacak.
 - **#127 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV’ye ait `Build` (3.1 GB), `ModuleCache.noindex` (358 MB), `SDKStatCaches.noindex` (17 MB), `CompilationCache.noindex` (28 KB) ve `Logs` (1.4 MB) `lsof` boş doğrulamasından sonra silindi. `SourcePackages` (1.8 GB) ile DerivedData dışındaki paylaşılan SDK precompiled cache korundu; ContactCleaner’a dokunulmadı.
 - **#128 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar kontrol edildi; geçici/derleme çıktısı adayı yoktu. 1.8 GB `SourcePackages` korundu.
+- **#130 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
-### 130. [PENDING] EPG’den Canlı Spor Etkinliği ve Takım Takibi
+### 130. [DEFERRED] EPG’den Canlı Spor Etkinliği ve Takım Takibi
 - **Canlı keşif (25 Ekim 2026):** UHF 2.3.0 etkinlik filtresiyle tüm playlistlerde etkinliği yayınlayan kanalları buluyor; favori takım/yarışmaları ana ekranda gelecek etkinlik rafına ekliyor: https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Aday gap:** EPG metadatası takım/yarışma ve etkinlik-kanal eşleşmesini güvenilir taşıyor mu; provider’dan gelmeyen skor/takvim verisi uydurmadan incele.
+- **Kod incelemesi:** `SportsHubManager` ve Dashboard rafı bugünün EPG programlarını zaten gösteriyor; eşleşme takımları serbest biçimli başlıktan ` - ` / ` vs ` ayracıyla tahmin ediliyor, yarışma da başlık/açıklama metninden bulunuyor. `EPGProgram.categories` XMLTV’den geliyor ama mevcut ayrıştırıcı takım/yarışma kimliği üretmiyor. Dashboard yalnızca aktif playlist konfigürasyonuyla veri alıyor; tüm playlist’lerde arama veya takım takip tercihi yok.
+- **Karar:** `[DEFERRED]` — güvenilir event/team identity olmadan takip, aynı adlı takımları birleştirebilir ve yanlış EPG başlıklarını etkinlik sanabilir; mevcut veri takvimi bugünün EPG’siyle sınırlı. Provider metadata desteği ve multi-playlist kapsamı belirlenince tekrar değerlendirilmeli. Kod/build değişikliği yapılmadı.
+- **Durum:** `[DEFERRED]` — Sports Hub mevcut şekilde korunuyor; güvenilmez takım kimliğiyle takip tercihi eklenmedi.
 
 ### 131. [PENDING] tvOS EPG’de Odaklanan Kanalı Küçük Pencerede Önizleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.96.3 Apple TV TV Rehberi’nde odaklanan kanalı küçük pencerede izleme ve ayardan kapatma ekledi: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
