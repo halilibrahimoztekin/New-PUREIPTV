@@ -56,7 +56,8 @@ public final class StreamSpeedTestManager: ObservableObject {
 
         // Settings tests the public endpoint. The UI names it explicitly so
         // results are never mistaken for the user's IPTV provider route.
-        let testURL = targetURL ?? URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!
+        let defaultURL = URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+        guard let testURL = targetURL ?? defaultURL else { return }
         let endpointLabel = targetURL?.host ?? "Google Cloud public sample endpoint"
 
         state = .testingResponseTime

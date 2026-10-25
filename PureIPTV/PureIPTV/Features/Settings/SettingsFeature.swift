@@ -45,6 +45,7 @@ public struct SettingsFeature {
         // New Settings
         public var autoPlayNextEpisode: Bool = true
         public var autoSelectFirstAlternativeSource = false
+        public var reverseChannelZappingDirection = false
         public var startMuted: Bool = false
         public var hardwareAcceleration: Bool = true
         public var isOLEDDimmingEnabled: Bool = true
@@ -152,6 +153,7 @@ public struct SettingsFeature {
         // New Setting Actions
         case setAutoPlayNextEpisode(Bool)
         case setAutoSelectFirstAlternativeSource(Bool)
+        case setReverseChannelZappingDirection(Bool)
         case setStartMuted(Bool)
         case setHardwareAcceleration(Bool)
         case setOLEDDimmingEnabled(Bool)
@@ -262,6 +264,7 @@ public struct SettingsFeature {
 
                 state.autoPlayNextEpisode = settingsClient.autoPlayNextEpisode()
                 state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
+                state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
                 state.startMuted = settingsClient.startMuted()
                 state.hardwareAcceleration = settingsClient.hardwareAcceleration()
                 state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
@@ -408,6 +411,10 @@ public struct SettingsFeature {
             case let .setAutoSelectFirstAlternativeSource(val):
                 state.autoSelectFirstAlternativeSource = val
                 return .run { _ in settingsClient.setAutoSelectFirstAlternativeSource(val) }
+
+            case let .setReverseChannelZappingDirection(val):
+                state.reverseChannelZappingDirection = val
+                return .run { _ in settingsClient.setReverseChannelZappingDirection(val) }
 
             case let .setDownloadConcurrencyLimit(value):
                 let limit = min(4, max(1, value))

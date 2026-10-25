@@ -223,6 +223,7 @@ public struct PlayerFeature {
         /// Smart Channel Name Cleaner (Madde #16)
         public var isChannelNameCleaningEnabled: Bool = true
         public var autoSelectFirstAlternativeSource: Bool = false
+        public var reverseChannelZappingDirection: Bool = false
 
         /// Trakt.tv Watchlist & Scrobble Sync Engine (Madde #17)
         public var isTraktScrobbleStarted: Bool = false
@@ -503,6 +504,11 @@ public struct PlayerFeature {
         case selectChannel(PlayableItem)
         case nextChannel
         case previousChannel
+        case channelUp
+        case channelDown
+        case keyboardChannelUp
+        case keyboardChannelDown
+        case channelDownOrRecentChannels
         case recallLastChannel
         case setRecallHUDVisible(Bool)
         case hideRecallHUD
@@ -747,6 +753,7 @@ public struct PlayerFeature {
             state.isMinimized = false
             state.isUserPaused = false
             state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
+            state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
             state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
             state.isPiPSupported = pipClient.isPiPSupported()
@@ -2090,6 +2097,24 @@ public struct PlayerFeature {
             guard let prev = state.previousChannelItem else { return .none }
             state.zappingHUDDirection = .previous
             return .send(.selectChannel(prev))
+
+        case .channelUp:
+            return .send(state.reverseChannelZappingDirection ? .previousChannel : .nextChannel)
+
+        case .channelDown:
+            return .send(state.reverseChannelZappingDirection ? .nextChannel : .previousChannel)
+
+        case .keyboardChannelUp:
+            return .send(state.reverseChannelZappingDirection ? .nextChannel : .previousChannel)
+
+        case .keyboardChannelDown:
+            return .send(state.reverseChannelZappingDirection ? .previousChannel : .nextChannel)
+
+        case .channelDownOrRecentChannels:
+            if state.reverseChannelZappingDirection {
+                return .send(.channelDown)
+            }
+            return .send(.setRecentChannelsHUDVisible(true))
 
         case let .showZappingHUD(item, direction):
             state.zappingHUDItem = item

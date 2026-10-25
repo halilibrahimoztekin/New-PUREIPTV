@@ -476,6 +476,8 @@ public enum AppStrings {
         public static let autoPlayNextEpisode = "Sonraki Bölüme Otomatik Geç".localized
         public static let autoSelectFirstAlternativeSource = "İlk Alternatif Kaynağı Otomatik Oynat".localized
         public static let autoSelectFirstAlternativeSourceDescription = "Alternatif kaynaklar seçildiğinde listeyi açmadan playlist sırasındaki ilk eşleşmeyi oynatır.".localized
+        public static let reverseChannelZappingDirection = "Kanal Gezinme Yönünü Ters Çevir".localized
+        public static let reverseChannelZappingDirectionDescription = "Canlı oynatıcıda yukarı ve aşağı yönleriyle önceki veya sonraki kanala geçişi tersine çevirir.".localized
         public static let startMuted = "Kanalları Sessiz Başlat".localized
         public static let hardwareAcceleration = "Donanım Hızlandırma".localized
         public static let downloadConcurrencyLimit = "Eşzamanlı İndirme Sayısı".localized

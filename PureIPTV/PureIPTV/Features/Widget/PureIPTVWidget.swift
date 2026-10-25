@@ -60,8 +60,22 @@
     public struct PureIPTVProvider: TimelineProvider {
         public init() {}
 
+        static let fallbackDashboardURL: URL = {
+            var comps = URLComponents()
+            comps.scheme = "pureiptv"
+            comps.host = "dashboard"
+            return comps.url ?? URL(fileURLWithPath: "/")
+        }()
+
         public func placeholder(in _: Context) -> PureIPTVEntry {
-            let sampleDeepLink = URL(string: "pureiptv://play?id=demo&title=Inception&type=vod")!
+            let sampleDeepLink = PureIPTVProvider.makeDeepLink(
+                id: "demo",
+                title: "Inception",
+                streamURL: nil,
+                coverURL: nil,
+                type: "vod",
+                startPosition: nil
+            )
             return PureIPTVEntry(
                 date: Date(),
                 continueWatching: WidgetMediaItem(
@@ -218,7 +232,7 @@
             }
 
             comps.queryItems = items
-            return comps.url ?? URL(string: "pureiptv://dashboard")!
+            return comps.url ?? fallbackDashboardURL
         }
     }
 
@@ -335,7 +349,7 @@
                 }
             }
             .padding(12)
-            .widgetURL(entry.continueWatching?.deepLinkURL ?? URL(string: "pureiptv://dashboard")!)
+            .widgetURL(entry.continueWatching?.deepLinkURL ?? PureIPTVProvider.fallbackDashboardURL)
         }
 
         /// ── System Medium View ────────────────────────────────────────────

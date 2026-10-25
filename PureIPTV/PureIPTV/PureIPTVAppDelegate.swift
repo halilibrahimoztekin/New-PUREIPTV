@@ -5,7 +5,11 @@ import SwiftUI
     class AppDelegate: NSObject, UIApplicationDelegate {
         func application(_: UIApplication, didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
             BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.pureiptv.refresh", using: nil) { task in
-                self.handleAppRefresh(task: task as! BGAppRefreshTask)
+                guard let refreshTask = task as? BGAppRefreshTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                self.handleAppRefresh(task: refreshTask)
             }
             return true
         }

@@ -21,7 +21,7 @@ public final class KeychainManager: @unchecked Sendable {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
-            kSecAttrSynchronizable as String: kCFBooleanTrue!, // Enable iCloud Sync
+            kSecAttrSynchronizable as String: true as CFBoolean, // Enable iCloud Sync
         ]
 
         SecItemDelete(query as CFDictionary)
@@ -38,9 +38,9 @@ public final class KeychainManager: @unchecked Sendable {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecReturnData as String: kCFBooleanTrue!,
+            kSecReturnData as String: true as CFBoolean,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrSynchronizable as String: kCFBooleanTrue!,
+            kSecAttrSynchronizable as String: true as CFBoolean,
         ]
 
         var item: CFTypeRef?
@@ -66,7 +66,7 @@ public final class KeychainManager: @unchecked Sendable {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: kCFBooleanTrue!,
+            kSecAttrSynchronizable as String: true as CFBoolean,
         ]
 
         let status = SecItemDelete(query as CFDictionary)

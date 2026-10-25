@@ -60,158 +60,183 @@ public struct EPGTimelineView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            GeometryReader { geo in
-                let availableGridWidth = max(100, geo.size.width - channelColumnWidth)
+        GeometryReader { geo in
+            let availableGridWidth = max(100, geo.size.width - channelColumnWidth)
 
-                ZStack(alignment: .bottomTrailing) {
-                    Color.black.ignoresSafeArea()
+            ZStack(alignment: .bottomTrailing) {
+                Color.black.ignoresSafeArea()
 
-                    VStack(spacing: 0) {
-                        // Search bar on iOS
-                        #if !os(tvOS)
-                            searchBarView
-                        #endif
+                VStack(spacing: 0) {
+                    epgHeaderBar
 
-                        // Date Selector Row (Catch-Up Archive Calendar)
-                        dateSelectorRow(availableWidth: availableGridWidth)
+                    // Search bar on iOS
+                    #if !os(tvOS)
+                        searchBarView
+                    #endif
 
-                        // Category filter chips
-                        if !store.availableCategories.isEmpty {
-                            categoryFilterRow
-                        }
+                    // Date Selector Row (Catch-Up Archive Calendar)
+                    dateSelectorRow(availableWidth: availableGridWidth)
 
-                        if !store.availableProgramCategories.isEmpty || store.selectedProgramCategory != nil {
-                            programCategoryFilterRow
-                        }
-
-                        // Sync Status Badge
-                        if let msg = store.syncStatusMessage {
-                            syncStatusBadge(message: msg)
-                        }
-
-                        // Synchronized Header Row
-                        headerRow(availableWidth: availableGridWidth)
-                            .zIndex(10)
-
-                        Divider().background(Color.white.opacity(0.12))
-
-                        // Virtualized Dual-Axis Grid Body
-                        if store.filteredChannels.isEmpty {
-                            emptyStateView
-                        } else {
-                            channelGridScrollView(availableWidth: availableGridWidth, containerHeight: geo.size.height)
-                        }
+                    // Category filter chips
+                    if !store.availableCategories.isEmpty {
+                        categoryFilterRow
                     }
 
-                    // Floating Action Button: Jump to Now (today) or Return to Today (past archive)
-                    if store.isViewingToday {
-                        if abs(horizontalOffset - targetCenteredNowOffset(availableWidth: availableGridWidth)) > 160 {
-                            jumpToNowButton(availableWidth: availableGridWidth)
-                                .padding(.trailing, 20)
-                                .padding(.bottom, 24)
-                                .transition(.scale.combined(with: .opacity))
-                        }
+                    if !store.availableProgramCategories.isEmpty || store.selectedProgramCategory != nil {
+                        programCategoryFilterRow
+                    }
+
+                    // Sync Status Badge
+                    if let msg = store.syncStatusMessage {
+                        syncStatusBadge(message: msg)
+                    }
+
+                    // Synchronized Header Row
+                    headerRow(availableWidth: availableGridWidth)
+                        .zIndex(10)
+
+                    Divider().background(Color.white.opacity(0.12))
+
+                    // Virtualized Dual-Axis Grid Body
+                    if store.filteredChannels.isEmpty {
+                        emptyStateView
                     } else {
-                        returnToTodayButton(availableWidth: availableGridWidth)
+                        channelGridScrollView(availableWidth: availableGridWidth, containerHeight: geo.size.height)
+                    }
+                }
+
+                // Floating Action Button: Jump to Now (today) or Return to Today (past archive)
+                if store.isViewingToday {
+                    if abs(horizontalOffset - targetCenteredNowOffset(availableWidth: availableGridWidth)) > 160 {
+                        jumpToNowButton(availableWidth: availableGridWidth)
                             .padding(.trailing, 20)
                             .padding(.bottom, 24)
                             .transition(.scale.combined(with: .opacity))
                     }
-
-                    // PiP-in-EPG Mini Preview Floating Card (Madde #25)
-                    if let previewChannel = store.activePreviewChannel {
-                        VStack {
-                            pipInEPGCard(channel: previewChannel)
-                                .padding(.top, 48)
-                                .padding(.trailing, 16)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                            Spacer()
-                        }
-                    }
+                } else {
+                    returnToTodayButton(availableWidth: availableGridWidth)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 24)
+                        .transition(.scale.combined(with: .opacity))
                 }
-                .onAppear {
-                    store.send(.onAppear)
-                    if !hasCenteredOnNow {
-                        hasCenteredOnNow = true
-                        let target = targetCenteredNowOffset(availableWidth: availableGridWidth)
-                        horizontalOffset = target
-                    }
-                    // Prewarm first 15 channels EPG data
-                    for channel in store.filteredChannels.prefix(15) {
-                        store.send(.fetchEPG(streamID: channel.id))
-                    }
-                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                        shimmerPhase = 1.0
+
+                // PiP-in-EPG Mini Preview Floating Card (Madde #25)
+                if let previewChannel = store.activePreviewChannel {
+                    VStack {
+                        pipInEPGCard(channel: previewChannel)
+                            .padding(.top, 48)
+                            .padding(.trailing, 16)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
                     }
                 }
             }
-            .navigationTitle(AppStrings.Player.timeline)
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.close) {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.closeTapped)
-                        }
-                        .foregroundColor(.white)
-                    }
-
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.refreshEPGTapped)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .rotationEffect(.degrees(store.isSyncingEPG ? 360 : 0))
-                                    .animation(
-                                        store.isSyncingEPG
-                                            ? Animation.linear(duration: 1.0).repeatForever(autoreverses: false)
-                                            : .default,
-                                        value: store.isSyncingEPG
-                                    )
-                                #if os(tvOS)
-                                    Text(AppStrings.Player.refreshEPG)
-                                #endif
-                            }
-                            .foregroundColor(.white)
-                        }
-                        .disabled(store.isSyncingEPG)
-                    }
+            .onAppear {
+                store.send(.onAppear)
+                if !hasCenteredOnNow {
+                    hasCenteredOnNow = true
+                    let target = targetCenteredNowOffset(availableWidth: availableGridWidth)
+                    horizontalOffset = target
                 }
-                .sheet(isPresented: Binding(
-                    get: { store.selectedProgramDetail != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.dismissProgramDetails)
-                        }
-                    }
-                )) {
-                    if let program = store.selectedProgramDetail, let channel = store.selectedProgramChannel {
-                        programDetailSheet(program: program, channel: channel)
-                        #if os(tvOS)
-                            .onExitCommand {
-                                store.send(.dismissProgramDetails)
-                            }
-                        #endif
-                    }
+                // Prewarm first 15 channels EPG data
+                for channel in store.filteredChannels.prefix(15) {
+                    store.send(.fetchEPG(streamID: channel.id))
                 }
-                .sheet(item: $logoEditorChannel) { channel in
-                    channelLogoEditorSheet(for: channel)
+                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                    shimmerPhase = 1.0
                 }
-            #if os(tvOS)
-                .onExitCommand {
-                    if store.selectedProgramDetail != nil {
-                        store.send(.dismissProgramDetails)
-                    } else {
-                        store.send(.closeTapped)
-                    }
-                }
-            #endif
+            }
         }
+        .sheet(isPresented: Binding(
+            get: { store.selectedProgramDetail != nil },
+            set: {
+                if !$0 {
+                    store.send(.dismissProgramDetails)
+                }
+            }
+        )) {
+            if let program = store.selectedProgramDetail, let channel = store.selectedProgramChannel {
+                programDetailSheet(program: program, channel: channel)
+                #if os(tvOS)
+                    .onExitCommand {
+                        store.send(.dismissProgramDetails)
+                    }
+                #endif
+            }
+        }
+        .sheet(item: $logoEditorChannel) { channel in
+            channelLogoEditorSheet(for: channel)
+        }
+        #if os(tvOS)
+        .onExitCommand {
+            if store.selectedProgramDetail != nil {
+                store.send(.dismissProgramDetails)
+            } else {
+                store.send(.closeTapped)
+            }
+        }
+        #endif
+    }
+
+    // MARK: - Header Bar
+
+    private var epgHeaderBar: some View {
+        HStack(spacing: 12) {
+            Button(action: {
+                HapticManager.shared.trigger(.light)
+                store.send(.closeTapped)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                    Text(AppStrings.Common.close)
+                        .font(.subheadline)
+                }
+                .foregroundColor(.white)
+            }
+            #if os(tvOS)
+            .buttonStyle(.bordered)
+            #else
+            .buttonStyle(.plain)
+            #endif
+
+            Spacer()
+
+            Text(AppStrings.Player.timeline)
+                .font(.headline)
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Button(action: {
+                HapticManager.shared.trigger(.light)
+                store.send(.refreshEPGTapped)
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .rotationEffect(.degrees(store.isSyncingEPG ? 360 : 0))
+                        .animation(
+                            store.isSyncingEPG
+                                ? Animation.linear(duration: 1.0).repeatForever(autoreverses: false)
+                                : .default,
+                            value: store.isSyncingEPG
+                        )
+                    #if os(tvOS)
+                        Text(AppStrings.Player.refreshEPG)
+                    #endif
+                }
+                .foregroundColor(.white)
+            }
+            #if os(tvOS)
+            .buttonStyle(.bordered)
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .disabled(store.isSyncingEPG)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.black.opacity(0.85))
     }
 
     // MARK: - Search Bar

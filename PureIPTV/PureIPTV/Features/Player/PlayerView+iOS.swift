@@ -1197,9 +1197,9 @@
                         .keyboardShortcut(.leftArrow, modifiers: [])
                     Button("") { store.send(.jumpForward) }
                         .keyboardShortcut(.rightArrow, modifiers: [])
-                    Button("") { store.send(.previousChannel) }
+                    Button("") { store.send(.keyboardChannelUp) }
                         .keyboardShortcut(.upArrow, modifiers: [])
-                    Button("") { store.send(.nextChannel) }
+                    Button("") { store.send(.keyboardChannelDown) }
                         .keyboardShortcut(.downArrow, modifiers: [])
                     Button("") { store.send(.openChannelDialer) }
                         .keyboardShortcut("d", modifiers: [])
@@ -1710,15 +1710,19 @@
                 if translation.height < -30 {
                     if interactiveZappingDirection != .next {
                         interactiveZappingDirection = .next
-                        if let nextItem = store.nextChannelItem {
-                            store.send(.showZappingHUD(item: nextItem, direction: .next))
+                        let item = store.reverseChannelZappingDirection ? store.previousChannelItem : store.nextChannelItem
+                        let direction: ZappingDirection = store.reverseChannelZappingDirection ? .previous : .next
+                        if let item {
+                            store.send(.showZappingHUD(item: item, direction: direction))
                         }
                     }
                 } else if translation.height > 30 {
                     if interactiveZappingDirection != .previous {
                         interactiveZappingDirection = .previous
-                        if let prevItem = store.previousChannelItem {
-                            store.send(.showZappingHUD(item: prevItem, direction: .previous))
+                        let item = store.reverseChannelZappingDirection ? store.nextChannelItem : store.previousChannelItem
+                        let direction: ZappingDirection = store.reverseChannelZappingDirection ? .next : .previous
+                        if let item {
+                            store.send(.showZappingHUD(item: item, direction: direction))
                         }
                     }
                 } else {
@@ -1861,9 +1865,9 @@
                 if abs(translation.height) >= 60 {
                     HapticManager.shared.trigger(.heavy)
                     if translation.height < 0 {
-                        store.send(.nextChannel)
+                        store.send(.channelUp)
                     } else {
-                        store.send(.previousChannel)
+                        store.send(.channelDown)
                     }
                 } else {
                     store.send(.hideZappingHUD)

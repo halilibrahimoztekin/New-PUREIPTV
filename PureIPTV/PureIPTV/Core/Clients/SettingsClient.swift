@@ -49,6 +49,9 @@ public struct SettingsClient: Sendable {
     public var autoSelectFirstAlternativeSource: @Sendable () -> Bool = { false }
     public var setAutoSelectFirstAlternativeSource: @Sendable (Bool) -> Void = { _ in }
 
+    public var reverseChannelZappingDirection: @Sendable () -> Bool = { false }
+    public var setReverseChannelZappingDirection: @Sendable (Bool) -> Void = { _ in }
+
     public var startMuted: @Sendable () -> Bool = { false }
     public var setStartMuted: @Sendable (Bool) -> Void = { _ in }
 
@@ -128,6 +131,7 @@ extension SettingsClient: DependencyKey {
         let seriesSortKey = "com.pureiptv.seriesSortMethod"
         let autoPlayKey = "com.pureiptv.autoPlayNextEpisode"
         let autoSelectAlternativeSourceKey = "com.pureiptv.autoSelectFirstAlternativeSource"
+        let reverseChannelZappingDirectionKey = "com.pureiptv.reverseChannelZappingDirection"
         let startMutedKey = "com.pureiptv.startMuted"
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
@@ -268,6 +272,8 @@ extension SettingsClient: DependencyKey {
             setAutoPlayNextEpisode: { defaults.set($0, forKey: autoPlayKey) },
             autoSelectFirstAlternativeSource: { defaults.bool(forKey: autoSelectAlternativeSourceKey) },
             setAutoSelectFirstAlternativeSource: { defaults.set($0, forKey: autoSelectAlternativeSourceKey) },
+            reverseChannelZappingDirection: { defaults.bool(forKey: reverseChannelZappingDirectionKey) },
+            setReverseChannelZappingDirection: { defaults.set($0, forKey: reverseChannelZappingDirectionKey) },
             startMuted: { defaults.bool(forKey: startMutedKey) },
             setStartMuted: { defaults.set($0, forKey: startMutedKey) },
             hardwareAcceleration: { defaults.bool(forKey: hwAccelKey) },

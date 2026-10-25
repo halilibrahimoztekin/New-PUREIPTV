@@ -546,9 +546,9 @@
                 .onMoveCommand { direction in
                     store.send(.userInteracted)
                     if direction == .up, store.item.isLive, store.playlist != nil {
-                        store.send(.nextChannel)
+                        store.send(.channelUp)
                     } else if direction == .down, store.item.isLive {
-                        store.send(.setRecentChannelsHUDVisible(true), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        store.send(.channelDownOrRecentChannels, animation: .spring(response: 0.35, dampingFraction: 0.8))
                     } else if direction == .left, store.item.isLive, store.playlist != nil {
                         store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
                     } else if direction == .right, store.item.isLive, store.previousChannel != nil {

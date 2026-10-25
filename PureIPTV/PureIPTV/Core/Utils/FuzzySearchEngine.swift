@@ -147,10 +147,13 @@ public nonisolated enum FuzzySearchEngine: Sendable {
                               maximumDistance: maximumDistance
                           )
                     else { continue }
-                    if bestFuzzyMatch == nil
-                        || distance < bestFuzzyMatch!.distance
-                        || (distance == bestFuzzyMatch!.distance && targetIndex < bestFuzzyMatch!.targetIndex)
-                    {
+                    let shouldReplace: Bool = if let currentBest = bestFuzzyMatch {
+                        distance < currentBest.distance
+                            || (distance == currentBest.distance && targetIndex < currentBest.targetIndex)
+                    } else {
+                        true
+                    }
+                    if shouldReplace {
                         bestFuzzyMatch = (targetIndex, distance)
                     }
                 }

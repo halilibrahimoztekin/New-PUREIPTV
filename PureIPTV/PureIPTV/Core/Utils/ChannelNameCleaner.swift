@@ -54,65 +54,67 @@ public struct CleanedChannelMetadata: Equatable, Sendable {
 public nonisolated enum ChannelNameCleaner: Sendable {
     // MARK: - Regex Patterns
 
+    private static func createRegex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
+        (try? NSRegularExpression(pattern: pattern, options: options)) ?? NSRegularExpression()
+    }
+
     /// 1. Country & Language Prefixes (e.g. "[TR]", "TR:", "TR -", "TR|", "[USA]", etc.)
-    private static let countryPrefixRegex: NSRegularExpression = {
-        let pattern = #"^(?:\[|\(|\b)(TR|TUR|TURK|TURKEY|EN|ENG|USA|US|UK|GB|DE|GER|FR|FRA|IT|ITA|ES|SPA|AR|ARA|NL|NED|AZ|AZE|PT|POR|RU|RUS|PL|POL|EX-YU|ALB|GR|GRE|SCAND)(?:\]|\)|\b)\s*[:\-\|\/]?\s*"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let countryPrefixRegex: NSRegularExpression = createRegex(
+        #"^(?:\[|\(|\b)(TR|TUR|TURK|TURKEY|EN|ENG|USA|US|UK|GB|DE|GER|FR|FRA|IT|ITA|ES|SPA|AR|ARA|NL|NED|AZ|AZE|PT|POR|RU|RUS|PL|POL|EX-YU|ALB|GR|GRE|SCAND)(?:\]|\)|\b)\s*[:\-\|\/]?\s*"#,
+        options: [.caseInsensitive]
+    )
 
     /// 2. Trailing Country Tags (e.g. "TR", "TUR", "(TR)", "[TR]")
-    private static let countrySuffixRegex: NSRegularExpression = {
-        let pattern = #"\s*(?:\[|\(|\b)(TR|TUR|TURKEY|EN|ENG|USA|UK|DE|GER|FR|IT|ES|AR|NL|AZ|PT|RU)(?:\]|\)|\b)\s*$"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let countrySuffixRegex: NSRegularExpression = createRegex(
+        #"\s*(?:\[|\(|\b)(TR|TUR|TURKEY|EN|ENG|USA|UK|DE|GER|FR|IT|ES|AR|NL|AZ|PT|RU)(?:\]|\)|\b)\s*$"#,
+        options: [.caseInsensitive]
+    )
 
     /// 3. 4K / UHD Indicators
-    private static let uhd4kRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(?:4K[\s\-_]*UHD|4K|ULTRA[\s\-_]*HD|2160P|2160I|UHD)(?:\]|\)|\b)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let uhd4kRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(?:4K[\s\-_]*UHD|4K|ULTRA[\s\-_]*HD|2160P|2160I|UHD)(?:\]|\)|\b)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 4. FHD / 1080p Indicators
-    private static let fhdRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(?:1080P|1080I|FHD|FULL[\s\-_]*HD)(?:\]|\)|\b)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let fhdRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(?:1080P|1080I|FHD|FULL[\s\-_]*HD)(?:\]|\)|\b)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 5. HD / 720p Indicators
-    private static let hdRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(?:720P|720I|HD\+|HD)(?:\]|\)|\b)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let hdRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(?:720P|720I|HD\+|HD)(?:\]|\)|\b)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 6. SD Indicators
-    private static let sdRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(?:576P|576I|480P|480I|SD)(?:\]|\)|\b)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let sdRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(?:576P|576I|480P|480I|SD)(?:\]|\)|\b)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 7. Codecs & Audio tags (HEVC, H.265, RAW, 50fps, 60fps, Multi-audio)
-    private static let codecNoiseRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b|\|)(?:HEVC|H\.?265|H\.?264|AVC|RAW|50FPS|60FPS|50\s*FPS|60\s*FPS|MULTI[\s\-_]*AUDIO|MULTI[\s\-_]*SUB|DUAL)(?:\]|\)|\b|\|)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let codecNoiseRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b|\|)(?:HEVC|H\.?265|H\.?264|AVC|RAW|50FPS|60FPS|50\s*FPS|60\s*FPS|MULTI[\s\-_]*AUDIO|MULTI[\s\-_]*SUB|DUAL)(?:\]|\)|\b|\|)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 8. Server / Provider Noise (VIP, PREMIUM, BACKUP, YEDEK, etc.)
-    private static let providerNoiseRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b|\|)(?:VIP|PREMIUM|BACKUP|YEDEK|MAIN)(?:\]|\)|\b|\|)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let providerNoiseRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b|\|)(?:VIP|PREMIUM|BACKUP|YEDEK|MAIN)(?:\]|\)|\b|\|)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 9. Stray wrapper symbols and brackets left behind
-    private static let straySymbolsRegex: NSRegularExpression = {
-        let pattern = #"^[\|\-\:\/\s]+|[\|\-\:\/\s]+$|\[\s*\]|\(\s*\)"#
-        return try! NSRegularExpression(pattern: pattern)
-    }()
+    private static let straySymbolsRegex: NSRegularExpression = createRegex(
+        #"^[\|\-\:\/\s]+|[\|\-\:\/\s]+$|\[\s*\]|\(\s*\)"#
+    )
 
     /// 10. Multiple spaces
-    private static let multiSpaceRegex: NSRegularExpression = {
-        let pattern = #"\s{2,}"#
-        return try! NSRegularExpression(pattern: pattern)
-    }()
+    private static let multiSpaceRegex: NSRegularExpression = createRegex(
+        #"\s{2,}"#
+    )
 
     // MARK: - Cleaning & Extraction
 

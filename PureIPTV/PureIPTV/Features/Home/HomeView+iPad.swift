@@ -180,7 +180,7 @@
 
     #Preview("Home iPad") {
         HomeView_iPad(
-            store: Store(initialState: HomeFeature.State(config: PlaylistConfig(type: .xtream, serverURL: URL(string: "http://example.com")!, username: "demo", password: "pwd"))) {
+            store: Store(initialState: HomeFeature.State(config: PlaylistConfig(type: .xtream, serverURL: URL(string: "http://example.com") ?? URL(fileURLWithPath: "/"), username: "demo", password: "pwd"))) {
                 HomeFeature()
             }
         )

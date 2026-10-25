@@ -27,29 +27,32 @@ public struct ParsedTraktMediaInfo: Equatable, Sendable {
 // MARK: - Trakt Media Parser Engine
 
 public nonisolated enum TraktMediaParser: Sendable {
+    private static func createRegex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
+        (try? NSRegularExpression(pattern: pattern, options: options)) ?? NSRegularExpression()
+    }
+
     /// 1. Season and Episode pattern (S01E05, S1E5, 1x05, 01x05)
-    private static let seasonEpisodeRegex: NSRegularExpression = {
-        let pattern = #"(?:s|season\s*)(\d{1,2})[\s\.\-_]*(?:e|ep|episode\s*)(\d{1,3})|(\d{1,2})x(\d{1,3})"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let seasonEpisodeRegex: NSRegularExpression = createRegex(
+        #"(?:s|season\s*)(\d{1,2})[\s\.\-_]*(?:e|ep|episode\s*)(\d{1,3})|(\d{1,2})x(\d{1,3})"#,
+        options: [.caseInsensitive]
+    )
 
     /// 2. Year pattern (1950 - 2039)
-    private static let yearRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(19[5-9]\d|20[0-3]\d)(?:\]|\)|\b)"#
-        return try! NSRegularExpression(pattern: pattern)
-    }()
+    private static let yearRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(19[5-9]\d|20[0-3]\d)(?:\]|\)|\b)"#
+    )
 
     /// 3. Technical clutter noise in VOD titles
-    private static let vodClutterRegex: NSRegularExpression = {
-        let pattern = #"(?:\[|\(|\b)(?:4K|UHD|1080P|720P|FHD|HD|BLURAY|WEBDL|WEB[\-_]DL|HDRIP|REMUX|HEVC|X265|H265|X264|H264|AAC|AC3|5\.1|7\.1|DTS|DUAL|SUB|TR|EN|MULTISUB)(?:\]|\)|\b|\.)"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let vodClutterRegex: NSRegularExpression = createRegex(
+        #"(?:\[|\(|\b)(?:4K|UHD|1080P|720P|FHD|HD|BLURAY|WEBDL|WEB[\-_]DL|HDRIP|REMUX|HEVC|X265|H265|X264|H264|AAC|AC3|5\.1|7\.1|DTS|DUAL|SUB|TR|EN|MULTISUB)(?:\]|\)|\b|\.)"#,
+        options: [.caseInsensitive]
+    )
 
     /// 4. File extensions (.mkv, .mp4, .avi, etc.)
-    private static let fileExtensionRegex: NSRegularExpression = {
-        let pattern = #"\.(?:mkv|mp4|avi|mov|ts|m3u8|flv)$"#
-        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-    }()
+    private static let fileExtensionRegex: NSRegularExpression = createRegex(
+        #"\.(?:mkv|mp4|avi|mov|ts|m3u8|flv)$"#,
+        options: [.caseInsensitive]
+    )
 
     /// Parses an IPTV media title into structured movie or series episode information suitable for Trakt.
     public static func parse(title: String, seriesTitle: String? = nil, isExplicitSeries: Bool = false) -> ParsedTraktMediaInfo {

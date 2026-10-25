@@ -62,15 +62,17 @@ public struct TraktAuthView: View {
                                         .shadow(color: Color(hex: "#ED1C24").opacity(0.3), radius: 20, x: 0, y: 8)
                                 }
 
-                                Link(destination: URL(string: codeInfo.verificationURL)!) {
-                                    HStack(spacing: 6) {
-                                        Text(codeInfo.verificationURL)
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                if let verificationURL = URL(string: codeInfo.verificationURL) {
+                                    Link(destination: verificationURL) {
+                                        HStack(spacing: 6) {
+                                            Text(codeInfo.verificationURL)
+                                                .font(.system(size: 15, weight: .bold))
+                                                .foregroundStyle(Color(hex: "#0A84FF"))
 
-                                        Image(systemName: "arrow.up.right")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                            Image(systemName: "arrow.up.right")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                        }
                                     }
                                 }
 

@@ -15,6 +15,7 @@ public struct SettingsView: View {
     @State private var isShowingBackupAlert: Bool = false
     @State private var diagnosticReportURL: URL?
     @State private var isGeneratingDiagnosticReport = false
+    @State private var isShowingTraktWatchlist: Bool = false
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
@@ -204,6 +205,14 @@ public struct SettingsView: View {
                     set: { store.send(.setAutoSelectFirstAlternativeSource($0)) }
                 ))
                 Text(AppStrings.Settings.autoSelectFirstAlternativeSourceDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle(AppStrings.Settings.reverseChannelZappingDirection, isOn: Binding(
+                    get: { store.reverseChannelZappingDirection },
+                    set: { store.send(.setReverseChannelZappingDirection($0)) }
+                ))
+                Text(AppStrings.Settings.reverseChannelZappingDirectionDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -516,15 +525,20 @@ public struct SettingsView: View {
                     ))
                     .tint(Color(hex: "#ED1C24"))
 
-                    NavigationLink {
-                        TraktWatchlistView(store: store.scope(state: \.traktState, action: \.traktAction))
+                    Button {
+                        isShowingTraktWatchlist = true
                     } label: {
                         HStack {
                             Image(systemName: "bookmark.fill")
                                 .foregroundColor(Color(hex: "#ED1C24"))
                             Text("İzleme Listesi & Devam Edenler")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                                .font(.caption)
                         }
                     }
+                    .foregroundColor(.primary)
 
                     Button(role: .destructive) {
                         store.send(.traktLogout)
@@ -744,6 +758,18 @@ public struct SettingsView: View {
         )) {
             CustomEPGSettingsView(store: store)
         }
+        .sheet(isPresented: $isShowingTraktWatchlist) {
+            NavigationStack {
+                TraktWatchlistView(store: store.scope(state: \.traktState, action: \.traktAction))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(AppStrings.Common.close) {
+                                isShowingTraktWatchlist = false
+                            }
+                        }
+                    }
+            }
+        }
         .sheet(isPresented: Binding(
             get: { diagnosticReportURL != nil },
             set: {
@@ -788,7 +814,9 @@ private struct DiagnosticReportPreviewView: View {
                 Text(reportText)
                     .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                #if os(iOS)
                     .textSelection(.enabled)
+                #endif
                     .padding()
             }
             .navigationTitle(AppStrings.Settings.diagnosticReportTitle)
@@ -797,32 +825,36 @@ private struct DiagnosticReportPreviewView: View {
                     Button(AppStrings.Common.close) { dismiss() }
                         .accessibilityLabel(AppStrings.Common.close)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    ShareLink(
-                        item: DiagnosticReportFile(url: url),
-                        preview: SharePreview(
-                            AppStrings.Settings.diagnosticReportTitle,
-                            image: Image(systemName: "doc.text")
-                        )
-                    ) {
-                        Label(AppStrings.Settings.shareDiagnosticReport, systemImage: "square.and.arrow.up")
+                #if os(iOS)
+                    ToolbarItem(placement: .confirmationAction) {
+                        ShareLink(
+                            item: DiagnosticReportFile(url: url),
+                            preview: SharePreview(
+                                AppStrings.Settings.diagnosticReportTitle,
+                                image: Image(systemName: "doc.text")
+                            )
+                        ) {
+                            Label(AppStrings.Settings.shareDiagnosticReport, systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel(AppStrings.Settings.shareDiagnosticReport)
                     }
-                    .accessibilityLabel(AppStrings.Settings.shareDiagnosticReport)
-                }
+                #endif
             }
         }
     }
 }
 
-private struct DiagnosticReportFile: Transferable {
-    let url: URL
+#if os(iOS)
+    private struct DiagnosticReportFile: Transferable {
+        let url: URL
 
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(exportedContentType: .plainText) { report in
-            SentTransferredFile(report.url)
+        static var transferRepresentation: some TransferRepresentation {
+            FileRepresentation(exportedContentType: .plainText) { report in
+                SentTransferredFile(report.url)
+            }
         }
     }
-}
+#endif
 
 struct PINSetupView: View {
     @Bindable var store: StoreOf<SettingsFeature>

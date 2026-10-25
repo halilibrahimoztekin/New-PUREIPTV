@@ -410,7 +410,7 @@
         private func homeCategorySection(_ collection: DashboardFeature.ExploreCollection) -> some View {
             let isPinned = store.pinnedHomeCategoryIDs.contains(collection.id)
             let canPin = collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
-            VStack(alignment: .leading, spacing: 20) {
+            return VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 18) {
                     Text(collection.title)
                         .font(.system(size: 38, weight: .bold))
