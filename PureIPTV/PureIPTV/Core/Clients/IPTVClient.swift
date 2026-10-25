@@ -87,10 +87,27 @@ private extension M3UItemDTO {
     }
 }
 
+private func m3uCategory(for item: M3UItemDTO, config: PlaylistConfig, mappings: [String: String]) -> MediaModels.Category {
+    let sourceTag = item.sourceGroupTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !sourceTag.isEmpty, sourceTag.count <= 160,
+          let targetName = mappings[sourceTag]?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !targetName.isEmpty,
+          let playlistID = config.playlistID
+    else {
+        return MediaModels.Category(id: item.groupTitle, name: item.groupTitle)
+    }
+    let normalizedTarget = targetName.lowercased(with: Locale(identifier: "en_US_POSIX"))
+    return MediaModels.Category(
+        id: "m3u-map.\(playlistID.uuidString.lowercased()).\(normalizedTarget)",
+        name: targetName
+    )
+}
+
 @DependencyClient
 public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
+    public var fetchM3UCategoryTags: @Sendable (_ config: PlaylistConfig) async -> [String] = { _ in [] }
     public var fetchLiveChannels: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var resolveLiveItem: @Sendable (_ config: PlaylistConfig, _ itemID: String, _ categoryID: String?) async throws -> MediaModels.Item?
     public var fetchVODCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
@@ -150,6 +167,7 @@ extension IPTVClient: DependencyKey {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
         let logoOverrideClient = ChannelLogoOverrideClient.liveValue
+        let m3uCategoryMappingClient = M3UCategoryMappingClient.liveValue
 
         let m3uCacheKey: @Sendable (PlaylistConfig) -> String = { config in
             let identity = config.playlistID?.uuidString ?? config.m3uURL?.absoluteString ?? "unidentified"
@@ -204,8 +222,19 @@ extension IPTVClient: DependencyKey {
             fetchLiveCategories: { config in
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
-                    let groups = Array(Set(items.map(\.groupTitle))).sorted()
-                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                    let mappings: [String: String] = if let playlistID = config.playlistID {
+                        await m3uCategoryMappingClient.load(playlistID)
+                    } else {
+                        [:]
+                    }
+                    var categoriesByID: [String: MediaModels.Category] = [:]
+                    for item in items {
+                        let category = m3uCategory(for: item, config: config, mappings: mappings)
+                        if categoriesByID[category.id] == nil {
+                            categoriesByID[category.id] = category
+                        }
+                    }
+                    return categoriesByID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
@@ -214,17 +243,34 @@ extension IPTVClient: DependencyKey {
                 let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
+            fetchM3UCategoryTags: { config in
+                guard config.type == .m3u else { return [] }
+                let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
+                return Array(Set(items.compactMap { item in
+                    let tag = item.sourceGroupTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return tag.isEmpty || tag.count > 160 ? nil : tag
+                })).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            },
             fetchLiveChannels: { config, categoryID in
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
-                    let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
+                    let mappings: [String: String] = if let playlistID = config.playlistID {
+                        await m3uCategoryMappingClient.load(playlistID)
+                    } else {
+                        [:]
+                    }
+                    let filtered = items.filter { item in
+                        guard let categoryID else { return true }
+                        return m3uCategory(for: item, config: config, mappings: mappings).id == categoryID
+                    }
                     let channels = filtered.map { item in
-                        MediaModels.Item(
+                        let category = m3uCategory(for: item, config: config, mappings: mappings)
+                        return MediaModels.Item(
                             id: item.id,
                             title: item.title,
                             streamURL: item.streamURL,
                             coverURL: item.coverURL,
-                            categoryID: item.groupTitle,
+                            categoryID: category.id,
                             type: .live,
                             epgChannelID: item.tvgID,
                             userAgentOverride: config.userAgentOverride
@@ -262,23 +308,29 @@ extension IPTVClient: DependencyKey {
                 guard !itemID.isEmpty, itemID.count <= 512 else { return nil }
                 if config.type == .m3u {
                     let cachedItems = await ensureM3UCache(config)
+                    let mappings: [String: String] = if let playlistID = config.playlistID {
+                        await m3uCategoryMappingClient.load(playlistID)
+                    } else {
+                        [:]
+                    }
                     var matchingItem: M3UItemDTO?
                     for candidate in cachedItems {
                         guard candidate.id == itemID else { continue }
                         guard candidate.resolvedMediaType == .live else { continue }
-                        if let categoryID, candidate.groupTitle != categoryID {
+                        if let categoryID, m3uCategory(for: candidate, config: config, mappings: mappings).id != categoryID {
                             continue
                         }
                         matchingItem = candidate
                         break
                     }
                     guard let item = matchingItem else { return nil }
+                    let category = m3uCategory(for: item, config: config, mappings: mappings)
                     let resolved = MediaModels.Item(
                         id: item.id,
                         title: item.title,
                         streamURL: item.streamURL,
                         coverURL: item.coverURL,
-                        categoryID: item.groupTitle,
+                        categoryID: category.id,
                         type: .live,
                         epgChannelID: item.tvgID,
                         userAgentOverride: config.userAgentOverride
@@ -831,6 +883,7 @@ extension IPTVClient: DependencyKey {
     public static let testValue = IPTVClient(
         authenticate: { _ in },
         fetchLiveCategories: { _ in [] },
+        fetchM3UCategoryTags: { _ in [] },
         fetchLiveChannels: { _, _ in [] },
         resolveLiveItem: { _, _, _ in nil },
         fetchVODCategories: { _ in [] },

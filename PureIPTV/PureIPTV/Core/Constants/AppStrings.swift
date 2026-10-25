@@ -47,6 +47,16 @@ public enum AppStrings {
         public static let handoffPlaybackUnavailableMessage = "Bu içerik bu Apple TV'de kullanılamıyor.".localized
     }
 
+    public enum M3UCategoryMapping {
+        public static let title = "M3U Etiketlerini Eşle".localized
+        public static let destinationCategory = "Hedef Kategori".localized
+        public static let instructions = "Bir M3U etiketine kategori adı yazın. Aynı kategoriye eşlenen etiketler Live TV'de birleştirilir. Boş bırakılan etiketler kaynak kategorisini kullanır.".localized
+        public static let savedPlaylistRequired = "Kaydedilmiş playlist gerekir".localized
+        public static let savedPlaylistRequiredHint = "Etiket eşlemeleri yalnız playlist kimliği olan kaydedilmiş M3U kaynaklarında saklanır.".localized
+        public static let noTags = Common.categoryNotFound
+        public static let noTagsHint = LiveTV.emptyCategoryLive
+    }
+
     // MARK: - VOD (Movies)
 
     public enum VOD {

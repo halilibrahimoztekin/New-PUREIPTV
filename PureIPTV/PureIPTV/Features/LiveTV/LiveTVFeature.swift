@@ -1701,6 +1701,14 @@ public struct LiveTVFeature {
             case .categoryManagement(.presented(.delegate(.categoriesUpdated))):
                 return .send(.reloadPreferences)
 
+            case .categoryManagement(.presented(.delegate(.m3uMappingsUpdated))):
+                guard let config = state.config else { return .none }
+                state.categories = []
+                state.channelsByCategory = [:]
+                state.selectedCategoryID = nil
+                state.selectedChannel = nil
+                return .send(.reloadCategories(config: config))
+
             case .categoryManagement(.presented(.delegate(.close))):
                 state.categoryManagement = nil
                 return .none

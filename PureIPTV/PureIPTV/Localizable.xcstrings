@@ -37504,6 +37504,656 @@
           }
         }
       }
+    },
+    "M3U Etiketlerini Eşle" : {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعيين وسوم M3U"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3U-Tags zuordnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map M3U Tags"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asignar etiquetas M3U"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Associer les tags M3U"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3U टैग मैप करें"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Petakan tag M3U"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappa tag M3U"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3Uタグを割り当て"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3U 태그 매핑"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M3U-tags toewijzen"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapuj tagi M3U"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapear tags M3U"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapear etiquetas M3U"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сопоставить теги M3U"
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappa M3U-taggar"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "จับคู่แท็ก M3U"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Зіставити теги M3U"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ánh xạ thẻ M3U"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "映射 M3U 标签"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對應 M3U 標籤"
+          }
+        }
+      }
+    },
+    "Hedef Kategori" : {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفئة المستهدفة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zielkategorie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination Category"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categoría de destino"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Catégorie cible"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लक्ष्य श्रेणी"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategori tujuan"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categoria di destinazione"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "割り当て先カテゴリ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "대상 카테고리"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelcategorie"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategoria docelowa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categoria de destino"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categoria de destino"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Целевая категория"
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Målkategori"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "หมวดหมู่ปลายทาง"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цільова категорія"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danh mục đích"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标分类"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目標分類"
+          }
+        }
+      }
+    },
+    "Bir M3U etiketine kategori adı yazın. Aynı kategoriye eşlenen etiketler Live TV'de birleştirilir. Boş bırakılan etiketler kaynak kategorisini kullanır." : {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر فئة لكل وسم M3U. تُدمج الوسوم ذات الفئة نفسها في Live TV. تحتفظ الوسوم الفارغة بفئتها الأصلية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle für jedes M3U-Tag eine Zielkategorie. Tags mit demselben Ziel werden in Live TV zusammengeführt. Leere Tags behalten ihre Quellkategorie."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a target category for each M3U tag. Tags with the same target are combined in Live TV. Empty tags keep their source category."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige una categoría de destino para cada etiqueta M3U. Las etiquetas con el mismo destino se combinan en TV en directo. Las vacías conservan su categoría de origen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez une catégorie cible pour chaque tag M3U. Les tags ayant la même cible sont regroupés dans Live TV. Les tags vides gardent leur catégorie source."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हर M3U टैग के लिए लक्ष्य श्रेणी चुनें। एक ही लक्ष्य वाले टैग Live TV में जुड़ जाते हैं। खाली टैग अपनी स्रोत श्रेणी रखते हैं।"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pilih kategori tujuan untuk setiap tag M3U. Tag dengan tujuan sama digabungkan di Live TV. Tag kosong memakai kategori sumber."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli una categoria di destinazione per ogni tag M3U. I tag con la stessa destinazione vengono uniti in Live TV. Quelli vuoti mantengono la categoria sorgente."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各M3Uタグの移行先カテゴリを選択します。同じ移行先のタグはLive TVで統合されます。空欄は元のカテゴリを維持します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 M3U 태그의 대상 카테고리를 선택하세요. 대상이 같은 태그는 Live TV에서 합쳐집니다. 비어 있는 태그는 원래 카테고리를 유지합니다."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een doelcategorie voor elke M3U-tag. Tags met hetzelfde doel worden samengevoegd in Live TV. Lege tags behouden hun broncategorie."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wybierz kategorię docelową dla każdego tagu M3U. Tagi z tym samym celem zostaną połączone w Live TV. Puste zachowają kategorię źródłową."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha uma categoria de destino para cada tag M3U. Tags com o mesmo destino são agrupadas na TV ao vivo. Tags vazias mantêm a categoria de origem."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha uma categoria de destino para cada etiqueta M3U. Etiquetas com o mesmo destino são agrupadas na TV em direto. As vazias mantêm a categoria de origem."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите целевую категорию для каждого тега M3U. Теги с одинаковой целью объединяются в Live TV. Пустые сохраняют исходную категорию."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Välj en målkategori för varje M3U-tagg. Taggar med samma mål slås ihop i Live TV. Tomma taggar behåller sin källkategori."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เลือกหมวดหมู่ปลายทางให้แต่ละแท็ก M3U แท็กที่มีปลายทางเดียวกันจะรวมใน Live TV ส่วนแท็กว่างจะใช้หมวดหมู่เดิม"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Виберіть цільову категорію для кожного тегу M3U. Теги з однаковою ціллю об’єднаються в Live TV. Порожні збережуть вихідну категорію."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chọn danh mục đích cho từng thẻ M3U. Các thẻ cùng đích sẽ được gộp trong Live TV. Thẻ trống giữ danh mục nguồn."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为每个 M3U 标签选择目标分类。目标相同的标签会在 Live TV 中合并。留空则保留来源分类。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為每個 M3U 標籤選擇目標分類。目標相同的標籤會在 Live TV 中合併。留空則保留來源分類。"
+          }
+        }
+      }
+    },
+    "Kaydedilmiş playlist gerekir" : {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتطلب قائمة تشغيل محفوظة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Playlist erforderlich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Playlist Required"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se requiere una playlist guardada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playlist enregistrée requise"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सहेजी गई प्लेलिस्ट आवश्यक है"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playlist tersimpan diperlukan"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playlist salvata richiesta"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みプレイリストが必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 플레이리스트 필요"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen playlist vereist"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wymagana zapisana playlista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É necessária uma playlist salva"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É necessária uma playlist guardada"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Требуется сохранённый плейлист"
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparad spellista krävs"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ต้องใช้เพลย์ลิสต์ที่บันทึกไว้"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Потрібен збережений плейлист"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cần playlist đã lưu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要已保存的播放列表"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要已儲存的播放清單"
+          }
+        }
+      }
+    },
+    "Etiket eşlemeleri yalnız playlist kimliği olan kaydedilmiş M3U kaynaklarında saklanır." : {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُحفظ التعيينات للقوائم المحفوظة التي لها معرّف فقط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuordnungen werden nur für gespeicherte M3U-Playlists mit Playlist-ID gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappings are saved only for saved M3U playlists with a playlist ID."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las asignaciones se guardan solo para playlists M3U guardadas con ID."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les associations sont enregistrées uniquement pour les playlists M3U enregistrées avec un identifiant."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मैपिंग केवल playlist ID वाली सहेजी गई M3U प्लेलिस्ट में सहेजी जाती है।"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pemetaan hanya disimpan untuk playlist M3U tersimpan yang memiliki ID."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mappature vengono salvate solo per le playlist M3U salvate con ID."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "割り当てはプレイリストIDのある保存済みM3Uプレイリストにのみ保存されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매핑은 플레이리스트 ID가 있는 저장된 M3U 플레이리스트에만 저장됩니다."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toewijzingen worden alleen opgeslagen voor bewaarde M3U-playlists met een ID."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapowania są zapisywane tylko dla zapisanych playlist M3U z identyfikatorem."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os mapeamentos são salvos apenas para playlists M3U salvas com ID."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os mapeamentos são guardados apenas para playlists M3U guardadas com ID."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сопоставления сохраняются только для сохранённых плейлистов M3U с ID."
+          }
+        },
+        "sv": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappningar sparas bara för sparade M3U-spellistor med ID."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "การจับคู่จะบันทึกเฉพาะเพลย์ลิสต์ M3U ที่บันทึกไว้และมี ID"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Зіставлення зберігаються лише для збережених плейлистів M3U з ID."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ánh xạ chỉ được lưu cho playlist M3U đã lưu có ID."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "映射仅保存在具有 ID 的已保存 M3U 播放列表中。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對應只會儲存在具有 ID 的已儲存 M3U 播放清單中。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

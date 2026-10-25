@@ -92,6 +92,7 @@ public struct M3UParser: Sendable {
                         streamURL: url,
                         coverURL: currentTvgLogo.flatMap { URL(string: $0) },
                         groupTitle: processed.inferredCategory,
+                        sourceGroupTitle: currentGroupTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
                         tvgID: currentTvgID,
                         tvgName: currentTvgName,
                         tvgLogo: currentTvgLogo,

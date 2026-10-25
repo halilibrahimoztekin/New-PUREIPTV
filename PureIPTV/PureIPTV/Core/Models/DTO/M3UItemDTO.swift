@@ -6,6 +6,7 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
     public let streamURL: URL
     public let coverURL: URL?
     public let groupTitle: String
+    public let sourceGroupTitle: String?
     public let tvgID: String?
     public let tvgName: String?
     public let tvgLogo: String?
@@ -19,6 +20,7 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
         streamURL: URL,
         coverURL: URL? = nil,
         groupTitle: String,
+        sourceGroupTitle: String? = nil,
         tvgID: String? = nil,
         tvgName: String? = nil,
         tvgLogo: String? = nil,
@@ -31,6 +33,7 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
         self.streamURL = streamURL
         self.coverURL = coverURL
         self.groupTitle = groupTitle
+        self.sourceGroupTitle = sourceGroupTitle
         self.tvgID = tvgID
         self.tvgName = tvgName
         self.tvgLogo = tvgLogo

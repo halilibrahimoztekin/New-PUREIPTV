@@ -9,6 +9,7 @@ public struct CategoryManagementFeature {
         public let config: PlaylistConfig
         public var type: CategoryType
         public var isLoading = false
+        public var loadRequestID: UUID?
         public var categories: [MediaModels.Category] = []
         public var originalCategories: [MediaModels.Category] = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:] // key: categoryID
@@ -81,8 +82,8 @@ public struct CategoryManagementFeature {
         case binding(BindingAction<State>)
         case onAppear
         case loadData
-        case categoriesResponse(Result<[MediaModels.Category], Error>)
-        case preferencesLoaded([CategoryPreferenceDTO])
+        case categoriesResponse(requestID: UUID, Result<[MediaModels.Category], Error>)
+        case preferencesLoaded(requestID: UUID, [CategoryPreferenceDTO])
         case toggleVisibility(categoryID: String)
         case toggleLock(categoryID: String)
         case moveCategory(from: IndexSet, to: Int)
@@ -95,12 +96,14 @@ public struct CategoryManagementFeature {
         case resetOrderTapped
         case saveTapped
         case saveResponse(Result<Void, Error>)
+        case m3uCategoryMappingsUpdated
         case closeTapped
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case close
             case categoriesUpdated
+            case m3uMappingsUpdated
         }
     }
 
@@ -124,6 +127,8 @@ public struct CategoryManagementFeature {
                 state.isLoading = true
                 let config = state.config
                 let type = state.type
+                let requestID = UUID()
+                state.loadRequestID = requestID
                 return .run { send in
                     // Fetch categories
                     async let categoriesResult: Result<[MediaModels.Category], Error> = Result {
@@ -138,11 +143,12 @@ public struct CategoryManagementFeature {
 
                     let cats = await categoriesResult
                     let p = await prefs ?? []
-                    await send(.preferencesLoaded(p))
-                    await send(.categoriesResponse(cats))
+                    await send(.preferencesLoaded(requestID: requestID, p))
+                    await send(.categoriesResponse(requestID: requestID, cats))
                 }
 
-            case let .preferencesLoaded(prefs):
+            case let .preferencesLoaded(requestID, prefs):
+                guard state.loadRequestID == requestID, !state.hasUnsavedChanges else { return .none }
                 var dict: [String: CategoryPreferenceDTO] = [:]
                 for pref in prefs {
                     dict[pref.categoryID] = pref
@@ -150,7 +156,8 @@ public struct CategoryManagementFeature {
                 state.categoryPreferences = dict
                 return .none
 
-            case let .categoriesResponse(.success(categories)):
+            case let .categoriesResponse(requestID, .success(categories)):
+                guard state.loadRequestID == requestID else { return .none }
                 state.isLoading = false
                 state.originalCategories = categories
 
@@ -170,7 +177,8 @@ public struct CategoryManagementFeature {
                 state.categories = sortedCategories
                 return .none
 
-            case .categoriesResponse(.failure):
+            case let .categoriesResponse(requestID, .failure):
+                guard state.loadRequestID == requestID else { return .none }
                 state.isLoading = false
                 return .none
 
@@ -351,6 +359,12 @@ public struct CategoryManagementFeature {
                         await send(.saveResponse(.failure(error)))
                     }
                 }
+
+            case .m3uCategoryMappingsUpdated:
+                return .merge(
+                    .send(.delegate(.m3uMappingsUpdated)),
+                    .send(.loadData)
+                )
 
             case .saveResponse(.success):
                 state.hasUnsavedChanges = false
