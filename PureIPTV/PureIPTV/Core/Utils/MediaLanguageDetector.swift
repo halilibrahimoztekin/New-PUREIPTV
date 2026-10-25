@@ -182,22 +182,23 @@ public enum MediaLanguageDetector {
 
     /// Determines if an item matches the requested language filter
     public static func matches(title: String, filter: MediaLanguageFilter) -> Bool {
-        if filter == .all {
-            return true
-        }
+        guard filter != .all else { return true }
+        return matches(tags: detectTags(from: title), filter: filter)
+    }
 
-        let tags = detectTags(from: title)
+    /// Matches precomputed tags so catalog projections can scan each title once.
+    public static func matches(tags: Set<MediaAudioLanguageTag>, filter: MediaLanguageFilter) -> Bool {
         switch filter {
         case .all:
-            return true
+            true
         case .turkishDubbed:
-            return tags.contains(.turkishDubbed) || tags.contains(.dualAudio)
+            tags.contains(.turkishDubbed) || tags.contains(.dualAudio)
         case .turkishSubtitled:
-            return tags.contains(.turkishSubtitled)
+            tags.contains(.turkishSubtitled)
         case .dualAudio:
-            return tags.contains(.dualAudio)
+            tags.contains(.dualAudio)
         case .originalAudio:
-            return tags.contains(.originalAudio) || tags.contains(.dualAudio)
+            tags.contains(.originalAudio) || tags.contains(.dualAudio)
         }
     }
 

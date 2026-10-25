@@ -296,8 +296,8 @@
                             guard let newID else { return }
                             TVFocusMemory.shared.recordSeries(newID, in: store.selectedCategoryID)
                             guard let series = store.currentSeries.first(where: { $0.id == newID }) else { return }
-                            let firstChar = String(series.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                            if !firstChar.isEmpty, firstChar != currentScrubLetter {
+                            let firstChar = MediaLibraryDerivedData.alphabetLetter(for: series.title)
+                            if firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar
                                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                                     isScrubOverlayVisible = true
@@ -318,10 +318,7 @@
                             TVAlphabetScrubberOverlay(
                                 currentLetter: currentScrubLetter,
                                 isVisible: isScrubOverlayVisible,
-                                availableLetters: Set(store.currentSeries.compactMap {
-                                    let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                                    return ("A" ... "Z").contains(c) ? c : "#"
-                                })
+                                availableLetters: store.availableLetters
                             )
                         )
                     }

@@ -24,6 +24,7 @@ public struct VODFeature {
         public var favoriteIDs: Set<String> = []
         public var lastSortMethod: SortMethod = .defaultOrder
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
+        public private(set) var derivedData = MediaLibraryDerivedData()
         public var unlockedCategoryIDs: Set<String> = []
         public var categoryUnlockRequestIDs: [String: UUID] = [:]
         public var categoryUnlockProfileScope: ProfileContextSnapshot?
@@ -42,55 +43,36 @@ public struct VODFeature {
         }
 
         public var availableLanguageFilters: [MediaLanguageFilter] {
-            MediaLanguageDetector.availableFilters(for: rawVODs)
+            derivedData.availableLanguageFilters
         }
 
         public var availableOriginalLanguageCodes: [String] {
-            Array(Set(rawVODs.compactMap { ISO639LanguageCode.normalize($0.originalLanguageCode) })).sorted()
+            derivedData.availableOriginalLanguageCodes
         }
 
         public var originalLanguageCounts: [String: Int] {
-            var counts: [String: Int] = [:]
-            let audioFilteredItems = rawVODs.filter {
-                MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter)
-            }
-            counts["all"] = audioFilteredItems.count
-            for code in availableOriginalLanguageCodes {
-                counts[code] = audioFilteredItems.filter {
-                    let itemCode = ISO639LanguageCode.normalize($0.originalLanguageCode)
-                    return itemCode == code || itemCode == nil
-                }.count
-            }
-            return counts
+            derivedData.originalLanguageCounts
         }
 
         public var languageFilterCounts: [MediaLanguageFilter: Int] {
-            var counts: [MediaLanguageFilter: Int] = [:]
-            for filter in MediaLanguageFilter.allCases {
-                counts[filter] = MediaLanguageDetector.count(for: filter, in: rawVODs)
-            }
-            return counts
+            derivedData.languageFilterCounts
         }
 
-        // Computed: vods for the currently selected category and language filter
         public var currentVODs: [MediaModels.Item] {
-            let filtered = rawVODs.filter { item in
-                MediaLanguageDetector.matches(title: item.title, filter: selectedLanguageFilter)
-                    && (selectedOriginalLanguageCode == nil
-                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == nil
-                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == selectedOriginalLanguageCode)
-            }
+            derivedData.items
+        }
 
-            switch lastSortMethod {
-            case .alphabetical:
-                return filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            case .rating:
-                return filtered.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
-            case .dateAdded:
-                return filtered.sorted { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
-            case .defaultOrder:
-                return filtered
-            }
+        public var availableLetters: Set<String> {
+            derivedData.availableLetters
+        }
+
+        public mutating func rebuildDerivedData() {
+            derivedData.rebuild(
+                from: rawVODs,
+                languageFilter: selectedLanguageFilter,
+                originalLanguageCode: selectedOriginalLanguageCode,
+                sortMethod: lastSortMethod
+            )
         }
 
         public init() {}
@@ -153,6 +135,7 @@ public struct VODFeature {
                     library: .movies
                 )
                 state.lastSortMethod = settingsClient.getVODSortMethod()
+                state.rebuildDerivedData()
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("vod", profileScope)) ?? []
                     let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }
@@ -275,6 +258,7 @@ public struct VODFeature {
                 let currentMethod = settingsClient.getVODSortMethod()
                 if state.lastSortMethod != currentMethod {
                     state.lastSortMethod = currentMethod
+                    state.rebuildDerivedData()
                 }
                 return .none
 
@@ -287,6 +271,7 @@ public struct VODFeature {
                     return .send(.categorySelected(current))
                 } else if let first = categories.first {
                     state.selectedCategoryID = first.id
+                    state.rebuildDerivedData()
                     return .send(.categorySelected(first))
                 }
                 return .none
@@ -307,8 +292,10 @@ public struct VODFeature {
                 }
 
                 state.selectedCategoryID = category.id
+                state.rebuildDerivedData()
                 if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
                     state.selectedLanguageFilter = .all
+                    state.rebuildDerivedData()
                 }
                 if state.vodsByCategory[category.id] != nil {
                     return .run { _ in await hapticClient.selection() }
@@ -328,17 +315,22 @@ public struct VODFeature {
 
             case let .setLanguageFilter(filter):
                 state.selectedLanguageFilter = filter
+                state.rebuildDerivedData()
                 return .run { _ in await hapticClient.selection() }
 
             case let .setOriginalLanguageFilter(code):
                 let normalized = ISO639LanguageCode.normalize(code)
                 state.selectedOriginalLanguageCode = normalized
+                state.rebuildDerivedData()
                 OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .movies)
                 return .run { _ in await hapticClient.selection() }
 
             case let .vodsResponse(categoryID, .success(vods)):
                 state.isLoadingVODs = false
                 state.vodsByCategory[categoryID] = vods
+                if state.selectedCategoryID == categoryID {
+                    state.rebuildDerivedData()
+                }
                 return .none
 
             case let .vodsResponse(_, .failure(error)):
@@ -414,6 +406,11 @@ public struct VODFeature {
                     }
                     .cancellable(id: "VODFeature.categoryUnlock.\(unlockedCategoryID)", cancelInFlight: true)
                     state.selectedCategoryID = category.id
+                    state.rebuildDerivedData()
+                    if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
+                        state.selectedLanguageFilter = .all
+                        state.rebuildDerivedData()
+                    }
                     if state.vodsByCategory[category.id] != nil {
                         return expirationEffect
                     }
@@ -441,6 +438,7 @@ public struct VODFeature {
                 state.unlockedCategoryIDs.remove(categoryID)
                 if state.selectedCategoryID == categoryID {
                     state.selectedCategoryID = nil
+                    state.rebuildDerivedData()
                     if let category = state.categories.first(where: { $0.id == categoryID }) {
                         state.parentalLock = ParentalLockFeature.State(category: category)
                     }

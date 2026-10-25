@@ -3,10 +3,10 @@
 Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal Dev, PR Reviewer) canlı hafızasıdır.
 
 ## 🧹 Kalıcı DerivedData Temizlik Kuralı
-- Her task tamamlandıktan sonra `/private/tmp` ve `~/Library/Developer/Xcode/DerivedData` içindeki DerivedData kalıntılarını tara.
-- Silmeden önce aktif build/typecheck süreçlerini ve açık dosya tanıtıcılarını doğrula; yalnızca kapanmış task’ların yeniden üretilebilir Build, Index ve compiler-cache çıktısını sil.
+- Her task tamamlandıktan sonra, sıradaki task’a geçmeden önce hem `/private/tmp` içindeki task kaynaklı geçici derived data’yı hem de `~/Library/Developer/Xcode/DerivedData` içindeki task kaynaklı derleme çıktılarını tara ve temizle.
+- Silmeden önce aktif build/typecheck süreçlerini ve açık dosya tanıtıcılarını doğrula; yalnızca artık kullanılmayan, kaynağı kesin bilinen ve yeniden üretilebilir Build, Index ve compiler-cache çıktısını sil. Amacı belirsiz dosyaları derived data varsayma.
 - Etkin projelerin `SourcePackages` checkout’larını ve kullanıcı kaynaklarını koru. ContactCleaner klasörlerini/DerivedData’sını kullanıcı talimatıyla temizleme kapsamının dışında tut.
-- Silme öncesi/sonrası boyutları kaydet; task sonrasında kullanılmayan DerivedData bırakma.
+- Her temizlikte silinen yolları ve boyutları, korunan cache/kullanıcı verisini ve `/private/tmp` son durumunu backlog’a kaydet; task sonrasında kullanılmayan task kaynaklı DerivedData bırakma.
 
 ---
 
@@ -1392,8 +1392,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#147 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task147` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — Uzun player eylem satırı ve değişken çeviri etiketleri yatay kaydırma/odak akışında erişilebilir.
 
-### 148. [IN_PROGRESS] Büyük Playlistlerde tvOS Katalog ve Rehber Açılışını Hafifletme
-- **Fırsat:** Büyük playlistlerde kategori, grid ve rehber açılış gecikmesini ölçmek; gereksiz tam katalog yüklemesini ve ana actor üzerindeki türetim işini azaltmak.
+### 148. [DONE] Büyük Playlistlerde Katalog Türetimlerini Önbellekleme
+- **Fırsat:** VOD/Dizi kataloglarında her görünüm güncellemesinde tekrarlanan filtreleme, sıralama, dil istatistiği ve alfabetik indeks hesaplarını azaltmak.
+- **Uygulama:** VOD ve Series reducer state’ine kaynak liste, dil/orijinal dil filtreleri veya sıralama değiştiğinde yenilenen ortak `MediaLibraryDerivedData` projection eklendi. Tek kaynak taramasında dil etiketleri ve adetleri hesaplanıyor; filtrelenmiş öğeler bir kez sıralanıyor; alfabetik indeks hem snapshot hem tvOS overlay/focus tarafından paylaşılıyor. `.all` filtresi regex tespitini atlamaya devam ediyor.
+- **İnceleme:** PR Reviewer `[APPROVED]`; kategori seçimi/yanıtı, dil filtreleri, sıralama ve kilit açma invalidasyon yolları doğrulandı.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Kullanıcı talimatı gereği test, simulator/app launch ve playback akışı çalıştırılmadı. Runtime açılış süreleri ölçülmedi; bu task ölçüm iddiasında bulunmuyor.
+- **#148 sonrası temizlik:** Build’e başlamadan önce kullanılmayan `/private/tmp/pureiptv_101_swiftpm_cache` (87 MB, açık handle yok) silindi. Build sonrası `/private/tmp/PureIPTVDerivedData_task148` (3.8 GB) ve iki build logu (7 MB toplam), açık handle olmadığı doğrulandıktan sonra silindi. `/private/tmp` 2.3 MB kaldı; kalan öğeler geçici soket, kullanıcı patch/PDF/asset yedeği veya Git index anlık görüntüsü olduğu için korundu. Normal PureIPTV DerivedData’da yalnızca paylaşılan `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) kaldı; ikisi korundu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — Tekrarlanan katalog türetimleri input değişimine bağlı snapshot rebuild’ine taşındı; canlı açılış süresi ölçümü yapılmadı.
 - **Kaynak:** https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801 · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 
 ### 149. [PENDING] tvOS EPG Odak Dönüşünü ve Önizleme Kapanışını Sağlamlaştırma

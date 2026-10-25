@@ -299,8 +299,8 @@
                             guard let newID else { return }
                             TVFocusMemory.shared.recordVOD(newID, in: store.selectedCategoryID)
                             guard let vod = store.currentVODs.first(where: { $0.id == newID }) else { return }
-                            let firstChar = String(vod.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                            if !firstChar.isEmpty, firstChar != currentScrubLetter {
+                            let firstChar = MediaLibraryDerivedData.alphabetLetter(for: vod.title)
+                            if firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar
                                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                                     isScrubOverlayVisible = true
@@ -321,10 +321,7 @@
                             TVAlphabetScrubberOverlay(
                                 currentLetter: currentScrubLetter,
                                 isVisible: isScrubOverlayVisible,
-                                availableLetters: Set(store.currentVODs.compactMap {
-                                    let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
-                                    return ("A" ... "Z").contains(c) ? c : "#"
-                                })
+                                availableLetters: store.availableLetters
                             )
                         )
                     }
