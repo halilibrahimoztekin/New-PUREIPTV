@@ -214,6 +214,7 @@ public enum AppStrings {
         public static let timeline = "Zaman Çizelgesi".localized
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
+        public static let returnToPlayingChannel = "İzlenen Kanala Dön".localized
         public static let nextUp = "Sıradaki:".localized
         public static let upcoming = "Yaklaşan".localized
         public static let nextLabel = "SONRAKİ".localized

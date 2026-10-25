@@ -1076,7 +1076,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_107_ios.log`, `/private/tmp/pureiptv_107_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 108. [IN_PROGRESS] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
+### 108. [DEFERRED] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
 - **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
 - **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.
 - **Canlı keşif (25 Ekim 2026):** IPTV Deck’in Plex/Jellyfin/Emby duyurusu kişisel filmleri ve dizileri IPTV yanında arama/Home’da birleştirme, watched/resume sync ve server profile’ını anlatıyor; self-hosted kullanıcılar da tek arayüz ve EPG’yi istiyor: https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ · https://www.reddit.com/r/selfhosted/comments/1w8kynf/jellyfin_plex_emby_which_integrates_iptv_the_best/ .
@@ -1174,14 +1174,20 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Kod incelemesi:** `KeychainManager` playlist’leri `kSecAttrSynchronizable` ile saklıyor. Apple dokümantasyonuna göre tvOS Keychain öğelerini iCloud üzerinden senkronize etmez; iCloud senkronizasyonu aynı kullanıcı cihazları için olup family sharing/uzaktan yönetim kanalı sağlamaz: https://developer.apple.com/documentation/security/ksecattrsynchronizable . Uygulamada playlist yenileme onayı için cihaz kimliği veya kullanıcı davet/erişim denetimi de yok.
 - **Karar:** `[DEFERRED]` — aile cihazlarına uzaktan yönetim için açık rızalı davet, erişim iptali, credential rotasyonu ve aile üyelerine göre yetki sunan backend/CloudKit paylaşım modeli gerekir. Var olan Keychain sync bu gereksinimi karşılamaz; iCloud Keychain’in tvOS desteği olmadığından Apple TV’ye playlist kopyalandığı varsayılamaz.
 
-### 121. [IN_PROGRESS] Oturum Hatasından Sonra Sağlam Kayıt Kurtarma
+### 121. [DEFERRED] Oturum Hatasından Sonra Sağlam Kayıt Kurtarma
 - **Canlı keşif (25 Ekim 2026):** TiviMate beta yorumlarında kayıt sürerken tek bir stream glitch’inin kaydı bozup bozmadığı ve kaydın toparlanması soruluyor: https://www.reddit.com/r/TiviMate/comments/1vgb900/new_540_beta_change_log/ .
 - **Aday gap:** Mevcut yerel kayıt akışı segment yazımını, disk hatasında güvenli sonlandırmayı ve kısmi kayıt kurtarmayı destekliyor mu incele.
 - **Kod incelemesi:** Kayıt tek VLC output file olarak başlar; app-side `LocalDVRManager` kayda ait manifest’i diske yazmadan yalnız bellekte `recordingStartTime`/başlık tutuyor. Catalog yalnızca VLC `recordingChanged(false, filePath:)` callback’inde güncelleniyor. İşlem kapanırsa kısmi dosya için metadata yok; disk dolması/stream glitch callback davranışı toparlama garantisi vermiyor. Önce yazım sırasında kalıcı küçük bir journal ve açılışta yalnız güvenli, doğrulanabilir kısmi dosyaları kurtarma tasarlanmalı; segmenting VLC API’sinde mevcut değil.
+- **Ek kapsam bulgusu:** `RecordedStreamItem` kayıtları için uygulamanın Features katmanında liste/oynatma ekranı bulunmuyor; kayıt dosyaları kullanıcı akışında yönetilemiyor. Recovery’yi güvenli sunmak için önce yerel DVR kitaplığı, kısmi kayıt durumu ve doğrulanmış dosya kurtarma beraber tasarlanmalı.
+- **Karar:** `[DEFERRED]` — bu altyapı olmadan orphan dosyayı otomatik “kayıt” diye listelemek metadata uydurur ve bozuk medyayı sağlıklı gösterir. Kayıt kitaplığı + recovery journal tek bir kapsamlı faz olarak ele alınmalı.
 
-### 122. [PENDING] EPG’den İzlenen Kanala Tek Hareketle Dönüş
+### 122. [DONE] EPG’den İzlenen Kanala Tek Hareketle Dönüş
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları rehberde gezinirken izlemekte oldukları kanal/programa geri dönme düğmesi istiyor: https://www.reddit.com/r/TiviMate/comments/1wnf218/tivimate_update_version_540_beta_3_premium/ .
-- **Aday gap:** Başlangıçta “şimdi”ye kaydırma ile rehber açıkken etkin izlenen kanala dönme aynı mı; EPG iOS/tvOS odak akışlarını tara.
+- **Kod incelemesi:** Player EPG kanal listesinde gezinmek mevcut yayını değiştirmiyor; rehber başlığında yalnızca “Bu Kanalı İzle” (yayını değiştir) ve kapat eylemi vardı. Aktif yayının rehber satırına geri dönmek için tek dokunuş/kumanda eylemi bulunmuyordu.
+- **Uygulama:** EPG başlığına “İzlenen Kanala Dön” eylemi eklendi. Bu eylem yalnızca rehberin gezinti kanalını oynayan kanala alıp EPG listesini yeniliyor; VLC stream’ini yeniden başlatmıyor. iOS/iPadOS’ta dar başlık genişliğini korumak için ikon düğmesi tam VoiceOver etiketiyle gösteriliyor; tvOS’ta metinli, odaklanabilir düğme kullanılıyor. Eylem yalnızca rehber başka kanala bakarken görünür.
+- **PR Reviewer:** Kod diff’i incelendi: reducer yalnız mevcut `state.item` için `selectEPGBrowseChannel` gönderiyor; `selectChannel`/player playback akışına girilmiyor. Response channel ID guard’ı stale EPG yanıtını zaten eliyor. tvOS eylemi ayrı focus target alıyor; iOS ikon düğmesinin tam erişilebilir etiketi var. `[APPROVED]`.
+- **Doğrulama:** iOS Release compile-only build başarılı (xcodebuild exit 0); tvOS Release compile-only build başarılı (`/private/tmp/pureiptv_122_tvos_final.log` içinde `BUILD SUCCEEDED`). String catalog JSON parse ve `git diff --check` temiz. Test, simulator launch, playback veya akış çalıştırılmadı.
+- **Durum:** `[DONE]` — Rehberden oynayan kanala dönüş tamamlandı; yalnızca Xcode build alındı.
 
 ### 123. [PENDING] Kumanda Tuşlarını Uygulama Eylemlerine Eşleme
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları remap edilebilir kısayolları konuşuyor: https://www.reddit.com/r/TiviMate/comments/1hfrwhj .

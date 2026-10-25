@@ -546,6 +546,7 @@ public struct PlayerFeature {
         case selectEPGBrowseChannel(PlayableItem)
         case epgBrowseResponse(channelID: String, Result<[EPGProgram], Error>)
         case watchEPGBrowseChannel
+        case returnToPlayingChannelInEPG
 
         // Aspect Ratio & Zoom Actions (Madde #14)
         case setVideoAspectRatioMode(VideoAspectRatioMode)
@@ -2582,6 +2583,10 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.epgBrowse),
                 .send(.selectChannel(channel))
             )
+
+        case .returnToPlayingChannelInEPG:
+            guard state.isEPGVisible else { return .none }
+            return .send(.selectEPGBrowseChannel(state.item))
 
         case let .setVideoAspectRatioMode(mode):
             state.videoAspectRatioMode = mode

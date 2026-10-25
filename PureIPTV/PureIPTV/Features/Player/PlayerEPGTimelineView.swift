@@ -7,6 +7,7 @@ public struct PlayerEPGTimelineView: View {
         private enum FocusTarget: Hashable {
             case close
             case watch
+            case currentChannel
             case channel(String)
         }
 
@@ -22,6 +23,7 @@ public struct PlayerEPGTimelineView: View {
     let canSelectPrograms: Bool
     let onClose: () -> Void
     let onBrowseChannel: (PlayerFeature.PlayableItem) -> Void
+    let onReturnToPlayingChannel: () -> Void
     let onWatchChannel: () -> Void
     let onSelect: (EPGProgram) -> Void
 
@@ -47,6 +49,7 @@ public struct PlayerEPGTimelineView: View {
         canSelectPrograms: Bool = true,
         onClose: @escaping () -> Void,
         onBrowseChannel: @escaping (PlayerFeature.PlayableItem) -> Void = { _ in },
+        onReturnToPlayingChannel: @escaping () -> Void = {},
         onWatchChannel: @escaping () -> Void = {},
         onSelect: @escaping (EPGProgram) -> Void
     ) {
@@ -60,6 +63,7 @@ public struct PlayerEPGTimelineView: View {
         self.canSelectPrograms = canSelectPrograms
         self.onClose = onClose
         self.onBrowseChannel = onBrowseChannel
+        self.onReturnToPlayingChannel = onReturnToPlayingChannel
         self.onWatchChannel = onWatchChannel
         self.onSelect = onSelect
     }
@@ -79,6 +83,21 @@ public struct PlayerEPGTimelineView: View {
                 }
                 Spacer()
                 if let selectedChannel, selectedChannel.id != playingChannelID {
+                    Button(action: onReturnToPlayingChannel) {
+                        #if os(tvOS)
+                            Label(AppStrings.Player.returnToPlayingChannel, systemImage: "arrow.uturn.backward")
+                                .font(.subheadline.weight(.semibold))
+                        #else
+                            Image(systemName: "arrow.uturn.backward")
+                                .accessibilityLabel(AppStrings.Player.returnToPlayingChannel)
+                        #endif
+                    }
+                    #if os(tvOS)
+                    .buttonStyle(.bordered)
+                    .focused($focusedTarget, equals: .currentChannel)
+                    #else
+                    .buttonStyle(.bordered)
+                    #endif
                     Button(action: onWatchChannel) {
                         Label("Bu Kanalı İzle".localized, systemImage: "play.fill")
                             .font(.subheadline.weight(.semibold))

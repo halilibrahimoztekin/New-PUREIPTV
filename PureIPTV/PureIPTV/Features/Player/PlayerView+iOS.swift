@@ -966,6 +966,9 @@
                             onBrowseChannel: { channel in
                                 store.send(.selectEPGBrowseChannel(channel))
                             },
+                            onReturnToPlayingChannel: {
+                                store.send(.returnToPlayingChannelInEPG)
+                            },
                             onWatchChannel: {
                                 store.send(.watchEPGBrowseChannel)
                             },
