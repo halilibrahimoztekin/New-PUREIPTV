@@ -585,7 +585,8 @@ extension IPTVClient: DependencyKey {
                             description: p.description,
                             startTime: p.start,
                             endTime: p.end,
-                            isPlayingNow: p.start <= now && p.end >= now
+                            isPlayingNow: p.start <= now && p.end >= now,
+                            categories: p.categories
                         )
                     }
                 }
@@ -781,7 +782,8 @@ extension IPTVClient: DependencyKey {
                                 description: programme.description,
                                 startTime: programme.start,
                                 endTime: programme.end,
-                                isPlayingNow: programme.start <= now && programme.end >= now
+                                isPlayingNow: programme.start <= now && programme.end >= now,
+                                categories: programme.categories
                             ),
                             channel: channel
                         ))

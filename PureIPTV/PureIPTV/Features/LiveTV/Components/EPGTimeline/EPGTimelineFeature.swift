@@ -28,6 +28,7 @@ public struct EPGTimelineFeature {
 
         public var currentTime: Date = .init()
         public var selectedDate: Date = .init()
+        public var selectedProgramCategory: String?
         public var searchQuery: String = ""
         public var selectedProgramDetail: EPGProgram?
         public var selectedProgramChannel: MediaModels.Item?
@@ -117,6 +118,24 @@ public struct EPGTimelineFeature {
                 }
             }
 
+            if let selectedProgramCategory {
+                let day = Calendar.current.dateInterval(of: .day, for: selectedDate)
+                result = result.filter { channel in
+                    // EPG is fetched lazily as rows appear. Keep unknown channels
+                    // visible so they can load; exclude only channels whose loaded
+                    // guide is known not to match this program category/day.
+                    guard let programs = epgData[channel.id] else { return true }
+                    guard let day else { return false }
+                    return programs.contains { program in
+                        program.startTime < day.end
+                            && program.endTime > day.start
+                            && program.categories.contains {
+                                $0.localizedCaseInsensitiveCompare(selectedProgramCategory) == .orderedSame
+                            }
+                    }
+                }
+            }
+
             // Pin favorite channels to the top when not searching or filtering by favorites
             if query.isEmpty, !isFavoritesOnly {
                 return result.sorted { a, b in
@@ -137,6 +156,22 @@ public struct EPGTimelineFeature {
             guard !query.isEmpty else { return false }
             return program.title.localizedCaseInsensitiveContains(query) ||
                 program.description.localizedCaseInsensitiveContains(query)
+        }
+
+        public var availableProgramCategories: [String] {
+            guard let day = Calendar.current.dateInterval(of: .day, for: selectedDate) else { return [] }
+            let values = epgData.values.flatMap(\.self).filter {
+                $0.startTime < day.end && $0.endTime > day.start
+            }.flatMap(\.categories).compactMap { category -> String? in
+                let trimmed = category.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            let sorted = values.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            return sorted.reduce(into: [String]()) { unique, category in
+                if !unique.contains(where: { $0.localizedCaseInsensitiveCompare(category) == .orderedSame }) {
+                    unique.append(category)
+                }
+            }
         }
 
         public init(
@@ -170,6 +205,7 @@ public struct EPGTimelineFeature {
         case showProgramDetails(EPGProgram, MediaModels.Item)
         case dismissProgramDetails
         case selectCategory(String?)
+        case selectProgramCategory(String?)
         case selectDate(Date)
         case updateSearchQuery(String)
         case loadReminders
@@ -759,6 +795,10 @@ public struct EPGTimelineFeature {
                         await send(.fetchEPG(streamID: ch.id))
                     }
                 }
+
+            case let .selectProgramCategory(category):
+                state.selectedProgramCategory = category
+                return .none
 
             case let .selectDate(date):
                 state.selectedDate = date

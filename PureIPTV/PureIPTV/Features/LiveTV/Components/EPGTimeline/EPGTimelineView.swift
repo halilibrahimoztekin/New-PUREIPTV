@@ -32,6 +32,7 @@ public struct EPGTimelineView: View {
     // Focus state for tvOS
     #if os(tvOS)
         @FocusState private var focusedProgramId: String?
+        @FocusState private var focusedProgramCategoryTitle: String?
     #endif
 
     public init(store: StoreOf<EPGTimelineFeature>) {
@@ -78,6 +79,10 @@ public struct EPGTimelineView: View {
                         // Category filter chips
                         if !store.availableCategories.isEmpty {
                             categoryFilterRow
+                        }
+
+                        if !store.availableProgramCategories.isEmpty || store.selectedProgramCategory != nil {
+                            programCategoryFilterRow
                         }
 
                         // Sync Status Badge
@@ -393,6 +398,69 @@ public struct EPGTimelineView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
         }
+    }
+
+    private var programCategoryFilterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text(AppStrings.LiveTV.categories)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .accessibilityAddTraits(.isHeader)
+
+                programCategoryChip(
+                    title: AppStrings.Player.allCategories,
+                    isSelected: store.selectedProgramCategory == nil,
+                    selection: nil
+                )
+                ForEach(store.availableProgramCategories, id: \.self) { category in
+                    programCategoryChip(
+                        title: category,
+                        isSelected: store.selectedProgramCategory == category,
+                        selection: category
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+        .accessibilityLabel(AppStrings.LiveTV.categories)
+        #if os(tvOS)
+            .focusSection()
+        #endif
+    }
+
+    private func programCategoryChip(title: String, isSelected: Bool, selection: String?) -> some View {
+        #if os(tvOS)
+            let isFocused = focusedProgramCategoryTitle == title
+        #else
+            let isFocused = false
+        #endif
+        return Button {
+            HapticManager.shared.trigger(.light)
+            store.send(.selectProgramCategory(selection))
+        } label: {
+            Text(title)
+                .font(.caption.weight(isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : .white.opacity(0.75))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? Color.purple : Color.white.opacity(0.08)))
+                .overlay(
+                    Capsule().stroke(
+                        isFocused ? Color.white : (isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.06)),
+                        lineWidth: isFocused ? 2 : 1
+                    )
+                )
+                .scaleEffect(isFocused ? 1.05 : 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(isSelected ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+        #if os(tvOS)
+            .focused($focusedProgramCategoryTitle, equals: title)
+        #endif
     }
 
     private func categoryChip(title: String, isSelected: Bool, onTap: @escaping () -> Void) -> some View {

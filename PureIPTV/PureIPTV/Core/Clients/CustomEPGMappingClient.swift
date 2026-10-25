@@ -410,7 +410,8 @@ extension CustomEPGMappingClient: DependencyKey {
                                 description: programme.description,
                                 startTime: start,
                                 endTime: end,
-                                isPlayingNow: start <= now && now <= end
+                                isPlayingNow: start <= now && now <= end,
+                                categories: programme.categories
                             )
                         }
                         for program in shiftedPrograms {
@@ -467,7 +468,8 @@ extension CustomEPGMappingClient: DependencyKey {
                             description: prog.description,
                             startTime: start,
                             endTime: end,
-                            isPlayingNow: start <= now && now <= end
+                            isPlayingNow: start <= now && now <= end,
+                            categories: prog.categories
                         )
                     }
                 }
@@ -494,7 +496,8 @@ extension CustomEPGMappingClient: DependencyKey {
                         description: prog.description,
                         startTime: newStart,
                         endTime: newEnd,
-                        isPlayingNow: newStart <= now && now <= newEnd
+                        isPlayingNow: newStart <= now && now <= newEnd,
+                        categories: prog.categories
                     )
                 }
             }

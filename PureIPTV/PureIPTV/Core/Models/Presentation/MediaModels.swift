@@ -183,14 +183,16 @@ public extension MediaModels.Item {
         public let startTime: Date
         public let endTime: Date
         public let isPlayingNow: Bool
+        public let categories: [String]
 
-        public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool) {
+        public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool, categories: [String] = []) {
             self.id = id
             self.title = title
             self.description = description
             self.startTime = startTime
             self.endTime = endTime
             self.isPlayingNow = isPlayingNow
+            self.categories = categories
         }
     }
 }
@@ -202,14 +204,16 @@ public struct EPGProgram: Equatable, Identifiable, Sendable {
     public let startTime: Date
     public let endTime: Date
     public let isPlayingNow: Bool
+    public let categories: [String]
 
-    public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool) {
+    public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool, categories: [String] = []) {
         self.id = id
         self.title = title
         self.description = description
         self.startTime = startTime
         self.endTime = endTime
         self.isPlayingNow = isPlayingNow
+        self.categories = categories
     }
 }
 

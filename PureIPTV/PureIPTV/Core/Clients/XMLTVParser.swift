@@ -12,6 +12,23 @@ public struct XMLTVProgramme: Sendable {
     public let description: String
     public let start: Date
     public let end: Date
+    public let categories: [String]
+
+    public init(
+        channelID: String,
+        title: String,
+        description: String,
+        start: Date,
+        end: Date,
+        categories: [String] = []
+    ) {
+        self.channelID = channelID
+        self.title = title
+        self.description = description
+        self.start = start
+        self.end = end
+        self.categories = categories
+    }
 }
 
 public struct XMLTVData: Sendable {
@@ -33,6 +50,8 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
     private var currentProgrammeEnd: Date?
     private var currentProgrammeTitle: String = ""
     private var currentProgrammeDesc: String = ""
+    private var currentProgrammeCategories: [String] = []
+    private var currentProgrammeCategoryText: String = ""
     private var hasSeenRootElement = false
     private var hasValidXMLTVRoot = false
 
@@ -107,6 +126,10 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
             }
             currentProgrammeTitle = ""
             currentProgrammeDesc = ""
+            currentProgrammeCategories = []
+            currentProgrammeCategoryText = ""
+        } else if elementName == "category", currentProgrammeChannelID != nil {
+            currentProgrammeCategoryText = ""
         }
     }
 
@@ -127,6 +150,10 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
             if currentProgrammeChannelID != nil {
                 currentProgrammeDesc += string
             }
+        case "category":
+            if currentProgrammeChannelID != nil {
+                currentProgrammeCategoryText += string
+            }
         default:
             break
         }
@@ -143,10 +170,25 @@ final nonisolated class XMLTVParserDelegate: NSObject, XMLParserDelegate, @unche
             if let channelID = currentProgrammeChannelID, let start = currentProgrammeStart, let end = currentProgrammeEnd {
                 let title = currentProgrammeTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                 let desc = currentProgrammeDesc.trimmingCharacters(in: .whitespacesAndNewlines)
-                let programme = XMLTVProgramme(channelID: channelID, title: title, description: desc, start: start, end: end)
+                let programme = XMLTVProgramme(
+                    channelID: channelID,
+                    title: title,
+                    description: desc,
+                    start: start,
+                    end: end,
+                    categories: currentProgrammeCategories
+                )
                 programmes[channelID, default: []].append(programme)
             }
             currentProgrammeChannelID = nil
+        } else if elementName == "category", currentProgrammeChannelID != nil {
+            let category = currentProgrammeCategoryText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !category.isEmpty,
+               !currentProgrammeCategories.contains(where: { $0.localizedCaseInsensitiveCompare(category) == .orderedSame })
+            {
+                currentProgrammeCategories.append(category)
+            }
+            currentProgrammeCategoryText = ""
         }
     }
 }
