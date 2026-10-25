@@ -272,12 +272,8 @@
                 // Description
                 let plot = store.tmdbTV?.overview ?? store.info?.plot
                 if let plotText = plot, !plotText.isEmpty {
-                    Text(plotText)
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.white.opacity(0.8))
-                        .lineSpacing(6)
+                    ExpandableSynopsisView(text: plotText, font: .system(size: 22), lineLimit: 4)
                         .padding(.horizontal, 80)
-                        .lineLimit(4)
                 } else if store.isLoading || store.isTMDBLoading {
                     VStack(alignment: .leading, spacing: 10) {
                         RoundedRectangle(cornerRadius: 6)

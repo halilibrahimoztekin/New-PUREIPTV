@@ -1246,6 +1246,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#131 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#132 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#133 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) klasörleri açık dosya olmadığı doğrulandıktan sonra silindi; `SourcePackages` (1.8 GB) ve paylaşılan SDK cache korundu.
+- **#135 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) klasörleri açık dosya olmadığı doğrulandıktan sonra silindi; `SourcePackages` (1.8 GB) ve paylaşılan SDK cache korundu.
 - **#134 sonrası:** `/private/tmp` ve PureIPTV DerivedData kontrol edildi; silinecek DerivedData/build/cache adayı yoktu. `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
@@ -1280,9 +1281,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DONE — ALREADY IMPLEMENTED]` — istenen eylem her iki platformda zaten sunuluyor. Kod/build değişikliği gerekmedi.
 - **Durum:** `[DONE]` — kullanıcı ilerlemeyi silmeden mevcut içerikte başa sarabilir.
 
-### 135. [PENDING] tvOS’ta Uzun Film/Dizi Özetini Okuma
+### 135. [DONE] tvOS’ta Uzun Film/Dizi Özetini Okuma
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.4 Apple TV’de film/dizi özetine dokununca tam metni kaydırılabilir görünümde açıyor: https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv .
-- **Aday gap:** Detay sayfası metadata özetini kesiyorsa VoiceOver ve Siri Remote ile erişilebilir tam metin sunumu değerlendirilsin.
+- **Kod incelemesi:** Film ve dizi detayında özet 4 satırla kesiliyordu.
+- **Uygulama:** tvOS film ve dizi özetleri odaklanıp seçilebilen ortak bileşene taşındı; seçim tam metni kaydırılabilir sheet’te açıyor, VoiceOver etiketi, başlık ve kapatma düğmesi mevcut.
+- **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Uzun film ve dizi özetleri tvOS’ta tam okunabiliyor.
 
 ### 136. [PENDING] İndirmeleri Duraklatma ve Devam Ettirme
 - **Canlı keşif (25 Ekim 2026):** IPTVX iOS/iPadOS indirmeler için pause/resume/cancel kontrolleri ekledi: https://apps.apple.com/us/app/iptvx/id1451470024 .

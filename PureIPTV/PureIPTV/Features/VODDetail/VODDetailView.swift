@@ -4,6 +4,49 @@ import SwiftUI
     import WebKit
 #endif
 
+struct ExpandableSynopsisView: View {
+    let text: String
+    let font: Font
+    let lineLimit: Int
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            Text(text)
+                .font(font)
+                .foregroundStyle(Color.white.opacity(0.8))
+                .lineSpacing(6)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(AppStrings.VODDetail.overview)
+        .sheet(isPresented: $isPresented) {
+            NavigationStack {
+                ScrollView {
+                    Text(text)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineSpacing(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(32)
+                }
+                .background(Color.black.ignoresSafeArea())
+                .navigationTitle(AppStrings.VODDetail.overview)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(AppStrings.Common.done) { isPresented = false }
+                    }
+                }
+            }
+        }
+    }
+}
+
 public struct VODDetailView: View {
     let store: StoreOf<VODDetailFeature>
     @State private var hasDisappeared = false
@@ -1271,11 +1314,7 @@ public struct VODDetailView: View {
 
                             // Plot
                             if let plot = store.tmdbMovie?.overview ?? store.info?.plot, !plot.isEmpty {
-                                Text(plot)
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white.opacity(0.75))
-                                    .lineLimit(4)
-                                    .multilineTextAlignment(.leading)
+                                ExpandableSynopsisView(text: plot, font: .system(size: 22), lineLimit: 4)
                             } else if store.isTMDBLoading || store.isLoading {
                                 VStack(alignment: .leading, spacing: 10) {
                                     RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(height: 22)
