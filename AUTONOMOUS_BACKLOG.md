@@ -1246,6 +1246,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#131 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#132 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#133 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) klasörleri açık dosya olmadığı doğrulandıktan sonra silindi; `SourcePackages` (1.8 GB) ve paylaşılan SDK cache korundu.
+- **#134 sonrası:** `/private/tmp` ve PureIPTV DerivedData kontrol edildi; silinecek DerivedData/build/cache adayı yoktu. `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
 ### 130. [DEFERRED] EPG’den Canlı Spor Etkinliği ve Takım Takibi
@@ -1273,9 +1274,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Favori listeleri isimlendirilebilir, silinebilir ve kullanıcı tarafından sıralanabilir.
 
-### 134. [PENDING] Oynatıcıdan VOD’u Baştan Başlatma
+### 134. [DONE — ALREADY IMPLEMENTED] Oynatıcıdan VOD’u Baştan Başlatma
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.7 Apple TV player’ına film/bölümü başa alan “Start Over” düğmesi ekledi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
-- **Aday gap:** Kaydedilmiş izleme ilerlemesini koruyarak mevcut player içinden isteğe bağlı seek-to-start eylemi var mı incele.
+- **Kod incelemesi:** iOS ve tvOS PlayerView içinde `restartPlayback` kontrolleri mevcut. Reducer pozisyonu/oynatıcı zamanını sıfırlıyor ve `seek(0)`, `seekToTime(.zero)`, `play` eylemlerini gönderiyor. Watch-history kaydı bu eylemde silinmiyor.
+- **Karar:** `[DONE — ALREADY IMPLEMENTED]` — istenen eylem her iki platformda zaten sunuluyor. Kod/build değişikliği gerekmedi.
+- **Durum:** `[DONE]` — kullanıcı ilerlemeyi silmeden mevcut içerikte başa sarabilir.
 
 ### 135. [PENDING] tvOS’ta Uzun Film/Dizi Özetini Okuma
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.4 Apple TV’de film/dizi özetine dokununca tam metni kaydırılabilir görünümde açıyor: https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv .
