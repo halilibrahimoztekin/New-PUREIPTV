@@ -176,7 +176,7 @@
                 if store.isSportsHubVisible, !store.epgEvents.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
                         ForEach(store.epgEvents) { event in
-                            DashboardEPGEventCard(event: event) { store.send(.channelSelected(event.channel)) }
+                            DashboardEPGEventCard(event: event) { store.send(.channelSelected($0)) }
                                 .frame(width: 380)
                         }
                     }

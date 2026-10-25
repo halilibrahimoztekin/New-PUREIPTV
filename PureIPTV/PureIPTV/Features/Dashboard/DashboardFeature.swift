@@ -7,14 +7,16 @@ public struct DashboardFeature {
     public struct EPGEvent: Equatable, Identifiable, Sendable {
         public let channel: MediaModels.Item
         public let program: EPGProgram
+        public let alternateChannels: [MediaModels.Item]
 
         public var id: String {
             "\(channel.id)::\(program.id)"
         }
 
-        public init(channel: MediaModels.Item, program: EPGProgram) {
+        public nonisolated init(channel: MediaModels.Item, program: EPGProgram, alternateChannels: [MediaModels.Item] = []) {
             self.channel = channel
             self.program = program
+            self.alternateChannels = alternateChannels
         }
     }
 
@@ -1427,10 +1429,26 @@ public struct DashboardFeature {
                 }
             }
 
-            return (
-                events.sorted { $0.program.startTime < $1.program.startTime }.prefix(16).map(\.self),
-                succeeded
-            )
+            let channelsByFixture = Dictionary(grouping: events.filter { Self.isSportsFixtureTitle($0.program.title) }) {
+                FuzzySearchEngine.normalize($0.program.title)
+            }
+            let linkedEvents = events.map { event in
+                let alternatives = (channelsByFixture[FuzzySearchEngine.normalize(event.program.title)] ?? [])
+                    .map(\.channel)
+                    .filter { $0.id != event.channel.id }
+                    .reduce(into: [MediaModels.Item]()) { result, channel in
+                        if !result.contains(where: { $0.id == channel.id }) {
+                            result.append(channel)
+                        }
+                    }
+                return EPGEvent(channel: event.channel, program: event.program, alternateChannels: alternatives)
+            }
+            return (linkedEvents.sorted { $0.program.startTime < $1.program.startTime }.prefix(16).map(\.self), succeeded)
         }
+    }
+
+    private nonisolated static func isSportsFixtureTitle(_ title: String) -> Bool {
+        let lowered = title.lowercased()
+        return lowered.contains(" vs ") || lowered.contains(" v ") || title.contains(" - ")
     }
 }

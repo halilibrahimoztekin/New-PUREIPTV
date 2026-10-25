@@ -167,7 +167,7 @@
             case .sportsHub:
                 if store.isSportsHubVisible, !store.epgEvents.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.epgPrograms, items: store.epgEvents) { event in
-                        DashboardEPGEventCard(event: event) { store.send(.channelSelected(event.channel)) }
+                        DashboardEPGEventCard(event: event) { store.send(.channelSelected($0)) }
                             .frame(width: 260)
                     }
                 }

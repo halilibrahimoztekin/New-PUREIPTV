@@ -2,10 +2,10 @@ import SwiftUI
 
 struct DashboardEPGEventCard: View {
     let event: DashboardFeature.EPGEvent
-    let onSelect: () -> Void
+    let onSelectChannel: (MediaModels.Item) -> Void
 
     var body: some View {
-        Button(action: onSelect) {
+        Button { onSelectChannel(event.channel) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Circle()
@@ -60,5 +60,16 @@ struct DashboardEPGEventCard: View {
         #endif
         .accessibilityLabel("\(event.program.title), \(event.channel.title), \(event.program.formattedTimeRange)")
         .accessibilityHint(AppStrings.Common.watchNow)
+        .contextMenu {
+            if !event.alternateChannels.isEmpty {
+                ForEach(event.alternateChannels) { channel in
+                    Button {
+                        onSelectChannel(channel)
+                    } label: {
+                        Label(channel.title, systemImage: "play.tv")
+                    }
+                }
+            }
+        }
     }
 }
