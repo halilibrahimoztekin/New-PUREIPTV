@@ -1076,10 +1076,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_107_ios.log`, `/private/tmp/pureiptv_107_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 108. [PENDING] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
+### 108. [IN_PROGRESS] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
 - **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
 - **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.
-- **Analiz:** Kod tabanında Plex/Jellyfin/WebDAV/FTP client’ı veya kaynak adaptörü bulunmuyor. `PlaylistConfig` ve `IPTVClient` Xtream/M3U protokollerine, `MediaModels.Item` ise IPTV kategori/akış varsayımlarına bağlı. Bu isteği tek backlog maddesinde dört ayrı auth, browse ve playback protokolü olarak uygulamak güvenli bir ürün dilimi değil; kimlik bilgileri Keychain, source adapter sözleşmesi ve ilk sağlayıcı seçimi için fazlandırılana kadar beklemeye alındı.
+- **Canlı keşif (25 Ekim 2026):** IPTV Deck’in Plex/Jellyfin/Emby duyurusu kişisel filmleri ve dizileri IPTV yanında arama/Home’da birleştirme, watched/resume sync ve server profile’ını anlatıyor; self-hosted kullanıcılar da tek arayüz ve EPG’yi istiyor: https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ · https://www.reddit.com/r/selfhosted/comments/1w8kynf/jellyfin_plex_emby_which_integrates_iptv_the_best/ .
+- **Kod incelemesi:** Swift kodunda Plex/Jellyfin/WebDAV/FTP client/source adapter bulunmuyor. `PlaylistType`, `SavedPlaylist`, `PlaylistConfig` ve 58 `IPTVClient` çağrı noktası Xtream/M3U kaynaklarını varsayıyor. Daha kritik olarak `WatchHistoryItem.streamURL` `WatchProgressSyncRecord.streamURL` alanına ve iCloud watch-progress kaydına taşınıyor; bearer/API token’ı query içine koyan stream URL’si bu şekilde kalıcı/senkronize olabilir. Mevcut player source pipeline’ı da Jellyfin/Plex bearer header’ı taşıyan ayrı yetkili playback oturumu sunmuyor.
+- **Kapsam kararı:** Dört protokolü tek seferde eklemek yerine önce credential’ı URL/log/history/sync dışına çıkaran playback yetki taşıma sözleşmesi ve tek sunucu adaptörü fazı tasarlanmalı. Aday ilk adaptör Jellyfin olabilir; Plex PIN auth ve WebDAV/FTP gezinmesi ayrı protokollerdir.
 
 ### 109. [IN_PROGRESS] Güven Skorlu EPG Eşleme Önerileri
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları kanalların büyük bölümünde EPG olmamasından ve manuel atamaların yorucu olup yenilemede kaybolabilmesinden yakınıyor; başka playlist’teki EPG’yi tekrar kanal adı yazmadan seçme isteği de var: https://www.reddit.com/r/TiviMate/comments/1x7lyx8/epg_that_doesnt_require_assignment/ · https://www.reddit.com/r/TiviMate/comments/1xe9mq0/tivimate_epg/ .
@@ -1159,3 +1161,43 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Uygulama:** Ayarlara kalıcı “Yalnızca Canlı TV gezinmesi” seçeneği eklendi. Açıkken ana sekmeler Canlı TV ve Ayarlar olur; kitaplıklar ve kayıtlı kataloglar değiştirilmez. Açılışta profil aktifse Canlı TV açılır; Ayarlar sekmesi tercihi kapatmak için erişilebilir kalır.
 - **Doğrulama:** `git diff --check` temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_118_ios.log`, `/private/tmp/pureiptv_118_tvos.log`). Projede mevcut Swift 6 concurrency/deprecation uyarıları dışında derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Live TV odaklı gezinme profili eklendi; tercih kapatılınca bütün sekmeler yeniden görünür.
+
+### 119. [PENDING] QR ile Güvenli Playlist Kurulumu
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları aile cihazları için QR playlist girişi ve daha kolay playlist ekleme istiyor: https://www.reddit.com/r/TiviMate/comments/1wnf218/tivimate_update_version_540_beta_3_premium/ .
+- **Aday gap:** Mevcut Smart Paste panodan metin okuyor; QR içeriğini cihazlar arasında parola sızdırmadan aktaran kullanıcı-onaylı bir kurulum var mı doğrula.
+
+### 120. [PENDING] Aile Cihazları için Uzaktan Playlist Yönetimi
+- **Canlı keşif (25 Ekim 2026):** Kullanıcılar aile üyelerinin cihazlarına, bağlantı koptuğunda da, uzaktan playlist güncellemek istediklerini bildiriyor: https://www.reddit.com/r/TiviMate/comments/1uzuy2g/playlist_update_remote/ .
+- **Aday gap:** Mevcut iCloud sync playlistleri hangi kapsamda taşıyor ve diğer cihazda yeni bağlantıyı güvenli onaylama/yenileme var mı incele.
+
+### 121. [PENDING] Oturum Hatasından Sonra Sağlam Kayıt Kurtarma
+- **Canlı keşif (25 Ekim 2026):** TiviMate beta yorumlarında kayıt sürerken tek bir stream glitch’inin kaydı bozup bozmadığı ve kaydın toparlanması soruluyor: https://www.reddit.com/r/TiviMate/comments/1vgb900/new_540_beta_change_log/ .
+- **Aday gap:** Mevcut yerel kayıt akışı segment yazımını, disk hatasında güvenli sonlandırmayı ve kısmi kayıt kurtarmayı destekliyor mu incele.
+
+### 122. [PENDING] EPG’den İzlenen Kanala Tek Hareketle Dönüş
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları rehberde gezinirken izlemekte oldukları kanal/programa geri dönme düğmesi istiyor: https://www.reddit.com/r/TiviMate/comments/1wnf218/tivimate_update_version_540_beta_3_premium/ .
+- **Aday gap:** Başlangıçta “şimdi”ye kaydırma ile rehber açıkken etkin izlenen kanala dönme aynı mı; EPG iOS/tvOS odak akışlarını tara.
+
+### 123. [PENDING] Kumanda Tuşlarını Uygulama Eylemlerine Eşleme
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları remap edilebilir kısayolları konuşuyor: https://www.reddit.com/r/TiviMate/comments/1hfrwhj .
+- **Aday gap:** tvOS/iOS izinli remote event’leri, mevcut Siri Remote kısayolları ve platform kısıtlarıyla güvenli özelleştirme yapılabilir mi incele.
+
+### 124. [PENDING] Oynatma Sorununda Hızlı Alternatif Kaynak Kurtarma
+- **Canlı keşif (25 Ekim 2026):** IPTVX 24.1.3 sürüm notları playback ekranından retry, alternatif kaynak veya farklı player’a geçişi öne çıkarıyor: https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv .
+- **Aday gap:** Mevcut error/recovery arayüzü başarısız stream’de kullanıcıya bağlama duyarlı kısa eylemler sunuyor mu denetle; var olan alternatif kaynak akışını yineleme.
+
+### 125. [PENDING] Profil Üzerinden Çocuklara Özel Sunucu Kütüphanesi
+- **Canlı keşif (25 Ekim 2026):** IPTV Deck’in Plex/Jellyfin/Emby entegrasyon duyurusu sunucu profiline bağlı kütüphane görünürlüğü ve izleme ilerlemesi sync’ini vurguluyor: https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ .
+- **Aday gap:** #108 kişisel kaynak desteğinden ayrı olarak mevcut çocuk profili filtreleri medya sunucusunun kendi kullanıcı/kütüphane yetkilerini bozmayacak biçimde taşır mı incele.
+
+### 126. [PENDING] Etkinlik Kategorilerini EPG’den Yeniden Yükleme
+- **Canlı keşif (25 Ekim 2026):** UHF 1.99 sürüm notları EPG içindeki PPV/Event gruplarını ayrı ele alıp doğrudan yenilemeyi belirtiyor: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=watch .
+- **Aday gap:** Etkinlik kategorileri normal playlist refresh’e bağımlı mı; maliyetli tam yenileme olmadan doğru kapsamda güncelleme var mı tara.
+
+### 127. [PENDING] PIN ile Kilitli Kategoriyi Geçici Açma
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları film kategorilerinde gizleme yerine PIN girilene kadar kilitleme talep ediyor: https://www.reddit.com/r/TiviMate/comments/1x5b02o/new_update/ .
+- **Aday gap:** Mevcut ebeveyn denetimi kategori gizleme/erişim kilidi ve geçici yetki süresi sağlar mı denetle; çocuk profili güvenliğini koru.
+
+### 128. [PENDING] IPTV Kaynaklarını Kişisel Sunucuya Taşıma Sihirbazı
+- **Canlı keşif (25 Ekim 2026):** Kullanıcılar IPTV’yi Plex/Jellyfin/Emby’ye alma ve ev cihazlarını açık tutmadan kullanma konusunda yardım arıyor; `xtream2jellyfin` proje önerisi `.strm`/metadata üretimini otomatikleştiriyor: https://www.reddit.com/r/iptv/comments/1r5gktf/i_made_a_tool_to_import_iptv_movies_and_series/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1vgrjmg/iptv_plex/ .
+- **Aday gap:** #108 player-side personal server integration’dan farklı olarak provider VOD’u kendi sunucuya içe aktarma/transfer aracı app’in güvenli ve yasal kapsamına uyuyor mu, stream URL saklama/credentials riskleriyle incele.
