@@ -565,6 +565,23 @@
                             } else if store.item.isLive {
                                 // Live TV Quick Zapping & Recall Bar
                                 HStack {
+                                    Button {
+                                        HapticManager.shared.trigger(.medium)
+                                        store.send(.toggleRecordingTapped)
+                                    } label: {
+                                        Image(systemName: store.isRecording ? "stop.circle.fill" : "record.circle")
+                                            .font(.title2)
+                                            .foregroundStyle(.red)
+                                    }
+                                    .accessibilityLabel(store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording)
+                                    .disabled(store.playerState != .playing || store.isRecordingStartPending || store.isRecordingStopPending)
+
+                                    if store.isRecording {
+                                        Label(AppStrings.Player.recordingInProgress, systemImage: "record.circle.fill")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.red)
+                                    }
+
                                     if store.isPlayingCatchup {
                                         Button(action: {
                                             HapticManager.shared.trigger(.medium)
@@ -607,6 +624,13 @@
                                     }
 
                                     Spacer()
+
+                                    if let recordingStatusMessage = store.recordingStatusMessage {
+                                        Text(recordingStatusMessage)
+                                            .font(.caption)
+                                            .foregroundStyle(.white)
+                                            .accessibilityAddTraits(.updatesFrequently)
+                                    }
 
                                     if store.playlist != nil {
                                         HStack(spacing: 12) {

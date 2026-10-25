@@ -127,6 +127,9 @@ public struct PlayerClient: Sendable {
     public var pause: @MainActor @Sendable () async throws -> Void
     public var stop: @MainActor @Sendable () async throws -> Void
     public var release: @MainActor @Sendable () async -> Void
+    public var startRecording: @MainActor @Sendable (_ directory: URL) -> Bool = { _ in false }
+    public var requestRecordingStop: @MainActor @Sendable () -> Void = {}
+    public var cancelRecordingStopObserver: @MainActor @Sendable () -> Void = {}
     public var setVolume: @MainActor @Sendable (_ volume: Int32) async throws -> Void
     public var setPlaybackRate: @MainActor @Sendable (_ rate: Float) async throws -> Void
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
@@ -154,6 +157,7 @@ extension PlayerClient: DependencyKey {
         final class Box: @unchecked Sendable {
             @MainActor var player: Player?
             @MainActor var promotedStreamURL: URL?
+            @MainActor var recordingStopObserver: Task<Void, Never>?
             @MainActor func getPlayer() -> Player {
                 if let p = player {
                     return p
@@ -218,6 +222,39 @@ extension PlayerClient: DependencyKey {
                 box.player?.stop()
                 box.player = nil
                 box.promotedStreamURL = nil
+            },
+            startRecording: { directory in
+                let player = box.getPlayer()
+                guard player.isPlaying else { return false }
+                player.startRecording(to: directory.path)
+                return true
+            },
+            requestRecordingStop: {
+                let player = box.getPlayer()
+                if box.recordingStopObserver == nil {
+                    let events = player.events
+                    box.recordingStopObserver = Task { @MainActor in
+                        let timeout = Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(30))
+                            box.recordingStopObserver?.cancel()
+                        }
+                        defer {
+                            timeout.cancel()
+                            box.recordingStopObserver = nil
+                        }
+                        for await event in events {
+                            guard !Task.isCancelled else { return }
+                            if case let .recordingChanged(isRecording: false, filePath: path) = event {
+                                _ = LocalDVRManager.shared.finishRecording(filePath: path)
+                                return
+                            }
+                        }
+                    }
+                }
+                player.stopRecording()
+            },
+            cancelRecordingStopObserver: {
+                box.recordingStopObserver?.cancel()
             },
             setVolume: { volume in
                 try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
@@ -416,6 +453,9 @@ extension PlayerClient: DependencyKey {
         pause: {},
         stop: {},
         release: {},
+        startRecording: { _ in false },
+        requestRecordingStop: {},
+        cancelRecordingStopObserver: {},
         setVolume: { _ in },
         setPlaybackRate: { _ in },
         jump: { _ in },

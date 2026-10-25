@@ -686,6 +686,13 @@
                     }
                 }
 
+                if let recordingStatusMessage = store.recordingStatusMessage {
+                    Text(recordingStatusMessage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+
                 if store.playerState == .buffering {
                     PureLoadingView(size: .small)
                         .padding(.leading, 8)
@@ -696,6 +703,20 @@
 
                 // Buttons Group (KSPlayer Style with Custom Smooth Glass Highlight)
                 HStack(spacing: 18) {
+                    if store.item.isLive {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleRecordingTapped)
+                        } label: {
+                            Image(systemName: store.isRecording ? "stop.circle.fill" : "record.circle")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording)
+                        .disabled(store.playerState != .playing || store.isRecordingStartPending || store.isRecordingStopPending)
+                    }
+
                     // Last Channel Recall (Önceki Kanal)
                     if let prev = store.previousChannel {
                         Button {

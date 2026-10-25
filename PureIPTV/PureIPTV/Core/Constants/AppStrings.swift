@@ -165,6 +165,13 @@ public enum AppStrings {
     // MARK: - Player & EPG
 
     public enum Player {
+        public static let startRecording = "Kaydı Başlat".localized
+        public static let stopRecording = "Kaydı Durdur".localized
+        public static let recordingSaved = "Kayıt kaydedildi".localized
+        public static let recordingCouldNotStart = "Kayıt başlatılamadı".localized
+        public static let recordingInProgress = "Kayıt yapılıyor".localized
+        public static let recordingStopping = "Kayıt durduruluyor".localized
+        public static let recordingCouldNotStop = "Kayıt bitişi doğrulanamadı".localized
         public static let removeRecentChannel = "Son İzlenenlerden Kaldır".localized
         public static let liveLabel = "CANLI".localized
         public static let liveLabelNormal = "Canlı".localized

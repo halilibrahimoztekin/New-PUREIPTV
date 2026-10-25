@@ -33,6 +33,9 @@ public struct PlayerFeature {
         public static let epgBrowse = "PlayerFeature.epgBrowse"
         public static let channelSwitch = "PlayerFeature.channelSwitch"
         public static let scrubThumbnail = "PlayerFeature.scrubThumbnail"
+        public static let recordingMonitor = "PlayerFeature.recordingMonitor"
+        public static let recordingStatus = "PlayerFeature.recordingStatus"
+        public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -139,6 +142,12 @@ public struct PlayerFeature {
         public var playerState: PlayerState = .stopped
         public var isControlsVisible: Bool = true
         public var errorMessage: String?
+        public var isRecording: Bool = false
+        public var isRecordingStartPending: Bool = false
+        public var isRecordingStopPending: Bool = false
+        public var recordingFilePath: String?
+        public var recordingStartedAt: Date?
+        public var recordingStatusMessage: String?
 
         // New properties for video features
         public var currentTime: Duration = .zero
@@ -558,6 +567,14 @@ public struct PlayerFeature {
 
         case playerEvent(PlayerEvent)
         case handlePlayerEvent(PlayerEvent)
+        case toggleRecordingTapped
+        case recordingStartFailed
+        case recordingStartTimedOut
+        case recordingFinalized(String?)
+        case recordingStopUnconfirmed
+        case recordingStopTimedOut
+        case recordingLimitCheck
+        case dismissRecordingStatus
         case closeTapped
         case delegate(Delegate)
 
@@ -1138,14 +1155,20 @@ public struct PlayerFeature {
             )
 
         case .stop:
+            let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             return .merge(
-                .run { _ in
+                .run { send in
+                    if shouldStopRecording {
+                        await playerClient.requestRecordingStop()
+                        await send(.recordingStopUnconfirmed)
+                    }
                     try await playerClient.stop()
                 },
                 .send(.traktScrobbleStop)
             )
 
         case .retryPlayback:
+            let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             state.errorMessage = nil
             state.isUserPaused = false
             if state.retryCount >= state.maxReconnectAttempts {
@@ -1165,6 +1188,10 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.statsTimer),
                 .run { send in
                     // Flush and cleanly reset VLC engine to avoid pipeline lockups
+                    if shouldStopRecording {
+                        await playerClient.requestRecordingStop()
+                        await send(.recordingStopUnconfirmed)
+                    }
                     try? await playerClient.stop()
                     try? await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1964,6 +1991,7 @@ public struct PlayerFeature {
             return .none
 
         case let .selectChannel(newItem):
+            let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentItem = state.item
             let channelZappingDelay: Int = if
                 !state.isReconnecting,
@@ -2039,6 +2067,10 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.playerEvents),
                 .run { send in
+                    if shouldStopRecording {
+                        await playerClient.requestRecordingStop()
+                        await send(.recordingStopUnconfirmed)
+                    }
                     try await playerClient.stop()
                     guard !Task.isCancelled else { return }
                     if channelZappingDelay > 0 {
@@ -2747,6 +2779,24 @@ public struct PlayerFeature {
         case let .handlePlayerEvent(event):
             // Handle different VLC events
             switch event {
+            case let .recordingChanged(isRecording, filePath):
+                if isRecording {
+                    state.isRecording = true
+                    state.isRecordingStartPending = false
+                    state.recordingFilePath = filePath
+                    state.recordingStartedAt = Date()
+                    let title = state.item.title
+                    return .merge(
+                        .run { _ in await MainActor.run { LocalDVRManager.shared.beginRecording(channelTitle: title) } },
+                        .run { send in
+                            while !Task.isCancelled {
+                                try await Task.sleep(for: .seconds(5))
+                                await send(.recordingLimitCheck)
+                            }
+                        }.cancellable(id: CancelID.recordingMonitor, cancelInFlight: true)
+                    )
+                }
+                return .send(.recordingFinalized(filePath))
             case let .stateChanged(newState):
                 state.playerState = newState
                 if newState == .playing {
@@ -2892,10 +2942,133 @@ public struct PlayerFeature {
             }
             return .none
 
+        case .toggleRecordingTapped:
+            if state.isRecording {
+                guard !state.isRecordingStopPending else { return .none }
+                return .run { send in
+                    await playerClient.requestRecordingStop()
+                    await send(.recordingStopUnconfirmed)
+                }
+            }
+            guard state.item.isLive,
+                  state.activeCatchupProgram == nil,
+                  state.playerState == .playing,
+                  !state.isRecordingStartPending
+            else { return .none }
+            state.isRecordingStartPending = true
+            state.recordingStatusMessage = nil
+            let channelTitle = state.item.title
+            return .run { send in
+                do {
+                    let directory = try await MainActor.run {
+                        try LocalDVRManager.shared.prepareRecordingDirectory()
+                    }
+                    await MainActor.run {
+                        LocalDVRManager.shared.beginRecording(channelTitle: channelTitle)
+                    }
+                    guard await playerClient.startRecording(directory) else {
+                        await send(.recordingStartFailed)
+                        return
+                    }
+                    try await Task.sleep(for: .seconds(5))
+                    await send(.recordingStartTimedOut)
+                } catch {
+                    await send(.recordingStartFailed)
+                }
+            }
+
+        case .recordingStartFailed:
+            state.isRecordingStartPending = false
+            state.isRecording = false
+            state.isRecordingStopPending = false
+            state.recordingFilePath = nil
+            state.recordingStartedAt = nil
+            state.recordingStatusMessage = AppStrings.Player.recordingCouldNotStart
+            return .merge(
+                .run { _ in await MainActor.run { LocalDVRManager.shared.cancelRecordingSession() } },
+                .run { send in
+                    try? await Task.sleep(for: .seconds(4))
+                    await send(.dismissRecordingStatus)
+                }.cancellable(id: CancelID.recordingStatus, cancelInFlight: true)
+            )
+
+        case .recordingStartTimedOut:
+            guard state.isRecordingStartPending, !state.isRecording else { return .none }
+            return .run { send in
+                await playerClient.requestRecordingStop()
+                await send(.recordingStopUnconfirmed)
+            }
+
+        case .recordingStopUnconfirmed:
+            guard state.isRecording || state.isRecordingStartPending else { return .none }
+            if state.isRecording {
+                state.isRecordingStartPending = false
+            }
+            state.isRecordingStopPending = true
+            if !state.isRecordingStartPending {
+                state.isRecording = true
+            }
+            state.recordingStatusMessage = AppStrings.Player.recordingStopping
+            return .run { send in
+                try? await Task.sleep(for: .seconds(8))
+                await send(.recordingStopTimedOut)
+            }
+            .cancellable(id: CancelID.recordingStopTimeout, cancelInFlight: true)
+
+        case .recordingStopTimedOut:
+            guard state.isRecordingStopPending else { return .none }
+            state.isRecordingStopPending = false
+            if state.isRecordingStartPending, !state.isRecording {
+                state.isRecordingStartPending = false
+                state.recordingFilePath = nil
+                state.recordingStartedAt = nil
+                state.recordingStatusMessage = AppStrings.Player.recordingCouldNotStart
+                LocalDVRManager.shared.cancelRecordingSession()
+                return .run { _ in
+                    await playerClient.cancelRecordingStopObserver()
+                }
+            }
+            state.recordingStatusMessage = AppStrings.Player.recordingCouldNotStop
+            return .none
+
+        case let .recordingFinalized(filePath):
+            guard state.isRecording || state.isRecordingStartPending else { return .none }
+            state.isRecording = false
+            state.isRecordingStartPending = false
+            state.isRecordingStopPending = false
+            state.recordingFilePath = nil
+            state.recordingStartedAt = nil
+            let saved = LocalDVRManager.shared.finishRecording(filePath: filePath) != nil
+            state.recordingStatusMessage = saved ? AppStrings.Player.recordingSaved : AppStrings.Player.recordingCouldNotStart
+            return .merge(
+                .cancel(id: CancelID.recordingMonitor),
+                .cancel(id: CancelID.recordingStopTimeout),
+                .run { send in
+                    try? await Task.sleep(for: .seconds(4))
+                    await send(.dismissRecordingStatus)
+                }.cancellable(id: CancelID.recordingStatus, cancelInFlight: true)
+            )
+
+        case .recordingLimitCheck:
+            guard state.isRecording else { return .cancel(id: CancelID.recordingMonitor) }
+            guard !state.isRecordingStopPending else { return .none }
+            let elapsed = state.recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+            let currentSize = LocalDVRManager.shared.recordingFileSize(at: state.recordingFilePath)
+            guard elapsed >= 4 * 60 * 60 || currentSize >= LocalDVRManager.shared.maximumRecordingBytes - 50_000_000 else { return .none }
+            return .run { send in
+                await playerClient.requestRecordingStop()
+                await send(.recordingStopUnconfirmed)
+            }
+
+        case .dismissRecordingStatus:
+            state.recordingStatusMessage = nil
+            return .none
+
         case .playerEvent:
             return .none
 
         case .closeTapped:
+            let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
@@ -2908,6 +3081,10 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .run { send in
+                    if shouldStopRecording {
+                        await playerClient.requestRecordingStop()
+                        await send(.recordingStopUnconfirmed)
+                    }
                     // Save Watch History before stopping
                     if currentSecs > 10 { // Only save if watched for more than 10 seconds
                         let type = item.seriesTitle == nil ? "vod" : "episode"
@@ -3002,6 +3179,12 @@ public struct PlayerFeature {
             return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
 
         case .appMovedToBackground:
+            if state.isRecording || state.isRecordingStartPending {
+                return .run { send in
+                    await playerClient.requestRecordingStop()
+                    await send(.recordingStopUnconfirmed)
+                }
+            }
             switch state.backgroundPlaybackMode {
             case .pip:
                 if state.isAutoPiPEnabled, state.isPiPSupported, state.playerState == .playing {
@@ -3035,7 +3218,12 @@ public struct PlayerFeature {
                         state.isBackgroundAudioActive = true
                         return .none
                     } else {
+                        let shouldStopRecording = state.isRecording || state.isRecordingStartPending
                         return .run { send in
+                            if shouldStopRecording {
+                                await playerClient.requestRecordingStop()
+                                await send(.recordingStopUnconfirmed)
+                            }
                             try? await playerClient.stop()
                             await playerClient.release()
                             await send(.delegate(.didClose))
