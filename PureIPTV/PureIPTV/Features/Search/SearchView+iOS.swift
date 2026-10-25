@@ -68,6 +68,17 @@
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let message = store.reminderFailureMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.red.opacity(0.9), in: Capsule())
+                        .padding(.bottom, 20)
+                }
+            }
             .onAppear {
                 store.send(.onAppear(config: config))
             }
@@ -269,7 +280,7 @@
                                     .contextMenu {
                                         if let program = result.matchedEPGProgram, program.startTime > Date() {
                                             Button {
-                                                store.send(.toggleReminder(program, result.item, reminderID: result.reminderID(for: program)))
+                                                store.send(.toggleReminder(program, result.item, reminderID: result.reminderID(for: program), playlistIdentity: store.playlistIdentitiesByBadgeID[result.playlistBadge.id] ?? ""))
                                             } label: {
                                                 Label(
                                                     store.scheduledReminderIDs.contains(result.reminderID(for: program))

@@ -351,6 +351,16 @@ public struct SettingsView: View {
             }
 
             Section(header: Text(AppStrings.Settings.epgSettings)) {
+                #if os(iOS)
+                    Toggle(AppStrings.Player.autoSwitchReminder, isOn: Binding(
+                        get: { store.autoSwitchOnEPGReminder },
+                        set: { store.send(.setAutoSwitchOnEPGReminder($0)) }
+                    ))
+                    Text(AppStrings.Player.autoSwitchReminderDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                #endif
+
                 #if os(tvOS)
                     HStack {
                         Text(AppStrings.Settings.timeShift)

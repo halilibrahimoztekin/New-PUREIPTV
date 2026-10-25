@@ -212,6 +212,7 @@ public struct EPGTimelineFeature {
         case remindersLoaded(requestID: UUID, Set<String>)
         case toggleReminder(EPGProgram, MediaModels.Item)
         case reminderScheduleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
+        case reminderSchedulingFailed
         case toggleFavorite(MediaModels.Item)
         case bulkDefaultFavoritesChanged(defaultIDs: Set<String>, changedIDsInProviderOrder: [String], operation: BulkFavoriteOperation)
         case saveChannelLogoOverride(channelID: String, rawValue: String?)
@@ -674,6 +675,7 @@ public struct EPGTimelineFeature {
                         endTime: program.endTime,
                         isPlayingNow: program.isPlayingNow
                     )
+                    let playlistIdentity = EPGReminderIdentifier.playlistIdentity(for: state.config)
                     return .run { send in
                         do {
                             guard try await reminderClient.requestAuthorization() else {
@@ -683,9 +685,15 @@ public struct EPGTimelineFeature {
                                     requestID: requestID,
                                     isScheduled: false
                                 ))
+                                await send(.reminderSchedulingFailed)
                                 return
                             }
-                            try await reminderClient.scheduleReminder(namespacedProgram, channel, 5)
+                            try await reminderClient.scheduleReminder(
+                                namespacedProgram,
+                                channel,
+                                5,
+                                playlistIdentity
+                            )
                             let scheduledIDs = await reminderClient.getScheduledReminderIDs()
                             await send(.reminderScheduleResponse(
                                 programID: reminderID,
@@ -700,9 +708,14 @@ public struct EPGTimelineFeature {
                                 requestID: requestID,
                                 isScheduled: false
                             ))
+                            await send(.reminderSchedulingFailed)
                         }
                     }
                 }
+
+            case .reminderSchedulingFailed:
+                state.syncStatusMessage = AppStrings.Player.reminderSchedulingFailed
+                return .none
 
             case let .reminderScheduleResponse(programID, legacyProgramID, requestID, isScheduled):
                 guard state.pendingReminderRequestIDs[programID] == requestID else { return .none }

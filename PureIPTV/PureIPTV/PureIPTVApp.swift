@@ -12,6 +12,9 @@ struct PureIPTVApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var themeManager = ThemeManager.shared
     init() {
+        #if os(iOS)
+            EPGReminderNotificationDelegate.install()
+        #endif
         PlaybackVLC.prewarm()
 
         // Initialize RevenueCat
@@ -71,6 +74,9 @@ struct PureIPTVApp: App {
                     .onChange(of: scenePhase) { newPhase, _ in
                         if newPhase == .background {
                             appDelegate.scheduleAppRefresh()
+                            store.send(.appEnteredBackground)
+                        } else if newPhase == .active {
+                            store.send(.appEnteredForeground)
                         }
                     }
 

@@ -12,6 +12,7 @@ import TCACoordinators
 public struct AppCoordinator {
     private enum CancelID {
         static let streamHandoffResolution = "AppCoordinator.streamHandoffResolution"
+        static let epgReminderMonitor = "AppCoordinator.epgReminderMonitor"
     }
 
     public enum PlayerDisplayMode: Equatable, Sendable {
@@ -31,6 +32,8 @@ public struct AppCoordinator {
         public var isPremium: Bool = false
         public var activeStreamHandoffRequestID: UUID?
         public var isStreamHandoffErrorPresented = false
+        public var isForeground = false
+        public var handledEPGReminderIDs: Set<String> = []
 
         public static var initialState: State {
             State(routes: [.root(.splash(SplashFeature.State()), withNavigation: true)])
@@ -70,10 +73,15 @@ public struct AppCoordinator {
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
+        case appEnteredForeground
+        case appEnteredBackground
+        case epgReminderMonitorTick([EPGReminder])
     }
 
     @Injected(\.playlistRepository) var playlistRepository
     @Injected(\.iptvClient) var iptvClient
+    @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.reminderClient) var reminderClient
     @Dependency(\.purchases) var purchases
 
     public init() {}
@@ -256,6 +264,63 @@ public struct AppCoordinator {
         case .dismissStreamHandoffError:
             state.isStreamHandoffErrorPresented = false
             return .none
+
+        case .appEnteredForeground:
+            state.isForeground = true
+            let reminderClient = reminderClient
+            return .run { send in
+                while !Task.isCancelled {
+                    let due = await reminderClient.reconcileScheduledReminders()
+                    await send(.epgReminderMonitorTick(due))
+                    do {
+                        try await Task.sleep(for: .seconds(15))
+                    } catch {
+                        return
+                    }
+                }
+            }.cancellable(id: CancelID.epgReminderMonitor, cancelInFlight: true)
+
+        case .appEnteredBackground:
+            state.isForeground = false
+            return .cancel(id: CancelID.epgReminderMonitor)
+
+        case let .epgReminderMonitorTick(reminders):
+            guard state.isForeground,
+                  settingsClient.autoSwitchOnEPGReminder(),
+                  state.routes.count == 1,
+                  !state.isPlayerMini,
+                  state.miniPlayer == nil,
+                  case let .home(home) = state.routes[0].screen,
+                  home.liveTV.epgTimeline?.activePreviewChannel == nil,
+                  home.liveTV.epgTimeline?.isPiPActive != true,
+                  let activeConfig = state.activeConfig
+            else { return .none }
+            let activeIdentity = EPGReminderIdentifier.playlistIdentity(for: activeConfig)
+            guard let reminder = reminders.first(where: {
+                !$0.autoSwitchHandled && !state.handledEPGReminderIDs.contains($0.id)
+                    && $0.playlistIdentity == activeIdentity
+                    && $0.startTime <= Date() && Date() < $0.endTime
+            }) else { return .none }
+            let channels = home.liveTV.channelsByCategory.values.flatMap(\.self)
+                + home.liveTV.smartGroupChannels
+                + home.liveTV.favoriteListResolvedChannels
+            guard let channel = channels.first(where: { $0.id == reminder.channelID }),
+                  let streamURL = channel.streamURL
+            else {
+                return .none
+            }
+            state.handledEPGReminderIDs.insert(reminder.id)
+            let playable = PlayerFeature.PlayableItem(
+                id: channel.id, title: channel.title, streamURL: streamURL,
+                coverURL: channel.displayLogoURL, isLive: true, config: activeConfig,
+                epgChannelID: channel.epgChannelID, tvArchive: channel.tvArchive,
+                categoryID: channel.categoryID
+            )
+            state.routes.presentCover(.player(PlayerFeature.State(item: playable)))
+            let reminderClient = reminderClient
+            return .run { _ in
+                await reminderClient.markAutoSwitchHandled(reminder.id)
+            }
 
         case .router(.routeAction(_, .paywall(.dismiss))),
              .router(.routeAction(_, .paywall(.closeButtonTapped))):

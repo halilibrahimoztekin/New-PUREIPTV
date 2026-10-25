@@ -141,6 +141,7 @@ public struct SearchFeature: Sendable {
         public var isProgramsSearchLoading = false
         public var hasLoaded = false
         public var errorMessage: String?
+        public var reminderFailureMessage: String?
         public var lastLoadedConfig: PlaylistConfig?
         public var lastAdultHidden: Bool?
 
@@ -177,6 +178,19 @@ public struct SearchFeature: Sendable {
                 identifiers["default"] = playlistID
             }
             return identifiers
+        }
+
+        public var playlistIdentitiesByBadgeID: [String: String] {
+            var identities: [String: String] = [:]
+            for (index, playlist) in savedPlaylists.enumerated() {
+                guard let config = playlist.toPlaylistConfig() else { continue }
+                let badge = UnifiedPlaylistManager.shared.badge(for: config, index: index)
+                identities[badge.id] = EPGReminderIdentifier.playlistIdentity(for: config)
+            }
+            if let config = lastLoadedConfig {
+                identities[UnifiedPlaylistManager.shared.badge(for: config).id] = EPGReminderIdentifier.playlistIdentity(for: config)
+            }
+            return identities
         }
 
         public mutating func updateAllResultsCount() {
@@ -294,8 +308,10 @@ public struct SearchFeature: Sendable {
         case loadFavoritesResponse([FavoriteItem], ProfileContextSnapshot)
         case loadReminders
         case remindersLoaded(requestID: UUID, Set<String>)
-        case toggleReminder(EPGProgram, MediaModels.Item, reminderID: String)
+        case toggleReminder(EPGProgram, MediaModels.Item, reminderID: String, playlistIdentity: String)
         case reminderToggleResponse(programID: String, legacyProgramID: String, requestID: UUID, isScheduled: Bool)
+        case reminderSchedulingFailed
+        case clearReminderFailure
         case toggleFavorite(item: MediaModels.Item, type: String, playlistID: UUID?)
         case delegate(Delegate)
 
@@ -884,8 +900,9 @@ public struct SearchFeature: Sendable {
                 state.scheduledReminderIDs = reconciledIDs
                 return .none
 
-            case let .toggleReminder(program, channel, reminderID):
+            case let .toggleReminder(program, channel, reminderID, playlistIdentity):
                 guard state.pendingReminderRequestIDs[reminderID] == nil else { return .none }
+                state.reminderFailureMessage = nil
                 state.reminderLoadRequestID = nil
                 let requestID = UUID()
                 state.pendingReminderRequestIDs[reminderID] = requestID
@@ -919,9 +936,10 @@ public struct SearchFeature: Sendable {
                     do {
                         guard try await reminderClient.requestAuthorization() else {
                             await send(.reminderToggleResponse(programID: reminderID, legacyProgramID: program.id, requestID: requestID, isScheduled: false))
+                            await send(.reminderSchedulingFailed)
                             return
                         }
-                        try await reminderClient.scheduleReminder(namespacedProgram, channel, 5)
+                        try await reminderClient.scheduleReminder(namespacedProgram, channel, 5, playlistIdentity)
                         let ids = await reminderClient.getScheduledReminderIDs()
                         await send(.reminderToggleResponse(
                             programID: reminderID,
@@ -931,6 +949,7 @@ public struct SearchFeature: Sendable {
                         ))
                     } catch {
                         await send(.reminderToggleResponse(programID: reminderID, legacyProgramID: program.id, requestID: requestID, isScheduled: false))
+                        await send(.reminderSchedulingFailed)
                     }
                 }
 
@@ -943,6 +962,17 @@ public struct SearchFeature: Sendable {
                     state.scheduledReminderIDs.remove(programID)
                     state.scheduledReminderIDs.remove(legacyProgramID)
                 }
+                return .none
+
+            case .reminderSchedulingFailed:
+                state.reminderFailureMessage = AppStrings.Player.reminderSchedulingFailed
+                return .run { send in
+                    try? await Task.sleep(for: .seconds(4))
+                    await send(.clearReminderFailure)
+                }
+
+            case .clearReminderFailure:
+                state.reminderFailureMessage = nil
                 return .none
 
             case let .filterChanged(filter):

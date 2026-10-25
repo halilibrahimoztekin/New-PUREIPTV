@@ -60,6 +60,8 @@ public struct SettingsClient: Sendable {
 
     public var autoUpdateEPG: @Sendable () -> Bool = { true }
     public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
+    public var autoSwitchOnEPGReminder: @Sendable () -> Bool = { false }
+    public var setAutoSwitchOnEPGReminder: @Sendable (Bool) -> Void = { _ in }
     public var downloadConcurrencyLimit: @Sendable () -> Int = { 1 }
     public var setDownloadConcurrencyLimit: @Sendable (Int) -> Void = { _ in }
     public var getLastEPGRefreshDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
@@ -130,6 +132,7 @@ extension SettingsClient: DependencyKey {
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
+        let autoSwitchOnEPGReminderKey = "com.pureiptv.autoSwitchOnEPGReminder"
         let downloadConcurrencyLimitKey = "com.pureiptv.downloadConcurrencyLimit"
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
@@ -273,6 +276,8 @@ extension SettingsClient: DependencyKey {
             setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
             autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },
             setAutoUpdateEPG: { defaults.set($0, forKey: autoUpdateEpgKey) },
+            autoSwitchOnEPGReminder: { defaults.bool(forKey: autoSwitchOnEPGReminderKey) },
+            setAutoSwitchOnEPGReminder: { defaults.set($0, forKey: autoSwitchOnEPGReminderKey) },
             downloadConcurrencyLimit: { min(4, max(1, defaults.integer(forKey: downloadConcurrencyLimitKey))) },
             setDownloadConcurrencyLimit: { defaults.set(min(4, max(1, $0)), forKey: downloadConcurrencyLimitKey) },
             getLastEPGRefreshDate: { playlistID in

@@ -67,6 +67,17 @@
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let message = store.reminderFailureMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.red.opacity(0.9), in: Capsule())
+                        .padding(.bottom, 20)
+                }
+            }
             .onAppear {
                 store.send(.onAppear(config: config))
             }
@@ -226,24 +237,6 @@
                                         store.send(.channelSelected(result.item))
                                     }
                                     .contextMenu {
-                                        if let program = result.matchedEPGProgram, program.startTime > Date() {
-                                            Button {
-                                                store.send(.toggleReminder(program, result.item, reminderID: result.reminderID(for: program)))
-                                            } label: {
-                                                Label(
-                                                    store.scheduledReminderIDs.contains(result.reminderID(for: program))
-                                                        || store.scheduledReminderIDs.contains(program.id)
-                                                        ? AppStrings.Player.removeReminder
-                                                        : AppStrings.Player.setReminder,
-                                                    systemImage: (store.scheduledReminderIDs.contains(result.reminderID(for: program))
-                                                        || store.scheduledReminderIDs.contains(program.id))
-                                                        ? "bell.slash.fill"
-                                                        : "bell.fill"
-                                                )
-                                            }
-                                            .disabled(store.pendingReminderRequestIDs[result.reminderID(for: program)] != nil)
-                                        }
-
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
                                         } label: {

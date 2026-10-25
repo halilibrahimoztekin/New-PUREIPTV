@@ -1107,20 +1107,22 @@ public struct EPGTimelineView: View {
         .accessibilityLabel(Text(accessibilitySummaryParts.joined(separator: ". ")))
         .accessibilityHint(Text(accessibilityHint))
         .contextMenu {
-            if isFuture {
-                Button {
-                    HapticManager.shared.trigger(.light)
-                    store.send(.toggleReminder(program, channel))
-                } label: {
-                    Label(
-                        isReminderPending
-                            ? AppStrings.Player.reminderScheduling
-                            : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder),
-                        systemImage: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill")
-                    )
+            #if os(iOS)
+                if isFuture {
+                    Button {
+                        HapticManager.shared.trigger(.light)
+                        store.send(.toggleReminder(program, channel))
+                    } label: {
+                        Label(
+                            isReminderPending
+                                ? AppStrings.Player.reminderScheduling
+                                : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder),
+                            systemImage: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill")
+                        )
+                    }
+                    .disabled(isReminderPending)
                 }
-                .disabled(isReminderPending)
-            }
+            #endif
             Button {
                 HapticManager.shared.trigger(.light)
                 store.send(.toggleFavorite(channel))
@@ -1528,24 +1530,28 @@ public struct EPGTimelineView: View {
                         .padding(.vertical, 14)
                         .background(Color.purple, in: RoundedRectangle(cornerRadius: 12))
                     }
-                } else if isFuture {
-                    Button {
-                        HapticManager.shared.trigger(.medium)
-                        store.send(.toggleReminder(program, channel))
-                    } label: {
-                        HStack {
-                            Image(systemName: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill"))
-                            Text(isReminderPending
-                                ? AppStrings.Player.reminderScheduling
-                                : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder))
+                } else {
+                    #if os(iOS)
+                        if isFuture {
+                            Button {
+                                HapticManager.shared.trigger(.medium)
+                                store.send(.toggleReminder(program, channel))
+                            } label: {
+                                HStack {
+                                    Image(systemName: isReminderPending ? "ellipsis.circle" : (isScheduled ? "bell.slash.fill" : "bell.fill"))
+                                    Text(isReminderPending
+                                        ? AppStrings.Player.reminderScheduling
+                                        : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder))
+                                }
+                                .font(.headline)
+                                .foregroundColor(isScheduled ? .white : .black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(isScheduled ? Color.red.opacity(0.85) : Color.yellow, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .disabled(isReminderPending)
                         }
-                        .font(.headline)
-                        .foregroundColor(isScheduled ? .white : .black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(isScheduled ? Color.red.opacity(0.85) : Color.yellow, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .disabled(isReminderPending)
+                    #endif
                 }
             }
 

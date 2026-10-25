@@ -277,6 +277,13 @@ public enum AppStrings {
         public static let removeReminder = "Hatırlatıcıyı Kaldır".localized
         public static let reminderRemoved = "Hatırlatıcı Kaldırıldı".localized
         public static let reminderNotificationTitle = "Program Başlıyor".localized
+        public static func reminderStartsSoonBody(_ program: String, _ channel: String) -> String {
+            "\"%@\", %@ kanalında kısa süre içinde başlayacak!".localized(program, channel)
+        }
+
+        public static let autoSwitchReminder = "Program Başlangıcında Kanala Geç".localized
+        public static let autoSwitchReminderDescription = "Yalnızca uygulama açıkken ve oynatıcı boşta olduğunda, aynı playlist’teki hatırlatılan programa geçer.".localized
+        public static let reminderSchedulingFailed = "Hatırlatıcı ayarlanamadı. Bildirim iznini ve program saatini kontrol edin.".localized
         public static func reminderNotificationBody(_ program: String, _ channel: String, _ mins: Int) -> String {
             "\"%@\", %@ kanalında %lld dakika sonra başlayacak!".localized(program, channel, Int64(mins))
         }

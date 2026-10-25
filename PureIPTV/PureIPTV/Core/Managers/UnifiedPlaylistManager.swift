@@ -33,7 +33,7 @@ public final class UnifiedPlaylistManager: @unchecked Sendable {
 
     public nonisolated func badge(for playlistConfig: PlaylistConfig, index: Int = 0) -> PlaylistSourceBadge {
         let name = playlistConfig.serverURL?.host ?? playlistConfig.m3uURL?.lastPathComponent ?? "Playlist \(index + 1)"
-        let id = playlistConfig.serverURL?.absoluteString ?? playlistConfig.m3uURL?.absoluteString ?? "playlist_\(index)"
+        let id = EPGReminderIdentifier.playlistIdentity(for: playlistConfig)
         let colorHex = paletteHex[abs(index) % paletteHex.count]
         return PlaylistSourceBadge(id: id, playlistName: name, colorHex: colorHex)
     }
