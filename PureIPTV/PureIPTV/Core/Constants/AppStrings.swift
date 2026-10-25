@@ -215,6 +215,7 @@ public enum AppStrings {
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
         public static let returnToPlayingChannel = "İzlenen Kanala Dön".localized
+        public static let showControls = "Oynatıcı Kontrollerini Göster".localized
         public static let nextUp = "Sıradaki:".localized
         public static let upcoming = "Yaklaşan".localized
         public static let nextLabel = "SONRAKİ".localized
@@ -531,6 +532,12 @@ public enum AppStrings {
         public static let contentSorting = "İçerik Sıralaması".localized
         public static let vodSorting = "Filmler (VOD)".localized
         public static let playerSettings = "Oynatıcı (Player) Ayarları".localized
+        public static let remoteControls = "Oynatıcı Kumanda Yönleri".localized
+        public static let remoteControlsDescription = "Yalnızca oynatıcı kontrolleri gizliyken yön hareketlerine atanır. Aynı eylemi birden fazla yöne atayabilirsiniz.".localized
+        public static let remoteDirectionUp = "Yukarı".localized
+        public static let remoteDirectionDown = "Aşağı".localized
+        public static let remoteDirectionLeft = "Sol".localized
+        public static let remoteDirectionRight = "Sağ".localized
         public static let autoPlayNextEpisode = "Sonraki Bölüme Otomatik Geç".localized
         public static let autoSelectFirstAlternativeSource = "İlk Alternatif Kaynağı Otomatik Oynat".localized
         public static let autoSelectFirstAlternativeSourceDescription = "Alternatif kaynaklar seçildiğinde listeyi açmadan playlist sırasındaki ilk eşleşmeyi oynatır.".localized

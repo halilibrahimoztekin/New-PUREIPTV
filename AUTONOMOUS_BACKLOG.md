@@ -2,6 +2,12 @@
 
 Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal Dev, PR Reviewer) canlı hafızasıdır.
 
+## 🧹 Kalıcı DerivedData Temizlik Kuralı
+- Her task tamamlandıktan sonra `/private/tmp` ve `~/Library/Developer/Xcode/DerivedData` içindeki DerivedData kalıntılarını tara.
+- Silmeden önce aktif build/typecheck süreçlerini ve açık dosya tanıtıcılarını doğrula; yalnızca kapanmış task’ların yeniden üretilebilir Build, Index ve compiler-cache çıktısını sil.
+- Etkin projelerin `SourcePackages` checkout’larını ve kullanıcı kaynaklarını koru. ContactCleaner klasörlerini/DerivedData’sını kullanıcı talimatıyla temizleme kapsamının dışında tut.
+- Silme öncesi/sonrası boyutları kaydet; task sonrasında kullanılmayan DerivedData bırakma.
+
 ---
 
 ## 📊 Backlog Durumu (Active Pipeline)
@@ -1189,9 +1195,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS Release compile-only build başarılı (xcodebuild exit 0); tvOS Release compile-only build başarılı (`/private/tmp/pureiptv_122_tvos_final.log` içinde `BUILD SUCCEEDED`). String catalog JSON parse ve `git diff --check` temiz. Test, simulator launch, playback veya akış çalıştırılmadı.
 - **Durum:** `[DONE]` — Rehberden oynayan kanala dönüş tamamlandı; yalnızca Xcode build alındı.
 
-### 123. [PENDING] Kumanda Tuşlarını Uygulama Eylemlerine Eşleme
+### 123. [DONE] Kumanda Tuşlarını Uygulama Eylemlerine Eşleme
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları remap edilebilir kısayolları konuşuyor: https://www.reddit.com/r/TiviMate/comments/1hfrwhj .
-- **Aday gap:** tvOS/iOS izinli remote event’leri, mevcut Siri Remote kısayolları ve platform kısıtlarıyla güvenli özelleştirme yapılabilir mi incele.
+- **Kod incelemesi:** Mevcut tvOS oynatıcı yön hareketlerini kontroller gizliyken yakalayıp kanal yukarı/aşağı, kanal listesi, son kanal ve kontrolleri göster eylemlerine bağlıyordu. Ayarlardan eşleme ve kalıcı tercih yoktu. `playView` yalnız kontroller gizliyken focus aldığı için picker/menü odağına müdahale etmiyor.
+- **Uygulama:** tvOS Oynatıcı Ayarlarına yukarı/aşağı/sol/sağ için dört yerel Picker eklendi. Her yön beş mevcut eylemden birini seçebilir; eşlemeler `AppStorage` ile kalıcıdır. Varsayılanlar mevcut Siri Remote davranışıyla aynı. Live olmayan içerikte ve gerekli playlist/önceki kanal yoksa güvenli şekilde kontroller açılır. Metinler 20 dilde yerelleştirildi.
+- **PR Reviewer:** Focus hedefi yalnız kontroller gizliyken etkin; mevcut menü ve erişilebilir odak akışı korunuyor. Eşleme türü sabit enum seçeneklerinden geliyor; bozuk saklanan değer kontrolleri açmaya düşüyor. `[APPROVED]`.
+- **Doğrulama:** iOS Release ve tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; string catalog JSON parse ve `git diff --check` başarılı. Test, simulator, playback veya akış çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — tvOS yön tuşları özelleştirilebilir hale geldi.
 
 ### 124. [PENDING] Oynatma Sorununda Hızlı Alternatif Kaynak Kurtarma
 - **Canlı keşif (25 Ekim 2026):** IPTVX 24.1.3 sürüm notları playback ekranından retry, alternatif kaynak veya farklı player’a geçişi öne çıkarıyor: https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv .
@@ -1212,3 +1222,8 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 128. [PENDING] IPTV Kaynaklarını Kişisel Sunucuya Taşıma Sihirbazı
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar IPTV’yi Plex/Jellyfin/Emby’ye alma ve ev cihazlarını açık tutmadan kullanma konusunda yardım arıyor; `xtream2jellyfin` proje önerisi `.strm`/metadata üretimini otomatikleştiriyor: https://www.reddit.com/r/iptv/comments/1r5gktf/i_made_a_tool_to_import_iptv_movies_and_series/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1vgrjmg/iptv_plex/ .
 - **Aday gap:** #108 player-side personal server integration’dan farklı olarak provider VOD’u kendi sunucuya içe aktarma/transfer aracı app’in güvenli ve yasal kapsamına uyuyor mu, stream URL saklama/credentials riskleriyle incele.
+
+### 129. [DONE] Her Task Sonrası DerivedData Temizliği
+- **Uygulama:** `/private/tmp/PureIPTVDerivedData_98` (3.5 GB) aktif dosya tanıtıcısı olmadığı doğrulandıktan sonra silindi. Standart Xcode DerivedData’da kapanmış derlemelerin PureIPTV Build/Index/compiler-cache çıktıları ve ortak SDK/module cache’leri temizlendi; iki projenin `SourcePackages` checkout’ları korundu. #123 build’leri sonrası yalnız PureIPTV’ye ait 3.9 GB Build/compiler cache ve log çıktısı, `lsof` boş sonuç verdikten sonra kaldırıldı; PureIPTV `SourcePackages` (1.8 GB) korundu. `/private/tmp` içinde bu taramada DerivedData adlı klasör yoktu. ContactCleaner yoluna erişilmedi/değiştirilmedi.
+- **Sonuç:** İlk temizlik sonrası `df` kullanılabilir alanı 23 GiB’den 37 GiB’ye çıktı; #123 build ve cache temizliği sonrasında 75 GiB gösterildi. Geçici ve PureIPTV DerivedData içinde kullanılmayan build cache bırakılmadı. ContactCleaner gelecekteki temizliklerden hariç tutulacak.
+- **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.

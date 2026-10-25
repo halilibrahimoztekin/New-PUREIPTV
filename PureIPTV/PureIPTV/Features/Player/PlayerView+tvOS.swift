@@ -4,11 +4,38 @@
     import SwiftVLC
     import UIKit
 
+    enum TVPlayerRemoteAction: String, CaseIterable, Identifiable {
+        case channelUp
+        case channelDown
+        case openChannelList
+        case recallLastChannel
+        case showControls
+
+        var id: String {
+            rawValue
+        }
+
+        var title: String {
+            switch self {
+            case .channelUp: AppStrings.Player.nextChannel
+            case .channelDown: AppStrings.Player.previousChannel
+            case .openChannelList: AppStrings.Common.channels
+            case .recallLastChannel: AppStrings.Player.recallLastChannel
+            case .showControls: AppStrings.Player.showControls
+            }
+        }
+    }
+
     // MARK: - tvOS Player View (KSPlayer Architecture)
 
     @available(tvOS 16.0, *)
     public struct PlayerView_tvOS: View {
         @Bindable var store: StoreOf<PlayerFeature>
+
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var remoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var remoteDownAction = TVPlayerRemoteAction.channelDown.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var remoteLeftAction = TVPlayerRemoteAction.openChannelList.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var remoteRightAction = TVPlayerRemoteAction.recallLastChannel.rawValue
 
         @FocusState private var focusableField: FocusableField?
         @State private var isMaskShow: Bool = true
@@ -558,22 +585,46 @@
                 }
                 .onMoveCommand { direction in
                     store.send(.userInteracted)
-                    if direction == .up, store.item.isLive, store.playlist != nil {
-                        store.send(.channelUp)
-                    } else if direction == .down, store.item.isLive {
-                        store.send(.channelDownOrRecentChannels, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                    } else if direction == .left, store.item.isLive, store.playlist != nil {
-                        store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
-                    } else if direction == .right, store.item.isLive, store.previousChannel != nil {
-                        store.send(.recallLastChannel)
-                    } else {
-                        showMask()
+                    let rawAction: String = switch direction {
+                    case .up: remoteUpAction
+                    case .down: remoteDownAction
+                    case .left: remoteLeftAction
+                    case .right: remoteRightAction
+                    @unknown default: TVPlayerRemoteAction.showControls.rawValue
                     }
+                    performRemoteAction(rawAction)
                 }
                 .onContinuousHover { _ in
                     store.send(.userInteracted)
                     showMask()
                 }
+        }
+
+        private func performRemoteAction(_ rawValue: String) {
+            guard let action = TVPlayerRemoteAction(rawValue: rawValue) else {
+                showMask()
+                return
+            }
+            guard store.item.isLive else {
+                showMask()
+                return
+            }
+
+            switch action {
+            case .channelUp:
+                guard store.playlist != nil else { showMask(); return }
+                store.send(.channelUp)
+            case .channelDown:
+                store.send(.channelDownOrRecentChannels, animation: .spring(response: 0.35, dampingFraction: 0.8))
+            case .openChannelList:
+                guard store.playlist != nil else { showMask(); return }
+                store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
+            case .recallLastChannel:
+                guard store.previousChannel != nil else { showMask(); return }
+                store.send(.recallLastChannel)
+            case .showControls:
+                showMask()
+            }
         }
 
         // MARK: - Controller View (KSPlayer Layout)

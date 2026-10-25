@@ -16,6 +16,12 @@ public struct SettingsView: View {
     @State private var diagnosticReportURL: URL?
     @State private var isGeneratingDiagnosticReport = false
     @State private var isShowingTraktWatchlist: Bool = false
+    #if os(tvOS)
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var playerRemoteDownAction = TVPlayerRemoteAction.channelDown.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var playerRemoteLeftAction = TVPlayerRemoteAction.openChannelList.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var playerRemoteRightAction = TVPlayerRemoteAction.recallLastChannel.rawValue
+    #endif
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
@@ -231,6 +237,34 @@ public struct SettingsView: View {
                 Text(AppStrings.Settings.reverseChannelZappingDirectionDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                #if os(tvOS)
+                    Text(AppStrings.Settings.remoteControls)
+                        .font(.headline)
+                    Picker(AppStrings.Settings.remoteDirectionUp, selection: $playerRemoteUpAction) {
+                        ForEach(TVPlayerRemoteAction.allCases) { action in
+                            Text(action.title).tag(action.rawValue)
+                        }
+                    }
+                    Picker(AppStrings.Settings.remoteDirectionDown, selection: $playerRemoteDownAction) {
+                        ForEach(TVPlayerRemoteAction.allCases) { action in
+                            Text(action.title).tag(action.rawValue)
+                        }
+                    }
+                    Picker(AppStrings.Settings.remoteDirectionLeft, selection: $playerRemoteLeftAction) {
+                        ForEach(TVPlayerRemoteAction.allCases) { action in
+                            Text(action.title).tag(action.rawValue)
+                        }
+                    }
+                    Picker(AppStrings.Settings.remoteDirectionRight, selection: $playerRemoteRightAction) {
+                        ForEach(TVPlayerRemoteAction.allCases) { action in
+                            Text(action.title).tag(action.rawValue)
+                        }
+                    }
+                    Text(AppStrings.Settings.remoteControlsDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                #endif
 
                 Toggle(AppStrings.Settings.startMuted, isOn: Binding(
                     get: { store.startMuted },

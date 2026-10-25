@@ -1,6 +1,874 @@
 {
   "sourceLanguage" : "tr",
   "strings" : {
+      "Oynatıcı Kontrollerini Göster": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "إظهار عناصر تحكم المشغل"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Playersteuerung anzeigen"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Show Player Controls"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Mostrar controles del reproductor"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Afficher les commandes du lecteur"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "प्लेयर नियंत्रण दिखाएँ"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Tampilkan Kontrol Pemutar"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Mostra i controlli del lettore"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "プレーヤーコントロールを表示"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "플레이어 컨트롤 표시"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Spelerbediening tonen"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Pokaż elementy sterujące odtwarzaczem"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Mostrar controles do player"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Mostrar controlos do leitor"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Показать элементы управления плеером"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Visa spelarreglage"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "แสดงตัวควบคุมเครื่องเล่น"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Hiển thị điều khiển trình phát"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "显示播放器控件"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "顯示播放器控制項"
+            }
+          }
+        }
+      },
+      "Oynatıcı Kumanda Yönleri": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "اتجاهات جهاز التحكم بالمشغل"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Player-Fernbedienungsrichtungen"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Player Remote Directions"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direcciones del mando del reproductor"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Directions de la télécommande du lecteur"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "प्लेयर रिमोट दिशाएँ"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Arah Remote Pemutar"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direzioni del telecomando del lettore"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "プレーヤーリモコンの方向"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "플레이어 리모컨 방향"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Richtingen van de spelersafstandsbediening"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Kierunki pilota odtwarzacza"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direções do controle do player"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direções do comando do leitor"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Направления пульта плеера"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Spelarriktningar för fjärrkontrollen"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ทิศทางรีโมตเครื่องเล่น"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Hướng điều khiển từ xa của trình phát"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "播放器遥控方向"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "播放器遙控方向"
+            }
+          }
+        }
+      },
+      "Yalnızca oynatıcı kontrolleri gizliyken yön hareketlerine atanır. Aynı eylemi birden fazla yöne atayabilirsiniz.": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "يتم تعيينها لحركات الاتجاه فقط عند إخفاء عناصر تحكم المشغل. يمكنك تعيين الإجراء نفسه لأكثر من اتجاه."
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Richtungsbewegungen werden nur zugewiesen, wenn die Playersteuerung ausgeblendet ist. Dieselbe Aktion kann mehreren Richtungen zugewiesen werden."
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Directional movements are assigned only while player controls are hidden. You can assign the same action to multiple directions."
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Los movimientos direccionales se asignan solo cuando los controles del reproductor están ocultos. Puedes asignar la misma acción a varias direcciones."
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Les mouvements directionnels sont attribués uniquement lorsque les commandes du lecteur sont masquées. Vous pouvez attribuer la même action à plusieurs directions."
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "दिशात्मक गति केवल तब असाइन होती है जब प्लेयर नियंत्रण छिपे हों। आप एक ही कार्रवाई को कई दिशाओं में असाइन कर सकते हैं।"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Gerakan arah ditetapkan hanya saat kontrol pemutar tersembunyi. Anda dapat menetapkan tindakan yang sama ke beberapa arah."
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "I movimenti direzionali vengono assegnati solo quando i controlli del lettore sono nascosti. Puoi assegnare la stessa azione a più direzioni."
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "プレーヤーコントロールが非表示のときだけ方向操作が割り当てられます。同じアクションを複数の方向に割り当てられます。"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "플레이어 컨트롤이 숨겨져 있을 때만 방향 동작이 할당됩니다. 같은 동작을 여러 방향에 할당할 수 있습니다."
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Richtingsbewegingen worden alleen toegewezen wanneer de spelerbediening verborgen is. Je kunt dezelfde actie aan meerdere richtingen toewijzen."
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Ruchy kierunkowe są przypisywane tylko wtedy, gdy elementy sterujące odtwarzaczem są ukryte. To samo działanie można przypisać do wielu kierunków."
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Os movimentos direcionais são atribuídos somente quando os controles do player estão ocultos. Você pode atribuir a mesma ação a várias direções."
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Os movimentos direcionais só são atribuídos quando os controlos do leitor estão ocultos. Pode atribuir a mesma ação a várias direções."
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Действия по направлениям назначаются, только когда элементы управления плеером скрыты. Одно действие можно назначить нескольким направлениям."
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Riktningsrörelser tilldelas endast när spelarreglagen är dolda. Du kan tilldela samma åtgärd till flera riktningar."
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "กำหนดการเคลื่อนไหวตามทิศทางเฉพาะเมื่อซ่อนตัวควบคุมเครื่องเล่น คุณสามารถกำหนดการกระทำเดียวกันให้หลายทิศทางได้"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Chuyển động theo hướng chỉ được gán khi ẩn điều khiển trình phát. Bạn có thể gán cùng một hành động cho nhiều hướng."
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "仅在播放器控件隐藏时响应方向操作。你可以将同一操作分配给多个方向。"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "僅在播放器控制項隱藏時回應方向操作。你可以將相同操作指派給多個方向。"
+            }
+          }
+        }
+      },
+      "Yukarı": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "أعلى"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Nach oben"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Up"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Arriba"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Haut"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ऊपर"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Atas"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Su"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "上"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "위"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Omhoog"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "W górę"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Para cima"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Para cima"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Вверх"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Upp"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ขึ้น"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Lên"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "上"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "上"
+            }
+          }
+        }
+      },
+      "Aşağı": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "أسفل"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Nach unten"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Down"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Abajo"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Bas"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "नीचे"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Bawah"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Giù"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "下"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "아래"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Omlaag"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "W dół"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Para baixo"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Para baixo"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Вниз"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Ned"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ลง"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Xuống"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "下"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "下"
+            }
+          }
+        }
+      },
+      "Sol": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "يسار"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Links"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Left"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Izquierda"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Gauche"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "बाएँ"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Kiri"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Sinistra"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "左"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "왼쪽"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Links"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "W lewo"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Esquerda"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Esquerda"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Влево"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Vänster"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ซ้าย"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Trái"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "左"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "左"
+            }
+          }
+        }
+      },
+      "Sağ": {
+        "localizations": {
+          "ar": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "يمين"
+            }
+          },
+          "de": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Rechts"
+            }
+          },
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Right"
+            }
+          },
+          "es": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Derecha"
+            }
+          },
+          "fr": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Droite"
+            }
+          },
+          "hi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "दाएँ"
+            }
+          },
+          "id": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Kanan"
+            }
+          },
+          "it": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Destra"
+            }
+          },
+          "ja": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "右"
+            }
+          },
+          "ko": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "오른쪽"
+            }
+          },
+          "nl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Rechts"
+            }
+          },
+          "pl": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "W prawo"
+            }
+          },
+          "pt-BR": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direita"
+            }
+          },
+          "pt-PT": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Direita"
+            }
+          },
+          "ru": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Вправо"
+            }
+          },
+          "sv": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Höger"
+            }
+          },
+          "th": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "ขวา"
+            }
+          },
+          "vi": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Phải"
+            }
+          },
+          "zh-Hans": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "右"
+            }
+          },
+          "zh-Hant": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "右"
+            }
+          }
+        }
+      },
       "İzlenen Kanala Dön" : {
         "comment": "Returns EPG browsing to the channel currently playing without changing playback.",
         "isCommentAutoGenerated": false,
