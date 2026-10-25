@@ -290,6 +290,8 @@ public struct EPGTimelineFeature {
                     state.lastSyncTimestamp = settingsClient.getLastEPGRefreshDate(state.config.playlistID)
                 }
                 let shouldAutoSync = settingsClient.autoUpdateEPG()
+                let refreshInterval = settingsClient.epgAutoRefreshInterval().duration
+                let lastAutoAttempt = settingsClient.getLastEPGAutoRefreshAttemptDate(state.config.playlistID)
                 var effects: [Effect<Action>] = [
                     .send(.loadReminders),
                     .send(.loadFavorites),
@@ -300,8 +302,10 @@ public struct EPGTimelineFeature {
                         }
                     },
                 ]
-                if shouldAutoSync {
-                    if state.lastSyncTimestamp == nil || Date().timeIntervalSince(state.lastSyncTimestamp ?? .distantPast) > 4 * 3600 {
+                if shouldAutoSync, state.config.playlistID != nil {
+                    let referenceDate = max(state.lastSyncTimestamp ?? .distantPast, lastAutoAttempt ?? .distantPast)
+                    if Date().timeIntervalSince(referenceDate) >= refreshInterval {
+                        settingsClient.setLastEPGAutoRefreshAttemptDate(state.config.playlistID, Date())
                         effects.append(.send(.performSync(forced: false)))
                     }
                 }

@@ -24,6 +24,24 @@ public enum SortMethod: String, CaseIterable, Equatable, Identifiable {
     }
 }
 
+public enum EPGAutoRefreshInterval: Int, CaseIterable, Equatable, Identifiable, Sendable {
+    case fourHours = 4
+    case twelveHours = 12
+    case twentyFourHours = 24
+
+    public var id: Int {
+        rawValue
+    }
+
+    public var duration: TimeInterval {
+        TimeInterval(rawValue * 60 * 60)
+    }
+
+    public var title: String {
+        "\(rawValue) h"
+    }
+}
+
 public struct SettingsClient: Sendable {
     public var isParentalControlEnabled: @Sendable () -> Bool = { false }
     public var getParentalPIN: @Sendable () -> String? = { nil }
@@ -63,12 +81,16 @@ public struct SettingsClient: Sendable {
 
     public var autoUpdateEPG: @Sendable () -> Bool = { true }
     public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
+    public var epgAutoRefreshInterval: @Sendable () -> EPGAutoRefreshInterval = { .fourHours }
+    public var setEPGAutoRefreshInterval: @Sendable (EPGAutoRefreshInterval) -> Void = { _ in }
     public var autoSwitchOnEPGReminder: @Sendable () -> Bool = { false }
     public var setAutoSwitchOnEPGReminder: @Sendable (Bool) -> Void = { _ in }
     public var downloadConcurrencyLimit: @Sendable () -> Int = { 1 }
     public var setDownloadConcurrencyLimit: @Sendable (Int) -> Void = { _ in }
     public var getLastEPGRefreshDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
     public var setLastEPGRefreshDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
+    public var getLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
+    public var setLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
 
     public var hideAdultContent: @Sendable () -> Bool = { false }
     public var setHideAdultContent: @Sendable (Bool) -> Void = { _ in }
@@ -136,9 +158,11 @@ extension SettingsClient: DependencyKey {
         let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
+        let epgAutoRefreshIntervalKey = "com.pureiptv.epgAutoRefreshIntervalHours"
         let autoSwitchOnEPGReminderKey = "com.pureiptv.autoSwitchOnEPGReminder"
         let downloadConcurrencyLimitKey = "com.pureiptv.downloadConcurrencyLimit"
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
+        let lastEPGAutoRefreshAttemptPrefix = "com.pureiptv.lastEPGAutoRefreshAttempt."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
@@ -162,6 +186,7 @@ extension SettingsClient: DependencyKey {
             autoPlayKey: true,
             hwAccelKey: true,
             autoUpdateEpgKey: true,
+            epgAutoRefreshIntervalKey: EPGAutoRefreshInterval.fourHours.rawValue,
             downloadConcurrencyLimitKey: 1,
             startupTabKey: "Keşfet",
             preferredAudioKey: "tr",
@@ -282,6 +307,10 @@ extension SettingsClient: DependencyKey {
             setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
             autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },
             setAutoUpdateEPG: { defaults.set($0, forKey: autoUpdateEpgKey) },
+            epgAutoRefreshInterval: {
+                EPGAutoRefreshInterval(rawValue: defaults.integer(forKey: epgAutoRefreshIntervalKey)) ?? .fourHours
+            },
+            setEPGAutoRefreshInterval: { defaults.set($0.rawValue, forKey: epgAutoRefreshIntervalKey) },
             autoSwitchOnEPGReminder: { defaults.bool(forKey: autoSwitchOnEPGReminderKey) },
             setAutoSwitchOnEPGReminder: { defaults.set($0, forKey: autoSwitchOnEPGReminderKey) },
             downloadConcurrencyLimit: { min(4, max(1, defaults.integer(forKey: downloadConcurrencyLimitKey))) },
@@ -293,6 +322,19 @@ extension SettingsClient: DependencyKey {
             setLastEPGRefreshDate: { playlistID, date in
                 guard let playlistID else { return }
                 let key = lastEPGRefreshPrefix + playlistID.uuidString
+                if let date {
+                    defaults.set(date, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getLastEPGAutoRefreshAttemptDate: { playlistID in
+                guard let playlistID else { return nil }
+                return defaults.object(forKey: lastEPGAutoRefreshAttemptPrefix + playlistID.uuidString) as? Date
+            },
+            setLastEPGAutoRefreshAttemptDate: { playlistID, date in
+                guard let playlistID else { return }
+                let key = lastEPGAutoRefreshAttemptPrefix + playlistID.uuidString
                 if let date {
                     defaults.set(date, forKey: key)
                 } else {

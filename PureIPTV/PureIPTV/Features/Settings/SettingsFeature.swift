@@ -53,6 +53,7 @@ public struct SettingsFeature {
         public var showTwoLineTVChannelTitles = false
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
+        public var epgAutoRefreshInterval: EPGAutoRefreshInterval = .fourHours
         public var autoSwitchOnEPGReminder: Bool = false
         public var downloadConcurrencyLimit: Int = 1
         public var hideAdultContent: Bool = false
@@ -161,6 +162,7 @@ public struct SettingsFeature {
         case setShowTwoLineTVChannelTitles(Bool)
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
+        case setEPGAutoRefreshInterval(EPGAutoRefreshInterval)
         case setAutoSwitchOnEPGReminder(Bool)
         case setDownloadConcurrencyLimit(Int)
         case setHideAdultContent(Bool)
@@ -272,6 +274,7 @@ public struct SettingsFeature {
                 state.showTwoLineTVChannelTitles = settingsClient.showTwoLineTVChannelTitles()
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
+                state.epgAutoRefreshInterval = settingsClient.epgAutoRefreshInterval()
                 state.autoSwitchOnEPGReminder = settingsClient.autoSwitchOnEPGReminder()
                 state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
                 state.hideAdultContent = settingsClient.hideAdultContent()
@@ -452,6 +455,10 @@ public struct SettingsFeature {
             case let .setAutoUpdateEPG(val):
                 state.autoUpdateEPG = val
                 return .run { _ in settingsClient.setAutoUpdateEPG(val) }
+
+            case let .setEPGAutoRefreshInterval(interval):
+                state.epgAutoRefreshInterval = interval
+                return .run { _ in settingsClient.setEPGAutoRefreshInterval(interval) }
 
             case let .setAutoSwitchOnEPGReminder(val):
                 state.autoSwitchOnEPGReminder = val

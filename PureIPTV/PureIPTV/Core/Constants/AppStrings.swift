@@ -493,6 +493,8 @@ public enum AppStrings {
         }
 
         public static let autoUpdateEPG = "Akışı Otomatik Güncelle".localized
+        public static let epgAutoRefreshInterval = "EPG Otomatik Yenileme Aralığı".localized
+        public static let epgAutoRefreshDescription = "Guide refresh checks this interval when the guide opens; background updates are not guaranteed.".localized
         public static let subscriptionAndStorage = "Abonelik & Depolama".localized
         public static let subscriptionStatus = "Abonelik Durumu".localized
         public static let premiumStatus = "Premium 👑".localized

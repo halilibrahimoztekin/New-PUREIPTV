@@ -2945,6 +2945,58 @@
         }
       }
     },
+    "EPG Otomatik Yenileme Aralığı" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "فترة التحديث التلقائي لدليل البرامج" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Intervall für automatische EPG-Aktualisierung" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "EPG Auto-Refresh Interval" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Intervalo de actualización automática de EPG" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Intervalle de mise à jour automatique de l’EPG" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "EPG स्वतः रीफ़्रेश अंतराल" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Interval pembaruan otomatis EPG" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Intervallo aggiornamento automatico EPG" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "EPG自動更新間隔" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "EPG 자동 새로 고침 간격" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Interval voor automatische EPG-vernieuwing" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "Interwał automatycznego odświeżania EPG" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Intervalo de atualização automática do EPG" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Intervalo de atualização automática do EPG" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Интервал автообновления телепрограммы" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Intervall för automatisk EPG-uppdatering" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "ช่วงเวลาการรีเฟรช EPG อัตโนมัติ" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "EPG Otomatik Yenileme Aralığı" } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "Інтервал автоматичного оновлення EPG" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Khoảng thời gian tự động làm mới EPG" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "EPG 自动刷新间隔" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "EPG 自動重新整理間隔" } }
+      }
+    },
+    "Guide refresh checks this interval when the guide opens; background updates are not guaranteed." : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يُتحقق من هذا الفاصل عند فتح الدليل؛ ولا يُضمن التحديث في الخلفية." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Intervall wird beim Öffnen des Programmführers geprüft; Hintergrundaktualisierungen sind nicht garantiert." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Guide refresh checks this interval when the guide opens; background updates are not guaranteed." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El intervalo se comprueba al abrir la guía; no se garantizan actualizaciones en segundo plano." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cet intervalle est vérifié à l’ouverture du guide ; les mises à jour en arrière-plan ne sont pas garanties." } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "गाइड खुलने पर इस अंतराल की जाँच होती है; बैकग्राउंड अपडेट की गारंटी नहीं है।" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Interval ini diperiksa saat panduan dibuka; pembaruan latar belakang tidak dijamin." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "L’intervallo viene controllato all’apertura della guida; gli aggiornamenti in background non sono garantiti." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "番組ガイドを開いたときにこの間隔を確認します。バックグラウンド更新は保証されません。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "가이드를 열 때 이 간격을 확인합니다. 백그라운드 업데이트는 보장되지 않습니다." } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Dit interval wordt gecontroleerd wanneer de gids wordt geopend; updates op de achtergrond zijn niet gegarandeerd." } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "Ten interwał jest sprawdzany po otwarciu przewodnika; aktualizacje w tle nie są gwarantowane." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "O intervalo é verificado quando o guia é aberto; atualizações em segundo plano não são garantidas." } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "O intervalo é verificado ao abrir o guia; as atualizações em segundo plano não são garantidas." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Интервал проверяется при открытии программы передач; фоновое обновление не гарантируется." } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Intervallet kontrolleras när guiden öppnas; bakgrundsuppdateringar garanteras inte." } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "ตรวจสอบช่วงเวลานี้เมื่อเปิดคู่มือรายการ แต่ไม่รับประกันการอัปเดตเบื้องหลัง" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yenileme aralığı rehber açıldığında kontrol edilir; arka plan güncellemesi garanti edilmez." } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "Інтервал перевіряється під час відкриття програми передач; фонове оновлення не гарантується." } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Khoảng thời gian được kiểm tra khi mở hướng dẫn; không đảm bảo cập nhật nền." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开节目指南时会检查此间隔；不保证后台更新。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開啟節目指南時會檢查此間隔；不保證背景更新。" } }
+      }
+    },
     "Aktif" : {
       "comment" : "A label that indicates a playlist is currently active.",
       "isCommentAutoGenerated" : true

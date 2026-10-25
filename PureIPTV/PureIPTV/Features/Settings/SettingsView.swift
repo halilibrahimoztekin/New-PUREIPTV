@@ -398,6 +398,19 @@ public struct SettingsView: View {
                     set: { store.send(.setAutoUpdateEPG($0)) }
                 ))
 
+                Picker(AppStrings.Settings.epgAutoRefreshInterval, selection: Binding(
+                    get: { store.epgAutoRefreshInterval },
+                    set: { store.send(.setEPGAutoRefreshInterval($0)) }
+                )) {
+                    ForEach(EPGAutoRefreshInterval.allCases) { interval in
+                        Text(interval.title).tag(interval)
+                    }
+                }
+                .disabled(!store.autoUpdateEPG)
+                Text(AppStrings.Settings.epgAutoRefreshDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
                 Button {
                     store.send(.setCustomEPGSheetPresented(true))
                 } label: {
