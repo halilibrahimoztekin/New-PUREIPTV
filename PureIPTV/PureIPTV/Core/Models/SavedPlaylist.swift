@@ -101,4 +101,23 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             channelZappingDelayMilliseconds: value
         )
     }
+
+    public func replacingConnection(
+        serverURL: String?,
+        username: String?,
+        password: String?,
+        m3uURL: String?
+    ) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            m3uURL: m3uURL,
+            userAgentOverride: userAgentOverride,
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+        )
+    }
 }

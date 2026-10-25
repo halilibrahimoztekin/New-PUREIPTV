@@ -453,6 +453,26 @@ public struct AppCoordinator {
             return .none
 
         case let .router(.routeAction(_, .playlistManagement(.delegate(.didUpdateActivePlaylistSettings(config))))):
+            if let homeState = state.routes.compactMap({ route -> HomeFeature.State? in
+                guard case let .home(home) = route.screen else { return nil }
+                return home
+            }).first {
+                let connectionChanged = homeState.config.type != config.type
+                    || homeState.config.serverURL != config.serverURL
+                    || homeState.config.username != config.username
+                    || homeState.config.password != config.password
+                    || homeState.config.m3uURL != config.m3uURL
+                if connectionChanged {
+                    var refreshedHome = HomeFeature.State(config: config)
+                    refreshedHome.selectedTab = homeState.selectedTab
+                    state.miniPlayer = nil
+                    state.isPlayerMini = false
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        state.routes = [.root(.home(refreshedHome), withNavigation: true)]
+                    }
+                    return .none
+                }
+            }
             for index in state.routes.indices {
                 guard case var .home(homeState) = state.routes[index].screen else { continue }
                 homeState.config = config

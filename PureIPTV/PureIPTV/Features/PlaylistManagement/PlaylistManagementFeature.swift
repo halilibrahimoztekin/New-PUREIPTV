@@ -12,7 +12,11 @@ public struct PlaylistManagementFeature {
         public var playlistBeingEdited: SavedPlaylist?
         public var userAgentDraft = ""
         public var channelZappingDelayDraft = 0
-        public var userAgentValidationMessage: String?
+        public var serverURLDraft = ""
+        public var usernameDraft = ""
+        public var passwordDraft = ""
+        public var m3uURLDraft = ""
+        public var playlistValidationMessage: String?
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
         public init() {}
@@ -51,6 +55,16 @@ public struct PlaylistManagementFeature {
 
     public init() {}
 
+    private static func isValidHTTPURL(_ value: String) -> Bool {
+        guard let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = components.host,
+              !host.isEmpty
+        else { return false }
+        return true
+    }
+
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Reduce { state, action in
@@ -79,7 +93,11 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = playlist
                 state.userAgentDraft = playlist.userAgentOverride ?? ""
                 state.channelZappingDelayDraft = playlist.channelZappingDelayMilliseconds ?? 0
-                state.userAgentValidationMessage = nil
+                state.serverURLDraft = playlist.serverURL ?? ""
+                state.usernameDraft = playlist.username ?? ""
+                state.passwordDraft = playlist.password ?? ""
+                state.m3uURLDraft = playlist.m3uURL ?? ""
+                state.playlistValidationMessage = nil
                 return .none
 
             case .savePlaylistSettings:
@@ -89,10 +107,28 @@ public struct PlaylistManagementFeature {
                     value.utf8.count <= 512,
                     value.rangeOfCharacter(from: .controlCharacters) == nil
                 else {
-                    state.userAgentValidationMessage = "User-Agent 512 baytı aşamaz ve kontrol karakteri içeremez."
+                    state.playlistValidationMessage = "User-Agent 512 baytı aşamaz ve kontrol karakteri içeremez."
+                    return .none
+                }
+                let serverURL = state.serverURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                let username = state.usernameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                let m3uURL = state.m3uURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if playlist.type == .xtream {
+                    guard Self.isValidHTTPURL(serverURL), !username.isEmpty, !state.passwordDraft.isEmpty else {
+                        state.playlistValidationMessage = "Xtream adresi, kullanıcı adı ve parola geçerli olmalı."
+                        return .none
+                    }
+                } else if !Self.isValidHTTPURL(m3uURL) {
+                    state.playlistValidationMessage = "M3U adresi geçerli bir HTTP veya HTTPS URL olmalı."
                     return .none
                 }
                 let updatedPlaylist = playlist
+                    .replacingConnection(
+                        serverURL: playlist.type == .xtream ? serverURL : nil,
+                        username: playlist.type == .xtream ? username : nil,
+                        password: playlist.type == .xtream ? state.passwordDraft : nil,
+                        m3uURL: playlist.type == .m3u ? m3uURL : nil
+                    )
                     .replacingUserAgentOverride(value.isEmpty ? nil : value)
                     .replacingChannelZappingDelayMilliseconds(state.channelZappingDelayDraft)
                 playlistRepository.updatePlaylist(updatedPlaylist)
@@ -100,7 +136,11 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
-                state.userAgentValidationMessage = nil
+                state.serverURLDraft = ""
+                state.usernameDraft = ""
+                state.passwordDraft = ""
+                state.m3uURLDraft = ""
+                state.playlistValidationMessage = nil
                 guard
                     state.activePlaylistID == updatedPlaylist.id,
                     let config = updatedPlaylist.toPlaylistConfig()
@@ -111,7 +151,11 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
-                state.userAgentValidationMessage = nil
+                state.serverURLDraft = ""
+                state.usernameDraft = ""
+                state.passwordDraft = ""
+                state.m3uURLDraft = ""
+                state.playlistValidationMessage = nil
                 return .none
 
             case let .confirmDeletePlaylist(playlist):

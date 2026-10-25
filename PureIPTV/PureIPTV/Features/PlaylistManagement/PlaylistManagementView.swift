@@ -271,6 +271,23 @@ public struct PlaylistManagementView: View {
     private func playlistSettingsForm(for playlist: SavedPlaylist) -> some View {
         Form {
             Section(playlist.name) {
+                if playlist.type == .xtream {
+                    TextField("Server URL", text: $store.serverURLDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    TextField("Username", text: $store.usernameDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField("Password", text: $store.passwordDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    TextField("M3U URL", text: $store.m3uURLDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                }
                 TextField("User-Agent", text: $store.userAgentDraft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -302,7 +319,7 @@ public struct PlaylistManagementView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                if let message = store.userAgentValidationMessage {
+                if let message = store.playlistValidationMessage {
                     Text(message)
                         .font(.footnote)
                         .foregroundStyle(.red)
