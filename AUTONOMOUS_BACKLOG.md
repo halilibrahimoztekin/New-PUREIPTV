@@ -1439,8 +1439,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — EPG ve player program saatleri tek yerel biçimi kullanıyor ve değişen cihaz locale’ine bağlanıyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
-### 153. [PENDING] Rehberde Program Adı ve Açıklamasıyla Arama
+### 153. [DONE] Rehberde Program Adı ve Açıklamasıyla Arama
 - **Fırsat:** Kanal adına ek olarak yayınlanan/gelecek program başlığı ve özetinde arama, doğrudan zaman/kanal odağına atlama akışını değerlendir.
+- **Kod bulgusu:** Global Search ve EPG timeline sorguları program başlığı/açıklamasında eşleşme yapıyor; Timeline eşleşen kanalı filtreleyip program kartını vurguluyor. Ancak seçili arşiv günü/yatay zaman ve dikey kanal odağı arama sonucuna taşınmıyor.
+- **Uygulama:** EPG timeline arama eşleşmelerinden güncel saate en yakın programı bulup gerekirse ilgili günü seçiyor, yatay zamanı programın başlangıcına yaklaştırıyor ve dikey ScrollView’i kanal satırına getiriyor. tvOS’ta program odağı eşleşmeye taşınıyor. Arama silinince hedef kimlikleri temizleniyor; aynı kanala yeniden arama kaydırmayı tekrar tetikliyor. Localization kataloğuna dokunulmadı.
+- **İnceleme ve derleme:** Yaşam döngüsü/odak incelemesi onaylandı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; test, uygulama açılışı veya playback çalıştırılmadı.
+- **Temizlik:** #153 geçici DerivedData iOS (2.5 GB), tvOS (2.4 GB) ve build logları, açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — EPG program araması artık eşleşen kanal ve zaman konumuna doğrudan odaklanıyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 
 ### 154. [PENDING] Büyük Rehberlerde Yatay Zaman Navigasyonunu Sadeleştirme

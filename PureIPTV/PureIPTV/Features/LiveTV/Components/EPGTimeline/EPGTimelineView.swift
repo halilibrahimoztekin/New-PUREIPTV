@@ -41,6 +41,8 @@ public struct EPGTimelineView: View {
     @State private var isUserDragging: Bool = false
     @State private var hasCenteredOnNow: Bool = false
     @State private var shimmerPhase: CGFloat = 0
+    @State private var lastSearchNavigationKey: String?
+    @State private var pendingSearchChannelID: String?
     @State private var logoEditorChannel: MediaModels.Item?
     @State private var logoURLDraft = ""
     #if os(tvOS)
@@ -187,6 +189,16 @@ public struct EPGTimelineView: View {
                         focusedChannelID: nil
                     ))
                 #endif
+            }
+            .onChange(of: store.searchQuery) { _, query in
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    lastSearchNavigationKey = nil
+                    pendingSearchChannelID = nil
+                }
+                navigateToSearchMatch(query, availableWidth: availableGridWidth)
+            }
+            .onChange(of: store.epgData) { _, _ in
+                navigateToSearchMatch(store.searchQuery, availableWidth: availableGridWidth)
             }
         }
         .sheet(isPresented: Binding(
@@ -650,67 +662,76 @@ public struct EPGTimelineView: View {
     // MARK: - Virtualized Body
 
     private func channelGridScrollView(availableWidth: CGFloat, containerHeight _: CGFloat) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 2) {
-                ForEach(store.filteredChannels) { channel in
-                    HStack(spacing: 0) {
-                        // 100% Pinned Left Channel Cell
-                        stickyChannelCell(channel)
-                            .frame(width: channelColumnWidth, height: rowHeight)
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 2) {
+                    ForEach(store.filteredChannels) { channel in
+                        HStack(spacing: 0) {
+                            // 100% Pinned Left Channel Cell
+                            stickyChannelCell(channel)
+                                .frame(width: channelColumnWidth, height: rowHeight)
 
-                        // Synchronized Program Strip
-                        ZStack(alignment: .leading) {
-                            Color(hex: "#101014")
+                            // Synchronized Program Strip
+                            ZStack(alignment: .leading) {
+                                Color(hex: "#101014")
 
-                            programsRow(for: channel)
-                                .offset(x: -horizontalOffset)
+                                programsRow(for: channel)
+                                    .offset(x: -horizontalOffset)
 
-                            // Live Current Time Vertical Laser Line Indicator (only when viewing today)
-                            if store.isViewingToday {
-                                let nowX = currentNowOffset - horizontalOffset
-                                if nowX >= 0, nowX <= availableWidth {
-                                    LiveTimeIndicatorView(height: rowHeight, showTopBadge: false)
-                                        .offset(x: nowX)
-                                        .zIndex(50)
+                                // Live Current Time Vertical Laser Line Indicator (only when viewing today)
+                                if store.isViewingToday {
+                                    let nowX = currentNowOffset - horizontalOffset
+                                    if nowX >= 0, nowX <= availableWidth {
+                                        LiveTimeIndicatorView(height: rowHeight, showTopBadge: false)
+                                            .offset(x: nowX)
+                                            .zIndex(50)
+                                    }
                                 }
                             }
+                            .frame(width: availableWidth, height: rowHeight)
+                            .clipped()
                         }
-                        .frame(width: availableWidth, height: rowHeight)
-                        .clipped()
-                    }
-                    .frame(height: rowHeight)
-                    .onAppear {
-                        // On-demand fetch as user scrolls vertically
-                        store.send(.fetchEPG(streamID: channel.id))
+                        .frame(height: rowHeight)
+                        .id(channel.id)
+                        .onAppear {
+                            // On-demand fetch as user scrolls vertically
+                            store.send(.fetchEPG(streamID: channel.id))
+                        }
                     }
                 }
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
+            #if !os(tvOS)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { val in
+                        if !isUserDragging {
+                            isUserDragging = true
+                            dragStartOffset = horizontalOffset
+                        }
+                        let maxOffset = max(0, totalTimelineWidth - availableWidth)
+                        let newOffset = dragStartOffset - val.translation.width
+                        horizontalOffset = max(0, min(maxOffset, newOffset))
+                    }
+                    .onEnded { val in
+                        isUserDragging = false
+                        let maxOffset = max(0, totalTimelineWidth - availableWidth)
+                        let projectedOffset = horizontalOffset - (val.predictedEndTranslation.width - val.translation.width) * 0.4
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            horizontalOffset = max(0, min(maxOffset, projectedOffset))
+                        }
+                    }
+            )
+            #endif
+            .onChange(of: pendingSearchChannelID) { _, channelID in
+                guard let channelID else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    scrollProxy.scrollTo(channelID, anchor: .center)
+                }
+            }
         }
-        #if os(tvOS)
-        .focusSection()
-        #endif
-        #if !os(tvOS)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 10)
-                .onChanged { val in
-                    if !isUserDragging {
-                        isUserDragging = true
-                        dragStartOffset = horizontalOffset
-                    }
-                    let maxOffset = max(0, totalTimelineWidth - availableWidth)
-                    let newOffset = dragStartOffset - val.translation.width
-                    horizontalOffset = max(0, min(maxOffset, newOffset))
-                }
-                .onEnded { val in
-                    isUserDragging = false
-                    let maxOffset = max(0, totalTimelineWidth - availableWidth)
-                    let projectedOffset = horizontalOffset - (val.predictedEndTranslation.width - val.translation.width) * 0.4
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        horizontalOffset = max(0, min(maxOffset, projectedOffset))
-                    }
-                }
-        )
-        #endif
     }
 
     // MARK: - Sticky Channel Cell
@@ -1790,6 +1811,51 @@ public struct EPGTimelineView: View {
         let maxOffset = max(0, totalTimelineWidth - availableWidth)
         let centered = currentNowOffset - availableWidth * 0.35
         return max(0, min(maxOffset, centered))
+    }
+
+    private func navigateToSearchMatch(_ query: String, availableWidth: CGFloat) {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+
+        let matches = store.filteredChannels.flatMap { channel in
+            (store.epgData[channel.id] ?? []).compactMap { program -> (MediaModels.Item, EPGProgram)? in
+                guard program.title.localizedCaseInsensitiveContains(query)
+                    || program.description.localizedCaseInsensitiveContains(query) else { return nil }
+                return (channel, program)
+            }
+        }
+        guard let match = matches.min(by: { lhs, rhs in
+            abs(lhs.1.startTime.timeIntervalSince(store.currentTime))
+                < abs(rhs.1.startTime.timeIntervalSince(store.currentTime))
+        }) else { return }
+
+        let key = "\(query)|\(match.0.id)|\(match.1.id)"
+        guard key != lastSearchNavigationKey else { return }
+        lastSearchNavigationKey = key
+        if !Calendar.current.isDate(match.1.startTime, inSameDayAs: store.selectedDate) {
+            store.send(.selectDate(match.1.startTime))
+        }
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: match.1.startTime)
+        let timelineAnchor: Date
+        if calendar.isDateInToday(match.1.startTime) {
+            let currentHour = calendar.dateInterval(of: .hour, for: store.currentTime)?.start ?? store.currentTime
+            timelineAnchor = calendar.date(byAdding: .hour, value: -pastHoursAnchor, to: currentHour) ?? currentHour
+        } else {
+            timelineAnchor = dayStart
+        }
+        let targetX = CGFloat(match.1.startTime.timeIntervalSince(timelineAnchor) / 3600) * hourWidth
+            - availableWidth * 0.2
+        let maxOffset = max(0, totalTimelineWidth - availableWidth)
+        withAnimation(.easeInOut(duration: 0.3)) {
+            horizontalOffset = min(maxOffset, max(0, targetX))
+        }
+        pendingSearchChannelID = match.0.id
+        #if os(tvOS)
+            focusedChannelId = nil
+            focusedProgramId = match.1.id
+        #endif
     }
 
     private func isProgramMatchingSearch(_ program: EPGProgram) -> Bool {
