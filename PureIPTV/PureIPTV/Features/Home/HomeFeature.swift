@@ -87,8 +87,9 @@ public struct HomeFeature {
             }
         }
 
-        public init(config: PlaylistConfig) {
+        public init(config: PlaylistConfig, deferDashboardRefresh: Bool = false) {
             self.config = config
+            dashboard.deferInitialRemoteRefresh = deferDashboardRefresh
 
             @Dependency(\.settingsClient) var settingsClient
             let tabString = settingsClient.defaultStartupTab()

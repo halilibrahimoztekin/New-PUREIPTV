@@ -445,7 +445,7 @@ public struct AppCoordinator {
                 if let activePlaylist = playlistRepository.getActivePlaylist(),
                    let config = activePlaylist.toPlaylistConfig()
                 {
-                    state.routes = [.root(.home(HomeFeature.State(config: config)), withNavigation: true)]
+                    state.routes = [.root(.home(HomeFeature.State(config: config, deferDashboardRefresh: true)), withNavigation: true)]
                 } else {
                     state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
                 }

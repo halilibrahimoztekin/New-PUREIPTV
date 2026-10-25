@@ -40,6 +40,27 @@
                             VPNStatusBadge(compact: true)
 
                             Button {
+                                store.send(.refreshTapped)
+                            } label: {
+                                Label {
+                                    if let refreshedAt = store.lastRemoteRefreshAt {
+                                        Text(refreshedAt, style: .relative)
+                                    } else {
+                                        Text(AppStrings.Common.retry)
+                                    }
+                                } icon: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color(hex: "#1F1F23"), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(AppStrings.Common.retry)
+
+                            Button {
                                 isCategoryManagementPresented = true
                             } label: {
                                 Image(systemName: "pin")

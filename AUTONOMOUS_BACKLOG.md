@@ -1421,7 +1421,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Ana LiveTV favori listesi, EPG timeline ile senkronize ve gizli favori sırasını bozmayan kullanıcı sıralaması sunuyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
-### 151. [PENDING] Playlist Değiştirirken Yenilemeyi Kullanıcıya Bırakma
+### 151. [IN_PROGRESS] Playlist Değiştirirken Yenilemeyi Kullanıcıya Bırakma
+- **Kod bulgusu:** Playlist değişikliği Home’u baştan kuruyor; Dashboard `onAppear` playlist değişikliği, 15 dakikalık yaş veya boş içerik halinde katalogları ve görünür spor EPG’sini otomatik yeniden çekiyordu. Cache yalnız rafları saklıyor, güncelleme zamanını saklamıyordu.
+- **Uygulama:** Playlist yönetiminden playlist değiştirildiğinde Dashboard’ın ilk açılışı cache’i gösterip otomatik katalog/EPG ağ isteğini erteliyor. Normal uygulama açılışındaki ilk yükleme korunuyor. Dashboard’da kullanıcı yenileme düğmesi ve cache’e yazılan son başarılı yenilemenin göreli zamanı gösteriliyor; eski cache JSON’ları isteğe bağlı timestamp alanıyla geriye dönük okunuyor. Localization kataloğuna dokunulmadı.
+- **İnceleme ve derleme:** Yaşam döngüsü/cache incelemesi onaylandı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; test, uygulama açılışı veya playback çalıştırılmadı.
+- **Temizlik:** #151 geçici DerivedData iOS (2.5 GB), tvOS (2.4 GB) ve logları, açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData’daki `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — Playlist switch sonrası Dashboard yenilemesi kullanıcı kontrolünde; son başarılı yenileme zamanı saklanıyor ve görünür.
 - **Fırsat:** Playlist seçimi sırasında beklenmedik otomatik refresh’i önleyip açık “yenile” eylemi ve son güncelleme bilgisini değerlendirmek.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 

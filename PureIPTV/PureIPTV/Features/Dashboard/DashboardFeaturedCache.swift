@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 enum DashboardFeaturedCache {
     struct Snapshot: Codable, Sendable {
+        let updatedAt: Date?
         let channels: [Item]
         let vods: [Item]
         let series: [Item]
@@ -81,6 +82,7 @@ enum DashboardFeaturedCache {
     ) {
         guard let playlistID else { return }
         let snapshot = Snapshot(
+            updatedAt: Date(),
             channels: channels.map(Item.init),
             vods: vods.map(Item.init),
             series: series.map(Item.init),

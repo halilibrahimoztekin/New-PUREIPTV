@@ -98,6 +98,7 @@ public struct DashboardFeature {
         public var activeRefreshID: UUID?
         public var activeEPGRefreshID: UUID?
         public var lastSportsHubVisibility: Bool?
+        public var deferInitialRemoteRefresh = false
 
         public var favoriteItems: [FavoriteItem] = []
         public var favoriteSeriesUnwatchedEpisodeCounts: [String: Int] = [:]
@@ -123,6 +124,7 @@ public struct DashboardFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case onDisappear
+        case refreshTapped
         case openManagePlaylistsTapped
         case loadFeaturedData(config: PlaylistConfig, playlistID: UUID?, hideAdult: Bool, loadEPGEvents: Bool, refreshID: UUID)
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
@@ -316,14 +318,17 @@ public struct DashboardFeature {
                         else { return }
                         $0[$1.key] = reason
                     }
-                    state.isLoading = snapshot == nil
+                    state.lastRemoteRefreshAt = snapshot?.updatedAt
+                    state.isLoading = snapshot == nil && !state.deferInitialRemoteRefresh
                 }
-                let shouldReload = !state.hasLoadedRemoteData
-                    || playlistChanged
-                    || preferencesChanged
-                    || sportsHubVisibilityChanged
-                    || (state.lastRemoteRefreshAt.map { Date().timeIntervalSince($0) >= 15 * 60 } ?? true)
-                    || (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                let shouldReload = !state.deferInitialRemoteRefresh && (
+                    !state.hasLoadedRemoteData
+                        || playlistChanged
+                        || preferencesChanged
+                        || sportsHubVisibilityChanged
+                        || (state.lastRemoteRefreshAt.map { Date().timeIntervalSince($0) >= 15 * 60 } ?? true)
+                        || (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                )
                 state.activePlaylistID = playlistID
                 state.lastAdultHidden = currentAdultHidden
                 state.lastSportsHubVisibility = isSportsHubVisible
@@ -335,7 +340,7 @@ public struct DashboardFeature {
                 let hasCurrentEPGCandidates = state.epgCandidatePlaylistID == playlistID
                     && state.epgCandidateSourceLoaded
                 let remoteEffect: Effect<Action>
-                if shouldReload || (needsEPGLoad && !hasCurrentEPGCandidates) {
+                if shouldReload || (needsEPGLoad && !hasCurrentEPGCandidates && !state.deferInitialRemoteRefresh) {
                     let refreshID = UUID()
                     state.activeRefreshID = refreshID
                     state.activeEPGRefreshID = isSportsHubVisible ? refreshID : nil
@@ -346,7 +351,7 @@ public struct DashboardFeature {
                         loadEPGEvents: isSportsHubVisible,
                         refreshID: refreshID
                     ))
-                } else if needsEPGLoad {
+                } else if needsEPGLoad, !state.deferInitialRemoteRefresh {
                     let refreshID = UUID()
                     state.activeEPGRefreshID = refreshID
                     remoteEffect = .send(.loadEPGEvents(
@@ -403,6 +408,20 @@ public struct DashboardFeature {
                     awardEffect = .none
                 }
                 return .merge(localEffect, remoteEffect, notificationEffect, movieRatingEffect, awardEffect)
+
+            case .refreshTapped:
+                guard let config = state.activePlaylistConfig else { return .none }
+                state.deferInitialRemoteRefresh = false
+                let refreshID = UUID()
+                state.activeRefreshID = refreshID
+                state.activeEPGRefreshID = state.isSportsHubVisible ? refreshID : nil
+                return .send(.loadFeaturedData(
+                    config: config,
+                    playlistID: state.activePlaylistID,
+                    hideAdult: state.lastAdultHidden ?? settingsClient.hideAdultContent(),
+                    loadEPGEvents: state.isSportsHubVisible,
+                    refreshID: refreshID
+                ))
 
             case .onDisappear:
                 if state.activeEPGRefreshID != nil {

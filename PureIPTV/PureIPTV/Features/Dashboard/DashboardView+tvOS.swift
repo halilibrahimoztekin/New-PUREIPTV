@@ -42,6 +42,22 @@
                                 Spacer()
                                 VPNStatusBadge(compact: false)
                                 Button {
+                                    store.send(.refreshTapped)
+                                } label: {
+                                    Label {
+                                        if let refreshedAt = store.lastRemoteRefreshAt {
+                                            Text(refreshedAt, style: .relative)
+                                        } else {
+                                            Text(AppStrings.Common.retry)
+                                        }
+                                    } icon: {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                    .font(.system(size: 18, weight: .semibold))
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                                .accessibilityLabel(AppStrings.Common.retry)
+                                Button {
                                     isCategoryManagementPresented = true
                                 } label: {
                                     Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
