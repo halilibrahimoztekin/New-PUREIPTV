@@ -98,7 +98,6 @@
                     }
                     .buttonStyle(.tvCapsule) // Use custom style instead of plain
                     .focused($isFocused)
-                    .focusable()
                     .padding(.bottom, 80) // tvOS safe area
                 }
             }

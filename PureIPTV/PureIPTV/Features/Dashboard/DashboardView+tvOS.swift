@@ -85,6 +85,7 @@
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: store.isLoading)
                     }
+                    .focusSection()
                 }
             }
             .onAppear {

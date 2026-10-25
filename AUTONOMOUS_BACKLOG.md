@@ -1223,7 +1223,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DEFERRED]` — ayrı kategori yenilemesi için kaynağın gerçek kategori şemasını ve endpoint’ini tanımadan tüm EPG’yi “event” diye sınıflandırmak yanlış; provider-specific veri erişimi bu projede yok. Yenileme modeli sağlayıcı kapsamı belirlendikten sonra tekrar ele alınmalı.
 - **Durum:** `[DEFERRED]` — sahte event kategorisi yaratmadan mevcut ortak EPG yenilemesi korunuyor; bu incelemede kod/build değişikliği gerekmedi.
 
-### 127. [IN_PROGRESS] PIN ile Kilitli Kategoriyi Geçici Açma
+### 127. [DONE] PIN ile Kilitli Kategoriyi Geçici Açma
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları film kategorilerinde gizleme yerine PIN girilene kadar kilitleme talep ediyor: https://www.reddit.com/r/TiviMate/comments/1x5b02o/new_update/ .
 - **Kod incelemesi:** Live TV ve VOD kilitli/adult kategori seçerken PIN soruyor, ancak `unlockedCategoryIDs` reducer state’inde zaman aşımı olmadan kalıyordu. Başarılı PIN sonrası erişim profile/playlist kapsamına bağlı değildi; profil veya kaynak değiştirilirse açık kalma riski vardı.
 - **Uygulama:** PIN doğrulaması ilgili Live TV veya VOD kategori erişimini 15 dakika açıyor. Süre dolunca kategori seçimi temizlenip PIN kilidi yeniden gösteriliyor. Erişim profile+playlist değişince de sıfırlanıyor ve diske yazılmıyor. PIN ekranı süreyi kullanıcıya bildiriyor.
@@ -1319,3 +1319,48 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#139 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
 - **#137 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) açık dosya olmadığı doğrulandıktan sonra kaldırıldı; `SourcePackages` ve SDK önbellekleri korundu.
 - **#138 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (yaklaşık 3.0 GB) ve `Logs` (yaklaşık 1.3 MB) açık dosya kontrolünden sonra kaldırıldı; `SourcePackages` ve SDK önbellekleri korundu.
+
+### 140. [DONE] EPG Ekranı Kapanıp Açılırken Timer, Preview ve Odak Yaşam Döngüsünü Düzeltme
+- **Canlı keşif (25 Ekim 2026):** IPTVX sürüm notları EPG kategori performansı, Theater preview kapanış çökmesi ve yayın hatasından sonra retry/source/player kurtarması bildirdi. Kullanıcı raporları Apple TV’de rehberin eksik veya eski veri göstermesinden ve kanal/rehber gezinmesinde odak sorunlarından söz ediyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/ · https://www.reddit.com/r/iptvdeck/comments/1x2o22t/apple_tv_app_navigation/
+- **Kod incelemesi:** EPG görünümü her görünüşünde iptal edilemeyen 60 saniyelik timer başlatıyordu. iOS Live TV alt görünümü saklanıp yeniden görünür olduğunda state korunurken timer çoğalabiliyordu. Reminder/favorite/recent yüklemeleri ve preview debounce için görünüm yaşam döngüsü iptali yoktu. tvOS EPG yatay filtreleri ve dikey grid focus section sınırlarından yoksundu; başka bir tvOS rehberinde fokus değişince animasyonlu `scrollTo` tetikleniyordu.
+- **Uygulama:** EPG view kendi kayboluşunda 60 saniyelik timer’ı, preview debounce/playback’ini ve reminder/favorite/recent yüklemelerini iptal ediyor. Preview yanıtları yalnız aktif kanal state’i güncelliyor. tvOS EPG filtre/grid ve Dashboard focus section’ları eklendi; refresh düğmesi sync sırasında odaktan çıkarılmıyor; EPGGuide focus değişiminde zorla scroll kaldırıldı; Splash Button’daki fazladan `.focusable()` silindi.
+- **PR Reviewer:** İlk incelemede iptal edilen preview hatasının stale state yazabilme ihtimali bulundu. Cancellation guard ve aktif kanal ID kontrolleri eklendi; reviewer güncel reducer bölümünü `[APPROVED]` olarak yeniden inceledi.
+- **Doğrulama:** iOS Release Simulator ve tvOS Release Simulator compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Build dışında test, simulator başlatma, playback veya uygulama akışı çalıştırılmadı. Mevcut proje genelindeki Swift 6 concurrency uyarıları build’de görüldü.
+- **#140 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task140` (7.3 GB) ve iOS/tvOS build logları, build kapandıktan sonra silindi. PureIPTV normal DerivedData’sındaki `Build` (1.8 GB), `Index.noindex` (946 MB), `Logs` (1.2 MB), `SymbolCache` (15 MB), `TextIndex` (1.3 MB) ve `Localization` (3.6 MB) açık handle olmadığı doğrulanıp silindi. `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) korundu. Başka proje yolları temizlenmedi.
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca compile-only Xcode build’leri alındı.
+
+### 141. [IN_PROGRESS] EPG’de Sekme Değişiminden Sonra Tarih, Kanal ve Kaydırma Konumunu Koruma
+- **Fırsat:** Rehber gizlenip tekrar açıldığında seçilen günü ve kanal bağlamını kaybetmeden aynı gezinme noktasına dönmek; mevcut “izlenen kanala dön” eyleminden farklı olarak arşiv tarihi ve yatay zaman konumunu da korumak.
+- **Kaynak:** https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv
+
+### 142. [PENDING] EPG Program Kategorilerini Dakikalık Timer’dan Bağımsız Türetme
+- **Fırsat:** Her saat/timer yenilemesinde tüm programları tekrar düzleştirip sıralamak yerine playlist ve EPG revision değişiminde kategorileri yeniden hesaplayarak büyük rehberlerde UI işini azaltmak.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 143. [PENDING] EPG Verisi İçin Playlist Bazlı Güncellik Tanılaması
+- **Fırsat:** Rehberde eksik/eski program verisini tanımak için son başarılı XMLTV yenilemesi, seçili playlist kapsamı ve kanal bazında boş sonuçları kullanıcıya açıkça göstermek.
+- **Kaynak:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
+
+### 144. [PENDING] tvOS EPG’de Catch-up Programlarına Doğal Kumanda Yön Geçişi
+- **Fırsat:** Kanal listesi, zaman çizelgesi ve catch-up program düğmeleri arasında ek seçim/ekran kapatma gerektirmeyen, görünür odak köprüleri kurmak.
+- **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1qyidkh/appletv_guide_catchup_browsing/ · https://www.reddit.com/r/iptvdeck/comments/1x2o22t/apple_tv_app_navigation/
+
+### 145. [PENDING] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
+- **Fırsat:** Başlatma ve seek işini yüksek kare hızlı yayınlarda ölçüp player ilk karesini geciktiren adımları ayırmak; iyileştirmeyi yalnız ölçümle doğrulanmış yollara uygulamak.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 146. [PENDING] Player Hata Kurtarmasında Oynatma Konumunu Koruma
+- **Fırsat:** Retry, alternatif kaynak ve player değiştirirken uygun içeriklerde son anlamlı seek konumunu kaydedip kullanıcıyı başa döndürmemek.
+- **Kaynak:** https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv
+
+### 147. [PENDING] Player Aksiyonlarını tvOS ve Yerelleştirilmiş Boyutlarda Düzenleme
+- **Fırsat:** Başlat/başa dön, bölüm, ses ve altyazı eylemlerini TV mesafesinde okunur gruplara ayırıp uzun çevirilerde kesilme/örtüşme riskini incelemek.
+- **Kaynak:** https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv
+
+### 148. [PENDING] Büyük Playlistlerde tvOS Katalog ve Rehber Açılışını Hafifletme
+- **Fırsat:** Büyük playlistlerde kategori, grid ve rehber açılış gecikmesini ölçmek; gereksiz tam katalog yüklemesini ve ana actor üzerindeki türetim işini azaltmak.
+- **Kaynak:** https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801 · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 149. [PENDING] tvOS EPG Odak Dönüşünü ve Önizleme Kapanışını Sağlamlaştırma
+- **Fırsat:** Kanal listesinden player’a gidip geri dönerken fokus hedefini korumayı ve rehber preview kapanışını güvenli kılmayı büyük playlistlerde doğrulamak.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv

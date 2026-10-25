@@ -10,6 +10,12 @@ private func nextFavoriteChannelOrderRevision(after current: UInt64) -> UInt64 {
 private nonisolated enum EPGTimelineCancelID: Hashable, Sendable {
     case request(String)
     case clearSyncStatusMessage
+    case clockTimer
+    case previewDebounce
+    case previewPlayback
+    case loadReminders
+    case loadFavorites
+    case loadRecentChannels
 }
 
 @Reducer
@@ -203,6 +209,7 @@ public struct EPGTimelineFeature {
 
     public enum Action {
         case onAppear
+        case onDisappear
         case loadRecentChannels
         case recentChannelsLoaded(requestID: UUID, ids: Set<String>, revision: UInt64, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case removeRecentChannel(MediaModels.Item)
@@ -300,7 +307,8 @@ public struct EPGTimelineFeature {
                         for await _ in clock.timer(interval: .seconds(60)) {
                             await send(.updateCurrentTime)
                         }
-                    },
+                    }
+                    .cancellable(id: EPGTimelineCancelID.clockTimer, cancelInFlight: true),
                 ]
                 if shouldAutoSync, state.config.playlistID != nil {
                     let referenceDate = max(state.lastSyncTimestamp ?? .distantPast, lastAutoAttempt ?? .distantPast)
@@ -308,6 +316,31 @@ public struct EPGTimelineFeature {
                         settingsClient.setLastEPGAutoRefreshAttemptDate(state.config.playlistID, Date())
                         effects.append(.send(.performSync(forced: false)))
                     }
+                }
+                return .merge(effects)
+
+            case .onDisappear:
+                let shouldStopPreview = state.activePreviewChannel != nil || state.isPiPActive
+                state.activePreviewChannel = nil
+                state.isPiPActive = false
+                state.isPreviewLoading = false
+                state.previewErrorMessage = nil
+                state.focusedChannelID = nil
+                state.reminderLoadRequestID = nil
+                state.favoriteLoadRequestID = nil
+                state.recentChannelLoadRequestID = nil
+                var effects: [Effect<Action>] = [
+                    .cancel(id: EPGTimelineCancelID.clockTimer),
+                    .cancel(id: EPGTimelineCancelID.previewDebounce),
+                    .cancel(id: EPGTimelineCancelID.previewPlayback),
+                    .cancel(id: EPGTimelineCancelID.loadReminders),
+                    .cancel(id: EPGTimelineCancelID.loadFavorites),
+                    .cancel(id: EPGTimelineCancelID.loadRecentChannels),
+                ]
+                if shouldStopPreview {
+                    effects.append(.run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    })
                 }
                 return .merge(effects)
 
@@ -348,6 +381,7 @@ public struct EPGTimelineFeature {
                         profileScope: profileScope
                     ))
                 }
+                .cancellable(id: EPGTimelineCancelID.loadRecentChannels, cancelInFlight: true)
 
             case let .recentChannelsLoaded(requestID, ids, revision, playlistID, profileScope):
                 guard
@@ -479,6 +513,7 @@ public struct EPGTimelineFeature {
                     let ids = await reminderClient.getScheduledReminderIDs()
                     await send(.remindersLoaded(requestID: requestID, ids))
                 }
+                .cancellable(id: EPGTimelineCancelID.loadReminders, cancelInFlight: true)
 
             case let .remindersLoaded(requestID, ids):
                 guard state.reminderLoadRequestID == requestID else { return .none }
@@ -523,6 +558,7 @@ public struct EPGTimelineFeature {
                         scope: profileScope
                     ))
                 }
+                .cancellable(id: EPGTimelineCancelID.loadFavorites, cancelInFlight: true)
 
             case let .favoritesLoaded(requestID, ids, defaultIDs, storedOrder, playlistID, scope):
                 guard
@@ -998,7 +1034,13 @@ public struct EPGTimelineFeature {
                 }
 
             case .closeTapped:
+                state.activePreviewChannel = nil
+                state.isPiPActive = false
+                state.isPreviewLoading = false
+                state.previewErrorMessage = nil
                 return .concatenate(
+                    .cancel(id: EPGTimelineCancelID.previewDebounce),
+                    .cancel(id: EPGTimelineCancelID.previewPlayback),
                     .run { [previewPlayerClient] _ in
                         await previewPlayerClient.stopPreview()
                     },
@@ -1008,21 +1050,17 @@ public struct EPGTimelineFeature {
             case let .channelFocused(channel):
                 state.focusedChannelID = channel?.id
                 guard state.isAutoPreviewOnFocusEnabled, let channel else {
-                    return .none
+                    return .cancel(id: EPGTimelineCancelID.previewDebounce)
                 }
                 if state.activePreviewChannel?.id == channel.id, state.isPiPActive {
                     return .none
-                }
-
-                enum CancelID: Hashable {
-                    case previewDebounce
                 }
 
                 return .run { [clock] send in
                     try await clock.sleep(for: .milliseconds(400))
                     await send(.startPreviewDebounce(channel))
                 }
-                .cancellable(id: CancelID.previewDebounce, cancelInFlight: true)
+                .cancellable(id: EPGTimelineCancelID.previewDebounce, cancelInFlight: true)
 
             case let .startPreviewDebounce(channel):
                 state.activePreviewChannel = channel
@@ -1035,16 +1073,20 @@ public struct EPGTimelineFeature {
                         try await previewPlayerClient.playPreview(channel)
                         await send(.previewStarted(channelID: channel.id))
                     } catch {
+                        guard !Task.isCancelled else { return }
                         await send(.previewFailed(channelID: channel.id, message: error.localizedDescription))
                     }
                 }
+                .cancellable(id: EPGTimelineCancelID.previewPlayback, cancelInFlight: true)
 
-            case .previewStarted:
+            case let .previewStarted(channelID):
+                guard state.activePreviewChannel?.id == channelID else { return .none }
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
                 return .none
 
-            case let .previewFailed(_, message):
+            case let .previewFailed(channelID, message):
+                guard state.activePreviewChannel?.id == channelID else { return .none }
                 state.isPreviewLoading = false
                 state.previewErrorMessage = message
                 return .none
@@ -1082,9 +1124,13 @@ public struct EPGTimelineFeature {
                     state.activePreviewChannel = nil
                     state.isPiPActive = false
                     state.isPreviewLoading = false
-                    return .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
-                    }
+                    return .concatenate(
+                        .cancel(id: EPGTimelineCancelID.previewDebounce),
+                        .cancel(id: EPGTimelineCancelID.previewPlayback),
+                        .run { [previewPlayerClient] _ in
+                            await previewPlayerClient.stopPreview()
+                        }
+                    )
                 } else if let channel {
                     return .send(.startPreviewDebounce(channel))
                 } else {
@@ -1096,9 +1142,13 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = false
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
-                return .run { [previewPlayerClient] _ in
-                    await previewPlayerClient.stopPreview()
-                }
+                return .concatenate(
+                    .cancel(id: EPGTimelineCancelID.previewDebounce),
+                    .cancel(id: EPGTimelineCancelID.previewPlayback),
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    }
+                )
 
             case .delegate:
                 return .none

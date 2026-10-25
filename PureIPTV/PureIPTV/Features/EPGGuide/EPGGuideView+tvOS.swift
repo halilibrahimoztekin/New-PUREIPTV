@@ -93,25 +93,20 @@ import SwiftVLC
                 .padding(.bottom, 20)
 
                 // Channels List
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 10) {
-                            ForEach(store.channels) { channel in
-                                channelRow(channel)
-                                    .id(channel.id)
-                            }
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 10) {
+                        ForEach(store.channels) { channel in
+                            channelRow(channel)
+                                .id(channel.id)
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 8)
                     }
-                    .onChange(of: focusedChannelID) { _, newID in
-                        if let newID, let matchingChannel = store.channels.first(where: { $0.id == newID }) {
-                            if store.selectedChannel?.id != matchingChannel.id {
-                                store.send(.selectChannel(matchingChannel))
-                            }
-                            withAnimation {
-                                proxy.scrollTo(newID, anchor: .center)
-                            }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 8)
+                }
+                .onChange(of: focusedChannelID) { _, newID in
+                    if let newID, let matchingChannel = store.channels.first(where: { $0.id == newID }) {
+                        if store.selectedChannel?.id != matchingChannel.id {
+                            store.send(.selectChannel(matchingChannel))
                         }
                     }
                 }

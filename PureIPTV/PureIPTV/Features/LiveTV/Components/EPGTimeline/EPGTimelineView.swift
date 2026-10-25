@@ -160,6 +160,9 @@ public struct EPGTimelineView: View {
                     shimmerPhase = 1.0
                 }
             }
+            .onDisappear {
+                store.send(.onDisappear)
+            }
         }
         .sheet(isPresented: Binding(
             get: { store.selectedProgramDetail != nil },
@@ -237,6 +240,7 @@ public struct EPGTimelineView: View {
             Spacer()
 
             Button(action: {
+                guard !store.isSyncingEPG else { return }
                 HapticManager.shared.trigger(.light)
                 store.send(.refreshEPGTapped)
             }) {
@@ -260,7 +264,7 @@ public struct EPGTimelineView: View {
             #else
             .buttonStyle(.plain)
             #endif
-            .disabled(store.isSyncingEPG)
+            .opacity(store.isSyncingEPG ? 0.6 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -393,6 +397,9 @@ public struct EPGTimelineView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     // MARK: - Category Filter Chips
@@ -451,6 +458,9 @@ public struct EPGTimelineView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     private var programCategoryFilterRow: some View {
@@ -651,6 +661,9 @@ public struct EPGTimelineView: View {
                 }
             }
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
         #if !os(tvOS)
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
