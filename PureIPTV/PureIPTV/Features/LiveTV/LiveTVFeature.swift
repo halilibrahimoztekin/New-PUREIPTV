@@ -33,6 +33,38 @@ public struct PendingNamedFavoriteBulk: Equatable, Sendable {
     }
 }
 
+public struct UnavailableFavoriteChannel: Identifiable, Equatable, Sendable {
+    public let channelID: String
+    public let title: String
+    public let coverURL: URL?
+    public let playlistID: UUID
+    public let profileID: UUID?
+
+    public var id: String {
+        let components = [profileID?.uuidString ?? "legacy", playlistID.uuidString, channelID]
+        return "unavailable-favorite-v1|" + components.map { "\($0.utf8.count):\($0)" }.joined()
+    }
+
+    public var item: MediaModels.Item {
+        MediaModels.Item(
+            id: channelID,
+            title: title,
+            streamURL: nil,
+            coverURL: coverURL,
+            categoryID: "unavailable",
+            type: .live
+        )
+    }
+
+    public init(channelID: String, title: String, coverURL: URL?, playlistID: UUID, profileID: UUID?) {
+        self.channelID = channelID
+        self.title = title
+        self.coverURL = coverURL
+        self.playlistID = playlistID
+        self.profileID = profileID
+    }
+}
+
 private func persistFavoriteLists(
     state: inout LiveTVFeature.State,
     client: FavoriteChannelListsClient,
@@ -107,6 +139,11 @@ public struct LiveTVFeature {
         public var selectedFavoriteListID: UUID?
         public var isFavoriteListMode = false
         public var favoriteListResolvedChannels: [MediaModels.Item] = []
+        public var unavailableFavoriteChannels: [UnavailableFavoriteChannel] = []
+
+        public var unavailableFavoriteChannelIDs: Set<String> {
+            Set(unavailableFavoriteChannels.map(\.channelID))
+        }
 
         public var selectedFavoriteListName: String {
             guard isFavoriteListMode else { return "" }
@@ -121,7 +158,8 @@ public struct LiveTVFeature {
         }
 
         public var selectedCurrentChannelIDs: Set<String> {
-            let visibleIDs = Set(currentChannels.map(\.id))
+            let selectableChannels = isFavoriteListMode ? favoriteListResolvedChannels : currentChannels
+            let visibleIDs = Set(selectableChannels.map(\.id))
             return selectedChannelIDs.intersection(visibleIDs)
         }
 
@@ -200,6 +238,11 @@ public struct LiveTVFeature {
             }
         }
 
+        public var displayChannels: [MediaModels.Item] {
+            guard isFavoriteListMode else { return currentChannels }
+            return currentChannels + unavailableFavoriteChannels.map(\.item)
+        }
+
         mutating func syncEPGTimeline(channels: [MediaModels.Item], selectedCategoryID: String?) {
             guard var timeline = epgTimeline else { return }
             timeline.channels = channels
@@ -247,7 +290,7 @@ public struct LiveTVFeature {
         case favoriteListsLoaded(FavoriteChannelListsSnapshot, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
         case favoriteListSelected(UUID?)
         case clearFavoriteListSelection
-        case favoriteListChannelsLoaded(listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID, membershipIDs: Set<String>, Result<[MediaModels.Item], Error>)
+        case favoriteListChannelsLoaded(listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID, membershipIDs: Set<String>, unavailableFavorites: [UnavailableFavoriteChannel]?, Result<[MediaModels.Item], Error>)
         case saveNamedFavoriteList(id: UUID?, name: String)
         case deleteNamedFavoriteList(UUID)
         case toggleNamedFavorite(MediaModels.Item, listID: UUID)
@@ -320,6 +363,7 @@ public struct LiveTVFeature {
                 state.config = config
                 if playlistChanged {
                     state.resetChannelSelection()
+                    state.unavailableFavoriteChannels = []
                     state.categories = []
                     state.channelsByCategory = [:]
                     state.selectedCategoryID = nil
@@ -368,6 +412,7 @@ public struct LiveTVFeature {
                     state.pendingNamedFavoriteBulk = nil
                     state.favoriteLists = []
                     state.favoriteListResolvedChannels = []
+                    state.unavailableFavoriteChannels = []
                     state.favoriteListPendingMutations = []
                     state.selectedFavoriteListID = nil
                     state.isFavoriteListMode = false
@@ -804,6 +849,7 @@ public struct LiveTVFeature {
                 }
                 state.isFavoriteListMode = true
                 state.selectedFavoriteListID = listID
+                state.unavailableFavoriteChannels = []
                 state.selectedSmartGroupID = nil
                 state.smartGroupChannels = []
                 state.selectedCategoryID = nil
@@ -828,6 +874,14 @@ public struct LiveTVFeature {
                 let allowedCategoryIDs = Set(state.smartGroupSelectableCategories.map(\.id))
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
+                let canShowUnavailableFavorites = listID == nil
+                    && playlistID != nil
+                    && profileScope.profileID != nil
+                    && !state.parentalControlEnabled
+                    && !state.hideAdultContent
+                    && !UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
+                    && state.blacklistedCategoryIDs.isEmpty
+                    && state.categoryPreferences.values.allSatisfy { !$0.isHidden && !$0.isLocked }
                 let cancelOtherResolutions = Effect<Action>.merge(
                     .cancel(id: smartGroupResolutionCancellationID),
                     .cancel(id: favoriteListResolutionCancellationID)
@@ -835,6 +889,10 @@ public struct LiveTVFeature {
                 let resolve: Effect<Action> = .run { send in
                     do {
                         let channels = try await iptvClient.fetchLiveChannels(config, nil)
+                        guard !Task.isCancelled else { return }
+                        let favoriteRecords = canShowUnavailableFavorites
+                            ? try? await databaseClient.fetchFavoritesByType("live", profileScope)
+                            : nil
                         guard !Task.isCancelled else { return }
                         var resolved: [MediaModels.Item] = []
                         var seenIDs = Set<String>()
@@ -846,13 +904,34 @@ public struct LiveTVFeature {
                                   seenIDs.insert(channel.id).inserted else { continue }
                             resolved.append(channel)
                         }
+                        let providerChannelIDs = Set(channels.map(\.id))
+                        var seenUnavailableFavoriteIDs: Set<String> = []
+                        let unavailableFavorites = favoriteRecords?.compactMap { favorite -> UnavailableFavoriteChannel? in
+                            guard let playlistID,
+                                  favorite.playlistID == playlistID,
+                                  membershipIDs.contains(favorite.id),
+                                  !providerChannelIDs.contains(favorite.id),
+                                  !hiddenIDs.contains(favorite.id) else { return nil }
+                            let unavailableFavorite = UnavailableFavoriteChannel(
+                                channelID: favorite.id,
+                                title: favorite.title,
+                                coverURL: favorite.coverURL.flatMap { URL(string: $0) },
+                                playlistID: playlistID,
+                                profileID: favorite.profileID
+                            )
+                            return seenUnavailableFavoriteIDs.insert(unavailableFavorite.id).inserted
+                                ? unavailableFavorite
+                                : nil
+                        }
                         guard !Task.isCancelled else { return }
                         await send(.favoriteListChannelsLoaded(listID: listID, playlistID: playlistID,
-                                                               profileScope: profileScope, requestID: requestID, membershipIDs: membershipIDs, .success(resolved)))
+                                                               profileScope: profileScope, requestID: requestID, membershipIDs: membershipIDs,
+                                                               unavailableFavorites: unavailableFavorites, .success(resolved)))
                     } catch {
                         guard !Task.isCancelled else { return }
                         await send(.favoriteListChannelsLoaded(listID: listID, playlistID: playlistID,
-                                                               profileScope: profileScope, requestID: requestID, membershipIDs: membershipIDs, .failure(error)))
+                                                               profileScope: profileScope, requestID: requestID, membershipIDs: membershipIDs,
+                                                               unavailableFavorites: nil, .failure(error)))
                     }
                 }
                 .cancellable(id: favoriteListResolutionCancellationID, cancelInFlight: true)
@@ -866,13 +945,14 @@ public struct LiveTVFeature {
                 state.isFavoriteListMode = false
                 state.selectedFavoriteListID = nil
                 state.favoriteListResolvedChannels = []
+                state.unavailableFavoriteChannels = []
                 state.activeFavoriteListRequestID = nil
                 state.isLoadingChannels = false
                 let cancel = Effect<Action>.cancel(id: favoriteListResolutionCancellationID)
                 guard let category = state.categories.first else { return cancel }
                 return .merge(cancel, .send(.categorySelected(category)))
 
-            case let .favoriteListChannelsLoaded(listID, playlistID, profileScope, requestID, membershipIDs, result):
+            case let .favoriteListChannelsLoaded(listID, playlistID, profileScope, requestID, membershipIDs, unavailableFavorites, result):
                 guard state.activeFavoriteListRequestID == requestID,
                       state.isFavoriteListMode,
                       state.selectedFavoriteListID == listID,
@@ -881,6 +961,9 @@ public struct LiveTVFeature {
                       profileContextClient.snapshot() == profileScope else { return .none }
                 state.activeFavoriteListRequestID = nil
                 state.isLoadingChannels = false
+                if let unavailableFavorites {
+                    state.unavailableFavoriteChannels = unavailableFavorites
+                }
                 switch result {
                 case let .success(channels):
                     let eligibleCategoryIDs = Set(state.smartGroupSelectableCategories.map(\.id))
@@ -1016,6 +1099,7 @@ public struct LiveTVFeature {
                 guard state.isChannelSelectionMode,
                       state.channelSelectionPlaylistID == state.config?.playlistID,
                       state.channelSelectionProfileScope == profileContextClient.snapshot(),
+                      !state.unavailableFavoriteChannelIDs.contains(channel.id),
                       state.currentChannels.contains(where: { $0.id == channel.id }) else { return .none }
                 if !state.selectedChannelIDs.insert(channel.id).inserted {
                     state.selectedChannelIDs.remove(channel.id)
@@ -1026,7 +1110,9 @@ public struct LiveTVFeature {
                 guard state.isChannelSelectionMode,
                       state.channelSelectionPlaylistID == state.config?.playlistID,
                       state.channelSelectionProfileScope == profileContextClient.snapshot() else { return .none }
-                state.selectedChannelIDs = Set(state.currentChannels.map(\.id))
+                state.selectedChannelIDs = Set(state.currentChannels
+                    .filter { !state.unavailableFavoriteChannelIDs.contains($0.id) }
+                    .map(\.id))
                 return .none
 
             case .clearChannelSelection:
@@ -1428,6 +1514,7 @@ public struct LiveTVFeature {
                 return .none
 
             case let .channelSelected(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 state.selectedChannel = channel
                 return .merge(
                     .run { _ in await hapticClient.impact(.light) },
@@ -1435,6 +1522,7 @@ public struct LiveTVFeature {
                 )
 
             case let .selectChannelPreview(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 state.selectedChannel = channel
                 state.selectedChannelEPG = []
                 guard let config = state.config, let epgID = channel.epgChannelID else {
@@ -1482,6 +1570,7 @@ public struct LiveTVFeature {
                 let isCurrentlyFav = state.favoriteIDs.contains(item.id)
                 if isCurrentlyFav {
                     state.favoriteIDs.remove(item.id)
+                    state.unavailableFavoriteChannels.removeAll { $0.channelID == item.id }
                 } else {
                     state.favoriteIDs.insert(item.id)
                 }
@@ -1491,6 +1580,7 @@ public struct LiveTVFeature {
                 }
 
             case let .hideChannel(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 state.hiddenChannelIDs.insert(channel.id)
                 return .run { _ in
                     parentalControlClient.hideChannel(channel.id, channel.title)
@@ -1505,6 +1595,7 @@ public struct LiveTVFeature {
                 }
 
             case let .sendToMultiView(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id), channel.streamURL != nil else { return .none }
                 var mvState = MultiViewFeature.State(channels: state.currentChannels, config: state.config)
                 if !mvState.slots.isEmpty {
                     mvState.slots[0].item = channel
@@ -1515,6 +1606,7 @@ public struct LiveTVFeature {
                 }
 
             case let .openChannelEPG(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 if let config = state.config {
                     let reordered = [channel] + state.currentChannels.filter { $0.id != channel.id }
                     state.epgTimeline = EPGTimelineFeature.State(
@@ -1533,6 +1625,7 @@ public struct LiveTVFeature {
                 return .none
 
             case let .openChannelGuide(channel):
+                guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 if let config = state.config {
                     state.epgGuide = EPGGuideFeature.State(
                         config: config,

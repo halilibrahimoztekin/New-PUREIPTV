@@ -111,9 +111,9 @@
 
         private var focusedChannel: MediaModels.Item? {
             if let focusedChannelID {
-                return store.currentChannels.first(where: { $0.id == focusedChannelID })
+                return store.displayChannels.first(where: { $0.id == focusedChannelID })
             }
-            return store.selectedChannel ?? store.currentChannels.first
+            return store.selectedChannel ?? store.displayChannels.first
         }
 
         // MARK: – Category Column
@@ -135,7 +135,7 @@
                                     } else {
                                         selectionRestoreChannelID = focusedChannelID
                                             ?? store.selectedChannel?.id
-                                            ?? store.currentChannels.first?.id
+                                            ?? store.displayChannels.first?.id
                                         store.send(.enterChannelSelectionMode)
                                     }
                                 } label: {
@@ -271,7 +271,7 @@
                 if store.isLoadingChannels {
                     PureLoadingView(size: .large, text: AppStrings.LiveTV.loadingChannels)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if store.currentChannels.isEmpty {
+                } else if store.displayChannels.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "antenna.radiowaves.left.and.right.slash")
                             .font(.system(size: 60))
@@ -302,7 +302,7 @@
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     let targetID = TVFocusMemory.shared.lastChannel(
                         in: newCatID,
-                        fallback: store.currentChannels.first?.id
+                        fallback: store.displayChannels.first?.id
                     )
                     if let targetID {
                         focusedChannelID = targetID
@@ -314,7 +314,7 @@
                 .onAppear {
                     let targetID = TVFocusMemory.shared.lastChannel(
                         in: store.selectedCategoryID,
-                        fallback: store.selectedChannel?.id ?? store.currentChannels.first?.id
+                        fallback: store.selectedChannel?.id ?? store.displayChannels.first?.id
                     )
                     if let targetID {
                         focusedChannelID = targetID
@@ -330,7 +330,7 @@
                     TVAlphabetScrubberOverlay(
                         currentLetter: currentScrubLetter,
                         isVisible: isScrubOverlayVisible,
-                        availableLetters: Set(store.currentChannels.compactMap {
+                        availableLetters: Set(store.displayChannels.compactMap {
                             let c = String($0.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)).uppercased()
                             return ("A" ... "Z").contains(c) ? c : "#"
                         })
@@ -344,12 +344,25 @@
                 columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
                 spacing: 24
             ) {
-                ForEach(store.currentChannels) { channel in
+                ForEach(store.displayChannels) { channel in
+                    let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
                     TVChannelCard(
                         channel: channel,
                         isSelected: store.selectedChannel?.id == channel.id
                     ) {
                         store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if isUnavailable {
+                            Text(AppStrings.LiveTV.unavailableFavoriteChannel)
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.76), in: Capsule())
+                                .padding(12)
+                                .accessibilityHidden(true)
+                        }
                     }
                     .overlay(alignment: .topTrailing) {
                         if store.isChannelSelectionMode {
@@ -360,15 +373,19 @@
                                 .accessibilityHidden(true)
                         }
                     }
-                    .accessibilityValue(store.isChannelSelectionMode
-                        ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
-                        : "")
+                    .accessibilityValue(isUnavailable
+                        ? AppStrings.LiveTV.unavailableFavoriteChannel
+                        : (store.isChannelSelectionMode
+                            ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                            : ""))
                     .accessibilityHint(store.isChannelSelectionMode
-                        ? (store.selectedCurrentChannelIDs.contains(channel.id)
-                            ? AppStrings.LiveTV.deselectChannelAccessibilityHint
-                            : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                        ? (isUnavailable
+                            ? AppStrings.LiveTV.unavailableFavoriteChannel
+                            : (store.selectedCurrentChannelIDs.contains(channel.id)
+                                ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                                : AppStrings.LiveTV.selectChannelAccessibilityHint))
                         : "")
-                    .accessibilityAddTraits(store.isChannelSelectionMode && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
+                    .accessibilityAddTraits(store.isChannelSelectionMode && !isUnavailable && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
                     .focused($focusedChannelID, equals: channel.id)
                     .id(channel.id)
                     .contextMenu {
@@ -383,7 +400,7 @@
         private func handleFocusChange(_ newID: String?) {
             guard let newID else { return }
             TVFocusMemory.shared.recordChannel(newID, in: store.selectedCategoryID)
-            guard let ch = store.currentChannels.first(where: { $0.id == newID }) else { return }
+            guard let ch = store.displayChannels.first(where: { $0.id == newID }) else { return }
             PrebufferingManager.shared.prepareChannel(
                 url: ch.streamURL,
                 userAgentOverride: ch.userAgentOverride
@@ -409,6 +426,7 @@
 
         @ViewBuilder
         private func channelContextMenu(for channel: MediaModels.Item) -> some View {
+            let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
             Button {
                 store.send(.toggleFavorite(channel))
             } label: {
@@ -419,40 +437,42 @@
                 }
             }
 
-            if !store.favoriteLists.isEmpty {
-                Menu(AppStrings.LiveTV.addToFavoriteList) {
-                    ForEach(store.favoriteLists) { list in
-                        Button {
-                            store.send(.toggleNamedFavorite(channel, listID: list.id))
-                        } label: {
-                            Label(list.name, systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+            if !isUnavailable {
+                if !store.favoriteLists.isEmpty {
+                    Menu(AppStrings.LiveTV.addToFavoriteList) {
+                        ForEach(store.favoriteLists) { list in
+                            Button {
+                                store.send(.toggleNamedFavorite(channel, listID: list.id))
+                            } label: {
+                                Label(list.name, systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                            }
                         }
                     }
                 }
-            }
 
-            Button {
-                store.send(.sendToMultiView(channel))
-            } label: {
-                Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
-            }
+                Button {
+                    store.send(.sendToMultiView(channel))
+                } label: {
+                    Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+                }
 
-            Button {
-                store.send(.openChannelGuide(channel))
-            } label: {
-                Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
-            }
+                Button {
+                    store.send(.openChannelGuide(channel))
+                } label: {
+                    Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+                }
 
-            Button {
-                store.send(.openChannelEPG(channel))
-            } label: {
-                Label("Zaman Çizelgesi (Timeline)".localized, systemImage: "calendar.day.timeline.left")
-            }
+                Button {
+                    store.send(.openChannelEPG(channel))
+                } label: {
+                    Label("Zaman Çizelgesi (Timeline)".localized, systemImage: "calendar.day.timeline.left")
+                }
 
-            Button(role: .destructive) {
-                store.send(.hideChannel(channel))
-            } label: {
-                Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
+                Button(role: .destructive) {
+                    store.send(.hideChannel(channel))
+                } label: {
+                    Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
+                }
             }
         }
     }

@@ -123,6 +123,7 @@ public enum AppStrings {
         public static let smartGroupName = "Grup Adı".localized
         public static let smartGroupPrivacyHint = "Gruplar yalnızca seçili profil ve playlist için kaydedilir. Kanallar seçilen playlist kategorilerinden oluşturulur.".localized
         public static let unavailableSmartGroupCategory = "Artık kullanılmayan kategori".localized
+        public static let unavailableFavoriteChannel = "Artık kullanılamayan kanal".localized
         public static let selected = "Seçili".localized
         public static let notSelected = "Seçili değil".localized
         public static func smartGroupCategoryCount(_ count: Int) -> String {
