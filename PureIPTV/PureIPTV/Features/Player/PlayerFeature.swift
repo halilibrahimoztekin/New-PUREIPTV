@@ -775,9 +775,9 @@ public struct PlayerFeature {
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
+            let profileScope = profileContextClient.snapshot()
 
             let recentEffect: Effect<Action> = isLive ? .run { [item = state.item] send in
-                await send(.loadRecentChannels)
                 let recentDTO = RecentChannelDTO(
                     id: item.id,
                     title: item.title,
@@ -788,7 +788,14 @@ public struct PlayerFeature {
                     categoryID: item.categoryID,
                     tvArchive: item.tvArchive
                 )
-                await recentChannelsClient.recordChannel(recentDTO)
+                if let playlistID = item.config?.playlistID {
+                    await recentChannelsClient.recordScopedChannel(
+                        recentDTO,
+                        profileScope.profileID,
+                        playlistID
+                    )
+                }
+                await send(.loadRecentChannels)
             } : .none
 
             return .merge(
@@ -1874,15 +1881,18 @@ public struct PlayerFeature {
             state.recentChannelsRequestID = requestID
             let playlistID = state.item.config?.playlistID
             let profileScope = profileContextClient.snapshot()
+            guard let playlistID else {
+                state.recentChannels = []
+                state.pinnedRecentChannelIDs = []
+                state.pinnableRecentChannelIDs = []
+                state.recentChannelsRequestID = nil
+                return .none
+            }
             let hiddenIDs = state.hiddenChannelIDs
             let blacklistedCategoryIDs = state.blacklistedCategoryIDs
             return .run { [playlist = state.playlist, config = state.item.config] send in
-                let recentDTOs = await recentChannelsClient.fetchRecentChannels()
-                let pinnedIDs: [String] = if let playlistID {
-                    await recentChannelsClient.fetchPinnedChannelIDs(profileScope.profileID, playlistID)
-                } else {
-                    []
-                }
+                let recentDTOs = await recentChannelsClient.fetchScopedRecentChannels(profileScope.profileID, playlistID)
+                let pinnedIDs = await recentChannelsClient.fetchPinnedChannelIDs(profileScope.profileID, playlistID)
                 let pinnedItems: [PlayableItem] = pinnedIDs.compactMap { id in
                     playlist?.first(where: {
                         $0.id == id
@@ -1891,7 +1901,7 @@ public struct PlayerFeature {
                             && !($0.categoryID.map(blacklistedCategoryIDs.contains) ?? false)
                     })
                 }
-                let recentItems: [PlayableItem] = recentDTOs.compactMap { dto in
+                let recentItems: [PlayableItem] = recentDTOs.records.compactMap { dto in
                     let item: PlayableItem = if let match = playlist?.first(where: { $0.id == dto.id }) {
                         match
                     } else {

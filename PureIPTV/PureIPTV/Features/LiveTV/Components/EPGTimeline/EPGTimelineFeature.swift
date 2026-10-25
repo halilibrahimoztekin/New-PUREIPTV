@@ -49,6 +49,12 @@ public struct EPGTimelineFeature {
         public var successfulEPGChannelCount = 0
         public var failedEPGChannelCount = 0
         public var syncStatusMessage: String?
+        public var recentChannelIDs: Set<String> = []
+        public var recentChannelSnapshotRevision: UInt64 = 0
+        public var recentChannelSnapshotPlaylistID: UUID?
+        public var recentChannelSnapshotProfileScope: ProfileContextSnapshot?
+        public var recentChannelLoadRequestID: UUID?
+        public var pendingRecentChannelRemovalIDs: [String: UUID] = [:]
 
         // PiP-in-EPG Live Mini-Preview (Madde #25)
         public var activePreviewChannel: MediaModels.Item?
@@ -197,6 +203,10 @@ public struct EPGTimelineFeature {
 
     public enum Action {
         case onAppear
+        case loadRecentChannels
+        case recentChannelsLoaded(requestID: UUID, ids: Set<String>, revision: UInt64, playlistID: UUID, profileScope: ProfileContextSnapshot)
+        case removeRecentChannel(MediaModels.Item)
+        case recentChannelRemoved(channelID: String, requestID: UUID, ids: Set<String>, revision: UInt64, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case fetchEPG(streamID: String)
         case refreshEPG(streamID: String)
         case epgResponse(streamID: String, requestID: UUID, Result<[EPGProgram], Error>)
@@ -258,6 +268,7 @@ public struct EPGTimelineFeature {
     @Dependency(\.reminderClient) var reminderClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.recentChannelsClient) var recentChannelsClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.continuousClock) var clock
     @Dependency(\.dismiss) var dismiss
@@ -282,6 +293,7 @@ public struct EPGTimelineFeature {
                 var effects: [Effect<Action>] = [
                     .send(.loadReminders),
                     .send(.loadFavorites),
+                    .send(.loadRecentChannels),
                     .run { [clock] send in
                         for await _ in clock.timer(interval: .seconds(60)) {
                             await send(.updateCurrentTime)
@@ -297,6 +309,98 @@ public struct EPGTimelineFeature {
 
             case .refreshEPGTapped:
                 return .send(.performSync(forced: true))
+
+            case .loadRecentChannels:
+                guard let playlistID = state.config.playlistID else {
+                    state.recentChannelIDs = []
+                    state.recentChannelSnapshotRevision = 0
+                    state.recentChannelSnapshotPlaylistID = nil
+                    state.recentChannelSnapshotProfileScope = nil
+                    state.recentChannelLoadRequestID = nil
+                    state.pendingRecentChannelRemovalIDs = [:]
+                    return .none
+                }
+                let requestID = UUID()
+                state.recentChannelLoadRequestID = requestID
+                let profileScope = profileContextClient.snapshot()
+                if state.recentChannelSnapshotPlaylistID != playlistID
+                    || state.recentChannelSnapshotProfileScope != profileScope
+                {
+                    state.recentChannelIDs = []
+                    state.recentChannelSnapshotRevision = 0
+                    state.pendingRecentChannelRemovalIDs = [:]
+                    state.recentChannelSnapshotPlaylistID = playlistID
+                    state.recentChannelSnapshotProfileScope = profileScope
+                }
+                let client = recentChannelsClient
+                return .run { send in
+                    let snapshot = await client.fetchScopedRecentChannels(profileScope.profileID, playlistID)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    await send(.recentChannelsLoaded(
+                        requestID: requestID,
+                        ids: Set(snapshot.records.map(\.id)),
+                        revision: snapshot.revision,
+                        playlistID: playlistID,
+                        profileScope: profileScope
+                    ))
+                }
+
+            case let .recentChannelsLoaded(requestID, ids, revision, playlistID, profileScope):
+                guard
+                    state.recentChannelLoadRequestID == requestID,
+                    profileContextClient.snapshot() == profileScope,
+                    state.config.playlistID == playlistID
+                else { return .none }
+                state.recentChannelLoadRequestID = nil
+                guard revision >= state.recentChannelSnapshotRevision else {
+                    return .send(.loadRecentChannels)
+                }
+                state.recentChannelIDs = ids
+                state.recentChannelSnapshotRevision = revision
+                return .none
+
+            case let .removeRecentChannel(channel):
+                guard let playlistID = state.config.playlistID,
+                      state.recentChannelIDs.contains(channel.id),
+                      state.pendingRecentChannelRemovalIDs[channel.id] == nil
+                else { return .none }
+                let profileScope = profileContextClient.snapshot()
+                guard
+                    state.recentChannelSnapshotPlaylistID == playlistID,
+                    state.recentChannelSnapshotProfileScope == profileScope
+                else { return .send(.loadRecentChannels) }
+                let requestID = UUID()
+                // Invalidate any older load before the removal. Its result may
+                // predate this mutation and must never restore the removed ID.
+                state.recentChannelLoadRequestID = nil
+                state.pendingRecentChannelRemovalIDs[channel.id] = requestID
+                let client = recentChannelsClient
+                return .run { send in
+                    let snapshot = await client.removeScopedRecentChannel(channel.id, profileScope.profileID, playlistID)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    await send(.recentChannelRemoved(
+                        channelID: channel.id,
+                        requestID: requestID,
+                        ids: Set(snapshot.records.map(\.id)),
+                        revision: snapshot.revision,
+                        playlistID: playlistID,
+                        profileScope: profileScope
+                    ))
+                }
+
+            case let .recentChannelRemoved(channelID, requestID, ids, revision, playlistID, profileScope):
+                guard
+                    state.pendingRecentChannelRemovalIDs[channelID] == requestID,
+                    profileContextClient.snapshot() == profileScope,
+                    state.config.playlistID == playlistID
+                else { return .none }
+                state.pendingRecentChannelRemovalIDs.removeValue(forKey: channelID)
+                guard revision >= state.recentChannelSnapshotRevision else {
+                    return .send(.loadRecentChannels)
+                }
+                state.recentChannelIDs = ids
+                state.recentChannelSnapshotRevision = revision
+                return .send(.loadRecentChannels)
 
             case .performSync:
                 guard !state.isSyncingEPG else { return .none }

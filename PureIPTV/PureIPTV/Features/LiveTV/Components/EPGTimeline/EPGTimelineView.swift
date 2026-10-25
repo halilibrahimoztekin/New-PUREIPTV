@@ -701,6 +701,16 @@ public struct EPGTimelineView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            if store.recentChannelIDs.contains(channel.id) {
+                Button(role: .destructive) {
+                    store.send(.removeRecentChannel(channel))
+                } label: {
+                    Label(AppStrings.Player.removeRecentChannel, systemImage: "clock.badge.xmark")
+                }
+                .disabled(store.pendingRecentChannelRemovalIDs[channel.id] != nil)
+                .accessibilityLabel(AppStrings.Player.removeRecentChannel)
+            }
+
             Button {
                 HapticManager.shared.trigger(.medium)
                 store.send(.toggleFavorite(channel))

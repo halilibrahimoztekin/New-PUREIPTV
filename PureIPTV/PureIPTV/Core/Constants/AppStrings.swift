@@ -165,6 +165,7 @@ public enum AppStrings {
     // MARK: - Player & EPG
 
     public enum Player {
+        public static let removeRecentChannel = "Son İzlenenlerden Kaldır".localized
         public static let liveLabel = "CANLI".localized
         public static let liveLabelNormal = "Canlı".localized
         public static let liveBroadcast = "Canlı Yayın".localized
