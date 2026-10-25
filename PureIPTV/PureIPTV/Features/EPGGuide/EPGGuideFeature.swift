@@ -2,6 +2,11 @@ import ComposableArchitecture
 import FactoryKit
 import Foundation
 
+private nonisolated enum EPGGuideCancelID: Hashable, Sendable {
+    case previewDebounce
+    case previewPlayback
+}
+
 @Reducer
 public struct EPGGuideFeature {
     @ObservableState
@@ -19,6 +24,7 @@ public struct EPGGuideFeature {
         public var isPreviewMuted: Bool = true
         public var isPreviewPlaying: Bool = false
         public var isAutoPreviewEnabled: Bool = true
+        public var previewGeneration: Int = 0
 
         public init(config: PlaylistConfig, channels: [MediaModels.Item], initialChannel: MediaModels.Item?) {
             self.config = config
@@ -35,7 +41,7 @@ public struct EPGGuideFeature {
         case playTapped(MediaModels.Item)
         case playCatchUp(EPGProgram, MediaModels.Item)
         case channelFocused(MediaModels.Item?)
-        case startPreviewDebounce(MediaModels.Item)
+        case startPreviewDebounce(MediaModels.Item, generation: Int)
         case previewPlaybackStarted(String)
         case togglePreviewMute
         case stopPreview
@@ -71,13 +77,11 @@ public struct EPGGuideFeature {
                 state.isLoadingEPG = true
                 state.errorMessage = nil
                 state.epgListings = []
+                state.previewGeneration &+= 1
+                let previewGeneration = state.previewGeneration
 
                 let config = state.config
                 let streamID = channel.id
-
-                enum CancelID: Hashable {
-                    case previewDebounce
-                }
 
                 let epgEffect: Effect<Action> = .run { send in
                     await send(.epgResponse(
@@ -87,32 +91,55 @@ public struct EPGGuideFeature {
 
                 let previewEffect: Effect<Action> = state.isAutoPreviewEnabled ? .run { [clock] send in
                     try await clock.sleep(for: .milliseconds(400))
-                    await send(.startPreviewDebounce(channel))
-                }.cancellable(id: CancelID.previewDebounce, cancelInFlight: true) : .none
+                    await send(.startPreviewDebounce(channel, generation: previewGeneration))
+                }.cancellable(id: EPGGuideCancelID.previewDebounce, cancelInFlight: true) : .none
 
-                return .merge(epgEffect, previewEffect)
+                return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .merge(epgEffect, previewEffect)
+                )
 
             case let .channelFocused(channel):
-                guard let channel, state.isAutoPreviewEnabled else { return .none }
+                guard let channel else {
+                    state.previewGeneration &+= 1
+                    return .cancel(id: EPGGuideCancelID.previewDebounce)
+                }
+                state.previewGeneration &+= 1
+                let previewGeneration = state.previewGeneration
+                guard state.isAutoPreviewEnabled else { return .cancel(id: EPGGuideCancelID.previewDebounce) }
                 if state.activePreviewChannel?.id == channel.id, state.isPreviewPlaying {
                     return .none
                 }
-                enum CancelID: Hashable {
-                    case previewDebounce
-                }
-                return .run { [clock] send in
-                    try await clock.sleep(for: .milliseconds(400))
-                    await send(.startPreviewDebounce(channel))
-                }
-                .cancellable(id: CancelID.previewDebounce, cancelInFlight: true)
+                return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .run { [clock] send in
+                        try await clock.sleep(for: .milliseconds(400))
+                        await send(.startPreviewDebounce(channel, generation: previewGeneration))
+                    }
+                    .cancellable(id: EPGGuideCancelID.previewDebounce, cancelInFlight: true)
+                )
 
-            case let .startPreviewDebounce(channel):
+            case let .startPreviewDebounce(channel, generation):
+                guard state.isAutoPreviewEnabled,
+                      state.previewGeneration == generation,
+                      state.selectedChannel?.id == channel.id
+                else { return .none }
                 state.activePreviewChannel = channel
                 state.isPreviewPlaying = true
-                return .run { [previewPlayerClient] send in
-                    try? await previewPlayerClient.playPreview(channel)
-                    await send(.previewPlaybackStarted(channel.id))
-                }
+                return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .run { [previewPlayerClient] send in
+                        do {
+                            try await previewPlayerClient.playPreview(channel)
+                            await send(.previewPlaybackStarted(channel.id))
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                        }
+                    }
+                    .cancellable(id: EPGGuideCancelID.previewPlayback, cancelInFlight: true)
+                )
 
             case .previewPlaybackStarted:
                 return .none
@@ -125,11 +152,16 @@ public struct EPGGuideFeature {
                 }
 
             case .stopPreview:
+                state.previewGeneration &+= 1
                 state.activePreviewChannel = nil
                 state.isPreviewPlaying = false
-                return .run { [previewPlayerClient] _ in
-                    await previewPlayerClient.stopPreview()
-                }
+                return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    }
+                )
 
             case let .epgResponse(.success(listings)):
                 state.isLoadingEPG = false
@@ -142,7 +174,10 @@ public struct EPGGuideFeature {
                 return .none
 
             case .closeTapped:
+                state.previewGeneration &+= 1
                 return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
                     .run { [previewPlayerClient] _ in
                         await previewPlayerClient.stopPreview()
                     },
@@ -150,21 +185,27 @@ public struct EPGGuideFeature {
                 )
 
             case let .playTapped(channel):
+                state.previewGeneration &+= 1
                 let startsMuted = settingsClient.startMuted()
-                return .run { [previewPlayerClient, playerClient] send in
-                    if let streamURL = channel.streamURL,
-                       let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
-                    {
-                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
-                    } else {
-                        await previewPlayerClient.stopPreview()
+                return .concatenate(
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .run { [previewPlayerClient, playerClient] send in
+                        if let streamURL = channel.streamURL,
+                           let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
+                        {
+                            await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                        } else {
+                            await previewPlayerClient.stopPreview()
+                        }
+                        await send(.delegate(.playChannel(channel)))
                     }
-                    await send(.delegate(.playChannel(channel)))
-                }
+                )
 
             case let .playCatchUp(program, channel):
                 let config = state.config
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return .none }
+                state.previewGeneration &+= 1
                 let archiveStart = program.startTime.addingTimeInterval(
                     TimeInterval(customEPGMappingClient.getCatchupTimeShift(channel.id) * 3600)
                 )
@@ -193,6 +234,8 @@ public struct EPGGuideFeature {
                         userAgentOverride: channel.userAgentOverride
                     )
                     return .concatenate(
+                        .cancel(id: EPGGuideCancelID.previewDebounce),
+                        .cancel(id: EPGGuideCancelID.previewPlayback),
                         .run { [previewPlayerClient] _ in
                             await previewPlayerClient.stopPreview()
                         },

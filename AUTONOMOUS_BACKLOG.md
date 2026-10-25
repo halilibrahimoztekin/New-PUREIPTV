@@ -1401,6 +1401,53 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Tekrarlanan katalog türetimleri input değişimine bağlı snapshot rebuild’ine taşındı; canlı açılış süresi ölçümü yapılmadı.
 - **Kaynak:** https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801 · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 
-### 149. [PENDING] tvOS EPG Odak Dönüşünü ve Önizleme Kapanışını Sağlamlaştırma
+### 149. [DONE] tvOS EPG Odak Dönüşünü ve Önizleme Kapanışını Sağlamlaştırma
 - **Fırsat:** Kanal listesinden player’a gidip geri dönerken fokus hedefini korumayı ve rehber preview kapanışını güvenli kılmayı büyük playlistlerde doğrulamak.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **Canlı keşif (26 Ekim 2026):** UHF App Store sürüm notları tvOS rehber önizlemesini ve player kapanınca izlenen kanala odak dönüşünü iyileştirdiğini belirtiyor. Topluluk gönderilerinde EPG’nin bazı playlistlerde dakikalarca yüklenmesi ve favorilerin refresh sonrası kaybolması raporlanıyor. Kaynaklar: https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/ · https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/
+- **Kod bulgusu:** tvOS LiveTV ekranı kategori başına `TVFocusMemory` ve `selectedChannel` üzerinden kanala geri odağı restore ediyor. EPG rehberindeki 400 ms preview debounce, close/play/catch-up/stop anında iptal edilmiyor; timer action’ı kuyruğa girdikten sonra kanal aynıysa yine başlatılabiliyor ve başlamış `playPreview` effect’i stop sonrasında playback açabiliyor.
+- **Uygulama:** Ortak `previewGeneration` token’ı stale debounce action’larını reddediyor. `previewDebounce` ve `previewPlayback` ayrı cancellation ID’leriyle yönetiliyor; kanal değişimi, focus değişimi, stop, close, live promotion ve catch-up geçici işleri iptal ediyor. Rehber kapanışı preview’ı durdurmadan önce hem bekleyen hem başlamış effect’leri iptal ediyor. Mevcut LiveTV focus-restoration akışı korundu.
+- **İnceleme:** PR Reviewer ilk turda stale debounce, ikinci turda başlamış playback effect’inin yarışını yakaladı; iki düzeltmeden sonra güncel diff `[APPROVED]`.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. İlk denemede cancellation ID actor-isolation derleme hatası bulundu ve ID `nonisolated Hashable, Sendable` yapıldıktan sonra iki build tekrar başarılı oldu. Test, simulator/app launch veya playback akışı çalıştırılmadı.
+- **#149 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task149` (3.9 GB) ve iOS/tvOS build logları (yaklaşık 3.4 MB), açık handle olmadığı doğrulandıktan sonra silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData’daki `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu; başka task kaynaklı Build/Index çıktısı yoktu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — tvOS rehberinden player’a geçiş/geri dönüşte mevcut kanal focus restoration korunuyor ve geç debounce ya da playback effect’i rehber kapandıktan sonra preview başlatamıyor.
+
+### 150. [PENDING] Canlı Favoriler İçin Kullanıcı Sıralaması
+- **Fırsat:** Live favorites içinde kanal listesinin sırasından bağımsız sabit manuel sıralama ve hızlı taşıma davranışını değerlendir.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
+
+### 151. [PENDING] Playlist Değiştirirken Yenilemeyi Kullanıcıya Bırakma
+- **Fırsat:** Playlist seçimi sırasında beklenmedik otomatik refresh’i önleyip açık “yenile” eylemi ve son güncelleme bilgisini değerlendirmek.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
+
+### 152. [PENDING] EPG Saat Biçimini Cihaz Tercihiyle Canlı Eşleme
+- **Fırsat:** 12/24 saat tercihi değiştiğinde rehber, listeler ve player program bilgilerinin yeniden açılış gerektirmeden aynı biçime geçmesini incele.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
+
+### 153. [PENDING] Rehberde Program Adı ve Açıklamasıyla Arama
+- **Fırsat:** Kanal adına ek olarak yayınlanan/gelecek program başlığı ve özetinde arama, doğrudan zaman/kanal odağına atlama akışını değerlendir.
+- **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 154. [PENDING] Büyük Rehberlerde Yatay Zaman Navigasyonunu Sadeleştirme
+- **Fırsat:** Büyük EPG pencerelerinde Now’a dönme ve kullanıcının seçtiği zaman adımlarıyla ileri/geri gitmeyi focus-safe hale getir.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
+
+### 155. [PENDING] Altyazı Görünümünü Erişilebilir Tercihlerle Özelleştirme
+- **Fırsat:** Altyazı boyutu, kenarlık/arka plan kontrastı ve görünürlük tercihlerini Dynamic Type ve tvOS uzaktan kumanda kullanımına göre değerlendir.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
+
+### 156. [PENDING] Codec Uyumluluğu İçin Güvenli Oynatıcı Tanılama Seçenekleri
+- **Fırsat:** Donanım çözme, deinterlace ve oynatıcı seçimi ayarlarının hangi akışlarda gerekli olduğunu belirleyip kullanıcıya güvenli, geri alınabilir troubleshooting sun.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
+
+### 157. [PENDING] Kanal Kartlarında EPG Veri Tazeliğini Gösterme
+- **Fırsat:** Son başarılı EPG güncellemesi, veri yaşı ve stale/başarısız durumu için playlist ve rehber düzeyinde anlaşılır durum göstergesi tasarla.
+- **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
+
+### 158. [PENDING] Arama Harf Atlama İşlemlerini Birleştirme ve İptal Etme
+- **Fırsat:** Hızlı harf gezinmesinde poster/grid aramalarını birleştirip önceki istekleri iptal ederek Apple TV’de gezinme takılmasını azalt.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
+
+### 159. [PENDING] Playlist Yenilemesinde Favori Eşleşme Sorunlarını Açıklama
+- **Fırsat:** Yenileme sonrası favori kaybolduğunda kullanıcıya playlist, kanal kimliği veya eşleşme değişimini gösteren kurtarma yolu sun; mevcut profil ve kararlı ID davranışından farkını doğrula.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
