@@ -145,7 +145,13 @@
             case .favorites:
                 if !store.favoriteItems.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { item in
-                        FavoriteCardView(item: item, userAgentOverride: config.userAgentOverride) {
+                        FavoriteCardView(
+                            item: item,
+                            userAgentOverride: config.userAgentOverride,
+                            unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
+                                ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
+                                : nil
+                        ) {
                             store.send(.favoriteSelected(item))
                         }
                         .frame(width: 140)
@@ -607,6 +613,7 @@
     struct FavoriteCardView: View {
         let item: FavoriteItem
         let userAgentOverride: String?
+        var unwatchedEpisodeCount: Int?
         let onTap: () -> Void
 
         var body: some View {
@@ -638,6 +645,19 @@
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
+                }
+                .overlay(alignment: .topLeading) {
+                    if item.type.caseInsensitiveCompare("series") == .orderedSame,
+                       let unwatchedEpisodeCount, unwatchedEpisodeCount > 0
+                    {
+                        Text("\(unwatchedEpisodeCount)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color(hex: "#FF453A"), in: Capsule())
+                            .accessibilityLabel(Text(AppStrings.Dashboard.unwatchedEpisodeCount(unwatchedEpisodeCount)))
+                    }
                 }
             }
             .buttonStyle(.fluidScale)

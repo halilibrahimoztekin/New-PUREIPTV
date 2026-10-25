@@ -92,6 +92,7 @@ public enum DetailModels {
         public let plot: String?
         public let rating: Double?
         public let addedDate: Date?
+        public let releaseDate: Date?
 
         public init(
             id: String,
@@ -103,7 +104,8 @@ public enum DetailModels {
             duration: String? = nil,
             plot: String? = nil,
             rating: Double? = nil,
-            addedDate: Date? = nil
+            addedDate: Date? = nil,
+            releaseDate: Date? = nil
         ) {
             self.id = id
             self.episodeNum = episodeNum
@@ -115,6 +117,7 @@ public enum DetailModels {
             self.plot = plot
             self.rating = rating
             self.addedDate = addedDate
+            self.releaseDate = releaseDate
         }
     }
 }

@@ -303,13 +303,20 @@
     public struct TVFavoriteMediaCard: View {
         public let item: FavoriteItem
         public let userAgentOverride: String?
+        public let unwatchedEpisodeCount: Int?
         public let action: () -> Void
 
         @Environment(\.isFocused) private var isFocused
 
-        public init(item: FavoriteItem, userAgentOverride: String? = nil, action: @escaping () -> Void) {
+        public init(
+            item: FavoriteItem,
+            userAgentOverride: String? = nil,
+            unwatchedEpisodeCount: Int? = nil,
+            action: @escaping () -> Void
+        ) {
             self.item = item
             self.userAgentOverride = userAgentOverride
+            self.unwatchedEpisodeCount = unwatchedEpisodeCount
             self.action = action
         }
 
@@ -353,6 +360,17 @@
                     // Katman 3: Floating Heart Icon & Title
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
+                            if item.type.caseInsensitiveCompare("series") == .orderedSame,
+                               let unwatchedEpisodeCount, unwatchedEpisodeCount > 0
+                            {
+                                Text("\(unwatchedEpisodeCount)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 6)
+                                    .background(Color(hex: "#FF453A"), in: Capsule())
+                                    .accessibilityLabel(Text(AppStrings.Dashboard.unwatchedEpisodeCount(unwatchedEpisodeCount)))
+                            }
                             Spacer()
                             Image(systemName: "heart.fill")
                                 .font(.system(size: 16, weight: .bold))

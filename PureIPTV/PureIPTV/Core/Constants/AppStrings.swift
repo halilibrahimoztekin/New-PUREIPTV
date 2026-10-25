@@ -600,6 +600,11 @@ public enum AppStrings {
         public static let actorFilmographyUnavailable = "Bu oyuncunun kataloğunda eşleşen içerik bulunamadı.".localized
         public static let newEpisodesForYou = "Yeni Bölümler".localized
         public static let newEpisodeCardSummary = "S%1$02dE%2$02d · %3$d yeni bölüm".localized
+        public static let unwatchedEpisodeCountFormat = "%d izlenmemiş bölüm"
+        public static func unwatchedEpisodeCount(_ count: Int) -> String {
+            String(format: unwatchedEpisodeCountFormat.localized, locale: Locale.current, arguments: [count])
+        }
+
         public static let mostRatedMovies = "En Çok Oy Alan Filmler".localized
         public static let highestRatedMovies = "En Yüksek Puanlı Filmler".localized
         public static let ratingVotesSummary = "★ %1$.1f · %2$d oy".localized

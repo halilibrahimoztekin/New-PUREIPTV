@@ -11,6 +11,7 @@ public struct DatabaseClient {
     public var setFavorites: @Sendable (_ items: [FavoriteItem], _ isFavorite: Bool, _ scope: ProfileContextSnapshot) async throws -> Bool
 
     public var fetchWatchHistory: @Sendable (_ scope: ProfileContextSnapshot) async throws -> [WatchHistoryItem]
+    public var fetchEpisodeWatchHistory: @Sendable (_ scope: ProfileContextSnapshot) async throws -> [WatchHistoryItem]
     public var saveWatchProgress: @Sendable (_ item: WatchHistoryItem, _ scope: ProfileContextSnapshot) async throws -> Void
     public var deleteWatchProgress: @Sendable (_ id: String, _ type: String, _ playlistID: UUID?, _ scope: ProfileContextSnapshot) async throws -> Void
     public var clearWatchHistory: @Sendable (_ scope: ProfileContextSnapshot) async throws -> Void
@@ -292,6 +293,12 @@ extension DatabaseClient: DependencyKey {
                 }
 
                 return deduplicatedItems
+            },
+            fetchEpisodeWatchHistory: { scope in
+                let context = ModelContext(modelContainer)
+                return try watchHistory(in: context, profileID: scope.profileID).filter {
+                    $0.type.caseInsensitiveCompare("episode") == .orderedSame
+                }
             },
             saveWatchProgress: { item, scope in
                 let profileID = scope.profileID

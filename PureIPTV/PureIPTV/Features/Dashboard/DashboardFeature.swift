@@ -92,6 +92,7 @@ public struct DashboardFeature {
         public var lastSportsHubVisibility: Bool?
 
         public var favoriteItems: [FavoriteItem] = []
+        public var favoriteSeriesUnwatchedEpisodeCounts: [String: Int] = [:]
         public var watchHistoryItems: [WatchHistoryItem] = []
 
         public var favoriteIDs: Set<FavoriteIdentity> {
@@ -195,6 +196,7 @@ public struct DashboardFeature {
                 let playlistChanged = state.activePlaylistID != playlistID
                 if playlistChanged {
                     state.newEpisodeSeries = []
+                    state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                     state.activeNewEpisodeRefreshID = nil
                     state.mostRatedMovies = []
                     state.highestRatedMovies = []
@@ -234,6 +236,7 @@ public struct DashboardFeature {
                     // the refreshed adult-filtered catalog arrives.
                     state.availableHomeCategoryCollections = []
                     state.newEpisodeSeries = []
+                    state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                     state.activeNewEpisodeRefreshID = nil
                     state.mostRatedMovies = []
                     state.highestRatedMovies = []
@@ -395,6 +398,7 @@ public struct DashboardFeature {
                 state.selectedActorName = nil
                 state.selectedActorCollections = []
                 state.newEpisodeSeries = []
+                state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                 state.activeNewEpisodeRefreshID = nil
                 if state.activeMovieRatingRefreshID != nil,
                    state.mostRatedMovies.isEmpty,
@@ -430,6 +434,7 @@ public struct DashboardFeature {
 
             case let .localDataLoaded(favorites, history, scope):
                 guard profileContextClient.snapshot() == scope else { return .none }
+                state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                 state.favoriteItems = favorites
                 state.watchHistoryItems = history
                 Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
@@ -483,10 +488,17 @@ public struct DashboardFeature {
                 let newEpisodeEffect: Effect<Action>
                 if let config = state.activePlaylistConfig {
                     newEpisodeEffect = .run { send in
+                        let fullEpisodeHistory = await (try? databaseClient.fetchEpisodeWatchHistory(scope)) ?? []
+                        let eligibleEpisodeHistory = hideAdult
+                            ? fullEpisodeHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                            : fullEpisodeHistory
                         let entries = await NewEpisodeDiscoveryEngine.discover(
-                            history: eligibleHistory,
+                            history: eligibleEpisodeHistory,
                             playlistID: playlistID,
                             seriesCatalog: safeSeries,
+                            favoriteSeriesIDs: Set(favorites.filter {
+                                $0.playlistID == playlistID && $0.type.caseInsensitiveCompare("series") == .orderedSame
+                            }.map(\.id)),
                             config: config,
                             iptvClient: iptvClient
                         )
@@ -934,11 +946,15 @@ public struct DashboardFeature {
                 let newEpisodeEffect: Effect<Action>
                 if let config = state.activePlaylistConfig {
                     newEpisodeEffect = .run { send in
-                        let history = await (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
+                        let history = await (try? databaseClient.fetchEpisodeWatchHistory(profileScope)) ?? []
+                        let favorites = await (try? databaseClient.fetchFavorites(profileScope)) ?? []
                         let entries = await NewEpisodeDiscoveryEngine.discover(
                             history: history,
                             playlistID: playlistID,
                             seriesCatalog: actorSeriesCandidates,
+                            favoriteSeriesIDs: Set(favorites.filter {
+                                $0.playlistID == playlistID && $0.type.caseInsensitiveCompare("series") == .orderedSame
+                            }.map(\.id)),
                             config: config,
                             iptvClient: iptvClient
                         )
@@ -1000,7 +1016,11 @@ public struct DashboardFeature {
                       state.lastAdultHidden == hideAdult,
                       state.activeNewEpisodeRefreshID == refreshID
                 else { return .none }
-                state.newEpisodeSeries = series
+                state.newEpisodeSeries = series.filter { $0.newEpisodeCount > 0 }
+                state.favoriteSeriesUnwatchedEpisodeCounts = Dictionary(
+                    series.filter { $0.unwatchedEpisodeCount > 0 }.map { ($0.id, $0.unwatchedEpisodeCount) },
+                    uniquingKeysWith: { first, _ in first }
+                )
                 state.activeNewEpisodeRefreshID = nil
                 return .none
 

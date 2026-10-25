@@ -36,6 +36,23 @@ actor M3UCache {
     }
 }
 
+private func parseXtreamReleaseDate(_ value: String?) -> Date? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+    if let date = ISO8601DateFormatter().date(from: value) {
+        return date
+    }
+    for format in ["yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "dd/MM/yyyy"] {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = format
+        if let date = formatter.date(from: value) {
+            return date
+        }
+    }
+    return nil
+}
+
 private extension M3UItemDTO {
     var resolvedMediaType: MediaModels.ItemType {
         // 1. tvg-type
@@ -453,7 +470,8 @@ extension IPTVClient: DependencyKey {
                                 plot: ep.info?.plot,
                                 addedDate: ep.added.flatMap { TimeInterval($0) }.map {
                                     Date(timeIntervalSince1970: $0)
-                                }
+                                },
+                                releaseDate: parseXtreamReleaseDate(ep.info?.releasedate)
                             ))
                         }
                     }

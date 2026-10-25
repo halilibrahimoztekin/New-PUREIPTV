@@ -128,7 +128,13 @@
                 if !store.favoriteItems.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
                         ForEach(store.favoriteItems) { item in
-                            TVFavoriteMediaCard(item: item, userAgentOverride: config.userAgentOverride) {
+                            TVFavoriteMediaCard(
+                                item: item,
+                                userAgentOverride: config.userAgentOverride,
+                                unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
+                                    ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
+                                    : nil
+                            ) {
                                 store.send(.favoriteSelected(item))
                             }
                             .frame(width: item.type.lowercased() == "live" ? 340 : 220)
