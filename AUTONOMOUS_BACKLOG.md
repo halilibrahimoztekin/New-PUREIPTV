@@ -1076,17 +1076,23 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_107_ios.log`, `/private/tmp/pureiptv_107_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 108. [IN_PROGRESS] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
+### 108. [PENDING] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
 - **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
 - **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.
+- **Analiz:** Kod tabanında Plex/Jellyfin/WebDAV/FTP client’ı veya kaynak adaptörü bulunmuyor. `PlaylistConfig` ve `IPTVClient` Xtream/M3U protokollerine, `MediaModels.Item` ise IPTV kategori/akış varsayımlarına bağlı. Bu isteği tek backlog maddesinde dört ayrı auth, browse ve playback protokolü olarak uygulamak güvenli bir ürün dilimi değil; kimlik bilgileri Keychain, source adapter sözleşmesi ve ilk sağlayıcı seçimi için fazlandırılana kadar beklemeye alındı.
 
-### 109. [PENDING] Güven Skorlu EPG Eşleme Önerileri
+### 109. [IN_PROGRESS] Güven Skorlu EPG Eşleme Önerileri
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları kanalların büyük bölümünde EPG olmamasından ve manuel atamaların yorucu olup yenilemede kaybolabilmesinden yakınıyor; başka playlist’teki EPG’yi tekrar kanal adı yazmadan seçme isteği de var: https://www.reddit.com/r/TiviMate/comments/1x7lyx8/epg_that_doesnt_require_assignment/ · https://www.reddit.com/r/TiviMate/comments/1xe9mq0/tivimate_epg/ .
 - **Aday gap:** Mevcut manuel XMLTV ID eşleme (#23) yanında güven skorlu öneri ve açık kullanıcı onayı var mı denetlensin; otomatik yanlış eşleşme uygulanmamalı ve yenilemeler onaylı eşlemeyi silmemeli.
+- **Analiz:** `ChannelEPGMapping` özel kaynak ID’si ve XMLTV channel ID’si alanlarını tutuyordu; ayarlar ekranı yalnızca mevcut eşlemeleri gösteriyor, uygulama tarafında `setChannelMapping` çağrısı yoktu.
+- **Uygulama:** Aktif playlist canlı kanalları ile etkin XMLTV kaynakları karşılaştırılıyor; en fazla üç aday kanal başına güven skoru ve kaynak bilgisiyle listeleniyor. Kullanıcı açıkça onaylayınca kaynak/XMLTV ID’si kalıcı eşlemeye yazılıyor; var olan time shift korunuyor. Asenkron sonuçlar request ID ve playlist UUID ile doğrulanıyor; playlist değişmişse eski öneri uygulanmıyor. Öneri hesaplama ana thread dışında yapılıyor. Yeni metinler 22 locale’e eklendi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; final iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_109_ios_final.log`, `/private/tmp/pureiptv_109_tvos_final.log`). `git diff --check` ve strings JSON doğrulaması geçti. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 110. [PENDING] Eşleme Akışlarında Aramayı ve Odağı Korumak
+### 110. [IN_PROGRESS] Eşleme Akışlarında Aramayı ve Odağı Korumak
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları benzer isimli kanalları art arda eşlerken arama metninin sıfırlanmasını ve aynı aramanın yeniden yazılmasını sorun olarak bildiriyor: https://www.reddit.com/r/TiviMate/comments/1i3ejin/ · https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1wnk8x0/ .
 - **Aday gap:** Arama, filtre ve klavye/tvOS focus’u eşleme sonrası korunuyor mu taransın; yalnız ilgili eşleme ekranlarında kalıcı tut.
+- **Analiz:** Yeni #109 öneri listesi arama alanı sunmuyor; adaylar doğrudan kaynak+kanal adıyla listeleniyor. Onay sonrası öneri satırı kaldırılırken diğer satırlar kalır, ancak uzun kataloglarda aynı adlarla filtreleme ve kumanda/klavye ile satırlara dönme için arama/odak koruması yok. Önce bu yeni eşleme paneline hedefli filtre eklenmesi, arama metninin onaydan sonra korunması ve tvOS odak sırasının mevcut liste içinde kalması inceleniyor.
 
 ### 111. [PENDING] Görsel Ağırlıklı Kompakt EPG Görünümü
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcı önerisi EPG detaylarını azaltıp kanal görsellerine daha fazla alan ayırmayı istiyor: https://www.reddit.com/r/TiviMate/comments/1uvqltj/must_do_for_new_users/ .

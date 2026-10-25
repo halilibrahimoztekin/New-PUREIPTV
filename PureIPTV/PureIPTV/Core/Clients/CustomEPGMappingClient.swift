@@ -99,6 +99,24 @@ public struct ChannelEPGMapping: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct CustomEPGChannelOption: Equatable, Identifiable, Sendable {
+    public let sourceID: String
+    public let sourceName: String
+    public let channelID: String
+    public let channelName: String
+
+    public var id: String {
+        "\(sourceID):\(channelID)"
+    }
+
+    public init(sourceID: String, sourceName: String, channelID: String, channelName: String) {
+        self.sourceID = sourceID
+        self.sourceName = sourceName
+        self.channelID = channelID
+        self.channelName = channelName
+    }
+}
+
 // MARK: - In-Memory EPG Storage Actor
 
 public actor CustomEPGStore {
@@ -166,6 +184,7 @@ public struct CustomEPGMappingClient: Sendable {
     public var setGlobalTimeShift: @Sendable (_ hours: Int) -> Void
 
     public var getAvailableEPGChannels: @Sendable () async -> [XMLTVChannel] = { [] }
+    public var getAvailableEPGChannelOptions: @Sendable () async -> [CustomEPGChannelOption] = { [] }
     public var searchCachedPrograms: @Sendable (_ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _ in [] }
     public var fetchProgramsForChannel: @Sendable (_ channelID: String, _ channelName: String, _ fallbackEPGID: String?) async -> [EPGProgram] = { _, _, _ in [] }
     public var applyTimeShift: @Sendable (_ programs: [EPGProgram], _ channelID: String) -> [EPGProgram] = { programs, _ in programs }
@@ -357,6 +376,23 @@ extension CustomEPGMappingClient: DependencyKey {
             },
             getAvailableEPGChannels: {
                 await CustomEPGStore.shared.getAllChannels()
+            },
+            getAvailableEPGChannelOptions: {
+                let sources = loadSources().filter(\.isEnabled)
+                let dataBySource = await CustomEPGStore.shared.getAllSourceData()
+                var options: [CustomEPGChannelOption] = []
+                for source in sources {
+                    guard let channels = dataBySource[source.id]?.channels else { continue }
+                    options.append(contentsOf: channels.values.map { channel in
+                        CustomEPGChannelOption(
+                            sourceID: source.id,
+                            sourceName: source.name,
+                            channelID: channel.id,
+                            channelName: channel.name
+                        )
+                    })
+                }
+                return options
             },
             searchCachedPrograms: { query, channels, limit in
                 guard limit > 0 else { return [] }

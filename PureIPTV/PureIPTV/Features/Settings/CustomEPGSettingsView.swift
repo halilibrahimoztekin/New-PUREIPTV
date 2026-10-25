@@ -171,6 +171,61 @@ public struct CustomEPGSettingsView: View {
                     Text("Desteklenen formatlar: Doğrudan XML (.xml) ve sıkıştırılmış Gzip (.xml.gz) dosyaları.")
                 }
 
+                Section {
+                    Button {
+                        store.send(.loadEPGMappingSuggestions)
+                    } label: {
+                        HStack {
+                            Label(AppStrings.Settings.findEPGMappingSuggestions, systemImage: "sparkles")
+                            if store.isLoadingEPGMappingSuggestions {
+                                Spacer()
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(store.isLoadingEPGMappingSuggestions || !store.customEPGSources.contains(where: \.isEnabled))
+
+                    Text(AppStrings.Settings.epgMappingSuggestionsDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let message = store.epgMappingSuggestionError {
+                        ContentUnavailableView(message, systemImage: "antenna.radiowaves.left.and.right.slash")
+                    }
+
+                    ForEach(store.epgMappingSuggestions) { suggestion in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(suggestion.channelName)
+                                .font(.headline)
+                            ForEach(suggestion.candidates) { candidate in
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(candidate.option.channelName)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("\(candidate.option.sourceName) · \(AppStrings.Settings.epgMappingConfidence(candidate.confidence))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Button(AppStrings.Settings.confirmEPGMapping) {
+                                        store.send(.applySuggestedEPGMapping(
+                                            channelID: suggestion.channelID,
+                                            channelName: suggestion.channelName,
+                                            sourceID: candidate.option.sourceID,
+                                            epgChannelID: candidate.option.channelID
+                                        ))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .accessibilityHint(AppStrings.Settings.epgMappingSuggestionsDescription)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                } header: {
+                    Text(AppStrings.Settings.epgMappingSuggestionsTitle)
+                }
+
                 // Section 3: Channel-Specific EPG Mappings & Offsets
                 if !store.channelEPGMappings.isEmpty {
                     Section {

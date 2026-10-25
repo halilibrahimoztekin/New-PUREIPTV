@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import FactoryKit
 import Foundation
 import Kingfisher
 import RevenueCat
@@ -112,6 +113,13 @@ public struct SettingsFeature {
         // Custom EPG XMLTV & Time-Shift Offset (Madde #23)
         public var customEPGSources: [CustomEPGSource] = []
         public var channelEPGMappings: [String: ChannelEPGMapping] = [:]
+        public var epgMappingChannels: [MediaModels.Item] = []
+        public var epgMappingOptions: [CustomEPGChannelOption] = []
+        public var epgMappingSuggestions: [EPGMappingSuggestion] = []
+        public var isLoadingEPGMappingSuggestions = false
+        public var epgMappingSuggestionError: String?
+        public var epgMappingRequestID: UUID?
+        public var epgMappingSuggestionsPlaylistID: UUID?
         public var isCustomEPGSheetPresented: Bool = false
         public var isAddCustomEPGSourceSheetPresented: Bool = false
         public var newCustomEPGName: String = ""
@@ -232,6 +240,10 @@ public struct SettingsFeature {
         case refreshCustomEPGSourceResponse(TaskResult<CustomEPGSource>)
         case refreshAllCustomEPGSources
         case refreshAllCustomEPGSourcesCompleted
+        case loadEPGMappingSuggestions
+        case epgMappingInputsLoaded(UUID, playlistID: UUID, channels: [MediaModels.Item], options: [CustomEPGChannelOption])
+        case epgMappingSuggestionsLoaded(UUID, playlistID: UUID, [EPGMappingSuggestion])
+        case applySuggestedEPGMapping(channelID: String, channelName: String, sourceID: String, epgChannelID: String)
 
         // iCloud Cross-Device Sync (Madde #24)
         case syncNowTapped
@@ -251,6 +263,8 @@ public struct SettingsFeature {
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.downloadClient) var downloadClient
+    @Injected(\.iptvClient) var iptvClient
+    @Injected(\.playlistRepository) var playlistRepository
 
     public init() {}
 
@@ -777,6 +791,69 @@ public struct SettingsFeature {
                     state.channelEPGMappings = customEPGMappingClient.getAllMappings()
                     state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
                 }
+                return .none
+
+            case .loadEPGMappingSuggestions:
+                guard !state.isLoadingEPGMappingSuggestions,
+                      let playlist = playlistRepository.getActivePlaylist(),
+                      let config = playlist.toPlaylistConfig()
+                else { return .none }
+                let requestID = UUID()
+                state.epgMappingRequestID = requestID
+                state.epgMappingSuggestionsPlaylistID = playlist.id
+                state.isLoadingEPGMappingSuggestions = true
+                state.epgMappingSuggestionError = nil
+                return .run { send in
+                    async let channels = try? iptvClient.fetchLiveChannels(config, nil)
+                    async let options = customEPGMappingClient.getAvailableEPGChannelOptions()
+                    let fetchedChannels = await channels ?? []
+                    let fetchedOptions = await options
+                    await send(.epgMappingInputsLoaded(requestID, playlistID: playlist.id, channels: fetchedChannels, options: fetchedOptions))
+                }
+
+            case let .epgMappingInputsLoaded(requestID, playlistID, channels, options):
+                guard state.epgMappingRequestID == requestID else { return .none }
+                guard playlistRepository.getActivePlaylistID() == playlistID else {
+                    state.isLoadingEPGMappingSuggestions = false
+                    state.epgMappingRequestID = nil
+                    return .none
+                }
+                state.epgMappingChannels = channels
+                state.epgMappingOptions = options
+                state.epgMappingSuggestionsPlaylistID = playlistID
+                return .run { send in
+                    let suggestions = await EPGMappingSuggestionEngine.suggestions(for: channels, from: options)
+                    await send(.epgMappingSuggestionsLoaded(requestID, playlistID: playlistID, suggestions))
+                }
+
+            case let .epgMappingSuggestionsLoaded(requestID, playlistID, suggestions):
+                guard state.epgMappingRequestID == requestID else { return .none }
+                guard playlistRepository.getActivePlaylistID() == playlistID else {
+                    state.isLoadingEPGMappingSuggestions = false
+                    state.epgMappingRequestID = nil
+                    return .none
+                }
+                state.isLoadingEPGMappingSuggestions = false
+                state.epgMappingSuggestions = suggestions
+                state.epgMappingSuggestionError = suggestions.isEmpty ? AppStrings.Settings.noEPGMappingSuggestions : nil
+                return .none
+
+            case let .applySuggestedEPGMapping(channelID, channelName, sourceID, epgChannelID):
+                guard state.epgMappingSuggestionsPlaylistID == playlistRepository.getActivePlaylistID() else {
+                    state.epgMappingSuggestions = []
+                    return .none
+                }
+                let previous = state.channelEPGMappings[channelID]
+                let mapping = ChannelEPGMapping(
+                    channelID: channelID,
+                    channelName: channelName,
+                    customEPGChannelID: epgChannelID,
+                    customSourceID: sourceID,
+                    timeShiftHours: previous?.timeShiftHours ?? 0
+                )
+                customEPGMappingClient.setChannelMapping(mapping)
+                state.channelEPGMappings[channelID] = mapping
+                state.epgMappingSuggestions.removeAll { $0.channelID == channelID }
                 return .none
 
             case let .setAddCustomEPGSourceSheetPresented(val):

@@ -505,6 +505,15 @@ public enum AppStrings {
         public static let startupScreen = "Başlangıç Ekranı".localized
         public static let hideEmptyContentTabs = "Boş içerik sekmelerini gizle".localized
         public static let hideEmptyContentTabsDescription = "Playlist'te içerik olmayan canlı TV, film ve dizi sekmelerini gizler.".localized
+        public static let epgMappingSuggestionsTitle = "EPG Eşleme Önerileri".localized
+        public static let epgMappingSuggestionsDescription = "Kanal adlarına göre güven skorlu XMLTV eşleşmeleri önerir; siz onaylamadan hiçbir eşleme kaydedilmez.".localized
+        public static let findEPGMappingSuggestions = "Önerileri Bul veya Yenile".localized
+        public static let noEPGMappingSuggestions = "Güvenilir bir EPG eşleşmesi önerisi bulunamadı.".localized
+        public static let confirmEPGMapping = "Eşlemeyi Onayla".localized
+        public static func epgMappingConfidence(_ confidence: Int) -> String {
+            "Güven: %lld%%".localized(Int64(confidence))
+        }
+
         public static let discover = "Keşfet".localized
         public static let contentSorting = "İçerik Sıralaması".localized
         public static let vodSorting = "Filmler (VOD)".localized
