@@ -10,6 +10,8 @@ import SwiftUI
 public struct ChannelCardView: View {
     let channel: MediaModels.Item
     let isSelected: Bool
+    let presentationName: String?
+    let presentationNumber: Int?
     var selectionMode = false
     var isMarkedForBulkAction = false
     var onTap: (() -> Void)?
@@ -17,12 +19,16 @@ public struct ChannelCardView: View {
     public init(
         channel: MediaModels.Item,
         isSelected: Bool = false,
+        presentationName: String? = nil,
+        presentationNumber: Int? = nil,
         selectionMode: Bool = false,
         isMarkedForBulkAction: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
         self.channel = channel
         self.isSelected = isSelected
+        self.presentationName = presentationName
+        self.presentationNumber = presentationNumber
         self.selectionMode = selectionMode
         self.isMarkedForBulkAction = isMarkedForBulkAction
         self.onTap = onTap
@@ -79,11 +85,18 @@ public struct ChannelCardView: View {
 
                 // ── Channel name + LIVE badge ──────────────────────
                 HStack(alignment: .center, spacing: 6) {
-                    Text(channel.cleanTitle)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    HStack(spacing: 5) {
+                        if let presentationNumber {
+                            Text(String(presentationNumber))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(hex: "#64D2FF"))
+                        }
+                        Text(presentationName ?? channel.cleanTitle)
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
 
                     Spacer(minLength: 4)
 
@@ -112,6 +125,7 @@ public struct ChannelCardView: View {
         .accessibilityValue(selectionMode
             ? (isMarkedForBulkAction ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
             : "")
+        .accessibilityLabel([presentationNumber.map(String.init), presentationName ?? channel.cleanTitle].compactMap(\.self).joined(separator: ", "))
         .accessibilityHint(selectionMode
             ? (isMarkedForBulkAction
                 ? AppStrings.LiveTV.deselectChannelAccessibilityHint

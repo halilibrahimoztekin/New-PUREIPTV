@@ -140,6 +140,10 @@ public struct LiveTVFeature {
         public var isFavoriteListMode = false
         public var favoriteListResolvedChannels: [MediaModels.Item] = []
         public var unavailableFavoriteChannels: [UnavailableFavoriteChannel] = []
+        public var channelPresentationOverrides: [String: ChannelPresentationOverride] = [:]
+        public var channelPresentationPlaylistID: UUID?
+        public var channelPresentationProfileScope: ProfileContextSnapshot?
+        public var channelPresentationLoadID: UUID?
 
         public var unavailableFavoriteChannelIDs: Set<String> {
             Set(unavailableFavoriteChannels.map(\.channelID))
@@ -305,6 +309,8 @@ public struct LiveTVFeature {
         case namedFavoriteBulkSaveCompleted(requestID: UUID, playlistID: UUID, profileScope: ProfileContextSnapshot, didSave: Bool)
         case bulkFavoriteCompleted(requestID: UUID, targetListID: UUID?, operation: BulkFavoriteOperation, playlistID: UUID, profileScope: ProfileContextSnapshot, selectionGenerationID: UUID, channelIDs: Set<String>, Result<Bool, Error>)
         case channelsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
+        case channelPresentationOverridesLoaded([String: ChannelPresentationOverride], playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
+        case saveChannelPresentationOverride(channelID: String, name: String, number: Int?, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case channelSelected(MediaModels.Item)
         case selectChannelPreview(MediaModels.Item)
         case channelEPGResponse(Result<[EPGProgram], Error>)
@@ -343,6 +349,7 @@ public struct LiveTVFeature {
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.smartChannelGroupClient) var smartChannelGroupClient
     @Dependency(\.favoriteChannelListsClient) var favoriteChannelListsClient
+    @Dependency(\.channelPresentationOverrideClient) var channelPresentationOverrideClient
 
     public init() {}
 
@@ -351,6 +358,7 @@ public struct LiveTVFeature {
         let parentalControlClient = parentalControlClient
         let smartChannelGroupClient = smartChannelGroupClient
         let favoriteChannelListsClient = favoriteChannelListsClient
+        let channelPresentationOverrideClient = channelPresentationOverrideClient
         let databaseClient = databaseClient
 
         let profileContextClient = profileContextClient
@@ -361,6 +369,25 @@ public struct LiveTVFeature {
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 let profileScope = profileContextClient.snapshot()
                 state.config = config
+                let presentationScopeChanged = state.channelPresentationPlaylistID != config.playlistID
+                    || state.channelPresentationProfileScope != profileScope
+                if presentationScopeChanged {
+                    state.channelPresentationOverrides = [:]
+                    state.channelPresentationPlaylistID = config.playlistID
+                    state.channelPresentationProfileScope = profileScope
+                }
+                let presentationLoadID = UUID()
+                state.channelPresentationLoadID = presentationLoadID
+                let presentationOverridesLoad: Effect<Action>
+                if let playlistID = config.playlistID {
+                    presentationOverridesLoad = .run { send in
+                        let values = await channelPresentationOverrideClient.load(profileScope.profileID, playlistID)
+                        await send(.channelPresentationOverridesLoaded(values, playlistID: playlistID, profileScope: profileScope, requestID: presentationLoadID))
+                    }
+                } else {
+                    state.channelPresentationLoadID = nil
+                    presentationOverridesLoad = .none
+                }
                 if playlistChanged {
                     state.resetChannelSelection()
                     state.unavailableFavoriteChannels = []
@@ -474,10 +501,36 @@ public struct LiveTVFeature {
                     refreshSelectedFavoriteList = .none
                 }
 
-                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) }
-                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) } // Prevent re-fetching on view re-appear
+                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) }
+                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) } // Prevent re-fetching on view re-appear
 
-                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, .send(.reloadCategories(config: config)))
+                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, .send(.reloadCategories(config: config)))
+
+            case let .channelPresentationOverridesLoaded(values, playlistID, profileScope, requestID):
+                guard state.config?.playlistID == playlistID,
+                      state.channelPresentationPlaylistID == playlistID,
+                      state.channelPresentationLoadID == requestID,
+                      state.channelPresentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.channelPresentationLoadID = nil
+                state.channelPresentationOverrides = values
+                return .none
+
+            case let .saveChannelPresentationOverride(channelID, name, number, playlistID, profileScope):
+                guard state.config?.playlistID == playlistID,
+                      state.channelPresentationPlaylistID == playlistID,
+                      state.channelPresentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.channelPresentationLoadID = nil
+                let value = ChannelPresentationOverride(name: name, number: number)
+                if value.name == nil, value.number == nil {
+                    state.channelPresentationOverrides.removeValue(forKey: channelID)
+                } else {
+                    state.channelPresentationOverrides[channelID] = value
+                }
+                return .run { _ in
+                    await channelPresentationOverrideClient.save(value, channelID, profileScope.profileID, playlistID)
+                }
 
             case .onDisappear:
                 state.activeSmartGroupRequestID = nil

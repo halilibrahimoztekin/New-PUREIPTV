@@ -9,6 +9,7 @@ import SwiftUI
         @State private var categorySearchQuery: String = ""
         @State private var channelSearchQuery: String = ""
         @State private var isSmartGroupManagerPresented = false
+        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -40,6 +41,20 @@ import SwiftUI
             }
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
+            }
+            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
+            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
+            .sheet(item: $editingPresentationTarget) { target in
+                let channel = target.channel
+                let override = store.channelPresentationOverrides[channel.id]
+                ChannelPresentationEditorView(
+                    channelTitle: channel.title,
+                    currentName: override?.name,
+                    currentNumber: override?.number
+                ) { name, number in
+                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
+                                                                playlistID: target.playlistID, profileScope: target.profileScope))
+                }
             }
         }
 
@@ -308,10 +323,17 @@ import SwiftUI
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(channel.title)
-                            .font(.subheadline.weight(isSelected ? .bold : .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            if let number = store.channelPresentationOverrides[channel.id]?.number {
+                                Text(String(number))
+                                    .font(.caption.bold().monospacedDigit())
+                                    .foregroundStyle(Color(hex: "#64D2FF"))
+                            }
+                            Text(store.channelPresentationOverrides[channel.id]?.name ?? channel.title)
+                                .font(.subheadline.weight(isSelected ? .bold : .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
 
                         HStack(spacing: 6) {
                             if store.favoriteIDs.contains(channel.id) {
@@ -349,7 +371,7 @@ import SwiftUI
                             .foregroundColor(isSelected ? .accentColor : .white.opacity(0.5))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(channel.title)
+                    .accessibilityLabel([store.channelPresentationOverrides[channel.id]?.number.map(String.init), store.channelPresentationOverrides[channel.id]?.name ?? channel.title].compactMap(\.self).joined(separator: ", "))
                     .accessibilityValue(store.isChannelSelectionMode
                         ? (isBulkSelected ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
                         : AppStrings.LiveTV.title)
@@ -396,6 +418,16 @@ import SwiftUI
                 }
 
                 if !isUnavailable {
+                    Button {
+                        guard let playlistID = store.channelPresentationPlaylistID,
+                              let profileScope = store.channelPresentationProfileScope else { return }
+                        editingPresentationTarget = ChannelPresentationEditorTarget(
+                            channel: channel, playlistID: playlistID, profileScope: profileScope
+                        )
+                    } label: {
+                        Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
+                    }
+
                     if !store.favoriteLists.isEmpty {
                         Menu(AppStrings.LiveTV.addToFavoriteList) {
                             ForEach(store.favoriteLists) { list in

@@ -144,6 +144,10 @@ public enum AppStrings {
         public static let noChannelsMatchingFilter = "Seçili filtre veya arama kriterine uygun kanal bulunamadı.".localized
         public static let channelDialerTitle = "Kanal Numarası".localized
         public static let channelDialerHint = "Kanal numarası tuşlayarak anında geçiş yapın".localized
+        public static let editChannelPresentation = "Kanal Görünümünü Düzenle".localized
+        public static let channelName = "Kanal Adı".localized
+        public static let channelNumber = "Kanal Numarası".localized
+        public static let resetChannelPresentation = "Kaynak Bilgilerine Dön".localized
         public static let jumpToChannel = "Kanala Git".localized
         public static let sortTitle = "Sıralama".localized
         public static let sortDefault = "Varsayılan Sıra".localized

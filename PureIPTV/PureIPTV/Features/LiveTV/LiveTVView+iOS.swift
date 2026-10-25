@@ -11,6 +11,7 @@
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
         @State private var isSmartGroupManagerPresented = false
+        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
@@ -58,6 +59,8 @@
             .onDisappear {
                 store.send(.onDisappear)
             }
+            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
+            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
             .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
                 CategoryManagementView(store: store)
             }
@@ -70,6 +73,18 @@
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
                     .presentationDetents([.height(300)])
+            }
+            .sheet(item: $editingPresentationTarget) { target in
+                let channel = target.channel
+                let override = store.channelPresentationOverrides[channel.id]
+                ChannelPresentationEditorView(
+                    channelTitle: channel.title,
+                    currentName: override?.name,
+                    currentNumber: override?.number
+                ) { name, number in
+                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
+                                                                playlistID: target.playlistID, profileScope: target.profileScope))
+                }
             }
             .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
                 MultiView(store: store)
@@ -280,6 +295,8 @@
                             ChannelCardView(
                                 channel: channel,
                                 isSelected: store.selectedChannel?.id == channel.id,
+                                presentationName: store.channelPresentationOverrides[channel.id]?.name,
+                                presentationNumber: store.channelPresentationOverrides[channel.id]?.number,
                                 selectionMode: store.isChannelSelectionMode,
                                 isMarkedForBulkAction: store.selectedCurrentChannelIDs.contains(channel.id)
                             ) {
@@ -324,6 +341,16 @@
                                 }
 
                                 if !isUnavailable {
+                                    Button {
+                                        guard let playlistID = store.channelPresentationPlaylistID,
+                                              let profileScope = store.channelPresentationProfileScope else { return }
+                                        editingPresentationTarget = ChannelPresentationEditorTarget(
+                                            channel: channel, playlistID: playlistID, profileScope: profileScope
+                                        )
+                                    } label: {
+                                        Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
+                                    }
+
                                     if !store.favoriteLists.isEmpty {
                                         Menu(AppStrings.LiveTV.addToFavoriteList) {
                                             ForEach(store.favoriteLists) { list in

@@ -21,6 +21,7 @@
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
         @State private var selectionRestoreChannelID: String?
+        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -82,6 +83,8 @@
             .onDisappear {
                 store.send(.onDisappear)
             }
+            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
+            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.isChannelSelectionMode) { _, isSelecting in
                 guard !isSelecting, let selectionRestoreChannelID else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -97,6 +100,18 @@
             }
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
+            }
+            .sheet(item: $editingPresentationTarget) { target in
+                let channel = target.channel
+                let override = store.channelPresentationOverrides[channel.id]
+                ChannelPresentationEditorView(
+                    channelTitle: channel.title,
+                    currentName: override?.name,
+                    currentNumber: override?.number
+                ) { name, number in
+                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
+                                                                playlistID: target.playlistID, profileScope: target.profileScope))
+                }
             }
             .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
                 EPGTimelineView(store: store)
@@ -348,7 +363,9 @@
                     let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
                     TVChannelCard(
                         channel: channel,
-                        isSelected: store.selectedChannel?.id == channel.id
+                        isSelected: store.selectedChannel?.id == channel.id,
+                        presentationName: store.channelPresentationOverrides[channel.id]?.name,
+                        presentationNumber: store.channelPresentationOverrides[channel.id]?.number
                     ) {
                         store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
                     }
@@ -438,6 +455,16 @@
             }
 
             if !isUnavailable {
+                Button {
+                    guard let playlistID = store.channelPresentationPlaylistID,
+                          let profileScope = store.channelPresentationProfileScope else { return }
+                    editingPresentationTarget = ChannelPresentationEditorTarget(
+                        channel: channel, playlistID: playlistID, profileScope: profileScope
+                    )
+                } label: {
+                    Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
+                }
+
                 if !store.favoriteLists.isEmpty {
                     Menu(AppStrings.LiveTV.addToFavoriteList) {
                         ForEach(store.favoriteLists) { list in

@@ -7,6 +7,8 @@
     public struct TVChannelCard: View {
         public let channel: MediaModels.Item
         public let isSelected: Bool
+        public let presentationName: String?
+        public let presentationNumber: Int?
         public let action: () -> Void
 
         @Environment(\.isFocused) private var isFocused
@@ -15,10 +17,14 @@
         public init(
             channel: MediaModels.Item,
             isSelected: Bool = false,
+            presentationName: String? = nil,
+            presentationNumber: Int? = nil,
             action: @escaping () -> Void
         ) {
             self.channel = channel
             self.isSelected = isSelected
+            self.presentationName = presentationName
+            self.presentationNumber = presentationNumber
             self.action = action
         }
 
@@ -68,10 +74,17 @@
                         }
 
                         HStack(alignment: .center, spacing: 8) {
-                            Text(channel.title)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(showTwoLineTitles ? 2 : 1)
+                            HStack(spacing: 6) {
+                                if let presentationNumber {
+                                    Text(String(presentationNumber))
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color(hex: "#64D2FF"))
+                                }
+                                Text(presentationName ?? channel.title)
+                            }
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(showTwoLineTitles ? 2 : 1)
                             Spacer()
                             if channel.tvArchive == 1 {
                                 CatchUpBadge(isCompact: true, archiveDays: channel.tvArchiveDuration)
@@ -85,7 +98,7 @@
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(channel.title)
+            .accessibilityLabel([presentationNumber.map(String.init), presentationName ?? channel.title].compactMap(\.self).joined(separator: ", "))
         }
     }
 
