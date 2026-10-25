@@ -713,6 +713,20 @@ public enum AppStrings {
         public static let currentVersion = "Mevcut Sürüm".localized
     }
 
+    // MARK: - TMDB Match Picker
+
+    public enum TMDBMatchPicker {
+        public static let title = "TMDB eşleşmesi".localized
+        public static let searchPlaceholder = "Film veya dizi adı".localized
+        public static let searchAccessibilityLabel = "TMDB arama metni".localized
+        public static let clearMatch = "TMDB eşleşmesini temizle".localized
+        public static let clearMatchHint = "İçerik için seçilen TMDB eşleşmesini kaldırır.".localized
+        public static let noResults = "TMDB eşleşmesi bulunamadı".localized
+        public static let noResultsHint = "Başlık arayarak eşleşme bulabilirsiniz.".localized
+        public static let selected = "Seçili".localized
+        public static let selectResultHint = "Bu TMDB sonucunu eşleşme olarak seçer.".localized
+    }
+
     // MARK: - Series Detail
 
     public enum SeriesDetail {

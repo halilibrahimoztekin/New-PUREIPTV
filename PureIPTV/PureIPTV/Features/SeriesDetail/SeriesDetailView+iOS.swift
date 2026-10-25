@@ -43,6 +43,37 @@
             .onDisappear {
                 store.send(.viewDidDisappear)
             }
+            .overlay(alignment: .topTrailing) {
+                if store.canManageTMDBMatch {
+                    Button { store.send(.showTMDBMatchPicker) } label: {
+                        Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { store.isTMDBMatchPickerPresented },
+                set: {
+                    if !$0 {
+                        store.send(.dismissTMDBMatchPicker)
+                    }
+                }
+            )) {
+                TMDBMatchPickerSheet(
+                    results: store.tmdbSearchResults,
+                    selectedTMDBID: store.selectedTMDBMatchID,
+                    isLoading: store.isTMDBLoading,
+                    search: { store.send(.manualTMDBSearch($0)) },
+                    select: { store.send(.selectTMDBMatch($0)) },
+                    clear: { store.send(.clearTMDBMatchOverride) },
+                    dismiss: { store.send(.dismissTMDBMatchPicker) }
+                )
+            }
             #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)

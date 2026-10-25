@@ -13,23 +13,59 @@ public struct VODDetailView: View {
     }
 
     public var body: some View {
-        #if os(tvOS)
-            VODDetailView_tvOS(store: store)
-                .onAppear { hasDisappeared = false }
-                .onDisappear {
-                    guard !hasDisappeared else { return }
-                    hasDisappeared = true
-                    store.send(.viewDidDisappear)
+        Group {
+            #if os(tvOS)
+                VODDetailView_tvOS(store: store)
+                    .onAppear { hasDisappeared = false }
+                    .onDisappear {
+                        guard !hasDisappeared else { return }
+                        hasDisappeared = true
+                        store.send(.viewDidDisappear)
+                    }
+            #else
+                VODDetailView_iOS(store: store)
+                    .onAppear { hasDisappeared = false }
+                    .onDisappear {
+                        guard !hasDisappeared else { return }
+                        hasDisappeared = true
+                        store.send(.viewDidDisappear)
+                    }
+            #endif
+        }
+        .overlay(alignment: .topTrailing) {
+            if store.canManageTMDBMatch {
+                Button {
+                    store.send(.showTMDBMatchPicker)
+                } label: {
+                    Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(.ultraThinMaterial, in: Capsule())
                 }
-        #else
-            VODDetailView_iOS(store: store)
-                .onAppear { hasDisappeared = false }
-                .onDisappear {
-                    guard !hasDisappeared else { return }
-                    hasDisappeared = true
-                    store.send(.viewDidDisappear)
+                .padding(.top, 12)
+                .padding(.trailing, 16)
+                .accessibilityHint(AppStrings.TMDBMatchPicker.searchAccessibilityLabel)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { store.isTMDBMatchPickerPresented },
+            set: {
+                if !$0 {
+                    store.send(.dismissTMDBMatchPicker)
                 }
-        #endif
+            }
+        )) {
+            TMDBMatchPickerSheet(
+                results: store.tmdbSearchResults,
+                selectedTMDBID: store.selectedTMDBMatchID,
+                isLoading: store.isTMDBLoading,
+                search: { store.send(.manualTMDBSearch($0)) },
+                select: { store.send(.selectTMDBMatch($0)) },
+                clear: { store.send(.clearTMDBMatchOverride) },
+                dismiss: { store.send(.dismissTMDBMatchPicker) }
+            )
+        }
     }
 }
 

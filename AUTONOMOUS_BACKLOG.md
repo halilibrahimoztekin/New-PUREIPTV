@@ -1061,9 +1061,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS Release compile-only Xcode build başarılı (`/private/tmp/pureiptv_105_ios_final.log`); tvOS Release compile-only Xcode build başarılı (`/private/tmp/pureiptv_105_tvos_final.log`). `git diff --check` ve string catalog JSON doğrulaması başarılı. Kullanıcı talimatı gereği yalnız Xcode build alındı; test, simulator launch, playback veya akış çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnız iOS/tvOS Release build alındı.
 
-### 106. [IN_PROGRESS] TMDB Yanlış Eşleşmeleri İçin Kalıcı Manuel Film/Dizi Eşlemesi
+### 106. [DONE] TMDB Yanlış Eşleşmeleri İçin Kalıcı Manuel Film/Dizi Eşlemesi
 - **Canlı keşif (25 Ekim 2026):** Snappier IPTV listesi poster/metadata için yanlış TMDB eşleşmesini cihazlar arasında kalıcı düzelten manual match override desteği veriyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
 - **Aday gap:** PureIPTV’de kanal logo override ve TMDB otomatik lookup var; VOD/series için kullanıcı tarafından doğrulanmış TMDB ID override’ı ve sync var mı kontrol edilsin. Eşleşme playlist + içerik kimliği kapsamlı olmalı ve yanlış posterin sonraki refresh’te geri gelmesini engellemeli.
+- **Uygulama:** Film ve dizi detay ekranlarına TMDB arama/seçme/temizleme akışı eklendi. Eşleşmeler playlist UUID + medya türü + sağlayıcı içerik ID’si ile yerel saklanıyor; iCloud sync açıksa KVS üzerinden cihazlara yayılıyor. Temizleme tombstone olarak kaydediliyor. Reducer aksiyon sırası kalıcı revision ile korunuyor; eski otomatik TMDB yanıtları ve eski arama istekleri seçimi/sonuç listesini ezemiyor. Picker iOS ve tvOS’ta erişilebilir kontroller kullanıyor; dokuz yeni metin 22 desteklenen locale için çevrildi.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_106_ios.log`, `/private/tmp/pureiptv_106_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
 ### 107. [PENDING] Playlist İçerik Türüne Göre Gereksiz Ana Navigasyon Sekmelerini Gizleme
 - **Canlı keşif (25 Ekim 2026):** Snappier tvOS rehberi, boş playlist’lerde içerik sekmelerinin otomatik gizlendiğini ve sekmelerin Settings’ten ayrıca gizlenebildiğini açıklıyor: https://snappieriptv.app/tutorial/index.html .

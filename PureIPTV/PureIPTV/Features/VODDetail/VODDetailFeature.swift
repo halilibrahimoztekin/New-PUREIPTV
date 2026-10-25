@@ -13,6 +13,13 @@ public struct VODDetailFeature {
         // API Data
         public var info: DetailModels.Info?
         public var tmdbMovie: TMDBMovieDetailsDTO?
+        public var tmdbSearchResults: [TMDBMovieSearchResultDTO] = []
+        public var selectedTMDBMatchID: Int?
+        public var hasManualTMDBOverride = false
+        public var didUserChangeTMDBMatch = false
+        public var manualTMDBSearchRequestID: UUID?
+        public var lastTMDBMatchWriteRevision: Date?
+        public var isTMDBMatchPickerPresented = false
 
         // UI State
         public var isLoading = false
@@ -23,6 +30,10 @@ public struct VODDetailFeature {
         public var errorMessage: String?
 
         public var autoPlayOnLoad: Bool = false
+        public var canManageTMDBMatch: Bool {
+            config.playlistID != nil
+        }
+
         public var selectedActor: TMDBCastMemberDTO?
         public var selectedActorDetails: TMDBPersonDetailsDTO?
         public var isLoadingActorDetails: Bool = false
@@ -82,6 +93,14 @@ public struct VODDetailFeature {
         case infoResponse(Result<DetailModels.Info, Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBMovieDetailsDTO, Error>)
+        case tmdbOverrideLoaded(Int?)
+        case manualTMDBSearch(String)
+        case manualTMDBSearchResponse(UUID, Result<TMDBSearchResponseDTO, Error>)
+        case showTMDBMatchPicker
+        case dismissTMDBMatchPicker
+        case selectTMDBMatch(Int)
+        case manualTMDBDetailsResponse(Int, Result<TMDBMovieDetailsDTO, Error>)
+        case clearTMDBMatchOverride
         case catalogVODsResponse(Result<[MediaModels.Item], Error>)
         case playTapped
         case resumeTapped
@@ -126,6 +145,8 @@ public struct VODDetailFeature {
     @Injected(\.tmdbClient) var tmdbClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.cloudSyncClient) var cloudSyncClient
+    @Dependency(\.tmdbMatchOverrideClient) var tmdbMatchOverrideClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.dismiss) var dismiss
 
@@ -238,6 +259,8 @@ public struct VODDetailFeature {
         let iptvClient = iptvClient
         let tmdbClient = tmdbClient
         let profileContextClient = profileContextClient
+        let tmdbMatchOverrideClient = tmdbMatchOverrideClient
+        let cloudSyncClient = cloudSyncClient
 
         Reduce { state, action in
             switch action {
@@ -298,12 +321,26 @@ public struct VODDetailFeature {
                     ))
                 } : .none
 
+                let overrideEffect: Effect<Action> = if let playlistID {
+                    .run { [itemID = state.vod.id] send in
+                        let override = await tmdbMatchOverrideClient.load(
+                            playlistID,
+                            .movie,
+                            itemID,
+                            cloudSyncClient.isSyncEnabled()
+                        )
+                        await send(.tmdbOverrideLoaded(override))
+                    }
+                } else {
+                    .none
+                }
+
                 let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
                     let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
                     await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect, matchingEffect)
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect, matchingEffect, overrideEffect)
 
             case let .catalogVODsResponse(.success(items)):
                 state.catalogVODs = items
@@ -335,6 +372,8 @@ public struct VODDetailFeature {
                 return .none
 
             case let .tmdbSearchResponse(.success(response)):
+                state.tmdbSearchResults = response.results ?? []
+                guard !state.hasManualTMDBOverride else { return .none }
                 if let firstResult = response.results?.first {
                     print("TMDB search found result: \(firstResult.title ?? "") (ID: \(firstResult.id))")
                     return .run { send in
@@ -352,6 +391,7 @@ public struct VODDetailFeature {
                 }
 
             case let .tmdbDetailsResponse(.success(movieDetails)):
+                guard !state.hasManualTMDBOverride else { return .none }
                 print("TMDB details fetched for VOD: \(movieDetails.title ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbMovie = movieDetails
@@ -375,6 +415,7 @@ public struct VODDetailFeature {
                 return .merge(effects)
 
             case let .tmdbSearchResponse(.failure(error)):
+                guard !state.hasManualTMDBOverride else { return .none }
                 print("TMDB search failed: \(error.localizedDescription)")
                 state.isTMDBLoading = false
                 if state.info != nil {
@@ -383,12 +424,107 @@ public struct VODDetailFeature {
                 return .none // Fail silently for tmdb search
 
             case let .tmdbDetailsResponse(.failure(error)):
+                guard !state.hasManualTMDBOverride else { return .none }
                 print("TMDB fetch details failed: \(error.localizedDescription)")
                 state.isTMDBLoading = false
                 if state.info != nil {
                     state.isLoading = false
                 }
                 return .none // Fail silently for tmdb details
+
+            case let .tmdbOverrideLoaded(tmdbID):
+                guard !state.didUserChangeTMDBMatch else { return .none }
+                guard let tmdbID else { return .none }
+                state.hasManualTMDBOverride = true
+                state.didUserChangeTMDBMatch = true
+                state.selectedTMDBMatchID = tmdbID
+                state.isTMDBLoading = true
+                return .run { send in
+                    await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchMovieDetails(tmdbID) }))
+                }
+
+            case let .manualTMDBSearch(query):
+                state.isTMDBMatchPickerPresented = true
+                state.isTMDBLoading = true
+                let requestID = UUID()
+                state.manualTMDBSearchRequestID = requestID
+                return .run { send in
+                    await send(.manualTMDBSearchResponse(requestID, Result { try await tmdbClient.searchMovie(query) }))
+                }
+
+            case let .manualTMDBSearchResponse(requestID, .success(response)):
+                guard state.manualTMDBSearchRequestID == requestID else { return .none }
+                state.manualTMDBSearchRequestID = nil
+                state.tmdbSearchResults = response.results ?? []
+                state.isTMDBLoading = false
+                return .none
+
+            case let .manualTMDBSearchResponse(requestID, .failure):
+                guard state.manualTMDBSearchRequestID == requestID else { return .none }
+                state.manualTMDBSearchRequestID = nil
+                state.tmdbSearchResults = []
+                state.isTMDBLoading = false
+                return .none
+
+            case .showTMDBMatchPicker:
+                state.isTMDBMatchPickerPresented = true
+                state.manualTMDBSearchRequestID = nil
+                state.tmdbSearchResults = []
+                return .none
+
+            case .dismissTMDBMatchPicker:
+                state.isTMDBMatchPickerPresented = false
+                state.manualTMDBSearchRequestID = nil
+                return .none
+
+            case let .selectTMDBMatch(tmdbID):
+                guard state.canManageTMDBMatch, tmdbID > 0, let playlistID = state.config.playlistID else { return .none }
+                state.hasManualTMDBOverride = true
+                state.didUserChangeTMDBMatch = true
+                state.selectedTMDBMatchID = tmdbID
+                state.tmdbMovie = nil
+                state.isTMDBLoading = true
+                let itemID = state.vod.id
+                let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
+                let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
+                state.lastTMDBMatchWriteRevision = revision
+                return .merge(
+                    .run { _ in await tmdbMatchOverrideClient.save(tmdbID, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
+                    .run { send in
+                        await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchMovieDetails(tmdbID) }))
+                    }
+                )
+
+            case let .manualTMDBDetailsResponse(tmdbID, .success(details)):
+                guard state.selectedTMDBMatchID == tmdbID else { return .none }
+                state.tmdbMovie = details
+                state.isTMDBLoading = false
+                state.isLoading = false
+                state.isTMDBMatchPickerPresented = false
+                return .none
+
+            case let .manualTMDBDetailsResponse(tmdbID, .failure):
+                guard state.selectedTMDBMatchID == tmdbID else { return .none }
+                state.isTMDBLoading = false
+                state.tmdbMovie = nil
+                return .none
+
+            case .clearTMDBMatchOverride:
+                guard let playlistID = state.config.playlistID else { return .none }
+                let itemID = state.vod.id
+                let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
+                let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
+                state.lastTMDBMatchWriteRevision = revision
+                state.hasManualTMDBOverride = false
+                state.didUserChangeTMDBMatch = true
+                state.selectedTMDBMatchID = nil
+                state.tmdbMovie = nil
+                state.isTMDBMatchPickerPresented = false
+                let query = state.vod.title.cleanedForTMDBSearch()
+                return .merge(
+                    .run { _ in await tmdbMatchOverrideClient.save(nil, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
+                    .run { send in await send(.tmdbSearchResponse(Result { try await tmdbClient.searchMovie(query) })) }
+                )
 
             case .tmdbTimeout:
                 print("TMDB loading timed out after 4 seconds")
