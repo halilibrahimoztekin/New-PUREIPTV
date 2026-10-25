@@ -1360,11 +1360,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#143 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task143` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal DerivedData’daki SourcePackages ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — Başarılı boş EPG ile istek hatası birbirinden ayrılıyor.
 
-### 144. [IN_PROGRESS] tvOS EPG’de Catch-up Programlarına Doğal Kumanda Yön Geçişi
+### 144. [DONE] tvOS EPG’de Catch-up Programlarına Doğal Kumanda Yön Geçişi
 - **Fırsat:** Kanal listesi, zaman çizelgesi ve catch-up program düğmeleri arasında ek seçim/ekran kapatma gerektirmeyen, görünür odak köprüleri kurmak.
 - **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1qyidkh/appletv_guide_catchup_browsing/ · https://www.reddit.com/r/iptvdeck/comments/1x2o22t/apple_tv_app_navigation/
+- **Uygulama:** Kanal satırında sağ yön “İzle” düğmesine, program/catch-up satırında sol yön seçili kanal satırına açıkça odak taşıyor. Yukarı/aşağı gezinme yerel dikey ScrollView davranışında kaldı; ek seçim veya ekran kapatma gerekmiyor.
+- **İnceleme:** PR Reviewer yön geçişlerini ve SwiftUI FocusState kullanımını `[APPROVED]` olarak değerlendirdi. Gerçek Apple TV kumanda doğrulaması bu compile-only görev kapsamında yapılmadı.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test/uygulama akışı çalıştırılmadı.
+- **#144 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task144` (3.8 GB) ve iOS/tvOS logları (7.1 MB) açık handle kalmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
+- **Durum:** `[DONE]` — EPG kanal ve program/catch-up odak alanları arasında sağ/sol kumanda geçişleri açıkça bağlı.
 
-### 145. [PENDING] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
+### 145. [IN_PROGRESS] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
 - **Fırsat:** Başlatma ve seek işini yüksek kare hızlı yayınlarda ölçüp player ilk karesini geciktiren adımları ayırmak; iyileştirmeyi yalnız ölçümle doğrulanmış yollara uygulamak.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 

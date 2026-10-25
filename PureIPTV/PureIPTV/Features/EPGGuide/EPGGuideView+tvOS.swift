@@ -9,6 +9,7 @@ import SwiftVLC
 
         @FocusState private var focusedChannelID: String?
         @FocusState private var focusedProgramID: String?
+        @FocusState private var isScheduleWatchButtonFocused: Bool
         @State private var isLivePulsing: Bool = false
 
         public init(store: StoreOf<EPGGuideFeature>) {
@@ -202,6 +203,11 @@ import SwiftVLC
             }
             .buttonStyle(.plain)
             .focused($focusedChannelID, equals: channel.id)
+            .onMoveCommand { direction in
+                if direction == .right {
+                    isScheduleWatchButtonFocused = true
+                }
+            }
         }
 
         private var fallbackLogo: some View {
@@ -395,6 +401,7 @@ import SwiftVLC
                         .background(Color(hex: "#0A84FF"), in: Capsule())
                     }
                     .buttonStyle(.card)
+                    .focused($isScheduleWatchButtonFocused)
 
                     // Close Button
                     Button {
@@ -582,6 +589,11 @@ import SwiftVLC
             }
             .buttonStyle(.plain)
             .focused($focusedProgramID, equals: program.id)
+            .onMoveCommand { direction in
+                if direction == .left, let channelID = store.selectedChannel?.id {
+                    focusedChannelID = channelID
+                }
+            }
         }
 
         // MARK: - Helpers
