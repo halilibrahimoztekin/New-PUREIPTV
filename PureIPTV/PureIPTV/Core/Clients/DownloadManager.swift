@@ -15,6 +15,7 @@ actor DownloadManager {
         let key = "com.pureiptv.downloadConcurrencyLimit"
         let storedValue = UserDefaults.standard.object(forKey: key) as? Int ?? 1
         concurrencyLimit = min(4, max(1, storedValue))
+        manuallyPausedDownloadIDs = Set(UserDefaults.standard.stringArray(forKey: "com.pureiptv.downloads.manuallyPausedIDs") ?? [])
     }
 
     private var tasks: [String: URLSessionDownloadTask] = [:]
@@ -28,6 +29,7 @@ actor DownloadManager {
     private var invalidatedDownloadIDs: Set<String> = []
     private var queuedDownloadIDs: [String] = []
     private var concurrencyLimit = 1
+    private var manuallyPausedDownloadIDs: Set<String> = []
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.pureiptv.downloads")
@@ -43,6 +45,8 @@ actor DownloadManager {
         }
         guard tasks[id] == nil else { return }
         invalidatedDownloadIDs.remove(id)
+        manuallyPausedDownloadIDs.remove(id)
+        persistManuallyPausedDownloadIDs()
         var request = URLRequest(url: url)
         UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
         let task = session.downloadTask(with: request)
@@ -80,6 +84,8 @@ actor DownloadManager {
     }
 
     func cancelDownload(id: String) {
+        manuallyPausedDownloadIDs.remove(id)
+        persistManuallyPausedDownloadIDs()
         if backgroundTaskRestorationsInProgress > 0 {
             invalidatedDownloadIDs.insert(id)
         }
@@ -98,6 +104,44 @@ actor DownloadManager {
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
         resumeQueuedDownloads()
+    }
+
+    func pauseDownload(id: String) {
+        guard let task = tasks[id], task.state == .running || task.state == .suspended else { return }
+        if task.state == .running {
+            task.suspend()
+        }
+        manuallyPausedDownloadIDs.insert(id)
+        persistManuallyPausedDownloadIDs()
+        queuedDownloadIDs.removeAll { $0 == id }
+        if var item = activeDownloads[id] {
+            item.isPaused = true
+            item.isQueued = false
+            item.speedBytesPerSecond = 0
+            activeDownloads[id] = item
+            broadcast(item)
+        }
+        resumeQueuedDownloads()
+    }
+
+    func resumeDownload(id: String) {
+        guard manuallyPausedDownloadIDs.contains(id), let task = tasks[id] else { return }
+        manuallyPausedDownloadIDs.remove(id)
+        persistManuallyPausedDownloadIDs()
+        if var item = activeDownloads[id] {
+            item.isPaused = false
+            item.isQueued = task.state == .suspended
+            activeDownloads[id] = item
+            broadcast(item)
+        }
+        guard task.state == .suspended else { return }
+        queuedDownloadIDs.removeAll { $0 == id }
+        queuedDownloadIDs.insert(id, at: 0)
+        resumeQueuedDownloads()
+    }
+
+    private func persistManuallyPausedDownloadIDs() {
+        UserDefaults.standard.set(manuallyPausedDownloadIDs.sorted(), forKey: "com.pureiptv.downloads.manuallyPausedIDs")
     }
 
     func getActiveDownloads(scheduleQueuedTasks: Bool = true) async -> [DownloadProgressItem] {
@@ -131,6 +175,10 @@ actor DownloadManager {
             let progress = expectedBytes > 0
                 ? min(1, max(0, Double(receivedBytes) / Double(expectedBytes)))
                 : 0
+            let isManuallyPaused = manuallyPausedDownloadIDs.contains(metadata.id)
+            if isManuallyPaused, task.state == .running {
+                task.suspend()
+            }
             let item = DownloadProgressItem(
                 id: metadata.id,
                 title: metadata.title,
@@ -138,10 +186,11 @@ actor DownloadManager {
                 userAgentOverride: metadata.userAgentOverride,
                 progress: progress,
                 bytesWritten: receivedBytes,
-                totalBytesExpected: expectedBytes
+                totalBytesExpected: expectedBytes,
+                isPaused: isManuallyPaused
             )
             activeDownloads[metadata.id] = item
-            if task.state == .suspended {
+            if task.state == .suspended, !isManuallyPaused {
                 queuedDownloadIDs.append(metadata.id)
                 var queuedItem = item
                 queuedItem.isQueued = true
@@ -215,6 +264,7 @@ actor DownloadManager {
         var availableSlots = max(0, concurrencyLimit - runningCount)
         while availableSlots > 0, !queuedDownloadIDs.isEmpty {
             let id = queuedDownloadIDs.removeFirst()
+            guard !manuallyPausedDownloadIDs.contains(id) else { continue }
             guard let task = tasks[id], task.state == .suspended else { continue }
             task.resume()
             if var item = activeDownloads[id] {
@@ -258,6 +308,8 @@ actor DownloadManager {
 
     func completeDownload(id: String, taskIdentifier: Int) {
         guard tasks[id]?.taskIdentifier == taskIdentifier else { return }
+        manuallyPausedDownloadIDs.remove(id)
+        persistManuallyPausedDownloadIDs()
         if backgroundTaskRestorationsInProgress > 0 {
             invalidatedDownloadIDs.insert(id)
         }
@@ -318,6 +370,8 @@ actor DownloadManager {
 
     func failDownload(id: String, taskIdentifier: Int) {
         guard tasks[id]?.taskIdentifier == taskIdentifier else { return }
+        manuallyPausedDownloadIDs.remove(id)
+        persistManuallyPausedDownloadIDs()
         if backgroundTaskRestorationsInProgress > 0 {
             invalidatedDownloadIDs.insert(id)
         }

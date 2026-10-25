@@ -1288,9 +1288,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Uzun film ve dizi özetleri tvOS’ta tam okunabiliyor.
 
-### 136. [PENDING] İndirmeleri Duraklatma ve Devam Ettirme
+### 136. [DONE] İndirmeleri Duraklatma ve Devam Ettirme
 - **Canlı keşif (25 Ekim 2026):** IPTVX iOS/iPadOS indirmeler için pause/resume/cancel kontrolleri ekledi: https://apps.apple.com/us/app/iptvx/id1451470024 .
-- **Aday gap:** İndirme motoru `URLSessionDownloadTask` duraklatılabilir resume data ve kalıcı kuyruk sağlıyor mu; desteklenmeyen task’larda sahte pause düğmesi göstermeden denetle.
+- **Kod incelemesi:** İndirmeler arka plan `URLSessionDownloadTask` ile yönetiliyor; actor kuyruğu eşzamanlılık sınırını uygulamak için suspend/resume kullanıyordu, kullanıcıya pause/resume eylemi sunmuyordu.
+- **Uygulama:** İndirme satırlarına duraklat/devam düğmesi, durum metni ve erişilebilir etiketler eklendi. Manuel duraklatma kimlikleri kalıcı olarak saklanıyor ve arka plan task’ları yeniden bağlandığında korunuyor; devam ettirilen task’lar eşzamanlılık kuyruğundan geçiyor.
+- **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; katalog JSON ve `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Kullanıcı indirmeyi duraklatıp devam ettirebilir.
 
 ### 137. [PENDING] Ana Ekrana Playlist Kategorisi Sabitleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 herhangi playlist kategorisini, Live dahil, ana ekran Feed Collections’a sabitlemeyi duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
@@ -1303,3 +1306,4 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 139. [PENDING] Daha Uzun ve Kesin Süreli DVR Kaydı
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 kesin kayıt uzunluğu ve 24 saate kadar schedule desteğini duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
 - **Aday gap:** #121’de belgelenen yerel kayıt kısıtlarından ayrı olarak app’in EPG tabanlı planlama motoru var mı doğrula; yoksa provider/server DVR ile app tarafı kaydını karıştırma.
+- **#136 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) açık dosya olmadığı doğrulandıktan sonra kaldırıldı; `SourcePackages` (1.8 GB) ile SDK önbellekleri korundu. ContactCleaner’a dokunulmadı.

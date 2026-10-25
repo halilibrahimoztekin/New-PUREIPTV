@@ -124,7 +124,11 @@
                                                 .fontWeight(.semibold)
                                                 .lineLimit(1)
 
-                                            if item.isQueued {
+                                            if item.isPaused {
+                                                Text(AppStrings.Downloads.paused)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            } else if item.isQueued {
                                                 Text(AppStrings.Downloads.queued)
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
@@ -134,7 +138,7 @@
                                             }
 
                                             HStack(spacing: 8) {
-                                                Text(item.isQueued ? AppStrings.Downloads.queued : item.formattedProgress)
+                                                Text(item.isPaused ? AppStrings.Downloads.paused : (item.isQueued ? AppStrings.Downloads.queued : item.formattedProgress))
                                                     .font(.caption2)
                                                     .fontWeight(.bold)
                                                     .foregroundStyle(.blue)
@@ -161,6 +165,17 @@
                                                 }
                                             }
                                         }
+
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.togglePauseActiveDownload(item.id))
+                                        } label: {
+                                            Image(systemName: item.isPaused ? "play.fill" : "pause.fill")
+                                                .font(.body.weight(.semibold))
+                                                .foregroundStyle(.blue)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel(item.isPaused ? AppStrings.Downloads.resumeDownload : AppStrings.Downloads.pauseDownload)
 
                                         // Cancel Button
                                         Button {

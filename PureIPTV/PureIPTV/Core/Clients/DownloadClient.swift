@@ -17,6 +17,8 @@ public nonisolated struct DownloadBulkDeleteResult: Equatable, Sendable {
 public struct DownloadClient {
     public var startDownload: @Sendable (_ id: String, _ title: String, _ url: URL, _ coverURL: URL?, _ userAgentOverride: String?) async throws -> Void
     public var cancelDownload: @Sendable (_ id: String) async throws -> Void
+    public var pauseDownload: @Sendable (_ id: String) async -> Void = { _ in }
+    public var resumeDownload: @Sendable (_ id: String) async -> Void = { _ in }
     public var getDownloadProgress: @Sendable (_ id: String) -> AsyncStream<Double> = { _ in .finished }
     public var getDownloadedMedia: @Sendable () async throws -> [OfflineMedia]
     public var deleteDownloadedMedia: @Sendable (_ id: String) async throws -> Void
@@ -37,6 +39,12 @@ extension DownloadClient: DependencyKey {
         },
         cancelDownload: { id in
             await DownloadManager.shared.cancelDownload(id: id)
+        },
+        pauseDownload: { id in
+            await DownloadManager.shared.pauseDownload(id: id)
+        },
+        resumeDownload: { id in
+            await DownloadManager.shared.resumeDownload(id: id)
         },
         getDownloadProgress: { id in
             AsyncStream { continuation in

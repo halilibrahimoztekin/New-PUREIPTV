@@ -11,6 +11,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     public var totalBytesExpected: Int64
     public var speedBytesPerSecond: Double
     public var isQueued: Bool
+    public var isPaused: Bool
     public var isFailed: Bool
 
     public init(
@@ -24,6 +25,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         totalBytesExpected: Int64 = 0,
         speedBytesPerSecond: Double = 0,
         isQueued: Bool = false,
+        isPaused: Bool = false,
         isFailed: Bool = false
     ) {
         self.id = id
@@ -36,6 +38,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         self.totalBytesExpected = totalBytesExpected
         self.speedBytesPerSecond = speedBytesPerSecond
         self.isQueued = isQueued
+        self.isPaused = isPaused
         self.isFailed = isFailed
     }
 

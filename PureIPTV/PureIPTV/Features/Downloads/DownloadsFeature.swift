@@ -22,6 +22,7 @@ public struct DownloadsFeature {
         case downloadsLoaded([OfflineMedia])
         case activeDownloadsLoaded([DownloadProgressItem])
         case downloadProgressUpdated(DownloadProgressItem)
+        case togglePauseActiveDownload(String)
         case cancelActiveDownload(String)
         case deleteDownload(String)
         case clearCompletedTapped
@@ -90,6 +91,16 @@ public struct DownloadsFeature {
                 state.activeDownloads.removeAll { $0.id == id }
                 return .run { _ in
                     try? await downloadClient.cancelDownload(id)
+                }
+
+            case let .togglePauseActiveDownload(id):
+                let shouldResume = state.activeDownloads.first(where: { $0.id == id })?.isPaused == true
+                return .run { _ in
+                    if shouldResume {
+                        await downloadClient.resumeDownload(id)
+                    } else {
+                        await downloadClient.pauseDownload(id)
+                    }
                 }
 
             case let .deleteDownload(id):

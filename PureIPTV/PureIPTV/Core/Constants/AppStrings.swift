@@ -693,6 +693,9 @@ public enum AppStrings {
         public static let emptyDescription = "Filmleri veya dizileri indirerek internet bağlantınız olmadan da izleyebilirsiniz.".localized
         public static let activeDownloads = "Aktif İndirmeler".localized
         public static let queued = "Kuyrukta".localized
+        public static let paused = "Duraklatıldı".localized
+        public static let pauseDownload = "İndirmeyi Duraklat".localized
+        public static let resumeDownload = "İndirmeye Devam Et".localized
         public static let completedDownloads = "İndirilen İçerikler".localized
         public static let totalStorage = "Kullanılan Alan".localized
         public static let clearCompleted = "Tamamlananları Sil".localized

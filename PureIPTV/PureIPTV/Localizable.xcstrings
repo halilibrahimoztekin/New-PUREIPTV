@@ -44912,7 +44912,379 @@
           }
         }
       }
-    }
+    },
+        "İndirmeyi Duraklat" : {
+          "localizations" : {
+            "ar" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "إيقاف التنزيل مؤقتًا"
+              }
+            },
+            "de" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Download pausieren"
+              }
+            },
+            "en" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pause download"
+              }
+            },
+            "es" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausar descarga"
+              }
+            },
+            "fr" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Mettre le téléchargement en pause"
+              }
+            },
+            "hi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "डाउनलोड रोकें"
+              }
+            },
+            "id" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Jeda unduhan"
+              }
+            },
+            "it" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Metti in pausa il download"
+              }
+            },
+            "ja" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "ダウンロードを一時停止"
+              }
+            },
+            "ko" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "다운로드 일시 정지"
+              }
+            },
+            "nl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Download pauzeren"
+              }
+            },
+            "pl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Wstrzymaj pobieranie"
+              }
+            },
+            "pt-BR" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausar download"
+              }
+            },
+            "pt-PT" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausar transferência"
+              }
+            },
+            "ru" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Приостановить загрузку"
+              }
+            },
+            "sv" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausa nedladdning"
+              }
+            },
+            "th" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "หยุดดาวน์โหลดชั่วคราว"
+              }
+            },
+            "vi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Tạm dừng tải xuống"
+              }
+            },
+            "zh-Hans" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "暂停下载"
+              }
+            },
+            "zh-Hant" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "暫停下載"
+              }
+            }
+          }
+        },
+        "İndirmeye Devam Et" : {
+          "localizations" : {
+            "ar" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "استئناف التنزيل"
+              }
+            },
+            "de" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Download fortsetzen"
+              }
+            },
+            "en" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Resume download"
+              }
+            },
+            "es" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Reanudar descarga"
+              }
+            },
+            "fr" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Reprendre le téléchargement"
+              }
+            },
+            "hi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "डाउनलोड फिर शुरू करें"
+              }
+            },
+            "id" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Lanjutkan unduhan"
+              }
+            },
+            "it" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Riprendi il download"
+              }
+            },
+            "ja" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "ダウンロードを再開"
+              }
+            },
+            "ko" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "다운로드 재개"
+              }
+            },
+            "nl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Download hervatten"
+              }
+            },
+            "pl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Wznów pobieranie"
+              }
+            },
+            "pt-BR" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Retomar download"
+              }
+            },
+            "pt-PT" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Retomar transferência"
+              }
+            },
+            "ru" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Возобновить загрузку"
+              }
+            },
+            "sv" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Återuppta nedladdning"
+              }
+            },
+            "th" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "ดาวน์โหลดต่อ"
+              }
+            },
+            "vi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Tiếp tục tải xuống"
+              }
+            },
+            "zh-Hans" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "继续下载"
+              }
+            },
+            "zh-Hant" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "繼續下載"
+              }
+            }
+          }
+        },
+        "Duraklatıldı" : {
+          "localizations" : {
+            "ar" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "متوقف مؤقتًا"
+              }
+            },
+            "de" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausiert"
+              }
+            },
+            "en" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Paused"
+              }
+            },
+            "es" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "En pausa"
+              }
+            },
+            "fr" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "En pause"
+              }
+            },
+            "hi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "रोका गया"
+              }
+            },
+            "id" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Dijeda"
+              }
+            },
+            "it" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "In pausa"
+              }
+            },
+            "ja" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "一時停止中"
+              }
+            },
+            "ko" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "일시 정지됨"
+              }
+            },
+            "nl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Gepauzeerd"
+              }
+            },
+            "pl" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Wstrzymano"
+              }
+            },
+            "pt-BR" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausado"
+              }
+            },
+            "pt-PT" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Em pausa"
+              }
+            },
+            "ru" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Приостановлено"
+              }
+            },
+            "sv" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Pausad"
+              }
+            },
+            "th" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "หยุดชั่วคราว"
+              }
+            },
+            "vi" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "Đã tạm dừng"
+              }
+            },
+            "zh-Hans" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "已暂停"
+              }
+            },
+            "zh-Hant" : {
+              "stringUnit" : {
+                "state" : "translated",
+                "value" : "已暫停"
+              }
+            }
+          }
+        }
   },
   "version" : "1.1"
 }
