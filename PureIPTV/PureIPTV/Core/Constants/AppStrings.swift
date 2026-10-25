@@ -503,6 +503,8 @@ public enum AppStrings {
         public static let switchProfile = "Profil Değiştir".localized
         public static let hideAdultContent = "Yetişkin İçerikleri Tamamen Gizle".localized
         public static let startupScreen = "Başlangıç Ekranı".localized
+        public static let hideEmptyContentTabs = "Boş içerik sekmelerini gizle".localized
+        public static let hideEmptyContentTabsDescription = "Playlist'te içerik olmayan canlı TV, film ve dizi sekmelerini gizler.".localized
         public static let discover = "Keşfet".localized
         public static let contentSorting = "İçerik Sıralaması".localized
         public static let vodSorting = "Filmler (VOD)".localized

@@ -67,6 +67,22 @@ public struct HomeFeature {
         public var downloads = DownloadsFeature.State()
         public var settings = SettingsFeature.State()
 
+        public var visibleTabs: [HomeTab] {
+            guard settings.hideEmptyContentTabs else { return HomeTab.allCases }
+            return HomeTab.allCases.filter { tab in
+                switch tab {
+                case .liveTV:
+                    !dashboard.hasResolvedLiveCatalog || dashboard.hasLiveContent
+                case .movies:
+                    !dashboard.hasResolvedMovieCatalog || dashboard.hasMovieContent
+                case .series:
+                    !dashboard.hasResolvedSeriesCatalog || dashboard.hasSeriesContent
+                default:
+                    true
+                }
+            }
+        }
+
         public init(config: PlaylistConfig) {
             self.config = config
 
@@ -75,6 +91,7 @@ public struct HomeFeature {
             if let tab = HomeTab(rawValue: tabString) {
                 selectedTab = tab
             }
+            settings.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
         }
     }
 
@@ -128,6 +145,7 @@ public struct HomeFeature {
         Reduce { state, action in
             switch action {
             case let .tabSelected(tab):
+                guard state.visibleTabs.contains(tab) else { return .none }
                 state.selectedTab = tab
                 if tab == .movies {
                     return .send(.vod(.applySortIfChanged))
@@ -155,6 +173,9 @@ public struct HomeFeature {
                 return .send(.delegate(.openManagePlaylists))
 
             case .dashboard:
+                if !state.visibleTabs.contains(state.selectedTab) {
+                    state.selectedTab = .dashboard
+                }
                 return .none
 
             case let .liveTV(.delegate(.didSelectChannel(channel, playlist))):
@@ -200,6 +221,9 @@ public struct HomeFeature {
                 return .send(.delegate(.switchProfile))
 
             case .settings:
+                if !state.visibleTabs.contains(state.selectedTab) {
+                    state.selectedTab = .dashboard
+                }
                 return .none
 
             case .delegate:

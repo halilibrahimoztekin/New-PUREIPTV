@@ -35,6 +35,12 @@ public struct DashboardFeature {
         public var isLoading: Bool = false
         public var activePlaylistName: String = ""
         public var featuredChannels: [MediaModels.Item] = []
+        public var hasResolvedLiveCatalog = false
+        public var hasLiveContent = true
+        public var hasResolvedMovieCatalog = false
+        public var hasMovieContent = true
+        public var hasResolvedSeriesCatalog = false
+        public var hasSeriesContent = true
         public var epgCandidateChannels: [MediaModels.Item] = []
         public var epgCandidatePlaylistID: UUID?
         public var epgCandidateSourceLoaded = false
@@ -195,6 +201,12 @@ public struct DashboardFeature {
                 state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
                 let playlistChanged = state.activePlaylistID != playlistID
                 if playlistChanged {
+                    state.hasResolvedLiveCatalog = false
+                    state.hasLiveContent = true
+                    state.hasResolvedMovieCatalog = false
+                    state.hasMovieContent = true
+                    state.hasResolvedSeriesCatalog = false
+                    state.hasSeriesContent = true
                     state.newEpisodeSeries = []
                     state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                     state.activeNewEpisodeRefreshID = nil
@@ -232,6 +244,12 @@ public struct DashboardFeature {
                 state.isSportsHubVisible = isSportsHubVisible
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
+                    state.hasResolvedLiveCatalog = false
+                    state.hasLiveContent = true
+                    state.hasResolvedMovieCatalog = false
+                    state.hasMovieContent = true
+                    state.hasResolvedSeriesCatalog = false
+                    state.hasSeriesContent = true
                     // Drop both rendered and pin-management candidates before
                     // the refreshed adult-filtered catalog arrives.
                     state.availableHomeCategoryCollections = []
@@ -879,15 +897,21 @@ public struct DashboardFeature {
                 state.lastRemoteRefreshAt = Date()
                 state.activeRefreshID = nil
                 if let channels {
+                    state.hasResolvedLiveCatalog = true
+                    state.hasLiveContent = !channels.isEmpty
                     state.featuredChannels = channels
                 }
                 state.epgCandidateChannels = epgCandidateChannels
                 state.epgCandidatePlaylistID = playlistID
                 state.epgCandidateSourceLoaded = epgSourceLoaded
                 if let vods {
+                    state.hasResolvedMovieCatalog = true
+                    state.hasMovieContent = !vods.isEmpty
                     state.featuredVODs = vods
                 }
                 if let series {
+                    state.hasResolvedSeriesCatalog = true
+                    state.hasSeriesContent = !series.isEmpty
                     state.featuredSeries = series
                 }
                 state.actorRecommendationMovieCandidates = actorMovieCandidates

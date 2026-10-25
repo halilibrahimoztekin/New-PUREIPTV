@@ -20,7 +20,7 @@
                 get: { store.selectedTab },
                 set: { store.send(.tabSelected($0)) }
             )) {
-                ForEach(HomeTab.allCases, id: \.self) { tab in
+                ForEach(store.visibleTabs, id: \.self) { tab in
                     TVTabContentView(tab: tab, store: store)
                         .tabItem {
                             Label(tab.rawValue, systemImage: store.selectedTab == tab ? tab.selectedIcon : tab.icon)

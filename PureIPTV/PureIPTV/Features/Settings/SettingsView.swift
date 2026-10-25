@@ -172,6 +172,14 @@ public struct SettingsView: View {
                     Text(AppStrings.VOD.title).tag("Filmler")
                     Text(AppStrings.Series.title).tag("Diziler")
                 }
+
+                Toggle(AppStrings.Settings.hideEmptyContentTabs, isOn: Binding(
+                    get: { store.hideEmptyContentTabs },
+                    set: { store.send(.setHideEmptyContentTabs($0)) }
+                ))
+                Text(AppStrings.Settings.hideEmptyContentTabsDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section(header: Text(AppStrings.Settings.contentSorting)) {

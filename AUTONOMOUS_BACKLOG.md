@@ -1068,11 +1068,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_106_ios.log`, `/private/tmp/pureiptv_106_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 107. [PENDING] Playlist İçerik Türüne Göre Gereksiz Ana Navigasyon Sekmelerini Gizleme
+### 107. [DONE] Playlist İçerik Türüne Göre Gereksiz Ana Navigasyon Sekmelerini Gizleme
 - **Canlı keşif (25 Ekim 2026):** Snappier tvOS rehberi, boş playlist’lerde içerik sekmelerinin otomatik gizlendiğini ve sekmelerin Settings’ten ayrıca gizlenebildiğini açıklıyor: https://snappieriptv.app/tutorial/index.html .
 - **Aday gap:** PureIPTV’de ana navigation hangi tab’ları her zaman gösteriyor ve kaynakta içerik yokken boş durum mu sunuyor denetlensin. Otomatik mevcutluk ve kullanıcı visibility tercihi çatışmamalı; sekmeyi gizlemek erişimi kalıcı olarak silmemeli.
+- **Analiz:** iOS, tvOS ve iPad ana gezinme şu anda `HomeTab.allCases` ile yedi sekmenin hepsini gösteriyor. Dashboard açılışında zaten playlist’in tüm canlı/VOD/dizi kataloglarını paralel alıyor; başarılı yanıt `dataLoaded` içinde ilk raflara indirgeniyor. Boş katalogla ağ hatasını ayırt etmek için üç içerik türünün başarı/boş durumu ayrı tutulmalı. Varsayılan olarak sadece kesin boş kataloglar saklanacak; Settings tercihiyle otomatik gizleme kapatılabilir, böylece sekmeye erişim tercih değişikliğiyle geri gelir.
+- **Uygulama:** Dashboard başarılı canlı/VOD/dizi katalog yanıtlarının boş olup olmadığını ayrı takip ediyor. Hata veya henüz yanıt gelmemiş katalog tabı görünür bırakıyor; playlist veya yetişkin filtresi değişince durum yenilenene kadar görünürlük sıfırlanıyor. HomeFeature aynı görünür sekme listesini iPhone, iPad ve tvOS’ta kullanıyor; seçili tab gizlenirse Keşfet’e dönüyor. Settings’te otomatik gizleme kalıcı olarak kapatılabiliyor.
+- **Doğrulama:** PR Reviewer `[APPROVED]`; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_107_ios.log`, `/private/tmp/pureiptv_107_tvos.log`). `git diff --check` ve localization JSON/locale kontrolü başarılı. Test, simulator veya playback çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 108. [PENDING] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
+### 108. [IN_PROGRESS] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
 - **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
 - **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.
 

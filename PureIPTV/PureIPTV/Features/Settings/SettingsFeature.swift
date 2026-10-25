@@ -58,6 +58,7 @@ public struct SettingsFeature {
         public var downloadConcurrencyLimit: Int = 1
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
+        public var hideEmptyContentTabs = true
 
         // Picture-in-Picture & Background Audio (Madde #18)
         public var isAutoPiPEnabled: Bool = true
@@ -167,6 +168,7 @@ public struct SettingsFeature {
         case setDownloadConcurrencyLimit(Int)
         case setHideAdultContent(Bool)
         case setDefaultStartupTab(String)
+        case setHideEmptyContentTabs(Bool)
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
         case setRememberMediaTrackPreferences(Bool)
@@ -279,6 +281,7 @@ public struct SettingsFeature {
                 state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
                 state.hideAdultContent = settingsClient.hideAdultContent()
                 state.defaultStartupTab = settingsClient.defaultStartupTab()
+                state.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
@@ -471,6 +474,10 @@ public struct SettingsFeature {
             case let .setDefaultStartupTab(val):
                 state.defaultStartupTab = val
                 return .run { _ in settingsClient.setDefaultStartupTab(val) }
+
+            case let .setHideEmptyContentTabs(val):
+                state.hideEmptyContentTabs = val
+                return .run { _ in settingsClient.setHideEmptyContentTabs(val) }
 
             case let .setPreferredAudioLanguage(val):
                 state.preferredAudioLanguage = val

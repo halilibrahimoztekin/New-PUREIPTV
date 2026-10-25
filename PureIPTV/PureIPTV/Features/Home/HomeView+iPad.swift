@@ -51,7 +51,7 @@
                         .padding(.bottom, 16)
 
                     // Nav items
-                    ForEach(HomeTab.allCases, id: \.self) { tab in
+                    ForEach(store.visibleTabs, id: \.self) { tab in
                         SidebarNavItem(
                             tab: tab,
                             isSelected: store.selectedTab == tab
