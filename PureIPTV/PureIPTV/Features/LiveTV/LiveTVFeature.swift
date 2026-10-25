@@ -4,6 +4,12 @@ import Foundation
 
 private let smartGroupResolutionCancellationID = "LiveTVFeature.smartGroupResolution"
 private let favoriteListResolutionCancellationID = "LiveTVFeature.favoriteListResolution"
+private let favoriteOrderLoadCancellationID = "LiveTVFeature.favoriteOrderLoad"
+
+private func nextLiveFavoriteOrderRevision(after current: UInt64) -> UInt64 {
+    let timeRevision = UInt64(max(0, Date().timeIntervalSince1970 * 1_000_000))
+    return max(current &+ 1, timeRevision)
+}
 
 public struct PendingNamedFavoriteBulk: Equatable, Sendable {
     public var id: UUID
@@ -142,6 +148,10 @@ public struct LiveTVFeature {
         public var selectedFavoriteListID: UUID?
         public var isFavoriteListMode = false
         public var favoriteListResolvedChannels: [MediaModels.Item] = []
+        public var favoriteSortMode: FavoriteChannelSortMode = .defaultOrder
+        public var favoriteOrderIDs: [String] = []
+        public var favoriteOrderRevision: UInt64 = 0
+        public var favoriteOrderRequestID: UUID?
         public var unavailableFavoriteChannels: [UnavailableFavoriteChannel] = []
         public var channelPresentationOverrides: [String: ChannelPresentationOverride] = [:]
         public var channelPresentationPlaylistID: UUID?
@@ -162,6 +172,15 @@ public struct LiveTVFeature {
             guard isFavoriteListMode else { return [] }
             guard let selectedFavoriteListID else { return favoriteIDs }
             return Set(favoriteLists.first(where: { $0.id == selectedFavoriteListID })?.channelIDs ?? [String]())
+        }
+
+        public var orderedFavoriteListChannels: [MediaModels.Item] {
+            FavoriteChannelSortMode.orderedItems(
+                favoriteListResolvedChannels,
+                mode: favoriteSortMode,
+                providerOrder: favoriteListResolvedChannels,
+                manualIDs: favoriteOrderIDs
+            )
         }
 
         public var selectedCurrentChannelIDs: Set<String> {
@@ -229,7 +248,7 @@ public struct LiveTVFeature {
         // Computed: channels for the currently selected category
         public var currentChannels: [MediaModels.Item] {
             if isFavoriteListMode {
-                return favoriteListResolvedChannels
+                return orderedFavoriteListChannels
             }
             if selectedSmartGroupID != nil {
                 return smartGroupChannels.filter {
@@ -250,10 +269,14 @@ public struct LiveTVFeature {
             return currentChannels + unavailableFavoriteChannels.map(\.item)
         }
 
-        mutating func syncEPGTimeline(channels: [MediaModels.Item], selectedCategoryID: String?) {
+        mutating func syncEPGTimeline(
+            channels: [MediaModels.Item],
+            selectedCategoryID: String?,
+            providerOrderChannels: [MediaModels.Item]? = nil
+        ) {
             guard var timeline = epgTimeline else { return }
             timeline.channels = channels
-            timeline.providerOrderChannels = channels
+            timeline.providerOrderChannels = providerOrderChannels ?? channels
             timeline.selectedCategoryID = selectedCategoryID
             epgTimeline = timeline
         }
@@ -299,6 +322,9 @@ public struct LiveTVFeature {
         case favoriteListSelected(UUID?)
         case clearFavoriteListSelection
         case favoriteListChannelsLoaded(listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID, membershipIDs: Set<String>, unavailableFavorites: [UnavailableFavoriteChannel]?, Result<[MediaModels.Item], Error>)
+        case favoriteOrderLoaded(FavoriteChannelOrderSnapshot, listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
+        case setFavoriteSortMode(FavoriteChannelSortMode)
+        case moveFavoriteChannel(channelID: String, offset: Int)
         case saveNamedFavoriteList(id: UUID?, name: String)
         case deleteNamedFavoriteList(UUID)
         case moveNamedFavoriteList(id: UUID, offset: Int)
@@ -354,6 +380,7 @@ public struct LiveTVFeature {
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.smartChannelGroupClient) var smartChannelGroupClient
     @Dependency(\.favoriteChannelListsClient) var favoriteChannelListsClient
+    @Dependency(\.favoriteChannelOrderClient) var favoriteChannelOrderClient
     @Dependency(\.channelPresentationOverrideClient) var channelPresentationOverrideClient
 
     public init() {}
@@ -559,10 +586,12 @@ public struct LiveTVFeature {
                 state.activeSmartGroupRequestID = nil
                 state.isLoadingChannels = false
                 state.activeFavoriteListRequestID = nil
+                state.favoriteOrderRequestID = nil
                 state.resetChannelSelection()
                 return .merge(
                     .cancel(id: smartGroupResolutionCancellationID),
-                    .cancel(id: favoriteListResolutionCancellationID)
+                    .cancel(id: favoriteListResolutionCancellationID),
+                    .cancel(id: favoriteOrderLoadCancellationID)
                 )
 
             case let .reloadCategories(config):
@@ -927,6 +956,12 @@ public struct LiveTVFeature {
                 }
                 state.isFavoriteListMode = true
                 state.selectedFavoriteListID = listID
+                state.favoriteListResolvedChannels = []
+                state.favoriteSortMode = .defaultOrder
+                state.favoriteOrderIDs = []
+                state.favoriteOrderRevision = 0
+                let favoriteOrderRequestID = UUID()
+                state.favoriteOrderRequestID = favoriteOrderRequestID
                 state.unavailableFavoriteChannels = []
                 state.selectedSmartGroupID = nil
                 state.smartGroupChannels = []
@@ -1013,22 +1048,42 @@ public struct LiveTVFeature {
                     }
                 }
                 .cancellable(id: favoriteListResolutionCancellationID, cancelInFlight: true)
+                let orderClient = favoriteChannelOrderClient
+                let loadOrder: Effect<Action> = .run { send in
+                    let snapshot = await orderClient.load(profileScope.profileID, playlistID, listID)
+                    guard !Task.isCancelled else { return }
+                    await send(.favoriteOrderLoaded(
+                        snapshot,
+                        listID: listID,
+                        playlistID: playlistID,
+                        profileScope: profileScope,
+                        requestID: favoriteOrderRequestID
+                    ))
+                }
+                .cancellable(id: favoriteOrderLoadCancellationID, cancelInFlight: true)
                 let reloadTimeline: Effect<Action> = state.epgTimeline == nil
                     ? .none
                     : .send(.epgTimeline(.presented(.loadFavorites)))
-                return .merge(cancelOtherResolutions, resolve, reloadTimeline)
+                return .merge(
+                    cancelOtherResolutions,
+                    resolve,
+                    loadOrder,
+                    reloadTimeline
+                )
 
             case .clearFavoriteListSelection:
                 state.resetChannelSelection()
                 state.isFavoriteListMode = false
                 state.selectedFavoriteListID = nil
                 state.favoriteListResolvedChannels = []
+                state.favoriteOrderRequestID = nil
                 state.unavailableFavoriteChannels = []
                 state.activeFavoriteListRequestID = nil
                 state.isLoadingChannels = false
                 let cancel = Effect<Action>.cancel(id: favoriteListResolutionCancellationID)
-                guard let category = state.categories.first else { return cancel }
-                return .merge(cancel, .send(.categorySelected(category)))
+                let cancelOrder = Effect<Action>.cancel(id: favoriteOrderLoadCancellationID)
+                guard let category = state.categories.first else { return .merge(cancel, cancelOrder) }
+                return .merge(cancel, cancelOrder, .send(.categorySelected(category)))
 
             case let .favoriteListChannelsLoaded(listID, playlistID, profileScope, requestID, membershipIDs, unavailableFavorites, result):
                 guard state.activeFavoriteListRequestID == requestID,
@@ -1052,13 +1107,167 @@ public struct LiveTVFeature {
                             && !state.hiddenChannelIDs.contains($0.id)
                             && (!hideAdult || !settingsClient.isAdultContent($0.title))
                     }
-                    state.syncEPGTimeline(channels: state.favoriteListResolvedChannels, selectedCategoryID: nil)
+                    var updatedOrder: FavoriteChannelOrderSnapshot?
+                    if state.favoriteOrderRequestID == nil {
+                        let normalizedIDs = FavoriteChannelSortMode.normalizedManualIDs(
+                            favoriteIDs: membershipIDs,
+                            providerIDs: state.favoriteListResolvedChannels.map(\.id),
+                            storedIDs: state.favoriteOrderIDs
+                        )
+                        let orderChanged = normalizedIDs != state.favoriteOrderIDs
+                        state.favoriteOrderIDs = normalizedIDs
+                        if orderChanged, let playlistID {
+                            let order = FavoriteChannelOrderSnapshot(
+                                mode: state.favoriteSortMode,
+                                orderedIDs: normalizedIDs,
+                                revision: nextLiveFavoriteOrderRevision(after: state.favoriteOrderRevision)
+                            )
+                            state.favoriteOrderRevision = order.revision
+                            updatedOrder = order
+                        }
+                    }
+                    state.syncEPGTimeline(
+                        channels: state.currentChannels,
+                        selectedCategoryID: nil,
+                        providerOrderChannels: state.favoriteListResolvedChannels
+                    )
+                    if let updatedOrder, let playlistID {
+                        let orderClient = favoriteChannelOrderClient
+                        let profileID = profileScope.profileID
+                        let listID = state.selectedFavoriteListID
+                        return .run { _ in
+                            await orderClient.save(updatedOrder, profileID, playlistID, listID)
+                        }
+                    }
                 case let .failure(error):
                     state.favoriteListResolvedChannels = []
                     state.syncEPGTimeline(channels: [], selectedCategoryID: nil)
                     state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 }
                 return .none
+
+            case let .favoriteOrderLoaded(snapshot, listID, playlistID, profileScope, requestID):
+                guard state.favoriteOrderRequestID == requestID,
+                      state.isFavoriteListMode,
+                      state.selectedFavoriteListID == listID,
+                      state.config?.playlistID == playlistID,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.favoriteOrderRequestID = nil
+                let normalizedIDs = FavoriteChannelSortMode.normalizedManualIDs(
+                    favoriteIDs: state.selectedFavoriteListChannelIDs,
+                    providerIDs: state.favoriteListResolvedChannels.map(\.id),
+                    storedIDs: snapshot.orderedIDs
+                )
+                state.favoriteSortMode = snapshot.mode
+                state.favoriteOrderIDs = normalizedIDs
+                state.favoriteOrderRevision = snapshot.revision
+                state.syncEPGTimeline(
+                    channels: state.currentChannels,
+                    selectedCategoryID: nil,
+                    providerOrderChannels: state.favoriteListResolvedChannels
+                )
+                guard normalizedIDs != snapshot.orderedIDs,
+                      !state.isLoadingChannels,
+                      let playlistID else { return .none }
+                let order = FavoriteChannelOrderSnapshot(
+                    mode: snapshot.mode,
+                    orderedIDs: normalizedIDs,
+                    revision: nextLiveFavoriteOrderRevision(after: snapshot.revision)
+                )
+                state.favoriteOrderRevision = order.revision
+                let orderClient = favoriteChannelOrderClient
+                let profileID = profileScope.profileID
+                return .run { _ in
+                    await orderClient.save(order, profileID, playlistID, listID)
+                }
+
+            case let .setFavoriteSortMode(mode):
+                guard state.isFavoriteListMode, let playlistID = state.config?.playlistID else { return .none }
+                state.favoriteOrderRequestID = nil
+                let order = FavoriteChannelOrderSnapshot(
+                    mode: mode,
+                    orderedIDs: FavoriteChannelSortMode.normalizedManualIDs(
+                        favoriteIDs: state.selectedFavoriteListChannelIDs,
+                        providerIDs: state.favoriteListResolvedChannels.map(\.id),
+                        storedIDs: state.favoriteOrderIDs
+                    ),
+                    revision: nextLiveFavoriteOrderRevision(after: state.favoriteOrderRevision)
+                )
+                state.favoriteSortMode = mode
+                state.favoriteOrderIDs = order.orderedIDs
+                state.favoriteOrderRevision = order.revision
+                state.syncEPGTimeline(
+                    channels: state.currentChannels,
+                    selectedCategoryID: nil,
+                    providerOrderChannels: state.favoriteListResolvedChannels
+                )
+                if var timeline = state.epgTimeline,
+                   timeline.config.playlistID == playlistID,
+                   timeline.favoriteListID == state.selectedFavoriteListID
+                {
+                    timeline.favoriteSortMode = mode
+                    timeline.favoriteOrderIDs = order.orderedIDs
+                    timeline.favoriteOrderRevision = order.revision
+                    state.epgTimeline = timeline
+                }
+                let orderClient = favoriteChannelOrderClient
+                let profileID = profileContextClient.snapshot().profileID
+                let listID = state.selectedFavoriteListID
+                return .concatenate(
+                    .cancel(id: favoriteOrderLoadCancellationID),
+                    .run { _ in
+                        await orderClient.save(order, profileID, playlistID, listID)
+                    }
+                )
+
+            case let .moveFavoriteChannel(channelID, offset):
+                guard state.isFavoriteListMode,
+                      state.favoriteSortMode == .manual,
+                      let playlistID = state.config?.playlistID else { return .none }
+                state.favoriteOrderRequestID = nil
+                let orderedIDs = FavoriteChannelSortMode.normalizedManualIDs(
+                    favoriteIDs: state.selectedFavoriteListChannelIDs,
+                    providerIDs: state.favoriteListResolvedChannels.map(\.id),
+                    storedIDs: state.favoriteOrderIDs
+                )
+                let visibleIDs = state.currentChannels.map(\.id)
+                guard let visibleIndex = visibleIDs.firstIndex(of: channelID) else { return .none }
+                let visibleDestination = visibleIndex + offset
+                guard visibleIDs.indices.contains(visibleDestination),
+                      let source = orderedIDs.firstIndex(of: channelID),
+                      let destination = orderedIDs.firstIndex(of: visibleIDs[visibleDestination]) else { return .none }
+                var reorderedIDs = orderedIDs
+                reorderedIDs.swapAt(source, destination)
+                let order = FavoriteChannelOrderSnapshot(
+                    mode: .manual,
+                    orderedIDs: reorderedIDs,
+                    revision: nextLiveFavoriteOrderRevision(after: state.favoriteOrderRevision)
+                )
+                state.favoriteOrderIDs = reorderedIDs
+                state.favoriteOrderRevision = order.revision
+                state.syncEPGTimeline(
+                    channels: state.currentChannels,
+                    selectedCategoryID: nil,
+                    providerOrderChannels: state.favoriteListResolvedChannels
+                )
+                if var timeline = state.epgTimeline,
+                   timeline.config.playlistID == playlistID,
+                   timeline.favoriteListID == state.selectedFavoriteListID
+                {
+                    timeline.favoriteSortMode = .manual
+                    timeline.favoriteOrderIDs = reorderedIDs
+                    timeline.favoriteOrderRevision = order.revision
+                    state.epgTimeline = timeline
+                }
+                let orderClient = favoriteChannelOrderClient
+                let profileID = profileContextClient.snapshot().profileID
+                let listID = state.selectedFavoriteListID
+                return .concatenate(
+                    .cancel(id: favoriteOrderLoadCancellationID),
+                    .run { _ in
+                        await orderClient.save(order, profileID, playlistID, listID)
+                    }
+                )
 
             case let .saveNamedFavoriteList(id, rawName):
                 guard state.pendingNamedFavoriteBulk == nil else { return .none }

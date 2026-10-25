@@ -1412,8 +1412,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#149 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task149` (3.9 GB) ve iOS/tvOS build logları (yaklaşık 3.4 MB), açık handle olmadığı doğrulandıktan sonra silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData’daki `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu; başka task kaynaklı Build/Index çıktısı yoktu. ContactCleaner’a erişilmedi.
 - **Durum:** `[DONE]` — tvOS rehberinden player’a geçiş/geri dönüşte mevcut kanal focus restoration korunuyor ve geç debounce ya da playback effect’i rehber kapandıktan sonra preview başlatamıyor.
 
-### 150. [PENDING] Canlı Favoriler İçin Kullanıcı Sıralaması
+### 150. [DONE] Canlı Favoriler İçin Kullanıcı Sıralaması
 - **Fırsat:** Live favorites içinde kanal listesinin sırasından bağımsız sabit manuel sıralama ve hızlı taşıma davranışını değerlendir.
+- **Kod bulgusu:** `FavoriteChannelOrderClient` ve `FavoriteChannelSortMode` profil/playlist/favori-listesi bazında sıralama ve manuel ID saklıyor; EPG timeline’da menu ile mod seçimi ve kanal yukarı/aşağı taşıma mevcut. Ana LiveTV kanal grid’i ise `favoriteListResolvedChannels` provider sırasını doğrudan gösteriyor ve bu tercihi kullanmıyor.
+- **Uygulama:** Ana LiveTV favori grid’ine varsayılan/provider, isim artan/azalan ve manuel sıralama seçimi eklendi. iOS/tvOS/iPad kanal context menu’lerinde manuel yukarı/aşağı taşıma eklendi; tercih EPG timeline ile aynı profil/playlist/favori-listesi kaydını kullanıyor. Gizli veya mevcut sağlayıcıda bulunmayan favoriler, görünür kanallar taşınırken kendi sıralama konumlarını koruyor. Mevcut localization anahtarları kullanıldı; localization dosyası değiştirilmedi.
+- **İnceleme ve derleme:** Yaşam döngüsü/sıralama incelemesi onaylandı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; test, uygulama açılışı veya playback çalıştırılmadı.
+- **Temizlik:** #150’ye ait geçici DerivedData (iOS 2.5 GB, tvOS 2.4 GB) ve build logları, açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal DerivedData `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — Ana LiveTV favori listesi, EPG timeline ile senkronize ve gizli favori sırasını bozmayan kullanıcı sıralaması sunuyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
 ### 151. [PENDING] Playlist Değiştirirken Yenilemeyi Kullanıcıya Bırakma

@@ -35,6 +35,22 @@ struct FavoriteChannelListSwitcher: View {
                     .accessibilityAddTraits(store.selectedFavoriteListID == list.id && store.isFavoriteListMode ? .isSelected : [])
                 }
 
+                if store.isFavoriteListMode, !store.isChannelSelectionMode {
+                    Picker(AppStrings.LiveTV.sortTitle, selection: Binding(
+                        get: { store.favoriteSortMode },
+                        set: { store.send(.setFavoriteSortMode($0)) }
+                    )) {
+                        ForEach(FavoriteChannelSortMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityHint(AppStrings.Favorites.orderingDescription)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.1), in: Capsule())
+                }
+
                 Button {
                     isManagementPresented = true
                 } label: {
@@ -52,10 +68,41 @@ struct FavoriteChannelListSwitcher: View {
         .sheet(isPresented: $isManagementPresented) {
             FavoriteChannelListManagementView(store: store)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     private var isDefaultSelected: Bool {
         store.isFavoriteListMode && store.selectedFavoriteListID == nil
+    }
+}
+
+struct FavoriteChannelManualOrderActions: View {
+    let store: StoreOf<LiveTVFeature>
+    let channelID: String
+
+    var body: some View {
+        if store.isFavoriteListMode,
+           store.favoriteSortMode == .manual,
+           !store.isChannelSelectionMode,
+           let index = store.currentChannels.firstIndex(where: { $0.id == channelID })
+        {
+            if index > 0 {
+                Button {
+                    store.send(.moveFavoriteChannel(channelID: channelID, offset: -1))
+                } label: {
+                    Label(AppStrings.Favorites.moveUp, systemImage: "arrow.up")
+                }
+            }
+            if index + 1 < store.currentChannels.count {
+                Button {
+                    store.send(.moveFavoriteChannel(channelID: channelID, offset: 1))
+                } label: {
+                    Label(AppStrings.Favorites.moveDown, systemImage: "arrow.down")
+                }
+            }
+        }
     }
 }
 

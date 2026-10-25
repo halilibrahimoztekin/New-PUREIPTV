@@ -340,6 +340,8 @@
                                     }
                                 }
 
+                                FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
+
                                 if !isUnavailable {
                                     Button {
                                         guard let playlistID = store.channelPresentationPlaylistID,
