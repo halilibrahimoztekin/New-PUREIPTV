@@ -1383,11 +1383,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#146 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task146` (3.9 GB) ve iOS/tvOS logları (864 KB) açık handle kalmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — Hata sonrası aynı playback kaynağına dönerken bilinen ilerleme korunuyor.
 
-### 147. [IN_PROGRESS] Player Aksiyonlarını tvOS ve Yerelleştirilmiş Boyutlarda Düzenleme
+### 147. [DONE] Player Aksiyonlarını tvOS ve Yerelleştirilmiş Boyutlarda Düzenleme
 - **Fırsat:** Başlat/başa dön, bölüm, ses ve altyazı eylemlerini TV mesafesinde okunur gruplara ayırıp uzun çevirilerde kesilme/örtüşme riskini incelemek.
 - **Kaynak:** https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv
+- **Uygulama:** Player eylem satırı 1.040 pt üst sınırla yatay ScrollView içinde ve `.focusSection()` kapsamında; çok sayıda koşullu kontrol veya uzun çevrilmiş etiket satırı ekrana sığmadığında yatay odak gezinmesiyle görünür kalıyor.
+- **İnceleme:** PR Reviewer yatay alan genişliğini ve offscreen Button/Menu odak erişimini `[APPROVED]` olarak değerlendirdi.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test/uygulama akışı çalıştırılmadı.
+- **#147 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task147` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
+- **Durum:** `[DONE]` — Uzun player eylem satırı ve değişken çeviri etiketleri yatay kaydırma/odak akışında erişilebilir.
 
-### 148. [PENDING] Büyük Playlistlerde tvOS Katalog ve Rehber Açılışını Hafifletme
+### 148. [IN_PROGRESS] Büyük Playlistlerde tvOS Katalog ve Rehber Açılışını Hafifletme
 - **Fırsat:** Büyük playlistlerde kategori, grid ve rehber açılış gecikmesini ölçmek; gereksiz tam katalog yüklemesini ve ana actor üzerindeki türetim işini azaltmak.
 - **Kaynak:** https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801 · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 

@@ -1189,7 +1189,19 @@
                     }
                     .buttonStyle(PlayerCapsuleButtonStyle())
                 }
+                .modifier(HorizontalActionsScrollModifier())
             }
+        }
+    }
+
+    private struct HorizontalActionsScrollModifier: ViewModifier {
+        func body(content: Content) -> some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                content
+                    .padding(.horizontal, 8)
+            }
+            .frame(maxWidth: 1040, alignment: .trailing)
+            .focusSection()
         }
     }
 
