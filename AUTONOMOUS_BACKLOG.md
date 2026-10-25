@@ -1244,6 +1244,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#128 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar kontrol edildi; geçici/derleme çıktısı adayı yoktu. 1.8 GB `SourcePackages` korundu.
 - **#130 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#131 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
+- **#132 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
 ### 130. [DEFERRED] EPG’den Canlı Spor Etkinliği ve Takım Takibi
@@ -1258,9 +1259,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DEFERRED]` — otomatik preview ayrı bir provider stream’i başlatabilir; EPG’de focus kaybı, scroll, tekrar istek ve mevcut PiP ile tek aktif player yaşam döngüsü netleştirilmeden otomatik açma bağlantı bant genişliğini artırabilir. Mevcut manuel PiP korunuyor; önce focus loss/stop davranışı ve ayarın kapsamı tanımlanmalı.
 - **Durum:** `[DEFERRED]` — odakla otomatik preview eklenmedi; mevcut kullanıcı kontrollü PiP kullanılabilir.
 
-### 132. [PENDING] Kayıtta TS Akışını Tercih Etme
+### 132. [DEFERRED] Kayıtta TS Akışını Tercih Etme
 - **Canlı keşif (25 Ekim 2026):** UHF 2.2.0 kayıt için TS akışını varsa varsayılan seçerek güvenilirliği artırdığını belirtiyor: https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Aday gap:** Mevcut VLC kayıt çıktısı ile provider stream URL/formatları kontrol et; TS tercihi desteklenmiyorsa alternatif kapsayıcıyı yanlış yönlendirmeden sınırı belirt.
+- **Kod incelemesi:** Canlı Xtream URL’leri çoğunlukla `.ts` olarak kuruluyor; M3U akış formatı provider URL/yanıtına bağlı. `PlayerClient.startRecording` SwiftVLC `player.startRecording(to: directory)` çağırıyor. SwiftVLC API’si yalnız dizin alıyor, container/extension seçeneği sunmuyor; kaydedilen dosya adı ve yol event’ten geliyor.
+- **Karar:** `[DEFERRED]` — uygulama seviyesinde TS container seçimi yapılamıyor ve var olan stream URL’sini değiştirerek kayıt formatı garanti edilemez. Kayıt motoru/SwiftVLC format seçimi desteklemeden kullanıcı tercihi sunmak yanıltıcı olur. Kod/build değişikliği yapılmadı.
+- **Durum:** `[DEFERRED]` — mevcut provider akışı VLC tarafından olduğu gibi kaydediliyor.
 
 ### 133. [PENDING] Kullanıcı Favori Listelerini Yeniden Adlandırma ve Sıralama
 - **Canlı keşif (25 Ekim 2026):** UHF 1.96.0 favori listelerinde yeniden adlandırma, silme ve sıralama seçeneklerini duyurdu: https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=watch .
