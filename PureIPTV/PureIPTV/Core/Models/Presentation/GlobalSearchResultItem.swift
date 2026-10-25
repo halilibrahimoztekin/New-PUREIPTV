@@ -17,7 +17,7 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
 
     public func reminderID(for program: EPGProgram) -> String {
         EPGReminderIdentifier.make(
-            playlistIdentity: playlistBadge.id,
+            playlistIdentity: playlistBadge.reminderIdentity,
             channelID: item.id,
             programID: program.id
         )
