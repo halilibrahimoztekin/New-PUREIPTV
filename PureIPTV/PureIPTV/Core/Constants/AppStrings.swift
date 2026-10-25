@@ -635,6 +635,7 @@ public enum AppStrings {
     public enum ParentalLock {
         public static let title = "Ebeveyn Kontrolü".localized
         public static let description = "Bu içeriğe erişmek için PIN girin veya FaceID/TouchID kullanın.".localized
+        public static let categoryUnlockNotice = "PIN doğrulamasından sonra bu kategori 15 dakika açık kalır.".localized
         public static let pin = "PIN".localized
         public static let biometricReason = "Yetişkin içeriğine erişmek için doğrulama gerekiyor".localized
     }

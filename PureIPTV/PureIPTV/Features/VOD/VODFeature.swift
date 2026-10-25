@@ -25,6 +25,9 @@ public struct VODFeature {
         public var lastSortMethod: SortMethod = .defaultOrder
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
         public var unlockedCategoryIDs: Set<String> = []
+        public var categoryUnlockRequestIDs: [String: UUID] = [:]
+        public var categoryUnlockProfileScope: ProfileContextSnapshot?
+        public var categoryUnlockPlaylistID: UUID?
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
@@ -97,6 +100,7 @@ public struct VODFeature {
         case onAppear(config: PlaylistConfig)
         case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
+        case categoryUnlockExpired(categoryID: String, requestID: UUID)
         case vodsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case vodSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
@@ -134,6 +138,16 @@ public struct VODFeature {
             switch action {
             case let .onAppear(config):
                 let profileScope = profileContextClient.snapshot()
+                let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
+                    || state.categoryUnlockProfileScope != profileScope
+                if categoryAccessScopeChanged {
+                    state.unlockedCategoryIDs = []
+                    state.categoryUnlockRequestIDs = [:]
+                    state.selectedCategoryID = nil
+                    state.selectedVOD = nil
+                }
+                state.categoryUnlockPlaylistID = config.playlistID
+                state.categoryUnlockProfileScope = profileScope
                 state.selectedOriginalLanguageCode = OriginalLanguageFilterPreference.load(
                     profileID: profileScope.profileID,
                     library: .movies
@@ -389,23 +403,50 @@ public struct VODFeature {
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
                 if let category {
-                    state.unlockedCategoryIDs.insert(category.id)
+                    let requestID = UUID()
+                    let unlockedCategoryID = category.id
+                    state.unlockedCategoryIDs.insert(unlockedCategoryID)
+                    state.categoryUnlockRequestIDs[unlockedCategoryID] = requestID
+                    let expirationEffect: Effect<Action> = .run { send in
+                        try? await Task.sleep(nanoseconds: parentalCategoryUnlockDurationNanoseconds)
+                        guard !Task.isCancelled else { return }
+                        await send(.categoryUnlockExpired(categoryID: unlockedCategoryID, requestID: requestID))
+                    }
+                    .cancellable(id: "VODFeature.categoryUnlock.\(unlockedCategoryID)", cancelInFlight: true)
                     state.selectedCategoryID = category.id
                     if state.vodsByCategory[category.id] != nil {
-                        return .none
+                        return expirationEffect
                     }
-                    guard let config = state.config else { return .none }
+                    guard let config = state.config else { return expirationEffect }
                     state.isLoadingVODs = true
                     let categoryID = category.id
-                    return .run { send in
-                        await send(.vodsResponse(
-                            categoryID: categoryID,
-                            Result { try await iptvClient.fetchVODs(config, categoryID) }
-                        ))
-                    }
+                    return .merge(
+                        expirationEffect,
+                        .run { send in
+                            await send(.vodsResponse(
+                                categoryID: categoryID,
+                                Result { try await iptvClient.fetchVODs(config, categoryID) }
+                            ))
+                        }
+                    )
                 } else if let item {
                     state.selectedVOD = item
                     return .send(.delegate(.didSelectVOD(item)))
+                }
+                return .none
+
+            case let .categoryUnlockExpired(categoryID, requestID):
+                guard state.categoryUnlockRequestIDs[categoryID] == requestID else { return .none }
+                state.categoryUnlockRequestIDs.removeValue(forKey: categoryID)
+                state.unlockedCategoryIDs.remove(categoryID)
+                if state.selectedCategoryID == categoryID {
+                    state.selectedCategoryID = nil
+                    if let category = state.categories.first(where: { $0.id == categoryID }) {
+                        state.parentalLock = ParentalLockFeature.State(category: category)
+                    }
+                }
+                if state.selectedVOD?.categoryID == categoryID {
+                    state.selectedVOD = nil
                 }
                 return .none
 

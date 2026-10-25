@@ -36,6 +36,14 @@ public struct ParentalLockView: View {
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
+
+                        if store.pendingCategory != nil {
+                            Text(AppStrings.ParentalLock.categoryUnlockNotice)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        }
                     }
 
                     // 4-Digit PIN Indicators

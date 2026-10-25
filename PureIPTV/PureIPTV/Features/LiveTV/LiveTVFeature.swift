@@ -104,6 +104,9 @@ public struct LiveTVFeature {
         public var hiddenChannelIDs: Set<String> = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
         public var unlockedCategoryIDs: Set<String> = []
+        public var categoryUnlockRequestIDs: [String: UUID] = [:]
+        public var categoryUnlockProfileScope: ProfileContextSnapshot?
+        public var categoryUnlockPlaylistID: UUID?
         public var blacklistedCategoryIDs: Set<String> = []
         public var adultCategoryIDs: Set<String> = []
         public var parentalControlEnabled = false
@@ -286,6 +289,7 @@ public struct LiveTVFeature {
         case onDisappear
         case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
+        case categoryUnlockExpired(categoryID: String, requestID: UUID)
         case smartGroupSelected(String)
         case smartGroupsLoaded(SmartChannelGroupSnapshot, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
         case smartGroupChannelsLoaded(groupID: String, playlistID: UUID?, profileScope: ProfileContextSnapshot, hideAdult: Bool, requestID: UUID, Result<[MediaModels.Item], Error>)
@@ -368,6 +372,24 @@ public struct LiveTVFeature {
             case let .onAppear(config):
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 let profileScope = profileContextClient.snapshot()
+                let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
+                    || state.categoryUnlockProfileScope != profileScope
+                if categoryAccessScopeChanged {
+                    state.unlockedCategoryIDs = []
+                    state.categoryUnlockRequestIDs = [:]
+                    state.selectedCategoryID = nil
+                    state.selectedChannel = nil
+                    state.selectedSmartGroupID = nil
+                    state.smartGroupChannels = []
+                    if var timeline = state.epgTimeline {
+                        timeline.channels = []
+                        timeline.providerOrderChannels = []
+                        timeline.selectedCategoryID = nil
+                        state.epgTimeline = timeline
+                    }
+                }
+                state.categoryUnlockPlaylistID = config.playlistID
+                state.categoryUnlockProfileScope = profileScope
                 state.config = config
                 let presentationScopeChanged = state.channelPresentationPlaylistID != config.playlistID
                     || state.channelPresentationProfileScope != profileScope
@@ -1797,7 +1819,16 @@ public struct LiveTVFeature {
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
                 state.parentalLock = nil
                 if let category {
-                    state.unlockedCategoryIDs.insert(category.id)
+                    let requestID = UUID()
+                    let unlockedCategoryID = category.id
+                    state.unlockedCategoryIDs.insert(unlockedCategoryID)
+                    state.categoryUnlockRequestIDs[unlockedCategoryID] = requestID
+                    let expirationEffect: Effect<Action> = .run { send in
+                        try? await Task.sleep(nanoseconds: parentalCategoryUnlockDurationNanoseconds)
+                        guard !Task.isCancelled else { return }
+                        await send(.categoryUnlockExpired(categoryID: unlockedCategoryID, requestID: requestID))
+                    }
+                    .cancellable(id: "LiveTVFeature.categoryUnlock.\(unlockedCategoryID)", cancelInFlight: true)
                     state.selectedSmartGroupID = nil
                     state.activeSmartGroupRequestID = nil
                     state.smartGroupChannels = []
@@ -1819,13 +1850,14 @@ public struct LiveTVFeature {
                     }
                     let cancelGroupResolution = Effect<Action>.cancel(id: smartGroupResolutionCancellationID)
                     if state.channelsByCategory[category.id] != nil {
-                        return cancelGroupResolution
+                        return .merge(cancelGroupResolution, expirationEffect)
                     }
-                    guard let config = state.config else { return cancelGroupResolution }
+                    guard let config = state.config else { return .merge(cancelGroupResolution, expirationEffect) }
                     state.isLoadingChannels = true
                     let categoryID = category.id
                     return .merge(
                         cancelGroupResolution,
+                        expirationEffect,
                         .run { send in
                             await send(.channelsResponse(
                                 categoryID: categoryID,
@@ -1836,6 +1868,42 @@ public struct LiveTVFeature {
                 } else if let item {
                     state.selectedChannel = item
                     return .send(.delegate(.didSelectChannel(item, playlist: state.currentChannels)))
+                }
+                return .none
+
+            case let .categoryUnlockExpired(categoryID, requestID):
+                guard state.categoryUnlockRequestIDs[categoryID] == requestID else { return .none }
+                state.categoryUnlockRequestIDs.removeValue(forKey: categoryID)
+                state.unlockedCategoryIDs.remove(categoryID)
+                state.channelsByCategory.removeValue(forKey: categoryID)
+                state.favoriteListResolvedChannels.removeAll { $0.categoryID == categoryID }
+                let selectedGroupContainsExpiredCategory = state.smartChannelGroups
+                    .first(where: { $0.id == state.selectedSmartGroupID })?
+                    .categoryIDs.contains(categoryID) == true
+                if state.selectedCategoryID == categoryID || selectedGroupContainsExpiredCategory {
+                    state.selectedCategoryID = nil
+                    state.selectedSmartGroupID = nil
+                    state.smartGroupChannels = []
+                    if let category = state.categories.first(where: { $0.id == categoryID }) {
+                        state.parentalLock = ParentalLockFeature.State(category: category)
+                    }
+                }
+                if state.selectedChannel?.categoryID == categoryID {
+                    state.selectedChannel = nil
+                }
+                if var timeline = state.epgTimeline, timeline.selectedCategoryID == categoryID {
+                    timeline.channels = []
+                    timeline.providerOrderChannels = []
+                    timeline.selectedCategoryID = nil
+                    state.epgTimeline = timeline
+                }
+                if var multiView = state.multiView {
+                    multiView.channels.removeAll { $0.categoryID == categoryID }
+                    for index in multiView.slots.indices where multiView.slots[index].item?.categoryID == categoryID {
+                        multiView.slots[index].item = nil
+                        multiView.slots[index].instanceID = UUID()
+                    }
+                    state.multiView = multiView
                 }
                 return .none
 

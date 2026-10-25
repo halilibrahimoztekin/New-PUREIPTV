@@ -4,6 +4,8 @@ import Foundation
     import LocalAuthentication
 #endif
 
+let parentalCategoryUnlockDurationNanoseconds: UInt64 = 900_000_000_000
+
 // MARK: - HiddenItemDTO
 
 public struct HiddenItemDTO: Identifiable, Equatable, Hashable, Sendable, Codable {
