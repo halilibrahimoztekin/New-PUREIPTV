@@ -206,6 +206,7 @@ public struct PlayerClient: Sendable {
     public var getSelectedSubtitleTrack: @MainActor @Sendable () async -> Track?
     public var setAudioTrack: @MainActor @Sendable (_ track: Track?) async -> Void
     public var setSubtitleTrack: @MainActor @Sendable (_ track: Track?) async -> Void
+    public var addExternalSubtitleTrack: @MainActor @Sendable (_ url: URL) async -> Bool = { _ in false }
     public var setAudioDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var setSubtitleDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var getStats: @MainActor @Sendable () async -> String?
@@ -611,6 +612,15 @@ extension PlayerClient: DependencyKey {
             setSubtitleTrack: { track in
                 guard box.playbackEngine == .vlc else { return }
                 box.getPlayer().selectedSubtitleTrack = track
+            },
+            addExternalSubtitleTrack: { url in
+                guard box.playbackEngine == .vlc else { return false }
+                do {
+                    try box.getPlayer().addExternalTrack(from: url, type: .subtitle, select: true)
+                    return true
+                } catch {
+                    return false
+                }
             },
             setAudioDelay: { delay in
                 guard box.playbackEngine == .vlc else { return }

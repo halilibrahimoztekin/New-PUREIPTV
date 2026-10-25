@@ -246,6 +246,15 @@ public enum AppStrings {
         public static let streamProtocol = "Protokol / Format".localized
         public static let audioTracks = "Ses İzleri".localized
         public static let subtitles = "Altyazılar".localized
+        public static let subtitleOnlineSearch = "Çevrimiçi Altyazı Ara".localized
+        public static let openSubtitlesAPIKey = "OpenSubtitles API anahtarı".localized
+        public static let openSubtitlesAPIKeyHint = "Kendi API anahtarınız güvenli olarak Keychain’de saklanır.".localized
+        public static let getOpenSubtitlesAPIKey = "API anahtarı alın".localized
+        public static let subtitleSearchQuery = "Film veya dizi adı".localized
+        public static let searchSubtitles = "Altyazı ara".localized
+        public static let subtitleSearchResults = "Altyazı sonuçları".localized
+        public static let subtitleSearchEmpty = "Sonuçları görmek için altyazı arayın.".localized
+        public static let externalSubtitleAddFailed = "Harici altyazı oynatıcıya eklenemedi.".localized
         public static let tracks = "Ses ve Altyazı".localized
         public static let noOptions = "Seçenek bulunmuyor.".localized
         public static let noRecord = "Kayıt yok".localized

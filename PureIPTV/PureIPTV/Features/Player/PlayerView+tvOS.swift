@@ -14,6 +14,7 @@
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
         @State private var focusBeforeEPG: FocusableField?
+        @State private var isSubtitleSearchPresented = false
 
         fileprivate enum FocusableField: Hashable {
             case play
@@ -530,6 +531,15 @@
             .onDisappear {
                 idleTimer?.invalidate()
             }
+            .sheet(isPresented: $isSubtitleSearchPresented) {
+                OpenSubtitlesSearchView(
+                    itemTitle: [store.item.seriesTitle, store.item.title]
+                        .compactMap(\.self)
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " "),
+                    onTrackAdded: { store.send(.fetchTracks) }
+                )
+            }
         }
 
         // MARK: - Play View (Captures Remote Navigation & Clicks when controls are hidden)
@@ -570,9 +580,11 @@
                 Spacer()
 
                 // Top part of controls: Title + Action Buttons
-                VideoControllerView(store: store, onInteraction: {
-                    resetIdleTimer()
-                })
+                VideoControllerView(
+                    store: store,
+                    onInteraction: { resetIdleTimer() },
+                    onSubtitleSearch: { isSubtitleSearchPresented = true }
+                )
 
                 // Bottom part of controls: Interactive Fluid Scrubber + Time Display
                 if isMaskShow {
@@ -640,6 +652,7 @@
     private struct VideoControllerView: View {
         @Bindable var store: StoreOf<PlayerFeature>
         let onInteraction: () -> Void
+        let onSubtitleSearch: () -> Void
 
         var body: some View {
             HStack(alignment: .center, spacing: 16) {
@@ -848,7 +861,7 @@
                     }
 
                     // Subtitle Tracks
-                    if !store.subtitleTracks.isEmpty {
+                    if !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
                         Menu {
                             Button {
                                 onInteraction()
@@ -874,6 +887,13 @@
                                             Image(systemName: "checkmark")
                                         }
                                     }
+                                }
+                            }
+
+                            if !store.item.isLive, store.playbackEngine == .vlc {
+                                Button(AppStrings.Player.subtitleOnlineSearch) {
+                                    onInteraction()
+                                    onSubtitleSearch()
                                 }
                             }
 
