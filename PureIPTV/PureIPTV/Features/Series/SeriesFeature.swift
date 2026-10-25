@@ -31,6 +31,7 @@ public struct SeriesFeature {
 
         /// Language & Audio Filter
         public var selectedLanguageFilter: MediaLanguageFilter = .all
+        public var selectedOriginalLanguageCode: String?
 
         public var rawSeries: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
@@ -39,6 +40,25 @@ public struct SeriesFeature {
 
         public var availableLanguageFilters: [MediaLanguageFilter] {
             MediaLanguageDetector.availableFilters(for: rawSeries)
+        }
+
+        public var availableOriginalLanguageCodes: [String] {
+            Array(Set(rawSeries.compactMap { ISO639LanguageCode.normalize($0.originalLanguageCode) })).sorted()
+        }
+
+        public var originalLanguageCounts: [String: Int] {
+            var counts: [String: Int] = [:]
+            let audioFilteredItems = rawSeries.filter {
+                MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter)
+            }
+            counts["all"] = audioFilteredItems.count
+            for code in availableOriginalLanguageCodes {
+                counts[code] = audioFilteredItems.filter {
+                    let itemCode = ISO639LanguageCode.normalize($0.originalLanguageCode)
+                    return itemCode == code || itemCode == nil
+                }.count
+            }
+            return counts
         }
 
         public var languageFilterCounts: [MediaLanguageFilter: Int] {
@@ -51,7 +71,12 @@ public struct SeriesFeature {
 
         // Computed: series for the currently selected category and language filter
         public var currentSeries: [MediaModels.Item] {
-            let filtered = rawSeries.filter { MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter) }
+            let filtered = rawSeries.filter { item in
+                MediaLanguageDetector.matches(title: item.title, filter: selectedLanguageFilter)
+                    && (selectedOriginalLanguageCode == nil
+                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == nil
+                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == selectedOriginalLanguageCode)
+            }
 
             switch lastSortMethod {
             case .alphabetical:
@@ -75,6 +100,7 @@ public struct SeriesFeature {
         case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
+        case setOriginalLanguageFilter(String?)
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case dismissError
@@ -108,6 +134,10 @@ public struct SeriesFeature {
             switch action {
             case let .onAppear(config):
                 let profileScope = profileContextClient.snapshot()
+                state.selectedOriginalLanguageCode = OriginalLanguageFilterPreference.load(
+                    profileID: profileScope.profileID,
+                    library: .series
+                )
                 state.lastSortMethod = settingsClient.getSeriesSortMethod()
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("series", profileScope)) ?? []
@@ -284,6 +314,12 @@ public struct SeriesFeature {
 
             case let .setLanguageFilter(filter):
                 state.selectedLanguageFilter = filter
+                return .run { _ in await hapticClient.selection() }
+
+            case let .setOriginalLanguageFilter(code):
+                let normalized = ISO639LanguageCode.normalize(code)
+                state.selectedOriginalLanguageCode = normalized
+                OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .series)
                 return .run { _ in await hapticClient.selection() }
 
             case let .seriesResponse(categoryID, .success(series)):

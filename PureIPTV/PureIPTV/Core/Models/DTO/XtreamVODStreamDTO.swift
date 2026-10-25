@@ -10,6 +10,8 @@ public struct XtreamVODStreamDTO: Codable, Sendable {
     public let rating5based: Double?
     public let added: String?
     public let categoryId: String
+    public let originalLanguageCode: String?
+    public let originalLanguageSourceValue: String?
     public let containerExtension: String?
     public let customSid: String?
     public let directSource: String?
@@ -24,6 +26,7 @@ public struct XtreamVODStreamDTO: Codable, Sendable {
         case rating5based = "rating_5based"
         case added
         case categoryId = "category_id"
+        case originalLanguageCode = "original_language"
         case containerExtension = "container_extension"
         case customSid = "custom_sid"
         case directSource = "direct_source"
@@ -40,6 +43,8 @@ public struct XtreamVODStreamDTO: Codable, Sendable {
         rating5based = try container.decodeIfPresent(Double.self, forKey: .rating5based)
         added = try container.decodeIfPresent(String.self, forKey: .added)
         categoryId = try XtreamDTOValueDecoder.categoryID(from: container, forKey: .categoryId)
+        originalLanguageSourceValue = try? container.decode(String.self, forKey: .originalLanguageCode)
+        originalLanguageCode = ISO639LanguageCode.normalize(originalLanguageSourceValue)
         containerExtension = try container.decodeIfPresent(String.self, forKey: .containerExtension)
         customSid = try container.decodeIfPresent(String.self, forKey: .customSid)
         directSource = try container.decodeIfPresent(String.self, forKey: .directSource)

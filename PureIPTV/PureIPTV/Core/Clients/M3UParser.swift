@@ -17,6 +17,7 @@ public struct M3UParser: Sendable {
 
         var currentTvgID: String?
         var currentTvgName: String?
+        var currentOriginalLanguageCode: String?
         var currentTvgLogo: String?
         var currentTvgType: String?
         var currentCatchup: String?
@@ -44,6 +45,7 @@ public struct M3UParser: Sendable {
                 // Reset metadata for the next item
                 currentTvgID = nil
                 currentTvgName = nil
+                currentOriginalLanguageCode = nil
                 currentTvgLogo = nil
                 currentTvgType = nil
                 currentCatchup = nil
@@ -60,6 +62,7 @@ public struct M3UParser: Sendable {
                         switch key {
                         case "tvg-id": currentTvgID = value
                         case "tvg-name": currentTvgName = value
+                        case "tvg-language": currentOriginalLanguageCode = value
                         case "tvg-logo": currentTvgLogo = value
                         case "tvg-type": currentTvgType = value
                         case "group-title": currentGroupTitle = value
@@ -95,6 +98,7 @@ public struct M3UParser: Sendable {
                         sourceGroupTitle: currentGroupTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
                         tvgID: currentTvgID,
                         tvgName: currentTvgName,
+                        originalLanguageSourceValue: currentOriginalLanguageCode,
                         tvgLogo: currentTvgLogo,
                         tvgType: currentTvgType,
                         catchup: currentCatchup,

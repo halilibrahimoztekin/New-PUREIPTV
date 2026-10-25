@@ -14,6 +14,8 @@ public struct XtreamSeriesDTO: Codable, Sendable {
     public let rating: String?
     public let rating5based: Double?
     public let categoryId: String
+    public let originalLanguageCode: String?
+    public let originalLanguageSourceValue: String?
 
     private enum CodingKeys: String, CodingKey {
         case num
@@ -29,6 +31,7 @@ public struct XtreamSeriesDTO: Codable, Sendable {
         case rating
         case rating5based = "rating_5based"
         case categoryId = "category_id"
+        case originalLanguageCode = "original_language"
     }
 
     public init(from decoder: Decoder) throws {
@@ -46,5 +49,7 @@ public struct XtreamSeriesDTO: Codable, Sendable {
         rating = try container.decodeIfPresent(String.self, forKey: .rating)
         rating5based = try container.decodeIfPresent(Double.self, forKey: .rating5based)
         categoryId = try XtreamDTOValueDecoder.categoryID(from: container, forKey: .categoryId)
+        originalLanguageSourceValue = try? container.decode(String.self, forKey: .originalLanguageCode)
+        originalLanguageCode = ISO639LanguageCode.normalize(originalLanguageSourceValue)
     }
 }

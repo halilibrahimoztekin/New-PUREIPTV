@@ -389,6 +389,8 @@ extension IPTVClient: DependencyKey {
                             coverURL: item.coverURL,
                             categoryID: item.groupTitle,
                             type: .vod,
+                            originalLanguageCode: item.originalLanguageCode,
+                            originalLanguageSourceValue: item.originalLanguageSourceValue,
                             epgChannelID: item.tvgID,
                             userAgentOverride: config.userAgentOverride
                         )
@@ -410,6 +412,8 @@ extension IPTVClient: DependencyKey {
                         coverURL: dto.streamIcon.flatMap { URL(string: $0) },
                         categoryID: dto.categoryId,
                         type: .vod,
+                        originalLanguageCode: dto.originalLanguageCode,
+                        originalLanguageSourceValue: dto.originalLanguageSourceValue,
                         rating: dto.rating5based ?? dto.rating,
                         addedDate: addedDate,
                         userAgentOverride: config.userAgentOverride
@@ -441,6 +445,8 @@ extension IPTVClient: DependencyKey {
                             coverURL: item.coverURL,
                             categoryID: item.groupTitle,
                             type: .series,
+                            originalLanguageCode: item.originalLanguageCode,
+                            originalLanguageSourceValue: item.originalLanguageSourceValue,
                             epgChannelID: item.tvgID,
                             userAgentOverride: config.userAgentOverride
                         )
@@ -460,6 +466,8 @@ extension IPTVClient: DependencyKey {
                         coverURL: dto.cover.flatMap { URL(string: $0) },
                         categoryID: dto.categoryId,
                         type: .series,
+                        originalLanguageCode: dto.originalLanguageCode,
+                        originalLanguageSourceValue: dto.originalLanguageSourceValue,
                         rating: dto.rating5based ?? Double(dto.rating ?? "0"),
                         releaseDate: dto.releaseDate,
                         addedDate: addedDate,

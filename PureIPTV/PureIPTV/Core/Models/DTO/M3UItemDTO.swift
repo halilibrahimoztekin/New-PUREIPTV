@@ -9,6 +9,8 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
     public let sourceGroupTitle: String?
     public let tvgID: String?
     public let tvgName: String?
+    public let originalLanguageCode: String?
+    public let originalLanguageSourceValue: String?
     public let tvgLogo: String?
     public let tvgType: String?
     public let catchup: String?
@@ -23,6 +25,8 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
         sourceGroupTitle: String? = nil,
         tvgID: String? = nil,
         tvgName: String? = nil,
+        originalLanguageCode: String? = nil,
+        originalLanguageSourceValue: String? = nil,
         tvgLogo: String? = nil,
         tvgType: String? = nil,
         catchup: String? = nil,
@@ -36,6 +40,8 @@ public struct M3UItemDTO: Equatable, Identifiable, Sendable {
         self.sourceGroupTitle = sourceGroupTitle
         self.tvgID = tvgID
         self.tvgName = tvgName
+        self.originalLanguageSourceValue = originalLanguageSourceValue ?? originalLanguageCode
+        self.originalLanguageCode = ISO639LanguageCode.normalize(originalLanguageSourceValue ?? originalLanguageCode)
         self.tvgLogo = tvgLogo
         self.tvgType = tvgType
         self.catchup = catchup

@@ -179,6 +179,16 @@
                     .padding(.bottom, 12)
                 }
 
+                OriginalLanguageFilterBar(
+                    availableCodes: store.availableOriginalLanguageCodes,
+                    selectedCode: store.selectedOriginalLanguageCode,
+                    counts: store.originalLanguageCounts
+                ) { code in
+                    store.send(.setOriginalLanguageFilter(code))
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 8)
+
                 // Grid or Empty State
                 if store.isLoadingVODs {
                     VStack {
@@ -187,7 +197,7 @@
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if store.currentVODs.isEmpty {
                     VStack(spacing: 20) {
-                        if !store.rawVODs.isEmpty, store.selectedLanguageFilter != .all {
+                        if !store.rawVODs.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .font(.system(size: 64))
                                 .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
@@ -197,6 +207,7 @@
 
                             Button {
                                 store.send(.setLanguageFilter(.all))
+                                store.send(.setOriginalLanguageFilter(nil))
                             } label: {
                                 Text(AppStrings.MediaFilter.all)
                                     .font(.system(size: 20, weight: .bold))

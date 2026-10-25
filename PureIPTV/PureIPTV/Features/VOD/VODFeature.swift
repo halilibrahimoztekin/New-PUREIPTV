@@ -31,6 +31,7 @@ public struct VODFeature {
 
         /// Language & Audio Filter
         public var selectedLanguageFilter: MediaLanguageFilter = .all
+        public var selectedOriginalLanguageCode: String?
 
         public var rawVODs: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
@@ -39,6 +40,25 @@ public struct VODFeature {
 
         public var availableLanguageFilters: [MediaLanguageFilter] {
             MediaLanguageDetector.availableFilters(for: rawVODs)
+        }
+
+        public var availableOriginalLanguageCodes: [String] {
+            Array(Set(rawVODs.compactMap { ISO639LanguageCode.normalize($0.originalLanguageCode) })).sorted()
+        }
+
+        public var originalLanguageCounts: [String: Int] {
+            var counts: [String: Int] = [:]
+            let audioFilteredItems = rawVODs.filter {
+                MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter)
+            }
+            counts["all"] = audioFilteredItems.count
+            for code in availableOriginalLanguageCodes {
+                counts[code] = audioFilteredItems.filter {
+                    let itemCode = ISO639LanguageCode.normalize($0.originalLanguageCode)
+                    return itemCode == code || itemCode == nil
+                }.count
+            }
+            return counts
         }
 
         public var languageFilterCounts: [MediaLanguageFilter: Int] {
@@ -51,7 +71,12 @@ public struct VODFeature {
 
         // Computed: vods for the currently selected category and language filter
         public var currentVODs: [MediaModels.Item] {
-            let filtered = rawVODs.filter { MediaLanguageDetector.matches(title: $0.title, filter: selectedLanguageFilter) }
+            let filtered = rawVODs.filter { item in
+                MediaLanguageDetector.matches(title: item.title, filter: selectedLanguageFilter)
+                    && (selectedOriginalLanguageCode == nil
+                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == nil
+                        || ISO639LanguageCode.normalize(item.originalLanguageCode) == selectedOriginalLanguageCode)
+            }
 
             switch lastSortMethod {
             case .alphabetical:
@@ -75,6 +100,7 @@ public struct VODFeature {
         case vodsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
         case vodSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
+        case setOriginalLanguageFilter(String?)
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case dismissError
@@ -108,6 +134,10 @@ public struct VODFeature {
             switch action {
             case let .onAppear(config):
                 let profileScope = profileContextClient.snapshot()
+                state.selectedOriginalLanguageCode = OriginalLanguageFilterPreference.load(
+                    profileID: profileScope.profileID,
+                    library: .movies
+                )
                 state.lastSortMethod = settingsClient.getVODSortMethod()
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("vod", profileScope)) ?? []
@@ -284,6 +314,12 @@ public struct VODFeature {
 
             case let .setLanguageFilter(filter):
                 state.selectedLanguageFilter = filter
+                return .run { _ in await hapticClient.selection() }
+
+            case let .setOriginalLanguageFilter(code):
+                let normalized = ISO639LanguageCode.normalize(code)
+                state.selectedOriginalLanguageCode = normalized
+                OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .movies)
                 return .run { _ in await hapticClient.selection() }
 
             case let .vodsResponse(categoryID, .success(vods)):

@@ -19,6 +19,8 @@ public enum MediaModels: Sendable {
 
         public let categoryID: String
         public let type: ItemType
+        public let originalLanguageCode: String?
+        public let originalLanguageSourceValue: String?
 
         // Optional metadata, mainly populated for VOD/Series listings
         public let rating: Double?
@@ -41,6 +43,8 @@ public enum MediaModels: Sendable {
             logoURLOverride: URL? = nil,
             categoryID: String,
             type: ItemType,
+            originalLanguageCode: String? = nil,
+            originalLanguageSourceValue: String? = nil,
             rating: Double? = nil,
             releaseDate: String? = nil,
             duration: String? = nil,
@@ -59,6 +63,8 @@ public enum MediaModels: Sendable {
             self.logoURLOverride = logoURLOverride
             self.categoryID = categoryID
             self.type = type
+            self.originalLanguageSourceValue = originalLanguageSourceValue ?? originalLanguageCode
+            self.originalLanguageCode = ISO639LanguageCode.normalize(originalLanguageSourceValue ?? originalLanguageCode)
             self.rating = rating
             self.releaseDate = releaseDate
             self.duration = duration
@@ -80,6 +86,8 @@ public enum MediaModels: Sendable {
                 logoURLOverride: logoURLOverride,
                 categoryID: categoryID,
                 type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
                 rating: rating,
                 releaseDate: releaseDate,
                 duration: duration,
@@ -102,6 +110,8 @@ public enum MediaModels: Sendable {
                 logoURLOverride: value,
                 categoryID: categoryID,
                 type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
                 rating: rating,
                 releaseDate: releaseDate,
                 duration: duration,
@@ -124,6 +134,8 @@ public enum MediaModels: Sendable {
                 logoURLOverride: logoURLOverride,
                 categoryID: categoryID,
                 type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
                 rating: rating,
                 releaseDate: releaseDate,
                 duration: duration,
