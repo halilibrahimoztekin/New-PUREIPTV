@@ -753,6 +753,13 @@ public struct EPGTimelineView: View {
                                 .foregroundColor(.yellow)
                         }
 
+                        if store.epgLoadFailures.contains(channel.id) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.orange)
+                                .accessibilityLabel(AppStrings.Player.epgRefreshFailed)
+                        }
+
                         Text(channel.title)
                             .font(.caption2.bold())
                             .foregroundColor(.white)
@@ -811,6 +818,12 @@ public struct EPGTimelineView: View {
                     }
                     .disabled(store.pendingRecentChannelRemovalIDs[channel.id] != nil)
                     .accessibilityLabel(AppStrings.Player.removeRecentChannel)
+                }
+
+                if store.epgLoadFailures.contains(channel.id) {
+                    Button(AppStrings.Common.retry) {
+                        store.send(.refreshEPG(streamID: channel.id))
+                    }
                 }
 
                 Button {
@@ -907,7 +920,9 @@ public struct EPGTimelineView: View {
 
     private func programsRow(for channel: MediaModels.Item) -> some View {
         ZStack(alignment: .leading) {
-            if store.isLoading[channel.id] == true, store.epgData[channel.id] == nil {
+            if store.epgLoadFailures.contains(channel.id), store.epgData[channel.id]?.isEmpty != false {
+                epgLoadFailureRow(channel)
+            } else if store.isLoading[channel.id] == true, store.epgData[channel.id] == nil {
                 shimmerLoadingRow
             } else {
                 let programs = resolvedPrograms(for: channel)
@@ -927,6 +942,28 @@ public struct EPGTimelineView: View {
             }
         }
         .frame(width: totalTimelineWidth, height: rowHeight)
+    }
+
+    private func epgLoadFailureRow(_ channel: MediaModels.Item) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+
+            Text(AppStrings.Player.epgRefreshFailed)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Button(AppStrings.Common.retry) {
+                store.send(.refreshEPG(streamID: channel.id))
+            }
+            .buttonStyle(.bordered)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(width: totalTimelineWidth, height: rowHeight, alignment: .leading)
+        .offset(x: horizontalOffset)
     }
 
     // MARK: - Shimmer Placeholder Row

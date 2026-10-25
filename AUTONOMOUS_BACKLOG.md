@@ -1349,11 +1349,18 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#142 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task142` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal PureIPTV DerivedData’daki `SourcePackages` ve SDK cache’leri korundu; kapalı Build/Index/Logs çıktısı bırakılmadı.
 - **Durum:** `[DONE]` — Dakikalık UI timer’ı kategorileri yeniden türetmiyor.
 
-### 143. [IN_PROGRESS] EPG Verisi İçin Playlist Bazlı Güncellik Tanılaması
-- **Fırsat:** Rehberde eksik/eski program verisini tanımak için son başarılı XMLTV yenilemesi, seçili playlist kapsamı ve kanal bazında boş sonuçları kullanıcıya açıkça göstermek.
-- **Kaynak:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
+### 143. [DONE] Kanal Bazlı EPG Boş Yanıtı ile Yükleme Hatasını Ayırma
+- **Fırsat:** Global playlist son yenileme zamanı (#44) ve son iyi cache koruması (#74) zaten var. Eksik kalan parça, bir kanalın sağlayıcıdan gerçekten boş program listesi almasıyla ağ/endpoint isteğinin başarısız olup UI’da aynı “Yayın Akışı Yok” satırını göstermesini ayırmak.
+- **Kod incelemesi:** `epgResponse(.success([]))` ve `.failure` iki durumda da `epgData[streamID] = []` ile sonuçlanabiliyor. Timeline `resolvedPrograms` her iki durumu aynı sentetik “Yayın Akışı Yok” programına dönüştürüyor; kanal başına retry UI’sı yok. Bu madde #44’teki playlist genelindeki güncellik damgasını yinelemiyor.
+- **Kapsam:** EPG istek sonucunu kanal ID’si bazında ayrı tut; gerçek başarılı boş yanıtta mevcut bilgilendirme kartını koru, istek başarısızsa açık hata işareti ve o kanala retry eylemi sun. Son başarılı programlar varken refresh başarısız olursa eski programları koru ve kanalda/context menu’de retry affordance göster. Başarılı yeni yanıt hata durumunu temizlesin.
+- **Kaynak:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/ · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **Uygulama:** Kanal ID’si bazlı `epgLoadFailures` başarılı/başarısız yanıtı ayırıyor. Başarılı boş sonuç mevcut “Yayın Akışı Yok” satırı olarak kalıyor; başarısız ilk yüklemede görünür hata ve focusable Retry düğmesi var. Başarısız refresh eski EPG programlarını koruyup kanal satırında uyarı ve context menu retry sunuyor. Yeni başarılı yanıt uyarıyı temizliyor.
+- **PR Reviewer:** İlk failure/empty success, başarısız refresh’te eski programların korunması, yeniden deneme ve UI odaklanabilirliği kontrol edildi; `[APPROVED]`.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test/uygulama akışı çalıştırılmadı.
+- **#143 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task143` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal DerivedData’daki SourcePackages ve SDK önbellekleri korundu.
+- **Durum:** `[DONE]` — Başarılı boş EPG ile istek hatası birbirinden ayrılıyor.
 
-### 144. [PENDING] tvOS EPG’de Catch-up Programlarına Doğal Kumanda Yön Geçişi
+### 144. [IN_PROGRESS] tvOS EPG’de Catch-up Programlarına Doğal Kumanda Yön Geçişi
 - **Fırsat:** Kanal listesi, zaman çizelgesi ve catch-up program düğmeleri arasında ek seçim/ekran kapatma gerektirmeyen, görünür odak köprüleri kurmak.
 - **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1qyidkh/appletv_guide_catchup_browsing/ · https://www.reddit.com/r/iptvdeck/comments/1x2o22t/apple_tv_app_navigation/
 

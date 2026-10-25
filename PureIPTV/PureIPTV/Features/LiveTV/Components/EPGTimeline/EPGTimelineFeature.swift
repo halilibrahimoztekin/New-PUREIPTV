@@ -29,6 +29,7 @@ public struct EPGTimelineFeature {
         public var selectedCategoryID: String?
         public var epgData: [String: [EPGProgram]] = [:] // streamID -> programs
         public var isLoading: [String: Bool] = [:]
+        public var epgLoadFailures: Set<String> = []
         public var epgRequestIDs: [String: UUID] = [:]
         public var syncPendingEPGChannels: Set<String> = []
 
@@ -910,6 +911,10 @@ public struct EPGTimelineFeature {
 
             case let .refreshEPG(streamID):
                 state.isLoading[streamID] = true
+                state.epgLoadFailures.remove(streamID)
+                if state.epgData[streamID]?.isEmpty == true {
+                    state.epgData[streamID] = nil
+                }
                 let config = state.config
                 let requestID = UUID()
                 state.epgRequestIDs[streamID] = requestID
@@ -925,6 +930,7 @@ public struct EPGTimelineFeature {
                 state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
                 state.epgData[streamID] = programs
+                state.epgLoadFailures.remove(streamID)
                 state.rebuildAvailableProgramCategories()
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {
@@ -939,6 +945,7 @@ public struct EPGTimelineFeature {
                 guard state.epgRequestIDs[streamID] == requestID else { return .none }
                 state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
+                state.epgLoadFailures.insert(streamID)
                 // Retain the last successful guide while refresh is failing.
                 if state.epgData[streamID] == nil {
                     state.epgData[streamID] = []
