@@ -557,6 +557,10 @@ public enum AppStrings {
         public static let audioActive = "Aktif Ses".localized
         public static let audioMuted = "Sessiz".localized
         public static let primaryScreen = "Ana Ekran".localized
+        public static let aspectRatioControl = "Görüntü Oranı".localized
+        public static let aspectFit = "Orijinal (Fit)".localized
+        public static let aspectFill = "Ekranı Doldur (Fill)".localized
+        public static let aspectStretch = "Genişlet (Stretch)".localized
     }
 
     // MARK: - Parental Lock

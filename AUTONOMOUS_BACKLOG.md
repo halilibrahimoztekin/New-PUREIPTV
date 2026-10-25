@@ -957,9 +957,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** `xcodebuild ... -destination 'platform=iOS,id=00008150-000559AA3453401C' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_build_94_ios_final.log`). `xcodebuild ... -destination 'generic/platform=tvOS' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_build_94_tvos_final2.log`). Kullanıcı talimatı gereği test, simulator, app launch veya playback akışı çalıştırılmadı. Mevcut Swift 6 actor-isolation uyarıları build loglarında sürüyor.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnız iOS ve tvOS Release build’leri alındı.
 
-### 95. [PENDING] Çoklu Görünümde Her Akış İçin Ayrı Player Kontrolleri
-- **Canlı keşif (24 Ekim 2026):** UHF Wishlist kullanıcıları MultiView’in her akışına tekli oynatıcıdaki stream options/settings kontrollerini uygulama ve pencerelerin yerini elle belirleme talebini yazıyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
-- **Aday gap:** MultiView slotlarında audio/focus/removal var; deinterlace, aspect ratio, audio/subtitle track ve per-slot layout customization mevcut mu kontrol edilmeli. Slot bazlı engine state, decoder yükü ve Siri Remote focus kaybolması başlıca risk.
+### 95. [DONE] Çoklu Görünümde Her Akış İçin Ayrı Player Kontrolleri
+- **Canlı keşif (25 Ekim 2026):** UHF kullanıcıları her MultiView penceresine tekli oynatıcıdaki stream options/settings ve elle pencere yerleşimi istiyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/ . Snappier’in Apple TV ürün listesi aspect ratio, audio/subtitle track ve deinterlace kontrolleri sunuyor; bu da aynı kontrollerin her tile için bağımsız olmasını anlamlı kılıyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
+- **Kod taraması:** `MultiViewSlot` audio solo, item, hata/loading ve player instance identity tutuyor; sadece 1+3, 2x2, 1+1 global layout var. Tile’de mute, kaldır, retry ve ana ekrana taşı kontrolleri var; aspect ratio, track, deinterlace veya manuel tile pozisyonu yok. `PlayerClient` audio/subtitle track API’leri sunuyor, fakat deinterlace API’si bulunamadı. Tekli oynatıcı aspect mode’u `PlayerFeature` ve `PlayerView.swift` içinde; slotlardan bağımsız.
+- **Güvenli kapsam:** Her tile için default `.fit`, `.fill` ve `.stretch` aspect ratio menüsü; mode `MultiViewSlot` içinde stream ile birlikte yaşar, slotlar swap olduğunda item ile swap olur, yeni item seçildiğinde `.fit`’e sıfırlanır ve retry’da korunur. Mode değişikliği `instanceID`’yi değiştirmediğinden decode/player yeniden başlatılmaz. Görüntü transformu tile bounds içinde clip edilir. Deinterlace ve custom/manual tile placement engine ve focus kapsamı gerektirdiğinden bu işten ayrı tutulur. Siri Remote odak vurgusu ve mevcut audio-focus/mute kontrolüne yan etki olmaması reviewer tarafından incelenecek.
+- **Uygulama:** MultiView her dolu slotta erişilebilir Fit/Fill/Stretch menüsü gösteriyor. `MultiViewSlot.aspectRatioMode` item’la birlikte swap olur; yeni item/remove `.fit`’e sıfırlar, retry korur. Per-slot transform PiPVideoView/VideoView’e uygulanıp tile sınırında clip edilir; değişiklik player instance’ını yenilemez. Seçim mevcut mute, audio focus ve PiP state’ini değiştirmez. Yeni etiketler 21 locale’e eklendi.
+- **PR Reviewer:** İlk inceleme parent `slotView`’ın child player kapsamındaki mode/callback/title değerlerine yanlış referans verdiğini compile blocker olarak buldu. Menu slot state ve reducer action’ını parent scope’ta kullanacak şekilde düzeltildi; kullanılmayan child callback kaldırıldı. Son review `[APPROVED]`: slot lifecycle, swap/retry, decoder identity, tile clip, audio ve tvOS focus doğrulandı.
+- **Doğrulama:** iOS Release `xcodebuild ... -destination 'platform=iOS,id=00008150-000559AA3453401C' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_build_95_ios.log`). tvOS Release `xcodebuild ... -destination 'generic/platform=tvOS' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_build_95_tvos.log`). `git diff --check` başarılı. Kullanıcı talimatı gereği test, simulator veya playback akışı çalıştırılmadı; mevcut Swift 6 actor-isolation uyarıları sürüyor.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnız iOS ve tvOS Release build’leri alındı.
 
 ### 96. [PENDING] Playlist ve EPG İçin Ayrı Yenileme Takvimleri
 - **Canlı keşif (24 Ekim 2026):** UHF kullanıcıları yalnız Live TV’yi her gün, Movies/Series içeriğini daha seyrek yenileme ve EPG’yi arka planda takvimle eşitleme isteklerini bildiriyor: https://www.reddit.com/r/uhf_app/comments/1mdtzq7/wishlist_to_improve_the_app/
@@ -974,3 +979,42 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Repo/API bulgusu:** Checked-out SwiftVLC exposed `Player.startRecording(to:)`, `stopRecording()` and `PlayerEvent.recordingChanged`; uygulamadaki `PlayerClient` bunu henüz sarmalamıyor. Kullanılmayan `LocalDVRManager` ikinci bir URLSession bağlantısı açıyor, bu yüzden kayıt akışı ona bağlanmamalı.
 - **Kapsam adayı:** Kullanıcının açıkça başlattığı, yalnız ön plandaki aktif VLC stream’i kaydetme; kayıt durdurma ve `recordingChanged` ile dosyanın gerçekten yazıldığını doğrulama, süre ve depolama sınırı, app/stream değişiminde deterministik sonlandırma. Timeshift, live-edge rewind, arka plan/scheduled recording garantisi ve ikinci provider bağlantısı bu maddenin kapsamına girmiyor. SwiftVLC container/backend uyumu, iOS/tvOS sandbox davranışı ve dosya cleanup build dışı runtime doğrulama gerektirebilir.
 
+### 99. [PENDING] Birden Fazla Playlist’i Birleşik Canlı TV ve Rehberde Görüntüleme
+- **Canlı keşif (25 Ekim 2026):** IPTV Deck 1.6.8 birden fazla playlist’in Live TV, Guide, Movies, Series, Search ve Home’da birlikte görünmesini, her içerik tile’ında playlist rozetiyle sunuyor: https://www.reddit.com/r/iptvdeck/comments/1wg8rsa/iptv_deck_168_is_out_multiple_playlists_at_once/ .
+- **Aday gap:** PureIPTV’nin aktif playlist seçimi ve profil bağlamı ekranlar arasında tek kaynak mı, çoklu playlist aggregate var mı denetlensin. Duplicate channel ID, playlist bazlı favorites/history, parental filters, erişim limiti ve playlist badge kimliği temel tasarım riskleri.
+
+### 100. [PENDING] Sağlayıcıda Kaybolan Kanalları Düzenlemelerle Birlikte Arşivde Tutma
+- **Canlı keşif (25 Ekim 2026):** MultiView App 1.8.0 güncellemesi provider’dan kaybolan kanalın kullanıcı seçim ve düzenlemeleri silinmeden “Unavailable” altında gözden geçirilebildiğini bildiriyor: https://www.reddit.com/r/MultiviewApp/comments/1wpkssr/whats_new_in_multiview_180_for_apple_tv_iphone/ .
+- **Aday gap:** Playlist refresh, kanal ID değişimi veya kaybolan kaynağın favorites/group düzenlemelerini ne kadar koruyor taransın. Kaynağı bilinmeyen legacy mapping’leri yeni bir playlist’e atamadan erişilebilir orphan kayıtları göstermek gerekir.
+
+### 101. [PENDING] Kanal Görünen Adı ve Numarasını Sağlayıcı Verisinden Bağımsız Özelleştirme
+- **Canlı keşif (25 Ekim 2026):** MultiView App 1.8.0 kanallara uygulama içinde özel ad/numara atamayı, EPG ve stream eşlemesini değiştirmeden desteklediğini duyuruyor: https://www.reddit.com/r/MultiviewApp/comments/1wpkssr/whats_new_in_multiview_180_for_apple_tv_iphone/ .
+- **Aday gap:** PureIPTV’de kanal ismi temizleme ve logo override var; kalıcı kullanıcı adı ve kanal numarası override’ı var mı denetlensin. M3U/Xtream playlist refresh ve EPG/duplicate matching için orijinal başlık ve ID korunmalı.
+
+### 102. [PENDING] Playlist Başına M3U Etiketlerini Kategoriye Eşleme
+- **Canlı keşif (25 Ekim 2026):** Snappier IPTV ürün açıklaması zor M3U dosyaları için per-playlist tag mapping’i listeliyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
+- **Aday gap:** M3U parser’ı `group-title`, `tvg-*` ve özel attribute’ları nasıl normalize ediyor, playlist başına kullanıcı mapping’i mevcut mu araştırılsın. Aynı tag’i kullanan playlistler arasında preference sızıntısı olmamalı.
+
+### 103. [PENDING] Film ve Bölümlerde Intro/Kapanış Atla İşaretleri
+- **Canlı keşif (25 Ekim 2026):** Snappier IPTV App Store listesi TheIntroDB ile Skip Intro ve Skip Credits desteği bildiriyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
+- **Aday gap:** PureIPTV’de içerik bazlı intro/credits zaman aralığı, veri kaynağı, confidence, yanlış eşleşmeyi raporlama ve profil bazlı kapatma var mı taransın. IPTV sağlayıcı ID’leriyle metadata kimliği uyuşmadığında yanlış seek üretmemeli.
+
+### 104. [PENDING] Oynatma Motorunu Oturum Sırasında Değiştirme
+- **Canlı keşif (25 Ekim 2026):** IPTVX sürüm notları canlı oynatma sırasında desteklenen alternatif engine’e geçmeyi, ayrıca yeni AetherEngine’i ve VLC uyumluluk geliştirmelerini duyuruyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv .
+- **Aday gap:** Projede birden fazla decoder/player backend var mı, current session’ı item, seek, audio/subtitle state’i kaybetmeden aktarma mümkün mü kontrol edilsin. Engine değişimi ek provider bağlantısı açmamalı ve eski player’ı güvenle durdurmalı.
+
+### 105. [PENDING] Film ve Dizileri Orijinal Dile Göre Filtreleme
+- **Canlı keşif (25 Ekim 2026):** NowSeen App Store sürüm notları Movies ve Series klasörlerinde profil başına original language filter sunduğunu belirtiyor: https://apps.apple.com/us/app/nowseen-iptv-player/id6780634050 .
+- **Aday gap:** Xtream/M3U VOD metadata’sındaki dil bilgisi ve TMDB original language mevcut kategorilerde filtrelenebiliyor mu araştırılsın. Filtre yalnız seçili profile ait olmalı; sağlayıcı metadata’sı eksikse sessizce içerik saklamamalı.
+
+### 106. [PENDING] TMDB Yanlış Eşleşmeleri İçin Kalıcı Manuel Film/Dizi Eşlemesi
+- **Canlı keşif (25 Ekim 2026):** Snappier IPTV listesi poster/metadata için yanlış TMDB eşleşmesini cihazlar arasında kalıcı düzelten manual match override desteği veriyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
+- **Aday gap:** PureIPTV’de kanal logo override ve TMDB otomatik lookup var; VOD/series için kullanıcı tarafından doğrulanmış TMDB ID override’ı ve sync var mı kontrol edilsin. Eşleşme playlist + içerik kimliği kapsamlı olmalı ve yanlış posterin sonraki refresh’te geri gelmesini engellemeli.
+
+### 107. [PENDING] Playlist İçerik Türüne Göre Gereksiz Ana Navigasyon Sekmelerini Gizleme
+- **Canlı keşif (25 Ekim 2026):** Snappier tvOS rehberi, boş playlist’lerde içerik sekmelerinin otomatik gizlendiğini ve sekmelerin Settings’ten ayrıca gizlenebildiğini açıklıyor: https://snappieriptv.app/tutorial/index.html .
+- **Aday gap:** PureIPTV’de ana navigation hangi tab’ları her zaman gösteriyor ve kaynakta içerik yokken boş durum mu sunuyor denetlensin. Otomatik mevcutluk ve kullanıcı visibility tercihi çatışmamalı; sekmeyi gizlemek erişimi kalıcı olarak silmemeli.
+
+### 108. [PENDING] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
+- **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
+- **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.

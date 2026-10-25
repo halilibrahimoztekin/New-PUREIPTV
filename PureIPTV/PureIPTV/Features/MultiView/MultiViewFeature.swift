@@ -41,6 +41,7 @@ public enum MultiViewLayoutMode: String, CaseIterable, Equatable, Sendable, Iden
 public struct MultiViewSlot: Equatable, Identifiable {
     public let id: Int
     public var item: MediaModels.Item?
+    public var aspectRatioMode: VideoAspectRatioMode = .fit
     public var isLoading: Bool = false
     public var errorMessage: String?
 
@@ -109,6 +110,7 @@ public struct MultiViewFeature {
         case episodesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, seriesID: String, episodes: [MediaModels.Item])
         case backFromEpisodes
         case setLayoutMode(MultiViewLayoutMode)
+        case setAspectRatioMode(slotID: Int, mode: VideoAspectRatioMode)
         case swapToPrimary(slotID: Int)
         case setAudioActive(slotID: Int)
         case toggleAudioMute
@@ -343,6 +345,13 @@ public struct MultiViewFeature {
                 }
                 return .none
 
+            case let .setAspectRatioMode(slotID, mode):
+                guard let index = state.slots.firstIndex(where: { $0.id == slotID }),
+                      state.slots[index].item != nil
+                else { return .none }
+                state.slots[index].aspectRatioMode = mode
+                return .none
+
             case let .swapToPrimary(slotID):
                 guard slotID != state.primarySlotID else { return .none }
                 guard let primaryIndex = state.slots.firstIndex(where: { $0.id == state.primarySlotID }),
@@ -353,9 +362,12 @@ public struct MultiViewFeature {
 
                 // Swap items between primary and target slots
                 let tempItem = state.slots[primaryIndex].item
+                let tempAspectRatioMode = state.slots[primaryIndex].aspectRatioMode
                 state.slots[primaryIndex].item = state.slots[targetIndex].item
+                state.slots[primaryIndex].aspectRatioMode = state.slots[targetIndex].aspectRatioMode
                 state.slots[primaryIndex].instanceID = UUID()
                 state.slots[targetIndex].item = tempItem
+                state.slots[targetIndex].aspectRatioMode = tempAspectRatioMode
                 state.slots[targetIndex].instanceID = UUID()
 
                 // Immediately switch audio focus to primary showcase screen
@@ -397,6 +409,7 @@ public struct MultiViewFeature {
                 }
                 if let index = state.slots.firstIndex(where: { $0.id == slotID }) {
                     state.slots[index].item = item
+                    state.slots[index].aspectRatioMode = .fit
                     state.slots[index].instanceID = UUID() // Force new player
 
                     // If no audio is active, make this one active
@@ -425,6 +438,7 @@ public struct MultiViewFeature {
             case let .removeChannelTapped(slotID):
                 if let index = state.slots.firstIndex(where: { $0.id == slotID }) {
                     state.slots[index].item = nil
+                    state.slots[index].aspectRatioMode = .fit
                     state.slots[index].instanceID = UUID()
                 }
                 if state.activeAudioSlotID == slotID {

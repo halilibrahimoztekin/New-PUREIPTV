@@ -344,6 +344,15 @@ public struct MultiView: View {
 
     // MARK: - Slot View with Audio Swapping & Primary Promote
 
+    private func aspectRatioTitle(for mode: VideoAspectRatioMode) -> String {
+        switch mode {
+        case .fit: AppStrings.MultiView.aspectFit
+        case .fill: AppStrings.MultiView.aspectFill
+        case .stretch: AppStrings.MultiView.aspectStretch
+        case .zoom: AppStrings.MultiView.aspectFit
+        }
+    }
+
     private func slotView(for slot: MultiViewSlot, isCompanion: Bool) -> some View {
         let isAudioActive = store.activeAudioSlotID == slot.id
         #if os(tvOS)
@@ -357,6 +366,7 @@ public struct MultiView: View {
                 ZStack {
                     MultiViewPlayer(
                         item: item,
+                        aspectRatioMode: slot.aspectRatioMode,
                         isActiveAudio: isAudioActive,
                         isPiPActive: store.isPiPActive && isAudioActive,
                         instanceID: slot.instanceID,
@@ -392,6 +402,33 @@ public struct MultiView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+
+                            Menu {
+                                ForEach([VideoAspectRatioMode.fit, .fill, .stretch], id: \.rawValue) { mode in
+                                    Button {
+                                        store.send(.setAspectRatioMode(slotID: slot.id, mode: mode))
+                                    } label: {
+                                        if slot.aspectRatioMode == mode {
+                                            Label(aspectRatioTitle(for: mode), systemImage: "checkmark")
+                                        } else {
+                                            Text(aspectRatioTitle(for: mode))
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: slot.aspectRatioMode.systemIcon)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(7)
+                                    .background(Color.black.opacity(0.68), in: Circle())
+                            }
+                            .accessibilityLabel(AppStrings.MultiView.aspectRatioControl)
+                            .accessibilityValue(aspectRatioTitle(for: slot.aspectRatioMode))
+                            #if os(tvOS)
+                                .buttonStyle(TVCircleButtonStyle())
+                            #else
+                                .buttonStyle(.plain)
+                            #endif
 
                             Spacer()
 
@@ -654,6 +691,7 @@ private struct ChannelSelectionSheet: View {
 
 private struct MultiViewPlayer: View {
     let item: MediaModels.Item
+    let aspectRatioMode: VideoAspectRatioMode
     let isActiveAudio: Bool
     let isPiPActive: Bool
     let instanceID: UUID
@@ -686,8 +724,12 @@ private struct MultiViewPlayer: View {
             } else if let client = playerClient {
                 #if os(iOS)
                     PiPVideoView(client.vlcPlayer(), controller: $pipController)
+                        .scaleEffect(x: videoScaleX, y: videoScaleY)
+                        .clipped()
                 #else
                     VideoView(client.vlcPlayer())
+                        .scaleEffect(x: videoScaleX, y: videoScaleY)
+                        .clipped()
                 #endif
             } else {
                 Color.black
@@ -710,6 +752,18 @@ private struct MultiViewPlayer: View {
                 }
             #endif
         }
+    }
+
+    private var videoScaleX: CGFloat {
+        switch aspectRatioMode {
+        case .fit: 1
+        case .fill, .zoom: 1.25
+        case .stretch: 1.15
+        }
+    }
+
+    private var videoScaleY: CGFloat {
+        aspectRatioMode == .stretch ? 1 : videoScaleX
     }
 
     private func runPlayer() async {
