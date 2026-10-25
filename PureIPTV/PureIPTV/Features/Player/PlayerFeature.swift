@@ -36,6 +36,7 @@ public struct PlayerFeature {
         public static let recordingMonitor = "PlayerFeature.recordingMonitor"
         public static let recordingStatus = "PlayerFeature.recordingStatus"
         public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
+        public static let skipMarkerLoad = "PlayerFeature.skipMarkerLoad"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -153,6 +154,11 @@ public struct PlayerFeature {
         public var currentTime: Duration = .zero
         public var totalTime: Duration = .zero
         public var position: Double = 0.0
+        public var skipMarkers = PlaybackSkipMarkers()
+        public var skipMarkerRequestID: UUID?
+        public var skipMarkersProfileScope: ProfileContextSnapshot?
+        public var isSkipMarkersLoading = false
+        public var skipMarkerSaveRevision: UInt64 = 0
         public var scrubThumbnailData: Data?
         public var scrubThumbnailRequestID: UUID?
         public var mediaInfo: MediaInfo?
@@ -184,6 +190,27 @@ public struct PlayerFeature {
         public var activeCatchupProgram: EPGProgram?
         public var isPlayingCatchup: Bool {
             activeCatchupProgram != nil
+        }
+
+        public var canManageSkipMarkers: Bool {
+            !item.isLive
+                && !item.id.isEmpty
+                && item.config?.playlistID != nil
+                && skipMarkersProfileScope?.profileID != nil
+                && !isSkipMarkersLoading
+        }
+
+        public var activeSkipMarkerKind: PlaybackSkipMarkerKind? {
+            guard canManageSkipMarkers else { return nil }
+            let duration = Double(totalTime.components.seconds)
+            let seconds = Double(currentTime.components.seconds)
+            if skipMarkers.intro.isValid(duration: duration), skipMarkers.intro.contains(seconds) {
+                return .intro
+            }
+            if skipMarkers.credits.isValid(duration: duration), skipMarkers.credits.contains(seconds) {
+                return .credits
+            }
+            return nil
         }
 
         public var isCatchupTimelineVisible: Bool = false
@@ -489,6 +516,11 @@ public struct PlayerFeature {
         case restartPlayback
         case seek(Double)
         case seekToTime(Duration)
+        case loadSkipMarkers
+        case skipMarkersLoaded(requestID: UUID, itemID: String, playlistID: UUID, profileScope: ProfileContextSnapshot, markers: PlaybackSkipMarkers)
+        case setSkipMarkerBoundary(kind: PlaybackSkipMarkerKind, isStart: Bool)
+        case clearSkipMarker(PlaybackSkipMarkerKind)
+        case skipMarkedSegment(PlaybackSkipMarkerKind)
         case requestScrubThumbnail(Duration)
         case scrubThumbnailLoaded(requestID: UUID, itemID: String, data: Data?)
         case cancelScrubThumbnail
@@ -671,6 +703,7 @@ public struct PlayerFeature {
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
+    @Dependency(\.playbackSkipMarkerClient) var playbackSkipMarkerClient
 
     public init() {}
 
@@ -686,9 +719,10 @@ public struct PlayerFeature {
         let parentalControlClient = parentalControlClient
         let displayModeClient = displayModeClient
         let customEPGMappingClient = customEPGMappingClient
+        let playbackSkipMarkerClient = playbackSkipMarkerClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, profileContextClient: profileContextClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, profileContextClient: profileContextClient)
         }
     }
 
@@ -764,7 +798,47 @@ public struct PlayerFeature {
         return .cancel(id: CancelID.statsTimer)
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
+    private static func persistSkipMarkers(
+        _ markers: PlaybackSkipMarkers,
+        revision: UInt64,
+        item: PlayableItem,
+        profileScope: ProfileContextSnapshot,
+        markerClient: PlaybackSkipMarkerClient,
+        profileContextClient: ProfileContextClient
+    ) -> Effect<Action> {
+        guard
+            let profileID = profileScope.profileID,
+            let playlistID = item.config?.playlistID,
+            !item.isLive,
+            !item.id.isEmpty
+        else { return .none }
+
+        let mediaKind = item.seriesID == nil ? "movie" : "episode"
+        return .run { _ in
+            guard profileContextClient.snapshot() == profileScope else { return }
+            await markerClient.save(markers, revision, profileID, playlistID, mediaKind, item.id, item.seriesID)
+        }
+    }
+
+    private static func reloadSkipMarkersAfterProfileChange(
+        state: inout State,
+        profileContextClient: ProfileContextClient
+    ) -> Effect<Action> {
+        guard
+            let loadedScope = state.skipMarkersProfileScope,
+            profileContextClient.snapshot() != loadedScope
+        else { return .none }
+        state.skipMarkers = .init()
+        state.skipMarkerRequestID = nil
+        state.skipMarkersProfileScope = nil
+        state.isSkipMarkersLoading = false
+        return .merge(
+            .cancel(id: CancelID.skipMarkerLoad),
+            .send(.loadSkipMarkers)
+        )
+    }
+
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.isMinimized = false
@@ -834,6 +908,7 @@ public struct PlayerFeature {
                 state.isAFREnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
+                .send(.loadSkipMarkers),
                 recentEffect,
                 .send(.startOLEDDimTimer),
                 .run { _ in
@@ -910,6 +985,7 @@ public struct PlayerFeature {
                 parentalControlClient: parentalControlClient,
                 displayModeClient: displayModeClient,
                 customEPGMappingClient: customEPGMappingClient,
+                playbackSkipMarkerClient: playbackSkipMarkerClient,
                 profileContextClient: profileContextClient
             )
             return .merge(appearanceEffect, .send(.fetchEPG))
@@ -1830,6 +1906,117 @@ public struct PlayerFeature {
                 upNextEffect
             )
 
+        case .loadSkipMarkers:
+            let profileScope = profileContextClient.snapshot()
+            guard
+                !state.item.isLive,
+                !state.item.id.isEmpty,
+                let playlistID = state.item.config?.playlistID,
+                let profileID = profileScope.profileID
+            else {
+                state.skipMarkers = .init()
+                state.skipMarkerRequestID = nil
+                state.skipMarkersProfileScope = nil
+                state.isSkipMarkersLoading = false
+                return .cancel(id: CancelID.skipMarkerLoad)
+            }
+            let item = state.item
+            let requestID = UUID()
+            state.skipMarkerRequestID = requestID
+            state.skipMarkersProfileScope = profileScope
+            state.isSkipMarkersLoading = true
+            let mediaKind = item.seriesID == nil ? "movie" : "episode"
+            return .run { send in
+                let markers = await playbackSkipMarkerClient.load(
+                    profileID,
+                    playlistID,
+                    mediaKind,
+                    item.id,
+                    item.seriesID
+                )
+                await send(.skipMarkersLoaded(
+                    requestID: requestID,
+                    itemID: item.id,
+                    playlistID: playlistID,
+                    profileScope: profileScope,
+                    markers: markers
+                ))
+            }
+            .cancellable(id: CancelID.skipMarkerLoad, cancelInFlight: true)
+
+        case let .skipMarkersLoaded(requestID, itemID, playlistID, profileScope, markers):
+            guard
+                state.skipMarkerRequestID == requestID,
+                state.item.id == itemID,
+                state.item.config?.playlistID == playlistID,
+                state.skipMarkersProfileScope == profileScope,
+                profileContextClient.snapshot() == profileScope
+            else { return .none }
+            state.skipMarkers = markers
+            state.isSkipMarkersLoading = false
+            return .none
+
+        case let .setSkipMarkerBoundary(kind, isStart):
+            guard
+                state.canManageSkipMarkers,
+                let profileScope = state.skipMarkersProfileScope,
+                profileContextClient.snapshot() == profileScope
+            else { return .none }
+            let duration = Double(state.totalTime.components.seconds)
+            let seconds = min(duration, max(0, Double(state.currentTime.components.seconds)))
+            guard duration > 0 else { return .none }
+
+            var marker = state.skipMarkers[kind]
+            if isStart {
+                guard seconds < duration else { return .none }
+                marker.startSeconds = seconds
+                if let end = marker.endSeconds, end <= seconds {
+                    marker.endSeconds = nil
+                }
+            } else {
+                guard let start = marker.startSeconds, seconds > start else { return .none }
+                marker.endSeconds = seconds
+            }
+            state.skipMarkers[kind] = marker
+            state.skipMarkerSaveRevision = max(state.skipMarkerSaveRevision + 1, DispatchTime.now().uptimeNanoseconds)
+            return persistSkipMarkers(
+                state.skipMarkers,
+                revision: state.skipMarkerSaveRevision,
+                item: state.item,
+                profileScope: profileScope,
+                markerClient: playbackSkipMarkerClient,
+                profileContextClient: profileContextClient
+            )
+
+        case let .clearSkipMarker(kind):
+            guard
+                state.canManageSkipMarkers,
+                let profileScope = state.skipMarkersProfileScope,
+                profileContextClient.snapshot() == profileScope
+            else { return .none }
+            state.skipMarkers[kind] = .init()
+            state.skipMarkerSaveRevision = max(state.skipMarkerSaveRevision + 1, DispatchTime.now().uptimeNanoseconds)
+            return persistSkipMarkers(
+                state.skipMarkers,
+                revision: state.skipMarkerSaveRevision,
+                item: state.item,
+                profileScope: profileScope,
+                markerClient: playbackSkipMarkerClient,
+                profileContextClient: profileContextClient
+            )
+
+        case let .skipMarkedSegment(kind):
+            let duration = Double(state.totalTime.components.seconds)
+            let marker = state.skipMarkers[kind]
+            guard
+                state.activeSkipMarkerKind == kind,
+                let profileScope = state.skipMarkersProfileScope,
+                profileContextClient.snapshot() == profileScope,
+                marker.isValid(duration: duration),
+                let endSeconds = marker.endSeconds
+            else { return .none }
+            return .send(.seekToTime(.seconds(endSeconds)))
+
         case let .setPlaybackRate(rate):
             let clamped = max(0.25, min(4.0, rate))
             state.playbackRate = clamped
@@ -2023,6 +2210,11 @@ public struct PlayerFeature {
             state.streamHealthMetrics = nil
             state.activePlaybackURL = newItem.streamURL
             state.item = newItem
+            state.skipMarkers = .init()
+            state.skipMarkerRequestID = nil
+            state.skipMarkersProfileScope = nil
+            state.isSkipMarkersLoading = false
+            state.skipMarkerSaveRevision = 0
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
             state.catchupTimeShiftHours = customEPGMappingClient.getCatchupTimeShift(newItem.id)
@@ -2907,7 +3099,10 @@ public struct PlayerFeature {
                     let totalSecs = Double(time.components.seconds) / state.position
                     state.totalTime = Duration.seconds(totalSecs)
                 }
-                return updateUpNextState(state: &state, settingsClient: settingsClient)
+                return .merge(
+                    updateUpNextState(state: &state, settingsClient: settingsClient),
+                    reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient)
+                )
             case let .lengthChanged(length):
                 state.totalTime = length
                 return updateUpNextState(state: &state, settingsClient: settingsClient)
@@ -2920,6 +3115,7 @@ public struct PlayerFeature {
 
                 var effects: [Effect<Action>] = [
                     updateUpNextState(state: &state, settingsClient: settingsClient),
+                    reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient),
                 ]
 
                 // Trakt.tv VOD scrobble progress detection (Madde #17)

@@ -562,6 +562,11 @@
                                         .foregroundColor(.white)
                                 }
                                 .padding(.horizontal)
+
+                                PlayerSkipMarkersControls(store: store) {
+                                    HapticManager.shared.trigger(.light)
+                                }
+                                .frame(maxWidth: .infinity)
                             } else if store.item.isLive {
                                 // Live TV Quick Zapping & Recall Bar
                                 HStack {

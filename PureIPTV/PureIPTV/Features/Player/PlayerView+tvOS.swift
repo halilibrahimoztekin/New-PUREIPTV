@@ -906,6 +906,8 @@
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
+                    PlayerSkipMarkersControls(store: store, onInteraction: onInteraction)
+
                     // Playback Speed Menu (Madde #43 - VOD & Series)
                     if store.item.epgChannelID == nil {
                         Menu {

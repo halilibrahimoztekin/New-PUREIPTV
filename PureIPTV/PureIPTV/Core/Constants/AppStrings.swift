@@ -187,6 +187,14 @@ public enum AppStrings {
         public static let recordingInProgress = "Kayıt yapılıyor".localized
         public static let recordingStopping = "Kayıt durduruluyor".localized
         public static let recordingCouldNotStop = "Kayıt bitişi doğrulanamadı".localized
+        public static let skipMarkers = "Atlama İşaretleri".localized
+        public static let skipIntro = "Açılışı Atla".localized
+        public static let skipCredits = "Jeneriği Atla".localized
+        public static let introMarkerTitle = "Açılış".localized
+        public static let creditsMarkerTitle = "Jenerik".localized
+        public static let markStartHere = "Başlangıcı Burada İşaretle".localized
+        public static let markEndHere = "Bitişi Burada İşaretle".localized
+        public static let clearMarker = "İşareti Temizle".localized
         public static let removeRecentChannel = "Son İzlenenlerden Kaldır".localized
         public static let liveLabel = "CANLI".localized
         public static let liveLabelNormal = "Canlı".localized
