@@ -1105,7 +1105,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod incelemesi: tek virtualized grid ve tvOS focus kimlikleri değişmiyor; zaman bilgisi VoiceOver erişilebilirlik metninde kalıyor. `git diff --check` ve strings JSON doğrulaması temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_111_ios.log`, `/private/tmp/pureiptv_111_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Kod incelemesi tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 112. [IN_PROGRESS] Oynatıcıdan Dış Altyazı Arama ve Ekleme
+### 112. [DONE] Oynatıcıdan Dış Altyazı Arama ve Ekleme
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar altyazı eksik olduğunda VLC’ye geçmek zorunda kalmayı eleştiriyor; IPTVX OpenSubtitles entegrasyonu sunuyor, Snappier profil kapsamlı subtitle bağlantısını belgeliyor: https://www.reddit.com/r/TiviMate/comments/1k6cnvh/easiest_way_to_add_external_subtitles/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ss44kp/bought_tivimate_lifetime_subscription_and_no/ · https://snappieriptv.app/tutorial/index.html .
 - **Aday gap:** Player’ın sağlayıcı altyazı track’lerine ek dosya/servis araması var mı taransın. API anahtarları/hesap, içerik eşlemesi, kullanıcı onayı, profil kapsamı ve indirme güvenliği gereksinimleri belirlenmeli.
 - **Analiz:** Player state ve iOS/tvOS subtitle picker’ları mevcut akış altyazı track’lerini listeliyor; `SwiftVLC` aktif oynatmaya `addExternalTrack(from:type:select:)` sağlar. OpenSubtitles current API’de arama için app API key, download için uygun API-key/Bearer yetkisi gerekir; shared key’i client’a gömmek güvenli değil. Kullanıcı anahtarını Keychain’de saklama, aktif film/dizi başlığıyla arama, kullanıcı onaylı sonuç indirme ve VLC track’e ekleme akışı inceleniyor. Kaynaklar: https://ai.opensubtitles.com/api-docs · https://opensubtitles.tawk.help/article/getting-started .
@@ -1113,14 +1113,18 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod incelemesi: API anahtarı loglanmıyor; link host/scheme doğrulanıyor; AVPlayer ve Live TV’de eylem gösterilmiyor. `git diff --check` ve strings JSON doğrulaması temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_112_ios.log`, `/private/tmp/pureiptv_112_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı). API istekleri burada canlı hesapla denenmedi.
 - **Durum:** `[DONE]` — Kod incelemesi tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 113. [IN_PROGRESS] Teknik Oynatma Ayrıntılarını Tek Ekranda Gösterme
+### 113. [DONE] Teknik Oynatma Ayrıntılarını Tek Ekranda Gösterme
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları kanal bilgi ekranında çözünürlük/FPS/bant genişliği, TiviMate kullanıcıları video/ses bitrate ve codec bilgisi istiyor: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/ · https://www.reddit.com/r/TiviMate/comments/1pf3wh3/my_tivimeate_wishlist/ .
 - **Aday gap:** Mevcut #80 ölçülen FPS/network throughput kapsamı dışındaki doğrulanabilir codec, audio codec/bitrate veya kaynak bitrate alanları var mı denetlensin; tahmin ve ölçümü ayırt et.
-- **Analiz:** Player `MediaInfo` video/audio codec ve bitrate alanlarını, ayrıca ölçülen ağ throughput/FPS metriklerini taşıyor. Mevcut StreamHealthHUD/Media Info ekranlarının aynı anda hangilerini gösterdiği ve provider bitrate ile tahmin ayrımının nasıl korunduğu denetleniyor.
+- **Analiz:** `NerdStatsHUDView` zaten tek ekranda çözünürlük, video/audio codec, ağ throughput, bitrate ve FPS gösteriyor; #80 ölçümlerinden ayrı. Fakat ölçüm yokken çözünürlüğü başlıktan çıkarıyor, codec’i H.264/AAC varsayıyor ve kaynak bitrate’ini nötr bir “stream bitrate” etiketiyle sunuyordu. Bu sahte kesinliği kaldırıp eksik metadata’yı açık belirtmek gerekiyor.
+- **Uygulama:** Teknik HUD artık metadata eksikken başlıktan çözünürlük tahmini, sabit H.264/AAC codec varsayımı veya track dilinden ses codec’i çıkarmıyor; alanlarda teknik bilgi alınamadığı belirtiliyor. Kaynak/codec metadata’sından gelen bitrate “Kaynağın Bildirdiği Bit Hızı” diye etiketleniyor; byte deltalarından ölçülen ağ throughput ayrı “Ölçülen Ağ Veri Hızı” olarak kalıyor. Yeni etiketler 22 locale’e eklendi.
+- **Doğrulama:** Kod incelemesi: çözünürlük ve codec değerleri yalnız gerçek `MediaInfo` alanlarından geliyor; kaynak bitrate ile ölçülen throughput açıkça ayrılıyor. `git diff --check` ve strings JSON doğrulaması temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_113_ios.log`, `/private/tmp/pureiptv_113_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — İnceleme tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 114. [PENDING] “Şimdi Ne İzleyeyim?” Doğal Dilli Keşif
+### 114. [IN_PROGRESS] “Şimdi Ne İzleyeyim?” Doğal Dilli Keşif
 - **Canlı keşif (25 Ekim 2026):** IPTVX v25 For You alanı kişiselleştirilmiş VOD keşfi, türe/yıla göre gezinme ve canlı program/film araması için doğal dil prompt’u duyuruyor: https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv .
 - **Aday gap:** Mevcut arama ve öneri motoru “şu anda yayında” bağlamıyla doğal dilli sorguyu destekliyor mu incelensin; ağ çağrısına bağımlılık ve sonuçların kullanıcıya açıklanabilirliği değerlendirilsin.
+- **Analiz:** Ana Search feature’ı, LLM/remote prompt service ve Live EPG search bağlantıları taranıyor; “şu an” ve tür/yıl gibi kısıtların var olan filtre/indekslerle güvenilir yürütülüp yürütülemeyeceği belirleniyor.
 
 ### 115. [PENDING] Maç/Etkinlik Merkezli Spor Rehberi ve Alternatif Yayınlar
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları spor ve ligleri statik kanal gruplarından ayrı sunmayı istiyor; IPTV Deck’in spor güncellemesi lig/ülke, maça bağlı üç kanala kadar alternatif ve catch-up/watch-from-start örneği veriyor: https://www.reddit.com/r/TiviMate/comments/1pf3wh3/my_tivimeate_wishlist/ · https://www.reddit.com/r/iptvdeck/comments/1xdcrln/iptv_deck_186_now_on_linux_live_subtitles_in_any/ .

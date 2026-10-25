@@ -233,7 +233,8 @@ public enum AppStrings {
         public static let resolution = "Çözünürlük".localized
         public static let bitrate = "Bit Hızı (Bitrate)".localized
         public static let networkThroughput = "Ölçülen Ağ Veri Hızı".localized
-        public static let streamBitrate = "Yayın Bit Hızı".localized
+        public static let streamBitrate = "Kaynağın Bildirdiği Bit Hızı".localized
+        public static let mediaInfoUnavailable = "Teknik bilgi alınamadı".localized
         public static let renderedFPS = "Ölçülen Gösterilen Kare Hızı".localized
         public static let sampleUnavailable = "Örnek bekleniyor".localized
         public static let bufferHealth = "Tampon Durumu".localized

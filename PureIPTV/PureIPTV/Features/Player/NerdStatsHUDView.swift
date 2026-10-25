@@ -306,36 +306,21 @@ public struct NerdStatsHUDView: View {
         if let res = mediaInfo?.resolution, !res.isEmpty {
             return res.contains("3840") ? "\(res) (4K UHD)" : (res.contains("1920") ? "\(res) (FHD)" : res)
         }
-        let lower = item.title.lowercased()
-        if lower.contains("4k") || lower.contains("uhd") {
-            return "3840x2160 (4K UHD)"
-        } else if lower.contains("fhd") || lower.contains("1080") {
-            return "1920x1080 (1080p FHD)"
-        } else if lower.contains("hd") || lower.contains("720") {
-            return "1280x720 (720p HD)"
-        }
-        return "Otomatik / HLS Stream"
+        return AppStrings.Player.mediaInfoUnavailable
     }
 
     private var videoCodecString: String {
         if let codec = mediaInfo?.videoCodec, !codec.isEmpty {
             return codec.uppercased()
         }
-        let lower = item.title.lowercased()
-        if lower.contains("hevc") || lower.contains("h.265") || lower.contains("x265") {
-            return "HEVC (H.265 Main 10)"
-        }
-        return "H.264 (AVC High)"
+        return AppStrings.Player.mediaInfoUnavailable
     }
 
     private var audioCodecString: String {
         if let codec = mediaInfo?.audioCodec, !codec.isEmpty {
             return codec.uppercased()
         }
-        if let track = selectedAudioTrack {
-            return "\(track.name) (AAC-LC)"
-        }
-        return "AAC-LC Stereo"
+        return AppStrings.Player.mediaInfoUnavailable
     }
 
     private var bitrateString: String {
@@ -346,7 +331,7 @@ public struct NerdStatsHUDView: View {
                 return "\(bitrate / 1000) kbps"
             }
         }
-        return AppStrings.Player.sampleUnavailable
+        return AppStrings.Player.mediaInfoUnavailable
     }
 
     private var streamFormatString: String {
