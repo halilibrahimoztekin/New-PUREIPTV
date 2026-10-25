@@ -1211,9 +1211,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS ve tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test, simulator, playback veya akış çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Hata kurtarması yalnız güvenli biçimde eşleşen alternatif kaynağa geçiyor.
 
-### 125. [PENDING] Profil Üzerinden Çocuklara Özel Sunucu Kütüphanesi
-- **Canlı keşif (25 Ekim 2026):** IPTV Deck’in Plex/Jellyfin/Emby entegrasyon duyurusu sunucu profiline bağlı kütüphane görünürlüğü ve izleme ilerlemesi sync’ini vurguluyor: https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ .
-- **Aday gap:** #108 kişisel kaynak desteğinden ayrı olarak mevcut çocuk profili filtreleri medya sunucusunun kendi kullanıcı/kütüphane yetkilerini bozmayacak biçimde taşır mı incele.
+### 125. [DEFERRED] Profil Üzerinden Çocuklara Özel Sunucu Kütüphanesi
+- **Canlı keşif (25 Ekim 2026):** UHF Jellyfin desteği ile uygulama içi kütüphane gezinmesini sunuyor; IPTV Deck duyurusu server profili/kütüphane kapsamına dikkat çekiyor: https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=watch · https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ .
+- **Kod incelemesi:** Projede IPTV playlist/Xtream istemcileri ve çocuk profili seçimi var; Jellyfin/Plex/Emby istemcisi veya sunucu kütüphanesi modeli yok. Var olmayan kaynak için çocuk profili filtre UI’ı eklenemez. #108 kişisel kaynak/server playback desteği de credential, provider ve player kısıtları nedeniyle ertelenmiş.
+- **Karar:** `[DEFERRED]` — server kaynak modeli ve yetkilendirmeli kütüphane istemcisi önce ayrı bir mimari kapsamda gelmeli. Ardından sunucunun kullanıcı/kütüphane izinleri çocuk profilinde aynen korunmalı; IPTV playlist filtrelerini server erişim kontrolü gibi sunmak güvenli olmaz.
+- **Durum:** `[DEFERRED]` — önkoşul olan medya sunucusu entegrasyonu uygulamada bulunmuyor; bu incelemede kod/build değişikliği gerekmedi.
 
 ### 126. [PENDING] Etkinlik Kategorilerini EPG’den Yeniden Yükleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.99 sürüm notları EPG içindeki PPV/Event gruplarını ayrı ele alıp doğrudan yenilemeyi belirtiyor: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=watch .
@@ -1231,3 +1233,43 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Uygulama:** `/private/tmp/PureIPTVDerivedData_98` (3.5 GB) aktif dosya tanıtıcısı olmadığı doğrulandıktan sonra silindi. Standart Xcode DerivedData’da kapanmış derlemelerin PureIPTV Build/Index/compiler-cache çıktıları ve ortak SDK/module cache’leri temizlendi; iki projenin `SourcePackages` checkout’ları korundu. #123 ve #124 build’leri sonrası yalnız PureIPTV’ye ait 3.9 GB Build/compiler cache ve log çıktısı, `lsof` boş sonuç verdikten sonra kaldırıldı; PureIPTV `SourcePackages` (1.8 GB) korundu. `/private/tmp` içinde bu taramada DerivedData adlı klasör yoktu. ContactCleaner yoluna erişilmedi/değiştirilmedi.
 - **Sonuç:** İlk temizlik sonrası `df` kullanılabilir alanı 23 GiB’den 37 GiB’ye çıktı; #123 build ve cache temizliği sonrasında 75 GiB gösterildi. Geçici ve PureIPTV DerivedData içinde kullanılmayan build cache bırakılmadı. ContactCleaner gelecekteki temizliklerden hariç tutulacak.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
+
+### 130. [PENDING] EPG’den Canlı Spor Etkinliği ve Takım Takibi
+- **Canlı keşif (25 Ekim 2026):** UHF 2.3.0 etkinlik filtresiyle tüm playlistlerde etkinliği yayınlayan kanalları buluyor; favori takım/yarışmaları ana ekranda gelecek etkinlik rafına ekliyor: https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv .
+- **Aday gap:** EPG metadatası takım/yarışma ve etkinlik-kanal eşleşmesini güvenilir taşıyor mu; provider’dan gelmeyen skor/takvim verisi uydurmadan incele.
+
+### 131. [PENDING] tvOS EPG’de Odaklanan Kanalı Küçük Pencerede Önizleme
+- **Canlı keşif (25 Ekim 2026):** UHF 1.96.3 Apple TV TV Rehberi’nde odaklanan kanalı küçük pencerede izleme ve ayardan kapatma ekledi: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
+- **Aday gap:** Rehber kaydırması sırasında ayrı stream açmak bağlantı/odak maliyetini artırır mı; mevcut player stream’ini paylaşmak mümkün mü denetle.
+
+### 132. [PENDING] Kayıtta TS Akışını Tercih Etme
+- **Canlı keşif (25 Ekim 2026):** UHF 2.2.0 kayıt için TS akışını varsa varsayılan seçerek güvenilirliği artırdığını belirtiyor: https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv .
+- **Aday gap:** Mevcut VLC kayıt çıktısı ile provider stream URL/formatları kontrol et; TS tercihi desteklenmiyorsa alternatif kapsayıcıyı yanlış yönlendirmeden sınırı belirt.
+
+### 133. [PENDING] Kullanıcı Favori Listelerini Yeniden Adlandırma ve Sıralama
+- **Canlı keşif (25 Ekim 2026):** UHF 1.96.0 favori listelerinde yeniden adlandırma, silme ve sıralama seçeneklerini duyurdu: https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=watch .
+- **Aday gap:** Mevcut favorites/tags/list modelinin koleksiyon yönetimi ve profil/playlist kapsamı taransın; zaten sunulan işlevleri tekrarlamadan eksik kalan düzenleme yüzeyi belirlensin.
+
+### 134. [PENDING] Oynatıcıdan VOD’u Baştan Başlatma
+- **Canlı keşif (25 Ekim 2026):** Opus 2.0.7 Apple TV player’ına film/bölümü başa alan “Start Over” düğmesi ekledi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
+- **Aday gap:** Kaydedilmiş izleme ilerlemesini koruyarak mevcut player içinden isteğe bağlı seek-to-start eylemi var mı incele.
+
+### 135. [PENDING] tvOS’ta Uzun Film/Dizi Özetini Okuma
+- **Canlı keşif (25 Ekim 2026):** Opus 2.0.4 Apple TV’de film/dizi özetine dokununca tam metni kaydırılabilir görünümde açıyor: https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv .
+- **Aday gap:** Detay sayfası metadata özetini kesiyorsa VoiceOver ve Siri Remote ile erişilebilir tam metin sunumu değerlendirilsin.
+
+### 136. [PENDING] İndirmeleri Duraklatma ve Devam Ettirme
+- **Canlı keşif (25 Ekim 2026):** IPTVX iOS/iPadOS indirmeler için pause/resume/cancel kontrolleri ekledi: https://apps.apple.com/us/app/iptvx/id1451470024 .
+- **Aday gap:** İndirme motoru `URLSessionDownloadTask` duraklatılabilir resume data ve kalıcı kuyruk sağlıyor mu; desteklenmeyen task’larda sahte pause düğmesi göstermeden denetle.
+
+### 137. [PENDING] Ana Ekrana Playlist Kategorisi Sabitleme
+- **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 herhangi playlist kategorisini, Live dahil, ana ekran Feed Collections’a sabitlemeyi duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
+- **Aday gap:** Mevcut HomeSectionManager kullanıcıya playlist kategori feed’i yaratma, kaldırma ve yeniden sıralama imkânı veriyor mu; playlist UUID izolasyonu korunarak incele.
+
+### 138. [PENDING] tvOS Arama Sonucunda Klavye Sonrası Odak Geri Yükleme
+- **Canlı keşif (25 Ekim 2026):** Opus 2.0.5 Apple TV’de arama klavyesi kapandıktan sonra sonuçların konum ve odağını korumaya yönelik iyileştirmeler bildirdi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
+- **Aday gap:** Search navigation ve eksik grid sonuçlarında focus restore/dead-end davranışını statik koddan incele.
+
+### 139. [PENDING] Daha Uzun ve Kesin Süreli DVR Kaydı
+- **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 kesin kayıt uzunluğu ve 24 saate kadar schedule desteğini duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
+- **Aday gap:** #121’de belgelenen yerel kayıt kısıtlarından ayrı olarak app’in EPG tabanlı planlama motoru var mı doğrula; yoksa provider/server DVR ile app tarafı kaydını karıştırma.
