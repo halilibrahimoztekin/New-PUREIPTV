@@ -1243,6 +1243,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#127 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV’ye ait `Build` (3.1 GB), `ModuleCache.noindex` (358 MB), `SDKStatCaches.noindex` (17 MB), `CompilationCache.noindex` (28 KB) ve `Logs` (1.4 MB) `lsof` boş doğrulamasından sonra silindi. `SourcePackages` (1.8 GB) ile DerivedData dışındaki paylaşılan SDK precompiled cache korundu; ContactCleaner’a dokunulmadı.
 - **#128 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar kontrol edildi; geçici/derleme çıktısı adayı yoktu. 1.8 GB `SourcePackages` korundu.
 - **#130 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
+- **#131 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
 ### 130. [DEFERRED] EPG’den Canlı Spor Etkinliği ve Takım Takibi
@@ -1251,9 +1252,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DEFERRED]` — güvenilir event/team identity olmadan takip, aynı adlı takımları birleştirebilir ve yanlış EPG başlıklarını etkinlik sanabilir; mevcut veri takvimi bugünün EPG’siyle sınırlı. Provider metadata desteği ve multi-playlist kapsamı belirlenince tekrar değerlendirilmeli. Kod/build değişikliği yapılmadı.
 - **Durum:** `[DEFERRED]` — Sports Hub mevcut şekilde korunuyor; güvenilmez takım kimliğiyle takip tercihi eklenmedi.
 
-### 131. [PENDING] tvOS EPG’de Odaklanan Kanalı Küçük Pencerede Önizleme
+### 131. [DEFERRED] tvOS EPG’de Odaklanan Kanalı Küçük Pencerede Önizleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.96.3 Apple TV TV Rehberi’nde odaklanan kanalı küçük pencerede izleme ve ayardan kapatma ekledi: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Aday gap:** Rehber kaydırması sırasında ayrı stream açmak bağlantı/odak maliyetini artırır mı; mevcut player stream’ini paylaşmak mümkün mü denetle.
+- **Kod incelemesi:** EPG’de zaten manuel başlatılan PiP/mini-preview ve `PreviewPlayerClient` üzerinden player’a terfi var. Reducer’da `channelFocused`/400 ms debounce ve otomatik önizleme state’i de tanımlı; ancak EPG view bu action’ı göndermiyor, ayar tercihi de SettingsClient/Settings UI’a bağlı değil. Yani adayın altyapısı kısmen var, fakat otomatik odak akışı ve kapatma ayarı tamamlanmamış.
+- **Karar:** `[DEFERRED]` — otomatik preview ayrı bir provider stream’i başlatabilir; EPG’de focus kaybı, scroll, tekrar istek ve mevcut PiP ile tek aktif player yaşam döngüsü netleştirilmeden otomatik açma bağlantı bant genişliğini artırabilir. Mevcut manuel PiP korunuyor; önce focus loss/stop davranışı ve ayarın kapsamı tanımlanmalı.
+- **Durum:** `[DEFERRED]` — odakla otomatik preview eklenmedi; mevcut kullanıcı kontrollü PiP kullanılabilir.
 
 ### 132. [PENDING] Kayıtta TS Akışını Tercih Etme
 - **Canlı keşif (25 Ekim 2026):** UHF 2.2.0 kayıt için TS akışını varsa varsayılan seçerek güvenilirliği artırdığını belirtiyor: https://apps.apple.com/al/app/uhf-love-your-iptv/id6443751726?platform=tv .
