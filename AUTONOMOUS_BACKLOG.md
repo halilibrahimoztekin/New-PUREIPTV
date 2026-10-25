@@ -1217,9 +1217,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DEFERRED]` — server kaynak modeli ve yetkilendirmeli kütüphane istemcisi önce ayrı bir mimari kapsamda gelmeli. Ardından sunucunun kullanıcı/kütüphane izinleri çocuk profilinde aynen korunmalı; IPTV playlist filtrelerini server erişim kontrolü gibi sunmak güvenli olmaz.
 - **Durum:** `[DEFERRED]` — önkoşul olan medya sunucusu entegrasyonu uygulamada bulunmuyor; bu incelemede kod/build değişikliği gerekmedi.
 
-### 126. [PENDING] Etkinlik Kategorilerini EPG’den Yeniden Yükleme
-- **Canlı keşif (25 Ekim 2026):** UHF 1.99 sürüm notları EPG içindeki PPV/Event gruplarını ayrı ele alıp doğrudan yenilemeyi belirtiyor: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=watch .
-- **Aday gap:** Etkinlik kategorileri normal playlist refresh’e bağımlı mı; maliyetli tam yenileme olmadan doğru kapsamda güncelleme var mı tara.
+### 126. [DEFERRED] Etkinlik Kategorilerini EPG’den Yeniden Yükleme
+- **Canlı keşif (25 Ekim 2026):** UHF 1.99 sürüm notları TV rehberinde PPV/Event gruplarını ayrı yenilemeyi belirtiyor: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=watch .
+- **Kod incelemesi:** `EPGTimelineFeature.refreshEPGTapped` playlist’in ortak EPG cache’ini yeniliyor ve ekranda filtrelenmiş ilk 20 kanal için program yüklemesini başlatıyor. Mevcut XMLTV/EPG modellerinde PPV/Event sınıfı veya provider’ın event kategori endpoint’i yok; canlı etkinlik kartları da normal EPG program kayıtlarından oluşturuluyor.
+- **Karar:** `[DEFERRED]` — ayrı kategori yenilemesi için kaynağın gerçek kategori şemasını ve endpoint’ini tanımadan tüm EPG’yi “event” diye sınıflandırmak yanlış; provider-specific veri erişimi bu projede yok. Yenileme modeli sağlayıcı kapsamı belirlendikten sonra tekrar ele alınmalı.
+- **Durum:** `[DEFERRED]` — sahte event kategorisi yaratmadan mevcut ortak EPG yenilemesi korunuyor; bu incelemede kod/build değişikliği gerekmedi.
 
 ### 127. [PENDING] PIN ile Kilitli Kategoriyi Geçici Açma
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları film kategorilerinde gizleme yerine PIN girilene kadar kilitleme talep ediyor: https://www.reddit.com/r/TiviMate/comments/1x5b02o/new_update/ .
