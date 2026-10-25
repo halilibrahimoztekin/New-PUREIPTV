@@ -1,5 +1,11 @@
 import Foundation
 
+public enum LocalTimePresentation {
+    public static func string(from date: Date, locale: Locale) -> String {
+        date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+    }
+}
+
 public enum MediaModels: Sendable {
     public enum ItemType: String, Equatable, Sendable {
         case live
@@ -248,14 +254,18 @@ public extension EPGProgram {
     }
 
     var formattedTimeRange: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return "\(formatter.string(from: startTime)) - \(formatter.string(from: endTime))"
+        formattedTimeRange(locale: .autoupdatingCurrent)
     }
 
     var formattedStartTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: startTime)
+        formattedStartTime(locale: .autoupdatingCurrent)
+    }
+
+    func formattedTimeRange(locale: Locale) -> String {
+        "\(LocalTimePresentation.string(from: startTime, locale: locale)) - \(LocalTimePresentation.string(from: endTime, locale: locale))"
+    }
+
+    func formattedStartTime(locale: Locale) -> String {
+        LocalTimePresentation.string(from: startTime, locale: locale)
     }
 }

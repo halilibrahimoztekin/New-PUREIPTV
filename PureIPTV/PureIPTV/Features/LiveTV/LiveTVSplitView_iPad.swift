@@ -6,6 +6,7 @@ import SwiftUI
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
 
+        @Environment(\.locale) private var locale
         @State private var categorySearchQuery: String = ""
         @State private var channelSearchQuery: String = ""
         @State private var isSmartGroupManagerPresented = false
@@ -726,9 +727,7 @@ import SwiftUI
         }
 
         private func formatTime(_ date: Date) -> String {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
+            LocalTimePresentation.string(from: date, locale: locale)
         }
     }
 #endif

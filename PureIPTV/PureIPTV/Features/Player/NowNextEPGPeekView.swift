@@ -5,6 +5,7 @@ import SwiftUI
 /// A cinematic EPG sneak-peek component showing currently playing program with a circular/linear
 /// elapsed progress indicator and the upcoming next program with countdown badges.
 public struct NowNextEPGPeekView: View {
+    @Environment(\.locale) private var locale
     public let currentProgram: EPGProgram?
     public let nextProgram: EPGProgram?
     public var isCompact: Bool = false
@@ -71,7 +72,7 @@ public struct NowNextEPGPeekView: View {
 
                     Spacer(minLength: 0)
 
-                    Text(program.formattedTimeRange)
+                    Text(program.formattedTimeRange(locale: locale))
                         .font(.system(size: isCompact ? 11 : 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.65))
                 }
@@ -156,7 +157,7 @@ public struct NowNextEPGPeekView: View {
                 .padding(.vertical, 2)
                 .background(Color(hex: "#BF5AF2").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
 
-            Text(program.formattedStartTime)
+            Text(program.formattedStartTime(locale: locale))
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .foregroundStyle(Color(hex: "#BF5AF2").opacity(0.9))
 

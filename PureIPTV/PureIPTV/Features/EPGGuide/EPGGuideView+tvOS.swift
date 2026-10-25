@@ -7,6 +7,7 @@ import SwiftVLC
         @Bindable var store: StoreOf<EPGGuideFeature>
         @Dependency(\.previewPlayerClient) private var previewPlayerClient
 
+        @Environment(\.locale) private var locale
         @FocusState private var focusedChannelID: String?
         @FocusState private var focusedProgramID: String?
         @FocusState private var isScheduleWatchButtonFocused: Bool
@@ -611,9 +612,7 @@ import SwiftVLC
         }
 
         private func formatTime(_ date: Date) -> String {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
+            LocalTimePresentation.string(from: date, locale: locale)
         }
     }
 #endif

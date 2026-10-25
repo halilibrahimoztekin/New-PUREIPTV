@@ -1,6 +1,7 @@
 import SwiftUI
 
 public struct SportsHubView: View {
+    @Environment(\.locale) private var locale
     public let matches: [SportsMatchItem]
     public let onPlayChannel: (MediaModels.Item) -> Void
 
@@ -72,7 +73,7 @@ public struct SportsHubView: View {
                             .foregroundColor(.red)
                     }
                 } else {
-                    Text(match.formattedTime)
+                    Text(match.formattedTime(locale: locale))
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.secondary)
                 }

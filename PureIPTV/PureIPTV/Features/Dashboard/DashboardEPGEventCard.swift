@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardEPGEventCard: View {
+    @Environment(\.locale) private var locale
     let event: DashboardFeature.EPGEvent
     let onSelectChannel: (MediaModels.Item) -> Void
 
@@ -11,7 +12,7 @@ struct DashboardEPGEventCard: View {
                     Circle()
                         .fill(event.program.isPlayingNow ? Color.red : Color(hex: "#0A84FF"))
                         .frame(width: 8, height: 8)
-                    Text(event.program.isPlayingNow ? AppStrings.Dashboard.nowAiring : event.program.formattedStartTime)
+                    Text(event.program.isPlayingNow ? AppStrings.Dashboard.nowAiring : event.program.formattedStartTime(locale: locale))
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
                     Spacer(minLength: 8)
@@ -32,7 +33,7 @@ struct DashboardEPGEventCard: View {
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
 
-                Text(event.program.formattedTimeRange)
+                Text(event.program.formattedTimeRange(locale: locale))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -58,7 +59,7 @@ struct DashboardEPGEventCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel("\(event.program.title), \(event.channel.title), \(event.program.formattedTimeRange)")
+        .accessibilityLabel("\(event.program.title), \(event.channel.title), \(event.program.formattedTimeRange(locale: locale))")
         .accessibilityHint(AppStrings.Common.watchNow)
         .contextMenu {
             if !event.alternateChannels.isEmpty {

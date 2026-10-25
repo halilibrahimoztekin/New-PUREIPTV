@@ -1430,8 +1430,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Fırsat:** Playlist seçimi sırasında beklenmedik otomatik refresh’i önleyip açık “yenile” eylemi ve son güncelleme bilgisini değerlendirmek.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
-### 152. [PENDING] EPG Saat Biçimini Cihaz Tercihiyle Canlı Eşleme
+### 152. [DONE] EPG Saat Biçimini Cihaz Tercihiyle Canlı Eşleme
 - **Fırsat:** 12/24 saat tercihi değiştiğinde rehber, listeler ve player program bilgilerinin yeniden açılış gerektirmeden aynı biçime geçmesini incele.
+- **Kod bulgusu:** EPG guide, timeline, catch-up, player EPG list, iPad LiveTV, program kartları ve spor hub bazı saatleri sabit `HH:mm` ile biçimlendiriyordu; diğerleri `.short` kullanıyordu. Bu, cihazın saat tercihiyle tutarsız sonuç veriyordu.
+- **Uygulama:** Sabit formatlar kısa yerel saat biçimine alındı. iOS/tvOS EPG guide ve timeline, catch-up/player listeleri, iPad LiveTV, Dashboard/NowNext/SportsHub ve global arama, SwiftUI `locale` ortamını biçimlendiriciye aktarıyor; locale değişince view yeniden değerlendirilip 12/24 saat tercihini izliyor. Model seviyesinde çağrılabilen geriye dönük varsayılan biçim de cihazın güncel locale’ini kullanıyor. `Localizable.xcstrings` değiştirilmedi.
+- **İnceleme ve derleme:** İnceleme onaylandı; reviewer’ın yakaladığı iOS rehber satırındaki locale kapsamı düzeltildi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; test veya uygulama akışı çalıştırılmadı.
+- **Temizlik:** #152 geçici DerivedData iOS (2.6 GB), tvOS (2.4 GB) ve build logları, açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu. ContactCleaner’a erişilmedi.
+- **Durum:** `[DONE]` — EPG ve player program saatleri tek yerel biçimi kullanıyor ve değişen cihaz locale’ine bağlanıyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
 ### 153. [PENDING] Rehberde Program Adı ve Açıklamasıyla Arama

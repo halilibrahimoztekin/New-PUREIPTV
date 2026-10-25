@@ -344,6 +344,7 @@ public struct GlobalSearchResultCard: View {
 }
 
 public struct ProgramSearchResultCard: View {
+    @Environment(\.locale) private var locale
     let program: EPGProgram
     let channel: MediaModels.Item
     let playlistName: String?
@@ -361,7 +362,7 @@ public struct ProgramSearchResultCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: program.isPlayingNow ? "dot.radiowaves.left.and.right" : "clock")
-                    Text(program.isPlayingNow ? AppStrings.Player.nowPlaying : program.startTime.formatted(date: .omitted, time: .shortened))
+                    Text(program.isPlayingNow ? AppStrings.Player.nowPlaying : LocalTimePresentation.string(from: program.startTime, locale: locale))
                     Spacer(minLength: 0)
                     if let playlistName {
                         Text(playlistName).lineLimit(1)
@@ -402,7 +403,7 @@ public struct ProgramSearchResultCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel("\(program.title), \(channel.title), \(program.startTime.formatted(date: .omitted, time: .shortened))")
+        .accessibilityLabel("\(program.title), \(channel.title), \(LocalTimePresentation.string(from: program.startTime, locale: locale))")
         .accessibilityHint(AppStrings.Common.watchNow)
     }
 

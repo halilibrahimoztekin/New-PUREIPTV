@@ -267,6 +267,7 @@ import SwiftUI
     }
 
     public struct EPGGuideRow: View {
+        @Environment(\.locale) private var locale
         let program: EPGProgram
         let hasArchive: Bool
         var onCatchUp: (() -> Void)?
@@ -340,9 +341,7 @@ import SwiftUI
         }
 
         private func formatTime(_ date: Date) -> String {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
+            LocalTimePresentation.string(from: date, locale: locale)
         }
     }
 #endif

@@ -60,6 +60,7 @@ public struct EPGListView: View {
 }
 
 public struct EPGProgramRow: View {
+    @Environment(\.locale) private var locale
     let program: EPGProgram
 
     public init(program: EPGProgram) {
@@ -110,8 +111,6 @@ public struct EPGProgramRow: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        LocalTimePresentation.string(from: date, locale: locale)
     }
 }

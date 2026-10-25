@@ -16,9 +16,11 @@ public struct SportsMatchItem: Identifiable, Sendable, Equatable {
     }
 
     public var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: startTime)
+        formattedTime(locale: .autoupdatingCurrent)
+    }
+
+    public func formattedTime(locale: Locale) -> String {
+        LocalTimePresentation.string(from: startTime, locale: locale)
     }
 }
 

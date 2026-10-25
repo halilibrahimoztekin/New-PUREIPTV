@@ -6,6 +6,7 @@ import SwiftUI
 /// Interactive Visual Scrubber & Timeline Bookmarks for IPTV Catchup / Timeshift TV Archive.
 /// Fully compatible with Apple TV 10-foot UI (Siri Remote Focus Engine) and iOS Touch / Gestures.
 public struct CatchupTimelineScrubberView: View {
+    @Environment(\.locale) private var locale
     public let store: StoreOf<PlayerFeature>
     public let onClose: () -> Void
 
@@ -439,8 +440,6 @@ public struct CatchupTimelineScrubberView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        LocalTimePresentation.string(from: date, locale: locale)
     }
 }

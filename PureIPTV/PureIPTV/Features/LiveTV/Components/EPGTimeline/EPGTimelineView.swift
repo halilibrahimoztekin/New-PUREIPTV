@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct EPGTimelineView: View {
     @Bindable var store: StoreOf<EPGTimelineFeature>
+    @Environment(\.locale) private var locale
 
     // Dimensions
     #if os(tvOS)
@@ -1799,9 +1800,7 @@ public struct EPGTimelineView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        LocalTimePresentation.string(from: date, locale: locale)
     }
 
     private func formatDay(_ date: Date) -> String {
