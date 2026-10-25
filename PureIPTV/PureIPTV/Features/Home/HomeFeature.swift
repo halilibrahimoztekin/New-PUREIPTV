@@ -45,6 +45,7 @@ public struct HomeFeature {
     public struct State: Equatable {
         public var selectedTab: HomeTab = .dashboard
         public var config: PlaylistConfig
+        public var liveTVOnlyNavigation = false
 
         public var serverURL: String {
             config.serverURL?.absoluteString ?? config.m3uURL?.absoluteString ?? ""
@@ -68,6 +69,9 @@ public struct HomeFeature {
         public var settings = SettingsFeature.State()
 
         public var visibleTabs: [HomeTab] {
+            if liveTVOnlyNavigation {
+                return [.liveTV, .settings]
+            }
             guard settings.hideEmptyContentTabs else { return HomeTab.allCases }
             return HomeTab.allCases.filter { tab in
                 switch tab {
@@ -88,8 +92,12 @@ public struct HomeFeature {
 
             @Dependency(\.settingsClient) var settingsClient
             let tabString = settingsClient.defaultStartupTab()
+            liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
             if let tab = HomeTab(rawValue: tabString) {
                 selectedTab = tab
+            }
+            if liveTVOnlyNavigation, selectedTab != .settings {
+                selectedTab = .liveTV
             }
             settings.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
         }
@@ -171,6 +179,13 @@ public struct HomeFeature {
 
             case .dashboard(.delegate(.openManagePlaylists)):
                 return .send(.delegate(.openManagePlaylists))
+
+            case let .settings(.setLiveTVOnlyNavigation(enabled)):
+                state.liveTVOnlyNavigation = enabled
+                if enabled, state.selectedTab != .settings {
+                    state.selectedTab = .liveTV
+                }
+                return .none
 
             case .dashboard:
                 if !state.visibleTabs.contains(state.selectedTab) {

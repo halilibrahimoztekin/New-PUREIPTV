@@ -180,6 +180,14 @@ public struct SettingsView: View {
                 Text(AppStrings.Settings.hideEmptyContentTabsDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Toggle("Yalnızca Canlı TV gezinmesi", isOn: Binding(
+                    get: { store.liveTVOnlyNavigation },
+                    set: { store.send(.setLiveTVOnlyNavigation($0)) }
+                ))
+                Text("Ana gezinmede Canlı TV ve Ayarlar sekmelerini gösterir. Film ve dizi kitaplıkların korunur; bu sekmeler ayar kapatılınca yeniden görünür.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section(header: Text(AppStrings.Settings.contentSorting)) {

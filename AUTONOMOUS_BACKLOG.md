@@ -1152,6 +1152,10 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[APPROVED]` audit-only. Cross-playlist curation/migration, ancak kullanıcının açık içerik eşlemesi veya katalogda kalıcı canonical ID bulunduğunda ayrı bir madde olarak tasarlanmalı. Mevcut ilerleme/favori eşlemesi değiştirilmedi; bu inceleme için build gerekmedi.
 - **Durum:** `[DONE]` — Otomatik cross-playlist birleştirme için güvenilir ortak içerik kimliği yok; sessiz yanlış eşleşme yerine playlist-scope korunuyor.
 
-### 118. [PENDING] Yalnız Live TV İçin Ana Navigasyon Profili
+### 118. [DONE] Yalnız Live TV İçin Ana Navigasyon Profili
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları Film/Dizi menüsü olmayan ve doğrudan EPG’ye giden IPTV uygulaması talep ediyor: https://www.reddit.com/r/appletv/comments/1kw04v1/best_streaming_app_like_tivimate_for_apple_tv/ .
 - **Aday gap:** #107 boş playlist sekmelerini saklama davranışından ayrı olarak Live-only gezinme profili veya preset’i mevcut mu denetlensin; VOD erişimini silmeden ana menüyü sadeleştir.
+- **Analiz:** `hideEmptyContentTabs` yalnızca katalog boş olduğunda sekmeleri gizliyor; kullanıcı seçebileceği Live-only profil yok. Kalıcı startup tab seçimi Live TV’ye açabiliyor ancak diğer katalog sekmelerini gizlemiyor. Yeni profil ayrı tercih olarak eklenecek; canlı sekme ve bu tercihi kapatabileceği Ayarlar kalacak, VOD/dizi datası silinmeyecek.
+- **Uygulama:** Ayarlara kalıcı “Yalnızca Canlı TV gezinmesi” seçeneği eklendi. Açıkken ana sekmeler Canlı TV ve Ayarlar olur; kitaplıklar ve kayıtlı kataloglar değiştirilmez. Açılışta profil aktifse Canlı TV açılır; Ayarlar sekmesi tercihi kapatmak için erişilebilir kalır.
+- **Doğrulama:** `git diff --check` temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_118_ios.log`, `/private/tmp/pureiptv_118_tvos.log`). Projede mevcut Swift 6 concurrency/deprecation uyarıları dışında derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Live TV odaklı gezinme profili eklendi; tercih kapatılınca bütün sekmeler yeniden görünür.

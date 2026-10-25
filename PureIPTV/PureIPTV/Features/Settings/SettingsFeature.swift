@@ -60,6 +60,7 @@ public struct SettingsFeature {
         public var hideAdultContent: Bool = false
         public var defaultStartupTab: String = "Keşfet"
         public var hideEmptyContentTabs = true
+        public var liveTVOnlyNavigation = false
 
         // Picture-in-Picture & Background Audio (Madde #18)
         public var isAutoPiPEnabled: Bool = true
@@ -177,6 +178,7 @@ public struct SettingsFeature {
         case setHideAdultContent(Bool)
         case setDefaultStartupTab(String)
         case setHideEmptyContentTabs(Bool)
+        case setLiveTVOnlyNavigation(Bool)
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
         case setRememberMediaTrackPreferences(Bool)
@@ -296,6 +298,7 @@ public struct SettingsFeature {
                 state.hideAdultContent = settingsClient.hideAdultContent()
                 state.defaultStartupTab = settingsClient.defaultStartupTab()
                 state.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
+                state.liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
@@ -492,6 +495,10 @@ public struct SettingsFeature {
             case let .setHideEmptyContentTabs(val):
                 state.hideEmptyContentTabs = val
                 return .run { _ in settingsClient.setHideEmptyContentTabs(val) }
+
+            case let .setLiveTVOnlyNavigation(val):
+                state.liveTVOnlyNavigation = val
+                return .run { _ in settingsClient.setLiveTVOnlyNavigation(val) }
 
             case let .setPreferredAudioLanguage(val):
                 state.preferredAudioLanguage = val

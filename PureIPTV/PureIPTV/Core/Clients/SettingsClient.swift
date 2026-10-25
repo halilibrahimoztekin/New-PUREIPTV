@@ -99,6 +99,8 @@ public struct SettingsClient: Sendable {
     public var setDefaultStartupTab: @Sendable (String) -> Void = { _ in }
     public var hideEmptyContentTabs: @Sendable () -> Bool = { true }
     public var setHideEmptyContentTabs: @Sendable (Bool) -> Void = { _ in }
+    public var liveTVOnlyNavigation: @Sendable () -> Bool = { false }
+    public var setLiveTVOnlyNavigation: @Sendable (Bool) -> Void = { _ in }
 
     public var preferredAudioLanguage: @Sendable () -> String = { "tr" }
     public var setPreferredAudioLanguage: @Sendable (String) -> Void = { _ in }
@@ -168,6 +170,7 @@ extension SettingsClient: DependencyKey {
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
         let hideEmptyContentTabsKey = "com.pureiptv.hideEmptyContentTabs"
+        let liveTVOnlyNavigationKey = "com.pureiptv.liveTVOnlyNavigation"
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
         let secondaryAudioKey = "com.pureiptv.secondaryAudioLanguage"
         let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
@@ -193,6 +196,7 @@ extension SettingsClient: DependencyKey {
             downloadConcurrencyLimitKey: 1,
             startupTabKey: "Keşfet",
             hideEmptyContentTabsKey: true,
+            liveTVOnlyNavigationKey: false,
             preferredAudioKey: "tr",
             secondaryAudioKey: "en",
             preferredSubtitleKey: "off",
@@ -351,6 +355,8 @@ extension SettingsClient: DependencyKey {
             setDefaultStartupTab: { defaults.set($0, forKey: startupTabKey) },
             hideEmptyContentTabs: { defaults.bool(forKey: hideEmptyContentTabsKey) },
             setHideEmptyContentTabs: { defaults.set($0, forKey: hideEmptyContentTabsKey) },
+            liveTVOnlyNavigation: { defaults.bool(forKey: liveTVOnlyNavigationKey) },
+            setLiveTVOnlyNavigation: { defaults.set($0, forKey: liveTVOnlyNavigationKey) },
             preferredAudioLanguage: { defaults.string(forKey: preferredAudioKey) ?? "tr" },
             setPreferredAudioLanguage: { defaults.set($0, forKey: preferredAudioKey) },
             secondaryAudioLanguage: { defaults.string(forKey: secondaryAudioKey) ?? "en" },
