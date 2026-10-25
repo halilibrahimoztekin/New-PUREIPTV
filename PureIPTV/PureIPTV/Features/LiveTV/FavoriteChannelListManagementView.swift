@@ -85,6 +85,7 @@ struct FavoriteChannelListManagementView: View {
                         Label(AppStrings.Common.favorites, systemImage: store.isFavoriteListMode && store.selectedFavoriteListID == nil ? "checkmark.circle.fill" : "heart")
                     }
                     ForEach(store.favoriteLists) { list in
+                        let listIndex = store.favoriteLists.firstIndex(where: { $0.id == list.id }) ?? 0
                         HStack {
                             Button {
                                 store.send(.favoriteListSelected(list.id))
@@ -115,6 +116,20 @@ struct FavoriteChannelListManagementView: View {
                                 Image(systemName: "trash")
                             }
                             .accessibilityLabel(AppStrings.LiveTV.deleteFavoriteList)
+                            Button {
+                                store.send(.moveNamedFavoriteList(id: list.id, offset: -1))
+                            } label: {
+                                Image(systemName: "arrow.up")
+                            }
+                            .disabled(listIndex == 0)
+                            .accessibilityLabel(AppStrings.Favorites.moveUp)
+                            Button {
+                                store.send(.moveNamedFavoriteList(id: list.id, offset: 1))
+                            } label: {
+                                Image(systemName: "arrow.down")
+                            }
+                            .disabled(listIndex == store.favoriteLists.count - 1)
+                            .accessibilityLabel(AppStrings.Favorites.moveDown)
                         }
                     }
                 } header: {

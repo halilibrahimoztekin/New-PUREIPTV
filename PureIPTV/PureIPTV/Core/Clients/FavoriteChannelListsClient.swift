@@ -34,6 +34,7 @@ public struct FavoriteChannelListsSnapshot: Equatable, Sendable {
 public enum FavoriteChannelListPendingMutation: Equatable, Sendable {
     case save(id: UUID?, name: String)
     case delete(UUID)
+    case move(id: UUID, offset: Int)
     case toggle(channel: MediaModels.Item, listID: UUID)
     case bulk(channelIDs: [String], listID: UUID, operation: BulkFavoriteOperation, generationID: UUID)
 }

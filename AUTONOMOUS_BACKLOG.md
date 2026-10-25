@@ -1245,6 +1245,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#130 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#131 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
 - **#132 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar tarandı; temizlenecek build/cache adayı yoktu. `SourcePackages` korundu.
+- **#133 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) klasörleri açık dosya olmadığı doğrulandıktan sonra silindi; `SourcePackages` (1.8 GB) ve paylaşılan SDK cache korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
 ### 130. [DEFERRED] EPG’den Canlı Spor Etkinliği ve Takım Takibi
@@ -1265,9 +1266,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Karar:** `[DEFERRED]` — uygulama seviyesinde TS container seçimi yapılamıyor ve var olan stream URL’sini değiştirerek kayıt formatı garanti edilemez. Kayıt motoru/SwiftVLC format seçimi desteklemeden kullanıcı tercihi sunmak yanıltıcı olur. Kod/build değişikliği yapılmadı.
 - **Durum:** `[DEFERRED]` — mevcut provider akışı VLC tarafından olduğu gibi kaydediliyor.
 
-### 133. [PENDING] Kullanıcı Favori Listelerini Yeniden Adlandırma ve Sıralama
+### 133. [DONE] Kullanıcı Favori Listelerini Yeniden Adlandırma ve Sıralama
 - **Canlı keşif (25 Ekim 2026):** UHF 1.96.0 favori listelerinde yeniden adlandırma, silme ve sıralama seçeneklerini duyurdu: https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=watch .
-- **Aday gap:** Mevcut favorites/tags/list modelinin koleksiyon yönetimi ve profil/playlist kapsamı taransın; zaten sunulan işlevleri tekrarlamadan eksik kalan düzenleme yüzeyi belirlensin.
+- **Kod incelemesi:** Profile+playlist kapsamlı named favorites modeli zaten create/rename/delete destekliyordu; yalnızca liste sırası düzenleme eksikti.
+- **Uygulama:** Yönetim ekranına erişilebilir yukarı/aşağı sıralama kontrolleri eklendi. Yeni sıra mevcut snapshot dizisiyle profile+playlist anahtarında saklanıyor; ilk/son satır sınırı ve yükleme devam ederken sıralama değişikliğinin mutation kuyruğunda korunması sağlandı.
+- **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Favori listeleri isimlendirilebilir, silinebilir ve kullanıcı tarafından sıralanabilir.
 
 ### 134. [PENDING] Oynatıcıdan VOD’u Baştan Başlatma
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.7 Apple TV player’ına film/bölümü başa alan “Start Over” düğmesi ekledi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .

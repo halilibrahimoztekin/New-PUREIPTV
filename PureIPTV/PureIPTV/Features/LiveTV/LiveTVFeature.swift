@@ -301,6 +301,7 @@ public struct LiveTVFeature {
         case favoriteListChannelsLoaded(listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID, membershipIDs: Set<String>, unavailableFavorites: [UnavailableFavoriteChannel]?, Result<[MediaModels.Item], Error>)
         case saveNamedFavoriteList(id: UUID?, name: String)
         case deleteNamedFavoriteList(UUID)
+        case moveNamedFavoriteList(id: UUID, offset: Int)
         case toggleNamedFavorite(MediaModels.Item, listID: UUID)
         case enterChannelSelectionMode
         case toggleChannelSelection(MediaModels.Item)
@@ -886,6 +887,8 @@ public struct LiveTVFeature {
                                 await send(.saveNamedFavoriteList(id: id, name: name))
                             case let .delete(id):
                                 await send(.deleteNamedFavoriteList(id))
+                            case let .move(id, offset):
+                                await send(.moveNamedFavoriteList(id: id, offset: offset))
                             case let .toggle(channel, listID):
                                 await send(.toggleNamedFavorite(channel, listID: listID))
                             case let .bulk(channelIDs, listID, operation, generationID):
@@ -1116,6 +1119,22 @@ public struct LiveTVFeature {
                     state.epgTimeline = timeline
                 }
                 return .merge(save, cancel)
+
+            case let .moveNamedFavoriteList(listID, offset):
+                guard state.pendingNamedFavoriteBulk == nil, offset == -1 || offset == 1 else { return .none }
+                let profileScope = profileContextClient.snapshot()
+                guard profileScope == state.favoriteListProfileScope,
+                      let profileID = profileScope.profileID,
+                      let playlistID = state.config?.playlistID else { return .none }
+                if state.favoriteListLoadRequestID != nil {
+                    state.favoriteListPendingMutations.append(.move(id: listID, offset: offset))
+                    return .none
+                }
+                guard let index = state.favoriteLists.firstIndex(where: { $0.id == listID }) else { return .none }
+                let destination = index + offset
+                guard state.favoriteLists.indices.contains(destination) else { return .none }
+                state.favoriteLists.swapAt(index, destination)
+                return persistFavoriteLists(state: &state, client: favoriteChannelListsClient, profileID: profileID, playlistID: playlistID)
 
             case let .toggleNamedFavorite(channel, listID):
                 guard state.pendingNamedFavoriteBulk == nil else { return .none }
