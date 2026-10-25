@@ -1203,9 +1203,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS Release ve tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; string catalog JSON parse ve `git diff --check` başarılı. Test, simulator, playback veya akış çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — tvOS yön tuşları özelleştirilebilir hale geldi.
 
-### 124. [PENDING] Oynatma Sorununda Hızlı Alternatif Kaynak Kurtarma
-- **Canlı keşif (25 Ekim 2026):** IPTVX 24.1.3 sürüm notları playback ekranından retry, alternatif kaynak veya farklı player’a geçişi öne çıkarıyor: https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv .
-- **Aday gap:** Mevcut error/recovery arayüzü başarısız stream’de kullanıcıya bağlama duyarlı kısa eylemler sunuyor mu denetle; var olan alternatif kaynak akışını yineleme.
+### 124. [DONE] Oynatma Sorununda Hızlı Alternatif Kaynak Kurtarma
+- **Canlı keşif (25 Ekim 2026):** IPTVX 24.1.3 tvOS sürüm notları tam ekran oynatmadan tekrar deneme, kaynak değiştirme ve oynatıcı değiştirme eylemleri sunduğunu belirtiyor: https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv .
+- **Kod incelemesi:** iOS/tvOS hata katmanı yeniden deneme ve varsa tek yedek kaynağa geçiş sağlıyor. Retry sınırı dolunca da otomatik failover var. Mevcut `backupStreamItem` gevşek başlık `contains` eşleşmesi kullanıyor ve gizli/ebeveyn kilitli öğeleri, başarısız kimlikleri ve live/VOD türünü filtrelemiyordu. Sidebar alternatif kaynağı normalize edilmiş tam kanal adıyla eşliyor.
+- **Uygulama:** Yedek/failover adayı aynı medya türünde olmalı; daha önce başarısız, gizli veya ebeveyn kategori kilidindeki öğeler elenir. Başlık mevcut normalize edilmiş alternatif kaynak eşleştiricisiyle tam eşleşirse seçilir. Hata ekranındaki Retry ve yedek eylemleri korunur.
+- **PR Reviewer:** Otomatik ve kullanıcı tetiklemeli failover aynı güvenli aday seçicisini kullanıyor; yanlış benzer isimli kanala geçiş, döngü ve gizli/ebeveyn kilitli kanala geçiş önlendi. `[APPROVED]`.
+- **Doğrulama:** iOS ve tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test, simulator, playback veya akış çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Hata kurtarması yalnız güvenli biçimde eşleşen alternatif kaynağa geçiyor.
 
 ### 125. [PENDING] Profil Üzerinden Çocuklara Özel Sunucu Kütüphanesi
 - **Canlı keşif (25 Ekim 2026):** IPTV Deck’in Plex/Jellyfin/Emby entegrasyon duyurusu sunucu profiline bağlı kütüphane görünürlüğü ve izleme ilerlemesi sync’ini vurguluyor: https://www.reddit.com/r/AndroidTVApps/comments/1x9umbo/your_jellyfinembyplex_and_your_iptv/ .
@@ -1224,6 +1228,6 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Aday gap:** #108 player-side personal server integration’dan farklı olarak provider VOD’u kendi sunucuya içe aktarma/transfer aracı app’in güvenli ve yasal kapsamına uyuyor mu, stream URL saklama/credentials riskleriyle incele.
 
 ### 129. [DONE] Her Task Sonrası DerivedData Temizliği
-- **Uygulama:** `/private/tmp/PureIPTVDerivedData_98` (3.5 GB) aktif dosya tanıtıcısı olmadığı doğrulandıktan sonra silindi. Standart Xcode DerivedData’da kapanmış derlemelerin PureIPTV Build/Index/compiler-cache çıktıları ve ortak SDK/module cache’leri temizlendi; iki projenin `SourcePackages` checkout’ları korundu. #123 build’leri sonrası yalnız PureIPTV’ye ait 3.9 GB Build/compiler cache ve log çıktısı, `lsof` boş sonuç verdikten sonra kaldırıldı; PureIPTV `SourcePackages` (1.8 GB) korundu. `/private/tmp` içinde bu taramada DerivedData adlı klasör yoktu. ContactCleaner yoluna erişilmedi/değiştirilmedi.
+- **Uygulama:** `/private/tmp/PureIPTVDerivedData_98` (3.5 GB) aktif dosya tanıtıcısı olmadığı doğrulandıktan sonra silindi. Standart Xcode DerivedData’da kapanmış derlemelerin PureIPTV Build/Index/compiler-cache çıktıları ve ortak SDK/module cache’leri temizlendi; iki projenin `SourcePackages` checkout’ları korundu. #123 ve #124 build’leri sonrası yalnız PureIPTV’ye ait 3.9 GB Build/compiler cache ve log çıktısı, `lsof` boş sonuç verdikten sonra kaldırıldı; PureIPTV `SourcePackages` (1.8 GB) korundu. `/private/tmp` içinde bu taramada DerivedData adlı klasör yoktu. ContactCleaner yoluna erişilmedi/değiştirilmedi.
 - **Sonuç:** İlk temizlik sonrası `df` kullanılabilir alanı 23 GiB’den 37 GiB’ye çıktı; #123 build ve cache temizliği sonrasında 75 GiB gösterildi. Geçici ve PureIPTV DerivedData içinde kullanılmayan build cache bırakılmadı. ContactCleaner gelecekteki temizliklerden hariç tutulacak.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.

@@ -411,10 +411,13 @@ public struct PlayerFeature {
 
         public var backupStreamItem: PlayableItem? {
             guard let playlist, !playlist.isEmpty else { return nil }
-            return playlist.first(where: {
-                $0.id != item.id &&
-                    !failedStreamIDs.contains($0.id) &&
-                    PlayerFeature.areChannelsRelated($0.title, item.title)
+            return playlist.first(where: { candidate in
+                candidate.id != item.id &&
+                    candidate.isLive == item.isLive &&
+                    !failedStreamIDs.contains(candidate.id) &&
+                    !hiddenChannelIDs.contains(candidate.id) &&
+                    !(candidate.categoryID.map(blacklistedCategoryIDs.contains) ?? false) &&
+                    PlayerFeature.areAlternativeSources(candidate.title, item.title)
             })
         }
 
