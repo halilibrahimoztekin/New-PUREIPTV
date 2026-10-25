@@ -1089,14 +1089,18 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** PR Reviewer `[APPROVED]`; final iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_109_ios_final.log`, `/private/tmp/pureiptv_109_tvos_final.log`). `git diff --check` ve strings JSON doğrulaması geçti. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca Xcode derlemeleri alındı.
 
-### 110. [IN_PROGRESS] Eşleme Akışlarında Aramayı ve Odağı Korumak
+### 110. [DONE] Eşleme Akışlarında Aramayı ve Odağı Korumak
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları benzer isimli kanalları art arda eşlerken arama metninin sıfırlanmasını ve aynı aramanın yeniden yazılmasını sorun olarak bildiriyor: https://www.reddit.com/r/TiviMate/comments/1i3ejin/ · https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1wnk8x0/ .
 - **Aday gap:** Arama, filtre ve klavye/tvOS focus’u eşleme sonrası korunuyor mu taransın; yalnız ilgili eşleme ekranlarında kalıcı tut.
-- **Analiz:** Yeni #109 öneri listesi arama alanı sunmuyor; adaylar doğrudan kaynak+kanal adıyla listeleniyor. Onay sonrası öneri satırı kaldırılırken diğer satırlar kalır, ancak uzun kataloglarda aynı adlarla filtreleme ve kumanda/klavye ile satırlara dönme için arama/odak koruması yok. Önce bu yeni eşleme paneline hedefli filtre eklenmesi, arama metninin onaydan sonra korunması ve tvOS odak sırasının mevcut liste içinde kalması inceleniyor.
+- **Analiz:** Yeni #109 öneri listesi arama alanı sunmuyordu; adaylar doğrudan kaynak+kanal adıyla listeleniyordu. Onay sonrası öneri satırı kaldırılırken diğer satırlar kalıyor; uzun kataloglarda adla filtreleme eksikti.
+- **Uygulama:** EPG öneri bölümüne kanal arama alanı eklendi. Arama playlist kanal adı, XMLTV kanal adı veya kaynak adında eşleşme buluyor. Arama metni view state’inde kalır; öneri satırı onay sonrası kaldırıldığında filtre ve arama alanı korunur. tvOS ve iOS aynı SwiftUI alanını kullanır.
+- **Doğrulama:** Kod incelemesi: filtre saf view hesaplamasıdır, mapping onayına bağlı değildir; TextField ve sonuçlar listede stabil kalır. `git diff --check` temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_110_ios.log`, `/private/tmp/pureiptv_110_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — İnceleme tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 111. [PENDING] Görsel Ağırlıklı Kompakt EPG Görünümü
+### 111. [IN_PROGRESS] Görsel Ağırlıklı Kompakt EPG Görünümü
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcı önerisi EPG detaylarını azaltıp kanal görsellerine daha fazla alan ayırmayı istiyor: https://www.reddit.com/r/TiviMate/comments/1uvqltj/must_do_for_new_users/ .
 - **Aday gap:** Var olan EPG list/grid görünümüne alternatif yoğunluk veya görsel mod sunuluyor mu incelensin; tvOS odağı ve küçük metin okunabilirliği korunmalı.
+- **Analiz:** EPG rehber bileşenleri ve görünüm tercihi için mevcut seçenekler taranıyor; mevcut grid/list modları ve kanal logolarının yerleşimi karşılaştırılacak.
 
 ### 112. [PENDING] Oynatıcıdan Dış Altyazı Arama ve Ekleme
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar altyazı eksik olduğunda VLC’ye geçmek zorunda kalmayı eleştiriyor; IPTVX OpenSubtitles entegrasyonu sunuyor, Snappier profil kapsamlı subtitle bağlantısını belgeliyor: https://www.reddit.com/r/TiviMate/comments/1k6cnvh/easiest_way_to_add_external_subtitles/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ss44kp/bought_tivimate_lifetime_subscription_and_no/ · https://snappieriptv.app/tutorial/index.html .

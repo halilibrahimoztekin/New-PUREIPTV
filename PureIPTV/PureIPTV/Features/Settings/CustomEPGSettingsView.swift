@@ -8,6 +8,19 @@ import SwiftUI
 public struct CustomEPGSettingsView: View {
     @Bindable var store: StoreOf<SettingsFeature>
     @Environment(\.dismiss) private var dismiss
+    @State private var epgMappingSearchText = ""
+
+    private var visibleEPGMappingSuggestions: [EPGMappingSuggestion] {
+        let query = epgMappingSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return store.epgMappingSuggestions }
+        return store.epgMappingSuggestions.filter { suggestion in
+            suggestion.channelName.localizedCaseInsensitiveContains(query)
+                || suggestion.candidates.contains { candidate in
+                    candidate.option.channelName.localizedCaseInsensitiveContains(query)
+                        || candidate.option.sourceName.localizedCaseInsensitiveContains(query)
+                }
+        }
+    }
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
@@ -172,6 +185,10 @@ public struct CustomEPGSettingsView: View {
                 }
 
                 Section {
+                    TextField(AppStrings.Search.channelSearchPlaceholder, text: $epgMappingSearchText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
                     Button {
                         store.send(.loadEPGMappingSuggestions)
                     } label: {
@@ -193,7 +210,7 @@ public struct CustomEPGSettingsView: View {
                         ContentUnavailableView(message, systemImage: "antenna.radiowaves.left.and.right.slash")
                     }
 
-                    ForEach(store.epgMappingSuggestions) { suggestion in
+                    ForEach(visibleEPGMappingSuggestions) { suggestion in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(suggestion.channelName)
                                 .font(.headline)
