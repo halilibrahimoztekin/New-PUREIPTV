@@ -34,6 +34,9 @@ public struct EPGTimelineFeature {
 
         public var currentTime: Date = .init()
         public var selectedDate: Date = .init()
+        public var savedHorizontalOffset: CGFloat?
+        public var savedFocusedProgramID: String?
+        public var savedFocusedChannelID: String?
         public var selectedProgramCategory: String?
         public var searchQuery: String = ""
         public var selectedProgramDetail: EPGProgram?
@@ -209,7 +212,8 @@ public struct EPGTimelineFeature {
 
     public enum Action {
         case onAppear
-        case onDisappear
+        case onDisappear(horizontalOffset: CGFloat, focusedProgramID: String?, focusedChannelID: String?)
+        case saveNavigationState(horizontalOffset: CGFloat, focusedProgramID: String?, focusedChannelID: String?)
         case loadRecentChannels
         case recentChannelsLoaded(requestID: UUID, ids: Set<String>, revision: UInt64, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case removeRecentChannel(MediaModels.Item)
@@ -319,7 +323,10 @@ public struct EPGTimelineFeature {
                 }
                 return .merge(effects)
 
-            case .onDisappear:
+            case let .onDisappear(horizontalOffset, focusedProgramID, focusedChannelID):
+                state.savedHorizontalOffset = horizontalOffset
+                state.savedFocusedProgramID = focusedProgramID
+                state.savedFocusedChannelID = focusedChannelID
                 let shouldStopPreview = state.activePreviewChannel != nil || state.isPiPActive
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
@@ -343,6 +350,12 @@ public struct EPGTimelineFeature {
                     })
                 }
                 return .merge(effects)
+
+            case let .saveNavigationState(horizontalOffset, focusedProgramID, focusedChannelID):
+                state.savedHorizontalOffset = horizontalOffset
+                state.savedFocusedProgramID = focusedProgramID
+                state.savedFocusedChannelID = focusedChannelID
+                return .none
 
             case .refreshEPGTapped:
                 return .send(.performSync(forced: true))

@@ -42,10 +42,14 @@ public struct EPGTimelineView: View {
     @State private var shimmerPhase: CGFloat = 0
     @State private var logoEditorChannel: MediaModels.Item?
     @State private var logoURLDraft = ""
+    #if os(tvOS)
+        @State private var restoringProgramFocusID: String?
+    #endif
 
     // Focus state for tvOS
     #if os(tvOS)
         @FocusState private var focusedProgramId: String?
+        @FocusState private var focusedChannelId: String?
         @FocusState private var focusedProgramCategoryTitle: String?
     #endif
 
@@ -147,11 +151,19 @@ public struct EPGTimelineView: View {
             }
             .onAppear {
                 store.send(.onAppear)
-                if !hasCenteredOnNow {
+                if let savedOffset = store.savedHorizontalOffset {
+                    let maxOffset = max(0, totalTimelineWidth - availableGridWidth)
+                    horizontalOffset = min(maxOffset, max(0, savedOffset))
+                } else if !hasCenteredOnNow {
                     hasCenteredOnNow = true
                     let target = targetCenteredNowOffset(availableWidth: availableGridWidth)
                     horizontalOffset = target
                 }
+                #if os(tvOS)
+                    restoringProgramFocusID = store.savedFocusedProgramID
+                    focusedProgramId = store.savedFocusedProgramID
+                    focusedChannelId = store.savedFocusedProgramID == nil ? store.savedFocusedChannelID : nil
+                #endif
                 // Prewarm first 15 channels EPG data
                 for channel in store.filteredChannels.prefix(15) {
                     store.send(.fetchEPG(streamID: channel.id))
@@ -161,7 +173,19 @@ public struct EPGTimelineView: View {
                 }
             }
             .onDisappear {
-                store.send(.onDisappear)
+                #if os(tvOS)
+                    store.send(.onDisappear(
+                        horizontalOffset: horizontalOffset,
+                        focusedProgramID: focusedProgramId ?? store.savedFocusedProgramID,
+                        focusedChannelID: focusedChannelId ?? store.savedFocusedChannelID
+                    ))
+                #else
+                    store.send(.onDisappear(
+                        horizontalOffset: horizontalOffset,
+                        focusedProgramID: nil,
+                        focusedChannelID: nil
+                    ))
+                #endif
             }
         }
         .sheet(isPresented: Binding(
@@ -766,58 +790,70 @@ public struct EPGTimelineView: View {
             )
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            if store.recentChannelIDs.contains(channel.id) {
-                Button(role: .destructive) {
-                    store.send(.removeRecentChannel(channel))
+        #if os(tvOS)
+            .focused($focusedChannelId, equals: channel.id)
+            .onChange(of: focusedChannelId) { _, newID in
+                guard newID == channel.id else { return }
+                focusedProgramId = nil
+                store.send(.saveNavigationState(
+                    horizontalOffset: horizontalOffset,
+                    focusedProgramID: nil,
+                    focusedChannelID: channel.id
+                ))
+            }
+        #endif
+            .contextMenu {
+                if store.recentChannelIDs.contains(channel.id) {
+                    Button(role: .destructive) {
+                        store.send(.removeRecentChannel(channel))
+                    } label: {
+                        Label(AppStrings.Player.removeRecentChannel, systemImage: "clock.badge.xmark")
+                    }
+                    .disabled(store.pendingRecentChannelRemovalIDs[channel.id] != nil)
+                    .accessibilityLabel(AppStrings.Player.removeRecentChannel)
+                }
+
+                Button {
+                    HapticManager.shared.trigger(.medium)
+                    store.send(.toggleFavorite(channel))
                 } label: {
-                    Label(AppStrings.Player.removeRecentChannel, systemImage: "clock.badge.xmark")
+                    Label(
+                        isFav ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                        systemImage: isFav ? "star.slash.fill" : "star.fill"
+                    )
                 }
-                .disabled(store.pendingRecentChannelRemovalIDs[channel.id] != nil)
-                .accessibilityLabel(AppStrings.Player.removeRecentChannel)
-            }
 
-            Button {
-                HapticManager.shared.trigger(.medium)
-                store.send(.toggleFavorite(channel))
-            } label: {
-                Label(
-                    isFav ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                    systemImage: isFav ? "star.slash.fill" : "star.fill"
-                )
-            }
-
-            if store.isFavoritesOnly, store.favoriteSortMode == .manual, store.searchQuery.isEmpty {
-                if favoriteIndex > 0 {
-                    Button {
-                        store.send(.moveFavorite(channelID: channel.id, offset: -1))
-                    } label: {
-                        Label(AppStrings.Favorites.moveUp, systemImage: "arrow.up")
+                if store.isFavoritesOnly, store.favoriteSortMode == .manual, store.searchQuery.isEmpty {
+                    if favoriteIndex > 0 {
+                        Button {
+                            store.send(.moveFavorite(channelID: channel.id, offset: -1))
+                        } label: {
+                            Label(AppStrings.Favorites.moveUp, systemImage: "arrow.up")
+                        }
+                    }
+                    if favoriteIndex + 1 < favoriteCount {
+                        Button {
+                            store.send(.moveFavorite(channelID: channel.id, offset: 1))
+                        } label: {
+                            Label(AppStrings.Favorites.moveDown, systemImage: "arrow.down")
+                        }
                     }
                 }
-                if favoriteIndex + 1 < favoriteCount {
-                    Button {
-                        store.send(.moveFavorite(channelID: channel.id, offset: 1))
-                    } label: {
-                        Label(AppStrings.Favorites.moveDown, systemImage: "arrow.down")
-                    }
+
+                Button {
+                    HapticManager.shared.trigger(.light)
+                    store.send(.togglePiPPreview(channel))
+                } label: {
+                    Label("Canlı Mini Önizleme", systemImage: "pip.enter")
+                }
+
+                Button {
+                    logoURLDraft = channel.logoURLOverride?.absoluteString ?? ""
+                    logoEditorChannel = channel
+                } label: {
+                    Label(AppStrings.LiveTV.editChannelLogo, systemImage: "photo")
                 }
             }
-
-            Button {
-                HapticManager.shared.trigger(.light)
-                store.send(.togglePiPPreview(channel))
-            } label: {
-                Label("Canlı Mini Önizleme", systemImage: "pip.enter")
-            }
-
-            Button {
-                logoURLDraft = channel.logoURLOverride?.absoluteString ?? ""
-                logoEditorChannel = channel
-            } label: {
-                Label(AppStrings.LiveTV.editChannelLogo, systemImage: "photo")
-            }
-        }
     }
 
     private func channelLogoEditorSheet(for channel: MediaModels.Item) -> some View {
@@ -1221,10 +1257,21 @@ public struct EPGTimelineView: View {
         .focused($focusedProgramId, equals: program.id)
         .onChange(of: focusedProgramId) { _, newId in
             if newId == program.id {
+                if restoringProgramFocusID == newId {
+                    restoringProgramFocusID = nil
+                    return
+                }
+                restoringProgramFocusID = nil
+                focusedChannelId = nil
                 let targetX = (program.startTime.timeIntervalSince(timelineStart) / 3600.0) * hourWidth - 200
                 withAnimation(.easeInOut(duration: 0.25)) {
                     horizontalOffset = max(0, min(totalTimelineWidth - 800, targetX))
                 }
+                store.send(.saveNavigationState(
+                    horizontalOffset: horizontalOffset,
+                    focusedProgramID: program.id,
+                    focusedChannelID: channel.id
+                ))
             }
         }
         #endif

@@ -1329,11 +1329,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#140 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task140` (7.3 GB) ve iOS/tvOS build logları, build kapandıktan sonra silindi. PureIPTV normal DerivedData’sındaki `Build` (1.8 GB), `Index.noindex` (946 MB), `Logs` (1.2 MB), `SymbolCache` (15 MB), `TextIndex` (1.3 MB) ve `Localization` (3.6 MB) açık handle olmadığı doğrulanıp silindi. `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) korundu. Başka proje yolları temizlenmedi.
 - **Durum:** `[DONE]` — Reviewer onayladı; yalnızca compile-only Xcode build’leri alındı.
 
-### 141. [IN_PROGRESS] EPG’de Sekme Değişiminden Sonra Tarih, Kanal ve Kaydırma Konumunu Koruma
+### 141. [DONE] EPG’de Sekme Değişiminden Sonra Tarih, Kanal ve Kaydırma Konumunu Koruma
 - **Fırsat:** Rehber gizlenip tekrar açıldığında seçilen günü ve kanal bağlamını kaybetmeden aynı gezinme noktasına dönmek; mevcut “izlenen kanala dön” eyleminden farklı olarak arşiv tarihi ve yatay zaman konumunu da korumak.
 - **Kaynak:** https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv
+- **Kod incelemesi:** Seçili tarih EPG feature state’inde korunuyordu, ancak EPG view’ı yeniden oluşturulunca yatay zaman offset’i ve tvOS FocusState hedefleri sıfırlanıyordu.
+- **Uygulama:** Yatay offset, odaklanan program ID’si ve kanal ID’si EPG feature state’inde saklanıyor. View geri açıldığında offset mevcut genişliğe clamp edilerek, kanal/program odağı geri yükleniyor. Program odağı restoration sırasında focus handler’ın kaydedilmiş yatay konumu yeniden ortalamasını önleyen ID tabanlı tek seferlik guard var. Kapanışta SwiftUI FocusState nil olursa son kaydedilmiş hedef korunuyor; kanal odağına geçiş eski program hedefini temizliyor.
+- **PR Reviewer:** İlk inceleme focus restoration’ın offset’i ezmesini, ikinci inceleme kapanışta FocusState nil olduğunda program hedefinin silinmesini buldu. Guard ve fallback düzeltildi; her iki nokta yeniden incelenip `[APPROVED]` edildi.
+- **Doğrulama:** iOS Release Simulator ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test veya simulator/uygulama akışı çalıştırılmadı.
+- **#141 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task141` (5.7 GB) ve iOS/tvOS logları (9 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal DerivedData’daki `SourcePackages` ve SDK önbellekleri korundu.
+- **Durum:** `[DONE]` — EPG görünümü sekme değişiminden sonra kanal/program ve zaman konumunu koruyor.
 
-### 142. [PENDING] EPG Program Kategorilerini Dakikalık Timer’dan Bağımsız Türetme
+### 142. [IN_PROGRESS] EPG Program Kategorilerini Dakikalık Timer’dan Bağımsız Türetme
 - **Fırsat:** Her saat/timer yenilemesinde tüm programları tekrar düzleştirip sıralamak yerine playlist ve EPG revision değişiminde kategorileri yeniden hesaplayarak büyük rehberlerde UI işini azaltmak.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 
