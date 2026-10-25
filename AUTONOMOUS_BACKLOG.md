@@ -1369,15 +1369,21 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#144 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task144` (3.8 GB) ve iOS/tvOS logları (7.1 MB) açık handle kalmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — EPG kanal ve program/catch-up odak alanları arasında sağ/sol kumanda geçişleri açıkça bağlı.
 
-### 145. [IN_PROGRESS] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
+### 145. [PENDING] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
 - **Fırsat:** Başlatma ve seek işini yüksek kare hızlı yayınlarda ölçüp player ilk karesini geciktiren adımları ayırmak; iyileştirmeyi yalnız ölçümle doğrulanmış yollara uygulamak.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **Statik bulgu:** VOD başlangıç konumu geri yüklenirken `PlayerFeature.onAppear` içinde player başlatıldıktan sonra 600 ms sabit bekleme ve ardından seek var. Ölçüm olmadan yüksek kare hızlı yayınlardaki ilk kare/seek etkisini doğrulamadığım için bu sezgisel gecikmeyi değiştirmedim.
+- **Durum:** `[PENDING]` — Başlatma/seek süresi için gerçek, temsilî yüksek FPS akışında playback ölçümü gerekli; compile-only kısıtı altında metrik iddiası üretilmedi.
 
-### 146. [PENDING] Player Hata Kurtarmasında Oynatma Konumunu Koruma
-- **Fırsat:** Retry, alternatif kaynak ve player değiştirirken uygun içeriklerde son anlamlı seek konumunu kaydedip kullanıcıyı başa döndürmemek.
-- **Kaynak:** https://apps.apple.com/gb/app/iptvx/id1451470024?platform=tv
+### 146. [DONE] Player Hata Kurtarmasında Oynatma Konumunu Koruma
+- **Uygulama:** Aynı kaynak URL’sine retry öncesi konum, bilinen mutlak zaman/süre çiftinden normalize ediliyor; aksi durumda son player konumu ya da başlangıç konumu kullanılıyor. Retry, player `isPlaying` olana kadar en çok 10 saniye bekliyor; seek hataları reconnect akışına gidiyor ve iptal yeni hata üretmiyor. Catch-up başlangıcında eski canlı zaman/süre/konum sıfırlanıyor; catch-up retry de konum geri yüklemesine katılıyor.
+- **Kapsam:** Aynı URL’ye retry. Alternatif kaynağa failover, aynı medya/timeshift kimliği doğrulanamadığı için bu maddede konum eşleştirmesi vaat etmiyor.
+- **İnceleme:** PR Reviewer aynı-URL retry akışını ve catch-up saat sıfırlamasını `[APPROVED]` olarak değerlendirdi.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test/uygulama akışı çalıştırılmadı.
+- **#146 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task146` (3.9 GB) ve iOS/tvOS logları (864 KB) açık handle kalmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
+- **Durum:** `[DONE]` — Hata sonrası aynı playback kaynağına dönerken bilinen ilerleme korunuyor.
 
-### 147. [PENDING] Player Aksiyonlarını tvOS ve Yerelleştirilmiş Boyutlarda Düzenleme
+### 147. [IN_PROGRESS] Player Aksiyonlarını tvOS ve Yerelleştirilmiş Boyutlarda Düzenleme
 - **Fırsat:** Başlat/başa dön, bölüm, ses ve altyazı eylemlerini TV mesafesinde okunur gruplara ayırıp uzun çevirilerde kesilme/örtüşme riskini incelemek.
 - **Kaynak:** https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv
 

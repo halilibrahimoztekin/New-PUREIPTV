@@ -1291,7 +1291,23 @@ public struct PlayerFeature {
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
             let isLive = state.item.isLive
-            let position = state.position > 0 ? state.position : (state.item.startPosition ?? 0.0)
+            let shouldRestorePosition = !isLive || state.activeCatchupProgram != nil
+            let resumeTime = state.currentTime
+            let durationComponents = state.totalTime.components
+            let resumeTimeComponents = resumeTime.components
+            let durationSeconds = Double(durationComponents.seconds)
+                + Double(durationComponents.attoseconds) / 1_000_000_000_000_000_000
+            let resumeTimeSeconds = Double(resumeTimeComponents.seconds)
+                + Double(resumeTimeComponents.attoseconds) / 1_000_000_000_000_000_000
+            let position: Double = if resumeTime > .zero, durationSeconds > 0 {
+                max(0, min(1, resumeTimeSeconds / durationSeconds))
+            } else if state.position > 0 {
+                state.position
+            } else if state.activeCatchupProgram == nil {
+                state.item.startPosition ?? 0.0
+            } else {
+                0.0
+            }
             let currentRate = state.playbackRate
             let userAgentOverride = state.item.userAgentOverride
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
@@ -1317,13 +1333,28 @@ public struct PlayerFeature {
                         group.addTask {
                             do {
                                 try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
-                                if !isLive, position > 0 {
-                                    try? await Task.sleep(nanoseconds: 500_000_000)
-                                    try? await playerClient.seek(position)
+                                if shouldRestorePosition, position > 0 {
+                                    var reachedPlayingState = false
+                                    for _ in 0 ..< 200 {
+                                        try Task.checkCancellation()
+                                        let isPlaying = await MainActor.run { playerClient.isPlaying() }
+                                        if isPlaying {
+                                            reachedPlayingState = true
+                                            break
+                                        }
+                                        try await Task.sleep(for: .milliseconds(50))
+                                    }
+                                    guard reachedPlayingState else {
+                                        await send(.handlePlayerEvent(.encounteredError))
+                                        return
+                                    }
+                                    try await playerClient.seek(position)
                                 }
                                 if currentRate != 1.0 {
                                     try? await playerClient.setPlaybackRate(currentRate)
                                 }
+                            } catch is CancellationError {
+                                return
                             } catch {
                                 print("Player retry error: \(error)")
                                 await send(.handlePlayerEvent(.encounteredError))
@@ -2755,6 +2786,9 @@ public struct PlayerFeature {
                 state.isCatchupTimelineVisible = false
                 state.activeCatchupProgram = program
                 state.activePlaybackURL = catchupURL
+                state.currentTime = .zero
+                state.totalTime = .zero
+                state.position = 0.0
                 state.streamHealthGenerationID = UUID()
                 state.streamHealthMetrics = nil
                 return .merge(
