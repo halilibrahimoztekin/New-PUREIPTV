@@ -1307,9 +1307,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Kalan kapsam:** Arama klavyesi kapatıldığında sonuç grid’inde kararlı odak/konumu koru ve boş/eksik sonuçlarda navigasyon çıkmazlarını önle. Kullanıcı talimatıyla runtime UI akışı çalıştırılmadı; dead-end’in cihazdaki yeniden üretimi doğrulanmadı.
 - **Durum:** `[PENDING]` — Statik kodda restore mekanizması bulunmadı; uygulama değişikliği ve runtime doğrulaması bekliyor.
 
-### 139. [PENDING] Daha Uzun ve Kesin Süreli DVR Kaydı
+### 139. [DEFERRED] Daha Uzun ve EPG’ye Göre Planlanmış DVR Kaydı
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 kesin kayıt uzunluğu ve 24 saate kadar schedule desteğini duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Aday gap:** #121’de belgelenen yerel kayıt kısıtlarından ayrı olarak app’in EPG tabanlı planlama motoru var mı doğrula; yoksa provider/server DVR ile app tarafı kaydını karıştırma.
+- **Kod incelemesi:** EPG hatırlatmaları mevcut olsa da kayıt planlayıcısı, EPG programından kayıt oluşturma modeli veya scheduler bulunmadı. Yerel kayıt kullanıcı oynatıcıdayken başlatılıyor; oynatıcı dört saatte veya 4 GB’a yaklaşınca kaydı durduruyor.
+- **Karar:** Ertelendi. Arka plan/planlı kaydın platformda ve kaynak sağlayıcıda çalışacağı garanti edilemiyor; mevcut yerel kayıt API’si yalnızca oynatıcıdaki akışın anlık kaydını destekliyor. Uzun süre ve takvim planlaması için sağlayıcı destekli DVR entegrasyonu ya da platform sınırları doğrulanmış ayrı bir yakalama tasarımı gerekir.
+- **Durum:** `[DEFERRED]` — Yerel dosya kaydı sınırları, EPG veya provider DVR desteği gibi sunulmamalı.
 - **#136 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) açık dosya olmadığı doğrulandıktan sonra kaldırıldı; `SourcePackages` (1.8 GB) ile SDK önbellekleri korundu. ContactCleaner’a dokunulmadı.
 - **#137 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu. `SourcePackages` ve SDK önbellekleri korundu.
 - **#138 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; bu statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
+- **#139 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
