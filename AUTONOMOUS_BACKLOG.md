@@ -1145,9 +1145,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** `git diff --check` temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_116_ios.log`, `/private/tmp/pureiptv_116_tvos.log`). Projede mevcut Swift 6 concurrency/deprecation uyarıları dışında derleme hatası yok. Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Sağlayıcı URL/kimlik bilgileri aynı playlist kimliğinde değiştirilebiliyor; ayar yedeği formatı değiştirilmedi.
 
-### 117. [PENDING] Playlistler Arası İçerik Kimliği ve İzleme İlerlemesi Birleştirme
+### 117. [DONE] Playlistler Arası İçerik Kimliği ve İzleme İlerlemesi Birleştirme
 - **Canlı keşif (25 Ekim 2026):** IPTVX cihazlar arası kütüphane durumunu, TiviMate kullanıcıları ise cihazlar arası otomatik/yedek sync’i öne çıkarıyor: https://apps.apple.com/us/app/iptvx/id1451470024 · https://www.reddit.com/r/TiviMate/comments/1wod0np/1_tivimate_wish_at_least_semi_auto_sync/ .
 - **Aday gap:** Favori/geçmiş sync’i mevcut olsa da aynı film/bölüm farklı playlist ID’leriyle gelince ilerleme, watched ve curated state doğru eşleşiyor mu incelensin; yalnız kullanıcı curation/migration boşluğunu hedefle.
+- **Kod incelemesi:** Favoriler `profileID + playlistID + type + provider item ID`, izleme ilerlemesi de `profileID + playlistID + type + provider item ID` ile ayrılıyor; watch-progress sync kimliğinde playlist ID var. Aynı adlı katalog öğelerini otomatik birleştiren canonical TMDB/episode identity alanı bulunmuyor. Mevcut ayırma, iki farklı içeriği yanlışlıkla tek kayıt yapmayı önlüyor; başlık/ID heuristiği eklemek güvenilir olmazdı.
+- **Karar:** `[APPROVED]` audit-only. Cross-playlist curation/migration, ancak kullanıcının açık içerik eşlemesi veya katalogda kalıcı canonical ID bulunduğunda ayrı bir madde olarak tasarlanmalı. Mevcut ilerleme/favori eşlemesi değiştirilmedi; bu inceleme için build gerekmedi.
+- **Durum:** `[DONE]` — Otomatik cross-playlist birleştirme için güvenilir ortak içerik kimliği yok; sessiz yanlış eşleşme yerine playlist-scope korunuyor.
 
 ### 118. [PENDING] Yalnız Live TV İçin Ana Navigasyon Profili
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları Film/Dizi menüsü olmayan ve doğrudan EPG’ye giden IPTV uygulaması talep ediyor: https://www.reddit.com/r/appletv/comments/1kw04v1/best_streaming_app_like_tivimate_for_apple_tv/ .
