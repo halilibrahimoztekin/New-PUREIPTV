@@ -1231,14 +1231,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` ve `Localizable.xcstrings` JSON kontrolü başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — PIN ile açılan kategori erişimi 15 dakika ve aktif profil/playlist kapsamıyla sınırlı.
 
-### 128. [PENDING] IPTV Kaynaklarını Kişisel Sunucuya Taşıma Sihirbazı
+### 128. [DEFERRED] IPTV Kaynaklarını Kişisel Sunucuya Taşıma Sihirbazı
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar IPTV’yi Plex/Jellyfin/Emby’ye alma ve ev cihazlarını açık tutmadan kullanma konusunda yardım arıyor; `xtream2jellyfin` proje önerisi `.strm`/metadata üretimini otomatikleştiriyor: https://www.reddit.com/r/iptv/comments/1r5gktf/i_made_a_tool_to_import_iptv_movies_and_series/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1vgrjmg/iptv_plex/ .
-- **Aday gap:** #108 player-side personal server integration’dan farklı olarak provider VOD’u kendi sunucuya içe aktarma/transfer aracı app’in güvenli ve yasal kapsamına uyuyor mu, stream URL saklama/credentials riskleriyle incele.
+- **Kod incelemesi:** Uygulamada Jellyfin/Plex/Emby/WebDAV istemcisi veya server export/import katmanı yok; Xtream/M3U URL’leri ve kullanıcı bilgileri playlist konfigürasyonuyla sınırlı. Playlist stream URL’leri playback progress sync kayıtlarına taşınabildiğinden `.strm` gibi kalıcı playlist üretmek token/kimlik bilgilerini dışa aktarabilir. Sunucuya import da üçüncü tarafın medya ve hesap kimlik bilgilerini saklamasına yol açar.
+- **Karar:** `[DEFERRED]` — bu özelliğin güvenli ve kullanıcıya açık amacı, sağlayıcı şartları/lisans sınırları ve credential redaction modeli net değil. Mevcut server-client altyapısı da yok; önce server playback ve credential-safe URL modeli ayrı bir mimari iş olarak çözülmeli (#108). Kod/build değişikliği yapılmadı.
+- **Durum:** `[DEFERRED]` — kullanıcı kaynaklarını dış sunucuya aktaran sihirbaz uygulanmadı.
 
 ### 129. [DONE] Her Task Sonrası DerivedData Temizliği
 - **Uygulama:** `/private/tmp/PureIPTVDerivedData_98` (3.5 GB) aktif dosya tanıtıcısı olmadığı doğrulandıktan sonra silindi. Standart Xcode DerivedData’da kapanmış derlemelerin PureIPTV Build/Index/compiler-cache çıktıları ve ortak SDK/module cache’leri temizlendi; iki projenin `SourcePackages` checkout’ları korundu. #123 ve #124 build’leri sonrası yalnız PureIPTV’ye ait 3.9 GB Build/compiler cache ve log çıktısı, `lsof` boş sonuç verdikten sonra kaldırıldı; PureIPTV `SourcePackages` (1.8 GB) korundu. `/private/tmp` içinde bu taramada DerivedData adlı klasör yoktu. ContactCleaner yoluna erişilmedi/değiştirilmedi.
 - **Sonuç:** İlk temizlik sonrası `df` kullanılabilir alanı 23 GiB’den 37 GiB’ye çıktı; #123 build ve cache temizliği sonrasında 75 GiB gösterildi. Geçici ve PureIPTV DerivedData içinde kullanılmayan build cache bırakılmadı. ContactCleaner gelecekteki temizliklerden hariç tutulacak.
 - **#127 sonrası:** `/private/tmp` içinde DerivedData yoktu. PureIPTV’ye ait `Build` (3.1 GB), `ModuleCache.noindex` (358 MB), `SDKStatCaches.noindex` (17 MB), `CompilationCache.noindex` (28 KB) ve `Logs` (1.4 MB) `lsof` boş doğrulamasından sonra silindi. `SourcePackages` (1.8 GB) ile DerivedData dışındaki paylaşılan SDK precompiled cache korundu; ContactCleaner’a dokunulmadı.
+- **#128 sonrası:** `/private/tmp` ve PureIPTV DerivedData tekrar kontrol edildi; geçici/derleme çıktısı adayı yoktu. 1.8 GB `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Bu bakım kuralı her task sonrasında uygulanacak.
 
 ### 130. [PENDING] EPG’den Canlı Spor Etkinliği ve Takım Takibi
