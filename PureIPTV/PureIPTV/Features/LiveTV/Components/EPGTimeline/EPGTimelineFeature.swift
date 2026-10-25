@@ -34,6 +34,7 @@ public struct EPGTimelineFeature {
 
         public var currentTime: Date = .init()
         public var selectedDate: Date = .init()
+        public var availableProgramCategories: [String] = []
         public var savedHorizontalOffset: CGFloat?
         public var savedFocusedProgramID: String?
         public var savedFocusedChannelID: String?
@@ -173,8 +174,11 @@ public struct EPGTimelineFeature {
                 program.description.localizedCaseInsensitiveContains(query)
         }
 
-        public var availableProgramCategories: [String] {
-            guard let day = Calendar.current.dateInterval(of: .day, for: selectedDate) else { return [] }
+        mutating func rebuildAvailableProgramCategories() {
+            guard let day = Calendar.current.dateInterval(of: .day, for: selectedDate) else {
+                availableProgramCategories = []
+                return
+            }
             let values = epgData.values.flatMap(\.self).filter {
                 $0.startTime < day.end && $0.endTime > day.start
             }.flatMap(\.categories).compactMap { category -> String? in
@@ -182,7 +186,7 @@ public struct EPGTimelineFeature {
                 return trimmed.isEmpty ? nil : trimmed
             }
             let sorted = values.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            return sorted.reduce(into: [String]()) { unique, category in
+            availableProgramCategories = sorted.reduce(into: [String]()) { unique, category in
                 if !unique.contains(where: { $0.localizedCaseInsensitiveCompare(category) == .orderedSame }) {
                     unique.append(category)
                 }
@@ -921,6 +925,7 @@ public struct EPGTimelineFeature {
                 state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
                 state.epgData[streamID] = programs
+                state.rebuildAvailableProgramCategories()
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {
                     state.successfulEPGChannelCount += 1
@@ -972,6 +977,7 @@ public struct EPGTimelineFeature {
 
             case let .selectDate(date):
                 state.selectedDate = date
+                state.rebuildAvailableProgramCategories()
                 let channelsToPrewarm = Array(state.filteredChannels.prefix(15))
                 return .run { send in
                     for ch in channelsToPrewarm {

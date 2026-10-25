@@ -1339,11 +1339,17 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#141 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task141` (5.7 GB) ve iOS/tvOS logları (9 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal DerivedData’daki `SourcePackages` ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — EPG görünümü sekme değişiminden sonra kanal/program ve zaman konumunu koruyor.
 
-### 142. [IN_PROGRESS] EPG Program Kategorilerini Dakikalık Timer’dan Bağımsız Türetme
+### 142. [DONE] EPG Program Kategorilerini Dakikalık Timer’dan Bağımsız Türetme
 - **Fırsat:** Her saat/timer yenilemesinde tüm programları tekrar düzleştirip sıralamak yerine playlist ve EPG revision değişiminde kategorileri yeniden hesaplayarak büyük rehberlerde UI işini azaltmak.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+- **Kod incelemesi:** `availableProgramCategories` computed property’si her SwiftUI body access’inde tüm EPG programlarını düzleştirip seçili güne göre filtreliyor, kategorileri sıralayıp benzersizlik kontrolü yapıyordu. 60 saniyelik `currentTime` state değişimi de görünümü yenilediğinden aynı türetimi gereksiz yere tetikliyordu.
+- **Uygulama:** EPG category listesi state’te saklanıyor. Yalnız başarılı `epgResponse` ve `selectDate` bu listeyi yeniden kuruyor. `updateCurrentTime` yalnız saati güncelliyor; EPG category flatten/sort/deduplicate işi çalışmıyor. Başarısız ilk yanıtın boş sentinel’i mevcut program kategorilerini değiştirmiyor.
+- **PR Reviewer:** Başarılı EPG response ve selectedDate bütün türetim girdileri; başarısız response yalnız veri yoksa boş sentinel koyuyor. Cache yolu `[APPROVED]` edildi.
+- **Doğrulama:** Generic iOS Release ve generic tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test/uygulama akışı çalıştırılmadı.
+- **#142 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task142` (3.8 GB) ve iOS/tvOS logları (7 MB) açık handle olmadığı doğrulandıktan sonra silindi. Normal PureIPTV DerivedData’daki `SourcePackages` ve SDK cache’leri korundu; kapalı Build/Index/Logs çıktısı bırakılmadı.
+- **Durum:** `[DONE]` — Dakikalık UI timer’ı kategorileri yeniden türetmiyor.
 
-### 143. [PENDING] EPG Verisi İçin Playlist Bazlı Güncellik Tanılaması
+### 143. [IN_PROGRESS] EPG Verisi İçin Playlist Bazlı Güncellik Tanılaması
 - **Fırsat:** Rehberde eksik/eski program verisini tanımak için son başarılı XMLTV yenilemesi, seçili playlist kapsamı ve kanal bazında boş sonuçları kullanıcıya açıkça göstermek.
 - **Kaynak:** https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
 
