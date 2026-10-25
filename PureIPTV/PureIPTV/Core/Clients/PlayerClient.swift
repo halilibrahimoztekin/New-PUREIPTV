@@ -1,4 +1,5 @@
 import AVFoundation
+import AVKit
 import ComposableArchitecture
 import Foundation
 import SwiftVLC
@@ -36,6 +37,64 @@ public struct PlayerPlaybackCounters: Equatable, Sendable {
         self.lateFrames = lateFrames
         self.sourceReadBytes = sourceReadBytes
         self.presentedFrames = presentedFrames
+    }
+}
+
+public enum PlaybackEngine: String, CaseIterable, Equatable, Sendable {
+    case vlc
+    case avPlayer
+
+    public var title: String {
+        switch self {
+        case .vlc: "VLC"
+        case .avPlayer: "AVPlayer"
+        }
+    }
+}
+
+public struct PlaybackEngineSwitchRequest: Sendable {
+    public let requestID: UUID
+    public let target: PlaybackEngine
+    public let url: URL
+    public let userAgentOverride: String?
+    public let networkCachingMilliseconds: Int?
+    public let positionSeconds: Double
+    public let isPlaying: Bool
+    public let playbackRate: Float
+    public let volume: Int32
+    public let selectedAudioName: String?
+    public let selectedAudioLanguage: String?
+    public let selectedSubtitleName: String?
+    public let selectedSubtitleLanguage: String?
+
+    public init(
+        requestID: UUID,
+        target: PlaybackEngine,
+        url: URL,
+        userAgentOverride: String?,
+        networkCachingMilliseconds: Int?,
+        positionSeconds: Double,
+        isPlaying: Bool,
+        playbackRate: Float,
+        volume: Int32,
+        selectedAudioName: String?,
+        selectedAudioLanguage: String?,
+        selectedSubtitleName: String?,
+        selectedSubtitleLanguage: String?
+    ) {
+        self.requestID = requestID
+        self.target = target
+        self.url = url
+        self.userAgentOverride = userAgentOverride
+        self.networkCachingMilliseconds = networkCachingMilliseconds
+        self.positionSeconds = positionSeconds
+        self.isPlaying = isPlaying
+        self.playbackRate = playbackRate
+        self.volume = volume
+        self.selectedAudioName = selectedAudioName
+        self.selectedAudioLanguage = selectedAudioLanguage
+        self.selectedSubtitleName = selectedSubtitleName
+        self.selectedSubtitleLanguage = selectedSubtitleLanguage
     }
 }
 
@@ -120,6 +179,10 @@ enum PlayerThumbnailGenerator {
 
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
+    public var avPlayer: @MainActor @Sendable () -> AVPlayer = { AVPlayer() }
+    public var activeEngine: @MainActor @Sendable () -> PlaybackEngine = { .vlc }
+    public var isPlaying: @MainActor @Sendable () -> Bool = { false }
+    public var switchEngine: @MainActor @Sendable (_ request: PlaybackEngineSwitchRequest) async throws -> Void = { _ in }
     public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool) -> Void = { _, _, _ in }
     public var consumePreviewPromotion: @MainActor @Sendable (_ streamURL: URL) -> Bool = { _ in false }
     public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?, _ networkCachingMilliseconds: Int?) async throws -> Void
@@ -156,6 +219,9 @@ extension PlayerClient: DependencyKey {
     public nonisolated static let liveValue: PlayerClient = {
         final class Box: @unchecked Sendable {
             @MainActor var player: Player?
+            @MainActor var playbackEngine: PlaybackEngine = .vlc
+            @MainActor var engineSwitchGeneration = UUID()
+            @MainActor var alternateSession: AVPlayerPlaybackSession?
             @MainActor var promotedStreamURL: URL?
             @MainActor var recordingStopObserver: Task<Void, Never>?
             @MainActor func getPlayer() -> Player {
@@ -166,11 +232,128 @@ extension PlayerClient: DependencyKey {
                 player = p
                 return p
             }
+
+            @MainActor func getAlternateSession() -> AVPlayerPlaybackSession {
+                if let alternateSession {
+                    return alternateSession
+                }
+                let session = AVPlayerPlaybackSession()
+                alternateSession = session
+                return session
+            }
         }
         let box = Box()
 
         return PlayerClient(
             vlcPlayer: { box.getPlayer() },
+            avPlayer: { box.getAlternateSession().player },
+            activeEngine: { box.playbackEngine },
+            isPlaying: {
+                box.playbackEngine == .avPlayer
+                    ? box.getAlternateSession().player.rate != 0
+                    : box.getPlayer().isPlaying
+            },
+            switchEngine: { request in
+                try Task.checkCancellation()
+                guard box.playbackEngine != request.target else { return }
+                box.engineSwitchGeneration = request.requestID
+                let vlc = box.getPlayer()
+                let alternate = box.getAlternateSession()
+                let previousEngine = box.playbackEngine
+                let clampedPosition = max(0, request.positionSeconds.isFinite ? request.positionSeconds : 0)
+                let clampedRate = max(0.25, min(4.0, request.playbackRate))
+                let clampedVolume = max(0, min(100, request.volume))
+
+                switch request.target {
+                case .avPlayer:
+                    guard request.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true else {
+                        throw PlaybackEngineSwitchError.customUserAgentUnsupported
+                    }
+                    guard previousEngine == .vlc else { return }
+                    let actualPosition = vlc.currentTime.components.seconds > 0
+                        ? Double(vlc.currentTime.components.seconds)
+                        : clampedPosition
+                    try await alternate.prepare(
+                        url: request.url,
+                        positionSeconds: actualPosition,
+                        isPlaying: request.isPlaying,
+                        playbackRate: clampedRate,
+                        volume: clampedVolume,
+                        audioName: request.selectedAudioName,
+                        audioLanguage: request.selectedAudioLanguage,
+                        subtitleName: request.selectedSubtitleName,
+                        subtitleLanguage: request.selectedSubtitleLanguage
+                    )
+                    guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
+                    let latestPosition = max(0, Double(vlc.currentTime.components.seconds))
+                    vlc.pause()
+                    do {
+                        try await alternate.seek(to: latestPosition)
+                    } catch {
+                        if box.engineSwitchGeneration == request.requestID, request.isPlaying {
+                            try? vlc.play()
+                        }
+                        throw error
+                    }
+                    guard box.engineSwitchGeneration == request.requestID else {
+                        throw CancellationError()
+                    }
+                    alternate.setVolume(clampedVolume)
+                    box.playbackEngine = .avPlayer
+
+                case .vlc:
+                    guard previousEngine == .avPlayer else { return }
+                    let agent = UserAgentManager.shared.resolvedUserAgent
+                    let media = try Media(url: request.url, httpUserAgent: agent, httpReferrer: nil)
+                    if let caching = request.networkCachingMilliseconds, caching > 0 {
+                        media.addOption(":network-caching=\(caching)")
+                    }
+                    try vlc.setAudioVolume(Volume(0))
+                    do {
+                        guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
+                        try vlc.play(media)
+                        for _ in 0 ..< 100 where !vlc.isPlaying {
+                            try Task.checkCancellation()
+                            guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
+                            try await Task.sleep(for: .milliseconds(50))
+                        }
+                        guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
+                        guard vlc.isPlaying else { throw PlaybackEngineSwitchError.backendNotReady }
+                        let avSeconds = alternate.currentTimeSeconds
+                        let actualPosition = avSeconds.isFinite ? max(0, avSeconds) : clampedPosition
+                        try vlc.seek(to: .seconds(actualPosition), fast: false)
+                        try? vlc.setPlaybackRate(PlaybackRate(clampedRate))
+                        let audioLanguage = request.selectedAudioLanguage?.lowercased()
+                        let selectedAudioName = request.selectedAudioName
+                        if let track = vlc.audioTracks.first(where: { candidate in
+                            (audioLanguage != nil && candidate.language?.lowercased() == audioLanguage)
+                                || selectedAudioName.map { candidate.name.localizedCaseInsensitiveCompare($0) == .orderedSame } == true
+                        }) {
+                            vlc.selectedAudioTrack = track
+                        }
+                        let subtitleLanguage = request.selectedSubtitleLanguage?.lowercased()
+                        let selectedSubtitleName = request.selectedSubtitleName
+                        if let track = vlc.subtitleTracks.first(where: { candidate in
+                            (subtitleLanguage != nil && candidate.language?.lowercased() == subtitleLanguage)
+                                || selectedSubtitleName.map { candidate.name.localizedCaseInsensitiveCompare($0) == .orderedSame } == true
+                        }) {
+                            vlc.selectedSubtitleTrack = track
+                        }
+                        if !request.isPlaying {
+                            vlc.pause()
+                        }
+                        try vlc.setAudioVolume(Volume(Float(clampedVolume) / 100.0))
+                    } catch {
+                        if box.engineSwitchGeneration == request.requestID, !Task.isCancelled {
+                            vlc.stop()
+                        }
+                        throw error
+                    }
+                    guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
+                    alternate.pause()
+                    box.playbackEngine = .vlc
+                }
+            },
             adoptPreviewPlayer: { player, streamURL, startsMuted in
                 if let currentPlayer = box.player, currentPlayer !== player {
                     currentPlayer.stop()
@@ -188,8 +371,15 @@ extension PlayerClient: DependencyKey {
                 return true
             },
             play: { url, userAgentOverride, networkCachingMilliseconds in
+                box.engineSwitchGeneration = UUID()
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
+                if box.playbackEngine == .avPlayer {
+                    let alternate = box.getAlternateSession()
+                    try await alternate.prepare(url: url, positionSeconds: 0, isPlaying: true, playbackRate: 1, volume: 100, audioName: nil, audioLanguage: nil, subtitleName: nil, subtitleLanguage: nil)
+                    alternate.setVolume(100)
+                    return
+                }
                 let player = box.getPlayer()
                 if box.promotedStreamURL == url, player.isPlaying {
                     box.promotedStreamURL = nil
@@ -210,15 +400,29 @@ extension PlayerClient: DependencyKey {
             resume: {
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
-                try box.getPlayer().play()
+                if box.playbackEngine == .avPlayer {
+                    box.getAlternateSession().play(rate: 1)
+                } else {
+                    try box.getPlayer().play()
+                }
             },
             pause: {
-                box.getPlayer().pause()
+                if box.playbackEngine == .avPlayer {
+                    box.getAlternateSession().pause()
+                } else {
+                    box.getPlayer().pause()
+                }
             },
             stop: {
+                box.engineSwitchGeneration = UUID()
+                box.getAlternateSession().stop()
+                box.playbackEngine = .vlc
                 box.getPlayer().stop()
             },
             release: {
+                box.engineSwitchGeneration = UUID()
+                box.getAlternateSession().stop()
+                box.playbackEngine = .vlc
                 box.player?.stop()
                 box.player = nil
                 box.promotedStreamURL = nil
@@ -257,12 +461,24 @@ extension PlayerClient: DependencyKey {
                 box.recordingStopObserver?.cancel()
             },
             setVolume: { volume in
-                try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
+                if box.playbackEngine == .avPlayer {
+                    box.getAlternateSession().setVolume(volume)
+                } else {
+                    try box.getPlayer().setAudioVolume(Volume(Float(volume) / 100.0))
+                }
             },
             setPlaybackRate: { rate in
-                try box.getPlayer().setPlaybackRate(PlaybackRate(rate))
+                if box.playbackEngine == .avPlayer {
+                    box.getAlternateSession().setRate(rate)
+                } else {
+                    try box.getPlayer().setPlaybackRate(PlaybackRate(rate))
+                }
             },
             jump: { offset in
+                if box.playbackEngine == .avPlayer {
+                    try await box.getAlternateSession().seek(to: max(0, box.getAlternateSession().currentTimeSeconds + Double(offset)))
+                    return
+                }
                 let player = box.getPlayer()
                 let offsetDuration = Duration.seconds(offset)
 
@@ -291,6 +507,13 @@ extension PlayerClient: DependencyKey {
                 _ = player.jump(by: offsetDuration)
             },
             seek: { position in
+                if box.playbackEngine == .avPlayer {
+                    let item = box.getAlternateSession().player.currentItem
+                    let duration = item?.duration.seconds ?? 0
+                    guard duration.isFinite, duration > 0 else { return }
+                    try await box.getAlternateSession().seek(to: max(0, min(1, position)) * duration)
+                    return
+                }
                 let player = box.getPlayer()
                 let clamped = max(0.0, min(1.0, position))
                 if clamped == 0.0 {
@@ -310,6 +533,10 @@ extension PlayerClient: DependencyKey {
                 _ = player.seek(toPosition: PlaybackPosition(clamped), fast: false)
             },
             seekToTime: { time in
+                if box.playbackEngine == .avPlayer {
+                    try await box.getAlternateSession().seek(to: Double(time.components.seconds))
+                    return
+                }
                 let player = box.getPlayer()
                 if (try? player.seek(to: time, fast: false)) != nil {
                     return
@@ -330,6 +557,9 @@ extension PlayerClient: DependencyKey {
                 )
             },
             getMediaInfo: {
+                if box.playbackEngine == .avPlayer {
+                    return nil
+                }
                 var info = MediaInfo()
                 let player = box.getPlayer()
 
@@ -351,36 +581,54 @@ extension PlayerClient: DependencyKey {
                 return info.videoCodec != nil || info.audioCodec != nil ? info : nil
             },
             getAudioTracks: {
-                box.getPlayer().audioTracks
+                if box.playbackEngine == .avPlayer {
+                    return []
+                }
+                return box.getPlayer().audioTracks
             },
             getSubtitleTracks: {
-                box.getPlayer().subtitleTracks
+                if box.playbackEngine == .avPlayer {
+                    return []
+                }
+                return box.getPlayer().subtitleTracks
             },
             getSelectedAudioTrack: {
-                box.getPlayer().selectedAudioTrack
+                if box.playbackEngine == .avPlayer {
+                    return nil
+                }
+                return box.getPlayer().selectedAudioTrack
             },
             getSelectedSubtitleTrack: {
-                box.getPlayer().selectedSubtitleTrack
+                if box.playbackEngine == .avPlayer {
+                    return nil
+                }
+                return box.getPlayer().selectedSubtitleTrack
             },
             setAudioTrack: { track in
+                guard box.playbackEngine == .vlc else { return }
                 box.getPlayer().selectedAudioTrack = track
             },
             setSubtitleTrack: { track in
+                guard box.playbackEngine == .vlc else { return }
                 box.getPlayer().selectedSubtitleTrack = track
             },
             setAudioDelay: { delay in
+                guard box.playbackEngine == .vlc else { return }
                 try? box.getPlayer().setAudioDelay(.milliseconds(delay))
             },
             setSubtitleDelay: { delay in
+                guard box.playbackEngine == .vlc else { return }
                 try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
             },
             getStats: {
+                guard box.playbackEngine == .vlc else { return nil }
                 let health = box.getPlayer().playbackHealth
                 let c = health.counters
                 let mbRead = String(format: "%.1f", Double(c.sourceReadBytes) / (1024.0 * 1024.0))
                 return "Decoded: \(c.decodedVideoFrames)f | Dropped: \(c.droppedVideoFrames)f | Data: \(mbRead)MB"
             },
             getPlaybackCounters: {
+                guard box.playbackEngine == .vlc else { return PlayerPlaybackCounters() }
                 let health = box.getPlayer().playbackHealth
                 let c = health.counters
                 return PlayerPlaybackCounters(
@@ -392,6 +640,7 @@ extension PlayerClient: DependencyKey {
                 )
             },
             setEqualizerPreset: { preset in
+                guard box.playbackEngine == .vlc else { return }
                 let player = box.getPlayer()
                 if preset == .flat {
                     player.equalizer = nil
@@ -403,6 +652,9 @@ extension PlayerClient: DependencyKey {
                 }
             },
             events: {
+                if box.playbackEngine == .avPlayer {
+                    return box.getAlternateSession().events()
+                }
                 let player = box.getPlayer()
                 return AsyncStream { continuation in
                     let task = Task {

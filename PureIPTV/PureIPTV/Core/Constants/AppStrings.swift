@@ -180,6 +180,8 @@ public enum AppStrings {
     // MARK: - Player & EPG
 
     public enum Player {
+        public static let playbackEngine = "Oynatma Motoru".localized
+        public static let playbackEngineSwitchFailed = "Oynatma motoru değiştirilemedi.".localized
         public static let startRecording = "Kaydı Başlat".localized
         public static let stopRecording = "Kaydı Durdur".localized
         public static let recordingSaved = "Kayıt kaydedildi".localized

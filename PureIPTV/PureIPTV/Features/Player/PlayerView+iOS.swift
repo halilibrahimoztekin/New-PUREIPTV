@@ -249,7 +249,7 @@
                                     }
 
                                     // PiP Button
-                                    if pipController?.isPossible == true {
+                                    if store.playbackEngine == .vlc, pipController?.isPossible == true {
                                         Button(action: {
                                             HapticManager.shared.trigger(.light)
                                             if store.isPiPActive {
@@ -283,7 +283,31 @@
                                     // AirPlay Route Picker (Native Video Route Picker)
                                     AirPlayButton(size: 38)
 
-                                    // Consolidated Player Settings Menu (Zero Friction - Don't Make Me Think)
+                                    if store.canSwitchPlaybackEngine {
+                                        Menu {
+                                            ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                                                Button {
+                                                    store.send(.switchPlaybackEngine(engine))
+                                                } label: {
+                                                    if engine == store.playbackEngine {
+                                                        Label(engine.title, systemImage: "checkmark")
+                                                    } else {
+                                                        Text(engine.title)
+                                                    }
+                                                }
+                                                .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                            }
+                                        } label: {
+                                            Image(systemName: "cpu")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .frame(width: 38, height: 38)
+                                                .background(.ultraThinMaterial, in: Circle())
+                                        }
+                                        .accessibilityLabel("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)")
+                                    }
+
+                                    // Consolidated Player Settings Menu
                                     Menu {
                                         // 1. Tracks (Audio & Subtitles)
                                         Button {
@@ -406,19 +430,23 @@
                                         }
 
                                         // 8. Lip-Sync & Audio Delay Fine Adjustment
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                        } label: {
-                                            Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                        if store.playbackEngine == .vlc {
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                            }
                                         }
 
                                         // 9. Live Stream Audio Equalizer & Dialogue Enhancer (Madde #14)
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                        } label: {
-                                            Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                        if store.playbackEngine == .vlc {
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                            } label: {
+                                                Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                            }
                                         }
 
                                         // 8. Stream Health & Buffer Diagnostics (Feature #3)

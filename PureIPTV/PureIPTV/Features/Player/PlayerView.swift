@@ -18,28 +18,28 @@ public struct PlayerView: View {
 
     public var body: some View {
         ZStack {
-            #if os(iOS)
-                PiPVideoView(playerClient.vlcPlayer(), controller: $pipController)
+            if store.playbackEngine == .avPlayer {
+                AVPlayerSurfaceView(player: playerClient.avPlayer())
                     .ignoresSafeArea()
-                    .scaleEffect(
-                        x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
-                        y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale
-                    )
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
-                    .onTapGesture {
-                        store.send(.toggleControls)
-                    }
-            #else
-                VideoView(playerClient.vlcPlayer())
-                    .ignoresSafeArea()
-                    .scaleEffect(
-                        x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
-                        y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale
-                    )
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
-            #endif
+                    .onTapGesture { store.send(.toggleControls) }
+            } else {
+                #if os(iOS)
+                    PiPVideoView(playerClient.vlcPlayer(), controller: $pipController)
+                        .ignoresSafeArea()
+                        .scaleEffect(x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
+                                     y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale)
+                        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
+                        .onTapGesture { store.send(.toggleControls) }
+                #else
+                    VideoView(playerClient.vlcPlayer())
+                        .ignoresSafeArea()
+                        .scaleEffect(x: store.videoAspectRatioMode == .stretch ? 1.15 : store.videoZoomScale,
+                                     y: store.videoAspectRatioMode == .stretch ? 1.0 : store.videoZoomScale)
+                        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
+                #endif
+            }
 
             // UI Overlay
             #if os(tvOS)
@@ -47,6 +47,21 @@ public struct PlayerView: View {
             #else
                 PlayerView_iOS(store: store, pipController: $pipController)
             #endif
+
+            if let message = store.playbackEngineError {
+                VStack {
+                    Text(message)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.black.opacity(0.78), in: Capsule())
+                        .padding(.top, 24)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityAddTraits(.isStaticText)
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .onAppear {

@@ -1023,7 +1023,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS Release `xcodebuild ... -destination 'generic/platform=iOS Simulator' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_101_ios_retry.log`). tvOS Release `xcodebuild ... -destination 'generic/platform=tvOS' ... build` — `** BUILD SUCCEEDED **` (`/private/tmp/pureiptv_101_tvos.log`). `git diff --check` ve string catalog JSON doğrulaması başarılı. Xcode projedeki mevcut Swift 6 actor-isolation uyarılarını yazdı. Kullanıcı talimatı gereği test, simulator launch, uygulama akışı veya playback çalıştırılmadı.
 - **Durum:** `[DONE]` — reviewer onayladı; yalnız iOS/tvOS Release build alındı.
 
-### 102. [IN_PROGRESS] Playlist Başına M3U Etiketlerini Kategoriye Eşleme
+### 102. [DONE] Playlist Başına M3U Etiketlerini Kategoriye Eşleme
 - **Canlı keşif (25 Ekim 2026):** Snappier IPTV ürün açıklaması zor M3U dosyaları için per-playlist tag mapping’i listeliyor: https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
 - **Aday gap:** M3U parser’ı `group-title`, `tvg-*` ve özel attribute’ları nasıl normalize ediyor, playlist başına kullanıcı mapping’i mevcut mu araştırılsın. Aynı tag’i kullanan playlistler arasında preference sızıntısı olmamalı.
 - **Kod taraması:** `M3UParser` `group-title` değerini `SmartChannelProcessingEngine` ile tahmin edilmiş `M3UItemDTO.groupTitle` alanına yazıyor; özgün tag ayrı saklanmıyor. Live category üretimi, kanal filtreleme ve `MediaModels.Item.categoryID` aynı `groupTitle` üzerinden gidiyor. CategoryPreference ise yalnız medya türü + kategori ID ile küresel tutuluyor; mapping’i yalnız görsel ad olarak uygulamak kanal filtreleme ve playlist izolasyonunu sağlamaz.
@@ -1045,9 +1045,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 
 ### 104. [IN_PROGRESS] Oynatma Motorunu Oturum Sırasında Değiştirme
 - **Canlı keşif (25 Ekim 2026):** IPTVX sürüm notları canlı oynatma sırasında desteklenen alternatif engine’e geçmeyi, ayrıca yeni AetherEngine’i ve VLC uyumluluk geliştirmelerini duyuruyor: https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv .
-- **Aday gap:** Projede birden fazla decoder/player backend var mı, current session’ı item, seek, audio/subtitle state’i kaybetmeden aktarma mümkün mü kontrol edilsin. Engine değişimi ek provider bağlantısı açmamalı ve eski player’ı güvenle durdurmalı.
+- **Kod taraması:** Tam player, EPG preview, PiP ve MultiView yalnız SwiftVLC kullanıyor. `PlayerClient`, `PlayerFactoryClient`, `PlaybackVLC`, `FactoryManager` ve `VideoView` VLC tiplerine doğrudan bağlı; AVKit yalnız AirPlay/PiP/ses oturumu ve display davranışlarında var. Alternatif decoder veya kullanıcı seçimi bulunmadı. PlayerFeature zaman, süre, rate, volume ve seçili track bilgilerini tutuyor; fakat event, render surface ve çeşitli kontroller VLC’ye bağlı.
+- **Risk ve kapsam:** Güvenli ilk geçişi desteklenen VOD HLS altkümesiyle sınırla; VLC varsayılan kalsın. Aynı URL/headers kullan; mevcut zaman, oynat/duraklat, rate, ses ve desteklenen track seçimlerini yakala. Yeni backend hazır olmadan eskiyi durdurma; geçiş başarısız olursa VLC’de kal/geri dön. Live, catch-up, PiP, recording, preview ve MultiView kapsamını destek matrisi çıkana kadar koru. “Ek provider bağlantısı yok” ifadesi playlist/auth API isteği açmamak olarak anlaşılmalı; medya engine değiştirirken stream URL’yi yeniden açmak yeni media connection yaratır.
+- **Uygulama:** VOD HLS/MP4/M4V için iOS ve tvOS player’da VLC/AVPlayer seçici eklendi; VLC varsayılan. Yeni AVPlayer yalnız HTTP(S), özel User-Agent’sız akışlara açılıyor. Geçişte URL, konum, oynat/duraklat, hız, ses ve desteklenen track bilgileri korunuyor. Yeni engine hazır olmadan kaynak durmuyor; her yön konumu yeniden örnekleyip hedefe seek ediyor ve başarısızlıkta eski motorda kalıyor. İstek UUID’si, player item kimliği, backend generation token’ı ve AV hazırlık generation’ı stale/cancel edilmiş geçişlerin yeni playback’i durdurmasını engelliyor. Geçiş sırasında transport işlemleri kilitli; PiP/miniplayer, EQ ve ses senkronizasyonu AVPlayer’da gizli/engelli. Picker hataları yerelleştirilip gösteriliyor.
+- **PR Reviewer:** İlk incelemelerde async handoff’ın item değişimi/close sonrası eski URL’yi başlatma riski, geçiş sırasında EQ/delay ile VLC’ye dönmenin kilitlenmesi, başarısız VLC seek’in başarı sayılması ve ortak VLC player’ın yeni akışı durdurabilmesi bulundu. Request/item/generation sahipliği, stale/cancel guard’ları, strict seek rollback, AV ayar kısıtları, localized feedback ve transport gating eklendi. Son inceleme `[APPROVED]`.
+- **Doğrulama:** iOS Release compile-only Xcode build başarılı (`/private/tmp/pureiptv_104_ios_verified.log`); tvOS Release compile-only Xcode build başarılı (`/private/tmp/pureiptv_104_tvos_verified.log`). `git diff --check` ve string catalog JSON doğrulaması başarılı. Kullanıcı talimatı gereği yalnızca Xcode build alındı; test, simulator launch, playback veya akış çalıştırılmadı.
+- **Durum:** `[DONE]` — reviewer onayladı; yalnızca iOS/tvOS Release build alındı.
 
-### 105. [PENDING] Film ve Dizileri Orijinal Dile Göre Filtreleme
+### 105. [IN_PROGRESS] Film ve Dizileri Orijinal Dile Göre Filtreleme
 - **Canlı keşif (25 Ekim 2026):** NowSeen App Store sürüm notları Movies ve Series klasörlerinde profil başına original language filter sunduğunu belirtiyor: https://apps.apple.com/us/app/nowseen-iptv-player/id6780634050 .
 - **Aday gap:** Xtream/M3U VOD metadata’sındaki dil bilgisi ve TMDB original language mevcut kategorilerde filtrelenebiliyor mu araştırılsın. Filtre yalnız seçili profile ait olmalı; sağlayıcı metadata’sı eksikse sessizce içerik saklamamalı.
 
@@ -1062,3 +1067,43 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 108. [PENDING] IPTV Yanında Plex/Jellyfin/WebDAV Gibi Kişisel Medya Kaynakları
 - **Canlı keşif (25 Ekim 2026):** Chillio, Xtream/M3U yanında WebDAV, FTP, Plex/Jellyfin ve medya eklentilerini tek kütüphanede birleştirdiğini ürün sitesinde anlatıyor: https://chillio.app/ .
 - **Aday gap:** PureIPTV’nin network layer ve playlist/domain modeli IPTV provider protokollerine özel görünüyor; kişisel medya server client’ları var mı taransın. Bu çok büyük kapsam; kimlik bilgileri Keychain’de, playback yetkileri ve source-specific metadata ayrı tutulmalı.
+
+### 109. [PENDING] Güven Skorlu EPG Eşleme Önerileri
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları kanalların büyük bölümünde EPG olmamasından ve manuel atamaların yorucu olup yenilemede kaybolabilmesinden yakınıyor; başka playlist’teki EPG’yi tekrar kanal adı yazmadan seçme isteği de var: https://www.reddit.com/r/TiviMate/comments/1x7lyx8/epg_that_doesnt_require_assignment/ · https://www.reddit.com/r/TiviMate/comments/1xe9mq0/tivimate_epg/ .
+- **Aday gap:** Mevcut manuel XMLTV ID eşleme (#23) yanında güven skorlu öneri ve açık kullanıcı onayı var mı denetlensin; otomatik yanlış eşleşme uygulanmamalı ve yenilemeler onaylı eşlemeyi silmemeli.
+
+### 110. [PENDING] Eşleme Akışlarında Aramayı ve Odağı Korumak
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları benzer isimli kanalları art arda eşlerken arama metninin sıfırlanmasını ve aynı aramanın yeniden yazılmasını sorun olarak bildiriyor: https://www.reddit.com/r/TiviMate/comments/1i3ejin/ · https://www.reddit.com/r/NextGenIPTVPlayerPRO/comments/1wnk8x0/ .
+- **Aday gap:** Arama, filtre ve klavye/tvOS focus’u eşleme sonrası korunuyor mu taransın; yalnız ilgili eşleme ekranlarında kalıcı tut.
+
+### 111. [PENDING] Görsel Ağırlıklı Kompakt EPG Görünümü
+- **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcı önerisi EPG detaylarını azaltıp kanal görsellerine daha fazla alan ayırmayı istiyor: https://www.reddit.com/r/TiviMate/comments/1uvqltj/must_do_for_new_users/ .
+- **Aday gap:** Var olan EPG list/grid görünümüne alternatif yoğunluk veya görsel mod sunuluyor mu incelensin; tvOS odağı ve küçük metin okunabilirliği korunmalı.
+
+### 112. [PENDING] Oynatıcıdan Dış Altyazı Arama ve Ekleme
+- **Canlı keşif (25 Ekim 2026):** Kullanıcılar altyazı eksik olduğunda VLC’ye geçmek zorunda kalmayı eleştiriyor; IPTVX OpenSubtitles entegrasyonu sunuyor, Snappier profil kapsamlı subtitle bağlantısını belgeliyor: https://www.reddit.com/r/TiviMate/comments/1k6cnvh/easiest_way_to_add_external_subtitles/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ss44kp/bought_tivimate_lifetime_subscription_and_no/ · https://snappieriptv.app/tutorial/index.html .
+- **Aday gap:** Player’ın sağlayıcı altyazı track’lerine ek dosya/servis araması var mı taransın. API anahtarları/hesap, içerik eşlemesi, kullanıcı onayı, profil kapsamı ve indirme güvenliği gereksinimleri belirlenmeli.
+
+### 113. [PENDING] Teknik Oynatma Ayrıntılarını Tek Ekranda Gösterme
+- **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları kanal bilgi ekranında çözünürlük/FPS/bant genişliği, TiviMate kullanıcıları video/ses bitrate ve codec bilgisi istiyor: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/ · https://www.reddit.com/r/TiviMate/comments/1pf3wh3/my_tivimeate_wishlist/ .
+- **Aday gap:** Mevcut #80 ölçülen FPS/network throughput kapsamı dışındaki doğrulanabilir codec, audio codec/bitrate veya kaynak bitrate alanları var mı denetlensin; tahmin ve ölçümü ayırt et.
+
+### 114. [PENDING] “Şimdi Ne İzleyeyim?” Doğal Dilli Keşif
+- **Canlı keşif (25 Ekim 2026):** IPTVX v25 For You alanı kişiselleştirilmiş VOD keşfi, türe/yıla göre gezinme ve canlı program/film araması için doğal dil prompt’u duyuruyor: https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv .
+- **Aday gap:** Mevcut arama ve öneri motoru “şu anda yayında” bağlamıyla doğal dilli sorguyu destekliyor mu incelensin; ağ çağrısına bağımlılık ve sonuçların kullanıcıya açıklanabilirliği değerlendirilsin.
+
+### 115. [PENDING] Maç/Etkinlik Merkezli Spor Rehberi ve Alternatif Yayınlar
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları spor ve ligleri statik kanal gruplarından ayrı sunmayı istiyor; IPTV Deck’in spor güncellemesi lig/ülke, maça bağlı üç kanala kadar alternatif ve catch-up/watch-from-start örneği veriyor: https://www.reddit.com/r/TiviMate/comments/1pf3wh3/my_tivimeate_wishlist/ · https://www.reddit.com/r/iptvdeck/comments/1xdcrln/iptv_deck_186_now_on_linux_live_subtitles_in_any/ .
+- **Aday gap:** Var olan SportsHub’a rağmen maçtan ilişkili kanala, alternatif yoruma ve arşivden başlatmaya tek adımda erişim var mı incelensin.
+
+### 116. [PENDING] Provider URL Değişiminde Playlist Ayarlarını Taşıma
+- **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcı şikayetleri URL yenileme/değişiminde EPG eşleme ve kaynak ayarlarının kaybolmasını; diğerleri yedek ayarların cihazlar arasında taşınmasını gündeme getiriyor. Snappier App Store notları playlist backup/restore’ı sürdürüyor: https://www.reddit.com/r/TiviMate/comments/1qy28hz/tivimate_premium_playlist_cleanup_epg_questions/ · https://www.reddit.com/r/TiviMate/comments/1uvqltj/must_do_for_new_users/ · https://apps.apple.com/us/app/snappier-iptv/id1579702567?platform=tv .
+- **Aday gap:** Mevcut `BackupManager` ve cloud sync hangi playlist/EPG/category/user override’larını kapsıyor taransın; URL değişiminde kimlik bilgisi ve kullanıcı düzenlemeleri güvenli taşınmalı.
+
+### 117. [PENDING] Playlistler Arası İçerik Kimliği ve İzleme İlerlemesi Birleştirme
+- **Canlı keşif (25 Ekim 2026):** IPTVX cihazlar arası kütüphane durumunu, TiviMate kullanıcıları ise cihazlar arası otomatik/yedek sync’i öne çıkarıyor: https://apps.apple.com/us/app/iptvx/id1451470024 · https://www.reddit.com/r/TiviMate/comments/1wod0np/1_tivimate_wish_at_least_semi_auto_sync/ .
+- **Aday gap:** Favori/geçmiş sync’i mevcut olsa da aynı film/bölüm farklı playlist ID’leriyle gelince ilerleme, watched ve curated state doğru eşleşiyor mu incelensin; yalnız kullanıcı curation/migration boşluğunu hedefle.
+
+### 118. [PENDING] Yalnız Live TV İçin Ana Navigasyon Profili
+- **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları Film/Dizi menüsü olmayan ve doğrudan EPG’ye giden IPTV uygulaması talep ediyor: https://www.reddit.com/r/appletv/comments/1kw04v1/best_streaming_app_like_tivimate_for_apple_tv/ .
+- **Aday gap:** #107 boş playlist sekmelerini saklama davranışından ayrı olarak Live-only gezinme profili veya preset’i mevcut mu denetlensin; VOD erişimini silmeden ana menüyü sadeleştir.

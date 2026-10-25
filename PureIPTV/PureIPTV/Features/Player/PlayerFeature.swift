@@ -11,6 +11,7 @@ import SwiftVLC
 public struct PlayerFeature {
     public enum CancelID {
         public static let playerEvents = "PlayerFeature.playerEvents"
+        public static let playbackEngineSwitch = "PlayerFeature.playbackEngineSwitch"
         public static let statsTimer = "PlayerFeature.statsTimer"
         public static let sleepTimer = "PlayerFeature.sleepTimer"
         public static let seriesPlaylist = "PlayerFeature.seriesPlaylist"
@@ -141,6 +142,10 @@ public struct PlayerFeature {
         public var isMinimized: Bool = false
 
         public var playerState: PlayerState = .stopped
+        public var playbackEngine: PlaybackEngine = .vlc
+        public var isSwitchingPlaybackEngine = false
+        public var playbackEngineSwitchID: UUID?
+        public var playbackEngineError: String?
         public var isControlsVisible: Bool = true
         public var errorMessage: String?
         public var isRecording: Bool = false
@@ -190,6 +195,17 @@ public struct PlayerFeature {
         public var activeCatchupProgram: EPGProgram?
         public var isPlayingCatchup: Bool {
             activeCatchupProgram != nil
+        }
+
+        public var canSwitchPlaybackEngine: Bool {
+            let path = item.streamURL.pathExtension.lowercased()
+            let sharedRequirements = !item.isLive && activeCatchupProgram == nil && !isMinimized && !isPiPActive
+                && !isRecording
+                && ["m3u8", "mp4", "m4v"].contains(path)
+                && ["http", "https"].contains(item.streamURL.scheme?.lowercased() ?? "")
+                && item.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+            guard sharedRequirements else { return false }
+            return playbackEngine == .avPlayer || (audioEQPreset == .flat && audioDelay == 0 && subtitleDelay == 0)
         }
 
         public var canManageSkipMarkers: Bool {
@@ -608,6 +624,10 @@ public struct PlayerFeature {
         case recordingLimitCheck
         case dismissRecordingStatus
         case closeTapped
+        case switchPlaybackEngine(PlaybackEngine)
+        case playbackEngineSwitchFinished(PlaybackEngine, UUID, String)
+        case playbackEngineSwitchFailed(String, UUID, String)
+        case listenForPlayerEvents
         case delegate(Delegate)
 
         // PiP & Background Playback Engine (Madde #18)
@@ -747,7 +767,7 @@ public struct PlayerFeature {
                 let elapsed = previousSampleUptimeNanoseconds.map {
                     Double(now - $0) / 1_000_000_000
                 } ?? 0
-                let isPlaying = await MainActor.run { playerClient.vlcPlayer().isPlaying }
+                let isPlaying = await MainActor.run { playerClient.isPlaying() }
                 let mediaBitrate = await playerClient.getMediaInfo()?.bitrate
                 let health = await streamHealthClient.evaluateHealth(
                     streamURL,
@@ -843,11 +863,12 @@ public struct PlayerFeature {
         case .onAppear:
             state.isMinimized = false
             state.isUserPaused = false
+            state.playbackEngine = playerClient.activeEngine()
             state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
             state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
             state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
-            state.isPiPSupported = pipClient.isPiPSupported()
+            state.isPiPSupported = state.playbackEngine == .vlc && pipClient.isPiPSupported()
             state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
             state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
             state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
@@ -1009,6 +1030,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
                 .cancel(id: CancelID.audioRoute),
@@ -1065,6 +1087,7 @@ public struct PlayerFeature {
             )
 
         case let .setAudioDelay(delay):
+            guard state.playbackEngine == .vlc else { return .none }
             state.audioDelay = delay
             let delayStr = AppStrings.Player.audioDelayMs(delay)
             let hudMessage = "\(AppStrings.Player.audioSync): \(delayStr)"
@@ -1079,6 +1102,7 @@ public struct PlayerFeature {
             )
 
         case let .setSubtitleDelay(delay):
+            guard state.playbackEngine == .vlc else { return .none }
             state.subtitleDelay = delay
             let delayStr = AppStrings.Player.subtitleDelayMs(delay)
             let hudMessage = "\(AppStrings.Player.subtitleSync): \(delayStr)"
@@ -1093,6 +1117,7 @@ public struct PlayerFeature {
             )
 
         case .toggleAudioSyncHUD:
+            guard state.playbackEngine == .vlc else { return .none }
             state.isAudioSyncHUDVisible.toggle()
             if state.isAudioSyncHUDVisible {
                 state.isControlsVisible = false
@@ -1208,6 +1233,7 @@ public struct PlayerFeature {
             )
 
         case .play:
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.isUserPaused = false
             state.oledInactivitySeconds = 0
             state.oledDimLevel = 0.0
@@ -1220,6 +1246,7 @@ public struct PlayerFeature {
             )
 
         case .pause:
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.isUserPaused = true
             state.oledInactivitySeconds = 0
             return .merge(
@@ -1232,7 +1259,10 @@ public struct PlayerFeature {
 
         case .stop:
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
+            state.isSwitchingPlaybackEngine = false
+            state.playbackEngineSwitchID = nil
             return .merge(
+                .cancel(id: CancelID.playbackEngineSwitch),
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
@@ -1244,6 +1274,7 @@ public struct PlayerFeature {
             )
 
         case .retryPlayback:
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             state.errorMessage = nil
             state.isUserPaused = false
@@ -1496,6 +1527,7 @@ public struct PlayerFeature {
             return .none
 
         case let .setVolume(volume):
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.volume = volume
             return .run { _ in
                 try await playerClient.setVolume(volume)
@@ -1812,6 +1844,7 @@ public struct PlayerFeature {
             }
 
         case let .jumpBySeconds(offset):
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let targetSecs = currentSecs + Double(offset)
@@ -1831,6 +1864,7 @@ public struct PlayerFeature {
             return .send(.jumpBySeconds(-10))
 
         case .restartPlayback:
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.currentTime = .zero
             state.position = 0.0
             return .run { send in
@@ -1840,6 +1874,7 @@ public struct PlayerFeature {
             }
 
         case let .seek(position):
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
             let clamped = max(0.0, min(1.0, position))
@@ -1893,6 +1928,7 @@ public struct PlayerFeature {
             return .cancel(id: CancelID.scrubThumbnail)
 
         case let .seekToTime(time):
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
             state.currentTime = time
@@ -2018,6 +2054,7 @@ public struct PlayerFeature {
             return .send(.seekToTime(.seconds(endSeconds)))
 
         case let .setPlaybackRate(rate):
+            guard !state.isSwitchingPlaybackEngine else { return .none }
             let clamped = max(0.25, min(4.0, rate))
             state.playbackRate = clamped
             return .run { _ in
@@ -2210,6 +2247,10 @@ public struct PlayerFeature {
             state.streamHealthMetrics = nil
             state.activePlaybackURL = newItem.streamURL
             state.item = newItem
+            state.playbackEngine = .vlc
+            state.isSwitchingPlaybackEngine = false
+            state.playbackEngineSwitchID = nil
+            state.playbackEngineError = nil
             state.skipMarkers = .init()
             state.skipMarkerRequestID = nil
             state.skipMarkersProfileScope = nil
@@ -2258,6 +2299,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.playbackEngineSwitch),
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
@@ -2774,6 +2816,7 @@ public struct PlayerFeature {
             return .none
 
         case .fetchMediaInfo:
+            guard state.playbackEngine == .vlc else { return .none }
             return .run { send in
                 let info = await playerClient.getMediaInfo()
                 await send(.mediaInfoResponse(info))
@@ -2803,6 +2846,7 @@ public struct PlayerFeature {
             return .none
 
         case .fetchTracks:
+            guard state.playbackEngine == .vlc else { return .none }
             let mediaID = state.item.id
             return .run { send in
                 var audio = await playerClient.getAudioTracks()
@@ -2932,6 +2976,7 @@ public struct PlayerFeature {
             )
 
         case .toggleAudioEQHUD:
+            guard state.playbackEngine == .vlc else { return .none }
             state.isAudioEQHUDVisible.toggle()
             if state.isAudioEQHUDVisible {
                 state.isTracksMenuVisible = false
@@ -2948,6 +2993,7 @@ public struct PlayerFeature {
             return .none
 
         case let .selectAudioEQPreset(preset):
+            guard state.playbackEngine == .vlc else { return .none }
             state.audioEQPreset = preset
             let mediaID = state.item.id
             settingsClient.setChannelAudioEQPreset(mediaID, preset)
@@ -3260,6 +3306,70 @@ public struct PlayerFeature {
             state.recordingStatusMessage = nil
             return .none
 
+        case let .switchPlaybackEngine(target):
+            guard state.canSwitchPlaybackEngine, !state.isSwitchingPlaybackEngine,
+                  target != state.playbackEngine else { return .none }
+            state.isSwitchingPlaybackEngine = true
+            state.playbackEngineError = nil
+            let requestID = UUID()
+            state.playbackEngineSwitchID = requestID
+            let itemID = state.item.id
+            let item = state.item
+            let request = PlaybackEngineSwitchRequest(
+                requestID: requestID,
+                target: target,
+                url: item.streamURL,
+                userAgentOverride: item.userAgentOverride,
+                networkCachingMilliseconds: BufferProfile.activeNetworkCachingMilliseconds(for: false),
+                positionSeconds: Double(state.currentTime.components.seconds),
+                isPlaying: state.playerState == .playing || state.playerState == .buffering,
+                playbackRate: state.playbackRate,
+                volume: state.volume,
+                selectedAudioName: state.selectedAudioTrack?.name,
+                selectedAudioLanguage: state.selectedAudioTrack?.language,
+                selectedSubtitleName: state.selectedSubtitleTrack?.name,
+                selectedSubtitleLanguage: state.selectedSubtitleTrack?.language
+            )
+            return .run { send in
+                do {
+                    try await playerClient.switchEngine(request)
+                    await send(.playbackEngineSwitchFinished(target, requestID, itemID))
+                } catch {
+                    await send(.playbackEngineSwitchFailed(error.localizedDescription, requestID, itemID))
+                }
+            }.cancellable(id: CancelID.playbackEngineSwitch, cancelInFlight: true)
+
+        case let .playbackEngineSwitchFinished(engine, requestID, itemID):
+            guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
+            state.isSwitchingPlaybackEngine = false
+            state.playbackEngineSwitchID = nil
+            state.playbackEngine = engine
+            state.isPiPSupported = engine == .vlc && pipClient.isPiPSupported()
+            if engine == .avPlayer {
+                state.audioTracks = []
+                state.subtitleTracks = []
+                state.isAudioSyncHUDVisible = false
+                state.isAudioEQHUDVisible = false
+            }
+            return .merge(.cancel(id: CancelID.playerEvents), .send(.listenForPlayerEvents))
+
+        case let .playbackEngineSwitchFailed(message, requestID, itemID):
+            guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
+            state.isSwitchingPlaybackEngine = false
+            state.playbackEngineSwitchID = nil
+            _ = message
+            state.playbackEngineError = AppStrings.Player.playbackEngineSwitchFailed
+            return .none
+
+        case .listenForPlayerEvents:
+            return .run { send in
+                let stream = await playerClient.events()
+                for await event in stream {
+                    guard !Task.isCancelled else { return }
+                    await send(.handlePlayerEvent(event))
+                }
+            }.cancellable(id: CancelID.playerEvents, cancelInFlight: true)
+
         case .playerEvent:
             return .none
 
@@ -3272,6 +3382,7 @@ public struct PlayerFeature {
             let isPiPActive = state.isPiPActive
             return .merge(
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.stallWatchdog),
@@ -3331,6 +3442,7 @@ public struct PlayerFeature {
             return .none
 
         case .minimizeTapped:
+            guard state.playbackEngine == .vlc else { return .none }
             guard !state.isMinimized else { return .none }
             state.isMinimized = true
             return .run { send in
@@ -3355,6 +3467,7 @@ public struct PlayerFeature {
 
         // ── PiP & Background Playback Engine (Madde #18) ───────────────────────────
         case .togglePiP:
+            guard state.playbackEngine == .vlc else { return .none }
             state.shouldTriggerPiP = true
             return .none
 
@@ -3375,6 +3488,9 @@ public struct PlayerFeature {
             return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
 
         case .appMovedToBackground:
+            if state.playbackEngine == .avPlayer {
+                return .send(.pause)
+            }
             if state.isRecording || state.isRecordingStartPending {
                 return .run { send in
                     await playerClient.requestRecordingStop()

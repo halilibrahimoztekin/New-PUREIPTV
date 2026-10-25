@@ -800,42 +800,44 @@
                                 }
                             }
 
-                            Section("Ses İyileştirme & Ekolayzer") {
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                } label: {
-                                    Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
-                                }
-                            }
-
-                            Section(AppStrings.Player.audioSync) {
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                } label: {
-                                    Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                            if store.playbackEngine == .vlc {
+                                Section("Ses İyileştirme & Ekolayzer") {
+                                    Button {
+                                        onInteraction()
+                                        store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    } label: {
+                                        Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                    }
                                 }
 
-                                Button("+500 ms") {
-                                    onInteraction()
-                                    store.send(.setAudioDelay(store.audioDelay + 500))
-                                }
-                                Button("+250 ms") {
-                                    onInteraction()
-                                    store.send(.setAudioDelay(store.audioDelay + 250))
-                                }
-                                Button(AppStrings.Player.resetAudioDelay) {
-                                    onInteraction()
-                                    store.send(.setAudioDelay(0))
-                                }
-                                Button("-250 ms") {
-                                    onInteraction()
-                                    store.send(.setAudioDelay(store.audioDelay - 250))
-                                }
-                                Button("-500 ms") {
-                                    onInteraction()
-                                    store.send(.setAudioDelay(store.audioDelay - 500))
+                                Section(AppStrings.Player.audioSync) {
+                                    Button {
+                                        onInteraction()
+                                        store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                    } label: {
+                                        Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                    }
+
+                                    Button("+500 ms") {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(store.audioDelay + 500))
+                                    }
+                                    Button("+250 ms") {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(store.audioDelay + 250))
+                                    }
+                                    Button(AppStrings.Player.resetAudioDelay) {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(0))
+                                    }
+                                    Button("-250 ms") {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(store.audioDelay - 250))
+                                    }
+                                    Button("-500 ms") {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(store.audioDelay - 500))
+                                    }
                                 }
                             }
                         } label: {
@@ -1008,19 +1010,36 @@
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
-                    // Audio Equalizer & Dialogue Enhancer Quick Button (Madde #14)
-                    Button {
-                        onInteraction()
-                        store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                    } label: {
-                        Image(systemName: "waveform.badge.magnifyingglass")
-                            .font(.system(size: 24))
-                            .foregroundStyle(store.isAudioEQHUDVisible ? store.audioEQPreset.accentColor : (store.audioEQPreset == .flat ? .white : store.audioEQPreset.accentColor))
+                    if store.canSwitchPlaybackEngine {
+                        Menu {
+                            ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                                Button(engine.title) { store.send(.switchPlaybackEngine(engine)) }
+                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                            }
+                        } label: {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)")
                     }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
+
+                    // Audio Equalizer & Dialogue Enhancer Quick Button (Madde #14)
+                    if store.playbackEngine == .vlc {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "waveform.badge.magnifyingglass")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isAudioEQHUDVisible ? store.audioEQPreset.accentColor : (store.audioEQPreset == .flat ? .white : store.audioEQPreset.accentColor))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    }
 
                     // Catchup / Archive Timeline Scrubber (Feature #4)
-                    if store.item.tvArchive == 1 {
+                    if store.playbackEngine == .vlc, store.item.tvArchive == 1 {
                         Button {
                             onInteraction()
                             store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
@@ -1033,37 +1052,43 @@
                     }
 
                     // Stream Health & Buffer Gauge Button (Feature #3)
-                    Button {
-                        onInteraction()
-                        store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                    } label: {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 24))
-                            .foregroundStyle(store.isStreamHealthHUDVisible ? Color(hex: "#00F5D4") : .white)
+                    if store.playbackEngine == .vlc {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isStreamHealthHUDVisible ? Color(hex: "#00F5D4") : .white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // Picture-in-Picture / Mini-Player Toggle (Madde #18)
-                    Button {
-                        onInteraction()
-                        store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                    } label: {
-                        Image(systemName: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
-                            .font(.system(size: 24))
-                            .foregroundStyle(store.isPiPActive || store.isMinimized ? Color(hex: "#00D2FF") : .white)
+                    if store.playbackEngine == .vlc {
+                        Button {
+                            onInteraction()
+                            store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isPiPActive || store.isMinimized ? Color(hex: "#00D2FF") : .white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // Nerd Stats Technical Diagnostics Button (Madde #33)
-                    Button {
-                        onInteraction()
-                        store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                    } label: {
-                        Image(systemName: "chart.xyaxis.line")
-                            .font(.system(size: 24))
-                            .foregroundStyle(store.isShowingStats ? Color(hex: "#00F5D4") : .white)
+                    if store.playbackEngine == .vlc {
+                        Button {
+                            onInteraction()
+                            store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                        } label: {
+                            Image(systemName: "chart.xyaxis.line")
+                                .font(.system(size: 24))
+                                .foregroundStyle(store.isShowingStats ? Color(hex: "#00F5D4") : .white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
                     // Sleep Timer Menu (Feature #6)
                     Menu {
