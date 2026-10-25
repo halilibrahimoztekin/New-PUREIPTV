@@ -5,6 +5,13 @@
     public struct SearchView_tvOS: View {
         @Bindable var store: StoreOf<SearchFeature>
         let config: PlaylistConfig
+        @FocusState private var focusedTarget: SearchFocusTarget?
+        @State private var shouldFocusResultsWhenAvailable = false
+
+        private enum SearchFocusTarget: Hashable {
+            case search
+            case result(String)
+        }
 
         /// Columns for grids (wider for tvOS 10-foot UI)
         private let channelColumns: [GridItem] = [
@@ -81,6 +88,22 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .onChange(of: store.totalResultsCount) { _, count in
+                guard shouldFocusResultsWhenAvailable else { return }
+                if count > 0 {
+                    focusFirstResult()
+                } else if !store.isSearching, !store.isCurrentScopeSearching {
+                    shouldFocusResultsWhenAvailable = false
+                }
+            }
+            .onChange(of: store.isSearching) { _, isSearching in
+                guard !isSearching, shouldFocusResultsWhenAvailable else { return }
+                focusFirstResult()
+            }
+            .onChange(of: store.isCurrentScopeSearching) { _, isSearching in
+                guard !isSearching, shouldFocusResultsWhenAvailable else { return }
+                focusFirstResult()
+            }
         }
 
         // MARK: – UI Components
@@ -96,6 +119,9 @@
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .font(.system(size: 32))
+                    .focused($focusedTarget, equals: .search)
+                    .submitLabel(.search)
+                    .onSubmit(focusFirstResult)
 
                 if store.isSearching || store.isCurrentScopeSearching {
                     PureLoadingView(size: .small)
@@ -236,6 +262,8 @@
                                     ) {
                                         store.send(.channelSelected(result.item))
                                     }
+                                    .id(result.id)
+                                    .focused($focusedTarget, equals: .result(result.id))
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -277,6 +305,8 @@
                                     ) {
                                         store.send(.vodSelected(result.item))
                                     }
+                                    .id(result.id)
+                                    .focused($focusedTarget, equals: .result(result.id))
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -318,6 +348,8 @@
                                     ) {
                                         store.send(.seriesSelected(result.item))
                                     }
+                                    .id(result.id)
+                                    .focused($focusedTarget, equals: .result(result.id))
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -374,6 +406,8 @@
                                         .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                     }
                                     .buttonStyle(.card)
+                                    .id(credit.id)
+                                    .focused($focusedTarget, equals: .result(credit.id))
                                     .accessibilityLabel("\(credit.personName), \(credit.result.item.title)")
                                     .accessibilityHint(AppStrings.Common.watchNow)
                                 }
@@ -388,6 +422,8 @@
                                     ProgramSearchResultCard(program: match.program, channel: match.result.item, playlistName: store.savedPlaylists.count > 1 ? match.result.playlistBadge.playlistName : nil) {
                                         store.send(.programSelected(match))
                                     }
+                                    .id(match.id)
+                                    .focused($focusedTarget, equals: .result(match.id))
                                 }
                             }
                         }
@@ -517,6 +553,36 @@
                 }
                 content()
             }
+        }
+
+        private func focusFirstResult() {
+            guard !store.isSearching, !store.isCurrentScopeSearching else {
+                shouldFocusResultsWhenAvailable = true
+                return
+            }
+            guard let resultID = firstResultID else {
+                shouldFocusResultsWhenAvailable = false
+                return
+            }
+            shouldFocusResultsWhenAvailable = false
+            focusedTarget = .result(resultID)
+        }
+
+        private var firstResultID: String? {
+            if let result = store.enrichedLiveResults.first ?? store.enrichedVODResults.first ?? store.enrichedSeriesResults.first {
+                return result.id
+            }
+            let badge = PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+            if let item = store.liveResults.first ?? store.vodResults.first ?? store.seriesResults.first {
+                return GlobalSearchResultItem(item: item, playlistBadge: badge).id
+            }
+            if let credit = store.peopleResults.first {
+                return credit.id
+            }
+            if let program = store.programResults.first {
+                return program.id
+            }
+            return nil
         }
 
         private var loadingView: some View {

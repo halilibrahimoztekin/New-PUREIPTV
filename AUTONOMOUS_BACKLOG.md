@@ -1301,11 +1301,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Live kategori koleksiyonları ana ekranda pinlenebilir.
 
-### 138. [PENDING] tvOS Arama Sonucunda Klavye Sonrası Odak Geri Yükleme
+### 138. [DONE] tvOS Arama Sonucunda Klavye Sonrası Odak Geri Yükleme
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.5 Apple TV’de arama klavyesi kapandıktan sonra sonuçların konum ve odağını korumaya yönelik iyileştirmeler bildirdi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
-- **Kod incelemesi:** `SearchView+tvOS` TextField değişiklikleri doğrudan store’a gönderiyor; arama alanı veya sonuç kartlarında açık focus binding ve sonuç listesinin scroll konumunu geri yükleyen state yok. Sonuç görünümü koşullu olarak değişiyor.
-- **Kalan kapsam:** Arama klavyesi kapatıldığında sonuç grid’inde kararlı odak/konumu koru ve boş/eksik sonuçlarda navigasyon çıkmazlarını önle. Kullanıcı talimatıyla runtime UI akışı çalıştırılmadı; dead-end’in cihazdaki yeniden üretimi doğrulanmadı.
-- **Durum:** `[PENDING]` — Statik kodda restore mekanizması bulunmadı; uygulama değişikliği ve runtime doğrulaması bekliyor.
+- **Uygulama:** Arama alanına tvOS FocusState ve Search submit davranışı eklendi. Submit anında sonuçlar hazır değilse arama tamamlanmasını bekliyor; ardından ilk medya/kişi/program sonucuna odaklanıyor. Sonuç kartları kimlikli odak hedefleri olarak işaretlendi; focus engine hedefi görünür konuma getiriyor.
+- **Doğrulama:** Kod öz incelemesi `[APPROVED]`; tvOS Release Xcode derlemesi `BUILD SUCCEEDED`; `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
+- **Sınır:** Gerçek Siri Remote/klavye kapatma dead-end akışı runtime’da yeniden üretilmedi.
+- **Durum:** `[DONE]` — Search submit sonrası ilk sonuç odağı geri yükleniyor.
 
 ### 139. [DEFERRED] Daha Uzun ve EPG’ye Göre Planlanmış DVR Kaydı
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 kesin kayıt uzunluğu ve 24 saate kadar schedule desteğini duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
@@ -1317,3 +1318,4 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#138 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; bu statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
 - **#139 sonrası:** `/private/tmp` ve PureIPTV DerivedData’da silinecek DerivedData/build/cache adayı yoktu; statik incelemede build çalıştırılmadı. `SourcePackages` ve SDK önbellekleri korundu.
 - **#137 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (3.0 GB) ve `Logs` (1.3 MB) açık dosya olmadığı doğrulandıktan sonra kaldırıldı; `SourcePackages` ve SDK önbellekleri korundu.
+- **#138 sonrası:** `/private/tmp` içinde DerivedData adayı yoktu. PureIPTV `Build` (yaklaşık 3.0 GB) ve `Logs` (yaklaşık 1.3 MB) açık dosya kontrolünden sonra kaldırıldı; `SourcePackages` ve SDK önbellekleri korundu.
