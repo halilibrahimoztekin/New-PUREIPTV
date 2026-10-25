@@ -1295,9 +1295,11 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod öz incelemesi `[APPROVED]`; iOS ve tvOS Release Xcode derlemeleri `BUILD SUCCEEDED`; katalog JSON ve `git diff --check` başarılı. Test/uygulama akışı çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — Kullanıcı indirmeyi duraklatıp devam ettirebilir.
 
-### 137. [PENDING] Ana Ekrana Playlist Kategorisi Sabitleme
+### 137. [PENDING] Live Playlist Kategorilerini Ana Ekrana Sabitleme
 - **Canlı keşif (25 Ekim 2026):** UHF 1.95.0 herhangi playlist kategorisini, Live dahil, ana ekran Feed Collections’a sabitlemeyi duyurdu: https://apps.apple.com/ca/app/uhf-love-your-iptv/id6443751726?platform=tv .
-- **Aday gap:** Mevcut HomeSectionManager kullanıcıya playlist kategori feed’i yaratma, kaldırma ve yeniden sıralama imkânı veriyor mu; playlist UUID izolasyonu korunarak incele.
+- **Kod incelemesi:** Pin/kaldır/sıralama arayüzü var; `HomeCategoryPinStore` pinleri profile UUID + playlist UUID ile izole ediyor. Dashboard keşif satırları ise yalnızca film ve dizi kategorilerinden yapılıyor; Live kategori verisi çekilmiyor ve yönetim listesine eklenmiyor.
+- **Kalan kapsam:** Live kategorilerini ve kanal öğelerini koleksiyonlara ekleyip iOS/tvOS ana ekran kartı/seçim akışına bağla. Var olan profil/playlist izolasyonunu koru.
+- **Durum:** `[PENDING]` — Film/dizi kategorileri için temel hazır; Live kategori desteği eksik.
 
 ### 138. [PENDING] tvOS Arama Sonucunda Klavye Sonrası Odak Geri Yükleme
 - **Canlı keşif (25 Ekim 2026):** Opus 2.0.5 Apple TV’de arama klavyesi kapandıktan sonra sonuçların konum ve odağını korumaya yönelik iyileştirmeler bildirdi: https://apps.apple.com/gb/app/iptv-player-opus/id1592313576?platform=tv .
