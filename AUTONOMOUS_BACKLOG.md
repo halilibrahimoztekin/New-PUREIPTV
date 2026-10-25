@@ -1097,14 +1097,18 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** Kod incelemesi: filtre saf view hesaplamasıdır, mapping onayına bağlı değildir; TextField ve sonuçlar listede stabil kalır. `git diff --check` temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_110_ios.log`, `/private/tmp/pureiptv_110_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı).
 - **Durum:** `[DONE]` — İnceleme tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 111. [IN_PROGRESS] Görsel Ağırlıklı Kompakt EPG Görünümü
+### 111. [DONE] Görsel Ağırlıklı Kompakt EPG Görünümü
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcı önerisi EPG detaylarını azaltıp kanal görsellerine daha fazla alan ayırmayı istiyor: https://www.reddit.com/r/TiviMate/comments/1uvqltj/must_do_for_new_users/ .
 - **Aday gap:** Var olan EPG list/grid görünümüne alternatif yoğunluk veya görsel mod sunuluyor mu incelensin; tvOS odağı ve küçük metin okunabilirliği korunmalı.
-- **Analiz:** EPG rehber bileşenleri ve görünüm tercihi için mevcut seçenekler taranıyor; mevcut grid/list modları ve kanal logolarının yerleşimi karşılaştırılacak.
+- **Analiz:** `EPGTimelineView` tek bir virtualized yatay zaman grid’i kullanıyor; görünüm yoğunluğu ayarı yok. Program blokları tür rozeti, canlı/yakalama/hatırlatıcı simgesi, başlık ve zaman gösteriyor. Kanal logosu sabit sol hücrede yer alıyor; kompakt satır moduyla ekrana daha fazla kanal ve büyük logo sığdırılabilir.
+- **Uygulama:** EPG başlığına görünüm değiştirici eklendi. Kompakt görünüm tercihi `@AppStorage` ile saklanıyor; iOS ve tvOS’ta satır yüksekliği azalıyor, kanal sütunu/logoları büyüyor, uzun kanal adları tek satıra kısalıyor ve program bloklarındaki tekrar eden zaman satırı gizleniyor. Program erişilebilirlik özeti saat aralığını koruyor. Düğmenin her iki durum etiketi 22 locale’de tanımlandı.
+- **Doğrulama:** Kod incelemesi: tek virtualized grid ve tvOS focus kimlikleri değişmiyor; zaman bilgisi VoiceOver erişilebilirlik metninde kalıyor. `git diff --check` ve strings JSON doğrulaması temiz; iOS ve tvOS Release compile-only Xcode build’leri başarılı (`/private/tmp/pureiptv_111_ios.log`, `/private/tmp/pureiptv_111_tvos.log`). Akış/test çalıştırılmadı (kullanıcı talimatı).
+- **Durum:** `[DONE]` — Kod incelemesi tamamlandı; yalnızca Xcode derlemeleri alındı.
 
-### 112. [PENDING] Oynatıcıdan Dış Altyazı Arama ve Ekleme
+### 112. [IN_PROGRESS] Oynatıcıdan Dış Altyazı Arama ve Ekleme
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar altyazı eksik olduğunda VLC’ye geçmek zorunda kalmayı eleştiriyor; IPTVX OpenSubtitles entegrasyonu sunuyor, Snappier profil kapsamlı subtitle bağlantısını belgeliyor: https://www.reddit.com/r/TiviMate/comments/1k6cnvh/easiest_way_to_add_external_subtitles/ · https://www.reddit.com/r/IPTV_Help_Desk/comments/1ss44kp/bought_tivimate_lifetime_subscription_and_no/ · https://snappieriptv.app/tutorial/index.html .
 - **Aday gap:** Player’ın sağlayıcı altyazı track’lerine ek dosya/servis araması var mı taransın. API anahtarları/hesap, içerik eşlemesi, kullanıcı onayı, profil kapsamı ve indirme güvenliği gereksinimleri belirlenmeli.
+- **Analiz:** Player state ve iOS/tvOS subtitle picker’ları mevcut akış altyazı track’lerini listeliyor; `SwiftVLC` aktif oynatmaya `addExternalTrack(from:type:select:)` sağlar. OpenSubtitles current API’de arama için app API key, download için uygun API-key/Bearer yetkisi gerekir; shared key’i client’a gömmek güvenli değil. Kullanıcı anahtarını Keychain’de saklama, aktif film/dizi başlığıyla arama, kullanıcı onaylı sonuç indirme ve VLC track’e ekleme akışı inceleniyor. Kaynaklar: https://ai.opensubtitles.com/api-docs · https://opensubtitles.tawk.help/article/getting-started .
 
 ### 113. [PENDING] Teknik Oynatma Ayrıntılarını Tek Ekranda Gösterme
 - **Canlı keşif (25 Ekim 2026):** Apple TV kullanıcıları kanal bilgi ekranında çözünürlük/FPS/bant genişliği, TiviMate kullanıcıları video/ses bitrate ve codec bilgisi istiyor: https://www.reddit.com/r/appletv/comments/1wt5ulg/i_built_a_small_minimal_iptv_player_for_apple_tv/ · https://www.reddit.com/r/TiviMate/comments/1pf3wh3/my_tivimeate_wishlist/ .

@@ -7,15 +7,29 @@ public struct EPGTimelineView: View {
     // Dimensions
     #if os(tvOS)
         private let hourWidth: CGFloat = 340
-        private let rowHeight: CGFloat = 78
-        private let channelColumnWidth: CGFloat = 170
+        private let standardRowHeight: CGFloat = 78
+        private let compactRowHeight: CGFloat = 58
+        private let standardChannelColumnWidth: CGFloat = 170
+        private let compactChannelColumnWidth: CGFloat = 190
         private let timeHeaderHeight: CGFloat = 46
     #else
         private let hourWidth: CGFloat = 240
-        private let rowHeight: CGFloat = 64
-        private let channelColumnWidth: CGFloat = 115
+        private let standardRowHeight: CGFloat = 64
+        private let compactRowHeight: CGFloat = 48
+        private let standardChannelColumnWidth: CGFloat = 115
+        private let compactChannelColumnWidth: CGFloat = 132
         private let timeHeaderHeight: CGFloat = 42
     #endif
+
+    @AppStorage("epgTimelineCompactMode") private var isCompactMode = false
+
+    private var rowHeight: CGFloat {
+        isCompactMode ? compactRowHeight : standardRowHeight
+    }
+
+    private var channelColumnWidth: CGFloat {
+        isCompactMode ? compactChannelColumnWidth : standardChannelColumnWidth
+    }
 
     private let totalHoursCount: Int = 24
     private let pastHoursAnchor: Int = 4
@@ -198,6 +212,20 @@ public struct EPGTimelineView: View {
             .buttonStyle(.bordered)
             #else
             .buttonStyle(.plain)
+            #endif
+
+            Button {
+                isCompactMode.toggle()
+            } label: {
+                Image(systemName: isCompactMode ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.white)
+            }
+            .accessibilityLabel(isCompactMode ? AppStrings.LiveTV.standardEPGView : AppStrings.LiveTV.compactEPGView)
+            #if os(tvOS)
+                .buttonStyle(.bordered)
+            #else
+                .buttonStyle(.plain)
             #endif
 
             Spacer()
@@ -670,13 +698,13 @@ public struct EPGTimelineView: View {
                                 .foregroundColor(.white.opacity(0.3))
                         }
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: isCompactMode ? 42 : 32, height: isCompactMode ? 42 : 32)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
                     Image(systemName: "tv")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.3))
-                        .frame(width: 32, height: 32)
+                        .frame(width: isCompactMode ? 42 : 32, height: isCompactMode ? 42 : 32)
                 }
 
                 // Title & Badges
@@ -691,7 +719,7 @@ public struct EPGTimelineView: View {
                         Text(channel.title)
                             .font(.caption2.bold())
                             .foregroundColor(.white)
-                            .lineLimit(2)
+                            .lineLimit(isCompactMode ? 1 : 2)
                             .truncationMode(.tail)
                     }
 
@@ -1025,7 +1053,7 @@ public struct EPGTimelineView: View {
         let timeFontSize: CGFloat
         #if os(tvOS)
             let isFocused = focusedProgramId == program.id
-            titleFontSize = isFocused && width >= 140 ? 14 : 11
+            titleFontSize = isFocused && width >= 140 ? 14 : (isCompactMode ? 10 : 11)
             titleFontWeight = isFocused || isNow || isSearchMatch ? .bold : .medium
             timeFontSize = isFocused && width >= 120 ? 11 : 9.5
             if isFocused {
@@ -1034,7 +1062,7 @@ public struct EPGTimelineView: View {
                 cardBorderLineWidth = 3
             }
         #else
-            titleFontSize = 11
+            titleFontSize = isCompactMode ? 10 : 11
             titleFontWeight = isNow || isSearchMatch ? .bold : .medium
             timeFontSize = 9.5
         #endif
@@ -1118,10 +1146,12 @@ public struct EPGTimelineView: View {
                             .lineLimit(1)
                     }
 
-                    Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
-                        .font(.system(size: timeFontSize).monospacedDigit())
-                        .foregroundColor(.white.opacity(0.6))
-                        .lineLimit(1)
+                    if !isCompactMode {
+                        Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
+                            .font(.system(size: timeFontSize).monospacedDigit())
+                            .foregroundColor(.white.opacity(0.6))
+                            .lineLimit(1)
+                    }
 
                     Spacer(minLength: 0)
                 }

@@ -87,6 +87,8 @@ public enum AppStrings {
         public static let hideChannel = "Kanalı Gizle".localized
         public static let sendToMultiView = "Çoklu Ekran'a Gönder".localized
         public static let channelGuide = "Yayın Akışı (EPG)".localized
+        public static let compactEPGView = "Kompakt EPG görünümü".localized
+        public static let standardEPGView = "Standart EPG görünümü".localized
         public static let recentChannels = "Son İzlenen Kanallar".localized
         public static let quickZapHint = "Siri Remote ile gezin ve kanala anında geçiş yapın".localized
         public static let noRecentChannels = "Henüz izlenmiş kanal bulunmuyor".localized
