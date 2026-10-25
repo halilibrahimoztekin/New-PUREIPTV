@@ -1169,13 +1169,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Kod incelemesi:** `TVOnboardingQRView` / `TVOnboardingManager` QR içinde sadece `pureiptv://setup?session=...` statik deep linki üretiyor; view uygulamada kullanılmıyor, eşleşme durumu hiçbir yerde değiştirilmediği için “eşleşti” durumu erişilemiyor. `AppCoordinator.handleDeepLink` yalnızca `play` ve `channel` host’larını kabul ediyor; `setup` için alıcı/transfer yolu bulunmuyor. Doğrudan playlist URL’si veya Xtream parolası QR’a koyulursa dışa aktarılabilir.
 - **Karar:** `[DEFERRED]` — güvenli özellik için tek kullanımlık, kısa ömürlü pairing yetkisi ve yerel/şifreli cihazlar arası transfer kanalı gerekir. Statik QR görseli mevcut transferi gerçekleştirmediğinden “anında kurulum” olarak bağlanmamalı; bu altyapı ayrıca tasarlanıp uygulanmalı.
 
-### 120. [PENDING] Aile Cihazları için Uzaktan Playlist Yönetimi
+### 120. [DEFERRED] Aile Cihazları için Uzaktan Playlist Yönetimi
 - **Canlı keşif (25 Ekim 2026):** Kullanıcılar aile üyelerinin cihazlarına, bağlantı koptuğunda da, uzaktan playlist güncellemek istediklerini bildiriyor: https://www.reddit.com/r/TiviMate/comments/1uzuy2g/playlist_update_remote/ .
-- **Aday gap:** Mevcut iCloud sync playlistleri hangi kapsamda taşıyor ve diğer cihazda yeni bağlantıyı güvenli onaylama/yenileme var mı incele.
+- **Kod incelemesi:** `KeychainManager` playlist’leri `kSecAttrSynchronizable` ile saklıyor. Apple dokümantasyonuna göre tvOS Keychain öğelerini iCloud üzerinden senkronize etmez; iCloud senkronizasyonu aynı kullanıcı cihazları için olup family sharing/uzaktan yönetim kanalı sağlamaz: https://developer.apple.com/documentation/security/ksecattrsynchronizable . Uygulamada playlist yenileme onayı için cihaz kimliği veya kullanıcı davet/erişim denetimi de yok.
+- **Karar:** `[DEFERRED]` — aile cihazlarına uzaktan yönetim için açık rızalı davet, erişim iptali, credential rotasyonu ve aile üyelerine göre yetki sunan backend/CloudKit paylaşım modeli gerekir. Var olan Keychain sync bu gereksinimi karşılamaz; iCloud Keychain’in tvOS desteği olmadığından Apple TV’ye playlist kopyalandığı varsayılamaz.
 
-### 121. [PENDING] Oturum Hatasından Sonra Sağlam Kayıt Kurtarma
+### 121. [IN_PROGRESS] Oturum Hatasından Sonra Sağlam Kayıt Kurtarma
 - **Canlı keşif (25 Ekim 2026):** TiviMate beta yorumlarında kayıt sürerken tek bir stream glitch’inin kaydı bozup bozmadığı ve kaydın toparlanması soruluyor: https://www.reddit.com/r/TiviMate/comments/1vgb900/new_540_beta_change_log/ .
 - **Aday gap:** Mevcut yerel kayıt akışı segment yazımını, disk hatasında güvenli sonlandırmayı ve kısmi kayıt kurtarmayı destekliyor mu incele.
+- **Kod incelemesi:** Kayıt tek VLC output file olarak başlar; app-side `LocalDVRManager` kayda ait manifest’i diske yazmadan yalnız bellekte `recordingStartTime`/başlık tutuyor. Catalog yalnızca VLC `recordingChanged(false, filePath:)` callback’inde güncelleniyor. İşlem kapanırsa kısmi dosya için metadata yok; disk dolması/stream glitch callback davranışı toparlama garantisi vermiyor. Önce yazım sırasında kalıcı küçük bir journal ve açılışta yalnız güvenli, doğrulanabilir kısmi dosyaları kurtarma tasarlanmalı; segmenting VLC API’sinde mevcut değil.
 
 ### 122. [PENDING] EPG’den İzlenen Kanala Tek Hareketle Dönüş
 - **Canlı keşif (25 Ekim 2026):** TiviMate kullanıcıları rehberde gezinirken izlemekte oldukları kanal/programa geri dönme düğmesi istiyor: https://www.reddit.com/r/TiviMate/comments/1wnf218/tivimate_update_version_540_beta_3_premium/ .
