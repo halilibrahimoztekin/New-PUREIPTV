@@ -1558,9 +1558,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — tvOS arama sonucuna odak ve görünür konum dönüşü tamamlandı.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
-### 166. [PENDING] Apple TV’ye Güvenli QR Playlist Aktarımı
+### 166. [DONE] Apple TV’ye Güvenli QR Playlist Aktarımı
 - **Fırsat:** Uzun M3U/Xtream bilgilerini Siri Remote ile yazma yükünü azaltan, tek kullanımlık ve açıkça doğrulanan cihazlar arası transferi güvenlik/credential sızıntısı açısından incele.
 - **Keşif sinyali:** Opus Apple TV kurulum rehberi playlist’i telefonda ekleyip QR ile TV’ye aktarmayı temel kurulum yolu olarak sunuyor.
+- **Uygulama:** Apple TV 5 dakikalık UUID oturumu ve gizli anahtarı içeren QR üretir; credential veya playlist URL’si QR’a girmez. iPhone özel URL’yi açıp iCloud Keychain’den kayıtlı playlist’leri yükler, kullanıcıdan seçim/onay alır ve yalnız playlist kimliği ile tek kullanımlık isteği senkronize Keychain’e yazar. TV isteği doğrular, playlist’i cihazda etkinleştirir ve oturum/isteği siler. Eşleşme gecikmesinde iPhone 15 saniyeye kadar bekler ve hata durumunu gösterir. Aynı Apple ID ve iCloud Keychain gereksinimi iki ekranda açıklanır. tvOS Add Playlist ekranında QR düğmesi ve Siri Remote odağı eklendi; Connect düğmesi form boşken de odakta kalıyor ve eylemi güvenli biçimde no-op yapıyor.
+- **PR Reviewer:** İlk incelemede stale response, iptal-submit yarışı ve iCloud senkron gecikmesi için `[CHANGES REQUESTED]`; düzeltmelerden sonra yinelenen QR açılışının oturumu silebilmesi bulundu. Oturum ID guard’ı ve son tvOS focus zinciri düzeltmesi sonrası `[APPROVED]`.
+- **Doğrulama:** Generic iOS Release ve tvOS Release Xcode compile-only build’leri `BUILD SUCCEEDED`; son tvOS focus değişikliği final tvOS build’inde doğrulandı. `git diff --check` (String Catalog hariç) ve `Info.plist` lint başarılı. Yalnız compile-only build alındı; test, simülatör, uygulama açılışı veya playback çalıştırılmadı.
+- **Temizlik:** `/private/tmp/PureIPTV166` içindeki task DerivedData ve build logları toplam **4,107,824 KiB**; build süreçleri sonlanmış, `lsof +D` açık dosya bulmamış ve klasör kaldırıldı. İlk başarısız paket çözümlemesinden kalan bilinen Xcode result bundle’ı (28 KiB) de açık handle bulunmayınca silindi. Normal DerivedData’daki PureIPTV `SourcePackages` checkout’ları yalnızca paylaşılan bağımlılık olarak kullanıldı ve korundu. `/private/tmp` içinde kalanlar task kaynaklı DerivedData olarak doğrulanmadığı için korundu. ContactCleaner yolları kullanılmadı.
+- **Durum:** `[DONE]` — QR playlist aktarımı tamamlandı ve reviewer onayladı.
 - **Kaynak:** https://opusmediaplayer.com/devices/apple-tv/
 
 ### 167. [PENDING] Bağlı Cihaz ve Hesap Güvenliği Yönetimi
@@ -1577,3 +1582,53 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Fırsat:** Favori kanalları, filmleri ve dizileri tek tvOS gezinme modelinde ayır; mevcut Live TV named list davranışı ve VOD watchlist/favori işaretleriyle çakışmayı önle.
 - **Keşif sinyali:** Opus 2.0.4 favori canlı kanallar, film ve diziler için ayrı hızlı erişim kategorileri ekledi.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
+
+### 170. [PENDING] Apple TV Uykuya Geçerken Canlı Yayını Güvenle Durdurma
+- **Fırsat:** TV kapanınca veya uygulama arka plana düşünce canlı player ve ses oturumunun açık kalıp kalmadığını doğrula; yalnız gerçek platform yaşam döngüsü olayında durdur ve geri dönünce odak/oynatım durumunu tutarlı göster.
+- **Keşif sinyali:** UHF 1.98.0 Apple TV kapanırken oynatımın doğru durmasını düzeltti.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 171. [PENDING] EPG’den PPV ve Etkinlik Kategorilerini Yenileme
+- **Fırsat:** Sağlayıcıda özel PPV/Event grupları varsa rehberden erişilebilir, belirgin bir yenileme eylemi sun; mevcut playlist yenileme akışından ayrı olarak yalnız bu kategorileri güncellemenin güvenli olup olmadığını incele.
+- **Keşif sinyali:** UHF 1.99.0 etkinlik kanallarına özel kategori işleme ve EPG içinden hızlı yenileme ekledi.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 172. [PENDING] VPN Bağlantı Durumunu Playlist Akışında Açıklama
+- **Fırsat:** VPN’in uygulama tarafından yönetilip yönetilmediğini mevcut `VPNMonitor` ile doğrula; sağlayıcı/VPN kaynaklı başarısız bağlantıyı kullanıcıya anlaşılır göster, yeni VPN istemcisi veya gizli trafik yönlendirmesi eklemeden önce platform ve gizlilik gereksinimlerini değerlendir.
+- **Keşif sinyali:** UHF 1.99.0 yerleşik VPN sağlayıcı desteğini ve bağlantı kurtarmayı duyurdu; kullanıcı geri bildirimlerinde playlist sağlayıcı uyumluluğu ve bağlantı sorunlarının ayırt edilmesi öne çıkıyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/iptv_strong/comments/1uv632w/best_iptv_app_for_appletv/
+
+### 173. [PENDING] Büyük Playlistlerde İlk Ekran Yanıt Süresi Bütçesi
+- **Fırsat:** 10.000+ kanallı playlist’te açılış, arama ve rehberin ilk kullanılabilir çizimini ölç; katalog taraması, EPG yükü ve görsel isteklerini profilleyip ölçülen en büyük gecikmeyi azalt.
+- **Keşif sinyali:** Apple TV kullanıcıları çok büyük playlist’lerde uygulamanın donduğunu ve zorla kapatmak gerektiğini bildirdi; UHF 1.99.0 da ağır arama ve playlist yenileme performansını özellikle iyileştirdi.
+- **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/ · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 174. [PENDING] Çok Sayıda Kullanılmayan Kanalı Toplu Gizleme
+- **Fırsat:** Kullanıcıların 10.000+ kanallı sağlayıcıdan yalnız izlediklerini seçme isteğini mevcut gizleme ve PIN kurallarıyla karşılaştır; toplu seçim eklenirse Focus Engine, yanlışlıkla toplu gizleme ve geri alma akışlarını tasarla.
+- **Keşif sinyali:** Apple TV kullanıcıları büyük listelerde yalnızca birkaç kanalı görünür bırakıp kalanlarını kalıcı gizleme isteğini açıkça belirtiyor.
+- **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/
+
+### 175. [PENDING] Catch-up İleri/Geri Sarma Hata Kurtarması
+- **Fırsat:** Catch-up yayınında ileri/geri sarma sırasında zaman çizgisi, player ve EPG program durumunun ayrışıp ayrışmadığını analiz et; başarısız seek sonrası son geçerli konuma dön ve tvOS kumanda etkileşimini erişilebilir tut.
+- **Keşif sinyali:** Apple TV kullanıcıları catch-up/replay seek işlemlerinde takılma, donma ve çökme yaşamadan gezinebilmeyi temel gereksinim olarak belirtiyor.
+- **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1uv632w/best_iptv_app_for_appletv/
+
+### 176. [PENDING] Playlist iCloud Senkron Durumunu ve Gecikmesini Açıklama
+- **Fırsat:** Playlist cihazlar arasında görünmediğinde iCloud Keychain’in kapalı olması, gecikme veya gerçek kayıt eksikliğini ayırt et; parola göstermeyen bir durum ve yeniden deneme deneyiminin mevcut mimaride mümkün olup olmadığını araştır.
+- **Keşif sinyali:** Apple TV kullanıcıları telefonda ekledikleri playlist’in TV’de görünmemesi ve playlist eşitlemesinde cihazlar arası tutarsızlık bildirdi.
+- **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv_yes_iptv/ · https://www.reddit.com/r/IPTVGroupBuy/comments/1jsbs0b
+
+### 177. [PENDING] Kanal Önizlemesi İçin Odak ve Gecikme Tercihleri
+- **Fırsat:** EPG’de odaklanan kanal önizlemesinin ağ yükünü, kanal değişim hızını ve odağı nasıl etkilediğini ölç; mevcut preview davranışına ek ayar gerekiyorsa kısa/uzun gecikme ve kapalı seçeneklerini tvOS’ta erişilebilir kur.
+- **Keşif sinyali:** UHF Apple TV rehberinde kanal önizlemesini açıp kapatmayı destekliyor; kullanıcılar rehber gezinirken mevcut yayının korunması ve önizlemenin hızlı açılması konusunda farklı beklentiler bildiriyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/IPTV_Help_Desk/comments/1uzehpu/apple_tv_iptv_app_with_persistent_live_preview/
+
+### 178. [PENDING] Sağlayıcı Güncellemesinde EPG ve Katalog Yenileme İlerlemesi
+- **Fırsat:** Büyük playlist güncellemesinde hangi bölümün ve rehber verisinin yenilendiğini kullanıcıya doğru aşamalarla göster; iptal, arka plana geçiş ve eski son iyi katalog davranışını mevcut atomik yenilemeyle birlikte denetle.
+- **Keşif sinyali:** UHF playlist güncelleme hızını ve EPG kategori yenilemesini ayrı iyileştirdi; kullanıcılar rehberin eksik/eski kalmasını ve güncelleme sonrası donmayı raporluyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
+
+### 179. [PENDING] Apple TV’de Sağlayıcı Uyumluluğunu Güvenli Tanılama
+- **Fırsat:** Bağlantı hatasında cihaz türü, playlist biçimi, uygulama aşaması ve sansürlenmiş hata kodunu kullanıcı izniyle özetle; URL, kullanıcı adı, parola ve yayın adresleri rapora girmeden destek akışının işe yarayıp yaramadığını mevcut tanılama maddeleriyle karşılaştır.
+- **Keşif sinyali:** IPTV kullanıcıları sağlayıcıya göre değişen başarısızlıklar bildiriyor; Apple TV’de hangi playlist türü ve eylemin çalışmadığını paylaşabilmek destek için önemli.
+- **Kaynak:** https://www.reddit.com/r/IMadeThis/comments/1x2r7fs/i_made_a_free_iptv_player_for_ios_and_apple_tv/

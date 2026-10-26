@@ -359,7 +359,8 @@ public struct PlaylistManagementFeature {
                 state.addPlaylist = nil
                 return .none
 
-            case .addPlaylist(.presented(.delegate(.didConnect))):
+            case .addPlaylist(.presented(.delegate(.didConnect))),
+                 .addPlaylist(.presented(.delegate(.didReceiveTransferredPlaylist))):
                 state.playlists = playlistRepository.getPlaylists()
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
                 state.addPlaylist = nil

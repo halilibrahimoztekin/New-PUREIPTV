@@ -14,12 +14,13 @@
         @Bindable var store: StoreOf<AddPlaylistFeature>
 
         @FocusState private var focusedField: TVField?
+        @State private var isShowingQRTransfer = false
 
         private enum TVField: Hashable {
             case xtreamPicker, m3uPicker
             case serverURL, username, password
             case m3uURL
-            case connect
+            case connect, qrTransfer
         }
 
         public init(store: StoreOf<AddPlaylistFeature>) {
@@ -89,6 +90,19 @@
 
                         // Connect button
                         tvConnectButton
+
+                        Button {
+                            isShowingQRTransfer = true
+                        } label: {
+                            Label("iPhone ile QR üzerinden aktar", systemImage: "qrcode")
+                                .font(.system(size: 22, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 64)
+                                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .buttonStyle(TVFocusButtonStyle())
+                        .focused($focusedField, equals: .qrTransfer)
+                        .focusSection()
                     }
                     .frame(maxWidth: 600)
                 }
@@ -96,6 +110,14 @@
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.playlistType)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.errorMessage)
+            .sheet(isPresented: $isShowingQRTransfer) {
+                TVOnboardingQRView {
+                    isShowingQRTransfer = false
+                    focusedField = .qrTransfer
+                } onPaired: {
+                    store.send(.delegate(.didReceiveTransferredPlaylist))
+                }
+            }
         }
 
         // MARK: – Type Picker
@@ -204,6 +226,7 @@
 
         private var tvConnectButton: some View {
             Button {
+                guard store.canConnect, !store.isLoading else { return }
                 store.send(.connectTapped)
             } label: {
                 ZStack {
@@ -243,7 +266,6 @@
             }
             .buttonStyle(TVFocusButtonStyle())
             .focused($focusedField, equals: .connect)
-            .disabled(!store.canConnect || store.isLoading)
         }
     }
 

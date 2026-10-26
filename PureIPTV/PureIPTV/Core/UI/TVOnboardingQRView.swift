@@ -2,13 +2,17 @@ import SwiftUI
 
 public struct TVOnboardingQRView: View {
     public let onDismiss: () -> Void
+    public let onPaired: () -> Void
 
     @State private var qrImage: Image?
     @State private var isPaired: Bool = false
-    private let manager = TVOnboardingManager.shared
+    @State private var pairing: PlaylistQRTransferManager.Pairing?
+    @State private var isExpired = false
+    private let manager = PlaylistQRTransferManager.shared
 
-    public init(onDismiss: @escaping () -> Void) {
+    public init(onDismiss: @escaping () -> Void, onPaired: @escaping () -> Void = {}) {
         self.onDismiss = onDismiss
+        self.onPaired = onPaired
     }
 
     public var body: some View {
@@ -58,7 +62,7 @@ public struct TVOnboardingQRView: View {
                 Circle()
                     .fill(isPaired ? Color.green : Color.orange)
                     .frame(width: 8, height: 8)
-                Text(isPaired ? "Eşleşti, aktarılıyor..." : "Oturum Kodu: \(manager.sessionID) (Bağlantı Bekleniyor)")
+                Text(isPaired ? "Playlist alındı" : isExpired ? "QR kodun süresi doldu" : "Telefonunuzdan güvenli aktarım bekleniyor")
                     .font(.caption.monospaced())
                     .foregroundColor(.secondary)
             }
@@ -66,14 +70,47 @@ public struct TVOnboardingQRView: View {
             .padding(.vertical, 8)
             .background(Color.white.opacity(0.08), in: Capsule())
 
+            Text("Aktarım için iki cihazda da aynı Apple ID ve iCloud Keychain açık olmalıdır. QR kod 5 dakika sonra geçersiz olur.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: 420)
+
             Button("Kapat", action: onDismiss)
                 .font(.body.bold())
                 .foregroundColor(.white.opacity(0.8))
         }
         .padding(32)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
-        .onAppear {
-            qrImage = manager.generateQRCodeImage(from: manager.pairingURLString)
+        .task {
+            guard let pairing = try? manager.beginSession() else {
+                isExpired = true
+                return
+            }
+            self.pairing = pairing
+            if let url = pairing.url {
+                qrImage = TVOnboardingManager.shared.generateQRCodeImage(from: url.absoluteString)
+            }
+
+            let deadline = Date().addingTimeInterval(5 * 60)
+            while !Task.isCancelled, Date() < deadline {
+                if manager.consumeRequest(for: pairing) != nil {
+                    isPaired = true
+                    onPaired()
+                    try? await Task.sleep(for: .seconds(1))
+                    onDismiss()
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard !Task.isCancelled else { return }
+            manager.endSession(pairing.sessionID)
+            isExpired = true
+        }
+        .onDisappear {
+            if let pairing {
+                manager.endSession(pairing.sessionID)
+            }
         }
     }
 

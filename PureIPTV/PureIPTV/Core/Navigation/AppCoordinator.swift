@@ -13,6 +13,8 @@ public struct AppCoordinator {
     private enum CancelID {
         static let streamHandoffResolution = "AppCoordinator.streamHandoffResolution"
         static let epgReminderMonitor = "AppCoordinator.epgReminderMonitor"
+        static let playlistTransferLoad = "AppCoordinator.playlistTransferLoad"
+        static let playlistTransferSubmission = "AppCoordinator.playlistTransferSubmission"
     }
 
     public enum PlayerDisplayMode: Equatable, Sendable {
@@ -35,6 +37,12 @@ public struct AppCoordinator {
         public var isForeground = false
         public var handledEPGReminderIDs: Set<String> = []
         public var unlockedPlaylistIDs: Set<UUID> = []
+        public var playlistTransferPairing: PlaylistQRTransferManager.Pairing?
+        public var playlistTransferPlaylists: [SavedPlaylist] = []
+        public var playlistTransferSelectedID: UUID?
+        public var isSubmittingPlaylistTransfer = false
+        public var isLoadingPlaylistTransfer = false
+        public var playlistTransferError: String?
 
         public static var initialState: State {
             State(routes: [.root(.splash(SplashFeature.State()), withNavigation: true)])
@@ -71,6 +79,11 @@ public struct AppCoordinator {
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case handleDeepLink(URL)
+        case selectPlaylistForTransfer(UUID)
+        case playlistTransferPlaylistsLoaded(sessionID: UUID, playlists: [SavedPlaylist]?)
+        case confirmPlaylistTransfer
+        case cancelPlaylistTransfer
+        case playlistTransferSubmissionResponse(sessionID: UUID, succeeded: Bool)
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -189,7 +202,8 @@ public struct AppCoordinator {
             return .none
 
         // ── Add Playlist ─────────────────────────────────────────
-        case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))):
+        case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))),
+             .router(.routeAction(_, .addPlaylist(.delegate(.didReceiveTransferredPlaylist)))):
             withAnimation(.easeInOut(duration: 0.35)) {
                 state.routes = [.root(.splash(SplashFeature.State()), withNavigation: true)]
             }
@@ -664,8 +678,43 @@ public struct AppCoordinator {
         case let .handleDeepLink(url):
             guard url.scheme == "pureiptv" else { return .none }
             guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return .none }
-            guard let host = components.host, host == "play" || host == "channel" else { return .none }
             let queryItems = components.queryItems ?? []
+            if components.host == "setup" {
+                guard let sessionValue = queryItems.first(where: { $0.name == "session" })?.value,
+                      let sessionID = UUID(uuidString: sessionValue),
+                      let secretValue = queryItems.first(where: { $0.name == "secret" })?.value,
+                      let secret = UUID(uuidString: secretValue)
+                else { return .none }
+
+                let pairing = PlaylistQRTransferManager.Pairing(sessionID: sessionID, secret: secret)
+                if let previous = state.playlistTransferPairing, previous.sessionID != sessionID {
+                    PlaylistQRTransferManager.shared.endSession(previous.sessionID)
+                }
+                state.playlistTransferPairing = pairing
+                state.playlistTransferPlaylists = []
+                state.playlistTransferSelectedID = nil
+                state.isLoadingPlaylistTransfer = true
+                state.isSubmittingPlaylistTransfer = false
+                state.playlistTransferError = nil
+                return .merge(
+                    .cancel(id: CancelID.playlistTransferLoad),
+                    .cancel(id: CancelID.playlistTransferSubmission),
+                    .run { send in
+                        for _ in 0 ..< 15 {
+                            guard !Task.isCancelled else { return }
+                            if let playlists = PlaylistQRTransferManager.shared.availablePlaylists(for: pairing) {
+                                await send(.playlistTransferPlaylistsLoaded(sessionID: sessionID, playlists: playlists))
+                                return
+                            }
+                            try? await Task.sleep(for: .seconds(1))
+                        }
+                        guard !Task.isCancelled else { return }
+                        await send(.playlistTransferPlaylistsLoaded(sessionID: sessionID, playlists: nil))
+                    }
+                    .cancellable(id: CancelID.playlistTransferLoad, cancelInFlight: true)
+                )
+            }
+            guard let host = components.host, host == "play" || host == "channel" else { return .none }
             guard let id = queryItems.first(where: { $0.name == "id" })?.value,
                   let streamURLStr = queryItems.first(where: { $0.name == "streamURL" })?.value,
                   let streamURL = URL(string: streamURLStr)
@@ -700,6 +749,65 @@ public struct AppCoordinator {
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
             return .none
+
+        case let .selectPlaylistForTransfer(id):
+            guard state.playlistTransferPlaylists.contains(where: { $0.id == id }) else { return .none }
+            state.playlistTransferSelectedID = id
+            return .none
+
+        case let .playlistTransferPlaylistsLoaded(sessionID, playlists):
+            guard state.playlistTransferPairing?.sessionID == sessionID else { return .none }
+            state.isLoadingPlaylistTransfer = false
+            guard let playlists else {
+                state.playlistTransferError = "QR oturumu iCloud Keychain’e ulaşmadı. İki cihazda aynı Apple ID ile iCloud Keychain’in açık olduğunu kontrol edip yeniden tarayın."
+                return .none
+            }
+            state.playlistTransferPlaylists = playlists
+            state.playlistTransferSelectedID = playlists.first?.id
+            if playlists.isEmpty {
+                state.playlistTransferError = "Bu iPhone’da aktarılabilecek kayıtlı playlist bulunamadı."
+            }
+            return .none
+
+        case .confirmPlaylistTransfer:
+            guard let pairing = state.playlistTransferPairing,
+                  let playlistID = state.playlistTransferSelectedID,
+                  state.playlistTransferPlaylists.contains(where: { $0.id == playlistID })
+            else { return .none }
+            state.isSubmittingPlaylistTransfer = true
+            state.playlistTransferError = nil
+            return .run { send in
+                let succeeded = (try? PlaylistQRTransferManager.shared.submit(playlistID: playlistID, for: pairing)) != nil
+                await send(.playlistTransferSubmissionResponse(sessionID: pairing.sessionID, succeeded: succeeded))
+            }
+            .cancellable(id: CancelID.playlistTransferSubmission, cancelInFlight: true)
+
+        case let .playlistTransferSubmissionResponse(sessionID, succeeded):
+            guard state.playlistTransferPairing?.sessionID == sessionID else { return .none }
+            state.isSubmittingPlaylistTransfer = false
+            if succeeded {
+                state.playlistTransferPairing = nil
+                state.playlistTransferPlaylists = []
+                state.playlistTransferSelectedID = nil
+            } else {
+                state.playlistTransferError = "Oturum süresi dolmuş olabilir. Apple TV’de yeni bir QR kod oluşturun."
+            }
+            return .none
+
+        case .cancelPlaylistTransfer:
+            if let pairing = state.playlistTransferPairing {
+                PlaylistQRTransferManager.shared.endSession(pairing.sessionID)
+            }
+            state.playlistTransferPairing = nil
+            state.playlistTransferPlaylists = []
+            state.playlistTransferSelectedID = nil
+            state.isLoadingPlaylistTransfer = false
+            state.isSubmittingPlaylistTransfer = false
+            state.playlistTransferError = nil
+            return .merge(
+                .cancel(id: CancelID.playlistTransferLoad),
+                .cancel(id: CancelID.playlistTransferSubmission)
+            )
 
         default:
             return .none

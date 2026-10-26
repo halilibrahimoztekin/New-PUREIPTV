@@ -107,6 +107,29 @@ struct PureIPTVApp: App {
             .onOpenURL { url in
                 store.send(.handleDeepLink(url))
             }
+            #if os(iOS)
+            .sheet(
+                isPresented: Binding(
+                    get: { store.playlistTransferPairing != nil },
+                    set: {
+                        if !$0 {
+                            store.send(.cancelPlaylistTransfer)
+                        }
+                    }
+                )
+            ) {
+                PlaylistQRTransferConfirmationView(
+                    playlists: store.playlistTransferPlaylists,
+                    selectedID: store.playlistTransferSelectedID,
+                    isLoading: store.isLoadingPlaylistTransfer,
+                    isSubmitting: store.isSubmittingPlaylistTransfer,
+                    error: store.playlistTransferError,
+                    onSelect: { store.send(.selectPlaylistForTransfer($0)) },
+                    onConfirm: { store.send(.confirmPlaylistTransfer) },
+                    onCancel: { store.send(.cancelPlaylistTransfer) }
+                )
+            }
+            #endif
             #if os(tvOS)
             .onContinueUserActivity(StreamHandoffManager.activityType) { activity in
                 guard let request = StreamHandoffManager.shared.parseHandoff(from: activity) else { return }
@@ -116,3 +139,77 @@ struct PureIPTVApp: App {
         }
     }
 }
+
+#if os(iOS)
+    private struct PlaylistQRTransferConfirmationView: View {
+        let playlists: [SavedPlaylist]
+        let selectedID: UUID?
+        let isLoading: Bool
+        let isSubmitting: Bool
+        let error: String?
+        let onSelect: (UUID) -> Void
+        let onConfirm: () -> Void
+        let onCancel: () -> Void
+
+        var body: some View {
+            NavigationStack {
+                List(playlists) { playlist in
+                    Button {
+                        onSelect(playlist.id)
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(playlist.name).font(.body.weight(.semibold))
+                                Text(playlist.type.displayName).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if selectedID == playlist.id {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selectedID == playlist.id ? .isSelected : [])
+                }
+                .overlay {
+                    if isLoading {
+                        ProgressView("iCloud Keychain bekleniyor…")
+                            .padding()
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    } else if playlists.isEmpty {
+                        ContentUnavailableView("Playlist bulunamadı", systemImage: "qrcode", description: Text("Aktarılabilecek kayıtlı playlist görünmüyor."))
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    VStack(spacing: 12) {
+                        Text("Seçilen playlist Apple TV’de etkinleştirilecek. Adres ve giriş bilgileri QR kodla paylaşılmaz; cihazlar aynı Apple ID ve iCloud Keychain’i kullanmalıdır.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let error {
+                            Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Button(action: onConfirm) {
+                            if isSubmitting {
+                                ProgressView()
+                            } else {
+                                Text("Apple TV’ye Aktar").frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedID == nil || isSubmitting || isLoading)
+                    }
+                    .padding()
+                    .background(.bar)
+                }
+                .navigationTitle("Playlist Seç")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("İptal", action: onCancel)
+                    }
+                }
+            }
+        }
+    }
+#endif

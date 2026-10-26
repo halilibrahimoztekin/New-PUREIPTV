@@ -64,6 +64,7 @@ public struct AddPlaylistFeature {
 
         public enum Delegate: Equatable {
             case didConnect(serverURL: String, username: String, password: String)
+            case didReceiveTransferredPlaylist
         }
     }
 
