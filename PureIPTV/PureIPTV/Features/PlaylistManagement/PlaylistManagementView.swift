@@ -4,6 +4,7 @@ import SwiftUI
 public struct PlaylistManagementView: View {
     @Bindable var store: StoreOf<PlaylistManagementFeature>
     @State private var hasDisappeared = false
+    @FocusState private var isPlaylistPINFocused: Bool
 
     public init(store: StoreOf<PlaylistManagementFeature>) {
         self.store = store
@@ -17,6 +18,14 @@ public struct PlaylistManagementView: View {
                     playlistRow(playlist)
                     #if os(iOS)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                store.send(.playlistLockTapped(playlist.id))
+                            } label: {
+                                Label(
+                                    store.lockedPlaylistIDs.contains(playlist.id) ? "PIN Kilidini Kaldır" : "PIN Kilidi Ayarla",
+                                    systemImage: store.lockedPlaylistIDs.contains(playlist.id) ? "lock.open" : "lock"
+                                )
+                            }
                             Button {
                                 store.send(.editPlaylistSettings(playlist))
                             } label: {
@@ -36,27 +45,29 @@ public struct PlaylistManagementView: View {
                 Text(AppStrings.PlaylistMgmt.switchNote)
             }
 
-            // Section: Add Account Button
-            Section {
-                Button {
-                    store.send(.addPlaylistButtonTapped)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
-                        Text(AppStrings.PlaylistMgmt.addAccount)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
-                        Spacer()
+            if store.startupUnlockPlaylistID == nil {
+                // Section: Add Account Button
+                Section {
+                    Button {
+                        store.send(.addPlaylistButtonTapped)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(Color(hex: "#0A84FF"))
+                            Text(AppStrings.PlaylistMgmt.addAccount)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Color(hex: "#0A84FF"))
+                            Spacer()
+                        }
+                        .padding(.vertical, 6)
                     }
-                    .padding(.vertical, 6)
+                    #if os(tvOS)
+                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                    #else
+                    .buttonStyle(.plain)
+                    #endif
                 }
-                #if os(tvOS)
-                .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
-                #else
-                .buttonStyle(.plain)
-                #endif
             }
         }
         .navigationTitle(AppStrings.PlaylistMgmt.accountManagement)
@@ -66,28 +77,32 @@ public struct PlaylistManagementView: View {
         #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        #if os(iOS)
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        #endif
-                        store.send(.closeTapped)
-                    } label: {
-                        #if os(tvOS)
-                            Text(AppStrings.Common.cancel)
-                        #else
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(.ultraThinMaterial, in: Circle())
-                        #endif
+                    if store.startupUnlockPlaylistID == nil {
+                        Button {
+                            #if os(iOS)
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            #endif
+                            store.send(.closeTapped)
+                        } label: {
+                            #if os(tvOS)
+                                Text(AppStrings.Common.cancel)
+                            #else
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            #endif
+                        }
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        store.send(.addPlaylistButtonTapped)
-                    } label: {
-                        Image(systemName: "plus")
+                    if store.startupUnlockPlaylistID == nil {
+                        Button {
+                            store.send(.addPlaylistButtonTapped)
+                        } label: {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
             }
@@ -170,6 +185,18 @@ public struct PlaylistManagementView: View {
                     }
                 }
             }
+            .sheet(
+                isPresented: Binding(
+                    get: { store.pinFlow != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            store.send(.cancelPlaylistPIN)
+                        }
+                    }
+                )
+            ) {
+                playlistPINPrompt
+            }
     }
 
     // MARK: - Playlist Row
@@ -218,6 +245,13 @@ public struct PlaylistManagementView: View {
 
                 Spacer()
 
+                if store.lockedPlaylistIDs.contains(playlist.id) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                        .accessibilityLabel("PIN ile kilitli")
+                }
+
                 #if os(tvOS)
                     Button {
                         store.send(.editPlaylistSettings(playlist))
@@ -255,6 +289,96 @@ public struct PlaylistManagementView: View {
         #else
         .buttonStyle(.plain)
         #endif
+        .contextMenu {
+            Button {
+                store.send(.playlistLockTapped(playlist.id))
+            } label: {
+                Label(
+                    store.lockedPlaylistIDs.contains(playlist.id) ? "PIN Kilidini Kaldır" : "PIN Kilidi Ayarla",
+                    systemImage: store.lockedPlaylistIDs.contains(playlist.id) ? "lock.open" : "lock"
+                )
+            }
+        }
+    }
+
+    private var playlistPINPrompt: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("4 haneli PIN", text: Binding(
+                        get: { store.playlistPIN },
+                        set: { store.send(.playlistPINChanged($0)) }
+                    ))
+                    .focused($isPlaylistPINFocused)
+                    #if os(iOS)
+                        .keyboardType(.numberPad)
+                    #endif
+                        .accessibilityLabel("Playlist PIN")
+                    if isConfiguringPIN {
+                        SecureField("PIN'i tekrar girin", text: Binding(
+                            get: { store.playlistPINConfirmation },
+                            set: { store.send(.playlistPINConfirmationChanged($0)) }
+                        ))
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                        .accessibilityLabel("PIN doğrulaması")
+                    }
+                    if let error = store.playlistPINError {
+                        Text(error)
+                            .foregroundStyle(.red)
+                    }
+                } footer: {
+                    Text("PIN bu playlist için ayrı saklanır ve iCloud Keychain ile eşitlenebilir.")
+                }
+            }
+            .navigationTitle(playlistPINTitle)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if store.startupUnlockPlaylistID == nil {
+                        Button(AppStrings.Common.cancel) {
+                            store.send(.cancelPlaylistPIN)
+                        }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(playlistPINActionTitle) {
+                        store.send(.submitPlaylistPIN)
+                    }
+                    .disabled(store.playlistPIN.count != 4 || (isConfiguringPIN && store.playlistPINConfirmation.count != 4))
+                }
+            }
+            .onAppear {
+                isPlaylistPINFocused = true
+            }
+        }
+    }
+
+    private var isConfiguringPIN: Bool {
+        if case .configure? = store.pinFlow {
+            return true
+        }
+        return false
+    }
+
+    private var playlistPINTitle: String {
+        switch store.pinFlow {
+        case .configure?: "PIN Kilidi Ayarla"
+        case .activate?: "Playlist Kilidini Aç"
+        case .remove?: "Kilidi Kaldırmak için PIN"
+        case .startup?: "Başlamak için PIN"
+        case nil: "Playlist PIN"
+        }
+    }
+
+    private var playlistPINActionTitle: String {
+        if isConfiguringPIN {
+            return "Kilitle"
+        }
+        if case .remove? = store.pinFlow {
+            return "Kilidi Kaldır"
+        }
+        return "Devam Et"
     }
 
     private var canSaveUserAgentDraft: Bool {

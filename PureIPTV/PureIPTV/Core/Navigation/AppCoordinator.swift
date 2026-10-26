@@ -34,6 +34,7 @@ public struct AppCoordinator {
         public var isStreamHandoffErrorPresented = false
         public var isForeground = false
         public var handledEPGReminderIDs: Set<String> = []
+        public var unlockedPlaylistIDs: Set<UUID> = []
 
         public static var initialState: State {
             State(routes: [.root(.splash(SplashFeature.State()), withNavigation: true)])
@@ -79,6 +80,7 @@ public struct AppCoordinator {
     }
 
     @Injected(\.playlistRepository) var playlistRepository
+    @Dependency(\.parentalControlClient) var parentalControlClient
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.reminderClient) var reminderClient
@@ -119,6 +121,16 @@ public struct AppCoordinator {
         // ── Proceed To App ───────────────────────────────────────
         case .proceedToApp:
             let activePlaylist = playlistRepository.getActivePlaylist()
+            if let activePlaylist,
+               parentalControlClient.isPlaylistLocked(activePlaylist.id),
+               !state.unlockedPlaylistIDs.contains(activePlaylist.id)
+            {
+                state.routes = [.root(
+                    .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: activePlaylist.id)),
+                    withNavigation: true
+                )]
+                return .none
+            }
             var hasValidPlaylist = false
 
             if let playlist = activePlaylist {
@@ -152,6 +164,30 @@ public struct AppCoordinator {
             }
             return .send(.checkSubscriptionStatus)
 
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUnlockPlaylist(id))))):
+            state.unlockedPlaylistIDs.insert(id)
+            state.miniPlayer = nil
+            state.isPlayerMini = false
+            guard let playlist = playlistRepository.getActivePlaylist(), let config = playlist.toPlaylistConfig() else { return .none }
+            state.routes = [.root(.home(HomeFeature.State(config: config)), withNavigation: true)]
+            return .send(.checkSubscriptionStatus)
+
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didChangePlaylistLock(id, isLocked))))):
+            state.unlockedPlaylistIDs.remove(id)
+            guard isLocked, playlistRepository.getActivePlaylistID() == id else { return .none }
+            state.miniPlayer = nil
+            state.isPlayerMini = false
+            state.routes = [.root(
+                .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: id)),
+                withNavigation: true
+            )]
+            return .none
+
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUnlockStartupPlaylist(id))))):
+            state.unlockedPlaylistIDs.insert(id)
+            state.routes = [.root(.profileSelection(ProfileSelectionFeature.State()), withNavigation: true)]
+            return .none
+
         // ── Add Playlist ─────────────────────────────────────────
         case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))):
             withAnimation(.easeInOut(duration: 0.35)) {
@@ -183,6 +219,12 @@ public struct AppCoordinator {
             return .none
 
         case let .receiveStreamHandoff(request):
+            if parentalControlClient.isPlaylistLocked(request.playlistID),
+               !state.unlockedPlaylistIDs.contains(request.playlistID)
+            {
+                state.isStreamHandoffErrorPresented = true
+                return .none
+            }
             let requestID = UUID()
             state.activeStreamHandoffRequestID = requestID
             state.isStreamHandoffErrorPresented = false
@@ -440,6 +482,17 @@ public struct AppCoordinator {
         case .router(.routeAction(_, .playlistManagement(.delegate(.didChangeActivePlaylist)))):
             state.miniPlayer = nil
             state.isPlayerMini = false
+
+            if let activePlaylist = playlistRepository.getActivePlaylist(),
+               parentalControlClient.isPlaylistLocked(activePlaylist.id),
+               !state.unlockedPlaylistIDs.contains(activePlaylist.id)
+            {
+                state.routes = [.root(
+                    .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: activePlaylist.id)),
+                    withNavigation: true
+                )]
+                return .none
+            }
 
             withAnimation(.easeInOut(duration: 0.35)) {
                 if let activePlaylist = playlistRepository.getActivePlaylist(),

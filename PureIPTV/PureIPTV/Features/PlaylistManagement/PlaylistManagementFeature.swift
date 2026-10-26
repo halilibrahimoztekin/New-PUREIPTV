@@ -6,8 +6,22 @@ import Foundation
 public struct PlaylistManagementFeature {
     @ObservableState
     public struct State: Equatable {
+        public enum PINFlow: Equatable {
+            case configure(UUID)
+            case activate(UUID)
+            case remove(UUID)
+            case startup(UUID)
+        }
+
         public var playlists: [SavedPlaylist] = []
         public var activePlaylistID: UUID?
+        public var lockedPlaylistIDs: Set<UUID> = []
+        public var unlockedPlaylistIDs: Set<UUID> = []
+        public var startupUnlockPlaylistID: UUID?
+        public var pinFlow: PINFlow?
+        public var playlistPIN = ""
+        public var playlistPINConfirmation = ""
+        public var playlistPINError: String?
         public var playlistToDelete: SavedPlaylist?
         public var playlistBeingEdited: SavedPlaylist?
         public var userAgentDraft = ""
@@ -20,7 +34,9 @@ public struct PlaylistManagementFeature {
         public var isRefreshingPlaylist = false
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
-        public init() {}
+        public init(startupUnlockPlaylistID: UUID? = nil) {
+            self.startupUnlockPlaylistID = startupUnlockPlaylistID
+        }
     }
 
     public enum Action: BindableAction {
@@ -28,6 +44,11 @@ public struct PlaylistManagementFeature {
         case viewDidDisappear
         case binding(BindingAction<State>)
         case setActivePlaylist(UUID)
+        case playlistLockTapped(UUID)
+        case playlistPINChanged(String)
+        case playlistPINConfirmationChanged(String)
+        case submitPlaylistPIN
+        case cancelPlaylistPIN
         case editPlaylistSettings(SavedPlaylist)
         case savePlaylistSettings
         case m3uPlaylistRefreshSucceeded(SavedPlaylist)
@@ -47,6 +68,9 @@ public struct PlaylistManagementFeature {
         public enum Delegate: Equatable, Sendable {
             case didChangeActivePlaylist
             case didUpdateActivePlaylistSettings(PlaylistConfig)
+            case didChangePlaylistLock(UUID, isLocked: Bool)
+            case didUnlockPlaylist(UUID)
+            case didUnlockStartupPlaylist(UUID)
             case addPlaylistTapped
             case addPlaylistDidConnect
             case dismissed
@@ -56,6 +80,7 @@ public struct PlaylistManagementFeature {
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.dismiss) var dismiss
     @Injected(\.iptvClient) var iptvClient
+    @Dependency(\.parentalControlClient) var parentalControlClient
 
     public init() {}
 
@@ -76,6 +101,14 @@ public struct PlaylistManagementFeature {
             case .onAppear:
                 state.playlists = playlistRepository.getPlaylists()
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
+                state.lockedPlaylistIDs = Set(state.playlists.filter { parentalControlClient.isPlaylistLocked($0.id) }.map(\.id))
+                if let startupID = state.startupUnlockPlaylistID,
+                   state.lockedPlaylistIDs.contains(startupID)
+                {
+                    state.pinFlow = .startup(startupID)
+                    state.playlistPIN = ""
+                    state.playlistPINError = nil
+                }
                 return .none
 
             case .viewDidDisappear:
@@ -83,6 +116,7 @@ public struct PlaylistManagementFeature {
                 return .cancel(id: "PlaylistManagementFeature.m3uRefresh")
 
             case .closeTapped:
+                guard state.startupUnlockPlaylistID == nil else { return .none }
                 return .send(.delegate(.dismissed))
 
             case .binding:
@@ -90,9 +124,112 @@ public struct PlaylistManagementFeature {
 
             case let .setActivePlaylist(id):
                 guard state.activePlaylistID != id else { return .none }
+                if state.lockedPlaylistIDs.contains(id), !state.unlockedPlaylistIDs.contains(id) {
+                    state.pinFlow = .activate(id)
+                    state.playlistPIN = ""
+                    state.playlistPINConfirmation = ""
+                    state.playlistPINError = nil
+                    return .none
+                }
                 playlistRepository.setActivePlaylistID(id)
                 state.activePlaylistID = id
                 return .send(.delegate(.didChangeActivePlaylist))
+
+            case let .playlistLockTapped(id):
+                guard state.playlists.contains(where: { $0.id == id }) else { return .none }
+                state.pinFlow = state.lockedPlaylistIDs.contains(id) ? .remove(id) : .configure(id)
+                state.playlistPIN = ""
+                state.playlistPINConfirmation = ""
+                state.playlistPINError = nil
+                return .none
+
+            case let .playlistPINChanged(input):
+                state.playlistPIN = String(input.filter { $0 >= "0" && $0 <= "9" }.prefix(4))
+                state.playlistPINError = nil
+                return .none
+
+            case let .playlistPINConfirmationChanged(input):
+                state.playlistPINConfirmation = String(input.filter { $0 >= "0" && $0 <= "9" }.prefix(4))
+                state.playlistPINError = nil
+                return .none
+
+            case .submitPlaylistPIN:
+                guard let flow = state.pinFlow else { return .none }
+                let pin = state.playlistPIN
+                switch flow {
+                case let .configure(id):
+                    guard pin.count == 4 else {
+                        state.playlistPINError = "PIN 4 rakamdan oluşmalı."
+                        return .none
+                    }
+                    guard pin == state.playlistPINConfirmation else {
+                        state.playlistPINError = "PIN değerleri eşleşmiyor."
+                        return .none
+                    }
+                    guard parentalControlClient.setPlaylistPIN(id, pin) else {
+                        state.playlistPINError = "PIN güvenli olarak kaydedilemedi."
+                        return .none
+                    }
+                    parentalControlClient.clearPlaylistPINFailures(id)
+                    state.lockedPlaylistIDs.insert(id)
+                    state.pinFlow = nil
+                    state.playlistPIN = ""
+                    state.playlistPINConfirmation = ""
+                    return .send(.delegate(.didChangePlaylistLock(id, isLocked: true)))
+
+                case let .activate(id), let .startup(id), let .remove(id):
+                    let remainingSeconds = parentalControlClient.playlistPINLockoutRemainingSeconds(id)
+                    guard remainingSeconds == 0 else {
+                        state.playlistPINError = "Çok fazla hatalı deneme. \(remainingSeconds) saniye sonra tekrar deneyin."
+                        state.playlistPIN = ""
+                        return .none
+                    }
+                    guard pin.count == 4, parentalControlClient.verifyPlaylistPIN(id, pin) else {
+                        let lockoutSeconds = parentalControlClient.recordPlaylistPINFailure(id)
+                        state.playlistPINError = "PIN yanlış. Tekrar deneyin."
+                        if lockoutSeconds > 0 {
+                            state.playlistPINError = "Çok fazla hatalı deneme. \(lockoutSeconds) saniye sonra tekrar deneyin."
+                        }
+                        state.playlistPIN = ""
+                        return .none
+                    }
+                    parentalControlClient.clearPlaylistPINFailures(id)
+                    state.playlistPIN = ""
+                    switch flow {
+                    case .activate:
+                        state.unlockedPlaylistIDs.insert(id)
+                        playlistRepository.setActivePlaylistID(id)
+                        state.activePlaylistID = id
+                        state.pinFlow = nil
+                        return .send(.delegate(.didUnlockPlaylist(id)))
+                    case .startup:
+                        state.unlockedPlaylistIDs.insert(id)
+                        state.pinFlow = nil
+                        state.startupUnlockPlaylistID = nil
+                        return .send(.delegate(.didUnlockStartupPlaylist(id)))
+                    case .remove:
+                        guard parentalControlClient.setPlaylistPIN(id, nil) else {
+                            state.playlistPINError = "PIN kilidi kaldırılamadı."
+                            return .none
+                        }
+                        state.lockedPlaylistIDs.remove(id)
+                        state.unlockedPlaylistIDs.remove(id)
+                        state.pinFlow = nil
+                        return .send(.delegate(.didChangePlaylistLock(id, isLocked: false)))
+                    case .configure:
+                        return .none
+                    }
+                }
+
+            case .cancelPlaylistPIN:
+                if case .startup = state.pinFlow {
+                    return .none
+                }
+                state.pinFlow = nil
+                state.playlistPIN = ""
+                state.playlistPINConfirmation = ""
+                state.playlistPINError = nil
+                return .none
 
             case let .editPlaylistSettings(playlist):
                 state.playlistBeingEdited = playlist
@@ -201,6 +338,8 @@ public struct PlaylistManagementFeature {
                 return .send(.deletePlaylist(playlist.id))
 
             case let .deletePlaylist(id):
+                _ = parentalControlClient.setPlaylistPIN(id, nil)
+                parentalControlClient.clearPlaylistPINFailures(id)
                 playlistRepository.deletePlaylist(id: id)
                 state.playlists = playlistRepository.getPlaylists()
                 if state.activePlaylistID == id {
@@ -216,6 +355,7 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .closeAddPlaylistTapped:
+                guard state.startupUnlockPlaylistID == nil else { return .none }
                 state.addPlaylist = nil
                 return .none
 

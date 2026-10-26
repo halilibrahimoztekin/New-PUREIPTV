@@ -52,6 +52,13 @@ public struct ParentalControlClient: Sendable {
 
     public var fetchHiddenChannels: @Sendable () -> [HiddenItemDTO] = { [] }
     public var fetchBlacklistedCategories: @Sendable () -> [HiddenItemDTO] = { [] }
+
+    public var isPlaylistLocked: @Sendable (_ playlistID: UUID) -> Bool = { _ in false }
+    public var setPlaylistPIN: @Sendable (_ playlistID: UUID, _ pin: String?) -> Bool = { _, _ in false }
+    public var verifyPlaylistPIN: @Sendable (_ playlistID: UUID, _ pin: String) -> Bool = { _, _ in false }
+    public var playlistPINLockoutRemainingSeconds: @Sendable (_ playlistID: UUID) -> Int = { _ in 0 }
+    public var recordPlaylistPINFailure: @Sendable (_ playlistID: UUID) -> Int = { _ in 0 }
+    public var clearPlaylistPINFailures: @Sendable (_ playlistID: UUID) -> Void
 }
 
 // MARK: - DependencyKey & Live Value
@@ -64,6 +71,18 @@ extension ParentalControlClient: DependencyKey {
         let hiddenChannelsKey = "com.pureiptv.hiddenChannelsMetadata"
         let legacyHiddenChannelsKey = "PureIPTV.hiddenChannelIDs"
         let blacklistedCategoriesKey = "com.pureiptv.blacklistedCategoriesMetadata"
+
+        @Sendable func playlistPINKey(_ playlistID: UUID) -> String {
+            "com.pureiptv.playlistPIN.\(playlistID.uuidString.lowercased())"
+        }
+
+        @Sendable func playlistPINFailureCountKey(_ playlistID: UUID) -> String {
+            "com.pureiptv.playlistPINFailures.\(playlistID.uuidString.lowercased())"
+        }
+
+        @Sendable func playlistPINLockoutKey(_ playlistID: UUID) -> String {
+            "com.pureiptv.playlistPINLockoutUntil.\(playlistID.uuidString.lowercased())"
+        }
 
         @Sendable func loadHiddenItems(key: String) -> [HiddenItemDTO] {
             guard let data = defaults.data(forKey: key) else { return [] }
@@ -203,6 +222,59 @@ extension ParentalControlClient: DependencyKey {
             fetchBlacklistedCategories: {
                 let items = loadHiddenItems(key: blacklistedCategoriesKey)
                 return items.sorted(by: { $0.hiddenAt > $1.hiddenAt })
+            },
+            isPlaylistLocked: { playlistID in
+                do {
+                    _ = try KeychainManager.shared.retrieve(for: playlistPINKey(playlistID), as: String.self)
+                    return true
+                } catch KeychainError.itemNotFound {
+                    return false
+                } catch {
+                    return true
+                }
+            },
+            setPlaylistPIN: { playlistID, pin in
+                let key = playlistPINKey(playlistID)
+                do {
+                    if let pin {
+                        try KeychainManager.shared.save(pin, for: key)
+                    } else {
+                        try KeychainManager.shared.delete(for: key)
+                    }
+                    return true
+                } catch {
+                    return false
+                }
+            },
+            verifyPlaylistPIN: { playlistID, inputPin in
+                guard let savedPIN = try? KeychainManager.shared.retrieve(for: playlistPINKey(playlistID), as: String.self) else {
+                    return false
+                }
+                return savedPIN == inputPin
+            },
+            playlistPINLockoutRemainingSeconds: { playlistID in
+                let until = UserDefaults.standard.double(forKey: playlistPINLockoutKey(playlistID))
+                return max(0, Int(ceil(until - Date().timeIntervalSince1970)))
+            },
+            recordPlaylistPINFailure: { playlistID in
+                let defaults = UserDefaults.standard
+                let untilKey = playlistPINLockoutKey(playlistID)
+                let remaining = max(0, Int(ceil(defaults.double(forKey: untilKey) - Date().timeIntervalSince1970)))
+                guard remaining == 0 else { return remaining }
+
+                let countKey = playlistPINFailureCountKey(playlistID)
+                let failures = defaults.integer(forKey: countKey) + 1
+                defaults.set(failures, forKey: countKey)
+                guard failures >= 5 else { return 0 }
+
+                let escalation = min((failures - 5) / 5, 4)
+                let duration = min(300, 30 * (1 << escalation))
+                defaults.set(Date().timeIntervalSince1970 + Double(duration), forKey: untilKey)
+                return duration
+            },
+            clearPlaylistPINFailures: { playlistID in
+                UserDefaults.standard.removeObject(forKey: playlistPINFailureCountKey(playlistID))
+                UserDefaults.standard.removeObject(forKey: playlistPINLockoutKey(playlistID))
             }
         )
     }()
@@ -225,7 +297,13 @@ extension ParentalControlClient: DependencyKey {
         unblacklistAllCategories: {},
         isCategoryBlacklisted: { _ in false },
         fetchHiddenChannels: { [] },
-        fetchBlacklistedCategories: { [] }
+        fetchBlacklistedCategories: { [] },
+        isPlaylistLocked: { _ in false },
+        setPlaylistPIN: { _, _ in true },
+        verifyPlaylistPIN: { _, _ in true },
+        playlistPINLockoutRemainingSeconds: { _ in 0 },
+        recordPlaylistPINFailure: { _ in 0 },
+        clearPlaylistPINFailures: { _ in }
     )
 }
 

@@ -1540,9 +1540,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — güvenli yedek önizlemesi/geri yüklemesi tamamlandı.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
-### 164. [PENDING] Playlist Başına Ebeveyn PIN Kilidi
+### 164. [DONE] Playlist Başına Ebeveyn PIN Kilidi
 - **Fırsat:** Global ebeveyn denetiminden ayrı olarak seçilen playlist’i açmadan önce koru; tvOS’ta PIN girişi, focus ve başarısız deneme davranışını incele.
 - **Keşif sinyali:** Opus 2.0.3 Apple TV’de playlist bazlı ebeveyn kontrolü ve 4 haneli açma PIN’i duyurdu.
+- **Uygulama:** Playlist başına 4 ASCII rakamlı PIN UUID’ye bağlı iCloud Keychain girdisinde saklanıyor. PIN’li playlist seçimi, uygulamanın ilk açılışı ve handoff öncesi oturum yetkisiyle doğrulanıyor. Hatalı PIN input’u temizliyor; 5 başarısız denemede 30 saniyelik bekleme, tekrarda artan ve 300 saniyede sınırlanan lockout uygulanıyor; başarı sayaçları sıfırlıyor. Keychain’de yalnızca doğrulanmış öğe-yok durumu kilitsiz sayılıyor, diğer hatalar kilidi kapalı tutuyor. Kilit ekleme/kaldırma oturum yetkisini iptal ediyor; aktif playlist yeniden PIN soruyor. tvOS’ta PIN alanı focus alıyor, başlangıç kilidinde çıkış/iptal ve yeni playlist ekleme kapalı.
+- **İnceleme ve derleme:** İlk reviewer turunda Keychain hata davranışı, oturum grant iptali ve PIN brute-force riski için `[CHANGES REQUESTED]` geldi; üç bulgu giderildi ve tekrar incelemede `[APPROVED]` alındı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnız compile-only build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. `git diff --check` temiz.
+- **Temizlik:** `/private/tmp/PureIPTV164` içindeki görev DerivedData (4,096,768 KiB) ve build logları (864 KiB), `lsof +D` açık dosya göstermeyince klasör kaldırıldı. `/private/tmp` son taramasında kalan dosya/klasörler DerivedData olarak doğrulanmadığı için korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. ContactCleaner yollarına erişilmedi.
+- **Durum:** `[DONE]` — playlist PIN kilidi, giriş kilitlemesi ve oturum doğrulaması tamamlandı.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
 ### 165. [PENDING] Arama Sonucundan Dönüşte Focus ve Konumu Koruma
