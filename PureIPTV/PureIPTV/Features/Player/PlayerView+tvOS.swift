@@ -342,6 +342,23 @@
                         .zIndex(99)
                     }
 
+                    if let message = store.catchupSeekFailureMessage {
+                        VStack {
+                            Text(message)
+                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 16)
+                                .background(.ultraThinMaterial, in: Capsule())
+                            Spacer()
+                        }
+                        .padding(.top, 72)
+                        .padding(.horizontal, 48)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(101)
+                    }
+
                     // Edge-Swipe Channel Sidebar Drawer
                     if store.isChannelListVisible {
                         PlayerSidebarDrawer(store: store) {

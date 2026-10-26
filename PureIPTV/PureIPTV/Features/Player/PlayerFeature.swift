@@ -34,6 +34,8 @@ public struct PlayerFeature {
         public static let epgBrowse = "PlayerFeature.epgBrowse"
         public static let channelSwitch = "PlayerFeature.channelSwitch"
         public static let scrubThumbnail = "PlayerFeature.scrubThumbnail"
+        public static let catchupSeek = "PlayerFeature.catchupSeek"
+        public static let catchupSeekFeedback = "PlayerFeature.catchupSeekFeedback"
         public static let recordingMonitor = "PlayerFeature.recordingMonitor"
         public static let recordingStatus = "PlayerFeature.recordingStatus"
         public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
@@ -199,6 +201,9 @@ public struct PlayerFeature {
         public var activePlaybackURL: URL
         public var isStreamHealthHUDVisible: Bool = false
         public var activeCatchupProgram: EPGProgram?
+        public var activeCatchupSeekRequestID: UUID?
+        public var catchupSeekFailureMessage: String?
+        public var catchupSeekFailureRequestID: UUID?
         public var isPlayingCatchup: Bool {
             activeCatchupProgram != nil
         }
@@ -541,6 +546,8 @@ public struct PlayerFeature {
         case restartPlayback
         case seek(Double)
         case seekToTime(Duration)
+        case catchupSeekCompleted(requestID: UUID, itemID: String, result: CatchupSeekResult)
+        case clearCatchupSeekFailureMessage(requestID: UUID, itemID: String)
         case loadSkipMarkers
         case skipMarkersLoaded(requestID: UUID, itemID: String, playlistID: UUID, profileScope: ProfileContextSnapshot, markers: PlaybackSkipMarkers)
         case setSkipMarkerBoundary(kind: PlaybackSkipMarkerKind, isStart: Bool)
@@ -740,6 +747,22 @@ public struct PlayerFeature {
     @Dependency(\.playbackSkipMarkerClient) var playbackSkipMarkerClient
 
     public init() {}
+
+    private static func catchupSeekEffect(
+        requestID: UUID,
+        itemID: String,
+        command: CatchupSeekCommand,
+        client: PlayerClient
+    ) -> Effect<Action> {
+        .merge(
+            .cancel(id: CancelID.catchupSeekFeedback),
+            .run { send in
+                let result = await client.catchupSeek(command)
+                await send(.catchupSeekCompleted(requestID: requestID, itemID: itemID, result: result))
+            }
+            .cancellable(id: CancelID.catchupSeek, cancelInFlight: true)
+        )
+    }
 
     public var body: some Reducer<State, Action> {
         let playerClient = playerClient
@@ -1047,10 +1070,15 @@ public struct PlayerFeature {
                 return .cancel(id: CancelID.scrubThumbnail)
             }
             state.isClosing = true
+            state.activeCatchupSeekRequestID = nil
+            state.catchupSeekFailureMessage = nil
+            state.catchupSeekFailureRequestID = nil
 
             return .merge(
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),
+                .cancel(id: CancelID.catchupSeek),
+                .cancel(id: CancelID.catchupSeekFeedback),
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.seriesPlaylist),
@@ -1903,6 +1931,18 @@ public struct PlayerFeature {
 
         case let .jumpBySeconds(offset):
             guard !state.isSwitchingPlaybackEngine else { return .none }
+            if state.isPlayingCatchup {
+                let requestID = UUID()
+                state.activeCatchupSeekRequestID = requestID
+                state.catchupSeekFailureMessage = nil
+                state.catchupSeekFailureRequestID = nil
+                return Self.catchupSeekEffect(
+                    requestID: requestID,
+                    itemID: state.item.id,
+                    command: .relative(seconds: offset),
+                    client: playerClient
+                )
+            }
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let targetSecs = currentSecs + Double(offset)
@@ -1936,6 +1976,21 @@ public struct PlayerFeature {
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
             let clamped = max(0.0, min(1.0, position))
+            if state.isPlayingCatchup {
+                let requestID = UUID()
+                state.activeCatchupSeekRequestID = requestID
+                state.catchupSeekFailureMessage = nil
+                state.catchupSeekFailureRequestID = nil
+                return .merge(
+                    .cancel(id: CancelID.scrubThumbnail),
+                    Self.catchupSeekEffect(
+                        requestID: requestID,
+                        itemID: state.item.id,
+                        command: .position(clamped),
+                        client: playerClient
+                    )
+                )
+            }
             state.position = clamped
             if state.totalTime.components.seconds > 0 {
                 state.currentTime = Duration.seconds(Double(state.totalTime.components.seconds) * clamped)
@@ -1989,6 +2044,21 @@ public struct PlayerFeature {
             guard !state.isSwitchingPlaybackEngine else { return .none }
             state.scrubThumbnailRequestID = nil
             state.scrubThumbnailData = nil
+            if state.isPlayingCatchup {
+                let requestID = UUID()
+                state.activeCatchupSeekRequestID = requestID
+                state.catchupSeekFailureMessage = nil
+                state.catchupSeekFailureRequestID = nil
+                return .merge(
+                    .cancel(id: CancelID.scrubThumbnail),
+                    Self.catchupSeekEffect(
+                        requestID: requestID,
+                        itemID: state.item.id,
+                        command: .time(time),
+                        client: playerClient
+                    )
+                )
+            }
             state.currentTime = time
             if state.totalTime.components.seconds > 0 {
                 state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
@@ -1999,6 +2069,39 @@ public struct PlayerFeature {
                 .run { _ in try await playerClient.seekToTime(time) },
                 upNextEffect
             )
+
+        case let .catchupSeekCompleted(requestID, itemID, result):
+            guard
+                state.activeCatchupSeekRequestID == requestID,
+                state.item.id == itemID,
+                state.isPlayingCatchup
+            else { return .none }
+            state.activeCatchupSeekRequestID = nil
+            state.currentTime = result.currentTime
+            state.position = max(0, min(1, result.position))
+            state.catchupSeekFailureMessage = result.didSucceed
+                ? nil
+                : "Catch-up konumu doğrulanamadı; oynatıcıdaki geçerli zaman geri yüklendi.".localized
+            state.catchupSeekFailureRequestID = result.didSucceed ? nil : requestID
+            let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+            if state.catchupSeekFailureMessage == nil {
+                return .merge(upNextEffect, .cancel(id: CancelID.catchupSeekFeedback))
+            }
+            return .merge(
+                upNextEffect,
+                .run { send in
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled else { return }
+                    await send(.clearCatchupSeekFailureMessage(requestID: requestID, itemID: itemID))
+                }
+                .cancellable(id: CancelID.catchupSeekFeedback, cancelInFlight: true)
+            )
+
+        case let .clearCatchupSeekFailureMessage(requestID, itemID):
+            guard state.item.id == itemID, state.catchupSeekFailureRequestID == requestID else { return .none }
+            state.catchupSeekFailureMessage = nil
+            state.catchupSeekFailureRequestID = nil
+            return .none
 
         case .loadSkipMarkers:
             let profileScope = profileContextClient.snapshot()
@@ -2867,6 +2970,9 @@ public struct PlayerFeature {
                 state.isEPGVisible = false
                 state.isCatchupTimelineVisible = false
                 state.activeCatchupProgram = program
+                state.activeCatchupSeekRequestID = nil
+                state.catchupSeekFailureMessage = nil
+                state.catchupSeekFailureRequestID = nil
                 state.activePlaybackURL = catchupURL
                 state.currentTime = .zero
                 state.totalTime = .zero
@@ -2879,6 +2985,8 @@ public struct PlayerFeature {
                 state.isDeinterlaceModeKnown = false
                 return .merge(
                     .cancel(id: CancelID.statsTimer),
+                    .cancel(id: CancelID.catchupSeek),
+                    .cancel(id: CancelID.catchupSeekFeedback),
                     .run { send in
                         let appliedMode = try await playerClient.play(catchupURL, userAgentOverride, nil, deinterlaceMode)
                         await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: catchupURL))
@@ -2891,6 +2999,9 @@ public struct PlayerFeature {
 
         case .returnToLiveStream:
             state.activeCatchupProgram = nil
+            state.activeCatchupSeekRequestID = nil
+            state.catchupSeekFailureMessage = nil
+            state.catchupSeekFailureRequestID = nil
             state.isCatchupTimelineVisible = false
             state.playerState = .playing
             let liveURL = state.item.streamURL
@@ -2904,6 +3015,8 @@ public struct PlayerFeature {
             state.isDeinterlaceModeKnown = false
             return .merge(
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.catchupSeek),
+                .cancel(id: CancelID.catchupSeekFeedback),
                 .run { send in
                     let appliedMode = try await playerClient.play(liveURL, userAgentOverride, nil, deinterlaceMode)
                     await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: liveURL))
@@ -3520,6 +3633,9 @@ public struct PlayerFeature {
         case .closeTapped:
             guard !state.isClosing else { return .none }
             state.isClosing = true
+            state.activeCatchupSeekRequestID = nil
+            state.catchupSeekFailureMessage = nil
+            state.catchupSeekFailureRequestID = nil
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
@@ -3531,6 +3647,8 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),
+                .cancel(id: CancelID.catchupSeek),
+                .cancel(id: CancelID.catchupSeekFeedback),
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
                 .cancel(id: CancelID.audioRoute),

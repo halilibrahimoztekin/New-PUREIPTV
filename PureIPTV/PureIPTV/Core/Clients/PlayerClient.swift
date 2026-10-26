@@ -194,6 +194,24 @@ enum PlayerThumbnailGenerator {
     }
 }
 
+public enum CatchupSeekCommand: Sendable {
+    case relative(seconds: Int64)
+    case position(Double)
+    case time(Duration)
+}
+
+public struct CatchupSeekResult: Equatable, Sendable {
+    public let currentTime: Duration
+    public let position: Double
+    public let didSucceed: Bool
+
+    public init(currentTime: Duration, position: Double, didSucceed: Bool) {
+        self.currentTime = currentTime
+        self.position = position
+        self.didSucceed = didSucceed
+    }
+}
+
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
     public var avPlayer: @MainActor @Sendable () -> AVPlayer = { AVPlayer() }
@@ -214,6 +232,10 @@ public struct PlayerClient: Sendable {
     public var setPlaybackRate: @MainActor @Sendable (_ rate: Float) async throws -> Void
     public var setDeinterlaceMode: @MainActor @Sendable (_ mode: DeinterlaceMode) async throws -> Void = { _ in }
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
+    public var catchupSeek: @MainActor @Sendable (_ command: CatchupSeekCommand) async -> CatchupSeekResult = { _ in
+        CatchupSeekResult(currentTime: .zero, position: 0, didSucceed: false)
+    }
+
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
     public var thumbnail: @Sendable (_ url: URL, _ userAgentOverride: String?, _ time: Duration) async throws -> Data
@@ -554,6 +576,77 @@ extension PlayerClient: DependencyKey {
 
                 // Strategy 3: Fallback to native jump_time
                 _ = player.jump(by: offsetDuration)
+            },
+            catchupSeek: { command in
+                if box.playbackEngine == .avPlayer {
+                    let session = box.getAlternateSession()
+                    let duration = session.player.currentItem?.duration.seconds ?? 0
+                    let rawCurrentTime = session.currentTimeSeconds
+                    let currentTime = rawCurrentTime.isFinite ? max(0, rawCurrentTime) : 0
+                    guard duration.isFinite, duration > 0 else {
+                        return CatchupSeekResult(currentTime: .seconds(max(0, currentTime)), position: 0, didSucceed: false)
+                    }
+
+                    let target: Double = switch command {
+                    case let .relative(seconds):
+                        max(0, min(duration, currentTime + Double(seconds)))
+                    case let .position(position):
+                        max(0, min(1, position)) * duration
+                    case let .time(time):
+                        max(0, min(duration, Double(time.components.seconds)))
+                    }
+
+                    do {
+                        try await session.seek(to: target)
+                        let rawLandedTime = session.currentTimeSeconds
+                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : currentTime
+                        return CatchupSeekResult(
+                            currentTime: .seconds(max(0, landedTime)),
+                            position: max(0, min(1, landedTime / duration)),
+                            didSucceed: true
+                        )
+                    } catch {
+                        let rawLandedTime = session.currentTimeSeconds
+                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : currentTime
+                        return CatchupSeekResult(
+                            currentTime: .seconds(max(0, landedTime)),
+                            position: max(0, min(1, landedTime / duration)),
+                            didSucceed: false
+                        )
+                    }
+                }
+
+                let player = box.getPlayer()
+                @MainActor func snapshot(didSucceed: Bool) -> CatchupSeekResult {
+                    let position = player.position
+                    return CatchupSeekResult(
+                        currentTime: player.currentTime,
+                        position: position.isFinite ? max(0, min(1, position)) : 0,
+                        didSucceed: didSucceed
+                    )
+                }
+
+                let request: SeekRequest
+                switch command {
+                case let .relative(seconds):
+                    request = player.requestJump(by: .seconds(Double(seconds)))
+                case let .position(position):
+                    request = player.requestSeek(toPosition: PlaybackPosition(max(0, min(1, position))), fast: false)
+                case let .time(time):
+                    do {
+                        request = try player.requestSeek(to: max(.zero, time), fast: false)
+                    } catch {
+                        return snapshot(didSucceed: false)
+                    }
+                }
+
+                let initialOutcome = request.initialOutcome
+                guard initialOutcome == .pending else {
+                    return snapshot(didSucceed: initialOutcome == .settled || initialOutcome == .inaccurate)
+                }
+
+                let outcome = await request.outcome
+                return snapshot(didSucceed: outcome == .settled || outcome == .inaccurate)
             },
             seek: { position in
                 if box.playbackEngine == .avPlayer {

@@ -1090,6 +1090,23 @@
                     .zIndex(99)
                 }
 
+                if let message = store.catchupSeekFailureMessage {
+                    VStack {
+                        Text(message)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        Spacer()
+                    }
+                    .padding(.top, 48)
+                    .padding(.horizontal, 20)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(101)
+                }
+
                 // Stream Health & Buffer Diagnostics (Feature #3)
                 if store.isStreamHealthHUDVisible {
                     ZStack {

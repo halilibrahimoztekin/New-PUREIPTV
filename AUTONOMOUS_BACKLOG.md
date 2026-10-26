@@ -1649,9 +1649,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** `/private/tmp/PureIPTV174` task DerivedData ve logları **4,051,512 KiB**; her iki build sonlandıktan ve `lsof +D` açık handle göstermeyince kaldırıldı. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da `Build`/`Index.noindex` task çıktısı yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** korundu. Kullanıcı kaynakları/cache’leri temizlenmedi.
 - **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/
 
-### 175. [PENDING] Catch-up İleri/Geri Sarma Hata Kurtarması
-- **Fırsat:** Catch-up yayınında ileri/geri sarma sırasında zaman çizgisi, player ve EPG program durumunun ayrışıp ayrışmadığını analiz et; başarısız seek sonrası son geçerli konuma dön ve tvOS kumanda etkileşimini erişilebilir tut.
-- **Keşif sinyali:** Apple TV kullanıcıları catch-up/replay seek işlemlerinde takılma, donma ve çökme yaşamadan gezinebilmeyi temel gereksinim olarak belirtiyor.
+### 175. [DONE] Catch-up İleri/Geri Sarma Hata Kurtarması
+- **Fırsat:** Catch-up yayını seek/jump başarısız olduğunda UI zaman çizgisinin ve oynatıcı konumunun ayrışmasını önle.
+- **Kod bulgusu:** PlayerFeature `.seek`, `.seekToTime` ve `.jumpBySeconds` state’i iyimser güncelliyor; PlayerClient’ın VLC fallback seek çağrıları hataları yutabiliyor veya native seek sonucunu doğrulamıyordu. Bu, catch-up ekranında oynatıcının gerçek konumundan farklı zaman gösterimine yol açabiliyordu.
+- **Uygulama:** Catch-up’a özel relative, fraction ve absolute seek komutları eklendi. VLC `SeekRequest` terminal sonucunu, AVPlayer tamamlanan seek yanıtını bekliyor. Reducer istek UUID’si ve item kimliğiyle eski sonuçları eliyor; hata/timeout/supersede yanıtında oynatıcıdan raporlanan zaman ve konumu geri yansıtıyor. Başarısız/ doğrulanamayan seek’te iOS/tvOS üzerinde kısa mesaj gösteriliyor; yeni medya, canlıya dönüş ve player kapanışında istek ve mesaj timer’ı iptal ediliyor.
+- **PR Reviewer:** `[APPROVED]` — seek result outcome, typed-throws yakalama, actor izolasyonu, stale-result guard’ları ve yaşam döngüsü iptali incelendi.
+- **Doğrulama:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. İlk iOS denemeleri derleyici hataları gösterdi (typed throws, reducer static helper, actor izolasyonu); düzeltmeler sonrası son iOS ve tvOS build’leri başarılı. Test, simulator, app launch, playback veya UI akışı çalıştırılmadı.
+- **Temizlik:** `/private/tmp/PureIPTV175` task DerivedData ve logları **4,110,900 KiB**; her iki build sonlandıktan ve `lsof +D` açık handle göstermeyince kaldırıldı. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da `Build`/`Index.noindex` task çıktısı yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** korundu. Kullanıcı kaynakları/cache’leri temizlenmedi.
 - **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1uv632w/best_iptv_app_for_appletv/
 
 ### 176. [PENDING] Playlist iCloud Senkron Durumunu ve Gecikmesini Açıklama
