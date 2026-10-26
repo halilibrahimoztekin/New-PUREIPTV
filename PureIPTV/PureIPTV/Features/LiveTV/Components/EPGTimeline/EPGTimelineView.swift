@@ -41,6 +41,7 @@ public struct EPGTimelineView: View {
     @State private var isUserDragging: Bool = false
     @State private var hasCenteredOnNow: Bool = false
     @State private var shimmerPhase: CGFloat = 0
+    @State private var navigationStepHours = 1
     @State private var lastSearchNavigationKey: String?
     @State private var pendingSearchChannelID: String?
     @State private var logoEditorChannel: MediaModels.Item?
@@ -126,20 +127,10 @@ public struct EPGTimelineView: View {
                     }
                 }
 
-                // Floating Action Button: Jump to Now (today) or Return to Today (past archive)
-                if store.isViewingToday {
-                    if abs(horizontalOffset - targetCenteredNowOffset(availableWidth: availableGridWidth)) > 160 {
-                        jumpToNowButton(availableWidth: availableGridWidth)
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 24)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                } else {
-                    returnToTodayButton(availableWidth: availableGridWidth)
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 24)
-                        .transition(.scale.combined(with: .opacity))
-                }
+                timeNavigationControls(availableWidth: availableGridWidth)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 24)
+                    .transition(.scale.combined(with: .opacity))
 
                 // PiP-in-EPG Mini Preview Floating Card (Madde #25)
                 if let previewChannel = store.activePreviewChannel {
@@ -1369,8 +1360,9 @@ public struct EPGTimelineView: View {
     private func returnToTodayButton(availableWidth: CGFloat) -> some View {
         Button {
             HapticManager.shared.trigger(.medium)
-            store.send(.selectDate(Date()))
-            let target = targetCenteredNowOffset(availableWidth: availableWidth)
+            let now = Date()
+            store.send(.selectDate(now))
+            let target = targetHorizontalOffset(for: now, availableWidth: availableWidth)
             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                 horizontalOffset = target
             }
@@ -1808,9 +1800,90 @@ public struct EPGTimelineView: View {
     }
 
     private func targetCenteredNowOffset(availableWidth: CGFloat) -> CGFloat {
+        targetHorizontalOffset(for: store.currentTime, availableWidth: availableWidth)
+    }
+
+    private func targetHorizontalOffset(for date: Date, availableWidth: CGFloat) -> CGFloat {
+        let calendar = Calendar.current
+        let anchor: Date
+        if calendar.isDateInToday(date) {
+            let hour = calendar.dateInterval(of: .hour, for: date)?.start ?? date
+            anchor = calendar.date(byAdding: .hour, value: -pastHoursAnchor, to: hour) ?? hour
+        } else {
+            anchor = calendar.startOfDay(for: date)
+        }
+        let target = CGFloat(date.timeIntervalSince(anchor) / 3600) * hourWidth - availableWidth * 0.35
         let maxOffset = max(0, totalTimelineWidth - availableWidth)
-        let centered = currentNowOffset - availableWidth * 0.35
-        return max(0, min(maxOffset, centered))
+        return max(0, min(maxOffset, target))
+    }
+
+    private func timeNavigationControls(availableWidth: CGFloat) -> some View {
+        let maxOffset = max(0, totalTimelineWidth - availableWidth)
+        let canMoveBackward = horizontalOffset > 0
+        let canMoveForward = horizontalOffset < maxOffset
+
+        return HStack(spacing: 8) {
+            Button {
+                guard canMoveBackward else { return }
+                shiftTimeline(byHours: -navigationStepHours, availableWidth: availableWidth)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.caption.bold())
+                    .frame(minWidth: 38, minHeight: 38)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel(AppStrings.Settings.timeShiftHours(-navigationStepHours))
+            .opacity(canMoveBackward ? 1 : 0.45)
+
+            Menu {
+                ForEach([1, 2, 3, 6], id: \.self) { hours in
+                    Button(AppStrings.Settings.timeShiftHours(hours)) {
+                        navigationStepHours = hours
+                    }
+                }
+            } label: {
+                Text(AppStrings.Settings.timeShiftHours(navigationStepHours))
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 38)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel(AppStrings.Settings.timeShift)
+
+            Button {
+                guard canMoveForward else { return }
+                shiftTimeline(byHours: navigationStepHours, availableWidth: availableWidth)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .frame(minWidth: 38, minHeight: 38)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel(AppStrings.Settings.timeShiftHours(navigationStepHours))
+            .opacity(canMoveForward ? 1 : 0.45)
+
+            if store.isViewingToday {
+                if abs(horizontalOffset - targetCenteredNowOffset(availableWidth: availableWidth)) > 160 {
+                    jumpToNowButton(availableWidth: availableWidth)
+                }
+            } else {
+                returnToTodayButton(availableWidth: availableWidth)
+            }
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.72), in: Capsule())
+        #if os(tvOS)
+            .focusSection()
+        #endif
+    }
+
+    private func shiftTimeline(byHours hours: Int, availableWidth: CGFloat) {
+        HapticManager.shared.trigger(.light)
+        let maxOffset = max(0, totalTimelineWidth - availableWidth)
+        let target = horizontalOffset + CGFloat(hours) * hourWidth
+        withAnimation(.easeInOut(duration: 0.25)) {
+            horizontalOffset = max(0, min(maxOffset, target))
+        }
     }
 
     private func navigateToSearchMatch(_ query: String, availableWidth: CGFloat) {

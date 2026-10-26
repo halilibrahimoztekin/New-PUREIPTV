@@ -1448,8 +1448,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — EPG program araması artık eşleşen kanal ve zaman konumuna doğrudan odaklanıyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv · https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
 
-### 154. [PENDING] Büyük Rehberlerde Yatay Zaman Navigasyonunu Sadeleştirme
+### 154. [DONE] Büyük Rehberlerde Yatay Zaman Navigasyonunu Sadeleştirme
 - **Fırsat:** Büyük EPG pencerelerinde Now’a dönme ve kullanıcının seçtiği zaman adımlarıyla ileri/geri gitmeyi focus-safe hale getir.
+- **Kod bulgusu:** Rehberde Now’a git ve geçmiş günlerde Bugüne Dön düğmeleri var; adımlı ileri/geri kaydırma kontrolü yok. Bugüne dönüş hedef ofsetini `selectDate` state’i güncellenmeden önce eski günün zaman çizelgesinden hesaplıyor.
+- **Uygulama:** EPG rehberine 1/2/3/6 saatlik ileri/geri zaman adımları ve sınırlandırılmış yatay kaydırma eklendi. Sınırdaki oklar tvOS focus zincirinde kalıyor, soluk gösteriliyor ve güvenli no-op yapıyor; tvOS kontrol kümesi `.focusSection()` ile gruplanıyor. Bugüne dönüş hedefi seçili günün eski state’inden değil aynı anda alınan güncel tarihten hesaplanıyor. Mevcut Now/Bugüne Dön eylemleri korundu; localization kataloğu değiştirilmedi.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; tvOS focus zinciri için `.disabled()` yerine focus’ta kalan sınır davranışı uygulandı ve tekrar onaylandı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; `git diff --check` temiz. Yalnız build alındı; test, simulator/app launch veya playback akışı çalıştırılmadı.
+- **Temizlik:** #154 geçici DerivedData iOS (2.6 GB), tvOS (2.4 GB) ve build logları (~4.4 MB), açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData’daki `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu; bu task’a ait normal DerivedData çıktısı yoktu. ContactCleaner’a hiçbir şekilde erişilmedi.
+- **Durum:** `[DONE]` — Büyük rehberlerde focus-safe adımlı yatay zaman navigasyonu tamamlandı ve reviewer onayladı.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
 
 ### 155. [PENDING] Altyazı Görünümünü Erişilebilir Tercihlerle Özelleştirme
