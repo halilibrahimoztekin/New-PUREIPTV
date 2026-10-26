@@ -1608,9 +1608,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** `/private/tmp/PureIPTV170` task DerivedData ve logları toplam **4,096,904 KiB**; her iki build tamamlandı, `lsof +D` açık handle göstermedi ve task klasörü silindi. `/private/tmp` son toplamı **2,376 KiB**, DerivedData task klasörü yok. Normal PureIPTV `SourcePackages` (**1,873,636 KiB**) ve genel/user cache’leri korundu; task kaynaklı normal DerivedData çıktısı oluşmadı. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
-### 171. [PENDING] EPG’den PPV ve Etkinlik Kategorilerini Yenileme
+### 171. [DONE — NO-GO] EPG’den PPV ve Etkinlik Kategorilerini Yenileme
 - **Fırsat:** Sağlayıcıda özel PPV/Event grupları varsa rehberden erişilebilir, belirgin bir yenileme eylemi sun; mevcut playlist yenileme akışından ayrı olarak yalnız bu kategorileri güncellemenin güvenli olup olmadığını incele.
 - **Keşif sinyali:** UHF 1.99.0 etkinlik kanallarına özel kategori işleme ve EPG içinden hızlı yenileme ekledi.
+- **Kod incelemesi:** EPG `performSync` M3U için XMLTV cache’ini yeniliyor, ardından mevcut filtreli kanalların en fazla ilk 20’sini prewarm ediyor; Xtream EPG’si kanal başına çekiliyor. Canlı kategori yenilemesi ayrı provider katalog akışında. `EPGProgram.categories` program türü/genre metadata’sı; PPV/Event katalog taxonomy’si değil. EPG modelinde erişim/satın alma durumu ve event katalog kimliği bulunmuyor.
+- **PR Reviewer:** `[NO-GO]` EPG refresh içine kategori çekme eklemek için. Bu, rehber verisi ile sağlayıcı live-catalog state’ini karıştırıp kullanıcıya yanlış güncelleme kapsamı bildirir. Güvenli tasarım provider katalog/kategori yenileme operasyonu ile açık bir event/PPV modeli ve category preferences korunmasını gerektirir.
+- **Karar:** EPG refresh değişikliği yapılmadı. Provider kategori/katalog yenilemesi mevcut #178 “Sağlayıcı Güncellemesinde EPG ve Katalog Yenileme İlerlemesi” kapsamına eklendi; gerçek provider taxonomy’si doğrulanınca ele alınacak.
+- **Doğrulama/temizlik:** Salt okunur inceleme; build veya test çalıştırılmadı, task kaynaklı DerivedData üretilmedi. `/private/tmp` son taramasında task DerivedData klasörü yok; kullanıcı/olası kurtarma dosyaları korunuyor. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
 ### 172. [PENDING] VPN Bağlantı Durumunu Playlist Akışında Açıklama
@@ -1645,6 +1649,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 
 ### 178. [PENDING] Sağlayıcı Güncellemesinde EPG ve Katalog Yenileme İlerlemesi
 - **Fırsat:** Büyük playlist güncellemesinde hangi bölümün ve rehber verisinin yenilendiğini kullanıcıya doğru aşamalarla göster; iptal, arka plana geçiş ve eski son iyi katalog davranışını mevcut atomik yenilemeyle birlikte denetle.
+- **Kapsam genişletmesi:** Provider’ın gerçekten sunduğu canlı kategori/event taxonomy’si varsa EPG genres ile karıştırmadan aynı yenileme içinde katalog/kategori state’ini güncelle; kullanıcı kategori tercihlerini koru. Provider açıkça tanımlamıyorsa PPV/Event label uydurma.
 - **Keşif sinyali:** UHF playlist güncelleme hızını ve EPG kategori yenilemesini ayrı iyileştirdi; kullanıcılar rehberin eksik/eski kalmasını ve güncelleme sonrası donmayı raporluyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
 
