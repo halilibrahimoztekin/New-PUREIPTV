@@ -900,7 +900,6 @@ public struct PlayerFeature {
 
             let url = state.item.streamURL
             let isLive = state.item.isLive
-            let position = state.item.startPosition ?? 0.0
             let seriesID = state.item.seriesID
             let config = state.item.config
             let userAgentOverride = state.item.userAgentOverride
@@ -999,10 +998,6 @@ public struct PlayerFeature {
                                         try? await playerClient.setVolume(0)
                                     }
 
-                                    if !isLive, position > 0 {
-                                        try? await Task.sleep(nanoseconds: 600_000_000)
-                                        try? await playerClient.seek(position)
-                                    }
                                 } catch {
                                     print("Player error: \(error)")
                                     await send(.handlePlayerEvent(.encounteredError))
@@ -3225,7 +3220,7 @@ public struct PlayerFeature {
                     // Apply initial progress / seek if not yet applied
                     if !state.hasAppliedInitialSeek {
                         state.hasAppliedInitialSeek = true
-                        if let startPosition = state.item.startPosition, startPosition > 0.005 {
+                        if let startPosition = state.item.startPosition, startPosition > 0 {
                             actions.append(.send(.seek(startPosition)))
                         } else if let progress = state.item.initialProgress, progress > 1 {
                             actions.append(.send(.seekToTime(Duration.seconds(progress))))

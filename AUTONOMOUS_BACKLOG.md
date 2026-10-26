@@ -1369,11 +1369,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **#144 sonrası temizlik:** `/private/tmp/PureIPTVDerivedData_task144` (3.8 GB) ve iOS/tvOS logları (7.1 MB) açık handle kalmadığı doğrulandıktan sonra silindi. Paylaşılan SourcePackages ve SDK önbellekleri korundu.
 - **Durum:** `[DONE]` — EPG kanal ve program/catch-up odak alanları arasında sağ/sol kumanda geçişleri açıkça bağlı.
 
-### 145. [PENDING] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
+### 145. [DEFERRED] Yüksek Kare Hızlı Yayınlarda Başlatma ve Seek Gecikmesini Ölçme
 - **Fırsat:** Başlatma ve seek işini yüksek kare hızlı yayınlarda ölçüp player ilk karesini geciktiren adımları ayırmak; iyileştirmeyi yalnız ölçümle doğrulanmış yollara uygulamak.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
-- **Statik bulgu:** VOD başlangıç konumu geri yüklenirken `PlayerFeature.onAppear` içinde player başlatıldıktan sonra 600 ms sabit bekleme ve ardından seek var. Ölçüm olmadan yüksek kare hızlı yayınlardaki ilk kare/seek etkisini doğrulamadığım için bu sezgisel gecikmeyi değiştirmedim.
-- **Durum:** `[PENDING]` — Başlatma/seek süresi için gerçek, temsilî yüksek FPS akışında playback ölçümü gerekli; compile-only kısıtı altında metrik iddiası üretilmedi.
+- **Statik bulgu ve düzeltme:** VOD başlangıç konumu `.playing` event’inde zaten bir kez geri yükleniyordu; `onAppear` effect’i ayrıca 600 ms sabit beklemeden sonra aynı `startPosition`’a ikinci seek yapabiliyor ve stream hazır olmadan çalışabiliyordu. İkinci seek ile sabit bekleme kaldırıldı; `.playing` tek başlangıç seek sahibi oldu. Pozitif `startPosition` değerleri, önceki davranıştaki gibi 0.5% altındakiler dahil korunuyor.
+- **PR Reviewer:** İlk incelemede 0.5% altı resume konumları için `[CHANGES REQUESTED]`; `startPosition > 0` düzeltmesinden sonra `[APPROVED]`.
+- **Doğrulama:** Generic iOS Release ve tvOS Release compile-only Xcode build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Test, simulator veya playback çalıştırılmadı. Gerçek yüksek FPS akışında startup/seek ölçümü bu build-only görevinde alınmadı ve performans metrikleri uydurulmadı.
+- **Temizlik:** `/private/tmp/PureIPTV145` task DerivedData ve build logları toplam **4,049,848 KiB**; build süreçleri sonlanmış, `lsof +D` açık handle bulmamış. Klasör kaldırıldı. Paylaşılan SourcePackages ve genel SDK/compiler cache’leri korundu; ContactCleaner yolları kullanılmadı.
+- **Durum:** `[DEFERRED]` — doğrulanmış redundant 600 ms/duplicate seek kaldırıldı; gerçek FPS ölçümü daha sonra gerçek stream playback’i gerektiriyor.
 
 ### 146. [DONE] Player Hata Kurtarmasında Oynatma Konumunu Koruma
 - **Uygulama:** Aynı kaynak URL’sine retry öncesi konum, bilinen mutlak zaman/süre çiftinden normalize ediliyor; aksi durumda son player konumu ya da başlangıç konumu kullanılıyor. Retry, player `isPlaying` olana kadar en çok 10 saniye bekliyor; seek hataları reconnect akışına gidiyor ve iptal yeni hata üretmiyor. Catch-up başlangıcında eski canlı zaman/süre/konum sıfırlanıyor; catch-up retry de konum geri yüklemesine katılıyor.
