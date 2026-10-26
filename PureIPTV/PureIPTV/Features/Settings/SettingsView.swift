@@ -669,6 +669,24 @@ public struct SettingsView: View {
                 }
             }
 
+            Section(
+                header: Text("Kişiselleştirme"),
+                footer: Text("Öneriler yalnızca bu profildeki cihaz içi izleme sinyallerinden oluşturulur. Geçmişi sıfırlamak oynatma ilerlemesini ve favorileri korur.")
+            ) {
+                Toggle("Kişiselleştirilmiş For You önerileri", isOn: Binding(
+                    get: { store.isPersonalizedRecommendationsEnabled },
+                    set: { store.send(.setPersonalizedRecommendationsEnabled($0)) }
+                ))
+
+                Button(role: .destructive) {
+                    store.send(.resetRecommendationHistoryTapped)
+                } label: {
+                    Label("Öneri geçmişini sıfırla", systemImage: "clock.arrow.circlepath")
+                }
+                .foregroundStyle(.red)
+                .accessibilityHint("Eski izleme geçmişini For You önerilerinde kullanmayı bırakır; oynatma ilerlemesi ve favoriler korunur.")
+            }
+
             Section(header: Text(AppStrings.Settings.subscriptionAndStorage)) {
                 HStack {
                     Text(AppStrings.Settings.subscriptionStatus)
@@ -825,6 +843,29 @@ public struct SettingsView: View {
             }
         } message: {
             Text(AppStrings.Settings.clearCacheSuccess)
+        }
+        .alert(
+            "Öneri geçmişi sıfırlansın mı?",
+            isPresented: $store.isShowingRecommendationHistoryResetConfirmation
+        ) {
+            Button("Öneri geçmişini sıfırla", role: .destructive) {
+                store.send(.confirmRecommendationHistoryReset)
+            }
+            Button(AppStrings.Common.cancel, role: .cancel) {
+                store.send(.cancelRecommendationHistoryReset)
+            }
+        } message: {
+            Text("Bu profildeki eski izleme geçmişi öneri sinyali olmaktan çıkar. İzlemeye Devam Et ilerlemesi ve favoriler silinmez.")
+        }
+        .alert(
+            "Öneri geçmişi sıfırlandı",
+            isPresented: $store.isShowingRecommendationHistoryResetSuccess
+        ) {
+            Button(AppStrings.Common.ok, role: .cancel) {
+                store.send(.recommendationHistoryResetSuccessDismissed)
+            }
+        } message: {
+            Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
         }
         .sheet(isPresented: $store.isShowingPINSetup) {
             PINSetupView(store: store)

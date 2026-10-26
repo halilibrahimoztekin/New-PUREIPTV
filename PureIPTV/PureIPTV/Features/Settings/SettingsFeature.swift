@@ -136,6 +136,11 @@ public struct SettingsFeature {
         public var cloudSyncSummary: CloudSyncSummary?
         public var cloudSyncMessage: String?
 
+        public var personalizationProfileID: UUID?
+        public var isPersonalizedRecommendationsEnabled = true
+        public var isShowingRecommendationHistoryResetConfirmation = false
+        public var isShowingRecommendationHistoryResetSuccess = false
+
         public enum PINStep: Equatable {
             case enterNew
             case confirm
@@ -192,9 +197,14 @@ public struct SettingsFeature {
         case setTopShelfStyle(TopShelfStyle)
         case setBufferProfile(BufferProfile)
         case setComplianceDemoMode(Bool)
+        case setPersonalizedRecommendationsEnabled(Bool)
 
         case calculateCacheSize
         case cacheSizeCalculated(String)
+        case resetRecommendationHistoryTapped
+        case cancelRecommendationHistoryReset
+        case confirmRecommendationHistoryReset
+        case recommendationHistoryResetSuccessDismissed
         case clearCacheTapped
         case cancelClearCache
         case confirmClearCache
@@ -268,6 +278,7 @@ public struct SettingsFeature {
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.downloadClient) var downloadClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.playlistRepository) var playlistRepository
 
@@ -281,6 +292,11 @@ public struct SettingsFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                let currentProfileID = profileContextClient.snapshot().profileID
+                state.personalizationProfileID = currentProfileID
+                state.isPersonalizedRecommendationsEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
+                    for: currentProfileID
+                )
                 state.isParentalControlEnabled = settingsClient.isParentalControlEnabled()
                 state.vodSortMethod = settingsClient.getVODSortMethod()
                 state.seriesSortMethod = settingsClient.getSeriesSortMethod()
@@ -563,6 +579,35 @@ public struct SettingsFeature {
             case let .setComplianceDemoMode(enabled):
                 state.isComplianceDemoMode = enabled
                 ComplianceModeManager.shared.isComplianceModeActive = enabled
+                return .none
+
+            case let .setPersonalizedRecommendationsEnabled(enabled):
+                let profileID = profileContextClient.snapshot().profileID
+                guard state.personalizationProfileID == profileID
+                else { return .none }
+                state.isPersonalizedRecommendationsEnabled = enabled
+                LocalPersonalizationPreferences.setRecommendationsEnabled(enabled, for: profileID)
+                return .none
+
+            case .resetRecommendationHistoryTapped:
+                state.isShowingRecommendationHistoryResetConfirmation = true
+                return .none
+
+            case .cancelRecommendationHistoryReset:
+                state.isShowingRecommendationHistoryResetConfirmation = false
+                return .none
+
+            case .confirmRecommendationHistoryReset:
+                let profileID = profileContextClient.snapshot().profileID
+                guard state.personalizationProfileID == profileID
+                else { return .none }
+                state.isShowingRecommendationHistoryResetConfirmation = false
+                state.isShowingRecommendationHistoryResetSuccess = true
+                LocalPersonalizationPreferences.clearWatchHistorySignal(for: profileID)
+                return .none
+
+            case .recommendationHistoryResetSuccessDismissed:
+                state.isShowingRecommendationHistoryResetSuccess = false
                 return .none
 
             case let .setAutoPiPEnabled(enabled):

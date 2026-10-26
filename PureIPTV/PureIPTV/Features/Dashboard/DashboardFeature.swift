@@ -104,6 +104,8 @@ public struct DashboardFeature {
         public var lastRemoteRefreshAt: Date?
         public var activeRefreshID: UUID?
         public var activeEPGRefreshID: UUID?
+        public var activeProfileScope: ProfileContextSnapshot?
+        public var activePersonalizationRefreshID: UUID?
         public var lastSportsHubVisibility: Bool?
         public var deferInitialRemoteRefresh = false
 
@@ -144,7 +146,9 @@ public struct DashboardFeature {
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem], scope: ProfileContextSnapshot)
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], recommendations: [MediaModels.Item]?, recommendationReasons: [String: SmartRecommendationEngine.Reason]?, vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
+        case localPersonalizationPreferencesChanged
+        case localRecommendationsLoaded(playlistID: UUID?, refreshID: UUID, profileScope: ProfileContextSnapshot, recommendations: [MediaModels.Item], reasons: [String: SmartRecommendationEngine.Reason])
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
         case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
         case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
@@ -181,6 +185,8 @@ public struct DashboardFeature {
 
     private nonisolated enum CancelID: Hashable, Sendable {
         case watchHistoryObserver
+        case personalizationPreferencesObserver
+        case localRecommendations
         case remoteData
         case actorRecommendations
         case actorFilmography
@@ -217,8 +223,24 @@ public struct DashboardFeature {
                 let isAdult = settingsClient.isAdultContent
                 let playlistID = playlistRepository.getActivePlaylistID()
                 let profileScope = profileContextClient.snapshot()
-                state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
+                let profileChanged = state.activeProfileScope != profileScope
                 let playlistChanged = state.activePlaylistID != playlistID
+                let personalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
+                    for: profileScope.profileID
+                )
+                if profileChanged || playlistChanged || !personalizationEnabled {
+                    Self.clearPersonalizationState(&state)
+                }
+                state.activeProfileScope = profileScope
+                let profileCancellationEffect: Effect<Action> = profileChanged
+                    ? .merge(
+                        .cancel(id: CancelID.localRecommendations),
+                        .cancel(id: CancelID.actorRecommendations),
+                        .cancel(id: CancelID.actorFilmography),
+                        .cancel(id: CancelID.newEpisodeDiscovery)
+                    )
+                    : .none
+                state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
                 state.manualEPGChannelMappings = Self.loadManualEPGChannelMappings(playlistID: playlistID)
                 if playlistChanged {
                     state.hasResolvedLiveCatalog = false
@@ -264,6 +286,7 @@ public struct DashboardFeature {
                 state.isSportsHubVisible = isSportsHubVisible
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
+                    Self.clearPersonalizationState(&state)
                     state.hasResolvedLiveCatalog = false
                     state.hasLiveContent = true
                     state.hasResolvedMovieCatalog = false
@@ -323,23 +346,15 @@ public struct DashboardFeature {
                     state.featuredSeries = snapshot?.series.compactMap(\.mediaItem).filter {
                         !currentAdultHidden || !isAdult($0.title)
                     } ?? []
-                    state.recommendedVODs = snapshot?.recommendations.compactMap(\.mediaItem).filter {
-                        !currentAdultHidden || !isAdult($0.title)
-                    } ?? []
-                    let recommendedIDs = Set(state.recommendedVODs.map(\.id))
-                    state.recommendationReasons = (snapshot?.recommendationReasons ?? [:]).reduce(into: [:]) {
-                        guard
-                            recommendedIDs.contains($1.key),
-                            let reason = SmartRecommendationEngine.Reason(rawValue: $1.value)
-                        else { return }
-                        $0[$1.key] = reason
-                    }
+                    state.recommendedVODs = []
+                    state.recommendationReasons = [:]
                     state.lastRemoteRefreshAt = snapshot?.updatedAt
                     state.isLoading = snapshot == nil && !state.deferInitialRemoteRefresh
                 }
                 let shouldReload = !state.deferInitialRemoteRefresh && (
                     !state.hasLoadedRemoteData
                         || playlistChanged
+                        || profileChanged
                         || preferencesChanged
                         || sportsHubVisibilityChanged
                         || (state.lastRemoteRefreshAt.map { Date().timeIntervalSince($0) >= 15 * 60 } ?? true)
@@ -410,6 +425,14 @@ public struct DashboardFeature {
                     }
                 }
                 .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
+                let personalizationNotificationEffect: Effect<Action> = .run { send in
+                    for await _ in NotificationCenter.default.notifications(
+                        named: LocalPersonalizationPreferences.didChangeNotification
+                    ) {
+                        await send(.localPersonalizationPreferencesChanged)
+                    }
+                }
+                .cancellable(id: CancelID.personalizationPreferencesObserver, cancelInFlight: true)
                 let awardEffect: Effect<Action>
                 if !shouldReload, !state.hasLoadedAwardDiscovery, !state.actorRecommendationMovieCandidates.isEmpty {
                     let requestID = UUID()
@@ -423,7 +446,15 @@ public struct DashboardFeature {
                 } else {
                     awardEffect = .none
                 }
-                return .merge(localEffect, remoteEffect, notificationEffect, movieRatingEffect, awardEffect)
+                return .merge(
+                    localEffect,
+                    remoteEffect,
+                    profileCancellationEffect,
+                    notificationEffect,
+                    personalizationNotificationEffect,
+                    movieRatingEffect,
+                    awardEffect
+                )
 
             case .refreshTapped:
                 guard let config = state.activePlaylistConfig else { return .none }
@@ -480,6 +511,7 @@ public struct DashboardFeature {
                 state.activeRefreshID = nil
                 state.activeEPGRefreshID = nil
                 state.activeActorRecommendationRefreshID = nil
+                state.activePersonalizationRefreshID = nil
                 state.isLoadingActorFilmography = false
                 state.hasLoadedSelectedActorFilmography = false
                 state.selectedActorID = nil
@@ -507,7 +539,9 @@ public struct DashboardFeature {
                     .cancel(id: CancelID.newEpisodeDiscovery),
                     .cancel(id: CancelID.movieRatingDiscovery),
                     .cancel(id: CancelID.awardDiscovery),
-                    .cancel(id: CancelID.watchHistoryObserver)
+                    .cancel(id: CancelID.watchHistoryObserver),
+                    .cancel(id: CancelID.personalizationPreferencesObserver),
+                    .cancel(id: CancelID.localRecommendations)
                 )
 
             case .openManagePlaylistsTapped:
@@ -521,12 +555,39 @@ public struct DashboardFeature {
                     await send(.localDataLoaded(favorites: favorites, history: history, scope: profileScope))
                 }
 
+            case .localPersonalizationPreferencesChanged:
+                let profileScope = profileContextClient.snapshot()
+                state.activeProfileScope = profileScope
+                let personalizationCancellations = Effect<Action>.merge(
+                    .cancel(id: CancelID.localRecommendations),
+                    .cancel(id: CancelID.actorRecommendations),
+                    .cancel(id: CancelID.actorFilmography),
+                    .cancel(id: CancelID.newEpisodeDiscovery)
+                )
+                guard LocalPersonalizationPreferences.recommendationsEnabled(for: profileScope.profileID) else {
+                    Self.clearPersonalizationState(&state)
+                    return personalizationCancellations
+                }
+                Self.clearPersonalizationState(&state)
+                return .concatenate(personalizationCancellations, .send(.loadLocalData))
+
             case let .localDataLoaded(favorites, history, scope):
-                guard profileContextClient.snapshot() == scope else { return .none }
+                guard profileContextClient.snapshot() == scope,
+                      state.activeProfileScope == scope
+                else { return .none }
                 state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                 state.favoriteItems = favorites
                 state.watchHistoryItems = history
                 Self.syncTopShelf(history: history, favorites: favorites, vods: state.featuredVODs)
+                guard LocalPersonalizationPreferences.recommendationsEnabled(for: scope.profileID) else {
+                    Self.clearPersonalizationState(&state)
+                    return .merge(
+                        .cancel(id: CancelID.localRecommendations),
+                        .cancel(id: CancelID.actorRecommendations),
+                        .cancel(id: CancelID.actorFilmography),
+                        .cancel(id: CancelID.newEpisodeDiscovery)
+                    )
+                }
                 guard
                     state.hasLoadedRemoteData,
                     let playlistID = state.activePlaylistID,
@@ -535,17 +596,49 @@ public struct DashboardFeature {
                 let refreshID = UUID()
                 state.activeActorRecommendationRefreshID = refreshID
                 state.activeNewEpisodeRefreshID = nil
+                let recommendationRequestID = UUID()
+                state.activePersonalizationRefreshID = recommendationRequestID
                 let movies = state.actorRecommendationMovieCandidates
                 let series = state.actorRecommendationSeriesCandidates
                 let isAdult = settingsClient.isAdultContent
+                let cutoff = LocalPersonalizationPreferences.watchHistoryCutoff(for: scope.profileID)
+                let playlistHistory = history.filter { item in
+                    guard item.playlistID == playlistID else { return false }
+                    return cutoff.map { item.lastWatchedAt > $0 } ?? true
+                }
                 let eligibleHistory = hideAdult
-                    ? history.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
-                    : history
+                    ? playlistHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                    : playlistHistory
+                let playlistFavorites = favorites.filter { $0.playlistID == playlistID }
                 let newEpisodeRequestID = UUID()
                 state.activeNewEpisodeRefreshID = newEpisodeRequestID
-                let recommendationEffect = Effect<Action>.run { send in
-                    let safeMovies = hideAdult ? movies.filter { !isAdult($0.title) } : movies
-                    let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
+                let safeMovies = hideAdult ? movies.filter { !isAdult($0.title) } : movies
+                let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
+                let localRecommendationsEffect = Effect<Action>.run { send in
+                    let scoredRecommendations = SmartRecommendationEngine.recommendations(
+                        from: safeMovies,
+                        history: eligibleHistory,
+                        favorites: playlistFavorites,
+                        limit: 12
+                    )
+                    let recommendations = scoredRecommendations.map(\.item)
+                    let reasons = Dictionary(
+                        scoredRecommendations.compactMap { recommendation in
+                            recommendation.reason.map { (recommendation.id, $0) }
+                        },
+                        uniquingKeysWith: { first, _ in first }
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.localRecommendationsLoaded(
+                        playlistID: playlistID,
+                        refreshID: recommendationRequestID,
+                        profileScope: scope,
+                        recommendations: recommendations,
+                        reasons: reasons
+                    ))
+                }
+                .cancellable(id: CancelID.localRecommendations, cancelInFlight: true)
+                let actorRecommendationEffect = Effect<Action>.run { send in
                     let collections = await ActorRecommendationEngine.collections(
                         history: eligibleHistory,
                         playlistID: playlistID,
@@ -573,19 +666,22 @@ public struct DashboardFeature {
                     ))
                 }
                 .cancellable(id: CancelID.actorRecommendations, cancelInFlight: true)
-                let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
                 let newEpisodeEffect: Effect<Action>
                 if let config = state.activePlaylistConfig {
                     newEpisodeEffect = .run { send in
                         let fullEpisodeHistory = await (try? databaseClient.fetchEpisodeWatchHistory(scope)) ?? []
+                        let playlistEpisodeHistory = fullEpisodeHistory.filter { item in
+                            guard item.playlistID == playlistID else { return false }
+                            return cutoff.map { item.lastWatchedAt > $0 } ?? true
+                        }
                         let eligibleEpisodeHistory = hideAdult
-                            ? fullEpisodeHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
-                            : fullEpisodeHistory
+                            ? playlistEpisodeHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                            : playlistEpisodeHistory
                         let entries = await NewEpisodeDiscoveryEngine.discover(
                             history: eligibleEpisodeHistory,
                             playlistID: playlistID,
                             seriesCatalog: safeSeries,
-                            favoriteSeriesIDs: Set(favorites.filter {
+                            favoriteSeriesIDs: Set(playlistFavorites.filter {
                                 $0.playlistID == playlistID && $0.type.caseInsensitiveCompare("series") == .orderedSame
                             }.map(\.id)),
                             config: config,
@@ -605,7 +701,7 @@ public struct DashboardFeature {
                     state.activeNewEpisodeRefreshID = nil
                     newEpisodeEffect = .none
                 }
-                return .merge(recommendationEffect, newEpisodeEffect)
+                return .merge(localRecommendationsEffect, actorRecommendationEffect, newEpisodeEffect)
 
             case let .actorSelected(id, name):
                 if state.selectedActorID == id {
@@ -660,7 +756,8 @@ public struct DashboardFeature {
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
                     state.activeRefreshID == refreshID,
-                    profileContextClient.snapshot() == profileScope
+                    profileContextClient.snapshot() == profileScope,
+                    state.activeProfileScope == profileScope
                 else { return .none }
 
                 switch type {
@@ -684,12 +781,19 @@ public struct DashboardFeature {
 
             case let .loadFeaturedData(config, playlistID, hideAdult, loadEPGEvents, refreshID):
                 let profileScope = profileContextClient.snapshot()
+                let personalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
+                    for: profileScope.profileID
+                )
                 guard
                     state.activePlaylistID == playlistID,
                     state.activeRefreshID == refreshID
                 else { return .none }
+                state.activePersonalizationRefreshID = nil
+                if !personalizationEnabled {
+                    Self.clearPersonalizationState(&state)
+                }
                 state.activeEPGRefreshID = loadEPGEvents ? refreshID : nil
-                state.activeActorRecommendationRefreshID = refreshID
+                state.activeActorRecommendationRefreshID = nil
                 state.activeNewEpisodeRefreshID = nil
                 state.activeMovieRatingRefreshID = nil
                 state.hasLoadedMovieRatingDiscovery = false
@@ -720,9 +824,6 @@ public struct DashboardFeature {
                     async let liveCategories = try? iptvClient.fetchLiveCategories(config)
                     async let vodCategories = try? iptvClient.fetchVODCategories(config)
                     async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
-                    async let historyReq = (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
-                    async let favoritesReq = (try? databaseClient.fetchFavorites(profileScope)) ?? []
-
                     let primaryCatalogs = await withTaskGroup(
                         of: DashboardPrimaryCatalogResult.self
                     ) { group -> (channels: [MediaModels.Item]?, vods: [MediaModels.Item]?, series: [MediaModels.Item]?) in
@@ -801,9 +902,6 @@ public struct DashboardFeature {
                         return (channels, vods, series)
                     }
 
-                    let history = await historyReq
-                    let favorites = await favoritesReq
-
                     let fetchedChannels = primaryCatalogs.channels
                     let fetchedLiveCategories = await liveCategories
                     let fetchedVODs = primaryCatalogs.vods
@@ -817,8 +915,6 @@ public struct DashboardFeature {
                     var channels: [MediaModels.Item]?
                     var vods: [MediaModels.Item]?
                     var series: [MediaModels.Item]?
-                    var recommendations: [MediaModels.Item]?
-                    var recommendationReasons: [String: SmartRecommendationEngine.Reason]?
                     var vodExploreCollections: [ExploreCollection]?
                     var seriesExploreCollections: [ExploreCollection]?
                     var yearExploreCollections: [ExploreCollection]?
@@ -829,10 +925,6 @@ public struct DashboardFeature {
                     let actorSeriesCandidates = fetchedSeries.map {
                         hideAdult ? $0.filter { !isAdult($0.title) } : $0
                     } ?? []
-                    let eligibleHistory = hideAdult
-                        ? history.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
-                        : history
-
                     if let fetchedChannels {
                         let filtered = hideAdult ? fetchedChannels.filter { !isAdult($0.title) } : fetchedChannels
                         channels = Array(filtered.prefix(10))
@@ -852,21 +944,6 @@ public struct DashboardFeature {
                         let safeVODs = hideAdult ? fetchedVODs.filter { !isAdult($0.title) } : fetchedVODs
                         let sorted = safeVODs.sorted { ($0.addedDate ?? Date.distantPast) > ($1.addedDate ?? Date.distantPast) }
                         vods = Array(sorted.prefix(10))
-
-                        // Smart Content-based and collaborative recommendations (Madde #8 & #42)
-                        let scoredRecommendations = SmartRecommendationEngine.recommendations(
-                            from: safeVODs,
-                            history: history,
-                            favorites: favorites,
-                            limit: 12
-                        )
-                        recommendations = scoredRecommendations.map(\.item)
-                        recommendationReasons = Dictionary(
-                            scoredRecommendations.compactMap { recommendation in
-                                recommendation.reason.map { (recommendation.id, $0) }
-                            },
-                            uniquingKeysWith: { first, _ in first }
-                        )
                     }
 
                     if let fetchedSeries {
@@ -934,8 +1011,6 @@ public struct DashboardFeature {
                             series: series,
                             actorMovieCandidates: actorMovieCandidates,
                             actorSeriesCandidates: actorSeriesCandidates,
-                            recommendations: recommendations,
-                            recommendationReasons: recommendationReasons,
                             vodExploreCollections: vodExploreCollections,
                             seriesExploreCollections: seriesExploreCollections,
                             yearExploreCollections: yearExploreCollections,
@@ -950,33 +1025,6 @@ public struct DashboardFeature {
                                 refreshID: refreshID,
                                 events: [],
                                 succeeded: false
-                            ))
-                            // The actor recommendation shelves use the VOD/series
-                            // catalogues and may still succeed without live data.
-                            let actorCollections = await ActorRecommendationEngine.collections(
-                                history: eligibleHistory,
-                                playlistID: playlistID,
-                                movies: actorMovieCandidates,
-                                series: actorSeriesCandidates,
-                                tmdbClient: tmdbClient
-                            )
-                            let watchedActors = actorMovieCandidates.isEmpty && actorSeriesCandidates.isEmpty
-                                ? []
-                                : await ActorRecommendationEngine.mostWatchedActors(
-                                    history: eligibleHistory,
-                                    playlistID: playlistID,
-                                    movies: actorMovieCandidates,
-                                    series: actorSeriesCandidates,
-                                    tmdbClient: tmdbClient
-                                )
-                            guard !Task.isCancelled else { return }
-                            await send(.actorRecommendationsLoaded(
-                                playlistID: playlistID,
-                                hideAdult: hideAdult,
-                                refreshID: refreshID,
-                                profileScope: profileScope,
-                                collections: actorCollections,
-                                actors: watchedActors
                             ))
                             return
                         }
@@ -994,31 +1042,6 @@ public struct DashboardFeature {
                             succeeded: result.succeeded
                         ))
                     }
-                    let actorCollections = await ActorRecommendationEngine.collections(
-                        history: eligibleHistory,
-                        playlistID: playlistID,
-                        movies: actorMovieCandidates,
-                        series: actorSeriesCandidates,
-                        tmdbClient: tmdbClient
-                    )
-                    let watchedActors = actorMovieCandidates.isEmpty && actorSeriesCandidates.isEmpty
-                        ? []
-                        : await ActorRecommendationEngine.mostWatchedActors(
-                            history: eligibleHistory,
-                            playlistID: playlistID,
-                            movies: actorMovieCandidates,
-                            series: actorSeriesCandidates,
-                            tmdbClient: tmdbClient
-                        )
-                    guard !Task.isCancelled else { return }
-                    await send(.actorRecommendationsLoaded(
-                        playlistID: playlistID,
-                        hideAdult: hideAdult,
-                        refreshID: refreshID,
-                        profileScope: profileScope,
-                        collections: actorCollections,
-                        actors: watchedActors
-                    ))
                 } catch: { error, send in
                     await send(.dataFailed(
                         playlistID: playlistID,
@@ -1035,6 +1058,7 @@ public struct DashboardFeature {
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.newEpisodeDiscovery),
+                    .cancel(id: CancelID.localRecommendations),
                     .cancel(id: CancelID.movieRatingDiscovery),
                     .cancel(id: CancelID.awardDiscovery)
                 )
@@ -1079,13 +1103,30 @@ public struct DashboardFeature {
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, recommendations, recommendationReasons, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
+            case let .localRecommendationsLoaded(playlistID, refreshID, profileScope, recommendations, reasons):
+                guard
+                    LocalPersonalizationPreferences.recommendationsEnabled(for: profileScope.profileID),
+                    profileContextClient.snapshot() == profileScope,
+                    state.activeProfileScope == profileScope,
+                    state.activePlaylistID == playlistID,
+                    state.activePersonalizationRefreshID == refreshID
+                else { return .none }
+                state.activePersonalizationRefreshID = nil
+                state.recommendedVODs = recommendations
+                state.recommendationReasons = reasons
+                return .none
+
+            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
                     state.activeRefreshID == refreshID,
-                    profileContextClient.snapshot() == profileScope
+                    profileContextClient.snapshot() == profileScope,
+                    state.activeProfileScope == profileScope
                 else { return .none }
+                let personalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
+                    for: profileScope.profileID
+                )
                 state.isLoading = false
                 state.hasLoadedRemoteData = true
                 state.lastRemoteRefreshAt = Date()
@@ -1110,11 +1151,9 @@ public struct DashboardFeature {
                 }
                 state.actorRecommendationMovieCandidates = actorMovieCandidates
                 state.actorRecommendationSeriesCandidates = actorSeriesCandidates
-                if let recommendations {
-                    state.recommendedVODs = recommendations
-                }
-                if let recommendationReasons {
-                    state.recommendationReasons = recommendationReasons
+                state.activePersonalizationRefreshID = nil
+                if !personalizationEnabled {
+                    Self.clearPersonalizationState(&state)
                 }
                 if let vodExploreCollections {
                     state.exploreCollections.removeAll { $0.id.hasPrefix("movie-category:") }
@@ -1149,50 +1188,16 @@ public struct DashboardFeature {
                 let cachedChannels = state.featuredChannels
                 let cachedVODs = state.featuredVODs
                 let cachedSeries = state.featuredSeries
-                let cachedRecommendations = state.recommendedVODs
-                let cachedRecommendationReasons = state.recommendationReasons.mapValues(\.rawValue)
-                let newEpisodeRequestID = UUID()
-                state.activeNewEpisodeRefreshID = newEpisodeRequestID
                 let cacheEffect = Effect<Action>.run { _ in
                     await DashboardFeaturedCache.save(
                         playlistID: playlistID,
                         hideAdult: hideAdult,
                         channels: cachedChannels,
                         vods: cachedVODs,
-                        series: cachedSeries,
-                        recommendations: cachedRecommendations,
-                        recommendationReasons: cachedRecommendationReasons
+                        series: cachedSeries
                     )
                 }
-                let newEpisodeEffect: Effect<Action>
-                if let config = state.activePlaylistConfig {
-                    newEpisodeEffect = .run { send in
-                        let history = await (try? databaseClient.fetchEpisodeWatchHistory(profileScope)) ?? []
-                        let favorites = await (try? databaseClient.fetchFavorites(profileScope)) ?? []
-                        let entries = await NewEpisodeDiscoveryEngine.discover(
-                            history: history,
-                            playlistID: playlistID,
-                            seriesCatalog: actorSeriesCandidates,
-                            favoriteSeriesIDs: Set(favorites.filter {
-                                $0.playlistID == playlistID && $0.type.caseInsensitiveCompare("series") == .orderedSame
-                            }.map(\.id)),
-                            config: config,
-                            iptvClient: iptvClient
-                        )
-                        guard !Task.isCancelled else { return }
-                        await send(.newEpisodeSeriesLoaded(
-                            playlistID: playlistID,
-                            hideAdult: hideAdult,
-                            refreshID: newEpisodeRequestID,
-                            profileScope: profileScope,
-                            series: entries
-                        ))
-                    }
-                    .cancellable(id: CancelID.newEpisodeDiscovery, cancelInFlight: true)
-                } else {
-                    state.activeNewEpisodeRefreshID = nil
-                    newEpisodeEffect = .none
-                }
+                let localDataEffect = Effect<Action>.send(.loadLocalData)
                 let movieRatingRequestID = UUID()
                 state.activeMovieRatingRefreshID = movieRatingRequestID
                 let movieRatingEffect = Effect<Action>.run { send in
@@ -1217,11 +1222,13 @@ public struct DashboardFeature {
                     guard !Task.isCancelled else { return }
                     await send(.awardShelvesLoaded(playlistID: playlistID, hideAdult: hideAdult, refreshID: awardRequestID, shelves: shelves))
                 }.cancellable(id: CancelID.awardDiscovery, cancelInFlight: true)
-                return .merge(cacheEffect, newEpisodeEffect, movieRatingEffect, awardEffect)
+                return .merge(cacheEffect, localDataEffect, movieRatingEffect, awardEffect)
 
             case let .actorRecommendationsLoaded(playlistID, hideAdult, refreshID, profileScope, collections, actors):
                 guard
+                    LocalPersonalizationPreferences.recommendationsEnabled(for: profileScope.profileID),
                     profileContextClient.snapshot() == profileScope,
+                    state.activeProfileScope == profileScope,
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
                     state.activeActorRecommendationRefreshID == refreshID
@@ -1232,7 +1239,9 @@ public struct DashboardFeature {
                 return .none
 
             case let .newEpisodeSeriesLoaded(playlistID, hideAdult, refreshID, profileScope, series):
-                guard profileContextClient.snapshot() == profileScope,
+                guard LocalPersonalizationPreferences.recommendationsEnabled(for: profileScope.profileID),
+                      profileContextClient.snapshot() == profileScope,
+                      state.activeProfileScope == profileScope,
                       state.activePlaylistID == playlistID,
                       state.lastAdultHidden == hideAdult,
                       state.activeNewEpisodeRefreshID == refreshID
@@ -1652,6 +1661,24 @@ public struct DashboardFeature {
     private nonisolated static func isSportsFixtureTitle(_ title: String) -> Bool {
         let lowered = title.lowercased()
         return lowered.contains(" vs ") || lowered.contains(" v ") || title.contains(" - ")
+    }
+
+    private static func clearPersonalizationState(_ state: inout State) {
+        state.recommendedVODs = []
+        state.recommendationReasons = [:]
+        state.actorRecommendationCollections = []
+        state.mostWatchedActors = []
+        state.selectedActorID = nil
+        state.selectedActorName = nil
+        state.selectedActorCollections = []
+        state.isLoadingActorFilmography = false
+        state.hasLoadedSelectedActorFilmography = false
+        state.selectedActorFilmographyRequestID = nil
+        state.newEpisodeSeries = []
+        state.favoriteSeriesUnwatchedEpisodeCounts = [:]
+        state.activeActorRecommendationRefreshID = nil
+        state.activeNewEpisodeRefreshID = nil
+        state.activePersonalizationRefreshID = nil
     }
 
     private nonisolated static func fixtureMappingKey(title: String, startTime: Date) -> String {
