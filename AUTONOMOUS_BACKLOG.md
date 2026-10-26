@@ -1700,7 +1700,63 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. İlk iOS denemesi rapor oluşturucunun ana aktör cihaz bilgisini okumak için async olması gerektiğini belirtti; imza/call site akışı düzeltildikten sonra iki son build başarılı oldu. Test, simulator, app launch veya ağ bağlantısı çalıştırılmadı.
 - **Temizlik:** `/private/tmp/PureIPTV179` DerivedData **4,062,792 KiB**, iOS logu **432 KiB**, tvOS logu **3,096 KiB**; iki build bittikten sonra `lsof +D` açık handle göstermedi ve yalnız görev çıktıları silindi. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da task kaynaklı `Build`/`Index.noindex` yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** korundu. ContactCleaner’a erişilmedi.
 
-### 180. [PENDING] Plex ve Emby İçin Güvenli Uçtan Uca Media Server Sağlayıcıları
+### 180. [IN_PROGRESS] Plex ve Emby İçin Güvenli Uçtan Uca Media Server Sağlayıcıları
 - **Fırsat:** Xtream/M3U’dan ayrı provider mimarisi ekle: Plex/Emby sunucu keşfi ve kimlik doğrulaması, güvenli credential/token saklama, server-side kategori/katalog/aramanın sayfalı yüklenmesi, detay ve media playback, authenticated artwork, cache/refresh/invalidation ve playlist ekleme/düzenleme akışları. Provider token’larını URL’ye koyma; auth’ı korumalı request context/header yolundan taşı.
 - **Reviewer kapısı:** Yalnız kategori/search yüzeyini eklemek eksik; iOS ve tvOS’ta katalog, detay, oynatma ve token yaşam döngüsünün uçtan uca çalışması ve token’ın URL/log/persisted media identity’ye sızmaması gerekir.
 - **Kaynak:** https://developer.plex.tv/pms/ · https://dev.emby.media/doc/restapi/index.html
+- **Başlangıç taraması:** `PlaylistType`, `SavedPlaylist`, `PlaylistConfig`, `IPTVClient` ve Add Playlist yalnız `.xtream`/`.m3u` dallarına göre yapılandırılmış. Xtream-specific guards, stream URL builder ve EPG mapping dahil yaklaşık 83 call site yeni sağlayıcıların UI’den oynatmaya kadar taşınmasını etkiliyor; yüzeysel ayrı catalog ekranı reviewer kapısını karşılamaz.
+- **Uygulama adımları:** (1) credential/session tipleri ve Keychain yaşam döngüsü; (2) ayrı Plex PIN/device auth ve Emby user auth/discovery client’ları, token header’ları; (3) sayfalı catalog/category/search ve auth’lı artwork; (4) detail/series hierarchy ile authenticated playback; (5) iOS/tvOS playlist ekleme/düzenleme ve stale-token recovery; (6) full UI flow/reviewer audit/build. Her adım token’ı URL’den ve loglardan ayrı tutmalı; item identity’de yalnız opaque provider/server/item ID kullanılmalı.
+- **Resmî API bulgusu:** Plex belgeleri `X-Plex-Token` ve benzersiz client ID header’larını; Plex.tv kaynak keşfinden sonra her PMS için farklı `accessToken` ve local bağlantı önceliğini tarif ediyor. Emby, `AuthenticateByName` sonucundaki access token’ı sonraki isteklerde `X-Emby-Token` header’ıyla kullanmayı belgeliyor. Mevcut SwiftVLC paketi arbitrary HTTP header playback’ini desteklemediğini belirtiyor; authenticated stream’ler için farklı playback yolu veya proxy gerekecek. Kaynaklar: https://developer.plex.tv/pms/ · https://dev.emby.media/doc/restapi/User-Authentication.html · SwiftVLC `WorkingWithMedia.md` under shared Xcode SourcePackages.
+- **İlk altyapı değişikliği:** `NetworkClient.fetch(request:)` authenticated URLRequest kabul ediyor; debug request/response logları artık yalnız redacted URL ve status/süre bırakıyor, response body’lerini yazmıyor. `MediaServerRequestContext` Plex/Emby auth header’larını hazırlar ve server-returned URL’lerden credential query alanlarını çıkarır. Henüz UI/catalog/player’a bağlanmadı; item tamamlanmadı.
+- **İlk altyapı review/doğrulaması:** `[APPROVED]` — credential query/userinfo temizliği yalnız açık `request:` overload’larında uygulanıyor; mevcut Xtream/TMDB `url:` çağrıları orijinal URL’lerini koruyor, log temsili ise URL sırlarını gizliyor. Emby device descriptor çağırandan açıkça geliyor. iOS generic Release ve tvOS generic Release compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz; test/simulator/app/playback çalıştırılmadı.
+- **Task DerivedData temizliği:** `/private/tmp/PureIPTV180` **4,027,460 KiB**, iOS logu **4,100 KiB**, tvOS logu **3,132 KiB**. Build’ler bittikten sonra `lsof +D` boş döndü; yalnız bu task’ın klasör ve logları silindi, son `/private/tmp` **2,376 KiB** oldu. Normal PureIPTV DerivedData’da task `Build`/`Index.noindex` yoktu, paylaşılan `SourcePackages` **1,873,636 KiB** korundu.
+
+### 181. [PENDING] For You Raflarında Yerel ve Açıklanabilir Kişiselleştirme
+- **Fırsat:** Yerel izleme geçmişi/favorilerinden öneri sıralaması üret; kaynak nedenini göster, profil bazında kapat ve geçmişi temizle.
+- **Keşif:** IPTVX For You kişiselleştirilmiş film/dizi keşfini duyuruyor; kullanıcılar büyük kataloglarda keşif arıyor. Raporlama veya harici profile veri gönderilmemeli.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 182. [PENDING] Film ve Dizi Detaylarında Ödül Bilgisinin Kaynağını Belirtme
+- **Fırsat:** Sağlayıcı metadata’sında bulunan ödül/adaylık bilgisini detay ekranında göstermek; kaynakta yoksa alanı gizle ve kullanıcı puanı gibi sunma.
+- **Keşif:** IPTVX v25 sürüm notları detay sayfalarında mevcutsa ödül ve takdir bilgisini duyuruyor; kullanıcı açısından güven, kaynağın ve güncelliğin açık olmasına bağlı.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+
+### 183. [PENDING] Evrensel Aramada İçerik Türü ve Kişi Filtreleri
+- **Fırsat:** Film, dizi, oyuncu, canlı kanal ve program sonuçlarını tek arama ekranında seçilebilir filtrelerle daralt; tvOS filtre odak geri dönüşünü koru.
+- **Keşif:** IPTVX v25 arama sonuçları için tür filtrelerini (film, dizi, oyuncu, canlı kanal, program) yenilediğini belirtiyor.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+
+### 184. [PENDING] Başarısız Katalog Bölümünü Tam Playlist Yenilemeden Tekrar Dene
+- **Fırsat:** Xtream kategori isteği başarısız olduğunda yalnız o bölümü tekrar yükle; geçerli diğer kategorileri ve son iyi kataloğu tut.
+- **Keşif:** IPTVX v25, yüklenmeyen Xtream bölümleri için tüm playlist’i yenilemeden Retry eklediğini duyurdu. Mevcut hata modelinin hangi katalog çağrılarını ayırt edebildiği önce denetlensin.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+
+### 185. [PENDING] For You İçerik Satırları İçin Yenileme ve Boş Durum Deneyimi
+- **Fırsat:** Kişiselleştirilmiş raflar boş, eski veya kısmen yüklenmiş olduğunda kullanıcıya yenileme ve anlaşılır boş durum sun; katalog yüklemesi ekranı kilitlemesin.
+- **Keşif:** IPTVX v25 For You yenileme güvenilirliğini ve öneri alakasını geliştirdiğini duyurdu; bu uygulamada sunucu isteği yalnızca kullanıcı/provider desteklediğinde kullanılmalı.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+
+### 186. [PENDING] tvOS Arama Sonuçlarında Daha Belirgin Filtre ve Odak Akışı
+- **Fırsat:** Sonuç filtresi, sıfırlama ve sonuç listesi arasında tek yönlü Siri Remote dolaşımı kur; filtre uygulandıktan sonra seçili sonuç veya başlangıç konumu korunmalı.
+- **Keşif:** IPTVX sürüm notları Apple TV aramasını ve TV rehberini uzun adlar ile odak navigasyonu için iyileştirdiğini bildiriyor.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv
+
+### 187. [PENDING] Apple TV Top Shelf İçin Ayrıntılı Medya Kartları
+- **Fırsat:** Var olan Top Shelf seçimini bozmadan, seçili film/dizi rafında daha zengin sanat çalışması ve erişilebilir başlık/açıklama sun; değişen içerik bildirimlerini ölçülü gönder.
+- **Keşif:** IPTVX v25 Apple TV Top Shelf’te tam ekran artwork ve daha zengin içerik ayrıntısı eklediğini duyurdu. Mevcut #22 Top Shelf altyapısı tekrar kullanılmalı.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · [#22 Top Shelf mevcut altyapı](AUTONOMOUS_BACKLOG.md)
+
+### 188. [PENDING] Yüksek Kare Hızlı VOD’da İlk Kare ve Seek Hata Göstergesi
+- **Fırsat:** 50/60 fps VOD başlangıç ve seek süresini gerçek player event’lerinden ölç; süre aşımı/başarısızlıkta mevcut retry bilgisini göster ve ölçülemeyen değeri uydurma.
+- **Keşif:** IPTVX sürüm notları bazı yüksek kare hızlı videolarda başlatma ve seek iyileştirmesi bildirdi. Bu madde #145’e bağlı ölçümlü VOD deneyimi olarak ele alınmalı.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · #145
+
+### 189. [PENDING] Tam Ekran Oynatma Hatasında Açık Retry ve Kaynak Eylemleri
+- **Fırsat:** Hata panelinden aynı URL’ye retry, varsa güvenli alternatif kaynağa geçiş veya oynatıcıyı değiştirme eylemlerini açıkça ayır; her seçimde pozisyon korunabildiğini bildir.
+- **Keşif:** IPTVX v24/v25 notları tam ekran retry, source/player switching ve daha açık oynatma hata kurtarması eklediğini belirtiyor.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · #124 · #146
+
+### 190. [PENDING] Media Server Oynatma Kalitesi ve Direct Play Tercihi
+- **Fırsat:** Plex/Emby’nin gerçek playback-session/stream metadata’sını kullanarak direct play veya sunucu dönüştürmesini kullanıcıya açıkla; desteklenmeyen bir formatı sessizce garanti etme.
+- **Keşif:** IPTVX v25 yüksek kare hızındaki playback iyileştirmelerini, UHF ise Plex/Emby medya merkezlerini ve sunucu kaynaklı aramayı duyurdu. Playback capability kararları provider protokolünden doğrulanmalı.
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
