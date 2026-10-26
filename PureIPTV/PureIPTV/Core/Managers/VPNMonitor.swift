@@ -4,14 +4,13 @@ import Network
 
 // MARK: - VPN Monitor & Status Detector (Madde #93)
 
-/// Real-time VPN connection status monitor.
-/// Uses NWPathMonitor interface inspection and system network scoping to detect active VPN tunnels
-/// (utun, ipsec, ppp, wireguard, openvpn) across both iOS and tvOS (tvOS 17+ VPN support).
+/// Heuristically observes VPN-like tunnel interfaces.
+/// The available-interface and scoped-proxy signals do not prove that a specific stream uses a VPN.
 @MainActor
 public final class VPNMonitor: ObservableObject {
     public static let shared = VPNMonitor()
 
-    @Published public private(set) var isConnected: Bool = false
+    @Published public private(set) var hasVPNLikeInterfaceEvidence: Bool = false
     @Published public private(set) var activeInterfaceName: String? = nil
 
     private let monitor = NWPathMonitor()
@@ -25,14 +24,14 @@ public final class VPNMonitor: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             let (isVPN, ifaceName) = Self.checkVPN(path: path)
             Task { @MainActor [weak self] in
-                self?.isConnected = isVPN
+                self?.hasVPNLikeInterfaceEvidence = isVPN
                 self?.activeInterfaceName = ifaceName
             }
         }
         monitor.start(queue: monitorQueue)
     }
 
-    /// Evaluates whether an active VPN interface is handling network traffic.
+    /// Returns a heuristic signal; it does not identify the provider or prove stream routing.
     public nonisolated static func checkVPN(path: NWPath? = nil) -> (isVPN: Bool, interface: String?) {
         // 1. Check NWPath interface types
         if let path {

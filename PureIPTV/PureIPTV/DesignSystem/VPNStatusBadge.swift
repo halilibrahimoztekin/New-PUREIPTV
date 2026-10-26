@@ -11,35 +11,39 @@ public struct VPNStatusBadge: View {
     }
 
     public var body: some View {
+        let hasEvidence = vpnMonitor.hasVPNLikeInterfaceEvidence
         HStack(spacing: 5) {
-            Image(systemName: vpnMonitor.isConnected ? "lock.shield.fill" : "shield")
+            Image(systemName: hasEvidence ? "lock.shield.fill" : "shield")
                 .font(.system(size: compact ? 10 : 12, weight: .bold))
-                .foregroundStyle(vpnMonitor.isConnected ? Color.green : Color.white.opacity(0.5))
+                .foregroundStyle(hasEvidence ? Color.orange : Color.white.opacity(0.5))
 
             if !compact {
-                Text(vpnMonitor.isConnected ? "VPN AKTİF" : "VPN YOK")
+                Text(hasEvidence ? "VPN ARAYÜZÜ OLASI" : "VPN ARAYÜZÜ SAPTANMADI")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(vpnMonitor.isConnected ? Color.green : Color.white.opacity(0.6))
+                    .foregroundStyle(hasEvidence ? Color.orange : Color.white.opacity(0.6))
             } else {
                 Text("VPN")
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
-                    .foregroundStyle(vpnMonitor.isConnected ? Color.green : Color.white.opacity(0.5))
+                    .foregroundStyle(hasEvidence ? Color.orange : Color.white.opacity(0.5))
             }
 
             Circle()
-                .fill(vpnMonitor.isConnected ? Color.green : Color.gray.opacity(0.4))
+                .fill(hasEvidence ? Color.orange : Color.gray.opacity(0.4))
                 .frame(width: 5, height: 5)
-                .shadow(color: vpnMonitor.isConnected ? Color.green.opacity(0.8) : .clear, radius: 3)
+                .shadow(color: hasEvidence ? Color.orange.opacity(0.65) : .clear, radius: 3)
         }
         .padding(.horizontal, compact ? 7 : 10)
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(vpnMonitor.isConnected ? Color.green.opacity(0.12) : Color.white.opacity(0.06))
+                .fill(hasEvidence ? Color.orange.opacity(0.12) : Color.white.opacity(0.06))
                 .overlay(
                     Capsule()
-                        .stroke(vpnMonitor.isConnected ? Color.green.opacity(0.35) : Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(hasEvidence ? Color.orange.opacity(0.35) : Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(hasEvidence ? "VPN benzeri arayüz olabilir" : "VPN benzeri arayüz saptanmadı")
+        .accessibilityHint("Bu ağ arayüzü sinyali yayın trafiğinin VPN üzerinden gittiğini doğrulamaz.")
     }
 }

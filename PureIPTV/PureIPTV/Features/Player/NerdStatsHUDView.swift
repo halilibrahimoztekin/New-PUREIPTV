@@ -195,10 +195,12 @@ public struct NerdStatsHUDView: View {
 
                 // VPN Status (Madde #93)
                 StatCard(
-                    icon: VPNMonitor.shared.isConnected ? "lock.shield.fill" : "shield",
-                    title: "Ağ & VPN",
-                    value: VPNMonitor.shared.isConnected ? "VPN Tüneli Aktif" : "Doğrudan ISP",
-                    accentColor: VPNMonitor.shared.isConnected ? Color.green : Color.white.opacity(0.7)
+                    icon: VPNMonitor.shared.hasVPNLikeInterfaceEvidence ? "lock.shield.fill" : "shield",
+                    title: "VPN Algısı",
+                    value: VPNMonitor.shared.hasVPNLikeInterfaceEvidence
+                        ? "VPN benzeri arayüz olası"
+                        : "VPN benzeri arayüz saptanmadı",
+                    accentColor: VPNMonitor.shared.hasVPNLikeInterfaceEvidence ? Color.orange : Color.white.opacity(0.7)
                 )
 
                 // Stream Type / Live Mode

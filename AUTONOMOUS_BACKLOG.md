@@ -1617,8 +1617,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Doğrulama/temizlik:** Salt okunur inceleme; build veya test çalıştırılmadı, task kaynaklı DerivedData üretilmedi. `/private/tmp` son taramasında task DerivedData klasörü yok; kullanıcı/olası kurtarma dosyaları korunuyor. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
-### 172. [PENDING] VPN Bağlantı Durumunu Playlist Akışında Açıklama
+### 172. [DONE — RE-SCOPED] VPN Bağlantı Durumunu Playlist Akışında Açıklama
 - **Fırsat:** VPN’in uygulama tarafından yönetilip yönetilmediğini mevcut `VPNMonitor` ile doğrula; sağlayıcı/VPN kaynaklı başarısız bağlantıyı kullanıcıya anlaşılır göster, yeni VPN istemcisi veya gizli trafik yönlendirmesi eklemeden önce platform ve gizlilik gereksinimlerini değerlendir.
+- **Kod bulgusu:** `NWPath.availableInterfaces` mevcut bağlantı yolunun kullanabileceği tüm arayüzleri tercih sırasıyla listeler; stream’in fiilen hangi arayüzden çıktığını tek başına kanıtlamaz. `.other`, interface-name ve `__SCOPED__` aramaları heuristik; eşleşme bulunmaması Direct ISP anlamına gelmez. NetworkExtension `NEVPNStatus`, ilişkilendirilmiş VPN konfigürasyonu/bağlantısının durumudur; uygulamanın gördüğü tüm üçüncü taraf VPN sağlayıcılarının evrensel doğrulaması değildir.
+- **Uygulama:** `VPNMonitor.isConnected` adı `hasVPNLikeInterfaceEvidence` olarak değiştirildi. Dashboard rozeti ve Nerd Stats artık “VPN arayüzü olası / benzeri arayüz saptanmadı” der; “VPN aktif” ve “Doğrudan ISP” iddiaları kaldırıldı. Heuristik kanıt turuncu gösteriliyor; VoiceOver etiketi ve ipucu bu sinyalin stream egress doğrulamadığını açıklıyor.
+- **PR Reviewer:** `[APPROVED]` — property call site’ları ve HUD metinleri kontrol edildi; kompakt erişilebilirlik açıklaması ayrıca onaylandı.
+- **Karar:** Sağlayıcı bağlantı hatasının VPN’den kaynaklandığına dair teşhis eklenmedi; stream egress’i ölçen ayrı bir doğrulama yok. Mevcut gösterge yalnız olası VPN/tünel arayüzünü belirtir.
+- **Doğrulama:** iOS Release generic build ve tvOS Release generic build `BUILD SUCCEEDED`; `git diff --check` başarılı. Yalnız compile-only build alındı; test/simulator/app launch/playback akışı yok.
+- **Temizlik:** `/private/tmp/PureIPTV172` task DerivedData ve logları **4,039,908 KiB**; her iki build sonlandıktan ve `lsof +D` açık handle göstermedikten sonra kaldırıldı. `/private/tmp` içinde task DerivedData klasörü yok. Normal PureIPTV `SourcePackages` ve kullanıcı/global cache’leri korundu; normal DerivedData’da task çıktısı üretilmedi. ContactCleaner’a erişilmedi.
 - **Keşif sinyali:** UHF 1.99.0 yerleşik VPN sağlayıcı desteğini ve bağlantı kurtarmayı duyurdu; kullanıcı geri bildirimlerinde playlist sağlayıcı uyumluluğu ve bağlantı sorunlarının ayırt edilmesi öne çıkıyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/iptv_strong/comments/1uv632w/best_iptv_app_for_appletv/
 
