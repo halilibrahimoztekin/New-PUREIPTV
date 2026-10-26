@@ -45,6 +45,8 @@ public struct UnavailableFavoriteChannel: Identifiable, Equatable, Sendable {
     public let coverURL: URL?
     public let playlistID: UUID
     public let profileID: UUID?
+    public let streamURL: String?
+    public let replacement: MediaModels.Item?
 
     public var id: String {
         let components = [profileID?.uuidString ?? "legacy", playlistID.uuidString, channelID]
@@ -62,12 +64,22 @@ public struct UnavailableFavoriteChannel: Identifiable, Equatable, Sendable {
         )
     }
 
-    public init(channelID: String, title: String, coverURL: URL?, playlistID: UUID, profileID: UUID?) {
+    public init(
+        channelID: String,
+        title: String,
+        coverURL: URL?,
+        playlistID: UUID,
+        profileID: UUID?,
+        streamURL: String? = nil,
+        replacement: MediaModels.Item? = nil
+    ) {
         self.channelID = channelID
         self.title = title
         self.coverURL = coverURL
         self.playlistID = playlistID
         self.profileID = profileID
+        self.streamURL = streamURL
+        self.replacement = replacement
     }
 }
 
@@ -153,6 +165,7 @@ public struct LiveTVFeature {
         public var favoriteOrderRevision: UInt64 = 0
         public var favoriteOrderRequestID: UUID?
         public var unavailableFavoriteChannels: [UnavailableFavoriteChannel] = []
+        public var favoriteRecoveryRequestIDs: [String: UUID] = [:]
         public var channelPresentationOverrides: [String: ChannelPresentationOverride] = [:]
         public var channelPresentationPlaylistID: UUID?
         public var channelPresentationProfileScope: ProfileContextSnapshot?
@@ -346,6 +359,15 @@ public struct LiveTVFeature {
         case selectChannelPreview(MediaModels.Item)
         case channelEPGResponse(Result<[EPGProgram], Error>)
         case toggleFavorite(MediaModels.Item)
+        case recoverUnavailableFavorite(channelID: String, replacement: MediaModels.Item)
+        case unavailableFavoriteRecoveryCompleted(
+            channelID: String,
+            replacement: MediaModels.Item,
+            playlistID: UUID,
+            profileScope: ProfileContextSnapshot,
+            requestID: UUID,
+            succeeded: Bool
+        )
         case favoritesLoaded(Set<String>, playlistID: UUID?, ProfileContextSnapshot)
         case hideChannel(MediaModels.Item)
         case unhideAllChannels
@@ -1018,6 +1040,16 @@ public struct LiveTVFeature {
                             resolved.append(channel)
                         }
                         let providerChannelIDs = Set(channels.map(\.id))
+                        let replacementCandidates = channels.filter { channel in
+                            allowedCategoryIDs.contains(channel.categoryID)
+                                && !hiddenIDs.contains(channel.id)
+                                && (!hideAdult || !isAdult(channel.title))
+                        }
+                        var channelsByStreamURL: [String: [MediaModels.Item]] = [:]
+                        for channel in replacementCandidates {
+                            guard let streamURL = channel.streamURL?.absoluteString else { continue }
+                            channelsByStreamURL[streamURL, default: []].append(channel)
+                        }
                         var seenUnavailableFavoriteIDs: Set<String> = []
                         let unavailableFavorites = favoriteRecords?.compactMap { favorite -> UnavailableFavoriteChannel? in
                             guard let playlistID,
@@ -1025,12 +1057,20 @@ public struct LiveTVFeature {
                                   membershipIDs.contains(favorite.id),
                                   !providerChannelIDs.contains(favorite.id),
                                   !hiddenIDs.contains(favorite.id) else { return nil }
+                            let replacement = favorite.streamURL.flatMap { streamURL -> MediaModels.Item? in
+                                guard let candidates = channelsByStreamURL[streamURL],
+                                      candidates.count == 1,
+                                      candidates[0].id != favorite.id else { return nil }
+                                return candidates[0]
+                            }
                             let unavailableFavorite = UnavailableFavoriteChannel(
                                 channelID: favorite.id,
                                 title: favorite.title,
                                 coverURL: favorite.coverURL.flatMap { URL(string: $0) },
                                 playlistID: playlistID,
-                                profileID: favorite.profileID
+                                profileID: favorite.profileID,
+                                streamURL: favorite.streamURL,
+                                replacement: replacement
                             )
                             return seenUnavailableFavoriteIDs.insert(unavailableFavorite.id).inserted
                                 ? unavailableFavorite
@@ -1880,6 +1920,149 @@ public struct LiveTVFeature {
                 return .run { _ in
                     _ = try? await databaseClient.toggleFavorite(favItem, profileScope)
                     await hapticClient.notification(.success)
+                }
+
+            case let .recoverUnavailableFavorite(channelID, replacement):
+                guard state.isFavoriteListMode,
+                      state.selectedFavoriteListID == nil,
+                      let playlistID = state.config?.playlistID,
+                      let unavailable = state.unavailableFavoriteChannels.first(where: {
+                          $0.channelID == channelID && $0.playlistID == playlistID
+                      }),
+                      unavailable.replacement == replacement,
+                      replacement.id != channelID,
+                      replacement.streamURL?.absoluteString == unavailable.streamURL,
+                      state.favoriteRecoveryRequestIDs[channelID] == nil else { return .none }
+
+                let requestID = UUID()
+                state.favoriteRecoveryRequestIDs[channelID] = requestID
+                let profileScope = profileContextClient.snapshot()
+                let oldFavorite = FavoriteItem(
+                    id: unavailable.channelID,
+                    type: "live",
+                    title: unavailable.title,
+                    coverURL: unavailable.coverURL?.absoluteString,
+                    streamURL: unavailable.streamURL,
+                    playlistID: playlistID
+                )
+                let newFavorite = FavoriteItem(
+                    id: replacement.id,
+                    type: "live",
+                    title: replacement.title,
+                    coverURL: replacement.coverURL?.absoluteString,
+                    streamURL: replacement.streamURL?.absoluteString,
+                    playlistID: playlistID
+                )
+                return .run { send in
+                    do {
+                        let replacementIsFavorite = try await databaseClient.isFavorite(
+                            replacement.id, "live", playlistID, profileScope
+                        )
+                        if !replacementIsFavorite {
+                            let wasAdded = try await databaseClient.toggleFavorite(newFavorite, profileScope)
+                            guard wasAdded else {
+                                await send(.unavailableFavoriteRecoveryCompleted(
+                                    channelID: channelID,
+                                    replacement: replacement,
+                                    playlistID: playlistID,
+                                    profileScope: profileScope,
+                                    requestID: requestID,
+                                    succeeded: false
+                                ))
+                                return
+                            }
+                        }
+
+                        let oldIsFavorite = try await databaseClient.isFavorite(
+                            channelID, "live", playlistID, profileScope
+                        )
+                        if oldIsFavorite {
+                            let remainedFavorite = try await databaseClient.toggleFavorite(oldFavorite, profileScope)
+                            guard !remainedFavorite else {
+                                await send(.unavailableFavoriteRecoveryCompleted(
+                                    channelID: channelID,
+                                    replacement: replacement,
+                                    playlistID: playlistID,
+                                    profileScope: profileScope,
+                                    requestID: requestID,
+                                    succeeded: false
+                                ))
+                                return
+                            }
+                        }
+
+                        await send(.unavailableFavoriteRecoveryCompleted(
+                            channelID: channelID,
+                            replacement: replacement,
+                            playlistID: playlistID,
+                            profileScope: profileScope,
+                            requestID: requestID,
+                            succeeded: true
+                        ))
+                    } catch {
+                        await send(.unavailableFavoriteRecoveryCompleted(
+                            channelID: channelID,
+                            replacement: replacement,
+                            playlistID: playlistID,
+                            profileScope: profileScope,
+                            requestID: requestID,
+                            succeeded: false
+                        ))
+                    }
+                }
+
+            case let .unavailableFavoriteRecoveryCompleted(channelID, replacement, playlistID, profileScope, requestID, succeeded):
+                guard state.favoriteRecoveryRequestIDs[channelID] == requestID else { return .none }
+                state.favoriteRecoveryRequestIDs.removeValue(forKey: channelID)
+                guard state.config?.playlistID == playlistID,
+                      state.isFavoriteListMode,
+                      state.selectedFavoriteListID == nil,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                guard succeeded else {
+                    state.bulkFavoriteNotice = AppStrings.LiveTV.favoriteRecoveryFailed
+                    return .none
+                }
+
+                state.favoriteIDs.remove(channelID)
+                state.favoriteIDs.insert(replacement.id)
+                state.unavailableFavoriteChannels.removeAll { $0.channelID == channelID }
+                if let index = state.favoriteListResolvedChannels.firstIndex(where: { $0.id == channelID }) {
+                    state.favoriteListResolvedChannels[index] = replacement
+                } else if !state.favoriteListResolvedChannels.contains(where: { $0.id == replacement.id }) {
+                    state.favoriteListResolvedChannels.append(replacement)
+                }
+                let mappedOrderIDs = state.favoriteOrderIDs.map { $0 == channelID ? replacement.id : $0 }
+                state.favoriteOrderIDs = FavoriteChannelSortMode.normalizedManualIDs(
+                    favoriteIDs: state.favoriteIDs,
+                    providerIDs: state.favoriteListResolvedChannels.map(\.id),
+                    storedIDs: mappedOrderIDs
+                )
+                state.favoriteOrderRevision = nextLiveFavoriteOrderRevision(after: state.favoriteOrderRevision)
+                let updatedOrder = FavoriteChannelOrderSnapshot(
+                    mode: state.favoriteSortMode,
+                    orderedIDs: state.favoriteOrderIDs,
+                    revision: state.favoriteOrderRevision
+                )
+                state.syncEPGTimeline(
+                    channels: state.favoriteListResolvedChannels,
+                    selectedCategoryID: nil,
+                    providerOrderChannels: state.favoriteListResolvedChannels
+                )
+                if var timeline = state.epgTimeline,
+                   timeline.config.playlistID == playlistID,
+                   timeline.favoriteListID == nil
+                {
+                    timeline.defaultFavoriteIDs = state.favoriteIDs
+                    timeline.favoriteIDs = state.favoriteIDs
+                    timeline.favoriteOrderIDs = state.favoriteOrderIDs
+                    timeline.favoriteOrderRevision = state.favoriteOrderRevision
+                    state.epgTimeline = timeline
+                }
+                state.bulkFavoriteNotice = AppStrings.LiveTV.favoriteRecoverySucceeded
+                let orderClient = favoriteChannelOrderClient
+                let profileID = profileScope.profileID
+                return .run { _ in
+                    await orderClient.save(updatedOrder, profileID, playlistID, nil)
                 }
 
             case let .hideChannel(channel):

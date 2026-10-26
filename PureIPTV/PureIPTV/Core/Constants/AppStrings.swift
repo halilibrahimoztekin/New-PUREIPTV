@@ -135,7 +135,14 @@ public enum AppStrings {
         public static let smartGroupName = "Grup Adı".localized
         public static let smartGroupPrivacyHint = "Gruplar yalnızca seçili profil ve playlist için kaydedilir. Kanallar seçilen playlist kategorilerinden oluşturulur.".localized
         public static let unavailableSmartGroupCategory = "Artık kullanılmayan kategori".localized
-        public static let unavailableFavoriteChannel = "Artık kullanılamayan kanal".localized
+        public static let unavailableFavoriteChannel = "Playlistte kanal eşleşmesi yok".localized
+        public static let unavailableFavoriteChannelHint = "Kanal kaldırılmış veya yenileme sonrası kimliği değişmiş olabilir. Güncel kanalı arayıp yeniden favoriye ekleyin.".localized
+        public static func reattachFavorite(to channelTitle: String) -> String {
+            "Bu favoriyi %@ kanalıyla yeniden eşleştir".localized(channelTitle)
+        }
+
+        public static let favoriteRecoverySucceeded = "Favori güncel kanalla eşleştirildi".localized
+        public static let favoriteRecoveryFailed = "Favori eşleşmesi kaydedilemedi. Tekrar deneyin.".localized
         public static let selected = "Seçili".localized
         public static let notSelected = "Seçili değil".localized
         public static func smartGroupCategoryCount(_ count: Int) -> String {

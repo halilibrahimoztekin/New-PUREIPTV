@@ -395,13 +395,13 @@
                         : (store.isChannelSelectionMode
                             ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
                             : ""))
-                    .accessibilityHint(store.isChannelSelectionMode
-                        ? (isUnavailable
-                            ? AppStrings.LiveTV.unavailableFavoriteChannel
-                            : (store.selectedCurrentChannelIDs.contains(channel.id)
+                    .accessibilityHint(isUnavailable
+                        ? AppStrings.LiveTV.unavailableFavoriteChannelHint
+                        : (store.isChannelSelectionMode
+                            ? (store.selectedCurrentChannelIDs.contains(channel.id)
                                 ? AppStrings.LiveTV.deselectChannelAccessibilityHint
-                                : AppStrings.LiveTV.selectChannelAccessibilityHint))
-                        : "")
+                                : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                            : ""))
                     .accessibilityAddTraits(store.isChannelSelectionMode && !isUnavailable && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
                     .focused($focusedChannelID, equals: channel.id)
                     .id(channel.id)
@@ -444,6 +444,17 @@
         @ViewBuilder
         private func channelContextMenu(for channel: MediaModels.Item) -> some View {
             let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
+            if isUnavailable,
+               let unavailable = store.unavailableFavoriteChannels.first(where: { $0.channelID == channel.id }),
+               let replacement = unavailable.replacement
+            {
+                Button {
+                    store.send(.recoverUnavailableFavorite(channelID: channel.id, replacement: replacement))
+                } label: {
+                    Label(AppStrings.LiveTV.reattachFavorite(to: replacement.title), systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+
             Button {
                 store.send(.toggleFavorite(channel))
             } label: {

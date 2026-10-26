@@ -1491,8 +1491,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — TvOS VOD/dizi hızlı odak gezinmesinde gereksiz arka plan paleti görsel istekleri debounce edilip iptal ediliyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
-### 159. [PENDING] Playlist Yenilemesinde Favori Eşleşme Sorunlarını Açıklama
+### 159. [DONE] Playlist Yenilemesinde Favori Eşleşme Sorunlarını Açıklama
 - **Fırsat:** Yenileme sonrası favori kaybolduğunda kullanıcıya playlist, kanal kimliği veya eşleşme değişimini gösteren kurtarma yolu sun; mevcut profil ve kararlı ID davranışından farkını doğrula.
+- **Kod bulgusu:** M3U kanal kimliği sıra numarasını `tvg-id` ile birleştiriyor; `tvg-id` yoksa rastgele UUID kullanıyor. Bu nedenle playlist sırası/kimliği değişince eski favori ID’si yeni katalogda bulunmayabiliyor. Kanal URL’si favori kaydında zaten saklanıyor. Global ID algoritmasını değiştirmek watch history, gizleme ve diğer playlist ilişkilerini de etkileyebileceğinden değiştirilmedi.
+- **Uygulama:** Eski favori playlistte bulunamazsa kart “Playlistte kanal eşleşmesi yok” diye açıklanıyor. Kayıtlı yayın URL’si tek bir güncel kanalla birebir eşleşirse iOS/tvOS context menu üzerinden kullanıcı onayıyla yeni ID’ye taşıma sunuluyor; yeni kayıt önce eklenip eski favori sonra kaldırılıyor. Çoklu/hiç URL eşleşmesinde otomatik seçim yapılmıyor ve kullanıcı güncel kanalı arayıp yeniden favorileyebiliyor. Yeniden bağlama playlist/profile kapsamı ve güncel tekil aday ile doğrulanıyor; aktif EPG timeline ile favori sırası güncellenip tekilleştirilerek saklanıyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; stale menu action doğrulaması, yazma sırası, timeline state ve sıralama tekilleştirmesi incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca Xcode build çalıştırıldı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. Build loglarında mevcut Swift concurrency uyarıları görüldü.
+- **Temizlik:** Görev DerivedData (3,690,436 KiB) ve iki build logu (toplam 6,232 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV159` görev diziniyle silindi. Normal DerivedData’daki paylaşılan `SourcePackages` yalnızca okundu ve korundu. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — Playlist yenilemesinde kaybolan favoriler için eşleşme nedeni açıklanıyor ve yalnız tekil URL eşleşmesi olan kanala güvenli yeniden bağlama sunuluyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
 
 ## 🔎 Canlı Keşif — 26 Ekim 2026
