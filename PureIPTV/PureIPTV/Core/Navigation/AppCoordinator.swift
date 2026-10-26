@@ -615,16 +615,7 @@ public struct AppCoordinator {
             if case .player = state.routes.last?.screen {
                 state.routes.dismiss()
             }
-            return .run { _ in
-                @Injected(\.playerClient) var playerClient
-                #if os(iOS)
-                    await MainActor.run {
-                        OrientationManager.shared.unlockPortrait()
-                    }
-                #endif
-                try? await playerClient.stop()
-                await playerClient.release()
-            }
+            return .none
 
         case .router(.routeAction(_, .player(.delegate(.didRequestMinimize)))):
             if case let .player(playerState) = state.routes.last?.screen {

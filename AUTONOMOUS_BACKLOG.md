@@ -1598,9 +1598,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** `/private/tmp/PureIPTV169` içindeki build/log çıktısı **4,049,356 KiB**, bu task’ın başarısız paket çözümlemesinden kalan bilinen result bundle **28 KiB**; build süreçleri sonlandı ve `lsof` açık handle göstermediği doğrulanınca kaldırıldı. `/private/tmp` son toplamı **2,376 KiB**; DerivedData adlı geçici klasör yok. Normal PureIPTV `SourcePackages` (1,873,636 KiB) ve kullanıcı/global cache’leri korundu. Başlangıç taramasında görülen patch/index kurtarma dosyaları, PDF ve AppIcon yedeği kullanıcı verisi/olası kurtarma materyali olarak bırakıldı. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
-### 170. [PENDING] Apple TV Uykuya Geçerken Canlı Yayını Güvenle Durdurma
+### 170. [DONE] Apple TV Uykuya Geçerken Canlı Yayını Güvenle Durdurma
 - **Fırsat:** TV kapanınca veya uygulama arka plana düşünce canlı player ve ses oturumunun açık kalıp kalmadığını doğrula; yalnız gerçek platform yaşam döngüsü olayında durdur ve geri dönünce odak/oynatım durumunu tutarlı göster.
 - **Keşif sinyali:** UHF 1.98.0 Apple TV kapanırken oynatımın doğru durmasını düzeltti.
+- **Bulgu:** Player root’ta scenePhase yalnız iOS’ta izleniyor; app geneli arka plan olayı tvOS PlayerFeature’a ulaşmıyor. tvOS’ta arka plana geçiş view `onDisappear` olayını garanti etmediğinden canlı akış açık kalabiliyor.
+- **Uygulama:** `PlayerView` tvOS `.background` olduğunda `.closeTapped` gönderiyor; iOS PiP/audio-only policy aynen kaldı. PlayerFeature `isClosing` guard’ı `.closeTapped`/`.onDisappear` çift teardown’ını önlüyor. Kapanış tüm player timer/event/thumbnail/playlist etkilerini iptal edip PiP yoksa display mode’u sıfırlıyor. AppCoordinator’daki ikinci stop/release kaldırılarak PlayerFeature tek teardown sahibi yapıldı.
+- **PR Reviewer:** `[APPROVED]` — tvOS-only observer doğru; iOS davranışı korunuyor; route kapanışı, idempotent guard, cancellation ID’leri ve display mode cleanup kontrol edildi.
+- **Doğrulama:** Final iOS Release generic build ve final tvOS Release generic build `BUILD SUCCEEDED`; `git diff --check` başarılı. Yalnız compile-only Xcode build alındı; test, simulator, app launch/playback akışı çalıştırılmadı (kullanıcı talimatı).
+- **Temizlik:** `/private/tmp/PureIPTV170` task DerivedData ve logları toplam **4,096,904 KiB**; her iki build tamamlandı, `lsof +D` açık handle göstermedi ve task klasörü silindi. `/private/tmp` son toplamı **2,376 KiB**, DerivedData task klasörü yok. Normal PureIPTV `SourcePackages` (**1,873,636 KiB**) ve genel/user cache’leri korundu; task kaynaklı normal DerivedData çıktısı oluşmadı. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
 ### 171. [PENDING] EPG’den PPV ve Etkinlik Kategorilerini Yenileme

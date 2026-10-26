@@ -11,9 +11,9 @@ public struct PlayerView: View {
     }
 
     @Injected(\.playerClient) private var playerClient
+    @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
         @State private var pipController: PiPController?
-        @Environment(\.scenePhase) private var scenePhase
     #endif
 
     public var body: some View {
@@ -129,6 +129,12 @@ public struct PlayerView: View {
                 store.send(.resetPiPTrigger)
                 store.send(.minimizeTapped)
             }
+        }
+        #endif
+        #if os(tvOS)
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .background else { return }
+            store.send(.closeTapped)
         }
         #endif
     }

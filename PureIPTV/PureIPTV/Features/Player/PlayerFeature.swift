@@ -141,6 +141,7 @@ public struct PlayerFeature {
         public var liveChannels: [PlayableItem] = []
         public var isChannelListVisible: Bool = false
         public var isMinimized: Bool = false
+        public var isClosing: Bool = false
 
         public var playerState: PlayerState = .stopped
         public var playbackEngine: PlaybackEngine = .vlc
@@ -1031,6 +1032,7 @@ public struct PlayerFeature {
             return .merge(appearanceEffect, .send(.fetchEPG))
 
         case .onDisappear:
+            guard !state.isClosing else { return .none }
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
@@ -1044,6 +1046,7 @@ public struct PlayerFeature {
             if isMinimized || isPiPActive {
                 return .cancel(id: CancelID.scrubThumbnail)
             }
+            state.isClosing = true
 
             return .merge(
                 .cancel(id: CancelID.channelSwitch),
@@ -3515,6 +3518,8 @@ public struct PlayerFeature {
             return .none
 
         case .closeTapped:
+            guard !state.isClosing else { return .none }
+            state.isClosing = true
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
@@ -3524,10 +3529,24 @@ public struct PlayerFeature {
             return .merge(
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.playbackEngineSwitch),
+                .cancel(id: CancelID.channelSwitch),
+                .cancel(id: CancelID.scrubThumbnail),
+                .cancel(id: CancelID.seriesPlaylist),
+                .cancel(id: CancelID.oledDimTimer),
+                .cancel(id: CancelID.audioRoute),
+                .cancel(id: CancelID.audioRouteHUD),
+                .cancel(id: CancelID.upNextCountdown),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
+                .cancel(id: CancelID.dynamicRangeHUD),
+                .cancel(id: CancelID.afrToast),
+                .run { _ in
+                    if !isPiPActive {
+                        await displayModeClient.resetDisplayMode()
+                    }
+                },
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
