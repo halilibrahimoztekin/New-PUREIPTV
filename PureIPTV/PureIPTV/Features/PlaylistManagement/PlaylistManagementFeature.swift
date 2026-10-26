@@ -17,6 +17,7 @@ public struct PlaylistManagementFeature {
         public var passwordDraft = ""
         public var m3uURLDraft = ""
         public var playlistValidationMessage: String?
+        public var isRefreshingPlaylist = false
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
         public init() {}
@@ -29,6 +30,8 @@ public struct PlaylistManagementFeature {
         case setActivePlaylist(UUID)
         case editPlaylistSettings(SavedPlaylist)
         case savePlaylistSettings
+        case m3uPlaylistRefreshSucceeded(SavedPlaylist)
+        case m3uPlaylistRefreshFailed(String)
         case cancelPlaylistSettings
         case deletePlaylist(UUID)
         case confirmDeletePlaylist(SavedPlaylist)
@@ -52,6 +55,7 @@ public struct PlaylistManagementFeature {
 
     @Injected(\.playlistRepository) var playlistRepository
     @Dependency(\.dismiss) var dismiss
+    @Injected(\.iptvClient) var iptvClient
 
     public init() {}
 
@@ -75,7 +79,8 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .viewDidDisappear:
-                return .none
+                state.isRefreshingPlaylist = false
+                return .cancel(id: "PlaylistManagementFeature.m3uRefresh")
 
             case .closeTapped:
                 return .send(.delegate(.dismissed))
@@ -101,7 +106,7 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .savePlaylistSettings:
-                guard let playlist = state.playlistBeingEdited else { return .none }
+                guard !state.isRefreshingPlaylist, let playlist = state.playlistBeingEdited else { return .none }
                 let value = state.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard
                     value.utf8.count <= 512,
@@ -131,6 +136,24 @@ public struct PlaylistManagementFeature {
                     )
                     .replacingUserAgentOverride(value.isEmpty ? nil : value)
                     .replacingChannelZappingDelayMilliseconds(state.channelZappingDelayDraft)
+                if updatedPlaylist.type == .m3u, let config = updatedPlaylist.toPlaylistConfig() {
+                    state.isRefreshingPlaylist = true
+                    state.playlistValidationMessage = nil
+                    return .run { [iptvClient] send in
+                        do {
+                            try await iptvClient.authenticate(config)
+                            await send(.m3uPlaylistRefreshSucceeded(updatedPlaylist))
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            await send(.m3uPlaylistRefreshFailed(error.localizedDescription))
+                        }
+                    }.cancellable(id: "PlaylistManagementFeature.m3uRefresh", cancelInFlight: true)
+                }
+                return .send(.m3uPlaylistRefreshSucceeded(updatedPlaylist))
+
+            case let .m3uPlaylistRefreshSucceeded(updatedPlaylist):
+                state.isRefreshingPlaylist = false
                 playlistRepository.updatePlaylist(updatedPlaylist)
                 state.playlists = playlistRepository.getPlaylists()
                 state.playlistBeingEdited = nil
@@ -147,7 +170,13 @@ public struct PlaylistManagementFeature {
                 else { return .none }
                 return .send(.delegate(.didUpdateActivePlaylistSettings(config)))
 
+            case let .m3uPlaylistRefreshFailed(message):
+                state.isRefreshingPlaylist = false
+                state.playlistValidationMessage = "Playlist yenilenemedi; mevcut ayarlar ve katalog korundu. Ayrıntı: \(message)"
+                return .none
+
             case .cancelPlaylistSettings:
+                state.isRefreshingPlaylist = false
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
@@ -156,7 +185,7 @@ public struct PlaylistManagementFeature {
                 state.passwordDraft = ""
                 state.m3uURLDraft = ""
                 state.playlistValidationMessage = nil
-                return .none
+                return .cancel(id: "PlaylistManagementFeature.m3uRefresh")
 
             case let .confirmDeletePlaylist(playlist):
                 state.playlistToDelete = playlist

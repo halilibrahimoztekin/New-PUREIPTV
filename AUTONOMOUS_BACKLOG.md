@@ -1503,9 +1503,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ## 🔎 Canlı Keşif — 26 Ekim 2026
 - **Kaynak taraması:** UHF, IPTVX, Opus ve Snappier güncel App Store sürüm notları/yorumları ile r/appletv, r/iptv ve ilgili IPTV kullanıcı başlıkları tarandı. Sonraki 10 madde adaydır; uygulamaya özgü kod taraması yapılmadan uygulanmayacak.
 
-### 160. [PENDING] Playlist Yenilemesini Son İyi Katalog Üzerine Atomik Uygulama
+### 160. [DONE] Playlist Yenilemesini Son İyi Katalog Üzerine Atomik Uygulama
 - **Fırsat:** Ağ/parse hatası sırasında mevcut playlist kataloğunu silmeden yeni sonucu doğrula, başarıda tek seferde değiştir ve eski katalog korununca durumu kullanıcıya açıkla.
 - **Keşif sinyali:** Snappier 5.6.7 playlist güncellemesini hızlandırdığını ve güncellemeden önce eski listeyi silmeme davranışını öne çıkarıyor.
+- **Uygulama:** M3U playlist ayarları kaydedilmeden önce yeni URL/User-Agent ile ağ doğrulaması ve parse yapılıyor; yanıtın M3U başlığı ve boş olmayan kataloğu doğrulanmadan cache veya kayıtlı ayarlar değişmiyor. Başarılı yanıtta katalog ve EPG URL’si tek actor işlemiyle değişiyor; XMLTV verisi EPG URL’si aynıysa korunuyor, değiştiyse eski kaynağa ait veri temizleniyor. Başarısız yenilemede eski katalog ve kaydedilmiş ayarlar tutuluyor; düzenleme ekranı hatayı ve koruma durumunu gösteriyor. İptal edilen iş cache’e yazamıyor ve hata gibi gösterilmiyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; iptal yarışları, stale katalog koruması ve yalnızca doğrulama başarısında ayar kaydı incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca Xcode compile-only build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı.
+- **Temizlik:** Son derlemelerde oluşan görev DerivedData (3,663,148 KiB) ve build logları (6,240 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV160` ile silindi. `/private/tmp` üst düzeyindeki diğer dosyalar DerivedData olarak doğrulanmadığı için korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — M3U yenileme sonucu doğrulanmadan kayıtlı playlist ayarları veya katalog değişmiyor; başarısızlıkta son iyi durum korunuyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
 ### 161. [PENDING] İçerik Türüne Göre Kısmi Playlist Yenileme

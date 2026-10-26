@@ -10,12 +10,23 @@ actor M3UCache {
 
     private var entries: [String: Entry] = [:]
 
-    func update(items: [M3UItemDTO], epgURL: URL?, for key: String) {
-        entries[key] = Entry(items: items, epgURL: epgURL)
+    func replaceCatalog(items: [M3UItemDTO], epgURL: URL?, for key: String) throws {
+        try Task.checkCancellation()
+        var entry = entries[key] ?? Entry()
+        if entry.epgURL != epgURL {
+            entry.xmltvData = nil
+        }
+        entry.items = items
+        entry.epgURL = epgURL
+        entries[key] = entry
     }
 
     func getItems(for key: String) -> [M3UItemDTO] {
         entries[key]?.items ?? []
+    }
+
+    func hasCatalog(for key: String) -> Bool {
+        !(entries[key]?.items.isEmpty ?? true)
     }
 
     func getEpgURL(for key: String) -> URL? {
@@ -176,6 +187,23 @@ extension IPTVClient: DependencyKey {
             return "\(identity)|\(sourceURL)|\(userAgent.isEmpty ? "default" : userAgent)"
         }
 
+        let parseValidatedM3U: @Sendable (Data) async throws -> M3UParsedResult = { data in
+            guard let string = String(data: data, encoding: .utf8),
+                  string.range(of: #"(?m)^\s*#EXTM3U(?:\s|$)"#, options: .regularExpression) != nil
+            else {
+                throw NSError(domain: "IPTVClient.M3U", code: 400, userInfo: [NSLocalizedDescriptionKey: "Playlist yenilemesi doğrulanamadı. Mevcut katalog korundu."])
+            }
+            let parser = M3UParser()
+            let result = await Task.detached(priority: .userInitiated) {
+                parser.parse(m3uString: string)
+            }.value
+            try Task.checkCancellation()
+            guard !result.items.isEmpty else {
+                throw NSError(domain: "IPTVClient.M3U", code: 422, userInfo: [NSLocalizedDescriptionKey: "Playlist boş veya okunamıyor. Mevcut katalog korundu."])
+            }
+            return result
+        }
+
         let ensureM3UCache: @Sendable (PlaylistConfig) async -> [M3UItemDTO] = { config in
             let key = m3uCacheKey(config)
             let existing = await m3uCache.getItems(for: key)
@@ -184,13 +212,13 @@ extension IPTVClient: DependencyKey {
             }
             guard let url = config.m3uURL else { return [] }
             guard let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride) else { return [] }
-            guard let str = String(data: data, encoding: .utf8) else { return [] }
-            let parser = M3UParser()
-            let parsedResult = await Task.detached(priority: .userInitiated) {
-                parser.parse(m3uString: str)
-            }.value
-            await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
-            return parsedResult.items
+            do {
+                let parsedResult = try await parseValidatedM3U(data)
+                try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
+                return parsedResult.items
+            } catch {
+                return await m3uCache.getItems(for: key)
+            }
         }
 
         return IPTVClient(
@@ -199,15 +227,20 @@ extension IPTVClient: DependencyKey {
                     guard let m3uURL = config.m3uURL else {
                         throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U configuration"])
                     }
-                    let data = try await networkClient.fetchData(url: m3uURL, userAgentOverride: config.userAgentOverride)
-                    guard let m3uString = String(data: data, encoding: .utf8) else {
-                        throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Failed to parse M3U data"])
+                    let key = m3uCacheKey(config)
+                    do {
+                        let data = try await networkClient.fetchData(url: m3uURL, userAgentOverride: config.userAgentOverride)
+                        let parsedResult = try await parseValidatedM3U(data)
+                        try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
+                    } catch {
+                        if error is CancellationError {
+                            throw error
+                        }
+                        if await m3uCache.hasCatalog(for: key) {
+                            throw NSError(domain: "IPTVClient.M3U", code: 503, userInfo: [NSLocalizedDescriptionKey: "Playlist yenilenemedi; son başarılı katalog korunuyor. Ayrıntı: \(error.localizedDescription)"])
+                        }
+                        throw error
                     }
-                    let parser = M3UParser()
-                    let parsedResult = await Task.detached(priority: .userInitiated) {
-                        parser.parse(m3uString: m3uString)
-                    }.value
-                    await m3uCache.update(items: parsedResult.items, epgURL: parsedResult.epgURL, for: m3uCacheKey(config))
                     return
                 }
 

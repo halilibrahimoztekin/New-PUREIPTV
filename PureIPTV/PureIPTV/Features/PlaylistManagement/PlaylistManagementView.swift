@@ -164,7 +164,7 @@ public struct PlaylistManagementView: View {
                                     Button(AppStrings.Common.save) {
                                         store.send(.savePlaylistSettings)
                                     }
-                                    .disabled(!canSaveUserAgentDraft)
+                                    .disabled(!canSaveUserAgentDraft || store.isRefreshingPlaylist)
                                 }
                             }
                     }
@@ -323,6 +323,10 @@ public struct PlaylistManagementView: View {
                     Text(message)
                         .font(.footnote)
                         .foregroundStyle(.red)
+                }
+                if store.isRefreshingPlaylist {
+                    ProgressView("Playlist doğrulanıyor…")
+                        .font(.footnote)
                 }
             }
         }
