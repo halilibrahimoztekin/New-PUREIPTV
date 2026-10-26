@@ -1571,9 +1571,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — QR playlist aktarımı tamamlandı ve reviewer onayladı.
 - **Kaynak:** https://opusmediaplayer.com/devices/apple-tv/
 
-### 167. [PENDING] Bağlı Cihaz ve Hesap Güvenliği Yönetimi
+### 167. [DONE — NO-GO] Bağlı Cihaz ve Hesap Güvenliği Yönetimi
 - **Fırsat:** Hesaba bağlı cihazları, premium/senkron durumunu ve kaldırma eylemlerini tek yerde anlaşılır sun; mevcut iCloud/Keychain modelinin dışında yeni backend gerekip gerekmediğini önce belirle.
 - **Keşif sinyali:** IPTVX 24.0 hesap ve güvenlik gezinmesini Apple TV menüsünde öne çıkardı; Opus mobil uygulamada bağlı cihaz yönetimi duyurdu.
+- **Kod kanıtı:** `AccountInfoManager` yalnızca Xtream sağlayıcısının aggregate aktif/izinli bağlantı sayısı ve abonelik alanlarını tutuyor; RevenueCat katmanı purchase/customer info sağlar, uygulamaya ait sign-in/account ID/session endpoint yok. Playlist’ler senkronize Keychain’de tutuluyor; CloudSync/WatchProgress için yerel `deviceUUID` yalnızca sync kayıtlarını kaynak cihazla ilişkilendiriyor, aktif bağlantıyı kanıtlamıyor veya revoke sağlamıyor. Entitlements’ta CloudKit service yazılı olsa da container identifier listesi boş ve incelenen uygulama kodunda device registry yok.
+- **PR Reviewer:** `[NO-GO]` — Mevcut kaynakla aktif cihaz listesi ya da oturum sonlandırma iddiası yanlış yönlendirici olur. Xtream bağlantı sayısı dürüstçe gösterilebilir; geçmiş sync kayıtlarından cihaz adı/bağlantı durumu çıkarılamaz. Güvenli device management için authenticated app backend’i veya kimlik doğrulanmış, lease/revoke destekli CloudKit registry gerekir.
+- **Karar:** Yanıltıcı cihaz yönetim UI’si eklenmedi. Uygulamaya ait authenticated device registry tasarlandığında yeniden ele alınmak üzere ertelendi.
+- **Durum:** `[DONE — NO-GO]` — Mevcut hesap/senkron mimarisi cihaz oturumlarını tanımlayıp iptal edemiyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
 ### 168. [PENDING] Plex/Emby Kategori ve Sunucu Arama Desteği
