@@ -41,19 +41,47 @@
 
                         Spacer()
 
-                        Button {
-                            store.send(.editCategoriesTapped)
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.9))
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color(hex: "#1F1F23")))
+                        HStack(spacing: 10) {
+                            Button {
+                                store.send(.refreshContentTapped)
+                            } label: {
+                                if store.isRefreshingContent {
+                                    ProgressView()
+                                        .frame(width: 36, height: 36)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.9))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                }
+                            }
+                            .disabled(store.isRefreshingContent || store.isLoadingCategories)
+                            .accessibilityLabel("Filmleri yenile")
+                            .opacity(config.type == .m3u ? 1 : 0)
+                            .accessibilityHidden(config.type != .m3u)
+
+                            Button {
+                                store.send(.editCategoriesTapped)
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 4)
+
+                    if let refreshMessage = store.refreshMessage {
+                        Text(refreshMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 16)
+                    }
 
                     // ── Category horizontal scroll ─────────────────────
                     categoryBar

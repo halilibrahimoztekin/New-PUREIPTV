@@ -69,6 +69,21 @@ import SwiftUI
                         .foregroundColor(.white)
                     Spacer()
                     Button {
+                        store.send(.refreshContentTapped)
+                    } label: {
+                        if store.isRefreshingContent {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.isRefreshingContent || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                    .accessibilityLabel("Canlı kanalları yenile")
+                    .opacity(config.type == .m3u ? 1 : 0)
+                    .accessibilityHidden(config.type != .m3u)
+
+                    Button {
                         isSmartGroupManagerPresented = true
                     } label: {
                         Image(systemName: "square.stack.3d.up")
@@ -86,6 +101,14 @@ import SwiftUI
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
+
+                if let refreshMessage = store.refreshMessage {
+                    Text(refreshMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
 
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")

@@ -92,6 +92,24 @@
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
                             Button {
+                                store.send(.refreshContentTapped)
+                            } label: {
+                                Group {
+                                    if store.isRefreshingContent {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "arrow.clockwise").font(.system(size: 18))
+                                    }
+                                }
+                                .padding(8)
+                            }
+                            .buttonStyle(TVCircleButtonStyle())
+                            .disabled(store.isRefreshingContent || store.isLoadingCategories)
+                            .accessibilityLabel("Filmleri yenile")
+                            .opacity(config.type == .m3u ? 1 : 0)
+                            .accessibilityHidden(config.type != .m3u)
+
+                            Button {
                                 store.send(.editCategoriesTapped)
                             } label: {
                                 Image(systemName: "slider.horizontal.3")
@@ -103,6 +121,13 @@
                         .padding(.horizontal, 24)
                         .padding(.top, 48)
                         .padding(.bottom, 16)
+
+                        if let refreshMessage = store.refreshMessage {
+                            Text(refreshMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, 24)
+                        }
 
                         if store.isLoadingCategories {
                             PureLoadingView(size: .small)

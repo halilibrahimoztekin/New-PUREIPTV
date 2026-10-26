@@ -1512,9 +1512,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — M3U yenileme sonucu doğrulanmadan kayıtlı playlist ayarları veya katalog değişmiyor; başarısızlıkta son iyi durum korunuyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
-### 161. [PENDING] İçerik Türüne Göre Kısmi Playlist Yenileme
+### 161. [DONE] İçerik Türüne Göre Kısmi Playlist Yenileme
 - **Fırsat:** Kullanıcının yalnız Live TV, film veya dizileri yenileyip diğer katalogları ve devam eden playback’i etkilememesini sağlayacak dar kapsamlı refresh akışını değerlendir.
 - **Keşif sinyali:** Snappier sürüm notlarında Live TV, Movies ve TV Series için ayrı güncelleme seçeneği yer alıyor.
+- **Kod bulgusu:** Xtream Live/film/dizi katalogları zaten ayrı endpoint’lerden yükleniyor. M3U ise tek dosyada üç medya türünü taşıdığı için normal tam cache yenilemesi bir tür yenilenirken diğerlerini de değiştirebilirdi.
+- **Uygulama:** iOS ve tvOS Live TV, Film ve Dizi ekranlarına M3U için ayrı yenileme düğmeleri eklendi. Kaynak tam indiriliyor ve doğrulanıyor; cache’te yalnızca seçilen medya türü yeni parse sonucu ile değiştirilirken diğer iki tür ve aynı EPG kaynağına ait XMLTV cache’i korunuyor. EPG URL’si değişirse eski XMLTV cache’i temizleniyor. Ağ/parse hatası veya iptal cache’i ve ekrandaki mevcut içeriği değiştirmiyor. Başarıdan sonra yalnız hedef türün ekran cache’leri boşaltılıp seçili kategori yeniden yükleniyor; LiveTV’de smart group/favori modunda yenileme devre dışı. M3U dışı playlistlerde bu düğmeler gösterilmiyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; atomik medya türü birleştirme, diğer türleri koruma, stale istek/config yanıtlarını eleme ve LiveTV kategori cache invalidasyonu incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca compile-only Xcode build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı.
+- **Temizlik:** Görev DerivedData (3,719,572 KiB) ve build logları (3,544 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV161` ile silindi. `/private/tmp` içindeki diğer üst düzey dosyalar DerivedData olarak doğrulanmadığı için korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — M3U kullanıcıları Live TV, film ve dizi kataloglarını birbirinden bağımsız yenileyebiliyor; başarısız yenileme mevcut içeriği koruyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
 ### 162. [PENDING] Spor Programında Kanalı Elle Eşleme

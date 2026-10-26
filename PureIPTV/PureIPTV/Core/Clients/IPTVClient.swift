@@ -29,6 +29,18 @@ actor M3UCache {
         !(entries[key]?.items.isEmpty ?? true)
     }
 
+    func replaceContent(items: [M3UItemDTO], epgURL: URL?, contentType: PlaylistContentType, for key: String) throws {
+        try Task.checkCancellation()
+        var entry = entries[key] ?? Entry()
+        if entry.epgURL != epgURL {
+            entry.xmltvData = nil
+        }
+        entry.items.removeAll { $0.resolvedMediaType == contentType.mediaType }
+        entry.items.append(contentsOf: items.filter { $0.resolvedMediaType == contentType.mediaType })
+        entry.epgURL = epgURL
+        entries[key] = entry
+    }
+
     func getEpgURL(for key: String) -> URL? {
         entries[key]?.epgURL
     }
@@ -44,6 +56,20 @@ actor M3UCache {
     func replaceXmltvData(_ data: XMLTVData, for key: String) throws {
         try Task.checkCancellation()
         entries[key, default: Entry()].xmltvData = data
+    }
+}
+
+public enum PlaylistContentType: Sendable {
+    case live
+    case movies
+    case series
+
+    fileprivate var mediaType: MediaModels.ItemType {
+        switch self {
+        case .live: .live
+        case .movies: .vod
+        case .series: .series
+        }
     }
 }
 
@@ -117,6 +143,7 @@ private func m3uCategory(for item: M3UItemDTO, config: PlaylistConfig, mappings:
 @DependencyClient
 public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
+    public var refreshContent: @Sendable (_ config: PlaylistConfig, _ contentType: PlaylistContentType) async throws -> Void = { _, _ in }
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchM3UCategoryTags: @Sendable (_ config: PlaylistConfig) async -> [String] = { _ in [] }
     public var fetchLiveChannels: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
@@ -251,6 +278,17 @@ extension IPTVClient: DependencyKey {
                 if let authDTO: XtreamAuthResponseDTO = try? await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride) {
                     await AccountInfoManager.shared.update(from: authDTO)
                 }
+            },
+            refreshContent: { config, contentType in
+                guard config.type == .m3u, let url = config.m3uURL else { return }
+                let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                let parsedResult = try await parseValidatedM3U(data)
+                try await m3uCache.replaceContent(
+                    items: parsedResult.items,
+                    epgURL: parsedResult.epgURL,
+                    contentType: contentType,
+                    for: m3uCacheKey(config)
+                )
             },
             fetchLiveCategories: { config in
                 if config.type == .m3u {
@@ -923,6 +961,7 @@ extension IPTVClient: DependencyKey {
 
     public static let testValue = IPTVClient(
         authenticate: { _ in },
+        refreshContent: { _, _ in },
         fetchLiveCategories: { _ in [] },
         fetchM3UCategoryTags: { _ in [] },
         fetchLiveChannels: { _, _ in [] },

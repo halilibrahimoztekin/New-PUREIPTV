@@ -107,6 +107,26 @@
 
                         HStack(spacing: 10) {
                             Button {
+                                store.send(.refreshContentTapped)
+                            } label: {
+                                if store.isRefreshingContent {
+                                    ProgressView()
+                                        .frame(width: 36, height: 36)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.9))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(store.isRefreshingContent || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                            .accessibilityLabel("Canlı kanalları yenile")
+                            .opacity(config.type == .m3u ? 1 : 0)
+                            .accessibilityHidden(config.type != .m3u)
+
+                            Button {
                                 store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
                             } label: {
                                 Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
@@ -157,6 +177,13 @@
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 6)
+
+                    if let refreshMessage = store.refreshMessage {
+                        Text(refreshMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 16)
+                    }
 
                     // ── Mode Switcher (Kanallar / Yayın Akışı) ─────────
                     tabModePicker

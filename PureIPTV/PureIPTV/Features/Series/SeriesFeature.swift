@@ -20,6 +20,9 @@ public struct SeriesFeature {
         public var selectedSeries: MediaModels.Item?
         public var isLoadingCategories = false
         public var isLoadingSeries = false
+        public var isRefreshingContent = false
+        public var activeContentRefreshID: UUID?
+        public var refreshMessage: String?
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
         public var lastSortMethod: SortMethod = .defaultOrder
@@ -87,6 +90,9 @@ public struct SeriesFeature {
         case favoritesLoaded(Set<String>, ProfileContextSnapshot)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
+        case refreshContentTapped
+        case contentRefreshSucceeded(requestID: UUID, config: PlaylistConfig)
+        case contentRefreshFailed(requestID: UUID, config: PlaylistConfig, message: String)
         case reloadPreferences
         case applySortIfChanged
         case editCategoriesTapped
@@ -239,6 +245,44 @@ public struct SeriesFeature {
 
                     await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
                 }
+
+            case .refreshContentTapped:
+                guard !state.isRefreshingContent,
+                      !state.isLoadingCategories,
+                      let config = state.config,
+                      config.type == .m3u,
+                      state.selectedCategoryID != nil
+                else { return .none }
+                let requestID = UUID()
+                state.activeContentRefreshID = requestID
+                state.isRefreshingContent = true
+                state.refreshMessage = nil
+                return .run { send in
+                    do {
+                        try await iptvClient.refreshContent(config, .series)
+                        await send(.contentRefreshSucceeded(requestID: requestID, config: config))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        await send(.contentRefreshFailed(requestID: requestID, config: config, message: error.localizedDescription))
+                    }
+                }.cancellable(id: "SeriesFeature.refreshContent", cancelInFlight: true)
+
+            case let .contentRefreshSucceeded(requestID, config):
+                guard state.activeContentRefreshID == requestID else { return .none }
+                state.activeContentRefreshID = nil
+                state.isRefreshingContent = false
+                guard state.config == config, state.selectedCategoryID != nil else { return .none }
+                state.seriesByCategory.removeAll(keepingCapacity: true)
+                return .send(.reloadCategories(config: config))
+
+            case let .contentRefreshFailed(requestID, config, message):
+                guard state.activeContentRefreshID == requestID else { return .none }
+                state.activeContentRefreshID = nil
+                state.isRefreshingContent = false
+                guard state.config == config else { return .none }
+                state.refreshMessage = "Yenileme başarısız; mevcut dizi kataloğu korundu. \(message)"
+                return .none
 
             case .applySortIfChanged:
                 let currentMethod = settingsClient.getSeriesSortMethod()
