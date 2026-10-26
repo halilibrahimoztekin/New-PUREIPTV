@@ -364,6 +364,14 @@ public enum AppStrings {
             "Son güncelleme: %@".localized(timeString)
         }
 
+        public static func epgDataAge(_ age: String) -> String {
+            "EPG verisi %@ önce güncellendi".localized(age)
+        }
+
+        public static let epgDataStale = "EPG verisi eski".localized
+        public static let epgLastRefreshIssue = "Son EPG yenilemesinde hata oluştu".localized
+        public static let epgFreshnessUnknown = "EPG güncelleme durumu bilinmiyor".localized
+
         public static let automaticBroadcast = "Canlı Yayın".localized
         public static let broadcastIntermission = "Yayın Arası".localized
         public static let epgFallbackDescription = "Yayın akışı sağlayıcı tarafından iletilmediğinde otomatik olarak oluşturulan yayın kuşağı.".localized

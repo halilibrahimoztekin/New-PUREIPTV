@@ -1475,8 +1475,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — İşlevsiz donanım hızlandırma ayarı kaldırıldı; VLC için güvenli ve geri alınabilir deinterlace tanılaması eklendi.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
-### 157. [PENDING] Kanal Kartlarında EPG Veri Tazeliğini Gösterme
+### 157. [DONE] Kanal Kartlarında EPG Veri Tazeliğini Gösterme
 - **Fırsat:** Son başarılı EPG güncellemesi, veri yaşı ve stale/başarısız durumu için playlist ve rehber düzeyinde anlaşılır durum göstergesi tasarla.
+- **Uygulama:** Playlist başına son başarılı EPG güncelleme ve son başarısız/kısmi yenileme zamanı kalıcı olarak saklanıyor. EPG zaman çizelgesi ve iOS/tvOS rehber başlıkları veri yaşını dakika/saat/gün olarak gösteriyor; 24 saati aşan veri eski, son yenilemesi başarısız/kısmi olan playlist hata durumunda işaretleniyor. Başarılı tam yenileme eski hata durumunu temizliyor; ilk yenileme başarısız olduğunda da hata etiketi korunuyor. Kanal bazlı yükleme hatası ve Retry mevcut davranışıyla kaldı. `Localizable.xcstrings` önceden dirty olduğundan değiştirilmedi.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca Xcode build çalıştırıldı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. Build loglarında projedeki mevcut concurrency uyarıları görüldü.
+- **Temizlik:** Görev DerivedData (3,659,896 KiB) ve iki build logu (toplam 6,220 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV157` görev diziniyle silindi. Build `-derivedDataPath` geçici dizine ayarlandı; normal DerivedData’daki paylaşılan `SourcePackages` yalnızca okundu ve korundu. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — EPG tazelik yaşı ve yenileme hata durumu playlist/zaman çizelgesi ile rehber başlıklarında kalıcı biçimde gösteriliyor.
 - **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
 
 ### 158. [PENDING] Arama Harf Atlama İşlemlerini Birleştirme ve İptal Etme

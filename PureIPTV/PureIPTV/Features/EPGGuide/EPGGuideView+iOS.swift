@@ -186,6 +186,9 @@ import SwiftUI
                             Text(AppStrings.EPG.guide)
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.6))
+                            Text(store.epgFreshnessLabel)
+                                .font(.caption2)
+                                .foregroundColor(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.5))
                         }
                         Spacer()
                         Button {

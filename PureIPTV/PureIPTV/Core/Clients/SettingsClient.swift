@@ -86,6 +86,8 @@ public struct SettingsClient: Sendable {
     public var setDownloadConcurrencyLimit: @Sendable (Int) -> Void = { _ in }
     public var getLastEPGRefreshDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
     public var setLastEPGRefreshDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
+    public var getLastEPGRefreshFailureDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
+    public var setLastEPGRefreshFailureDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
     public var getLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
     public var setLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
 
@@ -164,6 +166,7 @@ extension SettingsClient: DependencyKey {
         let autoSwitchOnEPGReminderKey = "com.pureiptv.autoSwitchOnEPGReminder"
         let downloadConcurrencyLimitKey = "com.pureiptv.downloadConcurrencyLimit"
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
+        let lastEPGRefreshFailurePrefix = "com.pureiptv.lastEPGRefreshFailure."
         let lastEPGAutoRefreshAttemptPrefix = "com.pureiptv.lastEPGAutoRefreshAttempt."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
@@ -327,6 +330,19 @@ extension SettingsClient: DependencyKey {
             setLastEPGRefreshDate: { playlistID, date in
                 guard let playlistID else { return }
                 let key = lastEPGRefreshPrefix + playlistID.uuidString
+                if let date {
+                    defaults.set(date, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getLastEPGRefreshFailureDate: { playlistID in
+                guard let playlistID else { return nil }
+                return defaults.object(forKey: lastEPGRefreshFailurePrefix + playlistID.uuidString) as? Date
+            },
+            setLastEPGRefreshFailureDate: { playlistID, date in
+                guard let playlistID else { return }
+                let key = lastEPGRefreshFailurePrefix + playlistID.uuidString
                 if let date {
                     defaults.set(date, forKey: key)
                 } else {

@@ -57,6 +57,7 @@ public struct EPGTimelineFeature {
         public var channelLogoOverrideRequestIDs: [String: UUID] = [:]
         public var isSyncingEPG: Bool = false
         public var lastSyncTimestamp: Date?
+        public var lastSyncFailureTimestamp: Date?
         public var successfulEPGChannelCount = 0
         public var failedEPGChannelCount = 0
         public var syncStatusMessage: String?
@@ -81,6 +82,29 @@ public struct EPGTimelineFeature {
             let formatter = DateFormatter()
             formatter.timeStyle = .short
             return formatter.string(from: lastSyncTimestamp)
+        }
+
+        public var epgFreshnessLabel: String {
+            guard let lastSyncTimestamp else {
+                return lastSyncFailureTimestamp == nil
+                    ? AppStrings.Player.epgFreshnessUnknown
+                    : AppStrings.Player.epgLastRefreshIssue
+            }
+            let age = max(0, currentTime.timeIntervalSince(lastSyncTimestamp))
+            let value = if age < 3600 {
+                "\(max(1, Int(age / 60))) dk"
+            } else if age < 86400 {
+                "\(Int(age / 3600)) sa"
+            } else {
+                "\(Int(age / 86400)) gün"
+            }
+            if let lastSyncFailureTimestamp, lastSyncFailureTimestamp >= lastSyncTimestamp {
+                return AppStrings.Player.epgLastRefreshIssue + " · " + AppStrings.Player.epgDataAge(value)
+            }
+            if age >= 86400 {
+                return AppStrings.Player.epgDataStale + " · " + AppStrings.Player.epgDataAge(value)
+            }
+            return AppStrings.Player.epgDataAge(value)
         }
 
         public var isViewingToday: Bool {
@@ -305,6 +329,9 @@ public struct EPGTimelineFeature {
                 if state.lastSyncTimestamp == nil {
                     state.lastSyncTimestamp = settingsClient.getLastEPGRefreshDate(state.config.playlistID)
                 }
+                if state.lastSyncFailureTimestamp == nil {
+                    state.lastSyncFailureTimestamp = settingsClient.getLastEPGRefreshFailureDate(state.config.playlistID)
+                }
                 let shouldAutoSync = settingsClient.autoUpdateEPG()
                 let refreshInterval = settingsClient.epgAutoRefreshInterval().duration
                 let lastAutoAttempt = settingsClient.getLastEPGAutoRefreshAttemptDate(state.config.playlistID)
@@ -504,6 +531,13 @@ public struct EPGTimelineFeature {
                 if state.successfulEPGChannelCount > 0 {
                     state.lastSyncTimestamp = date
                     settingsClient.setLastEPGRefreshDate(state.config.playlistID, date)
+                }
+                if state.failedEPGChannelCount > 0 {
+                    state.lastSyncFailureTimestamp = date
+                    settingsClient.setLastEPGRefreshFailureDate(state.config.playlistID, date)
+                } else if state.successfulEPGChannelCount > 0 {
+                    state.lastSyncFailureTimestamp = nil
+                    settingsClient.setLastEPGRefreshFailureDate(state.config.playlistID, nil)
                 }
                 if state.failedEPGChannelCount > 0 {
                     state.syncStatusMessage = state.successfulEPGChannelCount > 0

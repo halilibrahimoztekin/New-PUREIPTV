@@ -18,6 +18,31 @@ public struct EPGGuideFeature {
         public var epgListings: [EPGProgram] = []
         public var isLoadingEPG = false
         public var errorMessage: String?
+        public var lastEPGRefreshDate: Date?
+        public var lastEPGRefreshFailureDate: Date?
+
+        public var epgFreshnessLabel: String {
+            guard let lastEPGRefreshDate else {
+                return lastEPGRefreshFailureDate == nil
+                    ? AppStrings.Player.epgFreshnessUnknown
+                    : AppStrings.Player.epgLastRefreshIssue
+            }
+            let age = max(0, Date().timeIntervalSince(lastEPGRefreshDate))
+            let value = if age < 3600 {
+                "\(max(1, Int(age / 60))) dk"
+            } else if age < 86400 {
+                "\(Int(age / 3600)) sa"
+            } else {
+                "\(Int(age / 86400)) gün"
+            }
+            if let failureDate = lastEPGRefreshFailureDate, failureDate >= lastEPGRefreshDate {
+                return AppStrings.Player.epgLastRefreshIssue + " · " + AppStrings.Player.epgDataAge(value)
+            }
+            if age >= 86400 {
+                return AppStrings.Player.epgDataStale + " · " + AppStrings.Player.epgDataAge(value)
+            }
+            return AppStrings.Player.epgDataAge(value)
+        }
 
         // Live EPG Preview (Madde #25)
         public var activePreviewChannel: MediaModels.Item?
@@ -67,6 +92,8 @@ public struct EPGGuideFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                state.lastEPGRefreshDate = settingsClient.getLastEPGRefreshDate(state.config.playlistID)
+                state.lastEPGRefreshFailureDate = settingsClient.getLastEPGRefreshFailureDate(state.config.playlistID)
                 if let channel = state.selectedChannel {
                     return .send(.selectChannel(channel))
                 }

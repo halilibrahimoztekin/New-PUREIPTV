@@ -382,6 +382,9 @@ import SwiftVLC
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
+                        Text(store.epgFreshnessLabel)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.55))
                     }
 
                     Spacer()

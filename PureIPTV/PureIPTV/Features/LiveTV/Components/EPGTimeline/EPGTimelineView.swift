@@ -91,6 +91,8 @@ public struct EPGTimelineView: View {
                 VStack(spacing: 0) {
                     epgHeaderBar
 
+                    epgFreshnessBadge
+
                     // Search bar on iOS
                     #if !os(tvOS)
                         searchBarView
@@ -333,6 +335,28 @@ public struct EPGTimelineView: View {
     #endif
 
     // MARK: - Sync Status Badge
+
+    private var epgFreshnessBadge: some View {
+        HStack(spacing: 6) {
+            Image(systemName: store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
+                ? "exclamationmark.triangle.fill"
+                : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
+                    ? "clock.fill" : "checkmark.circle.fill"))
+                .foregroundColor(store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
+                    ? .orange
+                    : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
+                        ? .yellow : .green))
+            Text(store.epgFreshnessLabel)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+            if store.isSyncingEPG {
+                ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .cyan)).scaleEffect(0.6)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     private func syncStatusBadge(message: String) -> some View {
         HStack(spacing: 6) {
