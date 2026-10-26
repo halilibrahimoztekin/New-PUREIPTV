@@ -75,6 +75,7 @@
                         .padding(.horizontal, 80)
                         .padding(.vertical, 30)
                     }
+                    .focusSection()
 
                     // ── Bottom Action (Manage Profiles) ───────────────
                     Button {
@@ -509,11 +510,13 @@
                             .padding(.horizontal, 32)
                             .padding(.vertical, 14)
 
-                        Button(AppStrings.Common.create, action: onAdd)
-                            .font(.system(size: 22, weight: .bold))
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 14)
-                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        Button(AppStrings.Common.create) {
+                            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                            onAdd()
+                        }
+                        .font(.system(size: 22, weight: .bold))
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 14)
                     }
                     .padding(.top, 16)
                 }

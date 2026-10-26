@@ -431,13 +431,20 @@ public struct DashboardFeature {
                 let refreshID = UUID()
                 state.activeRefreshID = refreshID
                 state.activeEPGRefreshID = state.isSportsHubVisible ? refreshID : nil
-                return .send(.loadFeaturedData(
+                let loadAction = Action.loadFeaturedData(
                     config: config,
                     playlistID: state.activePlaylistID,
                     hideAdult: state.lastAdultHidden ?? settingsClient.hideAdultContent(),
                     loadEPGEvents: state.isSportsHubVisible,
                     refreshID: refreshID
-                ))
+                )
+                if config.type == .plex || config.type == .emby {
+                    return .run { send in
+                        try? await iptvClient.refreshContent(config, .movies) { _ in }
+                        await send(loadAction)
+                    }
+                }
+                return .send(loadAction)
 
             case let .mapEPGEventToChannel(playlistID, event, channelID):
                 let fixtureKey = Self.fixtureMappingKey(title: event.program.title, startTime: event.program.startTime)

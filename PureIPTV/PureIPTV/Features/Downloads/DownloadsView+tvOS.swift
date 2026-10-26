@@ -52,6 +52,7 @@ import SwiftUI
                                     }
                                     Spacer()
                                     Button(role: .destructive) {
+                                        guard !store.isClearingCompleted else { return }
                                         store.send(.clearCompletedTapped)
                                     } label: {
                                         if store.isClearingCompleted {
@@ -60,7 +61,6 @@ import SwiftUI
                                             Label(AppStrings.Downloads.clearCompleted, systemImage: "trash")
                                         }
                                     }
-                                    .disabled(store.isClearingCompleted)
                                 }
                             }
 

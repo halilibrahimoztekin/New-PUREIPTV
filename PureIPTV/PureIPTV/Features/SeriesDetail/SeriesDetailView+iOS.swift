@@ -127,7 +127,7 @@
                         store.series.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -161,7 +161,7 @@
                         let cover = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
 
                         if let urlString = cover, let url = URL(string: urlString) {
-                            PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
+                            PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
                                 switch phase {
                                 case let .success(image):
                                     image.resizable().scaledToFill()
@@ -455,6 +455,7 @@
                         NextUpEpisodeBannerView(
                             episode: nextEp,
                             userAgentOverride: store.config.userAgentOverride,
+                            playlistID: store.config.playlistID,
                             seriesTitle: store.series.title,
                             progressItem: store.episodeProgressMap[nextEp.id],
                             onPlay: {
@@ -500,6 +501,7 @@
                                     EpisodeCardView(
                                         episode: episode,
                                         userAgentOverride: store.config.userAgentOverride,
+                                        playlistID: store.config.playlistID,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
                                         layoutMode: .list,
@@ -529,6 +531,7 @@
                                     EpisodeCardView(
                                         episode: episode,
                                         userAgentOverride: store.config.userAgentOverride,
+                                        playlistID: store.config.playlistID,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
                                         layoutMode: .grid,

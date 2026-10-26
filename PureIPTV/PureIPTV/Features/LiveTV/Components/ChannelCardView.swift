@@ -57,9 +57,9 @@ public struct ChannelCardView: View {
 
                 // ── Logo ─────────────────────────────────────────────
                 if let logoURL = channel.displayLogoURL {
-                    KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride))
+                    KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID))
                         .requestModifier { request in
-                            UserAgentManager.applyHeaders(to: &request, override: channel.userAgentOverride)
+                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID)
                         }
                         .placeholder {
                             ChannelLogoPlaceholder()

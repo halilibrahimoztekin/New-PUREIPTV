@@ -374,33 +374,35 @@
                                         }
 
                                         // 5. External Player Launcher & Share
-                                        Menu {
-                                            ForEach(ExternalPlayer.allCases) { player in
-                                                Button {
-                                                    store.send(.openInExternalPlayer(player))
-                                                } label: {
-                                                    Label(player.rawValue, systemImage: player.iconName)
+                                        if store.item.config?.type != .plex, store.item.config?.type != .emby {
+                                            Menu {
+                                                ForEach(ExternalPlayer.allCases) { player in
+                                                    Button {
+                                                        store.send(.openInExternalPlayer(player))
+                                                    } label: {
+                                                        Label(player.rawValue, systemImage: player.iconName)
+                                                    }
                                                 }
-                                            }
 
-                                            Divider()
+                                                Divider()
 
-                                            ShareLink(
-                                                item: store.item.streamURL,
-                                                subject: Text(store.item.title),
-                                                message: Text("PureIPTV: \(store.item.title)")
-                                            ) {
-                                                Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
-                                            }
+                                                ShareLink(
+                                                    item: store.item.streamURL,
+                                                    subject: Text(store.item.title),
+                                                    message: Text("PureIPTV: \(store.item.title)")
+                                                ) {
+                                                    Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
+                                                }
 
-                                            Button {
-                                                UIPasteboard.general.string = store.item.streamURL.absoluteString
-                                                HapticManager.shared.trigger(.success)
+                                                Button {
+                                                    UIPasteboard.general.string = store.item.streamURL.absoluteString
+                                                    HapticManager.shared.trigger(.success)
+                                                } label: {
+                                                    Label("Bağlantıyı Kopyala", systemImage: "doc.on.doc")
+                                                }
                                             } label: {
-                                                Label("Bağlantıyı Kopyala", systemImage: "doc.on.doc")
+                                                Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")
                                             }
-                                        } label: {
-                                            Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")
                                         }
 
                                         // 6. Recent Channels Quick Dock
@@ -489,11 +491,13 @@
                                         }
 
                                         // 10. SharePlay
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.sharePlayTapped)
-                                        } label: {
-                                            Label("SharePlay", systemImage: "shareplay")
+                                        if store.item.config?.type != .plex, store.item.config?.type != .emby {
+                                            Button {
+                                                HapticManager.shared.trigger(.light)
+                                                store.send(.sharePlayTapped)
+                                            } label: {
+                                                Label("SharePlay", systemImage: "shareplay")
+                                            }
                                         }
                                     } label: {
                                         Image(systemName: "ellipsis")

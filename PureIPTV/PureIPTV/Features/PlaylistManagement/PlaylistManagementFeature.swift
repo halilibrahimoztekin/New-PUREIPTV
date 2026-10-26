@@ -59,8 +59,8 @@ public struct PlaylistManagementFeature {
         case cancelPlaylistPIN
         case editPlaylistSettings(SavedPlaylist)
         case savePlaylistSettings
-        case m3uPlaylistRefreshSucceeded(SavedPlaylist)
-        case m3uPlaylistRefreshFailed(String)
+        case playlistSettingsSaveSucceeded(SavedPlaylist)
+        case playlistSettingsSaveFailed(String)
         case cancelPlaylistSettings
         case deletePlaylist(UUID)
         case confirmDeletePlaylist(SavedPlaylist)
@@ -125,7 +125,7 @@ public struct PlaylistManagementFeature {
 
             case .viewDidDisappear:
                 state.isRefreshingPlaylist = false
-                return .cancel(id: "PlaylistManagementFeature.m3uRefresh")
+                return .cancel(id: "PlaylistManagementFeature.connectionValidation")
 
             case .closeTapped:
                 guard state.startupUnlockPlaylistID == nil else { return .none }
@@ -267,41 +267,60 @@ public struct PlaylistManagementFeature {
                 let serverURL = state.serverURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 let username = state.usernameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 let m3uURL = state.m3uURLDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if playlist.type == .xtream {
+                switch playlist.type {
+                case .xtream:
                     guard Self.isValidHTTPURL(serverURL), !username.isEmpty, !state.passwordDraft.isEmpty else {
                         state.playlistValidationMessage = "Xtream adresi, kullanıcı adı ve parola geçerli olmalı."
                         return .none
                     }
-                } else if !Self.isValidHTTPURL(m3uURL) {
-                    state.playlistValidationMessage = "M3U adresi geçerli bir HTTP veya HTTPS URL olmalı."
-                    return .none
+                case .m3u:
+                    guard Self.isValidHTTPURL(m3uURL) else {
+                        state.playlistValidationMessage = "M3U adresi geçerli bir HTTP veya HTTPS URL olmalı."
+                        return .none
+                    }
+                case .plex, .emby:
+                    guard Self.isValidHTTPURL(serverURL) else {
+                        state.playlistValidationMessage = "Media server adresi geçerli bir HTTPS URL olmalı."
+                        return .none
+                    }
                 }
+                let serverBackedType = playlist.type == .xtream || playlist.type == .plex || playlist.type == .emby
                 let updatedPlaylist = playlist
                     .replacingConnection(
-                        serverURL: playlist.type == .xtream ? serverURL : nil,
-                        username: playlist.type == .xtream ? username : nil,
-                        password: playlist.type == .xtream ? state.passwordDraft : nil,
-                        m3uURL: playlist.type == .m3u ? m3uURL : nil
+                        serverURL: serverBackedType ? serverURL : nil,
+                        username: playlist.type == .xtream ? username : playlist.username,
+                        password: playlist.type == .xtream ? state.passwordDraft : playlist.password,
+                        m3uURL: playlist.type == .m3u ? m3uURL : playlist.m3uURL
                     )
                     .replacingUserAgentOverride(value.isEmpty ? nil : value)
                     .replacingChannelZappingDelayMilliseconds(state.channelZappingDelayDraft)
-                if updatedPlaylist.type == .m3u, let config = updatedPlaylist.toPlaylistConfig() {
+                if updatedPlaylist.type == .m3u || updatedPlaylist.type == .plex || updatedPlaylist.type == .emby {
+                    guard let config = updatedPlaylist.toPlaylistConfig() else {
+                        state.playlistValidationMessage = "Playlist bağlantı ayarları geçerli değil."
+                        return .none
+                    }
+                    if updatedPlaylist.type == .plex || updatedPlaylist.type == .emby,
+                       MediaServerRequestContextFactory.baseURL(for: config) == nil
+                    {
+                        state.playlistValidationMessage = "Plex/Emby sunucusu güvenli HTTPS bağlantısıyla doğrulanmalı."
+                        return .none
+                    }
                     state.isRefreshingPlaylist = true
                     state.playlistValidationMessage = nil
                     return .run { [iptvClient] send in
                         do {
                             try await iptvClient.authenticate(config)
-                            await send(.m3uPlaylistRefreshSucceeded(updatedPlaylist))
+                            await send(.playlistSettingsSaveSucceeded(updatedPlaylist))
                         } catch is CancellationError {
                             return
                         } catch {
-                            await send(.m3uPlaylistRefreshFailed(error.localizedDescription))
+                            await send(.playlistSettingsSaveFailed(error.localizedDescription))
                         }
-                    }.cancellable(id: "PlaylistManagementFeature.m3uRefresh", cancelInFlight: true)
+                    }.cancellable(id: "PlaylistManagementFeature.connectionValidation", cancelInFlight: true)
                 }
-                return .send(.m3uPlaylistRefreshSucceeded(updatedPlaylist))
+                return .send(.playlistSettingsSaveSucceeded(updatedPlaylist))
 
-            case let .m3uPlaylistRefreshSucceeded(updatedPlaylist):
+            case let .playlistSettingsSaveSucceeded(updatedPlaylist):
                 state.isRefreshingPlaylist = false
                 guard playlistRepository.updatePlaylist(updatedPlaylist) else {
                     state.playlistValidationMessage = "Ayarlar güvenli olarak kaydedilemedi. iCloud Keychain erişimini kontrol edip tekrar deneyin."
@@ -322,9 +341,9 @@ public struct PlaylistManagementFeature {
                 else { return .none }
                 return .send(.delegate(.didUpdateActivePlaylistSettings(config)))
 
-            case let .m3uPlaylistRefreshFailed(message):
+            case let .playlistSettingsSaveFailed(message):
                 state.isRefreshingPlaylist = false
-                state.playlistValidationMessage = "Playlist yenilenemedi; mevcut ayarlar ve katalog korundu. Ayrıntı: \(message)"
+                state.playlistValidationMessage = "Playlist doğrulanamadı; mevcut ayarlar korundu. \(message)"
                 return .none
 
             case .cancelPlaylistSettings:
@@ -337,7 +356,7 @@ public struct PlaylistManagementFeature {
                 state.passwordDraft = ""
                 state.m3uURLDraft = ""
                 state.playlistValidationMessage = nil
-                return .cancel(id: "PlaylistManagementFeature.m3uRefresh")
+                return .cancel(id: "PlaylistManagementFeature.connectionValidation")
 
             case let .confirmDeletePlaylist(playlist):
                 state.playlistToDelete = playlist

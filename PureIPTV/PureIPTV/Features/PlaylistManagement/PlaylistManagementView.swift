@@ -193,9 +193,9 @@ public struct PlaylistManagementView: View {
                                 }
                                 ToolbarItem(placement: .confirmationAction) {
                                     Button(AppStrings.Common.save) {
+                                        guard canSaveUserAgentDraft, !store.isRefreshingPlaylist else { return }
                                         store.send(.savePlaylistSettings)
                                     }
-                                    .disabled(!canSaveUserAgentDraft || store.isRefreshingPlaylist)
                                 }
                             }
                     }
@@ -380,9 +380,11 @@ public struct PlaylistManagementView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(playlistPINActionTitle) {
+                        guard store.playlistPIN.count == 4,
+                              !isConfiguringPIN || store.playlistPINConfirmation.count == 4
+                        else { return }
                         store.send(.submitPlaylistPIN)
                     }
-                    .disabled(store.playlistPIN.count != 4 || (isConfiguringPIN && store.playlistPINConfirmation.count != 4))
                 }
             }
             .onAppear {
@@ -443,11 +445,19 @@ public struct PlaylistManagementView: View {
                     SecureField("Password", text: $store.passwordDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                } else {
+                } else if playlist.type == .m3u {
                     TextField("M3U URL", text: $store.m3uURLDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                } else {
+                    TextField("Server URL", text: $store.serverURLDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    Text("Plex/Emby bağlantısı kaydedilmeden önce mevcut kimlik bilgileriyle doğrulanır.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 TextField("User-Agent", text: $store.userAgentDraft)
                     .textInputAutocapitalization(.never)

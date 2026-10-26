@@ -110,9 +110,9 @@
                     ?? store.series.coverURL?.absoluteString
 
                 if let urlString = cover, let url = URL(string: urlString) {
-                    KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride))
+                    KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID))
                         .requestModifier { request in
-                            UserAgentManager.applyHeaders(to: &request, override: store.config.userAgentOverride)
+                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID)
                         }
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -143,9 +143,9 @@
                     let posterURL = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? store.series.coverURL?.absoluteString
 
                     if let urlString = posterURL, let url = URL(string: urlString) {
-                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride))
+                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID))
                             .requestModifier { request in
-                                UserAgentManager.applyHeaders(to: &request, override: store.config.userAgentOverride)
+                                PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID)
                             }
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -300,6 +300,7 @@
                         NextUpEpisodeBannerView(
                             episode: nextEp,
                             userAgentOverride: store.config.userAgentOverride,
+                            playlistID: store.config.playlistID,
                             seriesTitle: store.series.title,
                             progressItem: store.episodeProgressMap[nextEp.id]
                         ) {
@@ -333,6 +334,7 @@
                             .padding(.horizontal, 80)
                             .padding(.vertical, 8)
                         }
+                        .focusSection()
                     }
                 } else if store.isLoading {
                     VStack(alignment: .leading, spacing: 20) {
@@ -392,6 +394,7 @@
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         userAgentOverride: store.config.userAgentOverride,
+                                        playlistID: store.config.playlistID,
                                         focusedEpisodeID: $focusedEpisodeID,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
@@ -408,6 +411,7 @@
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         userAgentOverride: store.config.userAgentOverride,
+                                        playlistID: store.config.playlistID,
                                         focusedEpisodeID: $focusedEpisodeID,
                                         onMarkUnwatched: { store.send(.markEpisodeUnwatched(episode.id)) }
                                     ) {
@@ -503,6 +507,7 @@
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
         let userAgentOverride: String?
+        let playlistID: UUID?
         @FocusState.Binding var focusedEpisodeID: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
@@ -534,9 +539,9 @@
                     ZStack(alignment: .bottomLeading) {
                         Group {
                             if let url = episode.coverURL {
-                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: playlistID))
                                     .requestModifier { request in
-                                        UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                        PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
                                     }
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
@@ -651,6 +656,7 @@
         let episode: DetailModels.Episode
         let progressItem: WatchHistoryItem?
         let userAgentOverride: String?
+        let playlistID: UUID?
         @FocusState.Binding var focusedEpisodeID: String?
         var onMarkUnwatched: () -> Void = {}
         let action: () -> Void
@@ -681,9 +687,9 @@
                     ZStack(alignment: .bottomLeading) {
                         Group {
                             if let url = episode.coverURL {
-                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                                KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: playlistID))
                                     .requestModifier { request in
-                                        UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                        PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
                                     }
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)

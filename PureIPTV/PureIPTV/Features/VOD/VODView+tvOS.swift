@@ -91,23 +91,23 @@
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
-                            Button {
-                                store.send(.refreshContentTapped)
-                            } label: {
-                                Group {
-                                    if store.isRefreshingContent {
-                                        ProgressView()
-                                    } else {
-                                        Image(systemName: "arrow.clockwise").font(.system(size: 18))
+                            if [PlaylistType.m3u, .plex, .emby].contains(config.type) {
+                                Button {
+                                    guard !store.isRefreshingContent, !store.isLoadingCategories else { return }
+                                    store.send(.refreshContentTapped)
+                                } label: {
+                                    Group {
+                                        if store.isRefreshingContent {
+                                            ProgressView()
+                                        } else {
+                                            Image(systemName: "arrow.clockwise").font(.system(size: 18))
+                                        }
                                     }
+                                    .padding(8)
                                 }
-                                .padding(8)
+                                .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel("Filmleri yenile")
                             }
-                            .buttonStyle(TVCircleButtonStyle())
-                            .disabled(store.isRefreshingContent || store.isLoadingCategories)
-                            .accessibilityLabel("Filmleri yenile")
-                            .opacity(config.type == .m3u ? 1 : 0)
-                            .accessibilityHidden(config.type != .m3u)
 
                             Button {
                                 store.send(.editCategoriesTapped)

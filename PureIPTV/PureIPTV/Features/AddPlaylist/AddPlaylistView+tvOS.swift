@@ -17,10 +17,10 @@
         @State private var isShowingQRTransfer = false
 
         private enum TVField: Hashable {
-            case xtreamPicker, m3uPicker
+            case xtreamPicker, m3uPicker, plexPicker, embyPicker
             case serverURL, username, password
             case m3uURL
-            case connect, qrTransfer
+            case connect, plexPINLink, qrTransfer
         }
 
         public init(store: StoreOf<AddPlaylistFeature>) {
@@ -76,8 +76,10 @@
                         tvTypePicker
 
                         // Form fields
-                        if store.playlistType == .xtream {
+                        if store.playlistType == .xtream || store.playlistType == .emby {
                             tvXtreamFields
+                        } else if store.playlistType == .plex {
+                            tvPlexFields
                         } else {
                             tvM3UField
                         }
@@ -102,9 +104,10 @@
                         }
                         .buttonStyle(TVFocusButtonStyle())
                         .focused($focusedField, equals: .qrTransfer)
-                        .focusSection()
                     }
                     .frame(maxWidth: 600)
+                    .focusSection()
+                    .defaultFocus($focusedField, .xtreamPicker, priority: .automatic)
                 }
                 .padding(.horizontal, 80)
             }
@@ -126,6 +129,7 @@
             HStack(spacing: 16) {
                 ForEach(PlaylistType.allCases, id: \.self) { type in
                     Button {
+                        guard !store.isLoading else { return }
                         store.send(.playlistTypeChanged(type))
                     } label: {
                         Text(type.displayName)
@@ -144,7 +148,7 @@
                             }
                     }
                     .buttonStyle(TVFocusButtonStyle())
-                    .focused($focusedField, equals: type == .xtream ? .xtreamPicker : .m3uPicker)
+                    .focused($focusedField, equals: pickerFocus(for: type))
                 }
             }
             .padding(6)
@@ -156,6 +160,16 @@
                             .stroke(Color.white.opacity(0.08), lineWidth: 1)
                     )
             )
+            .focusSection()
+        }
+
+        private func pickerFocus(for type: PlaylistType) -> TVField {
+            switch type {
+            case .xtream: .xtreamPicker
+            case .m3u: .m3uPicker
+            case .plex: .plexPicker
+            case .emby: .embyPicker
+            }
         }
 
         // MARK: – Xtream Fields
@@ -164,22 +178,22 @@
             VStack(spacing: 16) {
                 TVFormField(
                     icon: "server.rack",
-                    placeholder: AppStrings.AddPlaylist.serverPlaceholder,
-                    text: $store.serverURL
+                    placeholder: store.playlistType == .emby ? "Emby server URL" : AppStrings.AddPlaylist.serverPlaceholder,
+                    text: guardedBinding(\.serverURL)
                 )
                 .focused($focusedField, equals: .serverURL)
 
                 TVFormField(
                     icon: "person.fill",
                     placeholder: AppStrings.AddPlaylist.usernamePlaceholder,
-                    text: $store.username
+                    text: guardedBinding(\.username)
                 )
                 .focused($focusedField, equals: .username)
 
                 TVFormField(
                     icon: "lock.fill",
                     placeholder: AppStrings.AddPlaylist.passwordPlaceholder,
-                    text: $store.password,
+                    text: guardedBinding(\.password),
                     isSecure: !store.isPasswordVisible
                 )
                 .focused($focusedField, equals: .password)
@@ -192,9 +206,52 @@
             TVFormField(
                 icon: "link",
                 placeholder: AppStrings.AddPlaylist.m3uPlaceholder,
-                text: $store.m3uURL
+                text: guardedBinding(\.m3uURL)
             )
             .focused($focusedField, equals: .m3uURL)
+        }
+
+        private var tvPlexFields: some View {
+            VStack(alignment: .leading, spacing: 16) {
+                if let pin = store.plexPIN {
+                    Text("Open plex.tv/link and enter this code")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Color(hex: "#C0C6D6"))
+                    Link(pin.code, destination: pin.signInURL)
+                        .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        .tint(Color(hex: "#E5A00D"))
+                        .focused($focusedField, equals: .plexPINLink)
+                }
+                ForEach(store.discoveredPlexServers) { server in
+                    Button {
+                        guard !store.isLoading else { return }
+                        store.send(.selectPlexServer(server.id))
+                    } label: {
+                        HStack {
+                            Text(server.name)
+                            Spacer()
+                            if store.selectedPlexServerID == server.id {
+                                Image(systemName: "checkmark.circle.fill")
+                            }
+                        }
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(18)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(TVFocusButtonStyle())
+                }
+            }
+        }
+
+        private func guardedBinding(_ keyPath: WritableKeyPath<AddPlaylistFeature.State, String>) -> Binding<String> {
+            Binding(
+                get: { store.withState { $0[keyPath: keyPath] } },
+                set: { value in
+                    guard !store.isLoading else { return }
+                    store.send(.binding(.set(keyPath, value)))
+                }
+            )
         }
 
         // MARK: – Error Banner

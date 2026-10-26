@@ -10,6 +10,9 @@ public struct RecentChannelsHUDView: View {
 
     @FocusState private var focusedChannelID: String?
     @State private var dismissWorkItem: DispatchWorkItem?
+    #if os(tvOS)
+        @State private var scrollPosition = ScrollPosition(idType: String.self)
+    #endif
 
     public init(store: StoreOf<PlayerFeature>, onClose: @escaping () -> Void) {
         self.store = store
@@ -144,26 +147,42 @@ public struct RecentChannelsHUDView: View {
     // MARK: - Channels Scroll View
 
     private var channelsScrollView: some View {
-        ScrollViewReader { proxy in
+        #if os(tvOS)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(store.recentChannels, id: \.id) { channel in
-                        recentChannelCard(channel: channel)
-                            .id(channel.id)
-                    }
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 2)
+                recentChannelsRow
+                    .scrollTargetLayout()
             }
+            .scrollPosition($scrollPosition, anchor: .center)
             .onChange(of: focusedChannelID) { _, newID in
-                if let newID {
-                    resetDismissTimer()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                guard let newID else { return }
+                resetDismissTimer()
+                scrollPosition.scrollTo(id: newID, anchor: .center)
+            }
+            .focusSection()
+        #else
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    recentChannelsRow
+                }
+                .onChange(of: focusedChannelID) { _, newID in
+                    if let newID {
+                        resetDismissTimer()
                         proxy.scrollTo(newID, anchor: .center)
                     }
                 }
             }
+        #endif
+    }
+
+    private var recentChannelsRow: some View {
+        HStack(spacing: 14) {
+            ForEach(store.recentChannels, id: \.id) { channel in
+                recentChannelCard(channel: channel)
+                    .id(channel.id)
+            }
         }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 2)
     }
 
     // MARK: - Single Channel Card
@@ -189,9 +208,9 @@ public struct RecentChannelsHUDView: View {
 
                     // Logo presentation
                     if let logoURL = channel.coverURL {
-                        KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride))
+                        KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.config?.playlistID))
                             .requestModifier { request in
-                                UserAgentManager.applyHeaders(to: &request, override: channel.userAgentOverride)
+                                PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: channel.userAgentOverride, playlistID: channel.config?.playlistID)
                             }
                             .placeholder {
                                 fallbackLogoMonogram(title: channel.title)

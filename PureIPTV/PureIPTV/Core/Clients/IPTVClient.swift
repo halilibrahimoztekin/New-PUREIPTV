@@ -176,6 +176,7 @@ public struct IPTVClient {
     public var fetchVODs: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var fetchSeriesCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchSeries: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
+    public var searchMediaServer: @Sendable (_ config: PlaylistConfig, _ query: String) async throws -> (vods: [MediaModels.Item], series: [MediaModels.Item]) = { _, _ in ([], []) }
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
     public var resolveVODItem: @Sendable (_ config: PlaylistConfig, _ vodID: String, _ categoryID: String?) async throws -> MediaModels.Item?
@@ -228,6 +229,7 @@ extension IPTVClient: DependencyKey {
     public nonisolated static let liveValue: IPTVClient = {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
+        let mediaServerCatalogClient = MediaServerCatalogClient.liveValue
         let logoOverrideClient = ChannelLogoOverrideClient.liveValue
         let m3uCategoryMappingClient = M3UCategoryMappingClient.liveValue
 
@@ -274,6 +276,10 @@ extension IPTVClient: DependencyKey {
 
         return IPTVClient(
             authenticate: { config in
+                if config.type == .plex || config.type == .emby {
+                    try await mediaServerCatalogClient.validate(config)
+                    return
+                }
                 if config.type == .m3u {
                     guard let m3uURL = config.m3uURL else {
                         throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U configuration"])
@@ -304,6 +310,10 @@ extension IPTVClient: DependencyKey {
                 }
             },
             refreshContent: { config, contentType, reportStage in
+                if config.type == .plex || config.type == .emby {
+                    await mediaServerCatalogClient.invalidate(config, contentType == .live ? nil : contentType == .movies ? .vod : .series)
+                    return
+                }
                 guard config.type == .m3u, let url = config.m3uURL else { return }
                 await reportStage(.downloading)
                 let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
@@ -320,6 +330,9 @@ extension IPTVClient: DependencyKey {
                 )
             },
             fetchLiveCategories: { config in
+                if config.type == .plex || config.type == .emby {
+                    return []
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
                     let mappings: [String: String] = if let playlistID = config.playlistID {
@@ -352,6 +365,9 @@ extension IPTVClient: DependencyKey {
                 })).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             },
             fetchLiveChannels: { config, categoryID in
+                if config.type == .plex || config.type == .emby {
+                    return []
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .live }
                     let mappings: [String: String] = if let playlistID = config.playlistID {
@@ -406,6 +422,9 @@ extension IPTVClient: DependencyKey {
             },
             resolveLiveItem: { config, itemID, categoryID in
                 guard !itemID.isEmpty, itemID.count <= 512 else { return nil }
+                if config.type == .plex || config.type == .emby {
+                    return nil
+                }
                 if config.type == .m3u {
                     let cachedItems = await ensureM3UCache(config)
                     let mappings: [String: String] = if let playlistID = config.playlistID {
@@ -465,6 +484,9 @@ extension IPTVClient: DependencyKey {
                 return resolved.replacingLogoURLOverride(overrides[itemID])
             },
             fetchVODCategories: { config in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchCategories(config, .vod)
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .vod }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
@@ -478,6 +500,9 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchVODs: { config, categoryID in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchItems(config, .vod, categoryID)
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .vod }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
@@ -521,6 +546,9 @@ extension IPTVClient: DependencyKey {
                 }
             },
             fetchSeriesCategories: { config in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchCategories(config, .series)
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .series }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
@@ -534,6 +562,9 @@ extension IPTVClient: DependencyKey {
                 return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
             },
             fetchSeries: { config, categoryID in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchItems(config, .series, categoryID)
+                }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .series }
                     let filtered = items.filter { categoryID == nil || $0.groupTitle == categoryID }
@@ -575,7 +606,14 @@ extension IPTVClient: DependencyKey {
                     )
                 }
             },
+            searchMediaServer: { config, query in
+                guard config.type == .plex || config.type == .emby else { return ([], []) }
+                return try await mediaServerCatalogClient.search(config, query)
+            },
             fetchSeriesInfo: { config, seriesID in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchSeriesInfo(config, seriesID)
+                }
                 if config.type == .m3u {
                     // Since M3U series items are flat, we just return a single episode pseudo-info
                     // Find the item first
@@ -640,6 +678,9 @@ extension IPTVClient: DependencyKey {
                 return (info: info, seasons: seasons.sorted(by: { $0.seasonNumber < $1.seasonNumber }), episodes: episodes)
             },
             fetchVODInfo: { config, vodID in
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.fetchVODInfo(config, vodID)
+                }
                 if config.type == .m3u {
                     // Find the item first
                     let items = await ensureM3UCache(config)
@@ -671,6 +712,9 @@ extension IPTVClient: DependencyKey {
             },
             resolveVODItem: { config, vodID, categoryID in
                 guard !vodID.isEmpty, vodID.count <= 512 else { return nil }
+                if config.type == .plex || config.type == .emby {
+                    return try await mediaServerCatalogClient.resolvePlaybackItem(config, vodID)
+                }
 
                 if config.type == .m3u {
                     let cachedItems = await ensureM3UCache(config)
@@ -999,6 +1043,7 @@ extension IPTVClient: DependencyKey {
         fetchVODs: { _, _ in [] },
         fetchSeriesCategories: { _ in [] },
         fetchSeries: { _, _ in [] },
+        searchMediaServer: { _, _ in ([], []) },
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
         resolveVODItem: { _, _, _ in nil },

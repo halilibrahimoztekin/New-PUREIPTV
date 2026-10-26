@@ -156,23 +156,28 @@
                                 .foregroundStyle(Color(hex: "#E4E1E7"))
                             Spacer()
                             HStack(spacing: 8) {
-                                Button {
-                                    store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
-                                } label: {
-                                    Group {
-                                        if store.isRefreshingContent, store.refreshStage?.canCancel != true {
-                                            ProgressView()
-                                        } else {
-                                            Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise").font(.system(size: 18))
+                                if config.type == .m3u {
+                                    Button {
+                                        guard !((store.isRefreshingContent && store.refreshStage?.canCancel != true)
+                                            || store.isLoadingCategories
+                                            || store.isChannelSelectionMode
+                                            || store.isFavoriteListMode
+                                            || store.selectedSmartGroupID != nil)
+                                        else { return }
+                                        store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
+                                    } label: {
+                                        Group {
+                                            if store.isRefreshingContent, store.refreshStage?.canCancel != true {
+                                                ProgressView()
+                                            } else {
+                                                Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise").font(.system(size: 18))
+                                            }
                                         }
+                                        .padding(8)
                                     }
-                                    .padding(8)
+                                    .buttonStyle(TVCircleButtonStyle())
+                                    .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                                 }
-                                .buttonStyle(TVCircleButtonStyle())
-                                .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                                .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
-                                .opacity(config.type == .m3u ? 1 : 0)
-                                .accessibilityHidden(config.type != .m3u)
 
                                 Button {
                                     if store.isChannelSelectionMode {

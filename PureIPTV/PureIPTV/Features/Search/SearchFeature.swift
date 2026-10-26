@@ -8,6 +8,8 @@ import SwiftUI
 /// Cancel ID must be fully Sendable and non-isolated to avoid
 /// main-actor isolation conflicts with the @Reducer macro.
 private let searchCancelID = "SearchFeature.search"
+private let searchCatalogLoadCancelID = "SearchFeature.catalogLoad"
+private let searchMultiPlaylistLoadCancelID = "SearchFeature.multiPlaylistLoad"
 private let searchEPGCancelID = "SearchFeature.searchEPG"
 private let searchPeopleCancelID = "SearchFeature.searchPeople"
 private let searchProgramsCancelID = "SearchFeature.searchPrograms"
@@ -137,6 +139,8 @@ public struct SearchFeature: Sendable {
 
         // UI state
         public var isLoading = false
+        public var primaryCatalogLoadRequestID: UUID?
+        public var multiPlaylistLoadRequestID: UUID?
         public var isSearching = false
         public var isPeopleSearchLoading = false
         public var isProgramsSearchLoading = false
@@ -286,8 +290,16 @@ public struct SearchFeature: Sendable {
         case onAppear(config: PlaylistConfig)
         case loadSavedPlaylistsResponse([SavedPlaylist])
         case loadRecentSearchesResponse([SearchHistoryItem])
-        case loadAllDataResponse(Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item]), Error>)
-        case loadPlaylistsDataResponse([(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])])
+        case loadAllDataResponse(
+            requestID: UUID,
+            config: PlaylistConfig,
+            result: Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item]), Error>
+        )
+        case loadPlaylistsDataResponse(
+            requestID: UUID,
+            config: PlaylistConfig,
+            list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])]
+        )
         case queryChanged(String)
         case performSearch(String)
         case searchCompleted(query: String, filter: SearchFilter, live: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
@@ -368,6 +380,9 @@ public struct SearchFeature: Sendable {
                 let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 if state.lastLoadedConfig != config || state.lastAdultHidden != currentAdultHidden {
                     state.hasLoaded = false
+                    state.isLoading = false
+                    state.primaryCatalogLoadRequestID = nil
+                    state.multiPlaylistLoadRequestID = nil
                     state.allChannels = []
                     state.allVODs = []
                     state.allSeries = []
@@ -401,45 +416,88 @@ public struct SearchFeature: Sendable {
                 }
                 state.isLoading = true
                 state.errorMessage = nil
+                let primaryRequestID = UUID()
+                let multiPlaylistRequestID = playlists.count > 1 ? UUID() : nil
+                state.primaryCatalogLoadRequestID = primaryRequestID
+                state.multiPlaylistLoadRequestID = multiPlaylistRequestID
 
                 // Concurrently fetch active playlist plus other playlists if multiple exist
                 let primaryFetch: Effect<Action> = .run { send in
                     async let channelsReq = try? iptvClient.fetchLiveChannels(config, nil)
-                    async let vodsReq = try? iptvClient.fetchVODs(config, nil)
-                    async let seriesReq = try? iptvClient.fetchSeries(config, nil)
-
-                    let (channels, vods, series) = await (channelsReq, vodsReq, seriesReq)
+                    let vods: [MediaModels.Item]?
+                    let series: [MediaModels.Item]?
+                    if config.type == .plex || config.type == .emby {
+                        // Authenticated media servers are searched on demand instead of loading
+                        // their entire libraries into the global search index.
+                        vods = []
+                        series = []
+                    } else {
+                        async let vodsReq = try? iptvClient.fetchVODs(config, nil)
+                        async let seriesReq = try? iptvClient.fetchSeries(config, nil)
+                        (vods, series) = await (vodsReq, seriesReq)
+                    }
+                    let channels = await channelsReq
 
                     if channels == nil, vods == nil, series == nil {
-                        await send(.loadAllDataResponse(.failure(NetworkError.invalidResponse)))
+                        await send(.loadAllDataResponse(
+                            requestID: primaryRequestID,
+                            config: config,
+                            result: .failure(NetworkError.invalidResponse)
+                        ))
                     } else {
-                        await send(.loadAllDataResponse(.success((
-                            channels: channels ?? [],
-                            vods: vods ?? [],
-                            series: series ?? []
-                        ))))
+                        await send(.loadAllDataResponse(
+                            requestID: primaryRequestID,
+                            config: config,
+                            result: .success((
+                                channels: channels ?? [],
+                                vods: vods ?? [],
+                                series: series ?? []
+                            ))
+                        ))
                     }
                 }
 
-                let multiPlaylistFetch: Effect<Action> = if playlists.count > 1 {
+                let multiPlaylistFetch: Effect<Action> = if let multiPlaylistRequestID {
                     .run { send in
                         var list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])] = []
                         for (index, p) in playlists.enumerated() {
                             guard let pConfig = p.toPlaylistConfig() else { continue }
                             let badge = UnifiedPlaylistManager.shared.badge(for: pConfig, index: index)
                             async let channelsReq = try? iptvClient.fetchLiveChannels(pConfig, nil)
-                            async let vodsReq = try? iptvClient.fetchVODs(pConfig, nil)
-                            async let seriesReq = try? iptvClient.fetchSeries(pConfig, nil)
-                            let (ch, vo, se) = await (channelsReq, vodsReq, seriesReq)
-                            list.append((badge: badge, channels: ch ?? [], vods: vo ?? [], series: se ?? []))
+                            let vods: [MediaModels.Item]?
+                            let series: [MediaModels.Item]?
+                            if pConfig.type == .plex || pConfig.type == .emby {
+                                vods = []
+                                series = []
+                            } else {
+                                async let vodsReq = try? iptvClient.fetchVODs(pConfig, nil)
+                                async let seriesReq = try? iptvClient.fetchSeries(pConfig, nil)
+                                (vods, series) = await (vodsReq, seriesReq)
+                            }
+                            let channels = await channelsReq
+                            list.append((badge: badge, channels: channels ?? [], vods: vods ?? [], series: series ?? []))
                         }
-                        await send(.loadPlaylistsDataResponse(list))
+                        await send(.loadPlaylistsDataResponse(
+                            requestID: multiPlaylistRequestID,
+                            config: config,
+                            list: list
+                        ))
                     }
                 } else {
                     .none
                 }
 
-                return .merge(loadHistory, loadFavs, primaryFetch, multiPlaylistFetch, .send(.loadReminders))
+                return .concatenate(
+                    .cancel(id: searchCatalogLoadCancelID),
+                    .cancel(id: searchMultiPlaylistLoadCancelID),
+                    .merge(
+                        loadHistory,
+                        loadFavs,
+                        primaryFetch.cancellable(id: searchCatalogLoadCancelID, cancelInFlight: true),
+                        multiPlaylistFetch.cancellable(id: searchMultiPlaylistLoadCancelID, cancelInFlight: true),
+                        .send(.loadReminders)
+                    )
+                )
 
             case let .loadSavedPlaylistsResponse(playlists):
                 state.savedPlaylists = playlists
@@ -449,7 +507,11 @@ public struct SearchFeature: Sendable {
                 state.recentSearches = history
                 return .none
 
-            case let .loadAllDataResponse(.success(data)):
+            case let .loadAllDataResponse(requestID, responseConfig, .success(data)):
+                guard state.primaryCatalogLoadRequestID == requestID,
+                      state.lastLoadedConfig == responseConfig
+                else { return .none }
+                state.primaryCatalogLoadRequestID = nil
                 state.isLoading = false
                 state.hasLoaded = true
                 let hiddenIDs = parentalControlClient.hiddenChannelIDs()
@@ -489,12 +551,20 @@ public struct SearchFeature: Sendable {
                 }
                 return .none
 
-            case let .loadAllDataResponse(.failure(error)):
+            case let .loadAllDataResponse(requestID, responseConfig, .failure(error)):
+                guard state.primaryCatalogLoadRequestID == requestID,
+                      state.lastLoadedConfig == responseConfig
+                else { return .none }
+                state.primaryCatalogLoadRequestID = nil
                 state.isLoading = false
                 state.errorMessage = AppStrings.Errors.searchFailed(desc: error.localizedDescription)
                 return .none
 
-            case let .loadPlaylistsDataResponse(list):
+            case let .loadPlaylistsDataResponse(requestID, responseConfig, list):
+                guard state.multiPlaylistLoadRequestID == requestID,
+                      state.lastLoadedConfig == responseConfig
+                else { return .none }
+                state.multiPlaylistLoadRequestID = nil
                 let hiddenIDs = parentalControlClient.hiddenChannelIDs()
                 let blacklistedCats = parentalControlClient.blacklistedCategoryIDs()
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
@@ -640,22 +710,6 @@ public struct SearchFeature: Sendable {
                     series = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                 }
 
-                let searchEffect: Effect<Action> = .run { send in
-                    guard !Task.isCancelled else { return }
-                    let output = GlobalSearchEngine.search(
-                        query: trimmed,
-                        filter: filter,
-                        selectedPlaylistID: selectedPID,
-                        channels: channels,
-                        vods: vods,
-                        series: series,
-                        limitPerCategory: 100,
-                        isCancelled: { Task.isCancelled }
-                    )
-                    guard !Task.isCancelled else { return }
-                    await send(.searchEnrichedCompleted(requestID: searchRequestID, query: query, filter: filter, playlistID: selectedPID, output: output))
-                }
-                .cancellable(id: searchCancelID, cancelInFlight: true)
                 var configsByBadgeID: [String: (config: PlaylistConfig, badge: PlaylistSourceBadge)] = [:]
                 let primaryBadge = PlaylistSourceBadge(
                     id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
@@ -673,6 +727,51 @@ public struct SearchFeature: Sendable {
                 let scopedConfigs = Array(configsByBadgeID.values
                     .filter { selectedPID == nil || $0.badge.id == selectedPID?.uuidString }
                     .sorted { $0.badge.id < $1.badge.id })
+                let adultFilteringEnabled = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
+                let isAdultContent = settingsClient.isAdultContent
+                let blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
+
+                let searchEffect: Effect<Action> = .run { send in
+                    guard !Task.isCancelled else { return }
+                    var remoteVODs: [GlobalSearchResultItem] = []
+                    var remoteSeries: [GlobalSearchResultItem] = []
+                    if filter == .all || filter == .vod || filter == .series || filter == .uhd4k {
+                        for source in scopedConfigs where source.config.type == .plex || source.config.type == .emby {
+                            guard !Task.isCancelled else { return }
+                            guard let results = try? await iptvClient.searchMediaServer(source.config, trimmed) else { continue }
+                            for item in results.vods where !item.categoryID.isEmpty
+                                && !blacklistedCategoryIDs.contains(item.categoryID)
+                                && (!adultFilteringEnabled || !isAdultContent(item.title))
+                            {
+                                remoteVODs.append(GlobalSearchResultItem(item: item, playlistBadge: source.badge))
+                            }
+                            for item in results.series where !item.categoryID.isEmpty
+                                && !blacklistedCategoryIDs.contains(item.categoryID)
+                                && (!adultFilteringEnabled || !isAdultContent(item.title))
+                            {
+                                remoteSeries.append(GlobalSearchResultItem(item: item, playlistBadge: source.badge))
+                            }
+                        }
+                    }
+                    let knownVODIDs = Set(vods.map { "\($0.playlistBadge.id)_\($0.item.id)" })
+                    let knownSeriesIDs = Set(series.map { "\($0.playlistBadge.id)_\($0.item.id)" })
+                    remoteVODs.removeAll { knownVODIDs.contains("\($0.playlistBadge.id)_\($0.item.id)") }
+                    remoteSeries.removeAll { knownSeriesIDs.contains("\($0.playlistBadge.id)_\($0.item.id)") }
+                    guard !Task.isCancelled else { return }
+                    let output = GlobalSearchEngine.search(
+                        query: trimmed,
+                        filter: filter,
+                        selectedPlaylistID: selectedPID,
+                        channels: channels,
+                        vods: vods + remoteVODs,
+                        series: series + remoteSeries,
+                        limitPerCategory: 100,
+                        isCancelled: { Task.isCancelled }
+                    )
+                    guard !Task.isCancelled else { return }
+                    await send(.searchEnrichedCompleted(requestID: searchRequestID, query: query, filter: filter, playlistID: selectedPID, output: output))
+                }
+                .cancellable(id: searchCancelID, cancelInFlight: true)
                 let catalog = (vods + series).filter {
                     selectedPID == nil || $0.playlistBadge.id == selectedPID?.uuidString
                 }
@@ -994,6 +1093,8 @@ public struct SearchFeature: Sendable {
             case .resetCache:
                 state.hasLoaded = false
                 state.isLoading = false
+                state.primaryCatalogLoadRequestID = nil
+                state.multiPlaylistLoadRequestID = nil
                 state.isSearching = false
                 state.allChannels = []
                 state.allVODs = []
@@ -1018,6 +1119,8 @@ public struct SearchFeature: Sendable {
                 state.lastLoadedConfig = nil
                 state.selectedPlaylistID = nil
                 return .merge(
+                    .cancel(id: searchCatalogLoadCancelID),
+                    .cancel(id: searchMultiPlaylistLoadCancelID),
                     .cancel(id: searchCancelID),
                     .cancel(id: searchEPGCancelID),
                     .cancel(id: searchPeopleCancelID),

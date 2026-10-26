@@ -6,7 +6,7 @@ public enum LocalTimePresentation {
     }
 }
 
-public enum MediaModels: Sendable {
+public nonisolated enum MediaModels: Sendable {
     public enum ItemType: String, Equatable, Sendable {
         case live
         case vod
@@ -37,6 +37,11 @@ public enum MediaModels: Sendable {
         public let tvArchive: Int?
         public let tvArchiveDuration: Int?
         public let userAgentOverride: String?
+        /// Nonsecret identity used to select authenticated artwork requests from Keychain-backed configuration.
+        public let playlistID: UUID?
+        /// Request-only headers returned by the media server for the current playback source.
+        /// They remain transient and are never copied into persisted favorites or watch history.
+        public let playbackRequestHeaders: [String: String]?
         public let seriesID: String?
         /// Normalized playback position restored when this item enters a MultiView slot.
         public let resumePosition: Double?
@@ -59,8 +64,10 @@ public enum MediaModels: Sendable {
             tvArchive: Int? = nil,
             tvArchiveDuration: Int? = nil,
             userAgentOverride: String? = nil,
+            playlistID: UUID? = nil,
             seriesID: String? = nil,
-            resumePosition: Double? = nil
+            resumePosition: Double? = nil,
+            playbackRequestHeaders: [String: String]? = nil
         ) {
             self.id = id
             self.title = title
@@ -79,6 +86,8 @@ public enum MediaModels: Sendable {
             self.tvArchive = tvArchive
             self.tvArchiveDuration = tvArchiveDuration
             self.userAgentOverride = userAgentOverride
+            self.playlistID = playlistID
+            self.playbackRequestHeaders = playbackRequestHeaders
             self.seriesID = seriesID
             self.resumePosition = resumePosition.map { min(1, max(0, $0)) }
         }
@@ -102,8 +111,10 @@ public enum MediaModels: Sendable {
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
                 userAgentOverride: value,
+                playlistID: playlistID,
                 seriesID: seriesID,
-                resumePosition: resumePosition
+                resumePosition: resumePosition,
+                playbackRequestHeaders: playbackRequestHeaders
             )
         }
 
@@ -126,8 +137,10 @@ public enum MediaModels: Sendable {
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
                 userAgentOverride: userAgentOverride,
+                playlistID: playlistID,
                 seriesID: seriesID,
-                resumePosition: resumePosition
+                resumePosition: resumePosition,
+                playbackRequestHeaders: playbackRequestHeaders
             )
         }
 
@@ -150,8 +163,10 @@ public enum MediaModels: Sendable {
                 tvArchive: tvArchive,
                 tvArchiveDuration: tvArchiveDuration,
                 userAgentOverride: userAgentOverride,
+                playlistID: playlistID,
                 seriesID: seriesID,
-                resumePosition: value
+                resumePosition: value,
+                playbackRequestHeaders: playbackRequestHeaders
             )
         }
     }

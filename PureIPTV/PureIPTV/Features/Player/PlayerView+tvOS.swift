@@ -789,6 +789,10 @@
                 HStack(spacing: 18) {
                     if store.item.isLive {
                         Button {
+                            guard store.playerState == .playing,
+                                  !store.isRecordingStartPending,
+                                  !store.isRecordingStopPending
+                            else { return }
                             onInteraction()
                             store.send(.toggleRecordingTapped)
                         } label: {
@@ -798,7 +802,6 @@
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                         .accessibilityLabel(store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording)
-                        .disabled(store.playerState != .playing || store.isRecordingStartPending || store.isRecordingStopPending)
                     }
 
                     // Last Channel Recall (Önceki Kanal)
@@ -1104,8 +1107,10 @@
                     if store.canSwitchPlaybackEngine {
                         Menu {
                             ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                Button(engine.title) { store.send(.switchPlaybackEngine(engine)) }
-                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                Button(engine.title) {
+                                    guard !store.isSwitchingPlaybackEngine, engine != store.playbackEngine else { return }
+                                    store.send(.switchPlaybackEngine(engine))
+                                }
                             }
                         } label: {
                             Image(systemName: "cpu")

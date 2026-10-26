@@ -26,6 +26,7 @@ public struct VODDetailFeature {
         public var isTMDBLoading = false
         public var isFavorite = false
         public var isDownloaded = false
+        public var downloadErrorMessage: String?
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
@@ -109,6 +110,7 @@ public struct VODDetailFeature {
         case toggleFavorite
         case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
         case downloadStatusLoaded(Bool)
+        case downloadFailed(String)
         case downloadTapped
         case historyStatusLoaded(id: String, item: WatchHistoryItem?, scope: ProfileContextSnapshot)
         case markUnwatched
@@ -708,11 +710,21 @@ public struct VODDetailFeature {
                 state.isDownloaded = isDown
                 return .none
 
+            case let .downloadFailed(message):
+                state.downloadErrorMessage = message
+                return .none
+
             case .downloadTapped:
+                guard state.config.type != .plex, state.config.type != .emby else { return .none }
+                state.downloadErrorMessage = nil
                 if state.isDownloaded {
                     return .run { [id = state.vod.id] send in
-                        try? await downloadClient.deleteDownloadedMedia(id)
-                        await send(.downloadStatusLoaded(false))
+                        do {
+                            try await downloadClient.deleteDownloadedMedia(id)
+                            await send(.downloadStatusLoaded(false))
+                        } catch {
+                            await send(.downloadFailed(error.localizedDescription))
+                        }
                     }
                 } else {
                     guard let streamURL = state.vod.streamURL else { return .none }
@@ -730,8 +742,13 @@ public struct VODDetailFeature {
                     }()
 
                     return .run { send in
-                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
-                        await send(.downloadStatusLoaded(true))
+                        do {
+                            try await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
+                            let isDownloaded = await (try? downloadClient.isDownloaded(id)) ?? false
+                            await send(.downloadStatusLoaded(isDownloaded))
+                        } catch {
+                            await send(.downloadFailed(error.localizedDescription))
+                        }
                     }
                 }
 

@@ -1,26 +1,40 @@
 import Foundation
 
-private let mediaServerCredentialQueryKeys: Set<String> = [
+private nonisolated let mediaServerCredentialQueryKeys: Set<String> = [
     "token", "access_token", "authtoken", "auth", "authorization", "password", "username",
     "api_key", "api-key", "apikey", "secret", "x-plex-token", "x-emby-token",
 ]
 
-private func mediaServerCredentialSafeURL(_ url: URL) -> URL {
+private nonisolated func mediaServerCredentialSafeURL(
+    _ url: URL,
+    redactingAdditionalQueryKeys: Set<String> = []
+) -> URL {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
     components.user = nil
     components.password = nil
     components.queryItems = components.queryItems?.filter {
-        !mediaServerCredentialQueryKeys.contains($0.name.lowercased())
+        let key = $0.name.lowercased()
+        return !mediaServerCredentialQueryKeys.contains(key) && !redactingAdditionalQueryKeys.contains(key)
     }
     return components.url ?? url
 }
 
 public struct NetworkClient {
     private let session: URLSession
+    private let credentialedSession: URLSession
     private let decoder: JSONDecoder
 
     public init(session: URLSession = .shared) {
         self.session = session
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        credentialedSession = URLSession(
+            configuration: configuration,
+            delegate: CredentialedRedirectDelegate(),
+            delegateQueue: nil
+        )
         decoder = JSONDecoder()
         // Some APIs return empty arrays instead of objects on failure or empty results
         // Also might need date decoding strategies depending on API format.
@@ -42,7 +56,7 @@ public struct NetworkClient {
         if let url = request.url {
             request.url = mediaServerCredentialSafeURL(url)
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await credentialedSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
             throw NetworkError.invalidResponse
         }
@@ -63,17 +77,17 @@ public struct NetworkClient {
         if let url = request.url {
             request.url = mediaServerCredentialSafeURL(url)
         }
-        return try await performFetch(request: request)
+        return try await performFetch(request: request, session: credentialedSession)
     }
 
     @MainActor
-    private func performFetch<T: Decodable>(request: URLRequest) async throws -> T {
+    private func performFetch<T: Decodable>(request: URLRequest, session: URLSession? = nil) async throws -> T {
         #if DEBUG
             print("🌐 [NETWORK REQUEST] -> \(Self.redactedURL(request.url))")
             let startTime = CFAbsoluteTimeGetCurrent()
         #endif
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await (session ?? self.session).data(for: request)
 
         #if DEBUG
             let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
@@ -116,12 +130,60 @@ public struct NetworkClient {
         guard let url else {
             return "<invalid-url>"
         }
-        return mediaServerCredentialSafeURL(url).absoluteString
+        return mediaServerCredentialSafeURL(url, redactingAdditionalQueryKeys: ["code"]).absoluteString
+    }
+}
+
+private final nonisolated class CredentialedRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        guard let originalURL = task.originalRequest?.url,
+              let redirectedURL = request.url,
+              Self.hasSameOrigin(originalURL, redirectedURL),
+              redirectedURL.user == nil,
+              redirectedURL.password == nil
+        else {
+            completionHandler(nil)
+            return
+        }
+        completionHandler(request)
+    }
+
+    private nonisolated static func hasSameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+        guard let left = URLComponents(url: lhs, resolvingAgainstBaseURL: false),
+              let right = URLComponents(url: rhs, resolvingAgainstBaseURL: false),
+              let leftScheme = left.scheme?.lowercased(),
+              let rightScheme = right.scheme?.lowercased(),
+              let leftHost = left.host?.lowercased(),
+              let rightHost = right.host?.lowercased(),
+              left.user == nil, left.password == nil,
+              right.user == nil, right.password == nil
+        else { return false }
+
+        func effectivePort(_ components: URLComponents) -> Int? {
+            if let port = components.port {
+                return port
+            }
+            return switch components.scheme?.lowercased() {
+            case "https": 443
+            case "http": 80
+            default: nil
+            }
+        }
+
+        return leftScheme == rightScheme
+            && leftHost == rightHost
+            && effectivePort(left) == effectivePort(right)
     }
 }
 
 /// Provider authentication that travels only as HTTP headers.
-public enum MediaServerRequestContext: Sendable {
+public nonisolated enum MediaServerRequestContext: Sendable {
     case plex(accessToken: String, clientIdentifier: String)
     case emby(accessToken: String, userID: String, clientIdentifier: String, deviceName: String, deviceID: String)
 
@@ -132,6 +194,12 @@ public enum MediaServerRequestContext: Sendable {
         request.httpMethod = method
         apply(to: &request)
         return request
+    }
+
+    public var authorizationHeaders: [String: String] {
+        var request = URLRequest(url: URL(string: "https://localhost.invalid")!)
+        apply(to: &request)
+        return request.allHTTPHeaderFields ?? [:]
     }
 
     public func apply(to request: inout URLRequest) {

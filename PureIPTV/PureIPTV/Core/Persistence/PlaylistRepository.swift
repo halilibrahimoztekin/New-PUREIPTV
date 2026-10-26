@@ -91,7 +91,13 @@ public final class PlaylistRepository: @unchecked Sendable {
         case .failed: return false
         }
         current.removeAll { $0.id == id }
-        do { try keychainManager.save(current, for: keychainKey); return true } catch { return false }
+        do {
+            try keychainManager.save(current, for: keychainKey)
+            MediaServerRequestContextFactory.removeCachedContext(for: id)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Updates an existing playlist

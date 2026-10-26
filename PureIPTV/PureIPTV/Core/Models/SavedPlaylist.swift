@@ -12,6 +12,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
 
     /// M3U fields
     public let m3uURL: String?
+    /// Provider session secret, persisted only inside the encrypted Keychain playlist record.
+    public let mediaServerCredentials: MediaServerCredentials?
     public let userAgentOverride: String?
     /// Optional to decode playlists saved before this setting existed.
     public let channelZappingDelayMilliseconds: Int?
@@ -24,6 +26,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         username: String? = nil,
         password: String? = nil,
         m3uURL: String? = nil,
+        mediaServerCredentials: MediaServerCredentials? = nil,
         userAgentOverride: String? = nil,
         channelZappingDelayMilliseconds: Int? = nil
     ) {
@@ -34,6 +37,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.username = username
         self.password = password
         self.m3uURL = m3uURL
+        self.mediaServerCredentials = mediaServerCredentials
         self.userAgentOverride = userAgentOverride
         self.channelZappingDelayMilliseconds = channelZappingDelayMilliseconds.map { min(max($0, 0), 3000) }
     }
@@ -70,6 +74,21 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 userAgentOverride: userAgentOverride,
                 channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
             )
+        } else if type == .plex || type == .emby {
+            guard let serverURLString = serverURL,
+                  let url = URL(string: serverURLString),
+                  let mediaServerCredentials
+            else { return nil }
+            let config = PlaylistConfig(
+                playlistID: id,
+                type: type,
+                serverURL: url,
+                mediaServerCredentials: mediaServerCredentials,
+                userAgentOverride: userAgentOverride,
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
+            )
+            MediaServerRequestContextFactory.register(config)
+            return config
         }
         return nil
     }
@@ -83,6 +102,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             username: username,
             password: password,
             m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
             userAgentOverride: value,
             channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
         )
@@ -97,6 +117,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             username: username,
             password: password,
             m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
             userAgentOverride: userAgentOverride,
             channelZappingDelayMilliseconds: value
         )
@@ -116,8 +137,23 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             username: username,
             password: password,
             m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
             userAgentOverride: userAgentOverride,
             channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
         )
+    }
+}
+
+public struct MediaServerCredentials: Codable, Equatable, Sendable {
+    public let serverID: String
+    public let userID: String?
+    public let accessToken: String
+    public let accountToken: String?
+
+    public init(serverID: String, userID: String? = nil, accessToken: String, accountToken: String? = nil) {
+        self.serverID = serverID
+        self.userID = userID
+        self.accessToken = accessToken
+        self.accountToken = accountToken
     }
 }

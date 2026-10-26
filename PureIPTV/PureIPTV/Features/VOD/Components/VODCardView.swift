@@ -34,9 +34,9 @@ public struct VODCardView: View {
 
                 // Poster
                 if let posterURL = vod.coverURL {
-                    KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride))
+                    KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
                         .requestModifier { request in
-                            UserAgentManager.applyHeaders(to: &request, override: vod.userAgentOverride)
+                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
                         }
                         .placeholder {
                             VODPosterPlaceholder()

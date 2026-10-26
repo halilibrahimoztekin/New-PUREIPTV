@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import FactoryKit
 import Foundation
+import SwiftUI
 #if canImport(UIKit)
     import UIKit
 #endif
@@ -21,6 +22,10 @@ public struct AddPlaylistFeature {
 
         /// M3U field
         public var m3uURL: String = ""
+        public var plexPIN: PlexSignInPIN?
+        public var plexAccountToken: String?
+        public var discoveredPlexServers: [PlexDiscoveredServer] = []
+        public var selectedPlexServerID: String?
 
         // Smart Paste (Madde #77)
         public var detectedClipboardURL: String?
@@ -40,6 +45,12 @@ public struct AddPlaylistFeature {
                     !password.isEmpty
             case .m3u:
                 !m3uURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .plex:
+                true
+            case .emby:
+                !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    !password.isEmpty
             }
         }
 
@@ -56,8 +67,16 @@ public struct AddPlaylistFeature {
         case binding(BindingAction<State>)
         case playlistTypeChanged(PlaylistType)
         case connectTapped
-        case connectResponse(Result<String, Error>)
-        case playlistSaveFailed
+        case connectResponse(PlaylistType, Result<String, Error>)
+        case plexPINCreated(PlexSignInPIN)
+        case plexAccountTokenReceived(String)
+        case plexServersLoaded(Result<[PlexDiscoveredServer], Error>)
+        case selectPlexServer(String)
+        case plexPlaylistSaveResult(serverURL: String, succeeded: Bool)
+        case embyAuthenticationResponse(serverURL: String, result: Result<EmbyAuthenticatedSession, Error>)
+        case embyPlaylistSaveResult(serverURL: String, succeeded: Bool)
+        case playlistSaveFailed(PlaylistType)
+        case playlistSaveSucceeded(type: PlaylistType, serverURL: String, username: String, password: String)
         case dismissError
         case togglePasswordVisibility
 
@@ -71,13 +90,17 @@ public struct AddPlaylistFeature {
 
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.playlistRepository) var playlistRepository
+    @Dependency(\.mediaServerClient) var mediaServerClient
     @Dependency(\.hapticClient) var hapticClient
+    @Dependency(\.continuousClock) var clock
 
     public init() {}
 
     public var body: some Reducer<State, Action> {
         let iptvClient = iptvClient
         let playlistRepository = playlistRepository
+        let mediaServerClient = mediaServerClient
+        let clock = clock
 
         BindingReducer()
 
@@ -132,7 +155,15 @@ public struct AddPlaylistFeature {
             case let .playlistTypeChanged(type):
                 state.playlistType = type
                 state.errorMessage = nil
-                return .none
+                state.isLoading = false
+                state.plexPIN = nil
+                state.plexAccountToken = nil
+                state.discoveredPlexServers = []
+                state.selectedPlexServerID = nil
+                return .merge(
+                    .cancel(id: "AddPlaylistFeature.plexPinPolling"),
+                    .cancel(id: "AddPlaylistFeature.authentication")
+                )
 
             case .togglePasswordVisibility:
                 state.isPasswordVisible.toggle()
@@ -144,6 +175,58 @@ public struct AddPlaylistFeature {
                 state.errorMessage = nil
 
                 switch state.playlistType {
+                case .plex:
+                    if let selectedPlexServerID = state.selectedPlexServerID,
+                       let server = state.discoveredPlexServers.first(where: { $0.id == selectedPlexServerID }),
+                       let accountToken = state.plexAccountToken
+                    {
+                        let playlist = SavedPlaylist(
+                            name: server.name,
+                            type: .plex,
+                            serverURL: server.baseURL.absoluteString,
+                            mediaServerCredentials: MediaServerCredentials(
+                                serverID: server.id,
+                                accessToken: server.accessToken,
+                                accountToken: accountToken
+                            )
+                        )
+                        let serverURL = server.baseURL.absoluteString
+                        return .run { send in
+                            guard !Task.isCancelled else { return }
+                            await send(.plexPlaylistSaveResult(
+                                serverURL: serverURL,
+                                succeeded: playlistRepository.addPlaylist(playlist)
+                            ))
+                        }
+                        .cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
+                    }
+                    state.isLoading = true
+                    state.errorMessage = nil
+                    state.plexPIN = nil
+                    return .run { send in
+                        do {
+                            let pin = try await mediaServerClient.createPlexPIN()
+                            await send(.plexPINCreated(pin))
+                            for _ in 0 ..< 120 {
+                                try await clock.sleep(for: .seconds(3))
+                                try Task.checkCancellation()
+                                if let token = try? await mediaServerClient.pollPlexPIN(pin.id, pin.code),
+                                   !token.isEmpty
+                                {
+                                    await send(.plexAccountTokenReceived(token))
+                                    return
+                                }
+                            }
+                            await send(.connectResponse(.plex, .failure(NetworkError.underlying(description: "Plex oturum açma kodunun süresi doldu."))))
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            await send(.connectResponse(.plex, .failure(error)))
+                        }
+                    }
+                    .cancellable(id: "AddPlaylistFeature.plexPinPolling", cancelInFlight: true)
+                    .cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
+
                 case .xtream:
                     let rawURL = state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
                     let username = state.username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,13 +240,13 @@ public struct AddPlaylistFeature {
                             }
                             let config = PlaylistConfig(type: .xtream, serverURL: url, username: username, password: password)
                             try await iptvClient.authenticate(config)
-                            await send(.connectResponse(.success("Xtream Playlist")))
+                            await send(.connectResponse(.xtream, .success("Xtream Playlist")))
                         } catch {
                             guard !Task.isCancelled else { return }
                             await FeedbackReportManager.shared.recordConnectionFailure(playlistType: .xtream, error: error)
-                            await send(.connectResponse(.failure(error)))
+                            await send(.connectResponse(.xtream, .failure(error)))
                         }
-                    }
+                    }.cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
 
                 case .m3u:
                     let m3uURLString = state.m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,17 +258,120 @@ public struct AddPlaylistFeature {
                             }
                             let config = PlaylistConfig(type: .m3u, m3uURL: url)
                             try await iptvClient.authenticate(config)
-                            await send(.connectResponse(.success("M3U Playlist")))
+                            await send(.connectResponse(.m3u, .success("M3U Playlist")))
                         } catch {
                             guard !Task.isCancelled else { return }
                             await FeedbackReportManager.shared.recordConnectionFailure(playlistType: .m3u, error: error)
-                            await send(.connectResponse(.failure(error)))
+                            await send(.connectResponse(.m3u, .failure(error)))
                         }
+                    }.cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
+
+                case .emby:
+                    state.isLoading = true
+                    state.errorMessage = nil
+                    let rawURL = state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let username = state.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let password = state.password
+                    guard let url = URL(string: rawURL), url.scheme?.lowercased() == "https" else {
+                        state.isLoading = false
+                        state.errorMessage = "Emby bağlantısı için HTTPS gereklidir; parolanız HTTP üzerinden gönderilemez."
+                        return .none
                     }
+                    return .run { send in
+                        await FeedbackReportManager.shared.clearConnectionFailure()
+                        do {
+                            let session = try await mediaServerClient.authenticateEmby(url, username, password)
+                            await send(.embyAuthenticationResponse(serverURL: rawURL, result: .success(session)))
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            await FeedbackReportManager.shared.recordConnectionFailure(playlistType: .emby, error: error)
+                            await send(.embyAuthenticationResponse(serverURL: rawURL, result: .failure(error)))
+                        }
+                    }.cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
                 }
 
-            case let .connectResponse(.success(message)):
+            case let .plexPINCreated(pin):
+                guard state.playlistType == .plex else { return .none }
+                state.plexPIN = pin
+                return .none
+
+            case let .plexAccountTokenReceived(token):
+                guard state.playlistType == .plex else { return .none }
+                state.plexAccountToken = token
+                return .run { send in
+                    await send(.plexServersLoaded(Result { try await mediaServerClient.discoverPlexServers(token) }))
+                }.cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
+
+            case let .plexServersLoaded(.success(servers)):
+                guard state.playlistType == .plex else { return .none }
                 state.isLoading = false
+                state.discoveredPlexServers = servers
+                state.selectedPlexServerID = servers.first?.id
+                state.plexPIN = nil
+                if servers.isEmpty {
+                    state.errorMessage = "Plex hesabında erişilebilir medya sunucusu bulunamadı."
+                }
+                return .cancel(id: "AddPlaylistFeature.plexPinPolling")
+
+            case let .plexServersLoaded(.failure(error)):
+                guard state.playlistType == .plex else { return .none }
+                state.isLoading = false
+                state.errorMessage = error.localizedDescription
+                return .none
+
+            case let .selectPlexServer(serverID):
+                guard state.playlistType == .plex else { return .none }
+                guard state.discoveredPlexServers.contains(where: { $0.id == serverID }) else { return .none }
+                state.selectedPlexServerID = serverID
+                return .none
+
+            case let .plexPlaylistSaveResult(serverURL, succeeded):
+                guard state.playlistType == .plex else { return .none }
+                state.isLoading = false
+                guard succeeded else {
+                    state.errorMessage = "Plex sunucusu güvenli olarak kaydedilemedi."
+                    return .none
+                }
+                return .send(.delegate(.didConnect(serverURL: serverURL, username: "", password: "")))
+
+            case let .embyAuthenticationResponse(serverURL, .success(session)):
+                guard state.playlistType == .emby else { return .none }
+                let rawURL = serverURL
+                let playlist = SavedPlaylist(
+                    name: session.userName,
+                    type: .emby,
+                    serverURL: rawURL,
+                    mediaServerCredentials: MediaServerCredentials(
+                        serverID: session.serverID,
+                        userID: session.userID,
+                        accessToken: session.accessToken
+                    )
+                )
+                return .run { send in
+                    guard !Task.isCancelled else { return }
+                    let succeeded = playlistRepository.addPlaylist(playlist)
+                    guard !Task.isCancelled else { return }
+                    await send(.embyPlaylistSaveResult(serverURL: rawURL, succeeded: succeeded))
+                }
+                .cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
+
+            case let .embyPlaylistSaveResult(serverURL, succeeded):
+                guard state.playlistType == .emby else { return .none }
+                state.isLoading = false
+                guard succeeded else {
+                    state.errorMessage = "Emby sunucusu güvenli olarak kaydedilemedi."
+                    return .none
+                }
+                return .send(.delegate(.didConnect(serverURL: serverURL, username: "", password: "")))
+
+            case let .embyAuthenticationResponse(_, .failure(error)):
+                guard state.playlistType == .emby else { return .none }
+                state.isLoading = false
+                state.errorMessage = (error as? NetworkError)?.localizedDescription ?? "Emby sunucusuna bağlanılamadı."
+                return .none
+
+            case let .connectResponse(type, .success(message)):
+                guard type == state.playlistType else { return .none }
                 let rawURL = state.playlistType == .xtream ? state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines) : ""
                 let username = state.playlistType == .xtream ? state.username.trimmingCharacters(in: .whitespacesAndNewlines) : ""
                 let password = state.playlistType == .xtream ? state.password : ""
@@ -202,18 +388,34 @@ public struct AddPlaylistFeature {
                 )
 
                 return .run { send in
+                    guard !Task.isCancelled else { return }
                     guard playlistRepository.addPlaylist(playlist) else {
-                        await send(.playlistSaveFailed)
+                        guard !Task.isCancelled else { return }
+                        await send(.playlistSaveFailed(type))
                         return
                     }
-                    await send(.delegate(.didConnect(serverURL: rawURL, username: username, password: password)))
-                }
+                    guard !Task.isCancelled else { return }
+                    await send(.playlistSaveSucceeded(
+                        type: type,
+                        serverURL: rawURL,
+                        username: username,
+                        password: password
+                    ))
+                }.cancellable(id: "AddPlaylistFeature.authentication", cancelInFlight: true)
 
-            case .playlistSaveFailed:
+            case let .playlistSaveFailed(type):
+                guard type == state.playlistType else { return .none }
+                state.isLoading = false
                 state.errorMessage = "Playlist bu cihazda güvenli olarak kaydedilemedi. iCloud Keychain ayarlarını kontrol edip tekrar deneyin."
                 return .none
 
-            case let .connectResponse(.failure(error)):
+            case let .playlistSaveSucceeded(type, serverURL, username, password):
+                guard type == state.playlistType else { return .none }
+                state.isLoading = false
+                return .send(.delegate(.didConnect(serverURL: serverURL, username: username, password: password)))
+
+            case let .connectResponse(type, .failure(error)):
+                guard type == state.playlistType else { return .none }
                 state.isLoading = false
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none

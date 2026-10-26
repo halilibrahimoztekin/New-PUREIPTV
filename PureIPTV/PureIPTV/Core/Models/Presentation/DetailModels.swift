@@ -1,7 +1,7 @@
 import Foundation
 
-public enum DetailModels {
-    public struct Info: Equatable {
+public nonisolated enum DetailModels {
+    public struct Info: Equatable, Sendable {
         public let plot: String?
         public let cast: String?
         public let director: String?
@@ -55,7 +55,7 @@ public enum DetailModels {
         }
     }
 
-    public struct SimilarItem: Equatable, Identifiable {
+    public struct SimilarItem: Equatable, Identifiable, Sendable {
         public let id: String
         public let title: String
         public let coverURL: URL?
@@ -67,7 +67,7 @@ public enum DetailModels {
         }
     }
 
-    public struct Season: Equatable, Identifiable {
+    public struct Season: Equatable, Identifiable, Sendable {
         public let id: String
         public let seasonNumber: Int
         public let name: String
@@ -81,7 +81,7 @@ public enum DetailModels {
         }
     }
 
-    public struct Episode: Equatable, Identifiable {
+    public struct Episode: Equatable, Identifiable, Sendable {
         public let id: String
         public let episodeNum: Int
         public let title: String

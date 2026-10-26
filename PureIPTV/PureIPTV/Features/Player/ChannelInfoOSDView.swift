@@ -128,7 +128,7 @@ public struct ChannelInfoOSDView: View {
     private var channelLogoView: some View {
         Group {
             if let coverURL = item.coverURL {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
                     switch phase {
                     case let .success(image):
                         image

@@ -724,7 +724,7 @@ public struct PlayerSidebarDrawer: View {
     private func channelLogo(item: PlayerFeature.PlayableItem) -> some View {
         Group {
             if let coverURL = item.coverURL {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
                     switch phase {
                     case let .success(image):
                         image

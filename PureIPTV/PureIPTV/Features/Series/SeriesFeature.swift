@@ -250,7 +250,7 @@ public struct SeriesFeature {
                 guard !state.isRefreshingContent,
                       !state.isLoadingCategories,
                       let config = state.config,
-                      config.type == .m3u,
+                      [PlaylistType.m3u, .plex, .emby].contains(config.type),
                       state.selectedCategoryID != nil
                 else { return .none }
                 let requestID = UUID()

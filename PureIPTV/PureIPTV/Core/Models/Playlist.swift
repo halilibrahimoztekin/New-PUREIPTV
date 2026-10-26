@@ -1,15 +1,19 @@
 import Foundation
 import SwiftData
 
-public enum PlaylistType: String, Codable, CaseIterable, Equatable, Sendable {
+public nonisolated enum PlaylistType: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
     case xtream
     case m3u
+    case plex
+    case emby
 
     /// Human-readable display name used in the UI picker
     public var displayName: String {
         switch self {
         case .xtream: "Xtream Codes"
         case .m3u: "M3U URL"
+        case .plex: "Plex Media Server"
+        case .emby: "Emby Server"
         }
     }
 }

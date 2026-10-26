@@ -569,7 +569,7 @@
                 ZStack(alignment: .bottomLeading) {
                     // Poster/Backdrop
                     if let url = vod.coverURL {
-                        PlaylistAsyncImage(url: url, userAgentOverride: vod.userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID) { phase in
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fill)
                             } else {
@@ -678,7 +678,7 @@
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID) { phase in
                             if let image = phase.image {
                                 image.resizable().scaledToFill()
                             } else {
@@ -732,7 +732,7 @@
                 VStack(alignment: .leading, spacing: 8) {
                     ZStack(alignment: .bottomLeading) {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID) { phase in
                                 if let image = phase.image {
                                     image.resizable().scaledToFill()
                                 } else {

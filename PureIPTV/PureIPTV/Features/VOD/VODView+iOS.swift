@@ -42,24 +42,24 @@
                         Spacer()
 
                         HStack(spacing: 10) {
-                            Button {
-                                store.send(.refreshContentTapped)
-                            } label: {
-                                if store.isRefreshingContent {
-                                    ProgressView()
-                                        .frame(width: 36, height: 36)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.9))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                            if [PlaylistType.m3u, .plex, .emby].contains(config.type) {
+                                Button {
+                                    store.send(.refreshContentTapped)
+                                } label: {
+                                    if store.isRefreshingContent {
+                                        ProgressView()
+                                            .frame(width: 36, height: 36)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(Color.white.opacity(0.9))
+                                            .frame(width: 36, height: 36)
+                                            .background(Circle().fill(Color(hex: "#1F1F23")))
+                                    }
                                 }
+                                .disabled(store.isRefreshingContent || store.isLoadingCategories)
+                                .accessibilityLabel("Filmleri yenile")
                             }
-                            .disabled(store.isRefreshingContent || store.isLoadingCategories)
-                            .accessibilityLabel("Filmleri yenile")
-                            .opacity(config.type == .m3u ? 1 : 0)
-                            .accessibilityHidden(config.type != .m3u)
 
                             Button {
                                 store.send(.editCategoriesTapped)

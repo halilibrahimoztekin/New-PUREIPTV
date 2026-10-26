@@ -51,9 +51,9 @@
                     // Katman 3: Öne fırlayan Parallax Logo & Bilgiler
                     ZStack(alignment: .bottomLeading) {
                         if let logoURL = channel.displayLogoURL {
-                            KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride))
+                            KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID))
                                 .requestModifier { request in
-                                    UserAgentManager.applyHeaders(to: &request, override: channel.userAgentOverride)
+                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID)
                                 }
                                 .placeholder {
                                     Image(systemName: "tv.fill")
@@ -132,9 +132,9 @@
                     // Katman 1: Arka Plan Posteri
                     ZStack {
                         if let posterURL = vod.coverURL {
-                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride))
+                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
                                 .requestModifier { request in
-                                    UserAgentManager.applyHeaders(to: &request, override: vod.userAgentOverride)
+                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
                                 }
                                 .placeholder {
                                     ZStack {
@@ -242,9 +242,9 @@
                     // Katman 1: Arka Plan Posteri
                     ZStack {
                         if let posterURL = series.coverURL {
-                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: series.userAgentOverride))
+                            KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID))
                                 .requestModifier { request in
-                                    UserAgentManager.applyHeaders(to: &request, override: series.userAgentOverride)
+                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID)
                                 }
                                 .placeholder {
                                     ZStack {
@@ -348,9 +348,9 @@
                     // Katman 1: Poster & Arka Plan
                     ZStack {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID))
                                 .requestModifier { request in
-                                    UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: item.playlistID)
                                 }
                                 .placeholder {
                                     placeholderBackground

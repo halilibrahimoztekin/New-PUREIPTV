@@ -11,16 +11,19 @@ import SwiftUI
 struct PlaylistAsyncImage<Content: View>: View {
     let url: URL?
     let userAgentOverride: String?
+    let playlistID: UUID?
     let content: (AsyncImagePhase) -> Content
     @State private var phase: AsyncImagePhase = .empty
 
     init(
         url: URL?,
         userAgentOverride: String?,
+        playlistID: UUID? = nil,
         @ViewBuilder content: @escaping (AsyncImagePhase) -> Content
     ) {
         self.url = url
         self.userAgentOverride = userAgentOverride
+        self.playlistID = playlistID
         self.content = content
     }
 
@@ -29,10 +32,10 @@ struct PlaylistAsyncImage<Content: View>: View {
             if let url {
                 KFImage.url(
                     url,
-                    cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride)
+                    cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: playlistID)
                 )
                 .requestModifier { request in
-                    UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
                 }
                 .onSuccess { result in
                     #if canImport(UIKit)
@@ -56,6 +59,9 @@ struct PlaylistAsyncImage<Content: View>: View {
             phase = .empty
         }
         .onChange(of: userAgentOverride) { _, _ in
+            phase = .empty
+        }
+        .onChange(of: playlistID) { _, _ in
             phase = .empty
         }
     }

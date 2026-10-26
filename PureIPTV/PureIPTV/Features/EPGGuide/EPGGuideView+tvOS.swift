@@ -126,7 +126,7 @@ import SwiftVLC
                     // Logo
                     Group {
                         if let coverURL = channel.displayLogoURL {
-                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
+                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                                 switch phase {
                                 case let .success(image):
                                     image
@@ -332,7 +332,7 @@ import SwiftVLC
                         // Large Logo
                         Group {
                             if let coverURL = selected.displayLogoURL {
-                                PlaylistAsyncImage(url: coverURL, userAgentOverride: selected.userAgentOverride) { phase in
+                                PlaylistAsyncImage(url: coverURL, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
                                     switch phase {
                                     case let .success(img):
                                         img.resizable().aspectRatio(contentMode: .fit)

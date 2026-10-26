@@ -253,7 +253,7 @@ public struct VODDetailView: View {
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = posterURLString, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -490,28 +490,37 @@ public struct VODDetailView: View {
                     }
 
                     #if os(iOS)
-                        Button {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.downloadTapped)
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
-                                Text(store.isDownloaded ? AppStrings.Common.downloaded : AppStrings.Common.download)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
+                        if store.config.type != .plex, store.config.type != .emby {
+                            Button {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.downloadTapped)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: store.isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
+                                    Text(store.isDownloaded ? AppStrings.Common.downloaded : AppStrings.Common.download)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(store.isDownloaded ? Color.green : Color.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(
+                                    store.isDownloaded ? Color.green.opacity(0.15) : Color.white.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isDownloaded ? Color.green.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(
-                                store.isDownloaded ? Color.green.opacity(0.15) : Color.white.opacity(0.08),
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            )
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isDownloaded ? Color.green.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
                         }
                     #endif
                 }
+                #if os(iOS)
+                    if let downloadErrorMessage = store.downloadErrorMessage {
+                        Text(downloadErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                #endif
             }
         }
 
@@ -1231,7 +1240,7 @@ public struct VODDetailView: View {
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()

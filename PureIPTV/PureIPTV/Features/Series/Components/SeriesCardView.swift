@@ -34,9 +34,9 @@ public struct SeriesCardView: View {
 
                 // Poster
                 if let coverURL = series.coverURL {
-                    KFImage.url(coverURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: coverURL, userAgentOverride: series.userAgentOverride))
+                    KFImage.url(coverURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: coverURL, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID))
                         .requestModifier { request in
-                            UserAgentManager.applyHeaders(to: &request, override: series.userAgentOverride)
+                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID)
                         }
                         .placeholder {
                             SeriesPosterPlaceholder()

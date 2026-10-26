@@ -206,6 +206,7 @@
                     }
                 }
             }
+            .focusSection()
         }
 
         // MARK: - Instant Filter Badges Bar

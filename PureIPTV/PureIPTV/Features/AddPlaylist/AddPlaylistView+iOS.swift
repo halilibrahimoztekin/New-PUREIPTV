@@ -113,6 +113,7 @@
             HStack(spacing: 0) {
                 ForEach(PlaylistType.allCases, id: \.self) { type in
                     Button {
+                        guard !store.isLoading else { return }
                         store.send(.playlistTypeChanged(type))
                     } label: {
                         Text(type.displayName)
@@ -152,12 +153,12 @@
 
         @ViewBuilder
         private var formFields: some View {
-            if store.playlistType == .xtream {
+            if store.playlistType == .xtream || store.playlistType == .emby {
                 VStack(spacing: 12) {
                     GlassTextField(
                         icon: "server.rack",
-                        placeholder: AppStrings.AddPlaylist.serverPlaceholder,
-                        text: $store.serverURL,
+                        placeholder: store.playlistType == .emby ? "Emby server URL" : AppStrings.AddPlaylist.serverPlaceholder,
+                        text: guardedBinding(\.serverURL),
                         keyboardType: .URL,
                         autocapitalization: .never
                     )
@@ -167,7 +168,7 @@
                         GlassTextField(
                             icon: "person.fill",
                             placeholder: AppStrings.AddPlaylist.usernamePlaceholder,
-                            text: $store.username,
+                            text: guardedBinding(\.username),
                             autocapitalization: .never
                         )
                         .focused($focusedField, equals: .username)
@@ -175,23 +176,67 @@
                         GlassSecureField(
                             icon: "lock.fill",
                             placeholder: AppStrings.AddPlaylist.passwordPlaceholder,
-                            text: $store.password,
+                            text: guardedBinding(\.password),
                             isVisible: store.isPasswordVisible,
                             onToggle: { store.send(.togglePasswordVisibility) }
                         )
                         .focused($focusedField, equals: .password)
                     }
                 }
+            } else if store.playlistType == .plex {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let pin = store.plexPIN {
+                        Text("Go to plex.tv/link and enter this code")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                        Link(pin.code, destination: pin.signInURL)
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .tint(Color(hex: "#E5A00D"))
+                    }
+                    if !store.discoveredPlexServers.isEmpty {
+                        Text("Choose a Plex server")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                        ForEach(store.discoveredPlexServers) { server in
+                            Button {
+                                guard !store.isLoading else { return }
+                                store.send(.selectPlexServer(server.id))
+                            } label: {
+                                HStack {
+                                    Text(server.name)
+                                    Spacer()
+                                    if store.selectedPlexServerID == server.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                    }
+                                }
+                                .foregroundStyle(.white)
+                                .padding(12)
+                                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             } else {
                 GlassTextField(
                     icon: "link",
                     placeholder: AppStrings.AddPlaylist.m3uPlaceholder,
-                    text: $store.m3uURL,
+                    text: guardedBinding(\.m3uURL),
                     keyboardType: .URL,
                     autocapitalization: .never
                 )
                 .focused($focusedField, equals: .m3uURL)
             }
+        }
+
+        private func guardedBinding(_ keyPath: WritableKeyPath<AddPlaylistFeature.State, String>) -> Binding<String> {
+            Binding(
+                get: { store.withState { $0[keyPath: keyPath] } },
+                set: { value in
+                    guard !store.isLoading else { return }
+                    store.send(.binding(.set(keyPath, value)))
+                }
+            )
         }
 
         // MARK: – Error Banner

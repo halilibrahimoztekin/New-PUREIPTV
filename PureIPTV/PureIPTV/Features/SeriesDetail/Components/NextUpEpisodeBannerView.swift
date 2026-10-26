@@ -3,6 +3,7 @@ import SwiftUI
 public struct NextUpEpisodeBannerView: View {
     public let episode: DetailModels.Episode
     public let userAgentOverride: String?
+    public let playlistID: UUID?
     public let seriesTitle: String
     public let progressItem: WatchHistoryItem?
     public let onPlay: () -> Void
@@ -10,12 +11,14 @@ public struct NextUpEpisodeBannerView: View {
     public init(
         episode: DetailModels.Episode,
         userAgentOverride: String? = nil,
+        playlistID: UUID? = nil,
         seriesTitle: String,
         progressItem: WatchHistoryItem?,
         onPlay: @escaping () -> Void
     ) {
         self.episode = episode
         self.userAgentOverride = userAgentOverride
+        self.playlistID = playlistID
         self.seriesTitle = seriesTitle
         self.progressItem = progressItem
         self.onPlay = onPlay
@@ -41,7 +44,7 @@ public struct NextUpEpisodeBannerView: View {
                 // Background Artwork with Blur and Gradient Scrim
                 ZStack {
                     if let url = episode.coverURL {
-                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: playlistID) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable()

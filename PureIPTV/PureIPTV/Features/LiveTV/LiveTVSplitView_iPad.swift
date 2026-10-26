@@ -339,7 +339,7 @@ import SwiftUI
                             .frame(width: 44, height: 44)
 
                         if let coverURL = channel.displayLogoURL {
-                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride) { phase in
+                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                                 if let image = phase.image {
                                     image.resizable().scaledToFit()
                                 } else {
@@ -538,7 +538,7 @@ import SwiftUI
                         .overlay(
                             VStack(spacing: 12) {
                                 if let cover = selected.displayLogoURL {
-                                    PlaylistAsyncImage(url: cover, userAgentOverride: selected.userAgentOverride) { phase in
+                                    PlaylistAsyncImage(url: cover, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
                                         if let img = phase.image {
                                             img.resizable().scaledToFit()
                                         } else {

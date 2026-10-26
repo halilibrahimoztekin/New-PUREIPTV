@@ -199,6 +199,8 @@ public struct PlayerFeature {
         public var streamHealthMetrics: StreamHealthMetrics?
         public var streamHealthGenerationID = UUID()
         public var activePlaybackURL: URL
+        public var mediaServerProxyURL: URL?
+        public var mediaServerPlaybackRequestID: UUID?
         public var isStreamHealthHUDVisible: Bool = false
         public var activeCatchupProgram: EPGProgram?
         public var activeCatchupSeekRequestID: UUID?
@@ -209,6 +211,7 @@ public struct PlayerFeature {
         }
 
         public var canSwitchPlaybackEngine: Bool {
+            guard item.config?.type != .plex, item.config?.type != .emby else { return false }
             let path = item.streamURL.pathExtension.lowercased()
             let sharedRequirements = !item.isLive && activeCatchupProgram == nil && !isMinimized && !isPiPActive
                 && !isRecording
@@ -561,6 +564,7 @@ public struct PlayerFeature {
         case deinterlaceModeApplied(DeinterlaceMode, UUID, String, URL)
         case deinterlaceModeFailed(UUID, String, URL)
         case deinterlaceModePlaybackResolved(requested: DeinterlaceMode, applied: DeinterlaceMode?, revision: UUID, itemID: String, streamURL: URL)
+        case mediaServerPlaybackResolved(requestID: UUID, itemID: String, streamURL: URL, proxyURL: URL)
         case toggleInfo
         case toggleEPG
         case selectEPGBrowseChannel(PlayableItem)
@@ -900,7 +904,9 @@ public struct PlayerFeature {
         case .onAppear:
             state.isMinimized = false
             state.isUserPaused = false
-            state.playbackEngine = playerClient.activeEngine()
+            state.playbackEngine = state.item.config?.type == .plex || state.item.config?.type == .emby
+                ? .vlc
+                : playerClient.activeEngine()
             state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
             state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
@@ -922,11 +928,12 @@ public struct PlayerFeature {
                 state.subtitleDelay = savedSub
             }
 
-            let url = state.item.streamURL
+            let url = state.activePlaybackURL
             let isLive = state.item.isLive
             let seriesID = state.item.seriesID
             let config = state.item.config
             let userAgentOverride = state.item.userAgentOverride
+            let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
             let subtitleTextScale = settingsClient.subtitleTextSize().scale
             let deinterlaceMode = state.deinterlaceMode
@@ -934,6 +941,12 @@ public struct PlayerFeature {
             let itemID = state.item.id
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
+            if requiresAuthenticatedMediaServer, !isAlreadyPlaying {
+                state.mediaServerPlaybackRequestID = UUID()
+            } else if !requiresAuthenticatedMediaServer {
+                state.mediaServerPlaybackRequestID = nil
+            }
+            let mediaServerPlaybackRequestID = state.mediaServerPlaybackRequestID
             if !isAlreadyPlaying {
                 state.isDeinterlaceModeKnown = false
             }
@@ -996,6 +1009,9 @@ public struct PlayerFeature {
                     // Structured concurrency: event stream and playback run inside a task group
                     // so cooperative cancellation immediately cancels the event stream listener!
                     let isPreviewPromotion = await playerClient.consumePreviewPromotion(url)
+                    if requiresAuthenticatedMediaServer, !isAlreadyPlaying, !isPreviewPromotion {
+                        try? await playerClient.stop()
+                    }
                     let eventsStream = await playerClient.events()
                     if isPreviewPromotion {
                         // The preview may have reached `.playing` before this
@@ -1015,8 +1031,34 @@ public struct PlayerFeature {
                                 await playerClient.setSubtitleTextScale(subtitleTextScale)
                             } else {
                                 do {
-                                    let appliedMode = try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
-                                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: url))
+                                    let playbackURL: URL
+                                    let activeURL: URL
+                                    if requiresAuthenticatedMediaServer {
+                                        guard let config,
+                                              let resolvedItem = try await iptvClient.resolveVODItem(config, itemID, nil),
+                                              let resolvedURL = resolvedItem.streamURL
+                                        else { throw NetworkError.invalidResponse }
+                                        activeURL = resolvedURL
+                                        playbackURL = try await MediaServerStreamProxy.shared.makePlaybackURL(
+                                            for: activeURL,
+                                            config: config,
+                                            additionalHeaders: resolvedItem.playbackRequestHeaders
+                                        )
+                                        guard let mediaServerPlaybackRequestID else {
+                                            throw NetworkError.invalidResponse
+                                        }
+                                        await send(.mediaServerPlaybackResolved(
+                                            requestID: mediaServerPlaybackRequestID,
+                                            itemID: itemID,
+                                            streamURL: activeURL,
+                                            proxyURL: playbackURL
+                                        ))
+                                    } else {
+                                        playbackURL = url
+                                        activeURL = url
+                                    }
+                                    let appliedMode = try await playerClient.play(playbackURL, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
+                                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
                                     await playerClient.setSubtitleTextScale(subtitleTextScale)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
@@ -1059,6 +1101,7 @@ public struct PlayerFeature {
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
+            let mediaServerProxyURL = state.mediaServerProxyURL
             let profileScope = profileContextClient.snapshot()
             let isPiPActive = state.isPiPActive
             let isMinimized = state.isMinimized
@@ -1070,6 +1113,8 @@ public struct PlayerFeature {
                 return .cancel(id: CancelID.scrubThumbnail)
             }
             state.isClosing = true
+            state.mediaServerPlaybackRequestID = nil
+            state.mediaServerProxyURL = nil
             state.activeCatchupSeekRequestID = nil
             state.catchupSeekFailureMessage = nil
             state.catchupSeekFailureRequestID = nil
@@ -1131,6 +1176,7 @@ public struct PlayerFeature {
                     if !isPiPActive {
                         try? await playerClient.stop()
                         await playerClient.release()
+                        await MediaServerStreamProxy.shared.closeSession(for: mediaServerProxyURL)
                         await send(.delegate(.didClose))
                     }
                 }
@@ -1309,6 +1355,9 @@ public struct PlayerFeature {
 
         case .stop:
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
+            let mediaServerProxyURL = state.mediaServerProxyURL
+            state.mediaServerPlaybackRequestID = nil
+            state.mediaServerProxyURL = nil
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             return .merge(
@@ -1319,6 +1368,7 @@ public struct PlayerFeature {
                         await send(.recordingStopUnconfirmed)
                     }
                     try await playerClient.stop()
+                    await MediaServerStreamProxy.shared.closeSession(for: mediaServerProxyURL)
                 },
                 .send(.traktScrobbleStop)
             )
@@ -1335,6 +1385,8 @@ public struct PlayerFeature {
             state.isReconnecting = true
             state.isDeinterlaceModeKnown = false
             let url = state.activePlaybackURL
+            let oldMediaServerProxyURL = state.mediaServerProxyURL
+            state.mediaServerProxyURL = nil
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
             let isLive = state.item.isLive
@@ -1361,6 +1413,11 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let categoryID = state.item.categoryID
+            let config = state.item.config
+            let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
+            let mediaServerPlaybackRequestID = UUID()
+            state.mediaServerPlaybackRequestID = requiresAuthenticatedMediaServer ? mediaServerPlaybackRequestID : nil
             return .concatenate(
                 .cancel(id: CancelID.statsTimer),
                 .run { send in
@@ -1371,6 +1428,7 @@ public struct PlayerFeature {
                     }
                     try? await playerClient.stop()
                     try? await Task.sleep(nanoseconds: 200_000_000)
+                    await MediaServerStreamProxy.shared.closeSession(for: oldMediaServerProxyURL)
 
                     let eventsStream = await playerClient.events()
                     await withTaskGroup(of: Void.self) { group in
@@ -1382,8 +1440,31 @@ public struct PlayerFeature {
 
                         group.addTask {
                             do {
-                                let appliedMode = try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
-                                await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: url))
+                                let playbackURL: URL
+                                let activeURL: URL
+                                if requiresAuthenticatedMediaServer {
+                                    guard let config,
+                                          let resolvedItem = try await iptvClient.resolveVODItem(config, itemID, categoryID),
+                                          let resolvedURL = resolvedItem.streamURL
+                                    else { throw NetworkError.invalidResponse }
+                                    activeURL = resolvedURL
+                                    playbackURL = try await MediaServerStreamProxy.shared.makePlaybackURL(
+                                        for: activeURL,
+                                        config: config,
+                                        additionalHeaders: resolvedItem.playbackRequestHeaders
+                                    )
+                                    await send(.mediaServerPlaybackResolved(
+                                        requestID: mediaServerPlaybackRequestID,
+                                        itemID: itemID,
+                                        streamURL: activeURL,
+                                        proxyURL: playbackURL
+                                    ))
+                                } else {
+                                    playbackURL = url
+                                    activeURL = url
+                                }
+                                let appliedMode = try await playerClient.play(playbackURL, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
+                                await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
                                 if shouldRestorePosition, position > 0 {
                                     var reachedPlayingState = false
                                     for _ in 0 ..< 200 {
@@ -2011,7 +2092,7 @@ public struct PlayerFeature {
             else { return .none }
             let requestID = UUID()
             let itemID = state.item.id
-            let url = state.item.streamURL
+            let url = state.mediaServerProxyURL ?? state.activePlaybackURL
             let userAgentOverride = state.item.userAgentOverride
             state.scrubThumbnailRequestID = requestID
             state.scrubThumbnailData = nil
@@ -2262,6 +2343,19 @@ public struct PlayerFeature {
             state.playbackEngineError = "Deinterlace ayarı bu akışta uygulanamadı.".localized
             return .none
 
+        case let .mediaServerPlaybackResolved(requestID, itemID, streamURL, proxyURL):
+            guard state.mediaServerPlaybackRequestID == requestID,
+                  state.item.id == itemID,
+                  state.item.config?.type == .plex || state.item.config?.type == .emby
+            else {
+                return .run { _ in
+                    await MediaServerStreamProxy.shared.closeSession(for: proxyURL)
+                }
+            }
+            state.activePlaybackURL = streamURL
+            state.mediaServerProxyURL = proxyURL
+            return .none
+
         case let .deinterlaceModePlaybackResolved(requested, applied, revision, itemID, streamURL):
             guard state.item.id == itemID,
                   state.activePlaybackURL == streamURL,
@@ -2434,6 +2528,7 @@ public struct PlayerFeature {
         case let .selectChannel(newItem):
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentItem = state.item
+            let oldMediaServerProxyURL = state.mediaServerProxyURL
             let channelZappingDelay: Int = if
                 !state.isReconnecting,
                 !state.isFallbackSwitching,
@@ -2463,6 +2558,8 @@ public struct PlayerFeature {
             state.streamHealthGenerationID = streamHealthGenerationID
             state.streamHealthMetrics = nil
             state.activePlaybackURL = newItem.streamURL
+            state.mediaServerPlaybackRequestID = nil
+            state.mediaServerProxyURL = nil
             state.item = newItem
             state.playbackEngine = .vlc
             state.deinterlaceModeRequestID = nil
@@ -2526,6 +2623,7 @@ public struct PlayerFeature {
                         await send(.recordingStopUnconfirmed)
                     }
                     try await playerClient.stop()
+                    await MediaServerStreamProxy.shared.closeSession(for: oldMediaServerProxyURL)
                     guard !Task.isCancelled else { return }
                     if channelZappingDelay > 0 {
                         do {
@@ -3640,8 +3738,13 @@ public struct PlayerFeature {
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
             let item = state.item
+            let mediaServerProxyURL = state.mediaServerProxyURL
             let profileScope = profileContextClient.snapshot()
             let isPiPActive = state.isPiPActive
+            state.mediaServerPlaybackRequestID = nil
+            if !isPiPActive {
+                state.mediaServerProxyURL = nil
+            }
             return .merge(
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.playbackEngineSwitch),
@@ -3701,6 +3804,7 @@ public struct PlayerFeature {
                     if !isPiPActive {
                         try? await playerClient.stop()
                         await playerClient.release()
+                        await MediaServerStreamProxy.shared.closeSession(for: mediaServerProxyURL)
                     }
 
                     await MainActor.run {
@@ -3733,6 +3837,7 @@ public struct PlayerFeature {
             }
 
         case .sharePlayTapped:
+            guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }
             let activity = PureIPTVSharePlayActivity(
                 itemID: state.item.id,
                 title: state.item.title,
@@ -3873,6 +3978,7 @@ public struct PlayerFeature {
             return .none
 
         case let .openInExternalPlayer(player):
+            guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }
             #if canImport(UIKit)
                 let url = state.item.streamURL
                 _ = ExternalPlayerManager.shared.openStream(url, in: player)

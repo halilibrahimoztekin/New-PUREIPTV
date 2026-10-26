@@ -1,6 +1,6 @@
 import Foundation
 
-enum ISO639LanguageCode {
+nonisolated enum ISO639LanguageCode {
     private static let validCodes = Set(Locale.isoLanguageCodes.map { $0.lowercased() })
     private static let aliases: [String: String] = [
         "english": "en", "eng": "en", "anglais": "en", "ingilizce": "en",

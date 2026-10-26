@@ -144,19 +144,7 @@ public struct AppCoordinator {
                 )]
                 return .none
             }
-            var hasValidPlaylist = false
-
-            if let playlist = activePlaylist {
-                if playlist.type == .xtream {
-                    if playlist.serverURL != nil, playlist.username != nil, playlist.password != nil {
-                        hasValidPlaylist = true
-                    }
-                } else if playlist.type == .m3u {
-                    if playlist.m3uURL != nil {
-                        hasValidPlaylist = true
-                    }
-                }
-            }
+            let hasValidPlaylist = activePlaylist?.toPlaylistConfig() != nil
 
             withAnimation(.easeInOut(duration: 0.35)) {
                 if hasValidPlaylist {

@@ -546,9 +546,9 @@
             Button(action: onTap) {
                 ZStack(alignment: .bottomLeading) {
                     if let url = vod.coverURL {
-                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: vod.userAgentOverride))
+                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
                             .requestModifier { request in
-                                UserAgentManager.applyHeaders(to: &request, override: vod.userAgentOverride)
+                                PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
                             }
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -648,9 +648,9 @@
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack(alignment: .bottomLeading) {
                         if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride))
+                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID))
                                 .requestModifier { request in
-                                    UserAgentManager.applyHeaders(to: &request, override: userAgentOverride)
+                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: item.playlistID)
                                 }
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
