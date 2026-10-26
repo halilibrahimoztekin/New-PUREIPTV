@@ -674,6 +674,9 @@ public enum AppStrings {
         public static let homeCategoriesLoadHint = "Kategoriler playlist yüklemesi tamamlandıktan sonra burada görünür.".localized
         public static let continueWatching = "Kaldığın Yerden İzle".localized
         public static let myFavorites = "Favorilerim".localized
+        public static let favoriteLiveTV = "Favori Canlı TV".localized
+        public static let favoriteMovies = "Favori Filmler".localized
+        public static let favoriteSeries = "Favori Diziler".localized
         public static let featuredLiveTV = "Canlı TV (Önerilen)".localized
         public static let epgPrograms = "Rehberdeki Programlar".localized
         public static let nowAiring = "ŞU AN".localized

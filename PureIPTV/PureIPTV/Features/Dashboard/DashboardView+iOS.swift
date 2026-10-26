@@ -174,19 +174,20 @@
                     }
                 }
             case .favorites:
-                if !store.favoriteItems.isEmpty {
-                    featuredSection(title: AppStrings.Dashboard.myFavorites, items: store.favoriteItems) { item in
-                        FavoriteCardView(
-                            item: item,
-                            userAgentOverride: config.userAgentOverride,
-                            unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
-                                ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
-                                : nil
-                        ) {
-                            store.send(.favoriteSelected(item))
-                        }
-                        .frame(width: 140)
-                    }
+                let favorites = store.favoriteItemsByType
+                if let items = favorites["live"], !items.isEmpty {
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteLiveTV)
+                }
+                if let items = favorites["vod"], !items.isEmpty {
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteMovies)
+                }
+                if let items = favorites["series"], !items.isEmpty {
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteSeries)
+                }
+                let categorizedTypes = Set(["live", "vod", "series"])
+                let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
+                if !otherFavorites.isEmpty {
+                    favoriteSection(otherFavorites, title: AppStrings.Dashboard.myFavorites)
                 }
             case .featuredLiveTV:
                 if !store.featuredChannels.isEmpty {
@@ -418,6 +419,21 @@
                     }
                     .padding(.horizontal, 16)
                 }
+            }
+        }
+
+        private func favoriteSection(_ items: [FavoriteItem], title: String) -> some View {
+            featuredSection(title: title, items: items) { item in
+                FavoriteCardView(
+                    item: item,
+                    userAgentOverride: config.userAgentOverride,
+                    unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
+                        ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
+                        : nil
+                ) {
+                    store.send(.favoriteSelected(item))
+                }
+                .frame(width: 140)
             }
         }
 

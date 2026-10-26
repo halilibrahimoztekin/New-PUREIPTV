@@ -1589,9 +1589,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Geçici veri kontrolü:** `/private/tmp` kökünde task DerivedData klasörü veya doğrulanmış silinebilir derived çıktı bulunmadı. `pureiptv-*.patch` ve Git index dosyaları olası kurtarma materyali; `test_icon.pdf` kullanıcı belgesi, `AppIcon.appiconset.bak2` kaynak yedeği olduğundan korundu. ContactCleaner’a erişilmedi. (Task sonu kontrolünde aynı sınıflandırmayı yinele.)
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad
 
-### 169. [PENDING] Live, Film ve Dizi İçin Ortak Favori Kategorileri
+### 169. [DONE] Live, Film ve Dizi İçin Ortak Favori Kategorileri
 - **Fırsat:** Favori kanalları, filmleri ve dizileri tek tvOS gezinme modelinde ayır; mevcut Live TV named list davranışı ve VOD watchlist/favori işaretleriyle çakışmayı önle.
 - **Keşif sinyali:** Opus 2.0.4 favori canlı kanallar, film ve diziler için ayrı hızlı erişim kategorileri ekledi.
+- **Uygulama:** Dashboard favorileri iOS ve tvOS’ta ayrı Canlı TV, Film ve Dizi raflarına ayrıldı. Kayıtlar değiştirilmeden mevcut `.favoriteSelected`/silme eylemleriyle çalışıyor; bilinmeyen türler kaybolmaması için genel Favorilerim rafında kalıyor. tvOS’ta her tür kendi `TVShelfSection` focus bölgesini kullanıyor. `Localizable.xcstrings` dosyasına dokunulmadı.
+- **PR Reviewer:** `[APPROVED]` — Favori ID/playlist/profil alanları ve tür içi sıra korunuyor; focus veya anlamlı performans/veri kaybı engeli yok.
+- **Doğrulama:** iOS Release generic build ve tvOS Release generic build `BUILD SUCCEEDED`; `git diff --check` başarılı. Yalnız build alındı; test, simulator, app launch veya akış çalıştırılmadı (kullanıcı talimatı).
+- **Temizlik:** `/private/tmp/PureIPTV169` içindeki build/log çıktısı **4,049,356 KiB**, bu task’ın başarısız paket çözümlemesinden kalan bilinen result bundle **28 KiB**; build süreçleri sonlandı ve `lsof` açık handle göstermediği doğrulanınca kaldırıldı. `/private/tmp` son toplamı **2,376 KiB**; DerivedData adlı geçici klasör yok. Normal PureIPTV `SourcePackages` (1,873,636 KiB) ve kullanıcı/global cache’leri korundu. Başlangıç taramasında görülen patch/index kurtarma dosyaları, PDF ve AppIcon yedeği kullanıcı verisi/olası kurtarma materyali olarak bırakıldı. ContactCleaner’a erişilmedi.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
 ### 170. [PENDING] Apple TV Uykuya Geçerken Canlı Yayını Güvenle Durdurma

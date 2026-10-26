@@ -109,6 +109,12 @@ public struct DashboardFeature {
             Set(favoriteItems.map(FavoriteIdentity.init))
         }
 
+        public var favoriteItemsByType: [String: [FavoriteItem]] {
+            favoriteItems.reduce(into: [:]) { result, item in
+                result[item.type.lowercased(), default: []].append(item)
+            }
+        }
+
         public var continueWatchingItems: [WatchHistoryItem] {
             watchHistoryItems.filter { item in
                 guard item.duration > 0 else { return true }

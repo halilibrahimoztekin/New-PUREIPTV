@@ -130,6 +130,31 @@
             }
         }
 
+        private func favoriteShelf(_ items: [FavoriteItem], title: String, cardWidth: CGFloat) -> some View {
+            TVShelfSection(title: title) {
+                ForEach(items) { item in
+                    TVFavoriteMediaCard(
+                        item: item,
+                        userAgentOverride: config.userAgentOverride,
+                        unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
+                            ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
+                            : nil
+                    ) {
+                        store.send(.favoriteSelected(item))
+                    }
+                    .frame(width: cardWidth)
+                    .contextMenu {
+                        Button { store.send(.favoriteSelected(item)) } label: {
+                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                        }
+                        Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
+                            Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+
         @ViewBuilder
         private func homeSectionView(_ section: HomeSectionConfig) -> some View {
             let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
@@ -152,29 +177,20 @@
                     }
                 }
             case .favorites:
-                if !store.favoriteItems.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.myFavorites) {
-                        ForEach(store.favoriteItems) { item in
-                            TVFavoriteMediaCard(
-                                item: item,
-                                userAgentOverride: config.userAgentOverride,
-                                unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
-                                    ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
-                                    : nil
-                            ) {
-                                store.send(.favoriteSelected(item))
-                            }
-                            .frame(width: item.type.lowercased() == "live" ? 340 : 220)
-                            .contextMenu {
-                                Button { store.send(.favoriteSelected(item)) } label: {
-                                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
-                                }
-                                Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
-                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
-                                }
-                            }
-                        }
-                    }
+                let favorites = store.favoriteItemsByType
+                if let items = favorites["live"], !items.isEmpty {
+                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteLiveTV, cardWidth: 340)
+                }
+                if let items = favorites["vod"], !items.isEmpty {
+                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteMovies, cardWidth: 220)
+                }
+                if let items = favorites["series"], !items.isEmpty {
+                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteSeries, cardWidth: 220)
+                }
+                let categorizedTypes = Set(["live", "vod", "series"])
+                let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
+                if !otherFavorites.isEmpty {
+                    favoriteShelf(otherFavorites, title: AppStrings.Dashboard.myFavorites, cardWidth: 220)
                 }
             case .featuredLiveTV:
                 if !store.featuredChannels.isEmpty {
