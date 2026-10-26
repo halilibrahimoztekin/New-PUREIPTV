@@ -1531,9 +1531,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Spor EPG kartındaki fikstür için kullanıcı arayıp playlist’e özel kanal eşlemesi kaydedebiliyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
-### 163. [PENDING] Yedekten Geri Yükleme Önizlemesi ve Bütünlük Kontrolü
+### 163. [DONE] Yedekten Geri Yükleme Önizlemesi ve Bütünlük Kontrolü
 - **Fırsat:** Restore öncesi yedek kapsamını, sürümünü ve çakışacak tercihleri göster; bozuk/yetersiz arşivde mevcut profil verisini koru ve sonucu doğrula.
 - **Keşif sinyali:** Snappier’in son sürüm notu bazı yedeklerin geri yüklenmemesi hatasını ayrıca düzeltiyor; önceki Apple TV sürümleri Backup & Restore’u öne çıkarmıştı.
+- **Uygulama:** Ayarlara iOS’ta `.iptvbackup` seçici ve geri yükleme önizlemesi eklendi. Önizleme dosya sürümünü/tarihini/boyutunu, dahil ayarları ve mevcut ayar anahtarlarının üzerine yazma sayısını gösteriyor. JSON, dosya boyutu/türü, tarih, string sınırları ve enum/tema değerleri doğrulanıyor; bozuk veya desteklenmeyen yedek ayarlara dokunmuyor. Restore öncesi dosya yeniden doğrulanıyor ve yedekte olmayan tercihleri olduğu gibi bırakıyor. Geçici dosya önizleme kapatılınca siliniyor; iOS file importer tvOS’ta bulunmadığı için import eylemi iOS’a özel.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; tvOS SDK’da `.fileImporter` kullanılamaması build sırasında yakalanıp importer ve düğme iOS koşuluna alındı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnız compile-only build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. `git diff --check` temiz.
+- **Temizlik:** `/private/tmp/PureIPTV163` içindeki görev DerivedData ve loglar toplam 4,089,032 KiB tuttu; `lsof +D` açık dosya göstermeyince klasör silindi. `/private/tmp` son taramasında kalan öğeler DerivedData olarak doğrulanmadığından korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. ContactCleaner yollarına erişilmedi.
+- **Durum:** `[DONE]` — güvenli yedek önizlemesi/geri yüklemesi tamamlandı.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
 ### 164. [PENDING] Playlist Başına Ebeveyn PIN Kilidi
