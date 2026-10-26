@@ -2,6 +2,12 @@ import ComposableArchitecture
 import FactoryKit
 import Foundation
 
+private enum DashboardPrimaryCatalogResult: Sendable {
+    case live([MediaModels.Item]?)
+    case movies([MediaModels.Item]?)
+    case series([MediaModels.Item]?)
+}
+
 @Reducer
 public struct DashboardFeature {
     public struct EPGEvent: Equatable, Identifiable, Sendable {
@@ -134,6 +140,7 @@ public struct DashboardFeature {
         case refreshTapped
         case openManagePlaylistsTapped
         case loadFeaturedData(config: PlaylistConfig, playlistID: UUID?, hideAdult: Bool, loadEPGEvents: Bool, refreshID: UUID)
+        case primaryCatalogLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, type: MediaModels.ItemType, items: [MediaModels.Item])
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem], scope: ProfileContextSnapshot)
@@ -641,6 +648,33 @@ public struct DashboardFeature {
                 state.hasLoadedSelectedActorFilmography = true
                 return .none
 
+            case let .primaryCatalogLoaded(playlistID, hideAdult, refreshID, profileScope, type, items):
+                guard
+                    state.activePlaylistID == playlistID,
+                    state.lastAdultHidden == hideAdult,
+                    state.activeRefreshID == refreshID,
+                    profileContextClient.snapshot() == profileScope
+                else { return .none }
+
+                switch type {
+                case .live:
+                    state.hasResolvedLiveCatalog = true
+                    state.hasLiveContent = !items.isEmpty
+                    state.featuredChannels = items
+                case .vod:
+                    state.hasResolvedMovieCatalog = true
+                    state.hasMovieContent = !items.isEmpty
+                    state.featuredVODs = items
+                case .series:
+                    state.hasResolvedSeriesCatalog = true
+                    state.hasSeriesContent = !items.isEmpty
+                    state.featuredSeries = items
+                }
+                if !items.isEmpty {
+                    state.isLoading = false
+                }
+                return .none
+
             case let .loadFeaturedData(config, playlistID, hideAdult, loadEPGEvents, refreshID):
                 let profileScope = profileContextClient.snapshot()
                 guard
@@ -676,22 +710,97 @@ public struct DashboardFeature {
                 let seriesCollectionPrefix = "Diziler".localized
                 let liveCollectionPrefix = "Canlı TV".localized
                 let remoteEffect = Effect<Action>.run { send in
-                    async let liveStreams = try? iptvClient.fetchLiveChannels(config, nil)
                     async let liveCategories = try? iptvClient.fetchLiveCategories(config)
-                    async let allVODs = try? iptvClient.fetchVODs(config, nil)
-                    async let allSeries = try? iptvClient.fetchSeries(config, nil)
                     async let vodCategories = try? iptvClient.fetchVODCategories(config)
                     async let seriesCategories = try? iptvClient.fetchSeriesCategories(config)
                     async let historyReq = (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
                     async let favoritesReq = (try? databaseClient.fetchFavorites(profileScope)) ?? []
 
+                    let primaryCatalogs = await withTaskGroup(
+                        of: DashboardPrimaryCatalogResult.self
+                    ) { group -> (channels: [MediaModels.Item]?, vods: [MediaModels.Item]?, series: [MediaModels.Item]?) in
+                        group.addTask {
+                            await .live(try? iptvClient.fetchLiveChannels(config, nil))
+                        }
+                        group.addTask {
+                            await .movies(try? iptvClient.fetchVODs(config, nil))
+                        }
+                        group.addTask {
+                            await .series(try? iptvClient.fetchSeries(config, nil))
+                        }
+
+                        var channels: [MediaModels.Item]?
+                        var vods: [MediaModels.Item]?
+                        var series: [MediaModels.Item]?
+                        for await result in group {
+                            guard !Task.isCancelled else { continue }
+                            switch result {
+                            case let .live(items):
+                                channels = items
+                                if let items, !items.isEmpty {
+                                    let shelfItems = Array(
+                                        (hideAdult ? items.filter { !isAdult($0.title) } : items).prefix(10)
+                                    )
+                                    guard !shelfItems.isEmpty else { continue }
+                                    await send(.primaryCatalogLoaded(
+                                        playlistID: playlistID,
+                                        hideAdult: hideAdult,
+                                        refreshID: refreshID,
+                                        profileScope: profileScope,
+                                        type: .live,
+                                        items: shelfItems
+                                    ))
+                                }
+                            case let .movies(items):
+                                vods = items
+                                if let items, !items.isEmpty {
+                                    let filteredItems = hideAdult ? items.filter { !isAdult($0.title) } : items
+                                    let shelfItems = Array(
+                                        filteredItems.sorted {
+                                            ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast)
+                                        }.prefix(10)
+                                    )
+                                    guard !shelfItems.isEmpty else { continue }
+                                    await send(.primaryCatalogLoaded(
+                                        playlistID: playlistID,
+                                        hideAdult: hideAdult,
+                                        refreshID: refreshID,
+                                        profileScope: profileScope,
+                                        type: .vod,
+                                        items: shelfItems
+                                    ))
+                                }
+                            case let .series(items):
+                                series = items
+                                if let items, !items.isEmpty {
+                                    let filteredItems = hideAdult ? items.filter { !isAdult($0.title) } : items
+                                    let shelfItems = Array(
+                                        filteredItems.sorted {
+                                            ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast)
+                                        }.prefix(10)
+                                    )
+                                    guard !shelfItems.isEmpty else { continue }
+                                    await send(.primaryCatalogLoaded(
+                                        playlistID: playlistID,
+                                        hideAdult: hideAdult,
+                                        refreshID: refreshID,
+                                        profileScope: profileScope,
+                                        type: .series,
+                                        items: shelfItems
+                                    ))
+                                }
+                            }
+                        }
+                        return (channels, vods, series)
+                    }
+
                     let history = await historyReq
                     let favorites = await favoritesReq
 
-                    let fetchedChannels = await liveStreams
+                    let fetchedChannels = primaryCatalogs.channels
                     let fetchedLiveCategories = await liveCategories
-                    let fetchedVODs = await allVODs
-                    let fetchedSeries = await allSeries
+                    let fetchedVODs = primaryCatalogs.vods
+                    let fetchedSeries = primaryCatalogs.series
                     let fetchedVODCategories = await vodCategories
                     let fetchedSeriesCategories = await seriesCategories
                     guard !Task.isCancelled else { return }

@@ -6,6 +6,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - Her task tamamlandıktan sonra, sıradaki task’a geçmeden önce hem `/private/tmp` içindeki task kaynaklı geçici derived data’yı hem de `~/Library/Developer/Xcode/DerivedData` içindeki task kaynaklı derleme çıktılarını tara ve temizle.
 - Silmeden önce aktif build/typecheck süreçlerini ve açık dosya tanıtıcılarını doğrula; yalnızca artık kullanılmayan, kaynağı kesin bilinen ve yeniden üretilebilir Build, Index ve compiler-cache çıktısını sil. Amacı belirsiz dosyaları derived data varsayma.
 - Etkin projelerin `SourcePackages` checkout’larını ve kullanıcı kaynaklarını koru. ContactCleaner klasörlerini/DerivedData’sını kullanıcı talimatıyla temizleme kapsamının dışında tut.
+- Her task kapanışında temizlik ayrı bir checklist kapısıdır: `/private/tmp` task çıktıları ile normal Xcode DerivedData’daki yalnızca bu task’a ait Build/Index/compiler çıktısını kontrol et; açık handle yoksa temizle.
 - Her temizlikte silinen yolları ve boyutları, korunan cache/kullanıcı verisini ve `/private/tmp` son durumunu backlog’a kaydet; task sonrasında kullanılmayan task kaynaklı DerivedData bırakma.
 
 ---
@@ -1628,9 +1629,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Keşif sinyali:** UHF 1.99.0 yerleşik VPN sağlayıcı desteğini ve bağlantı kurtarmayı duyurdu; kullanıcı geri bildirimlerinde playlist sağlayıcı uyumluluğu ve bağlantı sorunlarının ayırt edilmesi öne çıkıyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/iptv_strong/comments/1uv632w/best_iptv_app_for_appletv/
 
-### 173. [PENDING] Büyük Playlistlerde İlk Ekran Yanıt Süresi Bütçesi
-- **Fırsat:** 10.000+ kanallı playlist’te açılış, arama ve rehberin ilk kullanılabilir çizimini ölç; katalog taraması, EPG yükü ve görsel isteklerini profilleyip ölçülen en büyük gecikmeyi azalt.
+### 173. [DONE] Büyük Playlistlerde İlk Ekran Yanıt Süresi Bütçesi
+- **Fırsat:** 10.000+ kanallı playlist’te Dashboard’ın ilk kullanılabilir çizimini geciktiren katalog ve ek istek beklemelerini azalt.
 - **Keşif sinyali:** Apple TV kullanıcıları çok büyük playlist’lerde uygulamanın donduğunu ve zorla kapatmak gerektiğini bildirdi; UHF 1.99.0 da ağır arama ve playlist yenileme performansını özellikle iyileştirdi.
+- **Kod bulgusu:** `DashboardFeature.loadFeaturedData` üç ana kataloğu, kategorileri, geçmişi ve favorileri bekleyip rafları tek seferde yayımlıyordu. Kategori/geçmiş yanıtlarından biri yavaşsa hazır canlı/VOD/dizi rafları da loading ekranının arkasında kalıyordu.
+- **Uygulama:** Canlı, VOD ve dizi katalogları completion order ile paralel toplanıyor. Her katalog geldiğinde yetişkin filtresi ve rafın sıralaması async effect içinde uygulanıp en fazla 10 hazır öğe stale playlist, refresh, filtre ve profil guard’larıyla Dashboard’a aktarılıyor. Reducer artık tam katalog üzerinde filtreleme/sıralama yapmıyor. Kategori, geçmiş, favoriler ve zenginleştirilmiş son sonuç akışı korunuyor.
+- **PR Reviewer:** `[APPROVED]` — ilk review, compile hatası sonrası düzeltme review’u ve final syntax review’u tamamlandı.
+- **Doğrulama:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. İlk iOS denemesi TaskGroup dönüş tuple’ı sözdizimi hatası verdi; imza düzeltildi ve iki platformun son build’i başarılı. Test, simulator, app launch, playback veya UI akışı çalıştırılmadı.
+- **Temizlik:** Başlangıç `/private/tmp` taramasında DerivedData bulunmadı; kullanıcı yedeği, patch/index kurtarma dosyaları ve PDF korundu. Bu task’ın `/private/tmp/PureIPTV173` build/log çıktısı **4,080,776 KiB** oldu; iki build bitip `lsof +D` açık handle göstermeyince silindi. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da `Build`/`Index.noindex` task çıktısı yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** olarak korundu. `.xcstrings` dosyası değiştirilmedi/stage edilmedi.
 - **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/ · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
 ### 174. [PENDING] Çok Sayıda Kullanılmayan Kanalı Toplu Gizleme
