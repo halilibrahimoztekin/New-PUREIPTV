@@ -129,6 +129,7 @@ public struct SearchFeature: Sendable {
 
         // Search state
         public var searchQuery: String = ""
+        public var focusedResultID: String?
         public var debouncedQuery: String = ""
         public var filter: SearchFilter = .all
         public var recentSearches: [SearchHistoryItem] = []
@@ -300,6 +301,7 @@ public struct SearchFeature: Sendable {
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
+        case focusedResultChanged(String)
         case personCreditSelected(PersonCreditResult)
         case programSelected(ProgramResult)
         case clearHistoryTapped
@@ -1030,6 +1032,10 @@ public struct SearchFeature: Sendable {
                     }
                     await send(.delegate(.didSelectChannel(channel, playlist: nil)))
                 }
+
+            case let .focusedResultChanged(id):
+                state.focusedResultID = id
+                return .none
 
             case let .vodSelected(vod):
                 let query = state.debouncedQuery

@@ -1549,9 +1549,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — playlist PIN kilidi, giriş kilitlemesi ve oturum doğrulaması tamamlandı.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
-### 165. [PENDING] Arama Sonucundan Dönüşte Focus ve Konumu Koruma
+### 165. [DONE] Arama Sonucundan Dönüşte Focus ve Konumu Koruma
 - **Fırsat:** tvOS aramasında klavye açılıp kapanırken ve sonuçtan ayrıntı/oynatıcıya gidip dönünce seçili sonucu, görünür sırasını ve focus’u geri yükle.
 - **Keşif sinyali:** Opus son güncellemesinde arama sonuçlarının klavyenin altında sabit kalmasını ve focus restoration’ı özellikle iyileştirdi.
+- **Uygulama:** tvOS SearchFeature son odaklanan sonuç ID’sini saklıyor; arama klavyesi kapanıp detay/oynatıcı dönüşünde hâlâ aktif filtrede görünüyorsa aynı sonuç yeniden odaklanıp ortalanıyor. Fallback ilk sonuç seçimi de aktif filtre sırasını kullanıyor. Lazy grid focus isteğinden önce ScrollViewReader ile hedefe gidiyor; gecikmeli istekler görünür ID’yi tekrar doğruluyor ve tamamlanınca temizleniyor. Arama sorgusu değişince artık görünmeyen kayıt restore edilmiyor.
+- **İnceleme ve derleme:** İlk reviewer turunda filtre duyarsız fallback ve scroll/focus sırası için `[CHANGES REQUESTED]`; düzeltme sonrası stale focus isteği için ikinci `[CHANGES REQUESTED]` geldi. İki turdaki üç bulgu giderilip son review `[APPROVED]` alındı. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnız compile-only build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. `git diff --check` temiz.
+- **Temizlik:** `/private/tmp/PureIPTV165` içindeki görev DerivedData (4,095,008 KiB) ve build logları (4,532 KiB), `lsof +D` açık dosya göstermeyince klasör kaldırıldı. `/private/tmp` son taramasında kalan öğeler DerivedData olarak doğrulanmadığı için korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. ContactCleaner yollarına erişilmedi.
+- **Durum:** `[DONE]` — tvOS arama sonucuna odak ve görünür konum dönüşü tamamlandı.
 - **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
 ### 166. [PENDING] Apple TV’ye Güvenli QR Playlist Aktarımı
