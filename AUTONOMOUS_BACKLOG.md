@@ -1580,9 +1580,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE — NO-GO]` — Mevcut hesap/senkron mimarisi cihaz oturumlarını tanımlayıp iptal edemiyor.
 - **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
 
-### 168. [PENDING] Plex/Emby Kategori ve Sunucu Arama Desteği
+### 168. [DONE — RE-SCOPED] Plex/Emby Kategori ve Sunucu Arama Desteği
 - **Fırsat:** IPTV playlist akışından ayrı olarak media-server kataloğunda sunucu kategorilerini ve server-side search’ü kullanma ihtiyacını değerlendir; ürün kapsamı ve cache davranışını kod tabanında doğrula.
 - **Keşif sinyali:** UHF 1.101.2 Plex/Emby desteği ekledi; kategorileri sunucudan alma ve yerel cache yerine sunucu tarafında aramayı sürüm notlarında belirtiyor.
+- **Kod incelemesi:** Playlist modeli/config ve kayıtlı kimlik bilgileri yalnızca Xtream/M3U tiplerini kapsıyor. `IPTVClient` iki sağlayıcı arasında dallanıyor, server-side search API’si yok; `SearchFeature` katalogları indirip yerel arıyor. Oynatıcı URL ve User-Agent alıyor, auth header taşımıyor. Token’ı stream/art URL’sine koymak favori, izleme geçmişi ve URL aktarımında sızıntı riski doğurur. M3U cache’i bellek içi ve M3U’ya özel; yeni sağlayıcı için kimlik, sayfalama, yenileme ve credential invalidation tasarlanmalı.
+- **PR Reviewer:** `[GO — TAM UÇTAN UCA]`; yalnız kategori ve server-side search eklemek için `[NO-GO]`. Güvenli kapsam sağlayıcıya özel auth/credential saklama, server discovery, kategori-katalog-search-detail eşlemesi, auth gerektiren artwork/playback, cache/sayfalama, playlist yönetimi ve yenileme/hata davranışını kapsamalı. Token URL’ye yazılmamalı; korumalı request context/header ile taşınmalı.
+- **Karar:** Dar kapsam uygulama başlatılmadı; tam uçtan uca mimari işi #180 olarak açıldı.
+- **Geçici veri kontrolü:** `/private/tmp` kökünde task DerivedData klasörü veya doğrulanmış silinebilir derived çıktı bulunmadı. `pureiptv-*.patch` ve Git index dosyaları olası kurtarma materyali; `test_icon.pdf` kullanıcı belgesi, `AppIcon.appiconset.bak2` kaynak yedeği olduğundan korundu. ContactCleaner’a erişilmedi. (Task sonu kontrolünde aynı sınıflandırmayı yinele.)
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad
 
 ### 169. [PENDING] Live, Film ve Dizi İçin Ortak Favori Kategorileri
@@ -1639,3 +1643,8 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Fırsat:** Bağlantı hatasında cihaz türü, playlist biçimi, uygulama aşaması ve sansürlenmiş hata kodunu kullanıcı izniyle özetle; URL, kullanıcı adı, parola ve yayın adresleri rapora girmeden destek akışının işe yarayıp yaramadığını mevcut tanılama maddeleriyle karşılaştır.
 - **Keşif sinyali:** IPTV kullanıcıları sağlayıcıya göre değişen başarısızlıklar bildiriyor; Apple TV’de hangi playlist türü ve eylemin çalışmadığını paylaşabilmek destek için önemli.
 - **Kaynak:** https://www.reddit.com/r/IMadeThis/comments/1x2r7fs/i_made_a_free_iptv_player_for_ios_and_apple_tv/
+
+### 180. [PENDING] Plex ve Emby İçin Güvenli Uçtan Uca Media Server Sağlayıcıları
+- **Fırsat:** Xtream/M3U’dan ayrı provider mimarisi ekle: Plex/Emby sunucu keşfi ve kimlik doğrulaması, güvenli credential/token saklama, server-side kategori/katalog/aramanın sayfalı yüklenmesi, detay ve media playback, authenticated artwork, cache/refresh/invalidation ve playlist ekleme/düzenleme akışları. Provider token’larını URL’ye koyma; auth’ı korumalı request context/header yolundan taşı.
+- **Reviewer kapısı:** Yalnız kategori/search yüzeyini eklemek eksik; iOS ve tvOS’ta katalog, detay, oynatma ve token yaşam döngüsünün uçtan uca çalışması ve token’ın URL/log/persisted media identity’ye sızmaması gerekir.
+- **Kaynak:** https://developer.plex.tv/pms/ · https://dev.emby.media/doc/restapi/index.html
