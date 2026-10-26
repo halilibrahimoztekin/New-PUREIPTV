@@ -110,6 +110,8 @@ public struct SettingsClient: Sendable {
 
     public var preferredSubtitleLanguage: @Sendable () -> String = { "off" }
     public var setPreferredSubtitleLanguage: @Sendable (String) -> Void = { _ in }
+    public var subtitleTextSize: @Sendable () -> SubtitleTextSize = { .standard }
+    public var setSubtitleTextSize: @Sendable (SubtitleTextSize) -> Void = { _ in }
 
     public var getChannelPreferredAudioTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
     public var setChannelPreferredAudioTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
@@ -174,6 +176,7 @@ extension SettingsClient: DependencyKey {
         let preferredAudioKey = "com.pureiptv.preferredAudioLanguage"
         let secondaryAudioKey = "com.pureiptv.secondaryAudioLanguage"
         let preferredSubtitleKey = "com.pureiptv.preferredSubtitleLanguage"
+        let subtitleTextSizeKey = "com.pureiptv.subtitleTextSize"
         let rememberTracksKey = "com.pureiptv.rememberMediaTrackPreferences"
         let iCloudSyncKey = "com.pureiptv.isICloudSyncEnabled"
         let oledDimmingKey = "com.pureiptv.isOLEDDimmingEnabled"
@@ -200,6 +203,7 @@ extension SettingsClient: DependencyKey {
             preferredAudioKey: "tr",
             secondaryAudioKey: "en",
             preferredSubtitleKey: "off",
+            subtitleTextSizeKey: SubtitleTextSize.standard.rawValue,
             rememberTracksKey: true,
             iCloudSyncKey: true,
             oledDimmingKey: true,
@@ -363,6 +367,10 @@ extension SettingsClient: DependencyKey {
             setSecondaryAudioLanguage: { defaults.set($0, forKey: secondaryAudioKey) },
             preferredSubtitleLanguage: { defaults.string(forKey: preferredSubtitleKey) ?? "off" },
             setPreferredSubtitleLanguage: { defaults.set($0, forKey: preferredSubtitleKey) },
+            subtitleTextSize: {
+                SubtitleTextSize(rawValue: defaults.integer(forKey: subtitleTextSizeKey)) ?? .standard
+            },
+            setSubtitleTextSize: { defaults.set($0.rawValue, forKey: subtitleTextSizeKey) },
             getChannelPreferredAudioTrack: { channelID in
                 defaults.string(forKey: channelAudioTrackPrefix + channelID)
             },

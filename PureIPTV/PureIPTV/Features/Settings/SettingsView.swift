@@ -403,6 +403,18 @@ public struct SettingsView: View {
                     Text("🇸🇦 العربية").tag("ar")
                 }
 
+                Picker(AppStrings.Settings.subtitleTextSize, selection: Binding(
+                    get: { store.subtitleTextSize },
+                    set: { store.send(.setSubtitleTextSize($0)) }
+                )) {
+                    ForEach(SubtitleTextSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+                Text(AppStrings.Settings.subtitleTextSizeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle(AppStrings.Settings.rememberTrackPreferences, isOn: Binding(
                     get: { store.rememberMediaTrackPreferences },
                     set: { store.send(.setRememberMediaTrackPreferences($0)) }

@@ -578,6 +578,8 @@ public enum AppStrings {
         public static let audioAndSubtitleSettings = "Ses ve Altyazı Ayarları".localized
         public static let defaultAudioLanguage = "Varsayılan Ses Dili".localized
         public static let defaultSubtitleLanguage = "Varsayılan Altyazı Dili".localized
+        public static let subtitleTextSize = "Altyazı Boyutu (VLC)".localized
+        public static let subtitleTextSizeDescription = "Boyut VLC’de uygulanır. AVPlayer, WebVTT dışındaki altyazılarda sistem görünümünü kullanır.".localized
         public static let rememberTrackPreferences = "Akıllı Tercih Belleği".localized
         public static let rememberTrackPreferencesDesc = "İzlenen her içerik için son seçilen ses ve altyazı otomatik hatırlanır.".localized
         public static let cloudSyncSection = "BULUT & EŞZAMANLAMA".localized

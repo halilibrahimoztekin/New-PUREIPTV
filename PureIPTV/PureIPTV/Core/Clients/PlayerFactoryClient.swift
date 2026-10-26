@@ -168,6 +168,10 @@ extension PlayerFactoryClient: DependencyKey {
                 setSubtitleDelay: { delay in
                     try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
                 },
+                setSubtitleTextScale: { scale in
+                    guard let player = box.player else { return }
+                    player.setSubtitleScale(SubtitleScale(scale))
+                },
                 getStats: { nil },
                 getPlaybackCounters: {
                     let health = box.getPlayer().playbackHealth

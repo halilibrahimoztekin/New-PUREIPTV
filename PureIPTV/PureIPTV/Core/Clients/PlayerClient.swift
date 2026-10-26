@@ -209,6 +209,7 @@ public struct PlayerClient: Sendable {
     public var addExternalSubtitleTrack: @MainActor @Sendable (_ url: URL) async -> Bool = { _ in false }
     public var setAudioDelay: @MainActor @Sendable (_ delay: Int) async -> Void
     public var setSubtitleDelay: @MainActor @Sendable (_ delay: Int) async -> Void
+    public var setSubtitleTextScale: @MainActor @Sendable (_ scale: Float) async -> Void
     public var getStats: @MainActor @Sendable () async -> String?
     public var getPlaybackCounters: @MainActor @Sendable () async -> PlayerPlaybackCounters
     public var setEqualizerPreset: @MainActor @Sendable (_ preset: AudioEQPreset) async -> Void
@@ -630,6 +631,10 @@ extension PlayerClient: DependencyKey {
                 guard box.playbackEngine == .vlc else { return }
                 try? box.getPlayer().setSubtitleDelay(.milliseconds(delay))
             },
+            setSubtitleTextScale: { scale in
+                guard box.playbackEngine == .vlc, let player = box.player else { return }
+                player.setSubtitleScale(SubtitleScale(scale))
+            },
             getStats: {
                 guard box.playbackEngine == .vlc else { return nil }
                 let health = box.getPlayer().playbackHealth
@@ -733,6 +738,7 @@ extension PlayerClient: DependencyKey {
         setSubtitleTrack: { _ in },
         setAudioDelay: { _ in },
         setSubtitleDelay: { _ in },
+        setSubtitleTextScale: { _ in },
         getStats: { nil },
         getPlaybackCounters: { PlayerPlaybackCounters() },
         setEqualizerPreset: { _ in },

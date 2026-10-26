@@ -697,6 +697,8 @@ private struct MultiViewPlayer: View {
     let instanceID: UUID
     let onRetry: () -> Void
 
+    @Dependency(\.settingsClient) private var settingsClient
+
     @State private var playerClient: PlayerClient?
     @State private var playbackFailed = false
     @State private var latestIsActiveAudio = false
@@ -788,6 +790,7 @@ private struct MultiViewPlayer: View {
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             let events = await client.events()
             try await client.play(url, item.userAgentOverride, nil)
+            await client.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             hasStartedPlayback = true
             if let position = item.resumePosition, position > 0, item.type != .live {

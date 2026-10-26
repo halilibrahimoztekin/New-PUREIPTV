@@ -896,6 +896,7 @@ public struct PlayerFeature {
             let config = state.item.config
             let userAgentOverride = state.item.userAgentOverride
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
+            let subtitleTextScale = settingsClient.subtitleTextSize().scale
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
             let profileScope = profileContextClient.snapshot()
@@ -972,9 +973,12 @@ public struct PlayerFeature {
                         }
 
                         group.addTask {
-                            if !isAlreadyPlaying, !isPreviewPromotion {
+                            if isAlreadyPlaying || isPreviewPromotion {
+                                await playerClient.setSubtitleTextScale(subtitleTextScale)
+                            } else {
                                 do {
                                     try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
+                                    await playerClient.setSubtitleTextScale(subtitleTextScale)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
                                     }
@@ -3375,6 +3379,9 @@ public struct PlayerFeature {
             return .run { send in
                 do {
                     try await playerClient.switchEngine(request)
+                    if target == .vlc {
+                        await playerClient.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
+                    }
                     await send(.playbackEngineSwitchFinished(target, requestID, itemID))
                 } catch {
                     await send(.playbackEngineSwitchFailed(error.localizedDescription, requestID, itemID))

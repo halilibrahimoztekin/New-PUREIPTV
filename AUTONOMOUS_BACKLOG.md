@@ -1457,8 +1457,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Büyük rehberlerde focus-safe adımlı yatay zaman navigasyonu tamamlandı ve reviewer onayladı.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad · https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/
 
-### 155. [PENDING] Altyazı Görünümünü Erişilebilir Tercihlerle Özelleştirme
+### 155. [DONE] Altyazı Görünümünü Erişilebilir Tercihlerle Özelleştirme
 - **Fırsat:** Altyazı boyutu, kenarlık/arka plan kontrastı ve görünürlük tercihlerini Dynamic Type ve tvOS uzaktan kumanda kullanımına göre değerlendir.
+- **Kod bulgusu:** Varsayılan altyazı dili için `off` seçeneği zaten görünürlüğü yönetiyor. `SwiftVLC` oynatıcıda canlı altyazı ölçeğini ayarlayan typed `SubtitleScale` API’si var ancak uygulama/ayar katmanına bağlanmamış. AVPlayer `textStyleRules` API’si yalnız WebVTT altyazılara uygulanıyor; tüm formatlar için güvenilir ortak kenarlık/arka plan kontrolü mevcut değil.
+- **Uygulama:** Ayarlara kalıcı %80, %100, %125 ve %150 VLC altyazı boyutu seçenekleri eklendi. Tercih etkin Player, motor VLC’ye çevrildiğinde ve MultiView oynatımında uygulanıyor; ayar açıkken mevcut VLC oynatımına da yansıyor. Varsayılan altyazı dili `off` görünürlüğü yönetmeye devam ediyor. AVPlayer altyazı boyutunu ve ortak outline/arka plan kontrastını tüm biçimlerde sunan destekli API bulunmadığından bu seçenekler eklenmedi; Settings açıklaması VLC kapsamını belirtiyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; motor değişimi sırasında eski tercihin uygulanabileceği yarış, geçiş sonrası kalıcı ayarı yeniden okuyarak giderildi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı; `git diff --check` temiz. Yalnız build alındı; test, simulator/app launch veya playback akışı çalıştırılmadı.
+- **Temizlik:** #155 geçici DerivedData (3.8 GB) ve iOS/tvOS build logları (~7.2 MB), açık dosya tutamacı olmadığı doğrulanıp silindi. `/private/tmp` 2.3 MB kaldı. Normal PureIPTV DerivedData’daki `SourcePackages` (1.8 GB) ve `SDKExplicitPrecompiledModules` (496 MB) paylaşılan cache olarak korundu; bu task’a ait normal DerivedData çıktısı yoktu. ContactCleaner’a hiçbir şekilde erişilmedi.
+- **Durum:** `[DONE]` — Altyazı boyutu tercihi kalıcı hale getirildi ve VLC oynatımına bağlandı; desteklenmeyen biçim/engine özelleştirmeleri kullanıcıya açıkça bildiriliyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
 
 ### 156. [PENDING] Codec Uyumluluğu İçin Güvenli Oynatıcı Tanılama Seçenekleri

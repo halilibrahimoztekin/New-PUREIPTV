@@ -69,6 +69,7 @@ public struct SettingsFeature {
         // Audio & Subtitle Language Settings (Madde #34)
         public var preferredAudioLanguage: String = "tr"
         public var preferredSubtitleLanguage: String = "off"
+        public var subtitleTextSize: SubtitleTextSize = .standard
         public var rememberMediaTrackPreferences: Bool = true
         public var isICloudSyncEnabled: Bool = true
 
@@ -181,6 +182,7 @@ public struct SettingsFeature {
         case setLiveTVOnlyNavigation(Bool)
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
+        case setSubtitleTextSize(SubtitleTextSize)
         case setRememberMediaTrackPreferences(Bool)
         case setICloudSyncEnabled(Bool)
         case setTvOSMatchContent(Bool)
@@ -256,6 +258,7 @@ public struct SettingsFeature {
     }
 
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.playerClient) var playerClient
     @Dependency(\.purchases) var purchases
     @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
@@ -301,6 +304,7 @@ public struct SettingsFeature {
                 state.liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
+                state.subtitleTextSize = settingsClient.subtitleTextSize()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
                 state.isICloudSyncEnabled = settingsClient.isICloudSyncEnabled()
 
@@ -507,6 +511,13 @@ public struct SettingsFeature {
             case let .setPreferredSubtitleLanguage(val):
                 state.preferredSubtitleLanguage = val
                 return .run { _ in settingsClient.setPreferredSubtitleLanguage(val) }
+
+            case let .setSubtitleTextSize(size):
+                state.subtitleTextSize = size
+                return .run { _ in
+                    settingsClient.setSubtitleTextSize(size)
+                    await playerClient.setSubtitleTextScale(size.scale)
+                }
 
             case let .setRememberMediaTrackPreferences(val):
                 state.rememberMediaTrackPreferences = val
