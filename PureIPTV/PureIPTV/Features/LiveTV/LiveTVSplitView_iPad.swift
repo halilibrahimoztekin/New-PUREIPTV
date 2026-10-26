@@ -69,17 +69,17 @@ import SwiftUI
                         .foregroundColor(.white)
                     Spacer()
                     Button {
-                        store.send(.refreshContentTapped)
+                        store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
                     } label: {
-                        if store.isRefreshingContent {
+                        if store.isRefreshingContent, store.refreshStage?.canCancel != true {
                             ProgressView()
                         } else {
-                            Image(systemName: "arrow.clockwise")
+                            Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(store.isRefreshingContent || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                    .accessibilityLabel("Canlı kanalları yenile")
+                    .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                    .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                     .opacity(config.type == .m3u ? 1 : 0)
                     .accessibilityHidden(config.type != .m3u)
 
@@ -102,6 +102,13 @@ import SwiftUI
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
+                if let refreshStage = store.refreshStage {
+                    Label(refreshStage.title, systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
                 if let refreshMessage = store.refreshMessage {
                     Text(refreshMessage)
                         .font(.footnote)

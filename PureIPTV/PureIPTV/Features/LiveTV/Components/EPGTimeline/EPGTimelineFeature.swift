@@ -8,6 +8,7 @@ private func nextFavoriteChannelOrderRevision(after current: UInt64) -> UInt64 {
 }
 
 private nonisolated enum EPGTimelineCancelID: Hashable, Sendable {
+    case syncEPG
     case request(String)
     case clearSyncStatusMessage
     case clockTimer
@@ -281,6 +282,8 @@ public struct EPGTimelineFeature {
         case refreshEPGTapped
         case performSync(forced: Bool)
         case syncEPGCacheRefreshFailed
+        case syncEPGSourceRefreshed([MediaModels.Item])
+        case cancelEPGSync
         case syncCompleted(Date)
         case clearSyncStatusMessage
         case closeTapped
@@ -360,6 +363,13 @@ public struct EPGTimelineFeature {
                 state.savedFocusedProgramID = focusedProgramID
                 state.savedFocusedChannelID = focusedChannelID
                 let shouldStopPreview = state.activePreviewChannel != nil || state.isPiPActive
+                let syncChannelIDs = Array(state.syncPendingEPGChannels)
+                state.isSyncingEPG = false
+                state.syncPendingEPGChannels = []
+                for streamID in syncChannelIDs {
+                    state.epgRequestIDs[streamID] = nil
+                    state.isLoading[streamID] = false
+                }
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
                 state.isPreviewLoading = false
@@ -369,6 +379,7 @@ public struct EPGTimelineFeature {
                 state.favoriteLoadRequestID = nil
                 state.recentChannelLoadRequestID = nil
                 var effects: [Effect<Action>] = [
+                    .cancel(id: EPGTimelineCancelID.syncEPG),
                     .cancel(id: EPGTimelineCancelID.clockTimer),
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
@@ -381,6 +392,7 @@ public struct EPGTimelineFeature {
                         await previewPlayerClient.stopPreview()
                     })
                 }
+                effects.append(contentsOf: syncChannelIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
                 return .merge(effects)
 
             case let .saveNavigationState(horizontalOffset, focusedProgramID, focusedChannelID):
@@ -488,7 +500,7 @@ public struct EPGTimelineFeature {
             case .performSync:
                 guard !state.isSyncingEPG else { return .none }
                 state.isSyncingEPG = true
-                state.syncStatusMessage = AppStrings.Player.syncing
+                state.syncStatusMessage = "Rehber kaynağı yenileniyor…"
                 state.successfulEPGChannelCount = 0
                 state.failedEPGChannelCount = 0
 
@@ -512,11 +524,32 @@ public struct EPGTimelineFeature {
                             await send(.syncEPGCacheRefreshFailed)
                             return
                         }
-                        for ch in channelsToPrewarm {
-                            await send(.refreshEPG(streamID: ch.id))
-                        }
+                        await send(.syncEPGSourceRefreshed(channelsToPrewarm))
                     }
+                    .cancellable(id: EPGTimelineCancelID.syncEPG, cancelInFlight: true)
                 )
+
+            case let .syncEPGSourceRefreshed(channels):
+                guard state.isSyncingEPG else { return .none }
+                state.syncStatusMessage = "Programlar güncelleniyor (0/\(channels.count))…"
+                return .run { send in
+                    for channel in channels {
+                        await send(.refreshEPG(streamID: channel.id))
+                    }
+                }
+                .cancellable(id: EPGTimelineCancelID.syncEPG, cancelInFlight: true)
+
+            case .cancelEPGSync:
+                guard state.isSyncingEPG else { return .none }
+                let streamIDs = Array(state.syncPendingEPGChannels)
+                state.isSyncingEPG = false
+                state.syncPendingEPGChannels = []
+                state.syncStatusMessage = "Durduruldu; son iyi program verileri korundu."
+                for streamID in streamIDs {
+                    state.epgRequestIDs[streamID] = nil
+                    state.isLoading[streamID] = false
+                }
+                return .merge([.cancel(id: EPGTimelineCancelID.syncEPG)] + streamIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
 
             case .syncEPGCacheRefreshFailed:
                 guard state.isSyncingEPG else { return .none }
@@ -969,6 +1002,7 @@ public struct EPGTimelineFeature {
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {
                     state.successfulEPGChannelCount += 1
+                    state.syncStatusMessage = "Programlar güncelleniyor (\(state.successfulEPGChannelCount + state.failedEPGChannelCount)/\(state.successfulEPGChannelCount + state.failedEPGChannelCount + state.syncPendingEPGChannels.count))…"
                 }
                 if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
                     return .send(.syncCompleted(Date()))
@@ -987,6 +1021,7 @@ public struct EPGTimelineFeature {
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {
                     state.failedEPGChannelCount += 1
+                    state.syncStatusMessage = "Programlar güncelleniyor (\(state.successfulEPGChannelCount + state.failedEPGChannelCount)/\(state.successfulEPGChannelCount + state.failedEPGChannelCount + state.syncPendingEPGChannels.count))…"
                 }
                 if responseCompletedSyncChannel, state.isSyncingEPG, state.syncPendingEPGChannels.isEmpty {
                     return .send(.syncCompleted(Date()))

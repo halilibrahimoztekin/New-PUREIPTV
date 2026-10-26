@@ -73,6 +73,26 @@ public enum PlaylistContentType: Sendable {
     }
 }
 
+public enum M3URefreshStage: Equatable, Sendable {
+    case downloading
+    case validating
+    case replacingCatalog
+    case loadingCategories
+
+    public var title: String {
+        switch self {
+        case .downloading: "Playlist indiriliyor…"
+        case .validating: "Playlist doğrulanıyor…"
+        case .replacingCatalog: "Canlı katalog güncelleniyor…"
+        case .loadingCategories: "Kategoriler yenileniyor…"
+        }
+    }
+
+    public var canCancel: Bool {
+        self == .downloading || self == .validating
+    }
+}
+
 private func parseXtreamReleaseDate(_ value: String?) -> Date? {
     guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
     if let date = ISO8601DateFormatter().date(from: value) {
@@ -143,7 +163,11 @@ private func m3uCategory(for item: M3UItemDTO, config: PlaylistConfig, mappings:
 @DependencyClient
 public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
-    public var refreshContent: @Sendable (_ config: PlaylistConfig, _ contentType: PlaylistContentType) async throws -> Void = { _, _ in }
+    public var refreshContent: @Sendable (
+        _ config: PlaylistConfig,
+        _ contentType: PlaylistContentType,
+        _ reportStage: @escaping @Sendable (M3URefreshStage) async -> Void
+    ) async throws -> Void = { _, _, _ in }
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchM3UCategoryTags: @Sendable (_ config: PlaylistConfig) async -> [String] = { _ in [] }
     public var fetchLiveChannels: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
@@ -279,10 +303,15 @@ extension IPTVClient: DependencyKey {
                     await AccountInfoManager.shared.update(from: authDTO)
                 }
             },
-            refreshContent: { config, contentType in
+            refreshContent: { config, contentType, reportStage in
                 guard config.type == .m3u, let url = config.m3uURL else { return }
+                await reportStage(.downloading)
                 let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                try Task.checkCancellation()
+                await reportStage(.validating)
                 let parsedResult = try await parseValidatedM3U(data)
+                try Task.checkCancellation()
+                await reportStage(.replacingCatalog)
                 try await m3uCache.replaceContent(
                     items: parsedResult.items,
                     epgURL: parsedResult.epgURL,
@@ -961,7 +990,7 @@ extension IPTVClient: DependencyKey {
 
     public static let testValue = IPTVClient(
         authenticate: { _ in },
-        refreshContent: { _, _ in },
+        refreshContent: { _, _, _ in },
         fetchLiveCategories: { _ in [] },
         fetchM3UCategoryTags: { _ in [] },
         fetchLiveChannels: { _, _ in [] },

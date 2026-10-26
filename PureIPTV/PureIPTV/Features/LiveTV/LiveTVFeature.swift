@@ -119,6 +119,8 @@ public struct LiveTVFeature {
         public var isLoadingChannels = false
         public var isRefreshingContent = false
         public var activeContentRefreshID: UUID?
+        public var refreshStage: M3URefreshStage?
+        public var activeCategoryRequestID: UUID?
         public var refreshMessage: String?
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
@@ -326,7 +328,7 @@ public struct LiveTVFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case onDisappear
-        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
+        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:], requestID: UUID)
         case categorySelected(MediaModels.Category)
         case categoryUnlockExpired(categoryID: String, requestID: UUID)
         case smartGroupSelected(String)
@@ -381,6 +383,9 @@ public struct LiveTVFeature {
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case refreshContentTapped
+        case cancelContentRefresh
+        case cancelRefreshForBackground
+        case contentRefreshProgress(requestID: UUID, stage: M3URefreshStage)
         case contentRefreshSucceeded(requestID: UUID, config: PlaylistConfig)
         case contentRefreshFailed(requestID: UUID, config: PlaylistConfig, message: String)
         case reloadPreferences
@@ -614,6 +619,8 @@ public struct LiveTVFeature {
             case .onDisappear:
                 state.isRefreshingContent = false
                 state.activeContentRefreshID = nil
+                state.refreshStage = nil
+                state.activeCategoryRequestID = nil
                 state.activeSmartGroupRequestID = nil
                 state.isLoadingChannels = false
                 state.activeFavoriteListRequestID = nil
@@ -627,6 +634,8 @@ public struct LiveTVFeature {
                 )
 
             case let .reloadCategories(config):
+                let requestID = UUID()
+                state.activeCategoryRequestID = requestID
                 state.isLoadingCategories = state.categories.isEmpty
                 state.errorMessage = nil
 
@@ -682,12 +691,14 @@ public struct LiveTVFeature {
                         }
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
+                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict, requestID: requestID))
                 } catch: { error, send in
-                    await send(.categoriesResponse(.failure(error), preferences: [:]))
+                    await send(.categoriesResponse(.failure(error), preferences: [:], requestID: requestID))
                 }
 
             case .reloadPreferences:
+                let requestID = UUID()
+                state.activeCategoryRequestID = requestID
                 let currentCats = state.categories
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
@@ -733,7 +744,7 @@ public struct LiveTVFeature {
                         }
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
+                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict, requestID: requestID))
                 }
 
             case .refreshContentTapped:
@@ -748,10 +759,13 @@ public struct LiveTVFeature {
                 let requestID = UUID()
                 state.activeContentRefreshID = requestID
                 state.isRefreshingContent = true
+                state.refreshStage = .downloading
                 state.refreshMessage = nil
                 return .run { send in
                     do {
-                        try await iptvClient.refreshContent(config, .live)
+                        try await iptvClient.refreshContent(config, .live) { stage in
+                            await send(.contentRefreshProgress(requestID: requestID, stage: stage))
+                        }
                         await send(.contentRefreshSucceeded(requestID: requestID, config: config))
                     } catch is CancellationError {
                         return
@@ -760,27 +774,58 @@ public struct LiveTVFeature {
                     }
                 }.cancellable(id: "LiveTVFeature.refreshContent", cancelInFlight: true)
 
+            case .cancelRefreshForBackground:
+                return .merge(
+                    .send(.cancelContentRefresh),
+                    .send(.epgTimeline(.presented(.cancelEPGSync)))
+                )
+
+            case .cancelContentRefresh:
+                guard state.isRefreshingContent, state.refreshStage?.canCancel == true else { return .none }
+                state.isRefreshingContent = false
+                state.activeContentRefreshID = nil
+                state.refreshStage = nil
+                state.refreshMessage = "Yenileme iptal edildi; mevcut katalog korundu."
+                return .cancel(id: "LiveTVFeature.refreshContent")
+
+            case let .contentRefreshProgress(requestID, stage):
+                guard state.activeContentRefreshID == requestID else { return .none }
+                state.refreshStage = stage
+                return .none
+
             case let .contentRefreshSucceeded(requestID, config):
                 guard state.activeContentRefreshID == requestID else { return .none }
-                state.activeContentRefreshID = nil
-                state.isRefreshingContent = false
                 guard state.config == config,
                       !state.isFavoriteListMode,
                       state.selectedSmartGroupID == nil,
                       state.selectedCategoryID != nil
-                else { return .none }
-                state.channelsByCategory.removeAll(keepingCapacity: true)
+                else {
+                    state.activeContentRefreshID = nil
+                    state.isRefreshingContent = false
+                    state.refreshStage = nil
+                    return .none
+                }
+                state.refreshStage = .loadingCategories
                 return .send(.reloadCategories(config: config))
 
             case let .contentRefreshFailed(requestID, config, message):
                 guard state.activeContentRefreshID == requestID else { return .none }
                 state.activeContentRefreshID = nil
                 state.isRefreshingContent = false
+                state.refreshStage = nil
                 guard state.config == config else { return .none }
                 state.refreshMessage = "Yenileme başarısız; mevcut canlı yayın kataloğu korundu. \(message)"
                 return .none
 
-            case let .categoriesResponse(.success(categories), preferences):
+            case let .categoriesResponse(.success(categories), preferences, requestID):
+                guard state.activeCategoryRequestID == requestID else { return .none }
+                state.activeCategoryRequestID = nil
+                if state.refreshStage == .loadingCategories {
+                    state.activeContentRefreshID = nil
+                    state.isRefreshingContent = false
+                    state.refreshStage = nil
+                    state.channelsByCategory.removeAll(keepingCapacity: true)
+                }
                 state.isLoadingCategories = false
                 state.categoryPreferences = preferences
                 state.categories = categories
@@ -807,8 +852,16 @@ public struct LiveTVFeature {
                 }
                 return .none
 
-            case let .categoriesResponse(.failure(error), _):
+            case let .categoriesResponse(.failure(error), _, requestID):
+                guard state.activeCategoryRequestID == requestID else { return .none }
+                state.activeCategoryRequestID = nil
                 state.isLoadingCategories = false
+                if state.refreshStage == .loadingCategories {
+                    state.activeContentRefreshID = nil
+                    state.isRefreshingContent = false
+                    state.refreshStage = nil
+                    state.refreshMessage = "Kategoriler yenilenemedi; ekrandaki son iyi katalog korundu."
+                }
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 

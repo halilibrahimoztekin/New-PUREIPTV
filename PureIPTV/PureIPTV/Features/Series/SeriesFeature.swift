@@ -259,7 +259,7 @@ public struct SeriesFeature {
                 state.refreshMessage = nil
                 return .run { send in
                     do {
-                        try await iptvClient.refreshContent(config, .series)
+                        try await iptvClient.refreshContent(config, .series) { _ in }
                         await send(.contentRefreshSucceeded(requestID: requestID, config: config))
                     } catch is CancellationError {
                         return

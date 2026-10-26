@@ -32,6 +32,7 @@
         }
 
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+        @Environment(\.scenePhase) private var scenePhase
 
         public var body: some View {
             Group {
@@ -58,6 +59,11 @@
             }
             .onDisappear {
                 store.send(.onDisappear)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    store.send(.cancelRefreshForBackground)
+                }
             }
             .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
@@ -107,13 +113,13 @@
 
                         HStack(spacing: 10) {
                             Button {
-                                store.send(.refreshContentTapped)
+                                store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
                             } label: {
-                                if store.isRefreshingContent {
+                                if store.isRefreshingContent, store.refreshStage?.canCancel != true {
                                     ProgressView()
                                         .frame(width: 36, height: 36)
                                 } else {
-                                    Image(systemName: "arrow.clockwise")
+                                    Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
                                         .font(.system(size: 15, weight: .semibold))
                                         .foregroundStyle(Color.white.opacity(0.9))
                                         .frame(width: 36, height: 36)
@@ -121,8 +127,8 @@
                                 }
                             }
                             .buttonStyle(.plain)
-                            .disabled(store.isRefreshingContent || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                            .accessibilityLabel("Canlı kanalları yenile")
+                            .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                            .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                             .opacity(config.type == .m3u ? 1 : 0)
                             .accessibilityHidden(config.type != .m3u)
 
@@ -178,6 +184,12 @@
                     .padding(.top, 12)
                     .padding(.bottom, 6)
 
+                    if let refreshStage = store.refreshStage {
+                        Label(refreshStage.title, systemImage: "arrow.triangle.2.circlepath")
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.horizontal, 16)
+                    }
                     if let refreshMessage = store.refreshMessage {
                         Text(refreshMessage)
                             .font(.footnote)

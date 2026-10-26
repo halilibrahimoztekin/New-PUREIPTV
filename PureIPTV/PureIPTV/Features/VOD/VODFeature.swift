@@ -273,7 +273,7 @@ public struct VODFeature {
                 state.refreshMessage = nil
                 return .run { send in
                     do {
-                        try await iptvClient.refreshContent(config, .movies)
+                        try await iptvClient.refreshContent(config, .movies) { _ in }
                         await send(.contentRefreshSucceeded(requestID: requestID, config: config))
                     } catch is CancellationError {
                         return

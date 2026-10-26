@@ -12,6 +12,7 @@
     public struct LiveTVView_tvOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
+        @Environment(\.scenePhase) private var scenePhase
         @State private var isSmartGroupManagerPresented = false
 
         @FocusState private var focusedCategory: String?
@@ -83,6 +84,11 @@
             .onDisappear {
                 store.send(.onDisappear)
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    store.send(.cancelRefreshForBackground)
+                }
+            }
             .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.isChannelSelectionMode) { _, isSelecting in
@@ -151,20 +157,20 @@
                             Spacer()
                             HStack(spacing: 8) {
                                 Button {
-                                    store.send(.refreshContentTapped)
+                                    store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
                                 } label: {
                                     Group {
-                                        if store.isRefreshingContent {
+                                        if store.isRefreshingContent, store.refreshStage?.canCancel != true {
                                             ProgressView()
                                         } else {
-                                            Image(systemName: "arrow.clockwise").font(.system(size: 18))
+                                            Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise").font(.system(size: 18))
                                         }
                                     }
                                     .padding(8)
                                 }
                                 .buttonStyle(TVCircleButtonStyle())
-                                .disabled(store.isRefreshingContent || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                                .accessibilityLabel("Canlı kanalları yenile")
+                                .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                                .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                                 .opacity(config.type == .m3u ? 1 : 0)
                                 .accessibilityHidden(config.type != .m3u)
 
@@ -229,6 +235,11 @@
                         .padding(.top, 48)
                         .padding(.bottom, 16)
 
+                        if let refreshStage = store.refreshStage {
+                            Label(refreshStage.title, systemImage: "arrow.triangle.2.circlepath")
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
                         if let refreshMessage = store.refreshMessage {
                             Text(refreshMessage)
                                 .font(.footnote)

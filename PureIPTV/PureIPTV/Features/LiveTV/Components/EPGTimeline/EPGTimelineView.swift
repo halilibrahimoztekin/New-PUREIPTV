@@ -278,12 +278,11 @@ public struct EPGTimelineView: View {
             Spacer()
 
             Button(action: {
-                guard !store.isSyncingEPG else { return }
                 HapticManager.shared.trigger(.light)
-                store.send(.refreshEPGTapped)
+                store.send(store.isSyncingEPG ? .cancelEPGSync : .refreshEPGTapped)
             }) {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Image(systemName: store.isSyncingEPG ? "xmark" : "arrow.triangle.2.circlepath")
                         .rotationEffect(.degrees(store.isSyncingEPG ? 360 : 0))
                         .animation(
                             store.isSyncingEPG
@@ -302,7 +301,7 @@ public struct EPGTimelineView: View {
             #else
             .buttonStyle(.plain)
             #endif
-            .opacity(store.isSyncingEPG ? 0.6 : 1)
+            .accessibilityLabel(store.isSyncingEPG ? "Rehber yenilemesini iptal et" : AppStrings.Player.refreshEPG)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
