@@ -20,13 +20,22 @@ public final class KeychainManager: @unchecked Sendable {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data,
             kSecAttrSynchronizable as String: true as CFBoolean, // Enable iCloud Sync
         ]
 
-        SecItemDelete(query as CFDictionary)
-
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus == errSecDuplicateItem {
+                let retryStatus = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+                guard retryStatus == errSecSuccess else { throw KeychainError.unknown(retryStatus) }
+                return
+            }
+            guard addStatus == errSecSuccess else { throw KeychainError.unknown(addStatus) }
+            return
+        }
 
         guard status == errSecSuccess else {
             throw KeychainError.unknown(status)

@@ -6,6 +6,12 @@ import Foundation
 public struct PlaylistManagementFeature {
     @ObservableState
     public struct State: Equatable {
+        public enum PlaylistStoreStatus: Equatable {
+            case available
+            case empty
+            case unavailable
+        }
+
         public enum PINFlow: Equatable {
             case configure(UUID)
             case activate(UUID)
@@ -14,6 +20,7 @@ public struct PlaylistManagementFeature {
         }
 
         public var playlists: [SavedPlaylist] = []
+        public var playlistStoreStatus: PlaylistStoreStatus = .empty
         public var activePlaylistID: UUID?
         public var lockedPlaylistIDs: Set<UUID> = []
         public var unlockedPlaylistIDs: Set<UUID> = []
@@ -41,6 +48,7 @@ public struct PlaylistManagementFeature {
 
     public enum Action: BindableAction {
         case onAppear
+        case refreshPlaylistStore
         case viewDidDisappear
         case binding(BindingAction<State>)
         case setActivePlaylist(UUID)
@@ -99,7 +107,7 @@ public struct PlaylistManagementFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
-                state.playlists = playlistRepository.getPlaylists()
+                Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
                 state.lockedPlaylistIDs = Set(state.playlists.filter { parentalControlClient.isPlaylistLocked($0.id) }.map(\.id))
                 if let startupID = state.startupUnlockPlaylistID,
@@ -109,6 +117,10 @@ public struct PlaylistManagementFeature {
                     state.playlistPIN = ""
                     state.playlistPINError = nil
                 }
+                return .none
+
+            case .refreshPlaylistStore:
+                Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 return .none
 
             case .viewDidDisappear:
@@ -291,8 +303,11 @@ public struct PlaylistManagementFeature {
 
             case let .m3uPlaylistRefreshSucceeded(updatedPlaylist):
                 state.isRefreshingPlaylist = false
-                playlistRepository.updatePlaylist(updatedPlaylist)
-                state.playlists = playlistRepository.getPlaylists()
+                guard playlistRepository.updatePlaylist(updatedPlaylist) else {
+                    state.playlistValidationMessage = "Ayarlar güvenli olarak kaydedilemedi. iCloud Keychain erişimini kontrol edip tekrar deneyin."
+                    return .none
+                }
+                Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
@@ -338,10 +353,13 @@ public struct PlaylistManagementFeature {
                 return .send(.deletePlaylist(playlist.id))
 
             case let .deletePlaylist(id):
+                guard playlistRepository.deletePlaylist(id: id) else {
+                    state.playlistValidationMessage = "Playlist silinemedi; kayıt korunuyor. iCloud Keychain erişimini kontrol edin."
+                    return .none
+                }
                 _ = parentalControlClient.setPlaylistPIN(id, nil)
                 parentalControlClient.clearPlaylistPINFailures(id)
-                playlistRepository.deletePlaylist(id: id)
-                state.playlists = playlistRepository.getPlaylists()
+                Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 if state.activePlaylistID == id {
                     let newActive = state.playlists.first?.id
                     playlistRepository.setActivePlaylistID(newActive)
@@ -361,7 +379,7 @@ public struct PlaylistManagementFeature {
 
             case .addPlaylist(.presented(.delegate(.didConnect))),
                  .addPlaylist(.presented(.delegate(.didReceiveTransferredPlaylist))):
-                state.playlists = playlistRepository.getPlaylists()
+                Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
                 state.addPlaylist = nil
                 return .send(.delegate(.addPlaylistDidConnect))
@@ -379,6 +397,19 @@ public struct PlaylistManagementFeature {
         }
         .ifLet(\.$addPlaylist, action: \.addPlaylist) {
             AddPlaylistFeature()
+        }
+    }
+
+    private static func refreshPlaylistStore(state: inout State, repository: PlaylistRepository) {
+        switch repository.readPlaylists() {
+        case let .loaded(playlists):
+            state.playlists = playlists
+            state.playlistStoreStatus = .available
+        case .notFound:
+            state.playlists = []
+            state.playlistStoreStatus = .empty
+        case .failed:
+            state.playlistStoreStatus = .unavailable
         }
     }
 }

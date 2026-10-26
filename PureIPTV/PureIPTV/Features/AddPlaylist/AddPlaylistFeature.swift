@@ -57,6 +57,7 @@ public struct AddPlaylistFeature {
         case playlistTypeChanged(PlaylistType)
         case connectTapped
         case connectResponse(Result<String, Error>)
+        case playlistSaveFailed
         case dismissError
         case togglePasswordVisibility
 
@@ -195,9 +196,16 @@ public struct AddPlaylistFeature {
                 )
 
                 return .run { send in
-                    playlistRepository.addPlaylist(playlist)
+                    guard playlistRepository.addPlaylist(playlist) else {
+                        await send(.playlistSaveFailed)
+                        return
+                    }
                     await send(.delegate(.didConnect(serverURL: rawURL, username: username, password: password)))
                 }
+
+            case .playlistSaveFailed:
+                state.errorMessage = "Playlist bu cihazda güvenli olarak kaydedilemedi. iCloud Keychain ayarlarını kontrol edip tekrar deneyin."
+                return .none
 
             case let .connectResponse(.failure(error)):
                 state.isLoading = false

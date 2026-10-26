@@ -14,6 +14,22 @@ public struct PlaylistManagementView: View {
         List {
             // Section: Saved Playlists
             Section {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: store.playlistStoreStatus == .unavailable ? "exclamationmark.icloud" : "icloud")
+                        .foregroundStyle(store.playlistStoreStatus == .unavailable ? Color.orange : Color.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(playlistStoreStatusTitle)
+                            .font(.subheadline)
+                        Text(playlistStoreStatusDetail)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Button("Yenile") { store.send(.refreshPlaylistStore) }
+                        .font(.footnote)
+                }
+                .padding(.vertical, 4)
+
                 ForEach(store.playlists) { playlist in
                     playlistRow(playlist)
                     #if os(iOS)
@@ -197,6 +213,27 @@ public struct PlaylistManagementView: View {
             ) {
                 playlistPINPrompt
             }
+    }
+
+    private var playlistStoreStatusTitle: String {
+        switch store.playlistStoreStatus {
+        case .available: "Bu cihazdaki Keychain kaydı okunabildi"
+        case .empty: "Bu cihazda kayıtlı playlist yok"
+        case .unavailable: "Keychain kaydı okunamadı"
+        }
+    }
+
+    private var playlistStoreStatusDetail: String {
+        #if os(tvOS)
+            "tvOS, iCloud Keychain öğelerini cihazlar arasında eşitlemez."
+        #else
+            switch store.playlistStoreStatus {
+            case .available, .empty:
+                "iCloud Keychain eşitlemesi Apple tarafından yönetilir; diğer cihaza ulaşma durumu veya süresi bu uygulamaya bildirilmez."
+            case .unavailable:
+                "iCloud Keychain erişimini kontrol edip Yenile'ye dokunun. Parolalar gösterilmez."
+            }
+        #endif
     }
 
     // MARK: - Playlist Row

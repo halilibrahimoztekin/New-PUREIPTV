@@ -2,6 +2,12 @@ import FactoryKit
 import Foundation
 
 public final class PlaylistRepository: @unchecked Sendable {
+    public enum PlaylistReadResult {
+        case loaded([SavedPlaylist])
+        case notFound
+        case failed
+    }
+
     private let keychainKey = "com.pureiptv.savedPlaylists"
     private let keychainManager = KeychainManager.shared
 
@@ -49,31 +55,58 @@ public final class PlaylistRepository: @unchecked Sendable {
         }
     }
 
+    public nonisolated func readPlaylists() -> PlaylistReadResult {
+        do {
+            return try .loaded(keychainManager.retrieve(for: keychainKey, as: [SavedPlaylist].self))
+        } catch KeychainError.itemNotFound {
+            return .notFound
+        } catch {
+            return .failed
+        }
+    }
+
     /// Adds a new playlist and saves it to iCloud Keychain
-    public nonisolated func addPlaylist(_ playlist: SavedPlaylist) {
-        var current = getPlaylists()
+    public nonisolated func addPlaylist(_ playlist: SavedPlaylist) -> Bool {
+        var current: [SavedPlaylist]
+        switch readPlaylists() {
+        case let .loaded(playlists): current = playlists
+        case .notFound: current = []
+        case .failed: return false
+        }
         // Prevent exact duplicates
         if !current.contains(where: { $0.id == playlist.id }) {
             current.append(playlist)
-            try? keychainManager.save(current, for: keychainKey)
+            do { try keychainManager.save(current, for: keychainKey) } catch { return false }
             setActivePlaylistID(playlist.id)
         }
+        return true
     }
 
     /// Deletes a playlist by ID
-    public func deletePlaylist(id: UUID) {
-        var current = getPlaylists()
+    public func deletePlaylist(id: UUID) -> Bool {
+        var current: [SavedPlaylist]
+        switch readPlaylists() {
+        case let .loaded(playlists): current = playlists
+        case .notFound: return true
+        case .failed: return false
+        }
         current.removeAll { $0.id == id }
-        try? keychainManager.save(current, for: keychainKey)
+        do { try keychainManager.save(current, for: keychainKey); return true } catch { return false }
     }
 
     /// Updates an existing playlist
-    public func updatePlaylist(_ playlist: SavedPlaylist) {
-        var current = getPlaylists()
+    public func updatePlaylist(_ playlist: SavedPlaylist) -> Bool {
+        var current: [SavedPlaylist]
+        switch readPlaylists() {
+        case let .loaded(playlists): current = playlists
+        case .notFound: return false
+        case .failed: return false
+        }
         if let index = current.firstIndex(where: { $0.id == playlist.id }) {
             current[index] = playlist
-            try? keychainManager.save(current, for: keychainKey)
+            do { try keychainManager.save(current, for: keychainKey); return true } catch { return false }
         }
+        return false
     }
 }
 
