@@ -526,7 +526,7 @@ public enum AppStrings {
         public static let createDiagnosticReport = "Gizlilik Korumalı Tanılama Raporu Oluştur".localized
         public static let diagnosticReportGenerating = "Tanılama raporu hazırlanıyor...".localized
         public static let diagnosticReportTitle = "Tanılama Raporu".localized
-        public static let diagnosticReportHint = "Yalnızca sürüm ve işletim sistemi bilgileri gösterilir; hiçbir yere otomatik gönderilmez.".localized
+        public static let diagnosticReportHint = "Sürüm, cihaz türü ve varsa son bağlantı denemesinin sansürlenmiş hata kodunu içerir. URL, hesap bilgisi ve günlük eklenmez; hiçbir yere otomatik gönderilmez.".localized
         public static let diagnosticReportUnavailable = "Rapor önizlemesi açılamadı.".localized
         public static let shareDiagnosticReport = "Raporu Dışa Aktar veya Paylaş".localized
         public static let version = "Sürüm".localized

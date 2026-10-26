@@ -139,7 +139,7 @@ public struct AddPlaylistFeature {
                 return .none
 
             case .connectTapped:
-                guard state.canConnect else { return .none }
+                guard !state.isLoading, state.canConnect else { return .none }
                 state.isLoading = true
                 state.errorMessage = nil
 
@@ -150,6 +150,7 @@ public struct AddPlaylistFeature {
                     let password = state.password
 
                     return .run { send in
+                        await FeedbackReportManager.shared.clearConnectionFailure()
                         do {
                             guard let url = URL(string: rawURL) else {
                                 throw NetworkError.invalidURL
@@ -158,6 +159,8 @@ public struct AddPlaylistFeature {
                             try await iptvClient.authenticate(config)
                             await send(.connectResponse(.success("Xtream Playlist")))
                         } catch {
+                            guard !Task.isCancelled else { return }
+                            await FeedbackReportManager.shared.recordConnectionFailure(playlistType: .xtream, error: error)
                             await send(.connectResponse(.failure(error)))
                         }
                     }
@@ -165,6 +168,7 @@ public struct AddPlaylistFeature {
                 case .m3u:
                     let m3uURLString = state.m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
                     return .run { send in
+                        await FeedbackReportManager.shared.clearConnectionFailure()
                         do {
                             guard let url = URL(string: m3uURLString) else {
                                 throw NetworkError.invalidURL
@@ -173,6 +177,8 @@ public struct AddPlaylistFeature {
                             try await iptvClient.authenticate(config)
                             await send(.connectResponse(.success("M3U Playlist")))
                         } catch {
+                            guard !Task.isCancelled else { return }
+                            await FeedbackReportManager.shared.recordConnectionFailure(playlistType: .m3u, error: error)
                             await send(.connectResponse(.failure(error)))
                         }
                     }
