@@ -82,6 +82,7 @@ public actor DominantColorExtractor {
                 cache[url] = palette
                 return palette
             } catch {
+                guard !Task.isCancelled else { return DynamicMeshPalette.fromSeed(fallbackTitle) }
                 let fallback = DynamicMeshPalette.fromSeed(fallbackTitle)
                 cache[url] = fallback
                 return fallback
@@ -158,13 +159,19 @@ public actor DominantColorExtractor {
 public struct DynamicMeshBackgroundView: View {
     let imageURL: URL?
     let titleSeed: String
+    let imageRequestDebounceNanoseconds: UInt64
 
     @State private var currentPalette: DynamicMeshPalette = .default
     @ObservedObject private var themeManager = ThemeManager.shared
 
-    public init(imageURL: URL? = nil, titleSeed: String = "PureIPTV") {
+    public init(
+        imageURL: URL? = nil,
+        titleSeed: String = "PureIPTV",
+        imageRequestDebounceNanoseconds: UInt64 = 0
+    ) {
         self.imageURL = imageURL
         self.titleSeed = titleSeed
+        self.imageRequestDebounceNanoseconds = imageRequestDebounceNanoseconds
     }
 
     public var body: some View {
@@ -203,7 +210,12 @@ public struct DynamicMeshBackgroundView: View {
             .ignoresSafeArea()
         }
         .task(id: imageURL) {
+            if imageRequestDebounceNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: imageRequestDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+            }
             let palette = await DominantColorExtractor.shared.extractPalette(from: imageURL, fallbackTitle: titleSeed)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.85)) {
                     currentPalette = palette

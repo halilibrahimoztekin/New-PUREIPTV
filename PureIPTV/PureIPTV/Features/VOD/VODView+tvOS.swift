@@ -58,7 +58,8 @@
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedVOD?.coverURL,
-                    titleSeed: focusedVOD?.title ?? "VOD"
+                    titleSeed: focusedVOD?.title ?? "VOD",
+                    imageRequestDebounceNanoseconds: 150_000_000
                 )
             )
             .onAppear {

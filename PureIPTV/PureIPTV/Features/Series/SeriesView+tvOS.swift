@@ -55,7 +55,8 @@
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedSeries?.coverURL,
-                    titleSeed: focusedSeries?.title ?? "Series"
+                    titleSeed: focusedSeries?.title ?? "Series",
+                    imageRequestDebounceNanoseconds: 150_000_000
                 )
             )
             .onAppear {

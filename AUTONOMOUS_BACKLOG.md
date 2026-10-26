@@ -1483,8 +1483,12 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — EPG tazelik yaşı ve yenileme hata durumu playlist/zaman çizelgesi ile rehber başlıklarında kalıcı biçimde gösteriliyor.
 - **Kaynak:** https://www.reddit.com/r/uhf_app/comments/1q1edqo/epg_on_apple_tv/ · https://www.reddit.com/r/uhfapp/comments/1x5esu8/epg_not_fully_loading_on_apple_tv/
 
-### 158. [PENDING] Arama Harf Atlama İşlemlerini Birleştirme ve İptal Etme
+### 158. [DONE] Arama Harf Atlama İşlemlerini Birleştirme ve İptal Etme
 - **Fırsat:** Hızlı harf gezinmesinde poster/grid aramalarını birleştirip önceki istekleri iptal ederek Apple TV’de gezinme takılmasını azalt.
+- **Uygulama:** tvOS VOD ve dizi ekranlarında odak görselinden palet çıkarma isteği başlamadan önce 150 ms iptal edilebilir bekleme eklendi; hızlı odak değişimlerinde yalnızca durulan kartın görseli indirilip işleniyor. URLSession isteği iptal edildiyse fallback paleti paylaşılan cache’e yazılmıyor ve iptal edilmiş sonuç görünümü güncellemiyor. Debounce yalnızca bu iki tvOS ekranında etkin; diğer DynamicMeshBackgroundView kullanımları değişmedi.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; Swift concurrency ve iptal davranışı incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca Xcode build çalıştırıldı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı. Build loglarında mevcut concurrency uyarıları görüldü.
+- **Temizlik:** Görev DerivedData (3,660,312 KiB) ve build logları (toplam 6,216 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV158` görev diziniyle silindi. Derleme çıktıları geçici dizinde tutuldu; normal DerivedData’daki paylaşılan `SourcePackages` yalnızca okundu ve korundu. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — TvOS VOD/dizi hızlı odak gezinmesinde gereksiz arka plan paleti görsel istekleri debounce edilip iptal ediliyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
 ### 159. [PENDING] Playlist Yenilemesinde Favori Eşleşme Sorunlarını Açıklama
