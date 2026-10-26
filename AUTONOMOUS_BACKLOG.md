@@ -1639,9 +1639,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** Başlangıç `/private/tmp` taramasında DerivedData bulunmadı; kullanıcı yedeği, patch/index kurtarma dosyaları ve PDF korundu. Bu task’ın `/private/tmp/PureIPTV173` build/log çıktısı **4,080,776 KiB** oldu; iki build bitip `lsof +D` açık handle göstermeyince silindi. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da `Build`/`Index.noindex` task çıktısı yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** olarak korundu. `.xcstrings` dosyası değiştirilmedi/stage edilmedi.
 - **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/ · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
 
-### 174. [PENDING] Çok Sayıda Kullanılmayan Kanalı Toplu Gizleme
-- **Fırsat:** Kullanıcıların 10.000+ kanallı sağlayıcıdan yalnız izlediklerini seçme isteğini mevcut gizleme ve PIN kurallarıyla karşılaştır; toplu seçim eklenirse Focus Engine, yanlışlıkla toplu gizleme ve geri alma akışlarını tasarla.
+### 174. [DONE] Çok Sayıda Kullanılmayan Kanalı Toplu Gizleme
+- **Fırsat:** Kullanıcıların 10.000+ kanallı sağlayıcıdan yalnız izlediklerini seçme isteğini mevcut gizleme davranışıyla karşıla.
 - **Keşif sinyali:** Apple TV kullanıcıları büyük listelerde yalnızca birkaç kanalı görünür bırakıp kalanlarını kalıcı gizleme isteğini açıkça belirtiyor.
+- **Kod bulgusu:** Live TV’de iOS/iPad/tvOS çoklu kanal seçimi ve toplu favori araç çubuğu vardı; kanal gizleme yalnız tek tek context menu üzerinden yapılabiliyordu. Favori listesi modu gizli kanalları mevcut kanallardan filtrelemiyordu.
+- **Uygulama:** Çoklu seçim araç çubuğuna seçili kanal adedini gösteren yıkıcı onay eylemi eklendi. Onaydan sonra seçili görünür kanallar durumdan çıkarılıyor ve gizleme metadata’sı ile eski ID listesi ParentalControlClient’da tek batch yazılıyor. Favori liste görünümü artık gizlenen kanalları da eliyor; EPG timeline güncelleniyor. tvOS’ta odaktaki kanal gizlenirse odak ilk görünür kanala aktarılıyor. Geri alma mevcut Ayarlar > Gizlenen İçerikler ekranından yapılabiliyor.
+- **PR Reviewer:** `[APPROVED]` — seçim kapsamı, batch persistence, onay sayısı, favori filtreleme ve tvOS focus geçişi incelendi.
+- **Doğrulama:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız Xcode build alındı; test, simulator veya uygulama akışı çalıştırılmadı.
+- **Temizlik:** `/private/tmp/PureIPTV174` task DerivedData ve logları **4,051,512 KiB**; her iki build sonlandıktan ve `lsof +D` açık handle göstermeyince kaldırıldı. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da `Build`/`Index.noindex` task çıktısı yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** korundu. Kullanıcı kaynakları/cache’leri temizlenmedi.
 - **Kaynak:** https://www.reddit.com/r/iptv_strong/comments/1svps80/iptv_app_rec_for_appletv/
 
 ### 175. [PENDING] Catch-up İleri/Geri Sarma Hata Kurtarması

@@ -264,7 +264,7 @@ public struct LiveTVFeature {
         // Computed: channels for the currently selected category
         public var currentChannels: [MediaModels.Item] {
             if isFavoriteListMode {
-                return orderedFavoriteListChannels
+                return orderedFavoriteListChannels.filter { !hiddenChannelIDs.contains($0.id) }
             }
             if selectedSmartGroupID != nil {
                 return smartGroupChannels.filter {
@@ -350,6 +350,7 @@ public struct LiveTVFeature {
         case selectAllCurrentChannels
         case clearChannelSelection
         case exitChannelSelectionMode
+        case hideSelectedChannels
         case dismissBulkFavoriteNotice
         case bulkFavoriteAction(targetListID: UUID?, operation: BulkFavoriteOperation)
         case applyBulkNamedFavoriteList(channelIDs: Set<String>, listID: UUID, operation: BulkFavoriteOperation, playlistID: UUID, profileScope: ProfileContextSnapshot, generationID: UUID)
@@ -1518,6 +1519,32 @@ public struct LiveTVFeature {
             case .exitChannelSelectionMode:
                 state.resetChannelSelection()
                 return .none
+
+            case .hideSelectedChannels:
+                guard
+                    state.isChannelSelectionMode,
+                    let playlistID = state.config?.playlistID,
+                    state.channelSelectionPlaylistID == playlistID,
+                    let profileScope = state.channelSelectionProfileScope,
+                    profileScope == profileContextClient.snapshot()
+                else {
+                    state.resetChannelSelection()
+                    return .none
+                }
+                let selectedIDs = state.selectedCurrentChannelIDs
+                let selectedChannels = state.currentChannels.filter { selectedIDs.contains($0.id) }
+                guard !selectedChannels.isEmpty else { return .none }
+
+                let hiddenItems = selectedChannels.map {
+                    HiddenItemDTO(id: $0.id, title: $0.title, type: .channel)
+                }
+                state.hiddenChannelIDs.formUnion(hiddenItems.map(\.id))
+                state.selectedChannelIDs.subtract(hiddenItems.map(\.id))
+                state.syncEPGTimeline(channels: state.currentChannels, selectedCategoryID: state.selectedCategoryID)
+                return .run { _ in
+                    parentalControlClient.hideChannels(hiddenItems)
+                    await hapticClient.notification(.success)
+                }
 
             case .dismissBulkFavoriteNotice:
                 state.bulkFavoriteNotice = nil

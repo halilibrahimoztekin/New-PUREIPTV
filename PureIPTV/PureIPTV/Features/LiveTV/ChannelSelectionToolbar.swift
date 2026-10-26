@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChannelSelectionToolbar: View {
     let store: StoreOf<LiveTVFeature>
+    @State private var isConfirmingHide = false
 
     private var isBusy: Bool {
         store.activeBulkFavoriteRequestID != nil
@@ -40,6 +41,13 @@ struct ChannelSelectionToolbar: View {
                     }
                     .disabled(isBusy)
 
+                    Button(role: .destructive) {
+                        isConfirmingHide = true
+                    } label: {
+                        Label("Seçilenleri Gizle", systemImage: "eye.slash")
+                    }
+                    .disabled(isBusy)
+
                     if !store.favoriteLists.isEmpty {
                         Menu(AppStrings.LiveTV.addSelectedToList) {
                             ForEach(store.favoriteLists) { list in
@@ -72,5 +80,17 @@ struct ChannelSelectionToolbar: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(.regularMaterial)
+        .confirmationDialog(
+            "Seçili Kanalları Gizle",
+            isPresented: $isConfirmingHide,
+            titleVisibility: .visible
+        ) {
+            Button("\(store.selectedCurrentChannelIDs.count) Kanalı Gizle", role: .destructive) {
+                store.send(.hideSelectedChannels)
+            }
+            Button("İptal", role: .cancel) {}
+        } message: {
+            Text("Seçili kanallar görünür listelerden kaldırılacak. Ayarlar > Gizlenen İçerikler bölümünden kanalları geri alabilirsiniz.")
+        }
     }
 }

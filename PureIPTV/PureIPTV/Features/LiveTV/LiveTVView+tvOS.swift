@@ -92,6 +92,12 @@
                     self.selectionRestoreChannelID = nil
                 }
             }
+            .onChange(of: store.hiddenChannelIDs.count) { _, _ in
+                guard let focusedChannelID,
+                      !store.currentChannels.contains(where: { $0.id == focusedChannelID })
+                else { return }
+                self.focusedChannelID = store.currentChannels.first?.id
+            }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
             }

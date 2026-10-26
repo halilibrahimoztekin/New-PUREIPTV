@@ -40,6 +40,7 @@ public struct ParentalControlClient: Sendable {
 
     public var hiddenChannelIDs: @Sendable () -> Set<String> = { [] }
     public var hideChannel: @Sendable (_ id: String, _ title: String) -> Void
+    public var hideChannels: @Sendable (_ channels: [HiddenItemDTO]) -> Void = { _ in }
     public var unhideChannel: @Sendable (_ id: String) -> Void
     public var unhideAllChannels: @Sendable () -> Void
     public var isChannelHidden: @Sendable (_ id: String) -> Bool = { _ in false }
@@ -166,6 +167,21 @@ extension ParentalControlClient: DependencyKey {
                 legacy.insert(id)
                 defaults.set(Array(legacy), forKey: legacyHiddenChannelsKey)
             },
+            hideChannels: { channels in
+                guard !channels.isEmpty else { return }
+                var items = loadHiddenItems(key: hiddenChannelsKey)
+                var knownIDs = Set(items.filter { $0.type == .channel }.map(\.id))
+                for channel in channels where !knownIDs.contains(channel.id) {
+                    guard channel.type == .channel else { continue }
+                    items.append(channel)
+                    knownIDs.insert(channel.id)
+                }
+                saveHiddenItems(items, key: hiddenChannelsKey)
+
+                var legacy = Set(defaults.stringArray(forKey: legacyHiddenChannelsKey) ?? [])
+                legacy.formUnion(channels.filter { $0.type == .channel }.map(\.id))
+                defaults.set(Array(legacy), forKey: legacyHiddenChannelsKey)
+            },
             unhideChannel: { id in
                 var items = loadHiddenItems(key: hiddenChannelsKey)
                 items.removeAll { $0.id == id }
@@ -288,6 +304,7 @@ extension ParentalControlClient: DependencyKey {
         authenticateWithBiometrics: { _ in true },
         hiddenChannelIDs: { [] },
         hideChannel: { _, _ in },
+        hideChannels: { _ in },
         unhideChannel: { _ in },
         unhideAllChannels: {},
         isChannelHidden: { _ in false },
