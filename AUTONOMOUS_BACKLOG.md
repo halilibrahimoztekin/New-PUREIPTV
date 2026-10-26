@@ -1669,8 +1669,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Keşif sinyali:** Apple TV kullanıcıları telefonda ekledikleri playlist’in TV’de görünmemesi ve playlist eşitlemesinde cihazlar arası tutarsızlık bildirdi.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv_yes_iptv/ · https://www.reddit.com/r/IPTVGroupBuy/comments/1jsbs0b
 
-### 177. [PENDING] Kanal Önizlemesi İçin Odak ve Gecikme Tercihleri
+### 177. [DONE] Kanal Önizlemesi İçin Odak ve Gecikme Tercihleri
 - **Fırsat:** EPG’de odaklanan kanal önizlemesinin ağ yükünü, kanal değişim hızını ve odağı nasıl etkilediğini ölç; mevcut preview davranışına ek ayar gerekiyorsa kısa/uzun gecikme ve kapalı seçeneklerini tvOS’ta erişilebilir kur.
+- **Kod bulgusu:** `channelFocused` reducer eylemi 400 ms debounce yapabiliyordu ancak EPG view bu eylemi göndermiyordu ve ayar kullanıcı tarafından değiştirilemiyordu. Önizleme başlatma gecikmesi her odak sıçramasında yeni stream isteği açılmasını sınırlıyor; gerçek cihaz ağ/odak ölçümü uygulama çalıştırmayı gerektirdiğinden compile-only kısıtı altında yapılmadı.
+- **Uygulama:** tvOS EPG ayarlarına kalıcı Kapalı/Kısa (400 ms)/Uzun (1 sn) seçimi eklendi. Channel focus değişimi reducer’a bağlandı; debounce tamamlanınca hâlâ aynı kanalda odak ve ayar doğrulanıyor. Kapalı mod otomatik odak stream isteğini önler, manuel kanal menüsü önizlemesi çalışmaya devam eder. Catch-up/channel/full-screen handoff ve manuel önizleme eylemleri bekleyen odak gecikmesini iptal eder; handoff sırasında in-flight preview effect de iptal edilerek sonradan başlayan stream yarışı engellendi.
+- **PR Reviewer:** `[APPROVED]` — gecikmiş stale focus, aktif aynı kanalın ikinci kez başlatılması, manuel önizleme, playback task iptali ve catch-up/full-screen handoff yaşam döngüsü incelendi.
+- **Doğrulama:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`; `git diff --check` temiz. Yalnız Xcode build alındı; test, simulator, app launch, playback veya gerçek cihaz ağ/odak ölçümü yapılmadı.
+- **Temizlik:** `/private/tmp/PureIPTV177` DerivedData ve logları **4,050,524 KiB**; build’ler tamamlandıktan ve `lsof +D` açık handle göstermedikten sonra kaldırıldı. Son `/private/tmp` **2,376 KiB**. Normal PureIPTV DerivedData’da task kaynaklı `Build`/`Index.noindex` yoktu; paylaşılan `SourcePackages` **1,873,636 KiB** korundu.
 - **Keşif sinyali:** UHF Apple TV rehberinde kanal önizlemesini açıp kapatmayı destekliyor; kullanıcılar rehber gezinirken mevcut yayının korunması ve önizlemenin hızlı açılması konusunda farklı beklentiler bildiriyor.
 - **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv · https://www.reddit.com/r/IPTV_Help_Desk/comments/1uzehpu/apple_tv_iptv_app_with_persistent_live_preview/
 

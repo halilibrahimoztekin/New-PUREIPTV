@@ -42,6 +42,24 @@ public enum EPGAutoRefreshInterval: Int, CaseIterable, Equatable, Identifiable, 
     }
 }
 
+public enum EPGPreviewDelay: Int, CaseIterable, Equatable, Identifiable, Sendable {
+    case off = 0
+    case short = 400
+    case long = 1000
+
+    public var id: Int {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .off: "Kapalı"
+        case .short: "Kısa (0,4 sn)"
+        case .long: "Uzun (1 sn)"
+        }
+    }
+}
+
 public struct SettingsClient: Sendable {
     public var isParentalControlEnabled: @Sendable () -> Bool = { false }
     public var getParentalPIN: @Sendable () -> String? = { nil }
@@ -80,6 +98,8 @@ public struct SettingsClient: Sendable {
     public var setAutoUpdateEPG: @Sendable (Bool) -> Void = { _ in }
     public var epgAutoRefreshInterval: @Sendable () -> EPGAutoRefreshInterval = { .fourHours }
     public var setEPGAutoRefreshInterval: @Sendable (EPGAutoRefreshInterval) -> Void = { _ in }
+    public var epgPreviewDelay: @Sendable () -> EPGPreviewDelay = { .short }
+    public var setEPGPreviewDelay: @Sendable (EPGPreviewDelay) -> Void = { _ in }
     public var autoSwitchOnEPGReminder: @Sendable () -> Bool = { false }
     public var setAutoSwitchOnEPGReminder: @Sendable (Bool) -> Void = { _ in }
     public var downloadConcurrencyLimit: @Sendable () -> Int = { 1 }
@@ -163,6 +183,7 @@ extension SettingsClient: DependencyKey {
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
         let epgAutoRefreshIntervalKey = "com.pureiptv.epgAutoRefreshIntervalHours"
+        let epgPreviewDelayKey = "com.pureiptv.epgPreviewDelayMilliseconds"
         let autoSwitchOnEPGReminderKey = "com.pureiptv.autoSwitchOnEPGReminder"
         let downloadConcurrencyLimitKey = "com.pureiptv.downloadConcurrencyLimit"
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
@@ -194,6 +215,7 @@ extension SettingsClient: DependencyKey {
             autoPlayKey: true,
             autoUpdateEpgKey: true,
             epgAutoRefreshIntervalKey: EPGAutoRefreshInterval.fourHours.rawValue,
+            epgPreviewDelayKey: EPGPreviewDelay.short.rawValue,
             downloadConcurrencyLimitKey: 1,
             startupTabKey: "Keşfet",
             hideEmptyContentTabsKey: true,
@@ -319,6 +341,10 @@ extension SettingsClient: DependencyKey {
                 EPGAutoRefreshInterval(rawValue: defaults.integer(forKey: epgAutoRefreshIntervalKey)) ?? .fourHours
             },
             setEPGAutoRefreshInterval: { defaults.set($0.rawValue, forKey: epgAutoRefreshIntervalKey) },
+            epgPreviewDelay: {
+                EPGPreviewDelay(rawValue: defaults.integer(forKey: epgPreviewDelayKey)) ?? .short
+            },
+            setEPGPreviewDelay: { defaults.set($0.rawValue, forKey: epgPreviewDelayKey) },
             autoSwitchOnEPGReminder: { defaults.bool(forKey: autoSwitchOnEPGReminderKey) },
             setAutoSwitchOnEPGReminder: { defaults.set($0, forKey: autoSwitchOnEPGReminderKey) },
             downloadConcurrencyLimit: { min(4, max(1, defaults.integer(forKey: downloadConcurrencyLimitKey))) },

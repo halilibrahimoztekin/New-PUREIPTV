@@ -54,6 +54,7 @@ public struct SettingsFeature {
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
         public var epgAutoRefreshInterval: EPGAutoRefreshInterval = .fourHours
+        public var epgPreviewDelay: EPGPreviewDelay = .short
         public var autoSwitchOnEPGReminder: Bool = false
         public var downloadConcurrencyLimit: Int = 1
         public var hideAdultContent: Bool = false
@@ -172,6 +173,7 @@ public struct SettingsFeature {
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
         case setEPGAutoRefreshInterval(EPGAutoRefreshInterval)
+        case setEPGPreviewDelay(EPGPreviewDelay)
         case setAutoSwitchOnEPGReminder(Bool)
         case setDownloadConcurrencyLimit(Int)
         case setHideAdultContent(Bool)
@@ -293,6 +295,7 @@ public struct SettingsFeature {
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.epgAutoRefreshInterval = settingsClient.epgAutoRefreshInterval()
+                state.epgPreviewDelay = settingsClient.epgPreviewDelay()
                 state.autoSwitchOnEPGReminder = settingsClient.autoSwitchOnEPGReminder()
                 state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
                 state.hideAdultContent = settingsClient.hideAdultContent()
@@ -476,6 +479,10 @@ public struct SettingsFeature {
             case let .setEPGAutoRefreshInterval(interval):
                 state.epgAutoRefreshInterval = interval
                 return .run { _ in settingsClient.setEPGAutoRefreshInterval(interval) }
+
+            case let .setEPGPreviewDelay(delay):
+                state.epgPreviewDelay = delay
+                return .run { _ in settingsClient.setEPGPreviewDelay(delay) }
 
             case let .setAutoSwitchOnEPGReminder(val):
                 state.autoSwitchOnEPGReminder = val

@@ -168,6 +168,14 @@ public struct EPGTimelineView: View {
                     shimmerPhase = 1.0
                 }
             }
+            #if os(tvOS)
+            .onChange(of: focusedChannelId) { _, channelID in
+                let channel = channelID.flatMap { focusedID in
+                    store.channels.first { $0.id == focusedID }
+                }
+                store.send(.channelFocused(channel))
+            }
+            #endif
             .onDisappear {
                 #if os(tvOS)
                     store.send(.onDisappear(

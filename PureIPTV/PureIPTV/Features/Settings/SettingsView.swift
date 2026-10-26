@@ -436,6 +436,20 @@ public struct SettingsView: View {
             }
 
             Section(header: Text(AppStrings.Settings.epgSettings)) {
+                #if os(tvOS)
+                    Picker("Kanal önizlemesi", selection: Binding(
+                        get: { store.epgPreviewDelay },
+                        set: { store.send(.setEPGPreviewDelay($0)) }
+                    )) {
+                        ForEach(EPGPreviewDelay.allCases) { delay in
+                            Text(delay.title).tag(delay)
+                        }
+                    }
+                    Text("Rehberde bir kanalda bekleyince sessiz önizlemeyi başlatır. Kapalı seçeneği odak gezinirken yayın isteği göndermez; kanal menüsünden önizleme yine açılabilir.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                #endif
+
                 #if os(iOS)
                     Toggle(AppStrings.Player.autoSwitchReminder, isOn: Binding(
                         get: { store.autoSwitchOnEPGReminder },

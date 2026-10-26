@@ -75,7 +75,6 @@ public struct EPGTimelineFeature {
         public var isPreviewLoading: Bool = false
         public var previewErrorMessage: String?
         public var focusedChannelID: String?
-        public var isAutoPreviewOnFocusEnabled: Bool = true
 
         public var lastSyncFormatted: String? {
             guard let lastSyncTimestamp else { return nil }
@@ -286,6 +285,7 @@ public struct EPGTimelineFeature {
         case clearSyncStatusMessage
         case closeTapped
         case channelFocused(MediaModels.Item?)
+        case focusedPreviewDelayElapsed(MediaModels.Item)
         case startPreviewDebounce(MediaModels.Item)
         case previewStarted(channelID: String)
         case previewFailed(channelID: String, message: String)
@@ -1066,7 +1066,10 @@ public struct EPGTimelineFeature {
                             epgChannelID: channel.epgChannelID,
                             userAgentOverride: channel.userAgentOverride
                         )
+                        state.focusedChannelID = nil
                         return .concatenate(
+                            .cancel(id: EPGTimelineCancelID.previewDebounce),
+                            .cancel(id: EPGTimelineCancelID.previewPlayback),
                             .run { [previewPlayerClient] _ in
                                 await previewPlayerClient.stopPreview()
                             },
@@ -1081,17 +1084,22 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = false
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
+                state.focusedChannelID = nil
                 let startsMuted = settingsClient.startMuted()
-                return .run { [previewPlayerClient, playerClient] send in
-                    if let streamURL = channel.streamURL,
-                       let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
-                    {
-                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
-                    } else {
-                        await previewPlayerClient.stopPreview()
+                return .concatenate(
+                    .cancel(id: EPGTimelineCancelID.previewDebounce),
+                    .cancel(id: EPGTimelineCancelID.previewPlayback),
+                    .run { [previewPlayerClient, playerClient] send in
+                        if let streamURL = channel.streamURL,
+                           let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
+                        {
+                            await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                        } else {
+                            await previewPlayerClient.stopPreview()
+                        }
+                        await send(.delegate(.playChannel(channel)))
                     }
-                    await send(.delegate(.playChannel(channel)))
-                }
+                )
 
             case .closeTapped:
                 state.activePreviewChannel = nil
@@ -1109,7 +1117,11 @@ public struct EPGTimelineFeature {
 
             case let .channelFocused(channel):
                 state.focusedChannelID = channel?.id
-                guard state.isAutoPreviewOnFocusEnabled, let channel else {
+                guard let channel else {
+                    return .cancel(id: EPGTimelineCancelID.previewDebounce)
+                }
+                let delay = settingsClient.epgPreviewDelay()
+                guard delay != .off else {
                     return .cancel(id: EPGTimelineCancelID.previewDebounce)
                 }
                 if state.activePreviewChannel?.id == channel.id, state.isPiPActive {
@@ -1117,10 +1129,17 @@ public struct EPGTimelineFeature {
                 }
 
                 return .run { [clock] send in
-                    try await clock.sleep(for: .milliseconds(400))
-                    await send(.startPreviewDebounce(channel))
+                    try await clock.sleep(for: .milliseconds(delay.rawValue))
+                    await send(.focusedPreviewDelayElapsed(channel))
                 }
                 .cancellable(id: EPGTimelineCancelID.previewDebounce, cancelInFlight: true)
+
+            case let .focusedPreviewDelayElapsed(channel):
+                guard state.focusedChannelID == channel.id,
+                      settingsClient.epgPreviewDelay() != .off
+                else { return .none }
+                guard state.activePreviewChannel?.id != channel.id || !state.isPiPActive else { return .none }
+                return .send(.startPreviewDebounce(channel))
 
             case let .startPreviewDebounce(channel):
                 state.activePreviewChannel = channel
@@ -1168,16 +1187,21 @@ public struct EPGTimelineFeature {
                 guard let channel = state.activePreviewChannel else { return .none }
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
+                state.focusedChannelID = nil
                 guard let streamURL = channel.streamURL else { return .none }
                 let startsMuted = settingsClient.startMuted()
-                return .run { [previewPlayerClient, playerClient] send in
-                    if let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL) {
-                        await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
-                    } else {
-                        await previewPlayerClient.stopPreview()
+                return .concatenate(
+                    .cancel(id: EPGTimelineCancelID.previewDebounce),
+                    .cancel(id: EPGTimelineCancelID.previewPlayback),
+                    .run { [previewPlayerClient, playerClient] send in
+                        if let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL) {
+                            await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
+                        } else {
+                            await previewPlayerClient.stopPreview()
+                        }
+                        await send(.delegate(.playChannel(channel)))
                     }
-                    await send(.delegate(.playChannel(channel)))
-                }
+                )
 
             case let .togglePiPPreview(channel):
                 if state.activePreviewChannel?.id == channel?.id, state.isPiPActive {
@@ -1192,7 +1216,10 @@ public struct EPGTimelineFeature {
                         }
                     )
                 } else if let channel {
-                    return .send(.startPreviewDebounce(channel))
+                    return .concatenate(
+                        .cancel(id: EPGTimelineCancelID.previewDebounce),
+                        .send(.startPreviewDebounce(channel))
+                    )
                 } else {
                     return .send(.closePiPPreview)
                 }
