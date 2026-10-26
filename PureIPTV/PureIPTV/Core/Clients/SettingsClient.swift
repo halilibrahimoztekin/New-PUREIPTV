@@ -73,9 +73,6 @@ public struct SettingsClient: Sendable {
     public var startMuted: @Sendable () -> Bool = { false }
     public var setStartMuted: @Sendable (Bool) -> Void = { _ in }
 
-    public var hardwareAcceleration: @Sendable () -> Bool = { true }
-    public var setHardwareAcceleration: @Sendable (Bool) -> Void = { _ in }
-
     public var epgTimeShift: @Sendable () -> Int = { 0 }
     public var setEpgTimeShift: @Sendable (Int) -> Void = { _ in }
 
@@ -161,7 +158,6 @@ extension SettingsClient: DependencyKey {
         let autoSelectAlternativeSourceKey = "com.pureiptv.autoSelectFirstAlternativeSource"
         let reverseChannelZappingDirectionKey = "com.pureiptv.reverseChannelZappingDirection"
         let startMutedKey = "com.pureiptv.startMuted"
-        let hwAccelKey = "com.pureiptv.hardwareAcceleration"
         let epgShiftKey = "com.pureiptv.epgTimeShift"
         let autoUpdateEpgKey = "com.pureiptv.autoUpdateEPG"
         let epgAutoRefreshIntervalKey = "com.pureiptv.epgAutoRefreshIntervalHours"
@@ -193,7 +189,6 @@ extension SettingsClient: DependencyKey {
         // Set defaults for some keys
         defaults.register(defaults: [
             autoPlayKey: true,
-            hwAccelKey: true,
             autoUpdateEpgKey: true,
             epgAutoRefreshIntervalKey: EPGAutoRefreshInterval.fourHours.rawValue,
             downloadConcurrencyLimitKey: 1,
@@ -313,8 +308,6 @@ extension SettingsClient: DependencyKey {
             setReverseChannelZappingDirection: { defaults.set($0, forKey: reverseChannelZappingDirectionKey) },
             startMuted: { defaults.bool(forKey: startMutedKey) },
             setStartMuted: { defaults.set($0, forKey: startMutedKey) },
-            hardwareAcceleration: { defaults.bool(forKey: hwAccelKey) },
-            setHardwareAcceleration: { defaults.set($0, forKey: hwAccelKey) },
             epgTimeShift: { defaults.integer(forKey: epgShiftKey) },
             setEpgTimeShift: { defaults.set($0, forKey: epgShiftKey) },
             autoUpdateEPG: { defaults.bool(forKey: autoUpdateEpgKey) },

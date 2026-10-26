@@ -38,6 +38,7 @@ public struct PlayerFeature {
         public static let recordingStatus = "PlayerFeature.recordingStatus"
         public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
         public static let skipMarkerLoad = "PlayerFeature.skipMarkerLoad"
+        public static let deinterlaceModeChange = "PlayerFeature.deinterlaceModeChange"
     }
 
     public struct PlayableItem: Equatable, Sendable {
@@ -143,6 +144,10 @@ public struct PlayerFeature {
 
         public var playerState: PlayerState = .stopped
         public var playbackEngine: PlaybackEngine = .vlc
+        public var deinterlaceMode: DeinterlaceMode = .automatic
+        public var deinterlaceModeRequestID: UUID?
+        public var deinterlaceModeRevision = UUID()
+        public var isDeinterlaceModeKnown = true
         public var isSwitchingPlaybackEngine = false
         public var playbackEngineSwitchID: UUID?
         public var playbackEngineError: String?
@@ -544,6 +549,10 @@ public struct PlayerFeature {
         case scrubThumbnailLoaded(requestID: UUID, itemID: String, data: Data?)
         case cancelScrubThumbnail
         case setPlaybackRate(Float)
+        case setDeinterlaceMode(DeinterlaceMode)
+        case deinterlaceModeApplied(DeinterlaceMode, UUID, String, URL)
+        case deinterlaceModeFailed(UUID, String, URL)
+        case deinterlaceModePlaybackResolved(requested: DeinterlaceMode, applied: DeinterlaceMode?, revision: UUID, itemID: String, streamURL: URL)
         case toggleInfo
         case toggleEPG
         case selectEPGBrowseChannel(PlayableItem)
@@ -629,7 +638,7 @@ public struct PlayerFeature {
         case dismissRecordingStatus
         case closeTapped
         case switchPlaybackEngine(PlaybackEngine)
-        case playbackEngineSwitchFinished(PlaybackEngine, UUID, String)
+        case playbackEngineSwitchFinished(PlaybackEngine, DeinterlaceMode, UUID, String)
         case playbackEngineSwitchFailed(String, UUID, String)
         case listenForPlayerEvents
         case delegate(Delegate)
@@ -897,8 +906,14 @@ public struct PlayerFeature {
             let userAgentOverride = state.item.userAgentOverride
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
             let subtitleTextScale = settingsClient.subtitleTextSize().scale
+            let deinterlaceMode = state.deinterlaceMode
+            let deinterlaceModeRevision = state.deinterlaceModeRevision
+            let itemID = state.item.id
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
+            if !isAlreadyPlaying {
+                state.isDeinterlaceModeKnown = false
+            }
             let profileScope = profileContextClient.snapshot()
 
             let recentEffect: Effect<Action> = isLive ? .run { [item = state.item] send in
@@ -977,7 +992,8 @@ public struct PlayerFeature {
                                 await playerClient.setSubtitleTextScale(subtitleTextScale)
                             } else {
                                 do {
-                                    try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
+                                    let appliedMode = try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
+                                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: url))
                                     await playerClient.setSubtitleTextScale(subtitleTextScale)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
@@ -1291,6 +1307,7 @@ public struct PlayerFeature {
                 state.failedStreamIDs.removeAll()
             }
             state.isReconnecting = true
+            state.isDeinterlaceModeKnown = false
             let url = state.activePlaybackURL
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
@@ -1315,6 +1332,9 @@ public struct PlayerFeature {
             let currentRate = state.playbackRate
             let userAgentOverride = state.item.userAgentOverride
             let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
+            let deinterlaceMode = state.deinterlaceMode
+            let deinterlaceModeRevision = state.deinterlaceModeRevision
+            let itemID = state.item.id
             return .concatenate(
                 .cancel(id: CancelID.statsTimer),
                 .run { send in
@@ -1336,7 +1356,8 @@ public struct PlayerFeature {
 
                         group.addTask {
                             do {
-                                try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds)
+                                let appliedMode = try await playerClient.play(url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
+                                await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: url))
                                 if shouldRestorePosition, position > 0 {
                                     var reachedPlayingState = false
                                     for _ in 0 ..< 200 {
@@ -2102,6 +2123,62 @@ public struct PlayerFeature {
                 print("Failed to set playback rate: \(error)")
             }
 
+        case let .setDeinterlaceMode(mode):
+            guard state.playbackEngine == .vlc, !state.isSwitchingPlaybackEngine else { return .none }
+            state.playbackEngineError = nil
+            let requestID = UUID()
+            state.deinterlaceModeRequestID = requestID
+            state.deinterlaceModeRevision = UUID()
+            state.isDeinterlaceModeKnown = false
+            let itemID = state.item.id
+            let streamURL = state.activePlaybackURL
+            return .run { send in
+                do {
+                    try await playerClient.setDeinterlaceMode(mode)
+                    await send(.deinterlaceModeApplied(mode, requestID, itemID, streamURL))
+                } catch {
+                    await send(.deinterlaceModeFailed(requestID, itemID, streamURL))
+                }
+            }.cancellable(id: CancelID.deinterlaceModeChange, cancelInFlight: true)
+
+        case let .deinterlaceModeApplied(mode, requestID, itemID, streamURL):
+            guard state.deinterlaceModeRequestID == requestID,
+                  state.item.id == itemID,
+                  state.activePlaybackURL == streamURL
+            else { return .none }
+            state.deinterlaceMode = mode
+            state.deinterlaceModeRequestID = nil
+            state.isDeinterlaceModeKnown = true
+            return .none
+
+        case let .deinterlaceModeFailed(requestID, itemID, streamURL):
+            guard state.deinterlaceModeRequestID == requestID,
+                  state.item.id == itemID,
+                  state.activePlaybackURL == streamURL
+            else { return .none }
+            state.deinterlaceModeRequestID = nil
+            state.isDeinterlaceModeKnown = false
+            state.playbackEngineError = "Deinterlace ayarı bu akışta uygulanamadı.".localized
+            return .none
+
+        case let .deinterlaceModePlaybackResolved(requested, applied, revision, itemID, streamURL):
+            guard state.item.id == itemID,
+                  state.activePlaybackURL == streamURL,
+                  state.deinterlaceModeRequestID == nil,
+                  state.deinterlaceModeRevision == revision
+            else { return .none }
+            guard let applied else {
+                state.isDeinterlaceModeKnown = false
+                state.playbackEngineError = AppStrings.Player.deinterlaceUnknown
+                return .none
+            }
+            state.deinterlaceMode = applied
+            state.isDeinterlaceModeKnown = true
+            if applied != requested {
+                state.playbackEngineError = AppStrings.Player.deinterlaceFallback
+            }
+            return .none
+
         case .toggleChannelList:
             state.isChannelListVisible.toggle()
             return .none
@@ -2287,6 +2364,8 @@ public struct PlayerFeature {
             state.activePlaybackURL = newItem.streamURL
             state.item = newItem
             state.playbackEngine = .vlc
+            state.deinterlaceModeRequestID = nil
+            state.isDeinterlaceModeKnown = false
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             state.playbackEngineError = nil
@@ -2339,6 +2418,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.playbackEngineSwitch),
+                .cancel(id: CancelID.deinterlaceModeChange),
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
@@ -2795,10 +2875,15 @@ public struct PlayerFeature {
                 state.position = 0.0
                 state.streamHealthGenerationID = UUID()
                 state.streamHealthMetrics = nil
+                let deinterlaceMode = state.deinterlaceMode
+                let deinterlaceModeRevision = state.deinterlaceModeRevision
+                let itemID = state.item.id
+                state.isDeinterlaceModeKnown = false
                 return .merge(
                     .cancel(id: CancelID.statsTimer),
-                    .run { _ in
-                        try await playerClient.play(catchupURL, userAgentOverride, nil)
+                    .run { send in
+                        let appliedMode = try await playerClient.play(catchupURL, userAgentOverride, nil, deinterlaceMode)
+                        await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: catchupURL))
                     } catch: { error, _ in
                         print("Failed to play catchup: \(error)")
                     }
@@ -2815,10 +2900,15 @@ public struct PlayerFeature {
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
             let userAgentOverride = state.item.userAgentOverride
+            let deinterlaceMode = state.deinterlaceMode
+            let deinterlaceModeRevision = state.deinterlaceModeRevision
+            let itemID = state.item.id
+            state.isDeinterlaceModeKnown = false
             return .merge(
                 .cancel(id: CancelID.statsTimer),
-                .run { _ in
-                    try await playerClient.play(liveURL, userAgentOverride, nil)
+                .run { send in
+                    let appliedMode = try await playerClient.play(liveURL, userAgentOverride, nil, deinterlaceMode)
+                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: liveURL))
                 } catch: { error, _ in
                     print("Failed to return to live stream: \(error)")
                 }
@@ -3367,6 +3457,7 @@ public struct PlayerFeature {
                 url: item.streamURL,
                 userAgentOverride: item.userAgentOverride,
                 networkCachingMilliseconds: BufferProfile.activeNetworkCachingMilliseconds(for: false),
+                deinterlaceMode: state.isDeinterlaceModeKnown ? state.deinterlaceMode : .automatic,
                 positionSeconds: Double(state.currentTime.components.seconds),
                 isPlaying: state.playerState == .playing || state.playerState == .buffering,
                 playbackRate: state.playbackRate,
@@ -3378,21 +3469,27 @@ public struct PlayerFeature {
             )
             return .run { send in
                 do {
-                    try await playerClient.switchEngine(request)
+                    let appliedMode = try await playerClient.switchEngine(request)
                     if target == .vlc {
                         await playerClient.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
                     }
-                    await send(.playbackEngineSwitchFinished(target, requestID, itemID))
+                    await send(.playbackEngineSwitchFinished(target, appliedMode, requestID, itemID))
                 } catch {
                     await send(.playbackEngineSwitchFailed(error.localizedDescription, requestID, itemID))
                 }
             }.cancellable(id: CancelID.playbackEngineSwitch, cancelInFlight: true)
 
-        case let .playbackEngineSwitchFinished(engine, requestID, itemID):
+        case let .playbackEngineSwitchFinished(engine, deinterlaceMode, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             state.playbackEngine = engine
+            let requestedMode = state.deinterlaceMode
+            state.deinterlaceMode = deinterlaceMode
+            state.isDeinterlaceModeKnown = true
+            if engine == .vlc, requestedMode != deinterlaceMode {
+                state.playbackEngineError = AppStrings.Player.deinterlaceFallback
+            }
             state.isPiPSupported = engine == .vlc && pipClient.isPiPSupported()
             if engine == .avPlayer {
                 state.audioTracks = []

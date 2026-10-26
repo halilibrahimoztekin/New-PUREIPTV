@@ -450,6 +450,28 @@
                                             }
                                         }
 
+                                        if store.playbackEngine == .vlc {
+                                            Menu {
+                                                ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                                                    Button {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setDeinterlaceMode(mode))
+                                                    } label: {
+                                                        if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
+                                                            Label(mode.title, systemImage: "checkmark")
+                                                        } else {
+                                                            Text(mode.title)
+                                                        }
+                                                    }
+                                                }
+                                            } label: {
+                                                Label(
+                                                    "\(AppStrings.Player.deinterlace) (\(store.isDeinterlaceModeKnown ? store.deinterlaceMode.title : AppStrings.Player.deinterlaceUnknownShort))",
+                                                    systemImage: "film.stack"
+                                                )
+                                            }
+                                        }
+
                                         // 8. Stream Health & Buffer Diagnostics (Feature #3)
                                         Button {
                                             HapticManager.shared.trigger(.light)

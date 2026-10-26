@@ -183,6 +183,10 @@ public enum AppStrings {
 
     public enum Player {
         public static let playbackEngine = "Oynatma Motoru".localized
+        public static let deinterlace = "Deinterlace".localized
+        public static let deinterlaceFallback = "Bu akışta Deinterlace uygulanamadı; Otomatik kullanılıyor.".localized
+        public static let deinterlaceUnknown = "Deinterlace durumu doğrulanamadı.".localized
+        public static let deinterlaceUnknownShort = "Bilinmiyor".localized
         public static let playbackEngineSwitchFailed = "Oynatma motoru değiştirilemedi.".localized
         public static let originalLanguageFilter = "Orijinal Dil".localized
         public static let originalLanguageUnknownHint = "Dili bilinmeyen içerikler gösterilmeye devam eder.".localized
@@ -544,7 +548,6 @@ public enum AppStrings {
         public static let reverseChannelZappingDirection = "Kanal Gezinme Yönünü Ters Çevir".localized
         public static let reverseChannelZappingDirectionDescription = "Canlı oynatıcıda yukarı ve aşağı yönleriyle önceki veya sonraki kanala geçişi tersine çevirir.".localized
         public static let startMuted = "Kanalları Sessiz Başlat".localized
-        public static let hardwareAcceleration = "Donanım Hızlandırma".localized
         public static let downloadConcurrencyLimit = "Eşzamanlı İndirme Sayısı".localized
         public static let downloadConcurrencyLimitDesc = "Aynı anda indirilecek içerik sayısını sınırlar.".localized
         public static let oledDimming = "OLED Ekran Koruma / Karartma".localized

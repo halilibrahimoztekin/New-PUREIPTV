@@ -271,11 +271,6 @@ public struct SettingsView: View {
                     set: { store.send(.setStartMuted($0)) }
                 ))
 
-                Toggle(AppStrings.Settings.hardwareAcceleration, isOn: Binding(
-                    get: { store.hardwareAcceleration },
-                    set: { store.send(.setHardwareAcceleration($0)) }
-                ))
-
                 #if os(iOS)
                     Picker(AppStrings.Settings.downloadConcurrencyLimit, selection: Binding(
                         get: { store.downloadConcurrencyLimit },

@@ -789,7 +789,7 @@ private struct MultiViewPlayer: View {
             // cannot briefly become audible during decoder startup.
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             let events = await client.events()
-            try await client.play(url, item.userAgentOverride, nil)
+            _ = try await client.play(url, item.userAgentOverride, nil, .automatic)
             await client.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             hasStartedPlayback = true

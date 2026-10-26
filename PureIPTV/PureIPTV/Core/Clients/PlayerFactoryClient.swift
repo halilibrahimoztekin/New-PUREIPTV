@@ -27,7 +27,7 @@ extension PlayerFactoryClient: DependencyKey {
 
             return PlayerClient(
                 vlcPlayer: { box.getPlayer() },
-                play: { url, userAgentOverride, networkCachingMilliseconds in
+                play: { url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode in
                     try await PlaybackAudioSession.setActive(true)
                     try Task.checkCancellation()
                     let player = box.getPlayer()
@@ -40,7 +40,20 @@ extension PlayerFactoryClient: DependencyKey {
                     if let networkCachingMilliseconds, networkCachingMilliseconds > 0 {
                         media.addOption(":network-caching=\(networkCachingMilliseconds)")
                     }
+                    let appliedDeinterlaceMode: DeinterlaceMode?
+                    do {
+                        try player.setDeinterlace(state: deinterlaceMode.rawValue, mode: nil)
+                        appliedDeinterlaceMode = deinterlaceMode
+                    } catch {
+                        do {
+                            try player.setDeinterlace(state: DeinterlaceMode.automatic.rawValue, mode: nil)
+                            appliedDeinterlaceMode = .automatic
+                        } catch {
+                            appliedDeinterlaceMode = nil
+                        }
+                    }
                     try player.play(media)
+                    return appliedDeinterlaceMode
                 },
                 resume: {
                     try await PlaybackAudioSession.setActive(true)

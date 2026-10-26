@@ -1099,6 +1099,29 @@
                         .accessibilityLabel("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)")
                     }
 
+                    if store.playbackEngine == .vlc {
+                        Menu {
+                            ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                                Button {
+                                    onInteraction()
+                                    store.send(.setDeinterlaceMode(mode))
+                                } label: {
+                                    if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
+                                        Label(mode.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(mode.title)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "film.stack")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel("\(AppStrings.Player.deinterlace): \(store.isDeinterlaceModeKnown ? store.deinterlaceMode.title : AppStrings.Player.deinterlaceUnknownShort)")
+                    }
+
                     // Audio Equalizer & Dialogue Enhancer Quick Button (Madde #14)
                     if store.playbackEngine == .vlc {
                         Button {

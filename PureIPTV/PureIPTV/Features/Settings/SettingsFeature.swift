@@ -48,7 +48,6 @@ public struct SettingsFeature {
         public var autoSelectFirstAlternativeSource = false
         public var reverseChannelZappingDirection = false
         public var startMuted: Bool = false
-        public var hardwareAcceleration: Bool = true
         public var isOLEDDimmingEnabled: Bool = true
         public var isChannelNameCleaningEnabled: Bool = true
         public var showTwoLineTVChannelTitles = false
@@ -167,7 +166,6 @@ public struct SettingsFeature {
         case setAutoSelectFirstAlternativeSource(Bool)
         case setReverseChannelZappingDirection(Bool)
         case setStartMuted(Bool)
-        case setHardwareAcceleration(Bool)
         case setOLEDDimmingEnabled(Bool)
         case setChannelNameCleaningEnabled(Bool)
         case setShowTwoLineTVChannelTitles(Bool)
@@ -289,7 +287,6 @@ public struct SettingsFeature {
                 state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
                 state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
                 state.startMuted = settingsClient.startMuted()
-                state.hardwareAcceleration = settingsClient.hardwareAcceleration()
                 state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
                 state.isChannelNameCleaningEnabled = settingsClient.isChannelNameCleaningEnabled()
                 state.showTwoLineTVChannelTitles = settingsClient.showTwoLineTVChannelTitles()
@@ -454,10 +451,6 @@ public struct SettingsFeature {
             case let .setStartMuted(val):
                 state.startMuted = val
                 return .run { _ in settingsClient.setStartMuted(val) }
-
-            case let .setHardwareAcceleration(val):
-                state.hardwareAcceleration = val
-                return .run { _ in settingsClient.setHardwareAcceleration(val) }
 
             case let .setOLEDDimmingEnabled(val):
                 state.isOLEDDimmingEnabled = val

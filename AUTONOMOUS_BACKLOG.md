@@ -1466,8 +1466,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — Altyazı boyutu tercihi kalıcı hale getirildi ve VLC oynatımına bağlandı; desteklenmeyen biçim/engine özelleştirmeleri kullanıcıya açıkça bildiriliyor.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
 
-### 156. [PENDING] Codec Uyumluluğu İçin Güvenli Oynatıcı Tanılama Seçenekleri
+### 156. [IN_PROGRESS] Codec Uyumluluğu İçin Güvenli Oynatıcı Tanılama Seçenekleri
 - **Fırsat:** Donanım çözme, deinterlace ve oynatıcı seçimi ayarlarının hangi akışlarda gerekli olduğunu belirleyip kullanıcıya güvenli, geri alınabilir troubleshooting sun.
+- **İlk kod bulgusu:** `hardwareAcceleration` tercihi yalnızca ayarlarda saklanıyor; Player/VLC çağrılarına uygulanmıyor. Uygulama tüm VLC player’larını tek `VLCInstance` üzerinden kuruyor. SwiftVLC paketi deinterlace için player düzeyinde API sağlıyor; donanım çözme tercihinin bu mimaride güvenle akış başına değiştirilebildiği henüz doğrulanmadı.
+- **Uygulama:** İşlevsiz donanım hızlandırma anahtarı Settings’ten ve kullanılmayan tercihten kaldırıldı. VLC oynatıcı menüsüne oturum/akış başına `Otomatik / Kapalı / Açık` deinterlace seçimi eklendi; playback başlatma ve motor değişimi uygulanan modu feature state’iyle eşliyor. İstenen mod desteklenmezse doğrulanabilen otomatik moda güvenli geri dönüş yapılıyor; otomatik ayarı da doğrulanamazsa kullanıcıya durumun bilinmediği gösteriliyor. Kanal değişiminde eski istekler iptal ediliyor; aynı akıştaki gecikmiş playback yanıtları tercih revizyonu ve stream kimliğiyle eleniyor. AVPlayer’da VLC’ye özgü kontrol gösterilmiyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; tvOS menüsünün focus erişimi, seçim geri bildirimi, kanal değişimi ve eski yanıt yarışları incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnız Xcode build alındı; test, uygulama açılışı veya playback akışı çalıştırılmadı. Çıktıda başka dosyalardaki mevcut Swift 6 concurrency uyarıları görüldü.
+- **Temizlik:** Task’a ait geçici DerivedData (4,035,649,135 bayt), build logları (4,303,320 bayt) ve Xcode ResultBundle (2,662 bayt), açık dosya tutamacı bulunmadığı doğrulanıp silindi. `/private/tmp` kalan içerik toplamı 2,340,511 bayt; bu task’a ait DerivedData/build logu kalmadı. Normal PureIPTV DerivedData’daki paylaşılan `SourcePackages` (1,883,349,932 bayt) ve `SDKExplicitPrecompiledModules` (518,721,544 bayt) korundu; task kaynaklı normal DerivedData çıktısı yoktu. `ContactCleaner` konumlarına erişilmedi.
+- **Durum:** `[DONE]` — İşlevsiz donanım hızlandırma ayarı kaldırıldı; VLC için güvenli ve geri alınabilir deinterlace tanılaması eklendi.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv/
 
 ### 157. [PENDING] Kanal Kartlarında EPG Veri Tazeliğini Gösterme
@@ -1481,3 +1486,56 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 ### 159. [PENDING] Playlist Yenilemesinde Favori Eşleşme Sorunlarını Açıklama
 - **Fırsat:** Yenileme sonrası favori kaybolduğunda kullanıcıya playlist, kanal kimliği veya eşleşme değişimini gösteren kurtarma yolu sun; mevcut profil ve kararlı ID davranışından farkını doğrula.
 - **Kaynak:** https://www.reddit.com/r/appletv/comments/1ndrj7n/what_player_do_you_recommend_for_ip_tv_on_apple_tv/ · https://www.reddit.com/r/uhf_app/comments/1ohjlyu/update_my_experience_with_uhf_for_iptv_on_apple_tv/
+
+## 🔎 Canlı Keşif — 26 Ekim 2026
+- **Kaynak taraması:** UHF, IPTVX, Opus ve Snappier güncel App Store sürüm notları/yorumları ile r/appletv, r/iptv ve ilgili IPTV kullanıcı başlıkları tarandı. Sonraki 10 madde adaydır; uygulamaya özgü kod taraması yapılmadan uygulanmayacak.
+
+### 160. [PENDING] Playlist Yenilemesini Son İyi Katalog Üzerine Atomik Uygulama
+- **Fırsat:** Ağ/parse hatası sırasında mevcut playlist kataloğunu silmeden yeni sonucu doğrula, başarıda tek seferde değiştir ve eski katalog korununca durumu kullanıcıya açıkla.
+- **Keşif sinyali:** Snappier 5.6.7 playlist güncellemesini hızlandırdığını ve güncellemeden önce eski listeyi silmeme davranışını öne çıkarıyor.
+- **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
+
+### 161. [PENDING] İçerik Türüne Göre Kısmi Playlist Yenileme
+- **Fırsat:** Kullanıcının yalnız Live TV, film veya dizileri yenileyip diğer katalogları ve devam eden playback’i etkilememesini sağlayacak dar kapsamlı refresh akışını değerlendir.
+- **Keşif sinyali:** Snappier sürüm notlarında Live TV, Movies ve TV Series için ayrı güncelleme seçeneği yer alıyor.
+- **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
+
+### 162. [PENDING] Spor Programında Kanalı Elle Eşleme
+- **Fırsat:** Spor fikstürü yanlış/boş EPG eşleşmesi yaptığında kullanıcıya arayıp doğru kanalı sabitleme ve yanlış eşleşmeyi geri alma yolu sun.
+- **Keşif sinyali:** Snappier 5.6.7 spor programlarında kanalı arayıp elle atama desteği ekledi.
+- **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
+
+### 163. [PENDING] Yedekten Geri Yükleme Önizlemesi ve Bütünlük Kontrolü
+- **Fırsat:** Restore öncesi yedek kapsamını, sürümünü ve çakışacak tercihleri göster; bozuk/yetersiz arşivde mevcut profil verisini koru ve sonucu doğrula.
+- **Keşif sinyali:** Snappier’in son sürüm notu bazı yedeklerin geri yüklenmemesi hatasını ayrıca düzeltiyor; önceki Apple TV sürümleri Backup & Restore’u öne çıkarmıştı.
+- **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
+
+### 164. [PENDING] Playlist Başına Ebeveyn PIN Kilidi
+- **Fırsat:** Global ebeveyn denetiminden ayrı olarak seçilen playlist’i açmadan önce koru; tvOS’ta PIN girişi, focus ve başarısız deneme davranışını incele.
+- **Keşif sinyali:** Opus 2.0.3 Apple TV’de playlist bazlı ebeveyn kontrolü ve 4 haneli açma PIN’i duyurdu.
+- **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
+
+### 165. [PENDING] Arama Sonucundan Dönüşte Focus ve Konumu Koruma
+- **Fırsat:** tvOS aramasında klavye açılıp kapanırken ve sonuçtan ayrıntı/oynatıcıya gidip dönünce seçili sonucu, görünür sırasını ve focus’u geri yükle.
+- **Keşif sinyali:** Opus son güncellemesinde arama sonuçlarının klavyenin altında sabit kalmasını ve focus restoration’ı özellikle iyileştirdi.
+- **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
+
+### 166. [PENDING] Apple TV’ye Güvenli QR Playlist Aktarımı
+- **Fırsat:** Uzun M3U/Xtream bilgilerini Siri Remote ile yazma yükünü azaltan, tek kullanımlık ve açıkça doğrulanan cihazlar arası transferi güvenlik/credential sızıntısı açısından incele.
+- **Keşif sinyali:** Opus Apple TV kurulum rehberi playlist’i telefonda ekleyip QR ile TV’ye aktarmayı temel kurulum yolu olarak sunuyor.
+- **Kaynak:** https://opusmediaplayer.com/devices/apple-tv/
+
+### 167. [PENDING] Bağlı Cihaz ve Hesap Güvenliği Yönetimi
+- **Fırsat:** Hesaba bağlı cihazları, premium/senkron durumunu ve kaldırma eylemlerini tek yerde anlaşılır sun; mevcut iCloud/Keychain modelinin dışında yeni backend gerekip gerekmediğini önce belirle.
+- **Keşif sinyali:** IPTVX 24.0 hesap ve güvenlik gezinmesini Apple TV menüsünde öne çıkardı; Opus mobil uygulamada bağlı cihaz yönetimi duyurdu.
+- **Kaynak:** https://apps.apple.com/us/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv
+
+### 168. [PENDING] Plex/Emby Kategori ve Sunucu Arama Desteği
+- **Fırsat:** IPTV playlist akışından ayrı olarak media-server kataloğunda sunucu kategorilerini ve server-side search’ü kullanma ihtiyacını değerlendir; ürün kapsamı ve cache davranışını kod tabanında doğrula.
+- **Keşif sinyali:** UHF 1.101.2 Plex/Emby desteği ekledi; kategorileri sunucudan alma ve yerel cache yerine sunucu tarafında aramayı sürüm notlarında belirtiyor.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad
+
+### 169. [PENDING] Live, Film ve Dizi İçin Ortak Favori Kategorileri
+- **Fırsat:** Favori kanalları, filmleri ve dizileri tek tvOS gezinme modelinde ayır; mevcut Live TV named list davranışı ve VOD watchlist/favori işaretleriyle çakışmayı önle.
+- **Keşif sinyali:** Opus 2.0.4 favori canlı kanallar, film ve diziler için ayrı hızlı erişim kategorileri ekledi.
+- **Kaynak:** https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv

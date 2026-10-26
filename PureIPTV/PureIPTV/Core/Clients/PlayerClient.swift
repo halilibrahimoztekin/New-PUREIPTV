@@ -52,12 +52,27 @@ public enum PlaybackEngine: String, CaseIterable, Equatable, Sendable {
     }
 }
 
+public enum DeinterlaceMode: Int, CaseIterable, Equatable, Hashable, Sendable {
+    case automatic = -1
+    case off = 0
+    case on = 1
+
+    public var title: String {
+        switch self {
+        case .automatic: "Otomatik"
+        case .off: "Kapalı"
+        case .on: "Açık"
+        }
+    }
+}
+
 public struct PlaybackEngineSwitchRequest: Sendable {
     public let requestID: UUID
     public let target: PlaybackEngine
     public let url: URL
     public let userAgentOverride: String?
     public let networkCachingMilliseconds: Int?
+    public let deinterlaceMode: DeinterlaceMode
     public let positionSeconds: Double
     public let isPlaying: Bool
     public let playbackRate: Float
@@ -73,6 +88,7 @@ public struct PlaybackEngineSwitchRequest: Sendable {
         url: URL,
         userAgentOverride: String?,
         networkCachingMilliseconds: Int?,
+        deinterlaceMode: DeinterlaceMode,
         positionSeconds: Double,
         isPlaying: Bool,
         playbackRate: Float,
@@ -87,6 +103,7 @@ public struct PlaybackEngineSwitchRequest: Sendable {
         self.url = url
         self.userAgentOverride = userAgentOverride
         self.networkCachingMilliseconds = networkCachingMilliseconds
+        self.deinterlaceMode = deinterlaceMode
         self.positionSeconds = positionSeconds
         self.isPlaying = isPlaying
         self.playbackRate = playbackRate
@@ -182,10 +199,10 @@ public struct PlayerClient: Sendable {
     public var avPlayer: @MainActor @Sendable () -> AVPlayer = { AVPlayer() }
     public var activeEngine: @MainActor @Sendable () -> PlaybackEngine = { .vlc }
     public var isPlaying: @MainActor @Sendable () -> Bool = { false }
-    public var switchEngine: @MainActor @Sendable (_ request: PlaybackEngineSwitchRequest) async throws -> Void = { _ in }
+    public var switchEngine: @MainActor @Sendable (_ request: PlaybackEngineSwitchRequest) async throws -> DeinterlaceMode = { $0.deinterlaceMode }
     public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool) -> Void = { _, _, _ in }
     public var consumePreviewPromotion: @MainActor @Sendable (_ streamURL: URL) -> Bool = { _ in false }
-    public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?, _ networkCachingMilliseconds: Int?) async throws -> Void
+    public var play: @MainActor @Sendable (_ url: URL, _ userAgentOverride: String?, _ networkCachingMilliseconds: Int?, _ deinterlaceMode: DeinterlaceMode) async throws -> DeinterlaceMode?
     public var resume: @MainActor @Sendable () async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
     public var stop: @MainActor @Sendable () async throws -> Void
@@ -195,6 +212,7 @@ public struct PlayerClient: Sendable {
     public var cancelRecordingStopObserver: @MainActor @Sendable () -> Void = {}
     public var setVolume: @MainActor @Sendable (_ volume: Int32) async throws -> Void
     public var setPlaybackRate: @MainActor @Sendable (_ rate: Float) async throws -> Void
+    public var setDeinterlaceMode: @MainActor @Sendable (_ mode: DeinterlaceMode) async throws -> Void = { _ in }
     public var jump: @MainActor @Sendable (_ offsetSeconds: Int64) async throws -> Void
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
@@ -222,6 +240,7 @@ extension PlayerClient: DependencyKey {
         final class Box: @unchecked Sendable {
             @MainActor var player: Player?
             @MainActor var playbackEngine: PlaybackEngine = .vlc
+            @MainActor var deinterlaceMode: DeinterlaceMode? = .automatic
             @MainActor var engineSwitchGeneration = UUID()
             @MainActor var alternateSession: AVPlayerPlaybackSession?
             @MainActor var promotedStreamURL: URL?
@@ -257,7 +276,7 @@ extension PlayerClient: DependencyKey {
             },
             switchEngine: { request in
                 try Task.checkCancellation()
-                guard box.playbackEngine != request.target else { return }
+                guard box.playbackEngine != request.target else { return box.deinterlaceMode ?? request.deinterlaceMode }
                 box.engineSwitchGeneration = request.requestID
                 let vlc = box.getPlayer()
                 let alternate = box.getAlternateSession()
@@ -265,13 +284,14 @@ extension PlayerClient: DependencyKey {
                 let clampedPosition = max(0, request.positionSeconds.isFinite ? request.positionSeconds : 0)
                 let clampedRate = max(0.25, min(4.0, request.playbackRate))
                 let clampedVolume = max(0, min(100, request.volume))
+                var appliedDeinterlaceMode = request.deinterlaceMode
 
                 switch request.target {
                 case .avPlayer:
                     guard request.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true else {
                         throw PlaybackEngineSwitchError.customUserAgentUnsupported
                     }
-                    guard previousEngine == .vlc else { return }
+                    guard previousEngine == .vlc else { return appliedDeinterlaceMode }
                     let actualPosition = vlc.currentTime.components.seconds > 0
                         ? Double(vlc.currentTime.components.seconds)
                         : clampedPosition
@@ -304,7 +324,7 @@ extension PlayerClient: DependencyKey {
                     box.playbackEngine = .avPlayer
 
                 case .vlc:
-                    guard previousEngine == .avPlayer else { return }
+                    guard previousEngine == .avPlayer else { return appliedDeinterlaceMode }
                     let agent = UserAgentManager.shared.resolvedUserAgent
                     let media = try Media(url: request.url, httpUserAgent: agent, httpReferrer: nil)
                     if let caching = request.networkCachingMilliseconds, caching > 0 {
@@ -312,6 +332,13 @@ extension PlayerClient: DependencyKey {
                     }
                     try vlc.setAudioVolume(Volume(0))
                     do {
+                        do {
+                            try vlc.setDeinterlace(state: request.deinterlaceMode.rawValue, mode: nil)
+                        } catch {
+                            try vlc.setDeinterlace(state: DeinterlaceMode.automatic.rawValue, mode: nil)
+                            appliedDeinterlaceMode = .automatic
+                        }
+                        box.deinterlaceMode = appliedDeinterlaceMode
                         guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
                         try vlc.play(media)
                         for _ in 0 ..< 100 where !vlc.isPlaying {
@@ -355,6 +382,7 @@ extension PlayerClient: DependencyKey {
                     alternate.pause()
                     box.playbackEngine = .vlc
                 }
+                return appliedDeinterlaceMode
             },
             adoptPreviewPlayer: { player, streamURL, startsMuted in
                 if let currentPlayer = box.player, currentPlayer !== player {
@@ -372,7 +400,7 @@ extension PlayerClient: DependencyKey {
                 box.promotedStreamURL = nil
                 return true
             },
-            play: { url, userAgentOverride, networkCachingMilliseconds in
+            play: { url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode in
                 box.engineSwitchGeneration = UUID()
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
@@ -380,12 +408,25 @@ extension PlayerClient: DependencyKey {
                     let alternate = box.getAlternateSession()
                     try await alternate.prepare(url: url, positionSeconds: 0, isPlaying: true, playbackRate: 1, volume: 100, audioName: nil, audioLanguage: nil, subtitleName: nil, subtitleLanguage: nil)
                     alternate.setVolume(100)
-                    return
+                    return deinterlaceMode
                 }
                 let player = box.getPlayer()
+                let appliedDeinterlaceMode: DeinterlaceMode?
+                do {
+                    try player.setDeinterlace(state: deinterlaceMode.rawValue, mode: nil)
+                    appliedDeinterlaceMode = deinterlaceMode
+                } catch {
+                    do {
+                        try player.setDeinterlace(state: DeinterlaceMode.automatic.rawValue, mode: nil)
+                        appliedDeinterlaceMode = .automatic
+                    } catch {
+                        appliedDeinterlaceMode = nil
+                    }
+                }
+                box.deinterlaceMode = appliedDeinterlaceMode
                 if box.promotedStreamURL == url, player.isPlaying {
                     box.promotedStreamURL = nil
-                    return
+                    return appliedDeinterlaceMode
                 }
                 box.promotedStreamURL = nil
                 let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -398,6 +439,7 @@ extension PlayerClient: DependencyKey {
                     media.addOption(":network-caching=\(networkCachingMilliseconds)")
                 }
                 try player.play(media)
+                return appliedDeinterlaceMode
             },
             resume: {
                 try await PlaybackAudioSession.setActive(true)
@@ -475,6 +517,11 @@ extension PlayerClient: DependencyKey {
                 } else {
                     try box.getPlayer().setPlaybackRate(PlaybackRate(rate))
                 }
+            },
+            setDeinterlaceMode: { mode in
+                guard box.playbackEngine == .vlc else { return }
+                try box.getPlayer().setDeinterlace(state: mode.rawValue, mode: nil)
+                box.deinterlaceMode = mode
             },
             jump: { offset in
                 if box.playbackEngine == .avPlayer {
@@ -715,7 +762,7 @@ extension PlayerClient: DependencyKey {
 
     public nonisolated static let testValue = PlayerClient(
         vlcPlayer: { fatalError() },
-        play: { _, _, _ in },
+        play: { _, _, _, mode in mode },
         resume: {},
         pause: {},
         stop: {},
