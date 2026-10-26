@@ -1522,9 +1522,13 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Durum:** `[DONE]` — M3U kullanıcıları Live TV, film ve dizi kataloglarını birbirinden bağımsız yenileyebiliyor; başarısız yenileme mevcut içeriği koruyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
-### 162. [PENDING] Spor Programında Kanalı Elle Eşleme
+### 162. [DONE] Spor Programında Kanalı Elle Eşleme
 - **Fırsat:** Spor fikstürü yanlış/boş EPG eşleşmesi yaptığında kullanıcıya arayıp doğru kanalı sabitleme ve yanlış eşleşmeyi geri alma yolu sun.
 - **Keşif sinyali:** Snappier 5.6.7 spor programlarında kanalı arayıp elle atama desteği ekledi.
+- **Uygulama:** Dashboard Spor Programı kartının context menu’süne elle kanal eşleme eklendi. Aranabilir kanal seçici, güncel EPG aday havuzundaki (en fazla 200) Live kanallarını gösteriyor. Eşleme playlist UUID’si, UTC günü ve normalize fikstür başlığıyla UserDefaults’ta saklanıyor; sonraki EPG yenilemeleri otomatik/fuzzy eşleşme yerine kaydedilen kanalı gösteriyor. İstek ve seçim anında playlist, güncel fikstür ve aday kanal doğrulanıyor; in-flight EPG yanıtı en son eşlemeleri yeniden uyguluyor. Seçim yalnız event-channel bağını değiştiriyor; yayına geçiş kart seçilene kadar başlamıyor.
+- **İnceleme ve derleme:** PR Reviewer `[APPROVED]`; eski playlist picker eylemi ve stale EPG yanıtı yarışları incelendi. Generic iOS Release ve generic tvOS Release `xcodebuild` başarılı. Yalnızca compile-only Xcode build alındı; test, uygulama açılışı, simülatör veya playback çalıştırılmadı.
+- **Temizlik:** Görev DerivedData (3,669,536 KiB) ve build logları (6,216 KiB), açık dosya tutamacı olmadığı doğrulandıktan sonra `/private/tmp/PureIPTV162` ile silindi. `/private/tmp` içindeki diğer üst düzey dosyalar DerivedData olarak doğrulanmadığı için korundu. Normal DerivedData’daki paylaşılan `SourcePackages` ve SDK/compiler cache’leri değiştirilmedi. `ContactCleaner` yollarına erişilmedi.
+- **Durum:** `[DONE]` — Spor EPG kartındaki fikstür için kullanıcı arayıp playlist’e özel kanal eşlemesi kaydedebiliyor.
 - **Kaynak:** https://apps.apple.com/gb/app/snappier-iptv/id1579702567?platform=tv
 
 ### 163. [PENDING] Yedekten Geri Yükleme Önizlemesi ve Bütünlük Kontrolü

@@ -4,6 +4,12 @@ struct DashboardEPGEventCard: View {
     @Environment(\.locale) private var locale
     let event: DashboardFeature.EPGEvent
     let onSelectChannel: (MediaModels.Item) -> Void
+    let onChooseChannel: () -> Void
+
+    private var isSportsFixture: Bool {
+        let lowered = event.program.title.lowercased()
+        return lowered.contains(" vs ") || lowered.contains(" v ") || event.program.title.contains(" - ")
+    }
 
     var body: some View {
         Button { onSelectChannel(event.channel) } label: {
@@ -62,6 +68,9 @@ struct DashboardEPGEventCard: View {
         .accessibilityLabel("\(event.program.title), \(event.channel.title), \(event.program.formattedTimeRange(locale: locale))")
         .accessibilityHint(AppStrings.Common.watchNow)
         .contextMenu {
+            if isSportsFixture {
+                Button("Kanala elle eşle", systemImage: "magnifyingglass", action: onChooseChannel)
+            }
             if !event.alternateChannels.isEmpty {
                 ForEach(event.alternateChannels) { channel in
                     Button {
@@ -69,6 +78,39 @@ struct DashboardEPGEventCard: View {
                     } label: {
                         Label(channel.title, systemImage: "play.tv")
                     }
+                }
+            }
+        }
+    }
+}
+
+struct DashboardEPGChannelPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    let channels: [MediaModels.Item]
+    let onSelect: (MediaModels.Item) -> Void
+
+    private var filteredChannels: [MediaModels.Item] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return channels }
+        return channels.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredChannels) { channel in
+                Button {
+                    onSelect(channel)
+                    dismiss()
+                } label: {
+                    Label(channel.title, systemImage: "play.tv")
+                }
+            }
+            .searchable(text: $searchText, prompt: "Kanal ara")
+            .navigationTitle("Spor yayını için kanal seç")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.cancel) { dismiss() }
                 }
             }
         }

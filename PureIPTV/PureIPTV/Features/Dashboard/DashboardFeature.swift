@@ -47,6 +47,7 @@ public struct DashboardFeature {
         public var epgCandidatePlaylistID: UUID?
         public var epgCandidateSourceLoaded = false
         public var epgEvents: [EPGEvent] = []
+        public var manualEPGChannelMappings: [String: String] = [:]
         public var hasLoadedEPGEvents = false
         public var isSportsHubVisible = true
         public var featuredVODs: [MediaModels.Item] = []
@@ -140,6 +141,7 @@ public struct DashboardFeature {
         case dataFailed(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, Error)
         case epgEventsLoaded(playlistID: UUID?, refreshID: UUID, events: [EPGEvent], succeeded: Bool)
         case channelSelected(MediaModels.Item)
+        case mapEPGEventToChannel(playlistID: UUID, event: EPGEvent, channelID: String)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
         case toggleHomeCategoryPin(String)
@@ -204,6 +206,7 @@ public struct DashboardFeature {
                 let profileScope = profileContextClient.snapshot()
                 state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
                 let playlistChanged = state.activePlaylistID != playlistID
+                state.manualEPGChannelMappings = Self.loadManualEPGChannelMappings(playlistID: playlistID)
                 if playlistChanged {
                     state.hasResolvedLiveCatalog = false
                     state.hasLiveContent = true
@@ -423,6 +426,33 @@ public struct DashboardFeature {
                     refreshID: refreshID
                 ))
 
+            case let .mapEPGEventToChannel(playlistID, event, channelID):
+                let fixtureKey = Self.fixtureMappingKey(title: event.program.title, startTime: event.program.startTime)
+                guard state.activePlaylistID == playlistID,
+                      state.epgCandidatePlaylistID == playlistID,
+                      let currentEvent = state.epgEvents.first(where: {
+                          $0.program.id == event.program.id
+                              && Self.fixtureMappingKey(title: $0.program.title, startTime: $0.program.startTime) == fixtureKey
+                      }),
+                      let channel = state.epgCandidateChannels.first(where: { $0.id == channelID && $0.type == .live })
+                else { return .none }
+                guard !fixtureKey.isEmpty else { return .none }
+                let currentFixtureKey = Self.fixtureMappingKey(title: currentEvent.program.title, startTime: currentEvent.program.startTime)
+                state.manualEPGChannelMappings[currentFixtureKey] = channel.id
+                UserDefaults.standard.set(
+                    state.manualEPGChannelMappings,
+                    forKey: Self.manualEPGChannelMappingsStorageKey(playlistID: playlistID)
+                )
+                state.epgEvents = state.epgEvents.map { current in
+                    guard Self.fixtureMappingKey(title: current.program.title, startTime: current.program.startTime) == currentFixtureKey else { return current }
+                    return EPGEvent(
+                        channel: channel,
+                        program: current.program,
+                        alternateChannels: current.alternateChannels.filter { $0.id != channel.id }
+                    )
+                }
+                return .none
+
             case .onDisappear:
                 if state.activeEPGRefreshID != nil {
                     state.hasLoadedEPGEvents = false
@@ -635,6 +665,7 @@ public struct DashboardFeature {
                     && state.featuredSeries.isEmpty
                 state.errorMessage = nil
                 let isAdult = settingsClient.isAdultContent
+                let manualEPGChannelMappings = state.manualEPGChannelMappings
                 let movieCollectionPrefix = "Filmler".localized
                 let seriesCollectionPrefix = "Diziler".localized
                 let liveCollectionPrefix = "Canlı TV".localized
@@ -659,7 +690,7 @@ public struct DashboardFeature {
                     let fetchedSeriesCategories = await seriesCategories
                     guard !Task.isCancelled else { return }
                     let epgCandidateChannels = fetchedChannels.map { channels in
-                        Array((hideAdult ? channels.filter { !isAdult($0.title) } : channels).prefix(80))
+                        Array((hideAdult ? channels.filter { !isAdult($0.title) } : channels).prefix(200))
                     } ?? []
                     var channels: [MediaModels.Item]?
                     var vods: [MediaModels.Item]?
@@ -830,7 +861,8 @@ public struct DashboardFeature {
                         let result = await Self.fetchEPGEvents(
                             config: config,
                             channels: epgCandidateChannels,
-                            iptvClient: iptvClient
+                            iptvClient: iptvClient,
+                            manualChannelMappings: manualEPGChannelMappings
                         )
                         guard !Task.isCancelled else { return }
                         await send(.epgEventsLoaded(
@@ -893,11 +925,13 @@ public struct DashboardFeature {
                     state.epgCandidatePlaylistID == playlistID,
                     state.epgCandidateSourceLoaded
                 else { return .none }
+                let manualEPGChannelMappings = state.manualEPGChannelMappings
                 return .run { send in
                     let result = await Self.fetchEPGEvents(
                         config: config,
                         channels: channels,
-                        iptvClient: iptvClient
+                        iptvClient: iptvClient,
+                        manualChannelMappings: manualEPGChannelMappings
                     )
                     guard !Task.isCancelled else { return }
                     await send(.epgEventsLoaded(
@@ -915,7 +949,11 @@ public struct DashboardFeature {
                     state.activeEPGRefreshID == refreshID
                 else { return .none }
                 state.activeEPGRefreshID = nil
-                state.epgEvents = events
+                state.epgEvents = Self.applyingManualChannelMappings(
+                    events,
+                    channels: state.epgCandidateChannels,
+                    mappings: state.manualEPGChannelMappings
+                )
                 state.hasLoadedEPGEvents = succeeded
                 return .none
 
@@ -1406,7 +1444,8 @@ public struct DashboardFeature {
     private nonisolated static func fetchEPGEvents(
         config: PlaylistConfig,
         channels: [MediaModels.Item],
-        iptvClient: IPTVClient
+        iptvClient: IPTVClient,
+        manualChannelMappings: [String: String]
     ) async -> (events: [EPGEvent], succeeded: Bool) {
         guard !Task.isCancelled else { return ([], false) }
         let eligibleChannels = Array(channels.filter { channel in
@@ -1469,15 +1508,20 @@ public struct DashboardFeature {
                 FuzzySearchEngine.normalize($0.program.title)
             }
             let linkedEvents = events.map { event in
+                let fixtureKey = fixtureMappingKey(title: event.program.title, startTime: event.program.startTime)
+                let mappedChannel = manualChannelMappings[fixtureKey].flatMap { mappedID in
+                    channels.first(where: { $0.id == mappedID })
+                }
+                let channel = mappedChannel ?? event.channel
                 let alternatives = (channelsByFixture[FuzzySearchEngine.normalize(event.program.title)] ?? [])
                     .map(\.channel)
-                    .filter { $0.id != event.channel.id }
+                    .filter { $0.id != channel.id }
                     .reduce(into: [MediaModels.Item]()) { result, channel in
                         if !result.contains(where: { $0.id == channel.id }) {
                             result.append(channel)
                         }
                     }
-                return EPGEvent(channel: event.channel, program: event.program, alternateChannels: alternatives)
+                return EPGEvent(channel: channel, program: event.program, alternateChannels: alternatives)
             }
             return (linkedEvents.sorted { $0.program.startTime < $1.program.startTime }.prefix(16).map(\.self), succeeded)
         }
@@ -1486,5 +1530,39 @@ public struct DashboardFeature {
     private nonisolated static func isSportsFixtureTitle(_ title: String) -> Bool {
         let lowered = title.lowercased()
         return lowered.contains(" vs ") || lowered.contains(" v ") || title.contains(" - ")
+    }
+
+    private nonisolated static func fixtureMappingKey(title: String, startTime: Date) -> String {
+        let normalizedTitle = FuzzySearchEngine.normalize(title)
+        guard !normalizedTitle.isEmpty else { return "" }
+        let utcDay = Int(startTime.timeIntervalSince1970 / 86400)
+        return "\(utcDay)::\(normalizedTitle)"
+    }
+
+    private nonisolated static func applyingManualChannelMappings(
+        _ events: [EPGEvent],
+        channels: [MediaModels.Item],
+        mappings: [String: String]
+    ) -> [EPGEvent] {
+        events.map { event in
+            let fixtureKey = fixtureMappingKey(title: event.program.title, startTime: event.program.startTime)
+            guard let mappedID = mappings[fixtureKey],
+                  let channel = channels.first(where: { $0.id == mappedID && $0.type == .live })
+            else { return event }
+            return EPGEvent(
+                channel: channel,
+                program: event.program,
+                alternateChannels: event.alternateChannels.filter { $0.id != channel.id }
+            )
+        }
+    }
+
+    private static func manualEPGChannelMappingsStorageKey(playlistID: UUID) -> String {
+        "Dashboard.manualEPGChannelMappings.\(playlistID.uuidString.lowercased())"
+    }
+
+    private static func loadManualEPGChannelMappings(playlistID: UUID?) -> [String: String] {
+        guard let playlistID else { return [:] }
+        return UserDefaults.standard.dictionary(forKey: manualEPGChannelMappingsStorageKey(playlistID: playlistID)) as? [String: String] ?? [:]
     }
 }

@@ -10,6 +10,8 @@
         let config: PlaylistConfig
         @State private var isHomeSettingsPresented = false
         @State private var isCategoryManagementPresented = false
+        @State private var eventForChannelMapping: DashboardFeature.EPGEvent?
+        @State private var playlistIDForChannelMapping: UUID?
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -118,6 +120,14 @@
             .sheet(isPresented: $isCategoryManagementPresented) {
                 HomeCategoryPinManagementView(store: store)
             }
+            .sheet(item: $eventForChannelMapping, onDismiss: {
+                playlistIDForChannelMapping = nil
+            }) { event in
+                DashboardEPGChannelPicker(channels: store.epgCandidateChannels) { channel in
+                    guard let playlistID = playlistIDForChannelMapping else { return }
+                    store.send(.mapEPGEventToChannel(playlistID: playlistID, event: event, channelID: channel.id))
+                }
+            }
         }
 
         @ViewBuilder
@@ -193,8 +203,16 @@
                 if store.isSportsHubVisible, !store.epgEvents.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
                         ForEach(store.epgEvents) { event in
-                            DashboardEPGEventCard(event: event) { store.send(.channelSelected($0)) }
-                                .frame(width: 380)
+                            DashboardEPGEventCard(
+                                event: event,
+                                onSelectChannel: { store.send(.channelSelected($0)) },
+                                onChooseChannel: {
+                                    guard let playlistID = store.activePlaylistID else { return }
+                                    playlistIDForChannelMapping = playlistID
+                                    eventForChannelMapping = event
+                                }
+                            )
+                            .frame(width: 380)
                         }
                     }
                 }
