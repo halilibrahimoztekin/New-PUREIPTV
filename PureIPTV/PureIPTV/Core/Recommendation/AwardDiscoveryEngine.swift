@@ -11,7 +11,7 @@ public enum AwardDiscoveryEngine: Sendable {
             item.id
         }
 
-        public init(item: MediaModels.Item, recognitionCount: Int) {
+        public nonisolated init(item: MediaModels.Item, recognitionCount: Int) {
             self.item = item
             self.recognitionCount = recognitionCount
         }
@@ -21,7 +21,7 @@ public enum AwardDiscoveryEngine: Sendable {
         public let winners: [MovieEntry]
         public let nominees: [MovieEntry]
 
-        public init(winners: [MovieEntry], nominees: [MovieEntry]) {
+        public nonisolated init(winners: [MovieEntry], nominees: [MovieEntry]) {
             self.winners = winners
             self.nominees = nominees
         }
@@ -55,12 +55,12 @@ public enum AwardDiscoveryEngine: Sendable {
             return Shelves(winners: [], nominees: [])
         }
 
-        guard let recognitions = try? await awardClient.fetchRecognitions(matched.map(\.movie.id)) else {
+        guard let recognitions = try? await awardClient.fetchRecognitions(matched.map(\.movie.id), .movie) else {
             return Shelves(winners: [], nominees: [])
         }
         guard !Task.isCancelled else { return Shelves(winners: [], nominees: []) }
 
-        let recognitionsByMovie = Dictionary(grouping: recognitions, by: \.tmdbMovieID)
+        let recognitionsByMovie = Dictionary(grouping: recognitions, by: \.tmdbID)
         let winners = entries(for: .winner, matched: matched, recognitions: recognitionsByMovie)
         let nominees = entries(for: .nominee, matched: matched, recognitions: recognitionsByMovie)
         return Shelves(winners: winners, nominees: nominees)

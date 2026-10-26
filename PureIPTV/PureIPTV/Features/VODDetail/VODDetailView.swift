@@ -577,6 +577,11 @@ public struct VODDetailView: View {
                     .padding(.horizontal, 24)
                 }
 
+                if !store.awardRecognitions.isEmpty {
+                    AwardRecognitionMetadataView(recognitions: store.awardRecognitions)
+                        .padding(.horizontal, 24)
+                }
+
                 // Oyuncu Kadrosu (Cast & Crew Carousel)
                 if let cast = store.tmdbMovie?.credits?.cast, !cast.isEmpty {
                     VStack(alignment: .leading, spacing: 14) {
@@ -1331,6 +1336,11 @@ public struct VODDetailView: View {
                                     RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(width: 400, height: 22)
                                 }
                                 .shimmeringPlaceholder(isLoading: true)
+                            }
+
+                            if !store.awardRecognitions.isEmpty {
+                                AwardRecognitionMetadataView(recognitions: store.awardRecognitions)
+                                    .padding(.top, 8)
                             }
 
                             if store.availableVersions.count > 1 {

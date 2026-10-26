@@ -18,6 +18,7 @@ public struct SeriesDetailFeature {
         public var allEpisodes: [String: [DetailModels.Episode]] = [:] // Keyed by season number string
         public var nextUpEpisode: DetailModels.Episode?
         public var tmdbTV: TMDBTVDetailsDTO?
+        public var awardRecognitions: [WikidataAwardClient.Recognition] = []
         public var tmdbSearchResults: [TMDBMovieSearchResultDTO] = []
         public var selectedTMDBMatchID: Int?
         public var hasManualTMDBOverride = false
@@ -152,6 +153,7 @@ public struct SeriesDetailFeature {
         case infoResponse(Result<(info: DetailModels.Info, seasons: [DetailModels.Season], allEpisodes: [String: [DetailModels.Episode]]), Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBTVDetailsDTO, Error>)
+        case awardRecognitionsResponse(tmdbID: Int, result: Result<[WikidataAwardClient.Recognition], Error>)
         case tmdbOverrideLoaded(Int?)
         case manualTMDBSearch(String)
         case manualTMDBSearchResponse(UUID, Result<TMDBSearchResponseDTO, Error>)
@@ -195,7 +197,12 @@ public struct SeriesDetailFeature {
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.tmdbMatchOverrideClient) var tmdbMatchOverrideClient
     @Dependency(\.downloadClient) var downloadClient
+    @Dependency(\.wikidataAwardClient) var wikidataAwardClient
     @Dependency(\.dismiss) var dismiss
+
+    private nonisolated enum CancelID: Hashable, Sendable {
+        case awardRecognitions
+    }
 
     public init() {}
 
@@ -205,6 +212,7 @@ public struct SeriesDetailFeature {
         let profileContextClient = profileContextClient
         let cloudSyncClient = cloudSyncClient
         let tmdbMatchOverrideClient = tmdbMatchOverrideClient
+        let wikidataAwardClient = wikidataAwardClient
 
         Reduce { state, action in
             switch action {
@@ -342,9 +350,26 @@ public struct SeriesDetailFeature {
                 print("TMDB details fetched for TV: \(tvDetails.name ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbTV = tvDetails
+                state.awardRecognitions = []
                 if !state.seasons.isEmpty {
                     state.isLoading = false
                 }
+                return .run { send in
+                    await send(.awardRecognitionsResponse(
+                        tmdbID: tvDetails.id,
+                        result: Result { try await wikidataAwardClient.fetchRecognitions([tvDetails.id], .series) }
+                    ))
+                }
+                .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
+
+            case let .awardRecognitionsResponse(tmdbID, .success(recognitions)):
+                guard state.tmdbTV?.id == tmdbID else { return .none }
+                state.awardRecognitions = recognitions.filter { $0.tmdbID == tmdbID }
+                return .none
+
+            case let .awardRecognitionsResponse(tmdbID, .failure):
+                guard state.tmdbTV?.id == tmdbID else { return .none }
+                state.awardRecognitions = []
                 return .none
 
             case let .tmdbSearchResponse(.failure(error)):
@@ -360,10 +385,12 @@ public struct SeriesDetailFeature {
                 guard !state.hasManualTMDBOverride else { return .none }
                 print("TMDB fetch details failed for TV: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                state.tmdbTV = nil
+                state.awardRecognitions = []
                 if !state.seasons.isEmpty {
                     state.isLoading = false
                 }
-                return .none
+                return .cancel(id: CancelID.awardRecognitions)
 
             case let .tmdbOverrideLoaded(tmdbID):
                 guard !state.didUserChangeTMDBMatch else { return .none }
@@ -416,12 +443,14 @@ public struct SeriesDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = tmdbID
                 state.tmdbTV = nil
+                state.awardRecognitions = []
                 state.isTMDBLoading = true
                 let itemID = state.series.id
                 let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
                 let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
                 state.lastTMDBMatchWriteRevision = revision
                 return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
                     .run { _ in await tmdbMatchOverrideClient.save(tmdbID, playlistID, .series, itemID, cloudSyncEnabled, revision) },
                     .run { send in
                         await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchTVDetails(tmdbID) }))
@@ -431,16 +460,24 @@ public struct SeriesDetailFeature {
             case let .manualTMDBDetailsResponse(tmdbID, .success(details)):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.tmdbTV = details
+                state.awardRecognitions = []
                 state.isTMDBLoading = false
                 state.isLoading = false
                 state.isTMDBMatchPickerPresented = false
-                return .none
+                return .run { send in
+                    await send(.awardRecognitionsResponse(
+                        tmdbID: details.id,
+                        result: Result { try await wikidataAwardClient.fetchRecognitions([details.id], .series) }
+                    ))
+                }
+                .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
 
             case let .manualTMDBDetailsResponse(tmdbID, .failure):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.isTMDBLoading = false
                 state.tmdbTV = nil
-                return .none
+                state.awardRecognitions = []
+                return .cancel(id: CancelID.awardRecognitions)
 
             case .clearTMDBMatchOverride:
                 guard let playlistID = state.config.playlistID else { return .none }
@@ -452,9 +489,11 @@ public struct SeriesDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = nil
                 state.tmdbTV = nil
+                state.awardRecognitions = []
                 state.isTMDBMatchPickerPresented = false
                 let query = state.series.title.cleanedForTMDBSearch()
                 return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
                     .run { _ in await tmdbMatchOverrideClient.save(nil, playlistID, .series, itemID, cloudSyncEnabled, revision) },
                     .run { send in await send(.tmdbSearchResponse(Result { try await tmdbClient.searchTV(query) })) }
                 )
@@ -738,11 +777,14 @@ public struct SeriesDetailFeature {
                 }
 
             case .closeTapped:
-                return .send(.delegate(.close))
+                return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
+                    .send(.delegate(.close))
+                )
 
             case .viewDidDisappear:
                 state.pendingEpisodeReveal = nil
-                return .none
+                return .cancel(id: CancelID.awardRecognitions)
 
             case .delegate:
                 return .none

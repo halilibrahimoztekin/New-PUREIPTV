@@ -13,6 +13,7 @@ public struct VODDetailFeature {
         // API Data
         public var info: DetailModels.Info?
         public var tmdbMovie: TMDBMovieDetailsDTO?
+        public var awardRecognitions: [WikidataAwardClient.Recognition] = []
         public var tmdbSearchResults: [TMDBMovieSearchResultDTO] = []
         public var selectedTMDBMatchID: Int?
         public var hasManualTMDBOverride = false
@@ -94,6 +95,7 @@ public struct VODDetailFeature {
         case infoResponse(Result<DetailModels.Info, Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBMovieDetailsDTO, Error>)
+        case awardRecognitionsResponse(tmdbID: Int, result: Result<[WikidataAwardClient.Recognition], Error>)
         case tmdbOverrideLoaded(Int?)
         case manualTMDBSearch(String)
         case manualTMDBSearchResponse(UUID, Result<TMDBSearchResponseDTO, Error>)
@@ -141,6 +143,7 @@ public struct VODDetailFeature {
     private nonisolated enum CancelID: Hashable, Sendable {
         case autoPlayTrailer
         case versionHistory
+        case awardRecognitions
     }
 
     @Injected(\.iptvClient) var iptvClient
@@ -150,6 +153,7 @@ public struct VODDetailFeature {
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.tmdbMatchOverrideClient) var tmdbMatchOverrideClient
     @Dependency(\.downloadClient) var downloadClient
+    @Dependency(\.wikidataAwardClient) var wikidataAwardClient
     @Dependency(\.dismiss) var dismiss
 
     public init() {}
@@ -263,6 +267,7 @@ public struct VODDetailFeature {
         let profileContextClient = profileContextClient
         let tmdbMatchOverrideClient = tmdbMatchOverrideClient
         let cloudSyncClient = cloudSyncClient
+        let wikidataAwardClient = wikidataAwardClient
 
         Reduce { state, action in
             switch action {
@@ -397,14 +402,22 @@ public struct VODDetailFeature {
                 print("TMDB details fetched for VOD: \(movieDetails.title ?? "")")
                 state.isTMDBLoading = false
                 state.tmdbMovie = movieDetails
+                state.awardRecognitions = []
                 if state.info != nil {
                     state.isLoading = false
                 }
+                let awardEffect: Effect<Action> = .run { send in
+                    await send(.awardRecognitionsResponse(
+                        tmdbID: movieDetails.id,
+                        result: Result { try await wikidataAwardClient.fetchRecognitions([movieDetails.id], .movie) }
+                    ))
+                }
+                .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
                 let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = movieDetails.similar?.results, versionId = state.selectedVersionId] send in
                     let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
                     await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
                 }
-                var effects: [Effect<Action>] = [matchingEffect]
+                var effects: [Effect<Action>] = [matchingEffect, awardEffect]
                 if state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled {
                     effects.append(.run { send in
                         try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -429,10 +442,22 @@ public struct VODDetailFeature {
                 guard !state.hasManualTMDBOverride else { return .none }
                 print("TMDB fetch details failed: \(error.localizedDescription)")
                 state.isTMDBLoading = false
+                state.tmdbMovie = nil
+                state.awardRecognitions = []
                 if state.info != nil {
                     state.isLoading = false
                 }
-                return .none // Fail silently for tmdb details
+                return .cancel(id: CancelID.awardRecognitions) // Fail silently for tmdb details
+
+            case let .awardRecognitionsResponse(tmdbID, .success(recognitions)):
+                guard state.tmdbMovie?.id == tmdbID else { return .none }
+                state.awardRecognitions = recognitions.filter { $0.tmdbID == tmdbID }
+                return .none
+
+            case let .awardRecognitionsResponse(tmdbID, .failure):
+                guard state.tmdbMovie?.id == tmdbID else { return .none }
+                state.awardRecognitions = []
+                return .none
 
             case let .tmdbOverrideLoaded(tmdbID):
                 guard !state.didUserChangeTMDBMatch else { return .none }
@@ -485,12 +510,14 @@ public struct VODDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = tmdbID
                 state.tmdbMovie = nil
+                state.awardRecognitions = []
                 state.isTMDBLoading = true
                 let itemID = state.vod.id
                 let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
                 let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
                 state.lastTMDBMatchWriteRevision = revision
                 return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
                     .run { _ in await tmdbMatchOverrideClient.save(tmdbID, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
                     .run { send in
                         await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchMovieDetails(tmdbID) }))
@@ -500,16 +527,24 @@ public struct VODDetailFeature {
             case let .manualTMDBDetailsResponse(tmdbID, .success(details)):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.tmdbMovie = details
+                state.awardRecognitions = []
                 state.isTMDBLoading = false
                 state.isLoading = false
                 state.isTMDBMatchPickerPresented = false
-                return .none
+                return .run { send in
+                    await send(.awardRecognitionsResponse(
+                        tmdbID: details.id,
+                        result: Result { try await wikidataAwardClient.fetchRecognitions([details.id], .movie) }
+                    ))
+                }
+                .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
 
             case let .manualTMDBDetailsResponse(tmdbID, .failure):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.isTMDBLoading = false
                 state.tmdbMovie = nil
-                return .none
+                state.awardRecognitions = []
+                return .cancel(id: CancelID.awardRecognitions)
 
             case .clearTMDBMatchOverride:
                 guard let playlistID = state.config.playlistID else { return .none }
@@ -521,9 +556,11 @@ public struct VODDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = nil
                 state.tmdbMovie = nil
+                state.awardRecognitions = []
                 state.isTMDBMatchPickerPresented = false
                 let query = state.vod.title.cleanedForTMDBSearch()
                 return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
                     .run { _ in await tmdbMatchOverrideClient.save(nil, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
                     .run { send in await send(.tmdbSearchResponse(Result { try await tmdbClient.searchMovie(query) })) }
                 )
@@ -772,6 +809,7 @@ public struct VODDetailFeature {
                 return .merge(
                     .cancel(id: CancelID.autoPlayTrailer),
                     .cancel(id: CancelID.versionHistory),
+                    .cancel(id: CancelID.awardRecognitions),
                     .send(.delegate(.close))
                 )
 
@@ -779,7 +817,8 @@ public struct VODDetailFeature {
                 state.isAutoPlayTrailerActive = false
                 return .merge(
                     .cancel(id: CancelID.autoPlayTrailer),
-                    .cancel(id: CancelID.versionHistory)
+                    .cancel(id: CancelID.versionHistory),
+                    .cancel(id: CancelID.awardRecognitions)
                 )
 
             case .delegate:

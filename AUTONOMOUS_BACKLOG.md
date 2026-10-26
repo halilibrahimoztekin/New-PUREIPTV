@@ -1730,10 +1730,14 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Derleme:** Son iOS ve tvOS generic Release compile-only Xcode build’leri exit code 0 / `BUILD SUCCEEDED`. Yeni bildirim sabitinin actor-isolation uyarısı `nonisolated` ile giderildi; projedeki önceden var olan Swift concurrency uyarıları sürüyor. Test, simülatör, uygulama açılışı veya UI akışı çalıştırılmadı.
 - **Temizlik:** `lsof +D /private/tmp/PureIPTV181-20261027` temizdi. Yalnız bu task’ın `/private/tmp/PureIPTV181-20261027/DerivedData` çıktısı (**4,131,836 KiB**), altı derleme logu (**15,308 KiB**) ve boş task PackageCache (**0 KiB**) silindi; task klasörü kaldırıldı. Build’ler açıkça bu temp DerivedData yolunu kullandı, normal DerivedData’da task kaynaklı Build/Index oluşmadı. Paylaşılan `SourcePackages` (**1,873,636 KiB**) korundu.
 
-### 182. [PENDING] Film ve Dizi Detaylarında Ödül Bilgisinin Kaynağını Belirtme
+### 182. [DONE] Film ve Dizi Detaylarında Ödül Bilgisinin Kaynağını Belirtme
 - **Fırsat:** Sağlayıcı metadata’sında bulunan ödül/adaylık bilgisini detay ekranında göstermek; kaynakta yoksa alanı gizle ve kullanıcı puanı gibi sunma.
 - **Keşif:** IPTVX v25 sürüm notları detay sayfalarında mevcutsa ödül ve takdir bilgisini duyuruyor; kullanıcı açısından güven, kaynağın ve güncelliğin açık olmasına bağlı.
-- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+- **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · https://www.wikidata.org/wiki/Property:P4947 · https://www.wikidata.org/wiki/Property:P4983 · https://www.wikidata.org/wiki/Property:P166 · https://www.wikidata.org/wiki/Property:P1411
+- **Uygulama:** `WikidataAwardClient` film TMDb ID’si (`P4947`) ve dizi TMDb TV ID’si (`P4983`) ile tam kimlik eşleştirmesi yapıyor; kazanan (`P166`) ve adaylık (`P1411`) sayısını döndürüyor. Film/dizi detay reducer’ları yalnız güncel TMDb eşleşmesi için sorguluyor, stale sonuçları reddediyor ve eşleşme değişince/ekran kapanınca isteği iptal ediyor. iOS ve tvOS detaylarında kazanç/adaylık sayısı, Wikidata kaynak adıyla birlikte gösteriliyor; veri gelmez veya istek başarısız olursa bölüm gizleniyor. Yeni katalog metinlerine dokunmadan mevcut yerelleştirilmiş sayı metinleri kullanıldı.
+- **PR Reviewer:** `[APPROVED]` — film/dizi kimlik özellikleri, kaynak etiketi, boş/hatalı veride gösterimi gizleme, stale-response koruması, iptal ve erişilebilir statik görünüm uygun bulundu.
+- **Derleme:** Son generic Release iOS ve tvOS compile-only Xcode build’leri exit code 0 / `BUILD SUCCEEDED`; yeni ödül client/engine/detail/view dosyalarında uyarı yok. Test, simülatör, uygulama açılışı veya UI akışı çalıştırılmadı.
+- **Temizlik:** `lsof +D /private/tmp/PureIPTV182-20261027` temizdi. Yalnız bu task’ın DerivedData’sı (**4,101,260 KiB**), üç build logu (**7,668 KiB**) ve boş task PackageCache (**0 KiB**) silindi; task klasörü kaldırıldı. Normal DerivedData’da task kaynaklı Build/Index oluşmadı. Paylaşılan `SourcePackages` (**1,873,636 KiB**) korundu.
 
 ### 183. [PENDING] Evrensel Aramada İçerik Türü ve Kişi Filtreleri
 - **Fırsat:** Film, dizi, oyuncu, canlı kanal ve program sonuçlarını tek arama ekranında seçilebilir filtrelerle daralt; tvOS filtre odak geri dönüşünü koru.

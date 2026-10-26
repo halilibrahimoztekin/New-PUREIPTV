@@ -412,6 +412,11 @@
                     .padding(.horizontal, 24)
                 }
 
+                if !store.awardRecognitions.isEmpty {
+                    AwardRecognitionMetadataView(recognitions: store.awardRecognitions)
+                        .padding(.horizontal, 24)
+                }
+
                 // Seasons Header
                 if !store.seasons.isEmpty {
                     VStack(alignment: .leading, spacing: 14) {

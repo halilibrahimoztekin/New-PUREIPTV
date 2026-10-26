@@ -2,42 +2,51 @@ import ComposableArchitecture
 @preconcurrency import Foundation
 
 public struct WikidataAwardClient: Sendable {
+    public enum ContentKind: Equatable, Sendable {
+        case movie
+        case series
+    }
+
     public enum RecognitionKind: String, Equatable, Sendable {
         case winner
         case nominee
     }
 
     public struct Recognition: Equatable, Sendable {
-        public let tmdbMovieID: Int
+        public let tmdbID: Int
         public let recognitionCount: Int
         public let kind: RecognitionKind
 
-        public init(tmdbMovieID: Int, recognitionCount: Int, kind: RecognitionKind) {
-            self.tmdbMovieID = tmdbMovieID
+        public nonisolated init(tmdbID: Int, recognitionCount: Int, kind: RecognitionKind) {
+            self.tmdbID = tmdbID
             self.recognitionCount = recognitionCount
             self.kind = kind
         }
     }
 
-    public var fetchRecognitions: @Sendable (_ tmdbMovieIDs: [Int]) async throws -> [Recognition]
+    public var fetchRecognitions: @Sendable (_ tmdbIDs: [Int], _ contentKind: ContentKind) async throws -> [Recognition]
 }
 
 extension WikidataAwardClient: DependencyKey {
     public nonisolated static let liveValue: WikidataAwardClient = .init(
-        fetchRecognitions: { tmdbMovieIDs in
-            let ids = Array(Set(tmdbMovieIDs.filter { $0 > 0 }).prefix(40))
+        fetchRecognitions: { tmdbIDs, contentKind in
+            let ids = Array(Set(tmdbIDs.filter { $0 > 0 }).prefix(40))
             guard !ids.isEmpty else { return [] }
 
             let idValues = ids.map { "\"\($0)\"" }.joined(separator: " ")
+            let tmdbProperty = switch contentKind {
+            case .movie: "P4947"
+            case .series: "P4983"
+            }
             let query = """
             SELECT ?tmdbID ?kind (COUNT(DISTINCT ?award) AS ?awardCount) WHERE {
               VALUES ?tmdbID { \(idValues) }
-              ?movie wdt:P4947 ?tmdbID.
+              ?work wdt:\(tmdbProperty) ?tmdbID.
               {
-                ?movie wdt:P166 ?award.
+                ?work wdt:P166 ?award.
                 BIND("winner" AS ?kind)
               } UNION {
-                ?movie wdt:P1411 ?award.
+                ?work wdt:P1411 ?award.
                 BIND("nominee" AS ?kind)
               }
             }
@@ -69,12 +78,12 @@ extension WikidataAwardClient: DependencyKey {
             let decoded = try JSONDecoder().decode(SPARQLResponse.self, from: data)
             return decoded.results.bindings.compactMap { binding in
                 guard
-                    let tmdbMovieID = Int(binding.tmdbID.value),
+                    let tmdbID = Int(binding.tmdbID.value),
                     let kind = RecognitionKind(rawValue: binding.kind.value),
                     let recognitionCount = Int(binding.awardCount.value), recognitionCount > 0
                 else { return nil }
                 return Recognition(
-                    tmdbMovieID: tmdbMovieID,
+                    tmdbID: tmdbID,
                     recognitionCount: recognitionCount,
                     kind: kind
                 )

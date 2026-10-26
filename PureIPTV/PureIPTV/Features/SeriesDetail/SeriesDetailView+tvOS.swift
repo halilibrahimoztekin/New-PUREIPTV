@@ -290,6 +290,11 @@
                     .shimmeringPlaceholder(isLoading: true)
                 }
 
+                if !store.awardRecognitions.isEmpty {
+                    AwardRecognitionMetadataView(recognitions: store.awardRecognitions)
+                        .padding(.horizontal, 80)
+                }
+
                 // Next Up Episode Auto-Cue Banner (if available)
                 if let nextEp = store.nextUpEpisode {
                     VStack(alignment: .leading, spacing: 16) {
