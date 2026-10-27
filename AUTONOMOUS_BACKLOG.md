@@ -1815,7 +1815,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** Görev öncesi `/private/tmp` **2,360 KiB** idi ve güvenle silinebilecek DerivedData yoktu. Bu görevin `/private/tmp/PureIPTV189-20261027` build ağacı **5,904,852 KiB** ve üç başarısız build’in kendi temporary `ResultBundle_*.xcresult` paketleri (toplam **84 KiB**) açık handle olmadığı doğrulandıktan sonra silindi. Son `/private/tmp` **2,360 KiB**; Git index snapshot’ları, patch’ler, PDF/ikon yedeği ve sistem/Codex öğeleri kullanıcı veya çalışma verisi olabileceğinden korundu. Normal PureIPTV DerivedData **2,381,460 KiB** olarak değişmedi; yalnız paylaşılan `SourcePackages` (**1,873,636 KiB**), `SDKExplicitPrecompiledModules` (**507,784 KiB**) ve mevcut `Logs` (**12 KiB**) vardı, görev kaynaklı Build/Index/ModuleCache yoktu. ContactCleaner ve `Localizable.xcstrings` dosyalarına dokunulmadı.
 - **Durum:** `[DONE]` — Reviewer onayı, iOS/tvOS compile-only build’leri ve görev kaynaklı temporary DerivedData temizliği tamamlandı.
 
-### 190. [IN_PROGRESS] Media Server Oynatma Kalitesi ve Direct Play Tercihi
+### 190. [DONE] Media Server Oynatma Kalitesi ve Direct Play Tercihi
 - **Fırsat:** Plex/Emby’nin gerçek playback-session/stream metadata’sını kullanarak direct play veya sunucu dönüştürmesini kullanıcıya açıkla; desteklenmeyen bir formatı sessizce garanti etme.
 - **Keşif:** IPTVX v25 yüksek kare hızındaki playback iyileştirmelerini, UHF ise Plex/Emby medya merkezlerini ve sunucu kaynaklı aramayı duyurdu. Playback capability kararları provider protokolünden doğrulanmalı.
 - **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
@@ -1824,7 +1824,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** Başlangıç `/private/tmp` **2,360 KiB** idi; DerivedData adayı yoktu. Sandbox nedeniyle paket çözümleme aşamasında durdurulan `xcodebuild -list` çağrısının 28 KiB temporary result bundle’ı açık handle bulunmadıktan sonra silindi. Göreve ait `/private/tmp/PureIPTV190-20261027` ağacı **5,935,112 KiB** idi; iki build tamamlandıktan, `lsof +D` açık handle bulmadıktan sonra kaldırıldı. Son `/private/tmp` **2,360 KiB**. Normal PureIPTV DerivedData **2,381,460 KiB**: ortak `SourcePackages` **1,873,636 KiB**, `SDKExplicitPrecompiledModules` **507,784 KiB**, `Logs` **12 KiB**; task kaynaklı `Build`, `Index.noindex` veya `ModuleCache.noindex` yoktu. Paylaşılan önbellekler korundu; başarılı build’lerde global SwiftFormat adımı task-local no-op shim ile kaynaklara yazmayacak şekilde çalıştırıldı.
 - **Durum:** `[DONE]` — Reviewer onayı, iOS/tvOS compile-only build’leri ve görev kaynaklı temporary DerivedData temizliği tamamlandı.
 
-### 191. [PENDING] Canlı Yayında Görüntü Donması ile Sesin İlerlemesini Ayırt Et
+### 191. [IN_PROGRESS] Canlı Yayında Görüntü Donması ile Sesin İlerlemesini Ayırt Et
 - **Fırsat:** Gerçek sunulan video kareleri dururken audio ilerliyorsa bunu ağ buffering’i gibi göstermeden tanı; akış/decoder değişimini yalnız kullanıcı seçimiyle öner.
 - **Keşif:** TiviMate kullanıcı raporu 1080p50 H.264 akışlarda görüntü donarken sesin sürmesini ve başka oynatıcıyla farklı sonuç alınmasını anlatıyor. Bu, #188’deki VOD ilk kare/seek ölçümünden ayrı bir canlı playback arızası.
 - **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1w9rtm6/video_freezes_but_audio_keeps_playing_on_google/
