@@ -150,59 +150,81 @@
 
         private var seriesGrid: some View {
             ScrollView {
-                if store.isLoadingSeries {
+                if store.isLoadingSeries, store.currentSeries.isEmpty {
                     loadingView
                 } else if store.currentSeries.isEmpty {
-                    VStack(spacing: 14) {
-                        if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .font(.system(size: 38))
-                                .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
-                            Text(AppStrings.MediaFilter.noMatchingResults)
-                                .font(.system(size: 15))
-                                .foregroundStyle(Color.white.opacity(0.7))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                            Button {
-                                store.send(.setLanguageFilter(.all))
-                                store.send(.setOriginalLanguageFilter(nil))
-                            } label: {
-                                Text(AppStrings.MediaFilter.all)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .padding(.horizontal, 18)
-                                    .padding(.vertical, 8)
-                                    .background(Color(hex: "#0A84FF"), in: Capsule())
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.top, 4)
-                        } else {
-                            Image(systemName: "rectangle.stack")
-                                .font(.system(size: 36))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                            Text(AppStrings.Series.emptyCategorySeries)
-                                .font(.system(size: 15))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    if let categoryID = store.selectedCategoryID,
+                       let error = store.categoryContentErrors[categoryID]
+                    {
+                        RetryableSectionEmptyState(message: error) {
+                            store.send(.retryCategoryContent(categoryID: categoryID))
                         }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 80)
-                } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(store.currentSeries) { series in
-                            SeriesCardView(
-                                series: series,
-                                isSelected: store.selectedSeries?.id == series.id
-                            ) {
-                                store.send(.seriesSelected(series))
-                            }
-                            .contextMenu {
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    } else {
+                        VStack(spacing: 14) {
+                            if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 38))
+                                    .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                                Text(AppStrings.MediaFilter.noMatchingResults)
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(Color.white.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
                                 Button {
-                                    store.send(.toggleFavorite(series))
+                                    store.send(.setLanguageFilter(.all))
+                                    store.send(.setOriginalLanguageFilter(nil))
                                 } label: {
-                                    if store.favoriteIDs.contains(series.id) {
-                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                    } else {
-                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                    Text(AppStrings.MediaFilter.all)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .padding(.horizontal, 18)
+                                        .padding(.vertical, 8)
+                                        .background(Color(hex: "#0A84FF"), in: Capsule())
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.top, 4)
+                            } else {
+                                Image(systemName: "rectangle.stack")
+                                    .font(.system(size: 36))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                                Text(AppStrings.Series.emptyCategorySeries)
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    }
+                } else {
+                    VStack(spacing: 14) {
+                        if let categoryID = store.selectedCategoryID,
+                           let error = store.categoryContentErrors[categoryID]
+                        {
+                            RetryableSectionEmptyState(message: error) {
+                                store.send(.retryCategoryContent(categoryID: categoryID))
+                            }
+                        }
+                        if store.isLoadingSeries {
+                            PureLoadingView(size: .small)
+                        }
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(store.currentSeries) { series in
+                                SeriesCardView(
+                                    series: series,
+                                    isSelected: store.selectedSeries?.id == series.id
+                                ) {
+                                    store.send(.seriesSelected(series))
+                                }
+                                .contextMenu {
+                                    Button {
+                                        store.send(.toggleFavorite(series))
+                                    } label: {
+                                        if store.favoriteIDs.contains(series.id) {
+                                            Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                        } else {
+                                            Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                        }
                                     }
                                 }
                             }

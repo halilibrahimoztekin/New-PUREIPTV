@@ -330,19 +330,30 @@
             VStack(spacing: 0) {
                 FavoriteChannelListSwitcher(store: store)
                     .padding(.top, 8)
-                if store.isLoadingChannels {
+                if store.isLoadingChannels, store.displayChannels.isEmpty {
                     PureLoadingView(size: .large, text: AppStrings.LiveTV.loadingChannels)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if store.displayChannels.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                            .font(.system(size: 60))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                        Text(AppStrings.LiveTV.noChannels)
-                            .font(.system(size: 28))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    if store.selectedSmartGroupID == nil,
+                       !store.isFavoriteListMode,
+                       let categoryID = store.selectedCategoryID,
+                       let error = store.categoryContentErrors[categoryID]
+                    {
+                        RetryableSectionEmptyState(message: error) {
+                            store.send(.retryCategoryContent(categoryID: categoryID))
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        VStack(spacing: 20) {
+                            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                                .font(.system(size: 60))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                            Text(AppStrings.LiveTV.noChannels)
+                                .font(.system(size: 28))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     channelScrollView
                 }
@@ -352,7 +363,21 @@
         private var channelScrollView: some View {
             ScrollViewReader { channelProxy in
                 ScrollView {
-                    channelGrid
+                    VStack(spacing: 16) {
+                        if store.selectedSmartGroupID == nil,
+                           !store.isFavoriteListMode,
+                           let categoryID = store.selectedCategoryID,
+                           let error = store.categoryContentErrors[categoryID]
+                        {
+                            RetryableSectionEmptyState(message: error) {
+                                store.send(.retryCategoryContent(categoryID: categoryID))
+                            }
+                        }
+                        if store.isLoadingChannels {
+                            PureLoadingView(size: .small)
+                        }
+                        channelGrid
+                    }
                 }
                 .onChange(of: store.selectedChannel) { _, newChannel in
                     if let channelID = newChannel?.id {

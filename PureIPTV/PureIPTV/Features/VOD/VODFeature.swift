@@ -20,6 +20,8 @@ public struct VODFeature {
         public var selectedVOD: MediaModels.Item?
         public var isLoadingCategories = false
         public var isLoadingVODs = false
+        public var categoryContentRequestIDs: [String: UUID] = [:]
+        public var categoryContentErrors: [String: String] = [:]
         public var isRefreshingContent = false
         public var activeContentRefreshID: UUID?
         public var refreshMessage: String?
@@ -86,7 +88,9 @@ public struct VODFeature {
         case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
         case categoryUnlockExpired(categoryID: String, requestID: UUID)
-        case vodsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
+        case fetchCategoryContent(requestID: UUID, config: PlaylistConfig, categoryID: String)
+        case retryCategoryContent(categoryID: String)
+        case vodsResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
         case vodSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
         case setOriginalLanguageFilter(String?)
@@ -125,6 +129,22 @@ public struct VODFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let configChanged = state.config != config
+                let playlistChanged = state.config?.playlistID != config.playlistID
+                if configChanged {
+                    state.categoryContentRequestIDs = [:]
+                    state.categoryContentErrors = [:]
+                    state.isLoadingVODs = false
+                }
+                if playlistChanged {
+                    state.categories = []
+                    state.vodsByCategory = [:]
+                    state.selectedCategoryID = nil
+                    state.selectedVOD = nil
+                    state.isLoadingCategories = false
+                    state.errorMessage = nil
+                }
+                state.config = config
                 let profileScope = profileContextClient.snapshot()
                 let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
                     || state.categoryUnlockProfileScope != profileScope
@@ -335,6 +355,7 @@ public struct VODFeature {
                     return .none
                 }
 
+                state.isLoadingVODs = false
                 state.selectedCategoryID = category.id
                 state.rebuildDerivedData()
                 if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
@@ -344,17 +365,40 @@ public struct VODFeature {
                 if state.vodsByCategory[category.id] != nil {
                     return .run { _ in await hapticClient.selection() }
                 }
+                if state.categoryContentRequestIDs[category.id] != nil {
+                    state.isLoadingVODs = true
+                    return .run { _ in await hapticClient.selection() }
+                }
+                if state.categoryContentErrors[category.id] != nil {
+                    return .run { _ in await hapticClient.selection() }
+                }
                 guard let config = state.config else { return .none }
 
+                let requestID = UUID()
+                state.categoryContentRequestIDs[category.id] = requestID
                 state.isLoadingVODs = true
                 let categoryID = category.id
+                return .merge(
+                    .run { _ in await hapticClient.selection() },
+                    .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
+                )
 
+            case let .retryCategoryContent(categoryID):
+                guard state.selectedCategoryID == categoryID, let config = state.config else { return .none }
+                guard state.categoryContentRequestIDs[categoryID] == nil else { return .none }
+                let requestID = UUID()
+                state.categoryContentRequestIDs[categoryID] = requestID
+                state.categoryContentErrors.removeValue(forKey: categoryID)
+                state.isLoadingVODs = true
+                return .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
+
+            case let .fetchCategoryContent(requestID, config, categoryID):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
                 return .run { send in
-                    await hapticClient.selection()
-                    await send(.vodsResponse(
-                        categoryID: categoryID,
-                        Result { try await iptvClient.fetchVODs(config, categoryID) }
-                    ))
+                    let result = await Result { try await iptvClient.fetchVODs(config, categoryID) }
+                    await send(.vodsResponse(requestID: requestID, config: config, categoryID: categoryID, result))
                 }
 
             case let .setLanguageFilter(filter):
@@ -369,17 +413,30 @@ public struct VODFeature {
                 OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .movies)
                 return .run { _ in await hapticClient.selection() }
 
-            case let .vodsResponse(categoryID, .success(vods)):
-                state.isLoadingVODs = false
+            case let .vodsResponse(requestID, config, categoryID, .success(vods)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID {
+                    state.isLoadingVODs = false
+                }
+                state.categoryContentErrors.removeValue(forKey: categoryID)
                 state.vodsByCategory[categoryID] = vods
                 if state.selectedCategoryID == categoryID {
                     state.rebuildDerivedData()
                 }
                 return .none
 
-            case let .vodsResponse(_, .failure(error)):
-                state.isLoadingVODs = false
-                state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
+            case let .vodsResponse(requestID, config, categoryID, .failure(error)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID {
+                    state.isLoadingVODs = false
+                }
+                state.categoryContentErrors[categoryID] = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
             case let .vodSelected(vod):
@@ -461,14 +518,12 @@ public struct VODFeature {
                     guard let config = state.config else { return expirationEffect }
                     state.isLoadingVODs = true
                     let categoryID = category.id
+                    let contentRequestID = UUID()
+                    state.categoryContentRequestIDs[categoryID] = contentRequestID
+                    state.categoryContentErrors.removeValue(forKey: categoryID)
                     return .merge(
                         expirationEffect,
-                        .run { send in
-                            await send(.vodsResponse(
-                                categoryID: categoryID,
-                                Result { try await iptvClient.fetchVODs(config, categoryID) }
-                            ))
-                        }
+                        .send(.fetchCategoryContent(requestID: contentRequestID, config: config, categoryID: categoryID))
                     )
                 } else if let item {
                     state.selectedVOD = item

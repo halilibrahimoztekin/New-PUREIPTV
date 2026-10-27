@@ -20,6 +20,8 @@ public struct SeriesFeature {
         public var selectedSeries: MediaModels.Item?
         public var isLoadingCategories = false
         public var isLoadingSeries = false
+        public var categoryContentRequestIDs: [String: UUID] = [:]
+        public var categoryContentErrors: [String: String] = [:]
         public var isRefreshingContent = false
         public var activeContentRefreshID: UUID?
         public var refreshMessage: String?
@@ -82,7 +84,9 @@ public struct SeriesFeature {
         case onAppear(config: PlaylistConfig)
         case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
         case categorySelected(MediaModels.Category)
-        case seriesResponse(categoryID: String, Result<[MediaModels.Item], Error>)
+        case fetchCategoryContent(requestID: UUID, config: PlaylistConfig, categoryID: String)
+        case retryCategoryContent(categoryID: String)
+        case seriesResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
         case seriesSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
         case setOriginalLanguageFilter(String?)
@@ -121,6 +125,22 @@ public struct SeriesFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let configChanged = state.config != config
+                let playlistChanged = state.config?.playlistID != config.playlistID
+                if configChanged {
+                    state.categoryContentRequestIDs = [:]
+                    state.categoryContentErrors = [:]
+                    state.isLoadingSeries = false
+                }
+                if playlistChanged {
+                    state.categories = []
+                    state.seriesByCategory = [:]
+                    state.selectedCategoryID = nil
+                    state.selectedSeries = nil
+                    state.isLoadingCategories = false
+                    state.errorMessage = nil
+                }
+                state.config = config
                 let profileScope = profileContextClient.snapshot()
                 state.selectedOriginalLanguageCode = OriginalLanguageFilterPreference.load(
                     profileID: profileScope.profileID,
@@ -321,6 +341,7 @@ public struct SeriesFeature {
                     return .none
                 }
 
+                state.isLoadingSeries = false
                 state.selectedCategoryID = category.id
                 state.rebuildDerivedData()
                 if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
@@ -330,17 +351,40 @@ public struct SeriesFeature {
                 if state.seriesByCategory[category.id] != nil {
                     return .run { _ in await hapticClient.selection() }
                 }
+                if state.categoryContentRequestIDs[category.id] != nil {
+                    state.isLoadingSeries = true
+                    return .run { _ in await hapticClient.selection() }
+                }
+                if state.categoryContentErrors[category.id] != nil {
+                    return .run { _ in await hapticClient.selection() }
+                }
                 guard let config = state.config else { return .none }
 
+                let requestID = UUID()
+                state.categoryContentRequestIDs[category.id] = requestID
                 state.isLoadingSeries = true
                 let categoryID = category.id
+                return .merge(
+                    .run { _ in await hapticClient.selection() },
+                    .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
+                )
 
+            case let .retryCategoryContent(categoryID):
+                guard state.selectedCategoryID == categoryID, let config = state.config else { return .none }
+                guard state.categoryContentRequestIDs[categoryID] == nil else { return .none }
+                let requestID = UUID()
+                state.categoryContentRequestIDs[categoryID] = requestID
+                state.categoryContentErrors.removeValue(forKey: categoryID)
+                state.isLoadingSeries = true
+                return .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
+
+            case let .fetchCategoryContent(requestID, config, categoryID):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
                 return .run { send in
-                    await hapticClient.selection()
-                    await send(.seriesResponse(
-                        categoryID: categoryID,
-                        Result { try await iptvClient.fetchSeries(config, categoryID) }
-                    ))
+                    let result = await Result { try await iptvClient.fetchSeries(config, categoryID) }
+                    await send(.seriesResponse(requestID: requestID, config: config, categoryID: categoryID, result))
                 }
 
             case let .setLanguageFilter(filter):
@@ -355,17 +399,30 @@ public struct SeriesFeature {
                 OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .series)
                 return .run { _ in await hapticClient.selection() }
 
-            case let .seriesResponse(categoryID, .success(series)):
-                state.isLoadingSeries = false
+            case let .seriesResponse(requestID, config, categoryID, .success(series)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID {
+                    state.isLoadingSeries = false
+                }
+                state.categoryContentErrors.removeValue(forKey: categoryID)
                 state.seriesByCategory[categoryID] = series
                 if state.selectedCategoryID == categoryID {
                     state.rebuildDerivedData()
                 }
                 return .none
 
-            case let .seriesResponse(_, .failure(error)):
-                state.isLoadingSeries = false
-                state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
+            case let .seriesResponse(requestID, config, categoryID, .failure(error)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID {
+                    state.isLoadingSeries = false
+                }
+                state.categoryContentErrors[categoryID] = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
             case let .seriesSelected(series):
@@ -438,12 +495,11 @@ public struct SeriesFeature {
                     guard let config = state.config else { return .none }
                     state.isLoadingSeries = true
                     let categoryID = category.id
-                    return .run { send in
-                        await send(.seriesResponse(
-                            categoryID: categoryID,
-                            Result { try await iptvClient.fetchSeries(config, categoryID) }
-                        ))
-                    }
+                    let requestID = UUID()
+                    state.categoryContentRequestIDs[categoryID] = requestID
+                    state.categoryContentErrors.removeValue(forKey: categoryID)
+                    state.isLoadingSeries = true
+                    return .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
                 } else if let item {
                     state.selectedSeries = item
                     return .send(.delegate(.didSelectSeries(item)))

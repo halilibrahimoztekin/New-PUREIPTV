@@ -109,7 +109,7 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Sonuç:** Mevcut SwiftVLC entegrasyonunda bounded segment-ring buffer, VLC’ye seek edilebilir kaynak, dosya yaş/kapasite eviction’ı ve live-edge geçişi bulunmuyor. UI-only scrubber yanlış seek vaadi olur. Bu nedenle bu altyapıyla özellik için **NO-GO**; ayrı playback/DVR mimarisi gerekir. Kullanıcı akışları çalıştırılmadı. **Canlı pause/rewind özelliği gönderilmedi.**
 - **Durum:** `[DONE]` — yalnızca uygulanabilirlik kararı kapatıldı; DVR özelliği tamamlanmadı.
 
-### 37. [IN_PROGRESS] Hatalı Xtream Bölümü İçin Tekrar Dene
+### 37. [DONE] Hatalı Xtream Bölümü İçin Tekrar Dene
 - **Bulgu:** IPTVX 24.3.1/24.3.2 sürüm notları, yüklenemeyen Xtream bölümüne playlist’in tamamını yeniden yüklemeden bölüm bazlı Retry eylemi eklediğini belirtiyor. Bu, büyük kataloglarda hata kurtarmayı daha hızlı ve düşük maliyetli yapıyor.
 - **Kaynak:** https://apps.apple.com/de/app/iptvx/id1451470024?platform=tv
 - **Kod incelemesi:** Live TV, VOD ve Series kategori istekleri hataları boş listeye çeviriyordu; bu yüzden ağ/API hatası “kategori yok” gibi görünüyordu. Mevcut reducer’lar kategori yükleme hatasını `errorMessage` durumuna iletiyor ve `reloadCategories(config:)` ile yalnız o içerik türünün kategori endpoint’ini tekrar çağırıyor.
@@ -1752,10 +1752,15 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** Başlangıç `/private/tmp` envanteri 2,3 MB idi; Xcode DerivedData/Build/Index dizini yoktu. Git index snapshot’ları ve gerçek kod `.patch` farkları korundu. Build sonunda açık handle bulunmadı; yalnız task’ın DerivedData’sı (**4.074.348 KiB**), logları (**7.212 KiB**) ve başarısız ilk denemeden kalan `.xcresult` (**28 KiB**) silindi. Task temp klasörü ve result bundle kaldırıldı; `/private/tmp` toplamı tekrar 2,3 MB, DerivedData dizini yok. Build’ler task temp DerivedData kullandığından normal Xcode DerivedData’da task Build/Index çıktısı oluşmadı; paylaşılan `SourcePackages` korundu.
 - **Durum:** `[DONE]` — Reviewer onayladı; compile-only iOS/tvOS derlemeleri başarılı.
 
-### 184. [PENDING] Başarısız Katalog Bölümünü Tam Playlist Yenilemeden Tekrar Dene
-- **Fırsat:** Xtream kategori isteği başarısız olduğunda yalnız o bölümü tekrar yükle; geçerli diğer kategorileri ve son iyi kataloğu tut.
-- **Keşif:** IPTVX v25, yüklenmeyen Xtream bölümleri için tüm playlist’i yenilemeden Retry eklediğini duyurdu. Mevcut hata modelinin hangi katalog çağrılarını ayırt edebildiği önce denetlensin.
+### 184. [IN_PROGRESS] Seçilmiş Kategori İçeriğini Yeniden Dene
+- **Fırsat:** Live TV, VOD veya Series’te seçilmiş kategori içeriği yüklenemezse kullanıcı aynı bölümü yeniden deneyebilsin; diğer kategori cache’leri ve son iyi içerik korunsun.
+- **Keşif:** #37 zaten kategori listesi endpoint’leri için Retry sağlıyor. Eksik durum içerik endpoint’lerinin (`fetchLiveChannels`, `fetchVODs`, `fetchSeries`) başarısızlığında seçilmiş kategoriye özgü Retry sunulmamasıydı.
 - **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+- **Uygulama:** Üç reducer’da kategori bazlı istek kimliği ve hata durumu eklendi. Yanıtlar hem aktif istek kimliği hem `PlaylistConfig` ile doğrulanıyor; başarı yalnız ilgili kategori cache’ini güncelliyor, hata mevcut cache’i silmiyor. iOS/tvOS içerik panelleri boş ve önbellekli sonuç durumlarında Retry gösteriyor; yenilemede mevcut içerik kalıyor ve yükleme göstergesi küçük tutuluyor. Playlist değişince cache temizleniyor; aynı playlist config değişince eski istekler/hatalar geçersiz kılınıp cache korunuyor. LiveTV Retry, kategori dışı favori ve Smart Group görünümlerinde gösterilmiyor.
+- **PR Reviewer:** İlk review `[CHANGES REQUESTED]` — aynı playlist’in config’i değişince eski istek kimliğinin yüklemeyi kalıcı açık bırakabilme yarışı belirtildi. Config değişiminde istek kimlikleri/hatalar ve yükleme durumu sıfırlandı; kategori cache’i korundu. Son review `[APPROVED]` — stale-response guard’ları, önbellekli/boş Retry durumu ve tvOS odaklanabilirliği uygun bulundu.
+- **Derleme:** iOS generic Release ve tvOS generic Release Xcode compile-only build’leri `BUILD SUCCEEDED`. İlk iOS denemesi LiveTV iOS görünümünde eksik kapanış ayracını SwiftFormat aşamasında yakaladı; düzeltildi. Son derlemelerde SwiftFormat yalnız bu task’ın dokuz Swift dosyasına yönlendirildi ve geçici proje ayarı geri alındı. Test, simulator, uygulama açılışı veya UI akışı çalıştırılmadı.
+- **Temizlik:** `lsof +D /private/tmp/PureIPTV184-20261027` açık handle bulmadı. Yalnız bu task’ın DerivedData’sı (**4,106,824 KiB**), üç build logu (**6,223,776 B**) ve task-scoped SwiftFormat shim’i silindi; task temp klasörü kaldırıldı. Son `/private/tmp` **2,360 KiB** ve DerivedData dizini yok. Xcode build’leri özel temp DerivedData kullandığından normal DerivedData’da task Build/Index çıktısı oluşmadı; paylaşılan `SourcePackages` (**1,873,636 KiB**) korundu.
+- **Durum:** `[DONE]` — Reviewer onayı ve iOS/tvOS compile-only build’leri tamamlandı.
 
 ### 185. [PENDING] For You İçerik Satırları İçin Yenileme ve Boş Durum Deneyimi
 - **Fırsat:** Kişiselleştirilmiş raflar boş, eski veya kısmen yüklenmiş olduğunda kullanıcıya yenileme ve anlaşılır boş durum sun; katalog yüklemesi ekranı kilitlemesin.

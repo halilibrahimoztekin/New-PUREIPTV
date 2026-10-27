@@ -314,124 +314,150 @@
 
         private var channelGrid: some View {
             ScrollView {
-                if store.isLoadingChannels {
+                if store.isLoadingChannels, store.displayChannels.isEmpty {
                     loadingView
                 } else if store.displayChannels.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "tv.slash")
-                            .font(.system(size: 36))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
-                        Text(AppStrings.LiveTV.emptyCategoryLive)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    if store.selectedSmartGroupID == nil,
+                       !store.isFavoriteListMode,
+                       let categoryID = store.selectedCategoryID,
+                       let error = store.categoryContentErrors[categoryID]
+                    {
+                        RetryableSectionEmptyState(message: error) {
+                            store.send(.retryCategoryContent(categoryID: categoryID))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "tv.slash")
+                                .font(.system(size: 36))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                            Text(AppStrings.LiveTV.emptyCategoryLive)
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 80)
                 } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(store.displayChannels) { channel in
-                            let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
-                            ChannelCardView(
-                                channel: channel,
-                                isSelected: store.selectedChannel?.id == channel.id,
-                                presentationName: store.channelPresentationOverrides[channel.id]?.name,
-                                presentationNumber: store.channelPresentationOverrides[channel.id]?.number,
-                                selectionMode: store.isChannelSelectionMode,
-                                isMarkedForBulkAction: store.selectedCurrentChannelIDs.contains(channel.id)
-                            ) {
-                                store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
+                    VStack(spacing: 14) {
+                        if store.selectedSmartGroupID == nil,
+                           !store.isFavoriteListMode,
+                           let categoryID = store.selectedCategoryID,
+                           let error = store.categoryContentErrors[categoryID]
+                        {
+                            RetryableSectionEmptyState(message: error) {
+                                store.send(.retryCategoryContent(categoryID: categoryID))
                             }
-                            .overlay(alignment: .topLeading) {
-                                if isUnavailable {
-                                    Text(AppStrings.LiveTV.unavailableFavoriteChannel)
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 5)
-                                        .background(Color.black.opacity(0.72), in: Capsule())
-                                        .padding(10)
-                                        .accessibilityHidden(true)
+                        }
+                        if store.isLoadingChannels {
+                            PureLoadingView(size: .small)
+                        }
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(store.displayChannels) { channel in
+                                let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
+                                ChannelCardView(
+                                    channel: channel,
+                                    isSelected: store.selectedChannel?.id == channel.id,
+                                    presentationName: store.channelPresentationOverrides[channel.id]?.name,
+                                    presentationNumber: store.channelPresentationOverrides[channel.id]?.number,
+                                    selectionMode: store.isChannelSelectionMode,
+                                    isMarkedForBulkAction: store.selectedCurrentChannelIDs.contains(channel.id)
+                                ) {
+                                    store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
                                 }
-                            }
-                            .accessibilityValue(isUnavailable
-                                ? AppStrings.LiveTV.unavailableFavoriteChannel
-                                : (store.isChannelSelectionMode
-                                    ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
-                                    : ""))
-                            .accessibilityHint(isUnavailable ? AppStrings.LiveTV.unavailableFavoriteChannelHint : "")
-                            .overlay(alignment: .topTrailing) {
-                                if store.isChannelSelectionMode, !isUnavailable {
-                                    Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
-                                        .font(.title2)
-                                        .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
-                                        .padding(10)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                            .contextMenu {
-                                if isUnavailable,
-                                   let unavailable = store.unavailableFavoriteChannels.first(where: { $0.channelID == channel.id }),
-                                   let replacement = unavailable.replacement
-                                {
-                                    Button {
-                                        store.send(.recoverUnavailableFavorite(channelID: channel.id, replacement: replacement))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.reattachFavorite(to: replacement.title), systemImage: "arrow.triangle.2.circlepath")
+                                .overlay(alignment: .topLeading) {
+                                    if isUnavailable {
+                                        Text(AppStrings.LiveTV.unavailableFavoriteChannel)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 5)
+                                            .background(Color.black.opacity(0.72), in: Capsule())
+                                            .padding(10)
+                                            .accessibilityHidden(true)
                                     }
                                 }
-
-                                Button {
-                                    store.send(.toggleFavorite(channel))
-                                } label: {
-                                    if store.favoriteIDs.contains(channel.id) {
-                                        Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                    } else {
-                                        Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                .accessibilityValue(isUnavailable
+                                    ? AppStrings.LiveTV.unavailableFavoriteChannel
+                                    : (store.isChannelSelectionMode
+                                        ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                                        : ""))
+                                .accessibilityHint(isUnavailable ? AppStrings.LiveTV.unavailableFavoriteChannelHint : "")
+                                .overlay(alignment: .topTrailing) {
+                                    if store.isChannelSelectionMode, !isUnavailable {
+                                        Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(.title2)
+                                            .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
+                                            .padding(10)
+                                            .accessibilityHidden(true)
                                     }
                                 }
-
-                                FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
-
-                                if !isUnavailable {
-                                    Button {
-                                        guard let playlistID = store.channelPresentationPlaylistID,
-                                              let profileScope = store.channelPresentationProfileScope else { return }
-                                        editingPresentationTarget = ChannelPresentationEditorTarget(
-                                            channel: channel, playlistID: playlistID, profileScope: profileScope
-                                        )
-                                    } label: {
-                                        Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
-                                    }
-
-                                    if !store.favoriteLists.isEmpty {
-                                        Menu(AppStrings.LiveTV.addToFavoriteList) {
-                                            ForEach(store.favoriteLists) { list in
-                                                Button {
-                                                    store.send(.toggleNamedFavorite(channel, listID: list.id))
-                                                } label: {
-                                                    Label(list.name,
-                                                          systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
-                                                }
-                                            }
+                                .contextMenu {
+                                    if isUnavailable,
+                                       let unavailable = store.unavailableFavoriteChannels.first(where: { $0.channelID == channel.id }),
+                                       let replacement = unavailable.replacement
+                                    {
+                                        Button {
+                                            store.send(.recoverUnavailableFavorite(channelID: channel.id, replacement: replacement))
+                                        } label: {
+                                            Label(AppStrings.LiveTV.reattachFavorite(to: replacement.title), systemImage: "arrow.triangle.2.circlepath")
                                         }
                                     }
 
                                     Button {
-                                        store.send(.sendToMultiView(channel))
+                                        store.send(.toggleFavorite(channel))
                                     } label: {
-                                        Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+                                        if store.favoriteIDs.contains(channel.id) {
+                                            Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                        } else {
+                                            Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                        }
                                     }
 
-                                    Button {
-                                        store.send(.openChannelEPG(channel))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
-                                    }
+                                    FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
 
-                                    Button(role: .destructive) {
-                                        store.send(.hideChannel(channel))
-                                    } label: {
-                                        Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
+                                    if !isUnavailable {
+                                        Button {
+                                            guard let playlistID = store.channelPresentationPlaylistID,
+                                                  let profileScope = store.channelPresentationProfileScope else { return }
+                                            editingPresentationTarget = ChannelPresentationEditorTarget(
+                                                channel: channel, playlistID: playlistID, profileScope: profileScope
+                                            )
+                                        } label: {
+                                            Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
+                                        }
+
+                                        if !store.favoriteLists.isEmpty {
+                                            Menu(AppStrings.LiveTV.addToFavoriteList) {
+                                                ForEach(store.favoriteLists) { list in
+                                                    Button {
+                                                        store.send(.toggleNamedFavorite(channel, listID: list.id))
+                                                    } label: {
+                                                        Label(list.name,
+                                                              systemImage: list.channelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Button {
+                                            store.send(.sendToMultiView(channel))
+                                        } label: {
+                                            Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.grid.2x2")
+                                        }
+
+                                        Button {
+                                            store.send(.openChannelEPG(channel))
+                                        } label: {
+                                            Label(AppStrings.LiveTV.channelGuide, systemImage: "calendar.badge.clock")
+                                        }
+
+                                        Button(role: .destructive) {
+                                            store.send(.hideChannel(channel))
+                                        } label: {
+                                            Label(AppStrings.LiveTV.hideChannel, systemImage: "eye.slash")
+                                        }
                                     }
                                 }
                             }

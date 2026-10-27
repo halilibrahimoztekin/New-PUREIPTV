@@ -213,45 +213,64 @@
                 .padding(.bottom, 8)
 
                 // Grid or Empty State
-                if store.isLoadingSeries {
+                if store.isLoadingSeries, store.currentSeries.isEmpty {
                     VStack {
                         PureLoadingView(size: .large, text: AppStrings.Series.loadingSeries)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if store.currentSeries.isEmpty {
-                    VStack(spacing: 20) {
-                        if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .font(.system(size: 64))
-                                .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
-                            Text(AppStrings.MediaFilter.noMatchingResults)
-                                .font(.system(size: 26))
-                                .foregroundStyle(Color.white.opacity(0.8))
-
-                            Button {
-                                store.send(.setLanguageFilter(.all))
-                                store.send(.setOriginalLanguageFilter(nil))
-                            } label: {
-                                Text(AppStrings.MediaFilter.all)
-                                    .font(.system(size: 20, weight: .bold))
-                                    .padding(.horizontal, 28)
-                                    .padding(.vertical, 12)
-                            }
-                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
-                            .padding(.top, 12)
-                        } else {
-                            Image(systemName: "tv")
-                                .font(.system(size: 60))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
-                            Text(AppStrings.Series.noSeries)
-                                .font(.system(size: 28))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                    if let categoryID = store.selectedCategoryID,
+                       let error = store.categoryContentErrors[categoryID]
+                    {
+                        RetryableSectionEmptyState(message: error) {
+                            store.send(.retryCategoryContent(categoryID: categoryID))
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        VStack(spacing: 20) {
+                            if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                    .font(.system(size: 64))
+                                    .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                                Text(AppStrings.MediaFilter.noMatchingResults)
+                                    .font(.system(size: 26))
+                                    .foregroundStyle(Color.white.opacity(0.8))
+
+                                Button {
+                                    store.send(.setLanguageFilter(.all))
+                                    store.send(.setOriginalLanguageFilter(nil))
+                                } label: {
+                                    Text(AppStrings.MediaFilter.all)
+                                        .font(.system(size: 20, weight: .bold))
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 12)
+                                }
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+                                .padding(.top, 12)
+                            } else {
+                                Image(systemName: "tv")
+                                    .font(.system(size: 60))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                Text(AppStrings.Series.noSeries)
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollViewReader { seriesProxy in
                         ScrollView {
+                            if let categoryID = store.selectedCategoryID,
+                               let error = store.categoryContentErrors[categoryID]
+                            {
+                                RetryableSectionEmptyState(message: error) {
+                                    store.send(.retryCategoryContent(categoryID: categoryID))
+                                }
+                            }
+                            if store.isLoadingSeries {
+                                PureLoadingView(size: .small)
+                            }
                             LazyVGrid(
                                 columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 32)],
                                 spacing: 32

@@ -117,6 +117,8 @@ public struct LiveTVFeature {
         public var selectedChannel: MediaModels.Item?
         public var isLoadingCategories = false
         public var isLoadingChannels = false
+        public var categoryContentRequestIDs: [String: UUID] = [:]
+        public var categoryContentErrors: [String: String] = [:]
         public var isRefreshingContent = false
         public var activeContentRefreshID: UUID?
         public var refreshStage: M3URefreshStage?
@@ -358,7 +360,9 @@ public struct LiveTVFeature {
         case applyBulkNamedFavoriteList(channelIDs: Set<String>, listID: UUID, operation: BulkFavoriteOperation, playlistID: UUID, profileScope: ProfileContextSnapshot, generationID: UUID)
         case namedFavoriteBulkSaveCompleted(requestID: UUID, playlistID: UUID, profileScope: ProfileContextSnapshot, didSave: Bool)
         case bulkFavoriteCompleted(requestID: UUID, targetListID: UUID?, operation: BulkFavoriteOperation, playlistID: UUID, profileScope: ProfileContextSnapshot, selectionGenerationID: UUID, channelIDs: Set<String>, Result<Bool, Error>)
-        case channelsResponse(categoryID: String, Result<[MediaModels.Item], Error>)
+        case fetchCategoryContent(requestID: UUID, config: PlaylistConfig, categoryID: String)
+        case retryCategoryContent(categoryID: String)
+        case channelsResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
         case channelPresentationOverridesLoaded([String: ChannelPresentationOverride], playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
         case saveChannelPresentationOverride(channelID: String, name: String, number: Int?, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case channelSelected(MediaModels.Item)
@@ -432,6 +436,7 @@ public struct LiveTVFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let configChanged = state.config != config
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 let profileScope = profileContextClient.snapshot()
                 let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
@@ -452,6 +457,11 @@ public struct LiveTVFeature {
                 }
                 state.categoryUnlockPlaylistID = config.playlistID
                 state.categoryUnlockProfileScope = profileScope
+                if configChanged {
+                    state.categoryContentRequestIDs = [:]
+                    state.categoryContentErrors = [:]
+                    state.isLoadingChannels = false
+                }
                 state.config = config
                 let presentationScopeChanged = state.channelPresentationPlaylistID != config.playlistID
                     || state.channelPresentationProfileScope != profileScope
@@ -621,6 +631,7 @@ public struct LiveTVFeature {
                 state.activeContentRefreshID = nil
                 state.refreshStage = nil
                 state.activeCategoryRequestID = nil
+                state.categoryContentRequestIDs = [:]
                 state.activeSmartGroupRequestID = nil
                 state.isLoadingChannels = false
                 state.activeFavoriteListRequestID = nil
@@ -900,22 +911,48 @@ public struct LiveTVFeature {
                 if state.channelsByCategory[category.id] != nil {
                     return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
                 }
+                if state.categoryContentRequestIDs[category.id] != nil {
+                    state.isLoadingChannels = true
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
+                }
+                if state.categoryContentErrors[category.id] != nil {
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
+                }
                 guard let config = state.config else { return .merge(cancelGroupResolution, cancelFavoriteListResolution) }
 
+                let requestID = UUID()
+                state.categoryContentRequestIDs[category.id] = requestID
                 state.isLoadingChannels = true
                 let categoryID = category.id
 
                 return .merge(
                     cancelGroupResolution,
                     cancelFavoriteListResolution,
-                    .run { send in
-                        await hapticClient.selection()
-                        await send(.channelsResponse(
-                            categoryID: categoryID,
-                            Result { try await iptvClient.fetchLiveChannels(config, categoryID) }
-                        ))
-                    }
+                    .run { _ in await hapticClient.selection() },
+                    .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
                 )
+
+            case let .retryCategoryContent(categoryID):
+                guard state.selectedCategoryID == categoryID,
+                      state.selectedSmartGroupID == nil,
+                      !state.isFavoriteListMode,
+                      let config = state.config
+                else { return .none }
+                guard state.categoryContentRequestIDs[categoryID] == nil else { return .none }
+                let requestID = UUID()
+                state.categoryContentRequestIDs[categoryID] = requestID
+                state.categoryContentErrors.removeValue(forKey: categoryID)
+                state.isLoadingChannels = true
+                return .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
+
+            case let .fetchCategoryContent(requestID, config, categoryID):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                return .run { send in
+                    let result = await Result { try await iptvClient.fetchLiveChannels(config, categoryID) }
+                    await send(.channelsResponse(requestID: requestID, config: config, categoryID: categoryID, result))
+                }
 
             case let .smartGroupsLoaded(snapshot, playlistID, profileScope, requestID):
                 guard state.activeSmartGroupLoadID == requestID,
@@ -1976,17 +2013,36 @@ public struct LiveTVFeature {
                 }
                 return .merge(cancelEffect, saveEffect)
 
-            case let .channelsResponse(categoryID, .success(channels)):
-                state.isLoadingChannels = false
+            case let .channelsResponse(requestID, config, categoryID, .success(channels)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID,
+                   state.selectedSmartGroupID == nil,
+                   !state.isFavoriteListMode
+                {
+                    state.isLoadingChannels = false
+                }
+                state.categoryContentErrors.removeValue(forKey: categoryID)
                 state.channelsByCategory[categoryID] = channels
                 if state.selectedTabMode == .epg, let epg = state.epgTimeline, epg.channels.isEmpty {
                     state.epgTimeline?.channels = channels
                 }
                 return .none
 
-            case let .channelsResponse(_, .failure(error)):
-                state.isLoadingChannels = false
-                state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
+            case let .channelsResponse(requestID, config, categoryID, .failure(error)):
+                guard state.categoryContentRequestIDs[categoryID] == requestID,
+                      state.config == config
+                else { return .none }
+                state.categoryContentRequestIDs.removeValue(forKey: categoryID)
+                if state.selectedCategoryID == categoryID,
+                   state.selectedSmartGroupID == nil,
+                   !state.isFavoriteListMode
+                {
+                    state.isLoadingChannels = false
+                }
+                state.categoryContentErrors[categoryID] = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
             case let .channelSelected(channel):
@@ -2399,15 +2455,13 @@ public struct LiveTVFeature {
                     guard let config = state.config else { return .merge(cancelGroupResolution, expirationEffect) }
                     state.isLoadingChannels = true
                     let categoryID = category.id
+                    let contentRequestID = UUID()
+                    state.categoryContentRequestIDs[categoryID] = contentRequestID
+                    state.categoryContentErrors.removeValue(forKey: categoryID)
                     return .merge(
                         cancelGroupResolution,
                         expirationEffect,
-                        .run { send in
-                            await send(.channelsResponse(
-                                categoryID: categoryID,
-                                Result { try await iptvClient.fetchLiveChannels(config, categoryID) }
-                            ))
-                        }
+                        .send(.fetchCategoryContent(requestID: contentRequestID, config: config, categoryID: categoryID))
                     )
                 } else if let item {
                     state.selectedChannel = item
