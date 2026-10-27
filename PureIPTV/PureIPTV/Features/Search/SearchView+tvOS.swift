@@ -182,6 +182,7 @@
                         .padding(.vertical, 10)
                     }
                     .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isGlobalSelected))
+                    .accessibilityAddTraits(isGlobalSelected ? .isSelected : [])
 
                     ForEach(Array(store.savedPlaylists.enumerated()), id: \.element.id) { index, playlist in
                         let isSelected = store.selectedPlaylistID == playlist.id
@@ -203,6 +204,7 @@
                             .padding(.vertical, 10)
                         }
                         .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
             }
@@ -238,6 +240,7 @@
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, 60)

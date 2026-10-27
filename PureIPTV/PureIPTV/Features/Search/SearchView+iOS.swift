@@ -156,6 +156,7 @@
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(isGlobalSelected ? .isSelected : [])
 
                     // Individual Saved Playlists
                     ForEach(Array(store.savedPlaylists.enumerated()), id: \.element.id) { index, playlist in
@@ -188,6 +189,7 @@
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, 16)
@@ -239,6 +241,7 @@
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
                     }
                 }

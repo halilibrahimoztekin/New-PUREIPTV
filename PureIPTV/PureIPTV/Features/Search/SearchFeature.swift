@@ -202,6 +202,19 @@ public struct SearchFeature: Sendable {
             filterCounts[.all] = baseAllResultsCount + peopleResults.count + programResults.count
         }
 
+        public mutating func clearSearchResults() {
+            liveResults = []
+            vodResults = []
+            seriesResults = []
+            enrichedLiveResults = []
+            enrichedVODResults = []
+            enrichedSeriesResults = []
+            peopleResults = []
+            programResults = []
+            filterCounts = [:]
+            baseAllResultsCount = 0
+        }
+
         public var totalResultsCount: Int {
             switch filter {
             case .people:
@@ -232,16 +245,7 @@ public struct SearchFeature: Sendable {
         public mutating func updateResults() {
             let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else {
-                liveResults = []
-                vodResults = []
-                seriesResults = []
-                enrichedLiveResults = []
-                enrichedVODResults = []
-                enrichedSeriesResults = []
-                peopleResults = []
-                programResults = []
-                filterCounts = [:]
-                baseAllResultsCount = 0
+                clearSearchResults()
                 return
             }
 
@@ -615,19 +619,10 @@ public struct SearchFeature: Sendable {
                     state.isSearching = false
                     state.isPeopleSearchLoading = false
                     state.isProgramsSearchLoading = false
-                    state.liveResults = []
-                    state.vodResults = []
-                    state.seriesResults = []
-                    state.enrichedLiveResults = []
-                    state.enrichedVODResults = []
-                    state.enrichedSeriesResults = []
-                    state.peopleResults = []
-                    state.programResults = []
+                    state.clearSearchResults()
                     state.activePeopleSearchRequestID = nil
                     state.activeProgramsSearchRequestID = nil
                     state.activeSearchRequestID = nil
-                    state.filterCounts = [:]
-                    state.baseAllResultsCount = 0
                     return .merge(
                         .cancel(id: searchCancelID),
                         .cancel(id: searchEPGCancelID),
@@ -639,6 +634,7 @@ public struct SearchFeature: Sendable {
                 state.isSearching = true
                 state.isPeopleSearchLoading = trimmed.count >= 2
                 state.isProgramsSearchLoading = true
+                state.clearSearchResults()
                 let debounceEffect: Effect<Action> = .run { send in
                     try await clock.sleep(for: .milliseconds(250))
                     await send(.performSearch(query))
@@ -653,19 +649,10 @@ public struct SearchFeature: Sendable {
                     state.isSearching = false
                     state.isPeopleSearchLoading = false
                     state.isProgramsSearchLoading = false
-                    state.liveResults = []
-                    state.vodResults = []
-                    state.seriesResults = []
-                    state.enrichedLiveResults = []
-                    state.enrichedVODResults = []
-                    state.enrichedSeriesResults = []
-                    state.peopleResults = []
-                    state.programResults = []
+                    state.clearSearchResults()
                     state.activePeopleSearchRequestID = nil
                     state.activeProgramsSearchRequestID = nil
                     state.activeSearchRequestID = nil
-                    state.filterCounts = [:]
-                    state.baseAllResultsCount = 0
                     return .merge(
                         .cancel(id: searchCancelID),
                         .cancel(id: searchEPGCancelID),
@@ -685,11 +672,7 @@ public struct SearchFeature: Sendable {
                 state.activeProgramsSearchRequestID = programsRequestID
                 state.isPeopleSearchLoading = trimmed.count >= 2
                 state.isProgramsSearchLoading = true
-
-                // These two supplemental scopes have independent cancellation so
-                // a slow metadata request cannot hold up the local catalogue search.
-                state.peopleResults = []
-                state.programResults = []
+                state.clearSearchResults()
 
                 let channels: [GlobalSearchResultItem]
                 let vods: [GlobalSearchResultItem]
@@ -877,7 +860,7 @@ public struct SearchFeature: Sendable {
                 return .merge(.cancel(id: searchEPGCancelID), searchEffect, personSearchEffect, programsEffect)
 
             case let .searchCompleted(query, filter, live, vods, series):
-                guard state.debouncedQuery == query, state.filter == filter else { return .none }
+                guard state.debouncedQuery == query, state.searchQuery == query, state.filter == filter else { return .none }
                 state.isSearching = false
                 state.liveResults = live
                 state.vodResults = vods
@@ -885,7 +868,7 @@ public struct SearchFeature: Sendable {
                 return .none
 
             case let .searchEnrichedCompleted(requestID, query, filter, playlistID, output):
-                guard state.activeSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                guard state.activeSearchRequestID == requestID, state.debouncedQuery == query, state.searchQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
                 state.activeSearchRequestID = nil
                 state.isSearching = false
                 state.enrichedLiveResults = output.live
@@ -955,6 +938,7 @@ public struct SearchFeature: Sendable {
             case let .liveEPGEnriched(query, filter, playlistID, results):
                 guard
                     state.debouncedQuery == query,
+                    state.searchQuery == query,
                     state.filter == filter,
                     state.selectedPlaylistID == playlistID
                 else { return .none }
@@ -962,7 +946,7 @@ public struct SearchFeature: Sendable {
                 return .none
 
             case let .peopleSearchCompleted(requestID, query, filter, playlistID, results):
-                guard state.activePeopleSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                guard state.activePeopleSearchRequestID == requestID, state.debouncedQuery == query, state.searchQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
                 state.activePeopleSearchRequestID = nil
                 state.isPeopleSearchLoading = false
                 state.peopleResults = results
@@ -971,7 +955,7 @@ public struct SearchFeature: Sendable {
                 return .none
 
             case let .programsSearchCompleted(requestID, query, filter, playlistID, results):
-                guard state.activeProgramsSearchRequestID == requestID, state.debouncedQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
+                guard state.activeProgramsSearchRequestID == requestID, state.debouncedQuery == query, state.searchQuery == query, state.filter == filter, state.selectedPlaylistID == playlistID else { return .none }
                 state.activeProgramsSearchRequestID = nil
                 state.isProgramsSearchLoading = false
                 state.programResults = results
@@ -1077,16 +1061,24 @@ public struct SearchFeature: Sendable {
                 return .none
 
             case let .filterChanged(filter):
+                guard state.filter != filter else { return .none }
                 state.filter = filter
-                if !state.debouncedQuery.isEmpty {
-                    return .send(.performSearch(state.debouncedQuery))
+                let query = state.searchQuery
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    state.isSearching = true
+                    state.clearSearchResults()
+                    return .send(.performSearch(query))
                 }
                 return .none
 
             case let .selectPlaylistFilter(playlistID):
+                guard state.selectedPlaylistID != playlistID else { return .none }
                 state.selectedPlaylistID = playlistID
-                if !state.debouncedQuery.isEmpty {
-                    return .send(.performSearch(state.debouncedQuery))
+                let query = state.searchQuery
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    state.isSearching = true
+                    state.clearSearchResults()
+                    return .send(.performSearch(query))
                 }
                 return .none
 

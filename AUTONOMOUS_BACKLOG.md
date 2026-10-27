@@ -4,8 +4,10 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 
 ## 🧹 Kalıcı DerivedData Temizlik Kuralı
 - Her task tamamlandıktan sonra, sıradaki task’a geçmeden önce hem `/private/tmp` içindeki task kaynaklı geçici derived data’yı hem de `~/Library/Developer/Xcode/DerivedData` içindeki task kaynaklı derleme çıktılarını tara ve temizle.
+- Her yeni task’a başlamadan önce de `/private/tmp` envanterini kontrol et; kaynağı kesin ve artık kullanılmayan task çıktıları temizlenmeden geliştirmeye geçme.
 - Silmeden önce aktif build/typecheck süreçlerini ve açık dosya tanıtıcılarını doğrula; yalnızca artık kullanılmayan, kaynağı kesin bilinen ve yeniden üretilebilir Build, Index ve compiler-cache çıktısını sil. Amacı belirsiz dosyaları derived data varsayma.
 - Etkin projelerin `SourcePackages` checkout’larını ve kullanıcı kaynaklarını koru. ContactCleaner klasörlerini/DerivedData’sını kullanıcı talimatıyla temizleme kapsamının dışında tut.
+- `/private/tmp` içindeki `pureiptv-93-index`, `pureiptv-epg-category.index` ve `pureiptv-reminder.index` dosyaları Git index snapshot’ları; eşleşen `.patch` dosyaları gerçek kod farklarıdır. Bunları build DerivedData sayma veya otomatik silme.
 - Her task kapanışında temizlik ayrı bir checklist kapısıdır: `/private/tmp` task çıktıları ile normal Xcode DerivedData’daki yalnızca bu task’a ait Build/Index/compiler çıktısını kontrol et; açık handle yoksa temizle.
 - Her temizlikte silinen yolları ve boyutları, korunan cache/kullanıcı verisini ve `/private/tmp` son durumunu backlog’a kaydet; task sonrasında kullanılmayan task kaynaklı DerivedData bırakma.
 
@@ -1739,10 +1741,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Derleme:** Son generic Release iOS ve tvOS compile-only Xcode build’leri exit code 0 / `BUILD SUCCEEDED`; yeni ödül client/engine/detail/view dosyalarında uyarı yok. Test, simülatör, uygulama açılışı veya UI akışı çalıştırılmadı.
 - **Temizlik:** `lsof +D /private/tmp/PureIPTV182-20261027` temizdi. Yalnız bu task’ın DerivedData’sı (**4,101,260 KiB**), üç build logu (**7,668 KiB**) ve boş task PackageCache (**0 KiB**) silindi; task klasörü kaldırıldı. Normal DerivedData’da task kaynaklı Build/Index oluşmadı. Paylaşılan `SourcePackages` (**1,873,636 KiB**) korundu.
 
-### 183. [PENDING] Evrensel Aramada İçerik Türü ve Kişi Filtreleri
+### 183. [DONE] Evrensel Aramada İçerik Türü ve Kişi Filtreleri
 - **Fırsat:** Film, dizi, oyuncu, canlı kanal ve program sonuçlarını tek arama ekranında seçilebilir filtrelerle daralt; tvOS filtre odak geri dönüşünü koru.
 - **Keşif:** IPTVX v25 arama sonuçları için tür filtrelerini (film, dizi, oyuncu, canlı kanal, program) yenilediğini belirtiyor.
 - **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv
+- **Analiz:** Sekiz arama kapsamı ve kapsam başına sayılar zaten vardı; yeni sorgu/filtre/playlist araması beklerken eski katalog sonuçları ekranda seçilebilir kalıyordu. Seçili filtre/playlist görünümü VoiceOver’a durum olarak aktarılmıyordu. tvOS filtre ve sonuç focus section’ları ile sonuç odağı geri yükleme mekanizması mevcut.
+- **Uygulama:** Sorgu, filtre veya playlist değişince eski katalog/kişi/program sonuçları ve sayaçlar anında temizleniyor. Filtre/playlist değişikliği debounce bekleyen güncel `searchQuery` değerini kullanıyor; katalog, kişi, program, legacy ve EPG yanıtları güncel sorgu ile kapsam/istek kimliğine göre doğrulanıyor. iOS ve tvOS’ta seçili filtre ve playlist düğmeleri erişilebilir seçili trait’i yayınlıyor; aynı seçili kapsamı tekrar seçmek gereksiz arama başlatmıyor.
+- **PR Reviewer:** İlk review `[CHANGES REQUESTED]` — debounce tamamlanmadan kapsam değiştirilince eski sorgunun başlayabilme yarışını belirtti. Güncel sorguyla arama ve tüm yanıt guard’ları eklendi; ikinci review `[APPROVED]`. Seçili accessibility traits ve tvOS focus akışında yeni sorun bulunmadı.
+- **Derleme:** Generic Release iOS ve tvOS compile-only Xcode build’leri exit code 0 / `BUILD SUCCEEDED`. İlk iOS denemesi sandbox’ın SwiftPM/Clang cache yazımını engellemesiyle durdu; aynı build yetkili cache erişimiyle tekrarlandı. Build loglarında mevcut başka `SearchFeature.swift` bölümlerinden Swift concurrency uyarıları ve SwiftFormat script-phase notu var; bu değişiklik satırlarında uyarı yok. Test, simulator, uygulama açılışı veya UI akışı çalıştırılmadı.
+- **Temizlik:** Başlangıç `/private/tmp` envanteri 2,3 MB idi; Xcode DerivedData/Build/Index dizini yoktu. Git index snapshot’ları ve gerçek kod `.patch` farkları korundu. Build sonunda açık handle bulunmadı; yalnız task’ın DerivedData’sı (**4.074.348 KiB**), logları (**7.212 KiB**) ve başarısız ilk denemeden kalan `.xcresult` (**28 KiB**) silindi. Task temp klasörü ve result bundle kaldırıldı; `/private/tmp` toplamı tekrar 2,3 MB, DerivedData dizini yok. Build’ler task temp DerivedData kullandığından normal Xcode DerivedData’da task Build/Index çıktısı oluşmadı; paylaşılan `SourcePackages` korundu.
+- **Durum:** `[DONE]` — Reviewer onayladı; compile-only iOS/tvOS derlemeleri başarılı.
 
 ### 184. [PENDING] Başarısız Katalog Bölümünü Tam Playlist Yenilemeden Tekrar Dene
 - **Fırsat:** Xtream kategori isteği başarısız olduğunda yalnız o bölümü tekrar yükle; geçerli diğer kategorileri ve son iyi kataloğu tut.
