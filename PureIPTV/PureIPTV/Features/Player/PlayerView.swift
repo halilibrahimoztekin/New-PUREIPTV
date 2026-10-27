@@ -16,6 +16,35 @@ public struct PlayerView: View {
         @State private var pipController: PiPController?
     #endif
 
+    private var liveVideoStallBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.yellow)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppStrings.Player.liveVideoStallTitle)
+                    .font(.callout.weight(.bold))
+                    .foregroundStyle(.white)
+                Text(AppStrings.Player.liveVideoStallMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.yellow.opacity(0.42), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AppStrings.Player.liveVideoStallTitle)
+        .accessibilityValue(AppStrings.Player.liveVideoStallMessage)
+        .accessibilityAddTraits(.isStaticText)
+    }
+
     public var body: some View {
         ZStack {
             if store.playbackEngine == .avPlayer {
@@ -84,6 +113,11 @@ public struct PlayerView: View {
                     .accessibilityAddTraits(.isStaticText)
                 }
 
+                if store.isLiveVideoStallDetected {
+                    liveVideoStallBanner
+                        .padding(.horizontal, 16)
+                }
+
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -91,6 +125,7 @@ public struct PlayerView: View {
             .allowsHitTesting(false)
             .animation(.easeInOut(duration: 0.2), value: store.vodSeekFailureRequestID)
             .animation(.easeInOut(duration: 0.2), value: store.firstPresentedFrameFeedbackRequestID)
+            .animation(.easeInOut(duration: 0.2), value: store.isLiveVideoStallDetected)
 
             if let message = store.playbackEngineError {
                 VStack {

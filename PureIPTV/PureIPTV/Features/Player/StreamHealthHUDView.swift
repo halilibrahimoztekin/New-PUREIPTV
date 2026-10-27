@@ -33,6 +33,9 @@ public struct StreamHealthHUDView: View {
     public var body: some View {
         VStack(spacing: 16) {
             headerBar
+            if store.isLiveVideoStallDetected {
+                liveVideoStallCard
+            }
             if store.streamHealthMetrics == nil {
                 waitingForSampleCard
             } else {
@@ -95,6 +98,37 @@ public struct StreamHealthHUDView: View {
     }
 
     // MARK: - Header Bar
+
+    private var liveVideoStallCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color(hex: "#FFD60A"))
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(AppStrings.Player.liveVideoStallTitle)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(AppStrings.Player.liveVideoStallMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: "#FFD60A").opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(hex: "#FFD60A").opacity(0.22), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(AppStrings.Player.liveVideoStallTitle)
+        .accessibilityValue(AppStrings.Player.liveVideoStallMessage)
+        .accessibilityAddTraits(.isStaticText)
+    }
 
     private var waitingForSampleCard: some View {
         HStack(spacing: 12) {

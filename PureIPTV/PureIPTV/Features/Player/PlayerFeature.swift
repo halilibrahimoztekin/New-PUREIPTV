@@ -14,6 +14,7 @@ public struct PlayerFeature {
         public static let mediaServerPlaybackStatus = "PlayerFeature.mediaServerPlaybackStatus"
         public static let playbackEngineSwitch = "PlayerFeature.playbackEngineSwitch"
         public static let statsTimer = "PlayerFeature.statsTimer"
+        public static let liveVideoStallMonitor = "PlayerFeature.liveVideoStallMonitor"
         public static let sleepTimer = "PlayerFeature.sleepTimer"
         public static let seriesPlaylist = "PlayerFeature.seriesPlaylist"
         public static let oledDimTimer = "PlayerFeature.oledDimTimer"
@@ -147,6 +148,7 @@ public struct PlayerFeature {
         public var liveChannels: [PlayableItem] = []
         public var isChannelListVisible: Bool = false
         public var isMinimized: Bool = false
+        public var isAppInBackground: Bool = false
         public var isClosing: Bool = false
 
         public var playerState: PlayerState = .stopped
@@ -212,6 +214,13 @@ public struct PlayerFeature {
         public var playerStats: String = ""
         public var streamHealthMetrics: StreamHealthMetrics?
         public var streamHealthGenerationID = UUID()
+        public var isLiveVideoStallDetected = false
+        public var liveVideoStallMonitorID = UUID()
+        public var liveVideoStallLastCounters: PlayerPlaybackCounters?
+        public var liveVideoStallLastSampleUptimeNanoseconds: UInt64?
+        public var liveVideoStallLastPlaybackTime: Duration?
+        public var liveVideoStallLastClockAdvanceUptimeNanoseconds: UInt64?
+        public var liveVideoStallNoFrameStartUptimeNanoseconds: UInt64?
         public var activePlaybackURL: URL
         public var mediaServerProxyURL: URL?
         public var mediaServerPlaybackRequestID: UUID?
@@ -557,6 +566,14 @@ public struct PlayerFeature {
         case setStreamHealthHUDVisible(Bool)
         case updateStreamHealth(StreamHealthMetrics, itemID: String, generationID: UUID)
         case startStreamHealthSampling(itemID: String, generationID: UUID)
+        case startLiveVideoStallMonitoring(itemID: String, playbackRequestID: UUID)
+        case liveVideoStallSample(
+            PlayerPlaybackCounters,
+            uptimeNanoseconds: UInt64,
+            itemID: String,
+            playbackRequestID: UUID,
+            monitorID: UUID
+        )
         case toggleCatchupTimeline
         case setCatchupTimelineVisible(Bool)
         case setCatchupTimeShiftHours(Int)
@@ -867,6 +884,77 @@ public struct PlayerFeature {
         }
     }
 
+    private static let liveVideoStallThresholdNanoseconds: UInt64 = 3_500_000_000
+    private static let liveVideoClockStaleToleranceNanoseconds: UInt64 = 2_500_000_000
+
+    private static func canMonitorLiveVideoStall(state: State) -> Bool {
+        guard state.item.isLive,
+              state.activeCatchupProgram == nil,
+              state.playbackEngine == .vlc,
+              state.playerState == .playing,
+              !state.isUserPaused,
+              !state.isMinimized,
+              !state.isPiPActive,
+              !state.isAppInBackground,
+              !state.isBackgroundAudioActive,
+              let videoCodec = state.mediaInfo?.videoCodec
+        else { return false }
+        return !videoCodec.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func resetLiveVideoStallTracking(state: inout State) {
+        state.isLiveVideoStallDetected = false
+        state.liveVideoStallMonitorID = UUID()
+        state.liveVideoStallLastCounters = nil
+        state.liveVideoStallLastSampleUptimeNanoseconds = nil
+        state.liveVideoStallLastPlaybackTime = nil
+        state.liveVideoStallLastClockAdvanceUptimeNanoseconds = nil
+        state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+    }
+
+    private static func stopLiveVideoStallMonitoring(state: inout State) -> Effect<Action> {
+        resetLiveVideoStallTracking(state: &state)
+        return .cancel(id: CancelID.liveVideoStallMonitor)
+    }
+
+    private static func startLiveVideoStallMonitoring(
+        state: inout State,
+        playerClient: PlayerClient,
+        itemID: String,
+        playbackRequestID: UUID
+    ) -> Effect<Action> {
+        guard state.item.id == itemID,
+              state.playbackRequestID == playbackRequestID
+        else { return .none }
+
+        guard canMonitorLiveVideoStall(state: state) else {
+            return stopLiveVideoStallMonitoring(state: &state)
+        }
+
+        resetLiveVideoStallTracking(state: &state)
+        let monitorID = state.liveVideoStallMonitorID
+        return .run { [playerClient] send in
+            while !Task.isCancelled {
+                let counters = await playerClient.getPlaybackCounters()
+                let uptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
+                guard !Task.isCancelled else { return }
+                await send(.liveVideoStallSample(
+                    counters,
+                    uptimeNanoseconds: uptimeNanoseconds,
+                    itemID: itemID,
+                    playbackRequestID: playbackRequestID,
+                    monitorID: monitorID
+                ))
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+        }
+        .cancellable(id: CancelID.liveVideoStallMonitor, cancelInFlight: true)
+    }
+
     private static func streamHealthSamplingEffect(
         itemID: String,
         streamURL: URL,
@@ -982,6 +1070,7 @@ public struct PlayerFeature {
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
+            Self.resetLiveVideoStallTracking(state: &state)
             state.playbackRequestID = UUID()
             state.mediaServerPlaybackStatus = nil
             state.mediaServerPlaybackStatusRequestID = nil
@@ -995,6 +1084,7 @@ public struct PlayerFeature {
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
             state.isMinimized = false
+            state.isAppInBackground = false
             state.isUserPaused = false
             state.playbackEngine = state.item.config?.type == .plex || state.item.config?.type == .emby
                 ? .vlc
@@ -1079,12 +1169,16 @@ public struct PlayerFeature {
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
                 .send(.loadSkipMarkers),
+                state.item.isLive && state.playbackEngine == .vlc && isAlreadyPlaying
+                    ? .send(.fetchMediaInfo)
+                    : .none,
                 recentEffect,
                 .send(.startOLEDDimTimer),
                 .cancel(id: CancelID.mediaServerPlaybackStatus),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
                 .cancel(id: CancelID.highFPSFeedback),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .run { _ in
                     #if os(iOS)
                         await MainActor.run {
@@ -1225,7 +1319,10 @@ public struct PlayerFeature {
 
             // If transitioning to In-App MiniPlayer or PiP is active, keep player alive and active!
             if isMinimized || isPiPActive {
-                return .cancel(id: CancelID.scrubThumbnail)
+                return .merge(
+                    .cancel(id: CancelID.scrubThumbnail),
+                    Self.stopLiveVideoStallMonitoring(state: &state)
+                )
             }
             state.isClosing = true
             state.playbackRequestID = UUID()
@@ -1241,6 +1338,7 @@ public struct PlayerFeature {
             state.activeCatchupSeekRequestID = nil
             state.catchupSeekFailureMessage = nil
             state.catchupSeekFailureRequestID = nil
+            Self.resetLiveVideoStallTracking(state: &state)
 
             return .merge(
                 .cancel(id: CancelID.channelSwitch),
@@ -1258,6 +1356,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.audioRouteHUD),
                 .cancel(id: CancelID.upNextCountdown),
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.dynamicRangeHUD),
@@ -1454,6 +1553,84 @@ public struct PlayerFeature {
                 streamHealthClient: streamHealthClient
             )
 
+        case let .startLiveVideoStallMonitoring(itemID, playbackRequestID):
+            return Self.startLiveVideoStallMonitoring(
+                state: &state,
+                playerClient: playerClient,
+                itemID: itemID,
+                playbackRequestID: playbackRequestID
+            )
+
+        case let .liveVideoStallSample(counters, uptimeNanoseconds, itemID, playbackRequestID, monitorID):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.liveVideoStallMonitorID == monitorID,
+                  Self.canMonitorLiveVideoStall(state: state)
+            else { return .none }
+
+            guard counters.presentedFrames > 0 else {
+                state.isLiveVideoStallDetected = false
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+                state.liveVideoStallLastCounters = counters
+                state.liveVideoStallLastSampleUptimeNanoseconds = uptimeNanoseconds
+                state.liveVideoStallLastPlaybackTime = state.currentTime
+                state.liveVideoStallLastClockAdvanceUptimeNanoseconds = nil
+                return .none
+            }
+
+            guard let previousCounters = state.liveVideoStallLastCounters,
+                  let previousUptime = state.liveVideoStallLastSampleUptimeNanoseconds,
+                  let previousPlaybackTime = state.liveVideoStallLastPlaybackTime,
+                  uptimeNanoseconds > previousUptime
+            else {
+                state.isLiveVideoStallDetected = false
+                state.liveVideoStallLastCounters = counters
+                state.liveVideoStallLastSampleUptimeNanoseconds = uptimeNanoseconds
+                state.liveVideoStallLastPlaybackTime = state.currentTime
+                state.liveVideoStallLastClockAdvanceUptimeNanoseconds = nil
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+                return .none
+            }
+
+            let playbackTimeMovedBackward = state.currentTime < previousPlaybackTime
+            let countersReset = counters.presentedFrames < previousCounters.presentedFrames
+            let sampleGapNanoseconds = uptimeNanoseconds - previousUptime
+            let sampleGapIsUsable = sampleGapNanoseconds <= Self.liveVideoClockStaleToleranceNanoseconds
+
+            if playbackTimeMovedBackward || countersReset || !sampleGapIsUsable {
+                state.isLiveVideoStallDetected = false
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+                state.liveVideoStallLastClockAdvanceUptimeNanoseconds = nil
+            }
+
+            if state.currentTime > previousPlaybackTime {
+                state.liveVideoStallLastClockAdvanceUptimeNanoseconds = uptimeNanoseconds
+            }
+
+            if counters.presentedFrames > previousCounters.presentedFrames {
+                state.isLiveVideoStallDetected = false
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+            } else if !playbackTimeMovedBackward,
+                      !countersReset,
+                      sampleGapIsUsable,
+                      let lastClockAdvance = state.liveVideoStallLastClockAdvanceUptimeNanoseconds,
+                      uptimeNanoseconds >= lastClockAdvance,
+                      uptimeNanoseconds - lastClockAdvance <= Self.liveVideoClockStaleToleranceNanoseconds
+            {
+                let noFrameStart = state.liveVideoStallNoFrameStartUptimeNanoseconds ?? previousUptime
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = noFrameStart
+                state.isLiveVideoStallDetected = uptimeNanoseconds >= noFrameStart
+                    && uptimeNanoseconds - noFrameStart >= Self.liveVideoStallThresholdNanoseconds
+            } else {
+                state.isLiveVideoStallDetected = false
+                state.liveVideoStallNoFrameStartUptimeNanoseconds = nil
+            }
+
+            state.liveVideoStallLastCounters = counters
+            state.liveVideoStallLastSampleUptimeNanoseconds = uptimeNanoseconds
+            state.liveVideoStallLastPlaybackTime = state.currentTime
+            return .none
+
         case .play:
             guard !state.isSwitchingPlaybackEngine else { return .none }
             state.isUserPaused = false
@@ -1472,6 +1649,7 @@ public struct PlayerFeature {
             state.isUserPaused = true
             state.oledInactivitySeconds = 0
             return .merge(
+                Self.stopLiveVideoStallMonitoring(state: &state),
                 .cancel(id: CancelID.stallWatchdog),
                 .run { _ in
                     try await playerClient.pause()
@@ -1496,7 +1674,9 @@ public struct PlayerFeature {
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            Self.resetLiveVideoStallTracking(state: &state)
             return .merge(
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
@@ -1524,6 +1704,7 @@ public struct PlayerFeature {
             state.isReconnecting = true
             state.isDeinterlaceModeKnown = false
             state.playbackRequestID = UUID()
+            Self.resetLiveVideoStallTracking(state: &state)
             state.mediaInfoRequestID = nil
             state.mediaInfo = nil
             state.firstPresentedFrameLatency = nil
@@ -1579,6 +1760,7 @@ public struct PlayerFeature {
             state.mediaServerPlaybackRequestID = requiresAuthenticatedMediaServer ? mediaServerPlaybackRequestID : nil
             return .concatenate(
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
                 .cancel(id: CancelID.highFPSFeedback),
@@ -2943,6 +3125,7 @@ public struct PlayerFeature {
             let streamHealthGenerationID = UUID()
             state.streamHealthGenerationID = streamHealthGenerationID
             state.streamHealthMetrics = nil
+            Self.resetLiveVideoStallTracking(state: &state)
             state.playbackRequestID = UUID()
             state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
@@ -3010,6 +3193,7 @@ public struct PlayerFeature {
 
             return .concatenate(
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
@@ -3467,6 +3651,7 @@ public struct PlayerFeature {
             components.queryItems = queryItems
 
             if let catchupURL = components.url {
+                Self.resetLiveVideoStallTracking(state: &state)
                 state.playerState = .playing
                 state.isEPGVisible = false
                 state.isCatchupTimelineVisible = false
@@ -3486,6 +3671,7 @@ public struct PlayerFeature {
                 state.isDeinterlaceModeKnown = false
                 return .merge(
                     .cancel(id: CancelID.statsTimer),
+                    .cancel(id: CancelID.liveVideoStallMonitor),
                     .cancel(id: CancelID.catchupSeek),
                     .cancel(id: CancelID.catchupSeekFeedback),
                     .run { send in
@@ -3499,6 +3685,7 @@ public struct PlayerFeature {
             return .none
 
         case .returnToLiveStream:
+            Self.resetLiveVideoStallTracking(state: &state)
             state.activeCatchupProgram = nil
             state.activeCatchupSeekRequestID = nil
             state.catchupSeekFailureMessage = nil
@@ -3516,6 +3703,7 @@ public struct PlayerFeature {
             state.isDeinterlaceModeKnown = false
             return .merge(
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
                 .run { send in
@@ -3586,6 +3774,14 @@ public struct PlayerFeature {
                   state.playbackEngine == .vlc
             else { return .none }
             state.mediaInfo = info
+            if state.item.isLive {
+                return Self.startLiveVideoStallMonitoring(
+                    state: &state,
+                    playerClient: playerClient,
+                    itemID: itemID,
+                    playbackRequestID: playbackRequestID
+                )
+            }
             if state.isHighFrameRateVOD,
                state.firstPresentedFrameLatency != nil,
                state.firstPresentedFrameFeedbackRequestID == nil
@@ -3853,6 +4049,11 @@ public struct PlayerFeature {
                 return .send(.recordingFinalized(filePath))
             case let .stateChanged(newState):
                 state.playerState = newState
+                let liveVideoMonitorCancellation: Effect<Action> = if newState == .playing {
+                    .none
+                } else {
+                    Self.stopLiveVideoStallMonitoring(state: &state)
+                }
                 if newState == .playing {
                     state.retryCount = 0 // Reset on successful play
                     state.isReconnecting = state.playbackPositionRecoveryRequestID == state.playbackRequestID
@@ -3965,23 +4166,36 @@ public struct PlayerFeature {
                             generationID: state.streamHealthGenerationID
                         )))
                     }
+                    if Self.canMonitorLiveVideoStall(state: state) {
+                        actions.append(.send(.startLiveVideoStallMonitoring(
+                            itemID: state.item.id,
+                            playbackRequestID: state.playbackRequestID
+                        )))
+                    } else {
+                        actions.append(Self.stopLiveVideoStallMonitoring(state: &state))
+                    }
                     return .merge(actions)
                 } else if newState == .buffering || newState == .opening {
                     if !state.isUserPaused {
-                        return .run { send in
-                            try await Task.sleep(nanoseconds: 12_000_000_000)
-                            await send(.streamStalled)
-                        }
-                        .cancellable(id: CancelID.stallWatchdog, cancelInFlight: true)
+                        return .merge(
+                            liveVideoMonitorCancellation,
+                            .run { send in
+                                try await Task.sleep(nanoseconds: 12_000_000_000)
+                                await send(.streamStalled)
+                            }
+                            .cancellable(id: CancelID.stallWatchdog, cancelInFlight: true)
+                        )
                     }
+                    return liveVideoMonitorCancellation
                 } else if newState == .stopped {
                     if state.item.isLive, !state.isUserPaused, !state.isMinimized {
-                        return .send(.initiateAutoReconnect)
+                        return .merge(liveVideoMonitorCancellation, .send(.initiateAutoReconnect))
                     }
                 } else if newState == .error {
                     state.isTransitioningEpisode = false
-                    return .send(.initiateAutoReconnect)
+                    return .merge(liveVideoMonitorCancellation, .send(.initiateAutoReconnect))
                 }
+                return liveVideoMonitorCancellation
             case .endReached:
                 if state.item.isLive, !state.isUserPaused, !state.isMinimized {
                     return .send(.initiateAutoReconnect)
@@ -4357,6 +4571,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.upNextCountdown),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.dynamicRangeHUD),
@@ -4425,14 +4640,17 @@ public struct PlayerFeature {
             guard state.playbackEngine == .vlc else { return .none }
             guard !state.isMinimized else { return .none }
             state.isMinimized = true
-            return .run { send in
-                await send(.delegate(.didRequestMinimize))
-                await MainActor.run {
-                    #if os(iOS)
-                        OrientationManager.shared.unlockPortrait()
-                    #endif
+            return .merge(
+                Self.stopLiveVideoStallMonitoring(state: &state),
+                .run { send in
+                    await send(.delegate(.didRequestMinimize))
+                    await MainActor.run {
+                        #if os(iOS)
+                            OrientationManager.shared.unlockPortrait()
+                        #endif
+                    }
                 }
-            }
+            )
 
         case .sharePlayTapped:
             guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }
@@ -4458,7 +4676,9 @@ public struct PlayerFeature {
 
         case let .onPiPStatusChanged(isActive):
             state.isPiPActive = isActive
-            return .none
+            return isActive
+                ? Self.stopLiveVideoStallMonitoring(state: &state)
+                : .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
 
         case let .setAutoPiPEnabled(enabled):
             state.isAutoPiPEnabled = enabled
@@ -4469,39 +4689,47 @@ public struct PlayerFeature {
             return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
 
         case .appMovedToBackground:
+            state.isAppInBackground = true
             if state.playbackEngine == .avPlayer {
-                return .send(.pause)
+                return .merge(Self.stopLiveVideoStallMonitoring(state: &state), .send(.pause))
             }
             if state.isRecording || state.isRecordingStartPending {
-                return .run { send in
-                    await playerClient.requestRecordingStop()
-                    await send(.recordingStopUnconfirmed)
-                }
+                return .merge(
+                    Self.stopLiveVideoStallMonitoring(state: &state),
+                    .run { send in
+                        await playerClient.requestRecordingStop()
+                        await send(.recordingStopUnconfirmed)
+                    }
+                )
             }
             switch state.backgroundPlaybackMode {
             case .pip:
                 if state.isAutoPiPEnabled, state.isPiPSupported, state.playerState == .playing {
                     state.shouldTriggerPiP = true
                 }
-                return .none
+                return Self.stopLiveVideoStallMonitoring(state: &state)
             case .audioOnly:
                 if state.playerState == .playing {
                     state.isBackgroundAudioActive = true
                 }
-                return .none
+                return Self.stopLiveVideoStallMonitoring(state: &state)
             case .disabled:
-                return .run { send in
-                    await send(.pause)
-                }
+                return .merge(
+                    Self.stopLiveVideoStallMonitoring(state: &state),
+                    .run { send in
+                        await send(.pause)
+                    }
+                )
             }
 
         case .appMovedToForeground:
+            state.isAppInBackground = false
             state.isBackgroundAudioActive = false
-            return .none
+            return .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
 
         case .pipStarted:
             state.isPiPActive = true
-            return .none
+            return Self.stopLiveVideoStallMonitoring(state: &state)
 
         case .pipStopped:
             state.isPiPActive = false
@@ -4523,10 +4751,10 @@ public struct PlayerFeature {
                         }
                     }
                 } else {
-                    return .none
+                    return .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
                 }
             #else
-                return .none
+                return .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
             #endif
 
         case .pipRestoreUI:
@@ -4534,13 +4762,16 @@ public struct PlayerFeature {
             state.isPiPActive = false
             state.isControlsVisible = true
             state.oledInactivitySeconds = 0
-            return .run { _ in
+            return .merge(
+                .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID)),
+                .run { _ in
                 #if os(iOS)
                     await MainActor.run {
                         OrientationManager.shared.lockLandscape()
                     }
                 #endif
-            }
+                }
+            )
 
         // ── Up Next Episode Auto-Play (Madde #48 / #42) ──
         case .showUpNext:

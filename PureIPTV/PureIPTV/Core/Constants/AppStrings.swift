@@ -272,6 +272,8 @@ public enum AppStrings {
         public static let mediaInfoUnavailable = "Teknik bilgi alınamadı".localized
         public static let renderedFPS = "Ölçülen Gösterilen Kare Hızı".localized
         public static let sampleUnavailable = "Örnek bekleniyor".localized
+        public static let liveVideoStallTitle = "Görüntü Akışı Duraklamış Olabilir".localized
+        public static let liveVideoStallMessage = "Oynatma saati ilerliyor, ancak oynatıcı yeni görüntü kareleri bildirmiyor. Ses çıkışı doğrulanamıyor.".localized
         public static let bufferHealth = "Tampon Durumu".localized
         public static let streamHealthTitle = "Yayın Sağlığı & Tampon".localized
         public static let networkLatency = "Ağ Gecikmesi (Ping)".localized
