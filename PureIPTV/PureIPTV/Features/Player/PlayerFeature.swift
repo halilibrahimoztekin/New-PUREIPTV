@@ -181,7 +181,12 @@ public struct PlayerFeature {
         public var isDeinterlaceModeKnown = true
         public var isSwitchingPlaybackEngine = false
         public var playbackEngineSwitchID: UUID?
+        var playbackEngineSwitchProfileID: UUID?
         public var playbackEngineError: String?
+        var rememberedPlaybackChoice: PlaybackChoiceReminder?
+        var didLoadRememberedPlaybackChoice = false
+        var rememberedPlaybackChoiceProfileScope: ProfileContextSnapshot?
+        var dismissedRememberedPlaybackChoiceScopeKeys: Set<String> = []
         public var isControlsVisible: Bool = true
         public var errorMessage: String?
         public var didRequestXtreamLiveOutputFormats = false
@@ -785,6 +790,9 @@ public struct PlayerFeature {
 
         /// External Player (Madde #86)
         case openInExternalPlayer(ExternalPlayer)
+        case applyRememberedPlaybackChoice
+        case dismissRememberedPlaybackChoice
+        case forgetRememberedPlaybackChoice
 
         // Category Jump (Madde #97)
         case jumpToNextCategory
@@ -1106,6 +1114,53 @@ public struct PlayerFeature {
         )
     }
 
+    private static func loadRememberedPlaybackChoice(state: inout State, profileScope: ProfileContextSnapshot) {
+        state.rememberedPlaybackChoiceProfileScope = profileScope
+        guard let reminder = PlaybackChoicePreferenceStore.load(
+            item: state.item,
+            playbackURL: state.activePlaybackURL,
+            profileID: profileScope.profileID
+        ) else {
+            state.rememberedPlaybackChoice = nil
+            return
+        }
+        guard !state.dismissedRememberedPlaybackChoiceScopeKeys.contains(reminder.scopeKey) else {
+            state.rememberedPlaybackChoice = nil
+            return
+        }
+
+        if let engine = reminder.choice.playbackEngine {
+            guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
+                state.rememberedPlaybackChoice = nil
+                return
+            }
+        } else {
+            #if os(iOS)
+                guard state.item.config?.type != .plex,
+                      state.item.config?.type != .emby else {
+                    state.rememberedPlaybackChoice = nil
+                    return
+                }
+            #else
+                state.rememberedPlaybackChoice = nil
+                return
+            #endif
+        }
+
+        state.rememberedPlaybackChoice = reminder
+    }
+
+    private static func reloadRememberedPlaybackChoiceAfterProfileChange(
+        state: inout State,
+        profileContextClient: ProfileContextClient
+    ) -> Effect<Action> {
+        let profileScope = profileContextClient.snapshot()
+        guard state.rememberedPlaybackChoiceProfileScope != profileScope else { return .none }
+        state.rememberedPlaybackChoice = nil
+        loadRememberedPlaybackChoice(state: &state, profileScope: profileScope)
+        return .none
+    }
+
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
@@ -1128,6 +1183,11 @@ public struct PlayerFeature {
             state.playbackEngine = state.item.config?.type == .plex || state.item.config?.type == .emby
                 ? .vlc
                 : playerClient.activeEngine()
+            let profileScope = profileContextClient.snapshot()
+            if !state.didLoadRememberedPlaybackChoice {
+                state.didLoadRememberedPlaybackChoice = true
+                Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileScope)
+            }
             state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
             state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
             state.isOLEDDimmingEnabled = settingsClient.isOLEDDimmingEnabled()
@@ -1172,8 +1232,6 @@ public struct PlayerFeature {
             if !isAlreadyPlaying {
                 state.isDeinterlaceModeKnown = false
             }
-            let profileScope = profileContextClient.snapshot()
-
             let recentEffect: Effect<Action> = isLive ? .run { [item = state.item] send in
                 let recentDTO = RecentChannelDTO(
                     id: item.id,
@@ -1849,6 +1907,7 @@ public struct PlayerFeature {
             let selectedItem = state.item.replacingLiveStreamURL(currentStreamURL, playlistConfig: updatedConfig)
             state.item = selectedItem
             state.activePlaybackURL = currentStreamURL
+            Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
             state.playlist = state.playlist?.map(updatedItem)
             state.liveChannels = state.liveChannels.map(updatedItem)
             state.epgBrowseChannel = state.epgBrowseChannel.map(updatedItem)
@@ -3331,10 +3390,12 @@ public struct PlayerFeature {
             state.hasAttemptedMediaServerPlaybackStatus = false
             state.item = newItem
             state.playbackEngine = .vlc
+            Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
             state.deinterlaceModeRequestID = nil
             state.isDeinterlaceModeKnown = false
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
+            state.playbackEngineSwitchProfileID = nil
             state.playbackEngineError = nil
             state.skipMarkers = .init()
             state.skipMarkerRequestID = nil
@@ -3857,6 +3918,7 @@ public struct PlayerFeature {
                 state.catchupSeekFailureMessage = nil
                 state.catchupSeekFailureRequestID = nil
                 state.activePlaybackURL = catchupURL
+                Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
                 state.currentTime = .zero
                 state.totalTime = .zero
                 state.position = 0.0
@@ -3891,6 +3953,7 @@ public struct PlayerFeature {
             state.playerState = .playing
             let liveURL = state.item.streamURL
             state.activePlaybackURL = liveURL
+            Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
             let userAgentOverride = state.item.userAgentOverride
@@ -4412,7 +4475,8 @@ public struct PlayerFeature {
                 }
                 return .merge(
                     updateUpNextState(state: &state, settingsClient: settingsClient),
-                    reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient)
+                    reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient),
+                    reloadRememberedPlaybackChoiceAfterProfileChange(state: &state, profileContextClient: profileContextClient)
                 )
             case let .lengthChanged(length):
                 state.totalTime = length
@@ -4427,6 +4491,7 @@ public struct PlayerFeature {
                 var effects: [Effect<Action>] = [
                     updateUpNextState(state: &state, settingsClient: settingsClient),
                     reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient),
+                    reloadRememberedPlaybackChoiceAfterProfileChange(state: &state, profileContextClient: profileContextClient),
                 ]
 
                 // Trakt.tv VOD scrobble progress detection (Madde #17)
@@ -4595,6 +4660,7 @@ public struct PlayerFeature {
             state.activeXtreamLiveOutputFormatRequestID = nil
             let requestID = UUID()
             state.playbackEngineSwitchID = requestID
+            state.playbackEngineSwitchProfileID = profileContextClient.snapshot().profileID
             state.mediaInfoRequestID = nil
             let itemID = state.item.id
             let item = state.item
@@ -4639,6 +4705,22 @@ public struct PlayerFeature {
 
         case let .playbackEngineSwitchFinished(engine, deinterlaceMode, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
+            let profileID = state.playbackEngineSwitchProfileID
+            if let scopeKey = PlaybackChoicePreferenceStore.scopeKey(
+                item: state.item,
+                playbackURL: state.activePlaybackURL,
+                profileID: profileID
+            ) {
+                state.dismissedRememberedPlaybackChoiceScopeKeys.insert(scopeKey)
+            }
+            PlaybackChoicePreferenceStore.save(
+                .inApp(engine),
+                item: state.item,
+                playbackURL: state.activePlaybackURL,
+                profileID: profileID
+            )
+            state.playbackEngineSwitchProfileID = nil
+            state.rememberedPlaybackChoice = nil
             let isErrorRecovery = state.playbackRecoveryErrorMessage != nil
             state.playbackRecoveryErrorMessage = nil
             state.isSwitchingPlaybackEngine = false
@@ -4689,6 +4771,7 @@ public struct PlayerFeature {
             state.playbackRecoveryErrorMessage = nil
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
+            state.playbackEngineSwitchProfileID = nil
             _ = message
             state.playbackEngineError = AppStrings.Player.playbackEngineSwitchFailed
             return .none
@@ -5018,9 +5101,80 @@ public struct PlayerFeature {
         case let .openInExternalPlayer(player):
             guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }
             #if canImport(UIKit)
-                let url = state.item.streamURL
-                _ = ExternalPlayerManager.shared.openStream(url, in: player)
+                let manager = ExternalPlayerManager.shared
+                let isInstalled = manager.isInstalled(player)
+                let result = manager.openStream(state.activePlaybackURL, in: player)
+                let profileID = profileContextClient.snapshot().profileID
+                if let scopeKey = PlaybackChoicePreferenceStore.scopeKey(
+                    item: state.item,
+                    playbackURL: state.activePlaybackURL,
+                    profileID: profileID
+                ) {
+                    state.dismissedRememberedPlaybackChoiceScopeKeys.insert(scopeKey)
+                }
+                if isInstalled, case .opened = result {
+                    PlaybackChoicePreferenceStore.save(
+                        .external(player),
+                        item: state.item,
+                        playbackURL: state.activePlaybackURL,
+                        profileID: profileID
+                    )
+                }
+                state.rememberedPlaybackChoice = nil
             #endif
+            return .none
+
+        case .applyRememberedPlaybackChoice:
+            guard let reminder = state.rememberedPlaybackChoice,
+                  PlaybackChoicePreferenceStore.scopeKey(
+                      item: state.item,
+                      playbackURL: state.activePlaybackURL,
+                      profileID: profileContextClient.snapshot().profileID
+                  ) == reminder.scopeKey else {
+                state.rememberedPlaybackChoice = nil
+                return .none
+            }
+
+            if let engine = reminder.choice.playbackEngine {
+                guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
+                    state.rememberedPlaybackChoice = nil
+                    return .none
+                }
+                return .send(.switchPlaybackEngine(engine))
+            }
+
+            #if os(iOS)
+                guard state.item.config?.type != .plex,
+                      state.item.config?.type != .emby,
+                      let player = reminder.choice.externalPlayer
+                else {
+                    state.rememberedPlaybackChoice = nil
+                    return .none
+                }
+                let manager = ExternalPlayerManager.shared
+                let isInstalled = manager.isInstalled(player)
+                let result = manager.openStream(state.activePlaybackURL, in: player)
+                guard isInstalled, case .opened = result else { return .none }
+                state.dismissedRememberedPlaybackChoiceScopeKeys.insert(reminder.scopeKey)
+                state.rememberedPlaybackChoice = nil
+                return .none
+            #else
+                state.rememberedPlaybackChoice = nil
+                return .none
+            #endif
+
+        case .dismissRememberedPlaybackChoice:
+            if let reminder = state.rememberedPlaybackChoice {
+                state.dismissedRememberedPlaybackChoiceScopeKeys.insert(reminder.scopeKey)
+            }
+            state.rememberedPlaybackChoice = nil
+            return .none
+
+        case .forgetRememberedPlaybackChoice:
+            if let reminder = state.rememberedPlaybackChoice {
+                PlaybackChoicePreferenceStore.clear(scopeKey: reminder.scopeKey)
+            }
+            state.rememberedPlaybackChoice = nil
             return .none
 
         // ── Channel Hide & Category Blacklist (Madde #19) ──

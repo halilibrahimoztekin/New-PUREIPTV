@@ -190,6 +190,14 @@ public enum AppStrings {
 
     public enum Player {
         public static let playbackEngine = "Oynatma Motoru".localized
+        public static let rememberedPlaybackChoiceTitle = "Önceki Oynatıcı Seçimin".localized
+        public static let forgetRememberedPlaybackChoice = "Bu Seçimi Unut".localized
+        public static func rememberedPlaybackChoiceMessage(_ choice: String) -> String {
+            "Bu kaynak ve yayın biçimi için son seçimin %@. Oynatıcı kendiliğinden değiştirilmez.".localized(choice)
+        }
+        public static func useRememberedPlaybackChoice(_ choice: String) -> String {
+            "%@ ile Aç".localized(choice)
+        }
         public static let deinterlace = "Deinterlace".localized
         public static let deinterlaceFallback = "Bu akışta Deinterlace uygulanamadı; Otomatik kullanılıyor.".localized
         public static let deinterlaceUnknown = "Deinterlace durumu doğrulanamadı.".localized
