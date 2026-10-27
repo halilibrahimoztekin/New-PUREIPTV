@@ -18,6 +18,7 @@ public struct NerdStatsHUDView: View {
     public let currentAudioRoute: AudioRouteInfo?
     public let playerStats: String
     public let streamHealthMetrics: StreamHealthMetrics?
+    public let serverPlaybackStatus: MediaModels.ServerPlaybackStatus?
     public let onClose: () -> Void
 
     #if os(tvOS)
@@ -37,6 +38,7 @@ public struct NerdStatsHUDView: View {
         currentAudioRoute: AudioRouteInfo? = nil,
         playerStats: String = "",
         streamHealthMetrics: StreamHealthMetrics? = nil,
+        serverPlaybackStatus: MediaModels.ServerPlaybackStatus? = nil,
         onClose: @escaping () -> Void
     ) {
         self.item = item
@@ -51,6 +53,7 @@ public struct NerdStatsHUDView: View {
         self.currentAudioRoute = currentAudioRoute
         self.playerStats = playerStats
         self.streamHealthMetrics = streamHealthMetrics
+        self.serverPlaybackStatus = serverPlaybackStatus
         self.onClose = onClose
     }
 
@@ -192,6 +195,15 @@ public struct NerdStatsHUDView: View {
                     value: streamFormatString,
                     accentColor: Color(hex: "#64D2FF")
                 )
+
+                if item.config?.type == .plex || item.config?.type == .emby {
+                    StatCard(
+                        icon: "play.square.stack.fill",
+                        title: AppStrings.Player.serverPlaybackMode,
+                        value: serverPlaybackModeString,
+                        accentColor: Color(hex: "#00F5D4")
+                    )
+                }
 
                 // VPN Status (Madde #93)
                 StatCard(
@@ -349,6 +361,27 @@ public struct NerdStatsHUDView: View {
             return "Matroska Video (.mkv)"
         }
         return "\(url.scheme?.uppercased() ?? "HTTP") Stream"
+    }
+
+    private var serverPlaybackModeString: String {
+        guard let serverPlaybackStatus else { return AppStrings.Player.serverPlaybackModeUnavailable }
+        let mode: String = switch serverPlaybackStatus.mode {
+        case .directPlay: AppStrings.Player.serverModeDirectPlay
+        case .directStream: AppStrings.Player.serverModeDirectStream
+        case .transcoding: AppStrings.Player.serverModeTranscoding
+        }
+        let evidence: String = switch serverPlaybackStatus.evidence {
+        case .serverSession: AppStrings.Player.serverModeEvidenceSession
+        case .playbackResponse: AppStrings.Player.serverModeEvidenceResponse
+        }
+        var details = [mode, evidence]
+        if let resolution = serverPlaybackStatus.resolution, !resolution.isEmpty {
+            details.append(resolution)
+        }
+        if let bitrateKbps = serverPlaybackStatus.bitrateKbps, bitrateKbps > 0 {
+            details.append("\(bitrateKbps) kbps")
+        }
+        return details.joined(separator: " • ")
     }
 }
 

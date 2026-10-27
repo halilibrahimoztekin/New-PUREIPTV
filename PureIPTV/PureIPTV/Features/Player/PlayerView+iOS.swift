@@ -1182,6 +1182,7 @@
                                     currentAudioRoute: store.currentAudioRoute,
                                     playerStats: store.playerStats,
                                     streamHealthMetrics: store.streamHealthMetrics,
+                                    serverPlaybackStatus: store.mediaServerPlaybackStatus,
                                     onClose: {
                                         store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                     }

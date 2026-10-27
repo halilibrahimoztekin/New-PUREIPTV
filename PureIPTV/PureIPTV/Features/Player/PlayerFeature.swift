@@ -11,6 +11,7 @@ import SwiftVLC
 public struct PlayerFeature {
     public enum CancelID {
         public static let playerEvents = "PlayerFeature.playerEvents"
+        public static let mediaServerPlaybackStatus = "PlayerFeature.mediaServerPlaybackStatus"
         public static let playbackEngineSwitch = "PlayerFeature.playbackEngineSwitch"
         public static let statsTimer = "PlayerFeature.statsTimer"
         public static let sleepTimer = "PlayerFeature.sleepTimer"
@@ -214,6 +215,9 @@ public struct PlayerFeature {
         public var activePlaybackURL: URL
         public var mediaServerProxyURL: URL?
         public var mediaServerPlaybackRequestID: UUID?
+        public var mediaServerPlaybackStatus: MediaModels.ServerPlaybackStatus?
+        public var mediaServerPlaybackStatusRequestID: UUID?
+        public var hasAttemptedMediaServerPlaybackStatus = false
         public var isStreamHealthHUDVisible: Bool = false
         public var activeCatchupProgram: EPGProgram?
         public var activeCatchupSeekRequestID: UUID?
@@ -604,7 +608,19 @@ public struct PlayerFeature {
         case deinterlaceModeApplied(DeinterlaceMode, UUID, String, URL)
         case deinterlaceModeFailed(UUID, String, URL)
         case deinterlaceModePlaybackResolved(requested: DeinterlaceMode, applied: DeinterlaceMode?, revision: UUID, itemID: String, streamURL: URL)
-        case mediaServerPlaybackResolved(requestID: UUID, itemID: String, streamURL: URL, proxyURL: URL)
+        case mediaServerPlaybackResolved(
+            requestID: UUID,
+            itemID: String,
+            streamURL: URL,
+            proxyURL: URL,
+            status: MediaModels.ServerPlaybackStatus?
+        )
+        case mediaServerPlaybackStatusLoaded(
+            requestID: UUID,
+            itemID: String,
+            playbackRequestID: UUID,
+            status: MediaModels.ServerPlaybackStatus?
+        )
         case toggleInfo
         case toggleEPG
         case selectEPGBrowseChannel(PlayableItem)
@@ -789,6 +805,7 @@ public struct PlayerFeature {
     @Dependency(\.displayModeClient) var displayModeClient
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.playbackSkipMarkerClient) var playbackSkipMarkerClient
+    @Dependency(\.mediaServerClient) var mediaServerClient
 
     public init() {}
 
@@ -833,6 +850,7 @@ public struct PlayerFeature {
     public var body: some Reducer<State, Action> {
         let playerClient = playerClient
         let databaseClient = databaseClient
+        let mediaServerClient = mediaServerClient
         let profileContextClient = profileContextClient
         let settingsClient = settingsClient
         let recentChannelsClient = recentChannelsClient
@@ -845,7 +863,7 @@ public struct PlayerFeature {
         let playbackSkipMarkerClient = playbackSkipMarkerClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, profileContextClient: profileContextClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, profileContextClient: profileContextClient)
         }
     }
 
@@ -961,10 +979,13 @@ public struct PlayerFeature {
         )
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             state.playbackRequestID = UUID()
+            state.mediaServerPlaybackStatus = nil
+            state.mediaServerPlaybackStatusRequestID = nil
+            state.hasAttemptedMediaServerPlaybackStatus = false
             state.mediaInfoRequestID = nil
             state.mediaInfo = nil
             state.firstPresentedFrameLatency = nil
@@ -1060,6 +1081,7 @@ public struct PlayerFeature {
                 .send(.loadSkipMarkers),
                 recentEffect,
                 .send(.startOLEDDimTimer),
+                .cancel(id: CancelID.mediaServerPlaybackStatus),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
                 .cancel(id: CancelID.highFPSFeedback),
@@ -1142,7 +1164,8 @@ public struct PlayerFeature {
                                             requestID: mediaServerPlaybackRequestID,
                                             itemID: itemID,
                                             streamURL: activeURL,
-                                            proxyURL: playbackURL
+                                            proxyURL: playbackURL,
+                                            status: resolvedItem.serverPlaybackStatus
                                         ))
                                     } else {
                                         playbackURL = url
@@ -1174,6 +1197,7 @@ public struct PlayerFeature {
                 playerClient: playerClient,
                 databaseClient: databaseClient,
                 iptvClient: iptvClient,
+                mediaServerClient: mediaServerClient,
                 settingsClient: settingsClient,
                 recentChannelsClient: recentChannelsClient,
                 streamHealthClient: streamHealthClient,
@@ -1613,7 +1637,8 @@ public struct PlayerFeature {
                                         requestID: mediaServerPlaybackRequestID,
                                         itemID: itemID,
                                         streamURL: activeURL,
-                                        proxyURL: playbackURL
+                                        proxyURL: playbackURL,
+                                        status: resolvedItem.serverPlaybackStatus
                                     ))
                                 } else {
                                     playbackURL = url
@@ -2687,7 +2712,7 @@ public struct PlayerFeature {
             state.playbackEngineError = "Deinterlace ayarı bu akışta uygulanamadı.".localized
             return .none
 
-        case let .mediaServerPlaybackResolved(requestID, itemID, streamURL, proxyURL):
+        case let .mediaServerPlaybackResolved(requestID, itemID, streamURL, proxyURL, status):
             guard state.mediaServerPlaybackRequestID == requestID,
                   state.item.id == itemID,
                   state.item.config?.type == .plex || state.item.config?.type == .emby
@@ -2698,6 +2723,21 @@ public struct PlayerFeature {
             }
             state.activePlaybackURL = streamURL
             state.mediaServerProxyURL = proxyURL
+            state.mediaServerPlaybackStatus = status
+            state.mediaServerPlaybackStatusRequestID = nil
+            state.hasAttemptedMediaServerPlaybackStatus = false
+            return .cancel(id: CancelID.mediaServerPlaybackStatus)
+
+        case let .mediaServerPlaybackStatusLoaded(requestID, itemID, playbackRequestID, status):
+            guard state.mediaServerPlaybackStatusRequestID == requestID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.item.id == itemID,
+                  state.item.config?.type == .plex || state.item.config?.type == .emby
+            else { return .none }
+            state.mediaServerPlaybackStatusRequestID = nil
+            if let status {
+                state.mediaServerPlaybackStatus = status
+            }
             return .none
 
         case let .deinterlaceModePlaybackResolved(requested, applied, revision, itemID, streamURL):
@@ -2916,6 +2956,9 @@ public struct PlayerFeature {
             state.activePlaybackURL = newItem.streamURL
             state.mediaServerPlaybackRequestID = nil
             state.mediaServerProxyURL = nil
+            state.mediaServerPlaybackStatus = nil
+            state.mediaServerPlaybackStatusRequestID = nil
+            state.hasAttemptedMediaServerPlaybackStatus = false
             state.item = newItem
             state.playbackEngine = .vlc
             state.deinterlaceModeRequestID = nil
@@ -2976,6 +3019,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.highFPSFeedback),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.deinterlaceModeChange),
+                .cancel(id: CancelID.mediaServerPlaybackStatus),
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
@@ -3821,6 +3865,42 @@ public struct PlayerFeature {
                         .cancel(id: CancelID.reconnectTimer),
                     ]
 
+                    if let config = state.item.config,
+                       config.type == .plex || config.type == .emby,
+                       !state.hasAttemptedMediaServerPlaybackStatus
+                    {
+                        state.hasAttemptedMediaServerPlaybackStatus = true
+                        let statusRequestID = UUID()
+                        let itemID = state.item.id
+                        let playbackRequestID = state.playbackRequestID
+                        state.mediaServerPlaybackStatusRequestID = statusRequestID
+                        actions.append(
+                            .run { [mediaServerClient] send in
+                                for attempt in 0 ..< 5 {
+                                    if attempt > 0 {
+                                        try await Task.sleep(for: .seconds(1))
+                                    }
+                                    if let status = try? await mediaServerClient.fetchPlaybackStatus(config, itemID) {
+                                        await send(.mediaServerPlaybackStatusLoaded(
+                                            requestID: statusRequestID,
+                                            itemID: itemID,
+                                            playbackRequestID: playbackRequestID,
+                                            status: status
+                                        ))
+                                        return
+                                    }
+                                }
+                                await send(.mediaServerPlaybackStatusLoaded(
+                                    requestID: statusRequestID,
+                                    itemID: itemID,
+                                    playbackRequestID: playbackRequestID,
+                                    status: nil
+                                ))
+                            }
+                            .cancellable(id: CancelID.mediaServerPlaybackStatus, cancelInFlight: true)
+                        )
+                    }
+
                     LiveStreamActivityManager.shared.startStreamActivity(
                         channelTitle: state.item.title,
                         programTitle: state.currentEPGProgram?.title,
@@ -4253,11 +4333,15 @@ public struct PlayerFeature {
             let profileScope = profileContextClient.snapshot()
             let isPiPActive = state.isPiPActive
             state.mediaServerPlaybackRequestID = nil
+            state.mediaServerPlaybackStatus = nil
+            state.mediaServerPlaybackStatusRequestID = nil
+            state.hasAttemptedMediaServerPlaybackStatus = false
             if !isPiPActive {
                 state.mediaServerProxyURL = nil
             }
             return .merge(
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.mediaServerPlaybackStatus),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),

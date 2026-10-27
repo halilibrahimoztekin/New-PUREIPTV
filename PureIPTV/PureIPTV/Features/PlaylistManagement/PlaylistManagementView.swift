@@ -458,6 +458,23 @@ public struct PlaylistManagementView: View {
                     Text("Plex/Emby bağlantısı kaydedilmeden önce mevcut kimlik bilgileriyle doğrulanır.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    if playlist.type == .emby {
+                        Picker(AppStrings.PlaylistMgmt.embyPlaybackPreference, selection: $store.mediaServerPlaybackPreferenceDraft) {
+                            ForEach(MediaServerPlaybackPreference.allCases) { preference in
+                                Text(preference == .automatic
+                                    ? AppStrings.PlaylistMgmt.embyPlaybackAutomatic
+                                    : AppStrings.PlaylistMgmt.embyPlaybackDirectStreamOnly)
+                                    .tag(preference)
+                            }
+                        }
+                        #if os(tvOS)
+                        .pickerStyle(.menu)
+                        #endif
+                        .accessibilityHint(AppStrings.PlaylistMgmt.embyPlaybackDirectStreamOnlyDescription)
+                        Text(AppStrings.PlaylistMgmt.embyPlaybackDirectStreamOnlyDescription)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 TextField("User-Agent", text: $store.userAgentDraft)
                     .textInputAutocapitalization(.never)

@@ -255,6 +255,14 @@ public enum AppStrings {
         public static let mediaInfo = "Media Info".localized
         public static let nerdStats = "Yayın İstatistikleri (Nerd Stats)".localized
         public static let nerdStatsShort = "Teknik Bilgi".localized
+        public static let serverPlaybackMode = "Medya Sunucusu Oynatma Modu".localized
+        public static let serverPlaybackModeUnavailable = "Sunucu modu bildirilmedi".localized
+        public static let serverModeEvidenceSession = "Oturum".localized
+        public static let serverModeEvidenceResponse = "Sunucu yanıtı".localized
+        public static let serverModeDirectPlay = "Direct Play".localized
+        public static let serverModeDirectStream = "Direct Stream".localized
+        public static let serverModeTranscoding = "Sunucu dönüştürmesi".localized
+        public static let directStreamUnavailable = "Sunucu Direct Stream sağlayamadı; otomatik oynatma seçeneğini deneyin.".localized
         public static let videoCodec = "Video Kod Çözücü".localized
         public static let audioCodec = "Ses Kod Çözücü".localized
         public static let resolution = "Çözünürlük".localized
@@ -870,6 +878,10 @@ public enum AppStrings {
         public static let playbackSettings = "Oynatma Ayarları".localized
         public static let channelZappingDelay = "Kanal Geçiş Gecikmesi".localized
         public static let channelZappingDelayDescription = "Önceki yayın kapandıktan sonra sonraki kanal açılmadan önce beklenecek süre. 0 ms anında geçiş yapar.".localized
+        public static let embyPlaybackPreference = "Emby Oynatma Tercihi".localized
+        public static let embyPlaybackAutomatic = "Otomatik (sunucu seçsin)".localized
+        public static let embyPlaybackDirectStreamOnly = "Direct Stream; dönüştürme kapalı".localized
+        public static let embyPlaybackDirectStreamOnlyDescription = "Emby sunucusundan encoding/transcoding yapmamasını ister. Sunucu ve oynatıcı uyumlu doğrudan akış bulamazsa içerik oynatılamayabilir.".localized
         public static func channelZappingDelayValue(_ milliseconds: Int) -> String {
             "%lld ms".localized(Int64(milliseconds))
         }

@@ -304,7 +304,12 @@ public struct MediaServerCatalogClient: Sendable {
                 return plexMediaItem(metadata, server: server, categoryID: metadata.librarySectionID, streamURL: streamURL, itemType: metadata.type?.lowercased() == "show" ? .series : .vod)
             case .emby:
                 let metadata = try await fetchEmbyItem(server, itemID: rawItemID, networkClient: networkClient)
-                let playback = try await fetchEmbyPlaybackURL(server, itemID: rawItemID, networkClient: networkClient)
+                let playback = try await fetchEmbyPlaybackURL(
+                    server,
+                    itemID: rawItemID,
+                    preference: config.mediaServerPlaybackPreference,
+                    networkClient: networkClient
+                )
                 let itemType: MediaModels.ItemType = metadata.type?.lowercased() == "series" ? .series : .vod
                 return embyMediaItem(
                     metadata,
@@ -312,7 +317,8 @@ public struct MediaServerCatalogClient: Sendable {
                     categoryID: metadata.parentID,
                     streamURL: playback.url,
                     itemType: itemType,
-                    playbackRequestHeaders: playback.headers
+                    playbackRequestHeaders: playback.headers,
+                    serverPlaybackStatus: playback.status
                 )
             case .xtream, .m3u:
                 return nil
@@ -856,8 +862,9 @@ private nonisolated func fetchEmbyItem(
 private nonisolated func fetchEmbyPlaybackURL(
     _ server: MediaServerConnection,
     itemID: String,
+    preference: MediaServerPlaybackPreference,
     networkClient: NetworkClient
-) async throws -> (url: URL, headers: [String: String]?) {
+) async throws -> (url: URL, headers: [String: String]?, status: MediaModels.ServerPlaybackStatus) {
     guard let userID = server.userID,
           let itemID = MediaServerIdentifier.validated(itemID),
           let url = serverURL(server.baseURL, path: ["Items", itemID, "PlaybackInfo"], query: [
@@ -865,14 +872,42 @@ private nonisolated func fetchEmbyPlaybackURL(
           ]) else { throw NetworkError.invalidURL }
     var request = server.context.makeRequest(for: url)
     request.setValue("application/json", forHTTPHeaderField: "Accept")
+    if preference == .directStreamOnly {
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(EmbyPlaybackInfoRequest(
+            id: itemID,
+            userID: userID,
+            enableDirectPlay: false,
+            enableDirectStream: true,
+            enableTranscoding: false,
+            isPlayback: true
+        ))
+    }
     let response: EmbyPlaybackInfoResponse = try await networkClient.fetch(request: request)
-    guard let source = response.mediaSources.first,
+    let source: EmbyMediaSource?
+    if preference == .directStreamOnly {
+        source = response.mediaSources.first(where: { $0.supportsDirectStream == true || $0.directStreamURL != nil })
+        guard source != nil else { throw EmbyPlaybackResolutionError.directStreamUnavailable }
+    } else {
+        source = response.mediaSources.first
+    }
+    guard let source,
           let sourceID = MediaServerIdentifier.validated(source.id) else { throw NetworkError.invalidResponse }
     let playSessionID = MediaServerIdentifier.validated(response.playSessionID)
     let directURL = source.directStreamURL.flatMap { providerURL($0, server: server) }
     let transcodingURL = source.transcodingURL.flatMap { providerURL($0, server: server) }
-    if let playbackURL = directURL ?? transcodingURL {
-        return (playbackURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders))
+    let playbackStatus: MediaModels.ServerPlaybackStatus
+    if let directURL {
+        playbackStatus = MediaModels.ServerPlaybackStatus(mode: .directStream, evidence: .playbackResponse)
+        return (directURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders), playbackStatus)
+    }
+    if preference == .automatic, let transcodingURL {
+        playbackStatus = MediaModels.ServerPlaybackStatus(mode: .transcoding, evidence: .playbackResponse)
+        return (transcodingURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders), playbackStatus)
+    }
+    guard preference == .automatic || source.supportsDirectStream == true else {
+        throw EmbyPlaybackResolutionError.directStreamUnavailable
     }
     let container = MediaServerIdentifier.validated(source.container?.lowercased()) ?? "mp4"
     var query = [
@@ -884,7 +919,19 @@ private nonisolated func fetchEmbyPlaybackURL(
     }
     guard let streamURL = serverURL(server.baseURL, path: ["Videos", itemID, "stream.\(container)"], query: query),
           let safeURL = server.context.makeRequest(for: streamURL).url else { throw NetworkError.invalidURL }
-    return (safeURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders))
+    playbackStatus = MediaModels.ServerPlaybackStatus(mode: .directStream, evidence: .playbackResponse)
+    return (safeURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders), playbackStatus)
+}
+
+private nonisolated enum EmbyPlaybackResolutionError: LocalizedError {
+    case directStreamUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .directStreamUnavailable:
+            AppStrings.Player.directStreamUnavailable
+        }
+    }
 }
 
 private nonisolated func plexMediaItem(
@@ -917,7 +964,8 @@ private nonisolated func embyMediaItem(
     categoryID: String?,
     streamURL: URL,
     itemType: MediaModels.ItemType,
-    playbackRequestHeaders: [String: String]? = nil
+    playbackRequestHeaders: [String: String]? = nil,
+    serverPlaybackStatus: MediaModels.ServerPlaybackStatus? = nil
 ) -> MediaModels.Item {
     let rawID = MediaServerIdentifier.validated(item.id) ?? "unknown"
     return MediaModels.Item(
@@ -933,7 +981,8 @@ private nonisolated func embyMediaItem(
         addedDate: parseISODate(item.dateCreated),
         userAgentOverride: nil,
         playlistID: server.playlistID,
-        playbackRequestHeaders: playbackRequestHeaders
+        playbackRequestHeaders: playbackRequestHeaders,
+        serverPlaybackStatus: serverPlaybackStatus
     )
 }
 
@@ -1330,6 +1379,9 @@ private nonisolated struct EmbyPerson: Decodable {
 private nonisolated struct EmbyMediaSource: Decodable {
     let id: String?
     let container: String?
+    let supportsDirectPlay: Bool?
+    let supportsDirectStream: Bool?
+    let supportsTranscoding: Bool?
     let directStreamURL: String?
     let transcodingURL: String?
     let requiredHTTPHeaders: [String: String]?
@@ -1337,6 +1389,9 @@ private nonisolated struct EmbyMediaSource: Decodable {
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case container = "Container"
+        case supportsDirectPlay = "SupportsDirectPlay"
+        case supportsDirectStream = "SupportsDirectStream"
+        case supportsTranscoding = "SupportsTranscoding"
         case directStreamURL = "DirectStreamUrl"
         case transcodingURL = "TranscodingUrl"
         case requiredHTTPHeaders = "RequiredHttpHeaders"
@@ -1346,9 +1401,30 @@ private nonisolated struct EmbyMediaSource: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeFlexibleString(forKey: .id)
         self.container = try container.decodeFlexibleString(forKey: .container)
+        supportsDirectPlay = try container.decodeIfPresent(Bool.self, forKey: .supportsDirectPlay)
+        supportsDirectStream = try container.decodeIfPresent(Bool.self, forKey: .supportsDirectStream)
+        supportsTranscoding = try container.decodeIfPresent(Bool.self, forKey: .supportsTranscoding)
         directStreamURL = try container.decodeFlexibleString(forKey: .directStreamURL)
         transcodingURL = try container.decodeFlexibleString(forKey: .transcodingURL)
         requiredHTTPHeaders = try? container.decode([String: String].self, forKey: .requiredHTTPHeaders)
+    }
+}
+
+private nonisolated struct EmbyPlaybackInfoRequest: Encodable {
+    let id: String
+    let userID: String
+    let enableDirectPlay: Bool
+    let enableDirectStream: Bool
+    let enableTranscoding: Bool
+    let isPlayback: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case userID = "UserId"
+        case enableDirectPlay = "EnableDirectPlay"
+        case enableDirectStream = "EnableDirectStream"
+        case enableTranscoding = "EnableTranscoding"
+        case isPlayback = "IsPlayback"
     }
 }
 

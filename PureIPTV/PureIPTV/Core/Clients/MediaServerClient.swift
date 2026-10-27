@@ -23,6 +23,10 @@ public struct EmbyAuthenticatedSession: Equatable, Sendable {
 
 @DependencyClient
 public struct MediaServerClient {
+    public var fetchPlaybackStatus: @Sendable (
+        _ config: PlaylistConfig,
+        _ itemID: String
+    ) async throws -> MediaModels.ServerPlaybackStatus?
     public var createPlexPIN: @Sendable () async throws -> PlexSignInPIN
     public var pollPlexPIN: @Sendable (_ pinID: Int, _ code: String) async throws -> String?
     public var discoverPlexServers: @Sendable (_ accountToken: String) async throws -> [PlexDiscoveredServer]
@@ -39,6 +43,88 @@ extension MediaServerClient: DependencyKey {
         let clientIdentifier = MediaServerIdentity.clientIdentifier
 
         return MediaServerClient(
+            fetchPlaybackStatus: { config, itemID in
+                guard let credentials = config.mediaServerCredentials,
+                      let baseURL = MediaServerRequestContextFactory.baseURL(for: config),
+                      let context = MediaServerRequestContextFactory.context(for: config),
+                      let rawItemID = rawMediaServerItemID(itemID, provider: config.type, serverID: credentials.serverID)
+                else { return nil }
+
+                switch config.type {
+                case .plex:
+                    guard let url = URL(string: "status/sessions", relativeTo: baseURL)?.absoluteURL else { return nil }
+                    var request = context.makeRequest(for: url)
+                    request.setValue("application/json", forHTTPHeaderField: "Accept")
+                    let response: PlexPlaybackSessionsResponse = try await networkClient.fetch(request: request)
+                    guard let session = response.mediaContainer.metadata.first(where: {
+                        $0.ratingKey == rawItemID && $0.player?.machineIdentifier == clientIdentifier
+                    }),
+                        let selectedMedia = session.media?.first(where: { $0.selected == true }) ?? session.media?.first,
+                        let part = selectedMedia.parts.first(where: { $0.selected == true }) ?? selectedMedia.parts.first,
+                        let decision = part.decision?.lowercased()
+                    else { return nil }
+                    let mode: MediaModels.ServerPlaybackStatus.Mode
+                    switch decision {
+                    case "directplay": mode = .directPlay
+                    case "directstream": mode = .directStream
+                    case "transcode": mode = .transcoding
+                    default: return nil
+                    }
+                    return MediaModels.ServerPlaybackStatus(
+                        mode: mode,
+                        evidence: .serverSession,
+                        resolution: selectedMedia.videoResolution,
+                        bitrateKbps: selectedMedia.bitrate
+                    )
+
+                case .emby:
+                    guard let userID = credentials.userID,
+                          let sessionsURL = URL(string: "Sessions", relativeTo: baseURL)?.absoluteURL,
+                          var components = URLComponents(url: sessionsURL, resolvingAgainstBaseURL: false)
+                    else { return nil }
+                    let deviceID = MediaServerIdentity.deviceIdentifier
+                    components.queryItems = [URLQueryItem(name: "DeviceId", value: deviceID)]
+                    guard let url = components.url else { return nil }
+                    var request = context.makeRequest(for: url)
+                    request.setValue("application/json", forHTTPHeaderField: "Accept")
+                    let sessions: [EmbyPlaybackSession] = try await networkClient.fetch(request: request)
+                    guard let session = sessions.first(where: {
+                        $0.deviceID == deviceID
+                            && $0.userID == userID
+                            && $0.nowPlayingItem?.id == rawItemID
+                    }),
+                        let playMethod = session.playState?.playMethod?.lowercased()
+                    else { return nil }
+                    let mode: MediaModels.ServerPlaybackStatus.Mode
+                    switch playMethod {
+                    case "directplay": mode = .directPlay
+                    case "directstream": mode = .directStream
+                    case "transcode": mode = .transcoding
+                    default: return nil
+                    }
+                    let transcodingInfo = session.transcodingInfo
+                    let videoStream = session.playState?.mediaSource?.mediaStreams?.first {
+                        $0.type?.caseInsensitiveCompare("Video") == .orderedSame
+                    }
+                    let width = transcodingInfo?.width ?? videoStream?.width
+                    let height = transcodingInfo?.height ?? videoStream?.height
+                    let resolution: String? = if let width, let height, width > 0, height > 0 {
+                        "\(width)×\(height)"
+                    } else {
+                        nil
+                    }
+                    let bitrate = transcodingInfo?.bitrate ?? session.playState?.mediaSource?.bitrate
+                    return MediaModels.ServerPlaybackStatus(
+                        mode: mode,
+                        evidence: .serverSession,
+                        resolution: resolution,
+                        bitrateKbps: bitrate.flatMap { $0 > 0 ? Int((Double($0) / 1000).rounded()) : nil }
+                    )
+
+                case .xtream, .m3u:
+                    return nil
+                }
+            },
             createPlexPIN: {
                 var components = URLComponents(string: "https://plex.tv/api/v2/pins")!
                 components.queryItems = [URLQueryItem(name: "strong", value: "true")]
@@ -151,6 +237,7 @@ extension MediaServerClient: DependencyKey {
     }()
 
     public static let testValue = Self(
+        fetchPlaybackStatus: { _, _ in nil },
         createPlexPIN: { PlexSignInPIN(id: 1, code: "test", signInURL: URL(string: "https://plex.tv/link/?pin=test")!) },
         pollPlexPIN: { _, _ in nil },
         discoverPlexServers: { _ in [] },
@@ -158,6 +245,158 @@ extension MediaServerClient: DependencyKey {
             EmbyAuthenticatedSession(serverID: "test", userID: "test", userName: "Test", accessToken: "test")
         }
     )
+}
+
+private nonisolated func rawMediaServerItemID(
+    _ stableID: String,
+    provider: PlaylistType,
+    serverID: String
+) -> String? {
+    let prefix = "\(provider.rawValue)|\(serverID)|"
+    guard stableID.hasPrefix(prefix) else { return nil }
+    let value = String(stableID.dropFirst(prefix.count))
+    guard !value.isEmpty, value.count <= 256,
+          value.utf8.allSatisfy({ byte in
+              (48 ... 57).contains(byte) || (65 ... 90).contains(byte) || (97 ... 122).contains(byte)
+                  || byte == 45 || byte == 46 || byte == 95
+          }) else { return nil }
+    return value
+}
+
+private struct PlexPlaybackSessionsResponse: Decodable {
+    let mediaContainer: PlexPlaybackSessionsContainer
+
+    enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
+private struct PlexPlaybackSessionsContainer: Decodable {
+    let metadata: [PlexPlaybackSession]
+
+    enum CodingKeys: String, CodingKey {
+        case metadata = "Metadata"
+    }
+}
+
+private struct PlexPlaybackSession: Decodable {
+    let ratingKey: String?
+    let media: [PlexPlaybackSessionMedia]?
+    let player: PlexPlaybackSessionPlayer?
+
+    enum CodingKeys: String, CodingKey {
+        case ratingKey
+        case media = "Media"
+        case player = "Player"
+    }
+}
+
+private struct PlexPlaybackSessionPlayer: Decodable {
+    let machineIdentifier: String?
+
+    enum CodingKeys: String, CodingKey {
+        case machineIdentifier
+    }
+}
+
+private struct PlexPlaybackSessionMedia: Decodable {
+    let selected: Bool?
+    let videoResolution: String?
+    let bitrate: Int?
+    let parts: [PlexPlaybackSessionPart]
+
+    enum CodingKeys: String, CodingKey {
+        case selected
+        case videoResolution
+        case bitrate
+        case parts = "Part"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        selected = try container.decodeIfPresent(Bool.self, forKey: .selected)
+        videoResolution = try container.decodeIfPresent(String.self, forKey: .videoResolution)
+        bitrate = try container.decodeIfPresent(Int.self, forKey: .bitrate)
+        parts = try container.decodeIfPresent([PlexPlaybackSessionPart].self, forKey: .parts) ?? []
+    }
+}
+
+private struct PlexPlaybackSessionPart: Decodable {
+    let selected: Bool?
+    let decision: String?
+
+    enum CodingKeys: String, CodingKey {
+        case selected
+        case decision
+    }
+}
+
+private struct EmbyPlaybackSession: Decodable {
+    let deviceID: String?
+    let userID: String?
+    let nowPlayingItem: EmbyPlaybackSessionItem?
+    let playState: EmbyPlaybackSessionPlayState?
+    let transcodingInfo: EmbyPlaybackSessionTranscodingInfo?
+
+    enum CodingKeys: String, CodingKey {
+        case deviceID = "DeviceId"
+        case userID = "UserId"
+        case nowPlayingItem = "NowPlayingItem"
+        case playState = "PlayState"
+        case transcodingInfo = "TranscodingInfo"
+    }
+}
+
+private struct EmbyPlaybackSessionItem: Decodable {
+    let id: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+    }
+}
+
+private struct EmbyPlaybackSessionPlayState: Decodable {
+    let playMethod: String?
+    let mediaSource: EmbyPlaybackSessionMediaSource?
+
+    enum CodingKeys: String, CodingKey {
+        case playMethod = "PlayMethod"
+        case mediaSource = "MediaSource"
+    }
+}
+
+private struct EmbyPlaybackSessionMediaSource: Decodable {
+    let bitrate: Int?
+    let mediaStreams: [EmbyPlaybackSessionMediaStream]?
+
+    enum CodingKeys: String, CodingKey {
+        case bitrate = "Bitrate"
+        case mediaStreams = "MediaStreams"
+    }
+}
+
+private struct EmbyPlaybackSessionMediaStream: Decodable {
+    let type: String?
+    let width: Int?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case type = "Type"
+        case width = "Width"
+        case height = "Height"
+    }
+}
+
+private struct EmbyPlaybackSessionTranscodingInfo: Decodable {
+    let bitrate: Int?
+    let width: Int?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case bitrate = "Bitrate"
+        case width = "Width"
+        case height = "Height"
+    }
 }
 
 public extension DependencyValues {

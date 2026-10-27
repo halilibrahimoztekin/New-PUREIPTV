@@ -7,6 +7,31 @@ public enum LocalTimePresentation {
 }
 
 public nonisolated enum MediaModels: Sendable {
+    public struct ServerPlaybackStatus: Equatable, Sendable {
+        public enum Mode: String, Equatable, Sendable {
+            case directPlay
+            case directStream
+            case transcoding
+        }
+
+        public enum Evidence: Equatable, Sendable {
+            case serverSession
+            case playbackResponse
+        }
+
+        public let mode: Mode
+        public let evidence: Evidence
+        public let resolution: String?
+        public let bitrateKbps: Int?
+
+        public init(mode: Mode, evidence: Evidence, resolution: String? = nil, bitrateKbps: Int? = nil) {
+            self.mode = mode
+            self.evidence = evidence
+            self.resolution = resolution
+            self.bitrateKbps = bitrateKbps
+        }
+    }
+
     public enum ItemType: String, Equatable, Sendable {
         case live
         case vod
@@ -42,6 +67,7 @@ public nonisolated enum MediaModels: Sendable {
         /// Request-only headers returned by the media server for the current playback source.
         /// They remain transient and are never copied into persisted favorites or watch history.
         public let playbackRequestHeaders: [String: String]?
+        public let serverPlaybackStatus: ServerPlaybackStatus?
         public let seriesID: String?
         /// Normalized playback position restored when this item enters a MultiView slot.
         public let resumePosition: Double?
@@ -67,7 +93,8 @@ public nonisolated enum MediaModels: Sendable {
             playlistID: UUID? = nil,
             seriesID: String? = nil,
             resumePosition: Double? = nil,
-            playbackRequestHeaders: [String: String]? = nil
+            playbackRequestHeaders: [String: String]? = nil,
+            serverPlaybackStatus: ServerPlaybackStatus? = nil
         ) {
             self.id = id
             self.title = title
@@ -88,6 +115,7 @@ public nonisolated enum MediaModels: Sendable {
             self.userAgentOverride = userAgentOverride
             self.playlistID = playlistID
             self.playbackRequestHeaders = playbackRequestHeaders
+            self.serverPlaybackStatus = serverPlaybackStatus
             self.seriesID = seriesID
             self.resumePosition = resumePosition.map { min(1, max(0, $0)) }
         }
@@ -114,7 +142,8 @@ public nonisolated enum MediaModels: Sendable {
                 playlistID: playlistID,
                 seriesID: seriesID,
                 resumePosition: resumePosition,
-                playbackRequestHeaders: playbackRequestHeaders
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
             )
         }
 
@@ -140,7 +169,8 @@ public nonisolated enum MediaModels: Sendable {
                 playlistID: playlistID,
                 seriesID: seriesID,
                 resumePosition: resumePosition,
-                playbackRequestHeaders: playbackRequestHeaders
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
             )
         }
 
@@ -166,7 +196,8 @@ public nonisolated enum MediaModels: Sendable {
                 playlistID: playlistID,
                 seriesID: seriesID,
                 resumePosition: value,
-                playbackRequestHeaders: playbackRequestHeaders
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
             )
         }
     }

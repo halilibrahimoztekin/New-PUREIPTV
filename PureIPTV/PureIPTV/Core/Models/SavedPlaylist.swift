@@ -14,6 +14,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
     public let m3uURL: String?
     /// Provider session secret, persisted only inside the encrypted Keychain playlist record.
     public let mediaServerCredentials: MediaServerCredentials?
+    /// Optional so existing encrypted playlist records continue to decode.
+    public let mediaServerPlaybackPreference: MediaServerPlaybackPreference?
     public let userAgentOverride: String?
     /// Optional to decode playlists saved before this setting existed.
     public let channelZappingDelayMilliseconds: Int?
@@ -27,6 +29,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         password: String? = nil,
         m3uURL: String? = nil,
         mediaServerCredentials: MediaServerCredentials? = nil,
+        mediaServerPlaybackPreference: MediaServerPlaybackPreference? = nil,
         userAgentOverride: String? = nil,
         channelZappingDelayMilliseconds: Int? = nil
     ) {
@@ -38,6 +41,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.password = password
         self.m3uURL = m3uURL
         self.mediaServerCredentials = mediaServerCredentials
+        self.mediaServerPlaybackPreference = mediaServerPlaybackPreference
         self.userAgentOverride = userAgentOverride
         self.channelZappingDelayMilliseconds = channelZappingDelayMilliseconds.map { min(max($0, 0), 3000) }
     }
@@ -84,6 +88,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 type: type,
                 serverURL: url,
                 mediaServerCredentials: mediaServerCredentials,
+                mediaServerPlaybackPreference: mediaServerPlaybackPreference ?? .automatic,
                 userAgentOverride: userAgentOverride,
                 channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
             )
@@ -103,6 +108,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             password: password,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: value,
             channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
         )
@@ -118,6 +124,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             password: password,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: userAgentOverride,
             channelZappingDelayMilliseconds: value
         )
@@ -138,6 +145,23 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             password: password,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: mediaServerPlaybackPreference,
+            userAgentOverride: userAgentOverride,
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+        )
+    }
+
+    public func replacingMediaServerPlaybackPreference(_ value: MediaServerPlaybackPreference?) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: value,
             userAgentOverride: userAgentOverride,
             channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
         )

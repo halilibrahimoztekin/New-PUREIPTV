@@ -33,6 +33,7 @@ public struct PlaylistManagementFeature {
         public var playlistBeingEdited: SavedPlaylist?
         public var userAgentDraft = ""
         public var channelZappingDelayDraft = 0
+        public var mediaServerPlaybackPreferenceDraft: MediaServerPlaybackPreference = .automatic
         public var serverURLDraft = ""
         public var usernameDraft = ""
         public var passwordDraft = ""
@@ -247,6 +248,7 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = playlist
                 state.userAgentDraft = playlist.userAgentOverride ?? ""
                 state.channelZappingDelayDraft = playlist.channelZappingDelayMilliseconds ?? 0
+                state.mediaServerPlaybackPreferenceDraft = playlist.mediaServerPlaybackPreference ?? .automatic
                 state.serverURLDraft = playlist.serverURL ?? ""
                 state.usernameDraft = playlist.username ?? ""
                 state.passwordDraft = playlist.password ?? ""
@@ -292,6 +294,11 @@ public struct PlaylistManagementFeature {
                         password: playlist.type == .xtream ? state.passwordDraft : playlist.password,
                         m3uURL: playlist.type == .m3u ? m3uURL : playlist.m3uURL
                     )
+                    .replacingMediaServerPlaybackPreference(
+                        playlist.type == .emby
+                            ? state.mediaServerPlaybackPreferenceDraft
+                            : playlist.mediaServerPlaybackPreference
+                    )
                     .replacingUserAgentOverride(value.isEmpty ? nil : value)
                     .replacingChannelZappingDelayMilliseconds(state.channelZappingDelayDraft)
                 if updatedPlaylist.type == .m3u || updatedPlaylist.type == .plex || updatedPlaylist.type == .emby {
@@ -330,6 +337,7 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
+                state.mediaServerPlaybackPreferenceDraft = .automatic
                 state.serverURLDraft = ""
                 state.usernameDraft = ""
                 state.passwordDraft = ""
@@ -351,6 +359,7 @@ public struct PlaylistManagementFeature {
                 state.playlistBeingEdited = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
+                state.mediaServerPlaybackPreferenceDraft = .automatic
                 state.serverURLDraft = ""
                 state.usernameDraft = ""
                 state.passwordDraft = ""
