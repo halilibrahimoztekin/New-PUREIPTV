@@ -28,11 +28,13 @@ Görünüm kapanırken yalnızca sync grubundaki kanal istekleri iptal ediliyord
 
 Önce: yalnız `syncPendingEPGChannels` iptali ve sabit `800` clamp → Sonra: bütün `epgRequestIDs` iptali, loading/status temizliği ve gerçek `viewportWidth` sınırı. Zaten görünür program için gereksiz kaydırma yapılmıyor; yeni focus animasyonu Reduce Motion’a uyuyor. Geniş programın yalnız bir kenarı görünüyorsa o kenar viewport’a alınıyor. Reviewer onayladı; iOS/tvOS Release compile-only build’leri başarılı. Cihaz doğrulaması yapılmadı.
 
-### DownloadsView+tvOS.swift:38, 67 — aktif indirmelerin yönetimi (P1, açık)
+### DownloadsView+tvOS.swift — geri yüklenmiş aktif indirmelerin yönetimi (#198)
 
 Aktif indirme var ve tamamlanmış indirme yoksa boş ekran koşulu atlanıyor, fakat içerik yalnız tamamlanmış dosyaları çiziyor. Sonuç boş bir içerik alanı; `DownloadsFeature` içindeki pause/resume/cancel eylemlerinin tvOS düğmesi yok. Kural: kullanıcıya sunulan her işlem kumanda ile erişilebilir olmalı.
 
-Önce: yalnız `completedDownloads` kartları → Öneri: aktif indirmeler için progress, durum ve kardeş pause/resume/cancel düğmeleri; tamamlanmış dosyaları ayrı bölümde tut. Backlog #198 ile birlikte ele alınacak.
+Önce: yalnız `completedDownloads` kartları → #198’de aktif işler için progress/durum ve kardeş pause/resume/cancel düğmeleri; başarısız ve tamamlanmış işler için ayrı bölümler eklendi. Büyük native kontrol hedefleri, focus bölümleri ve busy durumunda odağı koruyan action guard’ları var. Eksik dosya oynatması kapalı; tekli silme onaylı. İlk yükleme hatası gerçek boş listeyle karıştırılmıyor. Reviewer onaylı; iOS/tvOS Release compile-only build’leri başarılı ve görev çıktıları temizlendi. Cihaz doğrulaması yapılmadı.
+
+#198’in ek analizinde yeni indirme düğmelerinin iOS/iPadOS’a ait olduğu ve OfflineMedia’nın CloudKit dışında tutulduğu doğrulandı. tvOS’ta bu dal eski bir sürümden kalan URLSession görevinin geri yüklenmesiyle oluşabilir; yeni tvOS indirme başlatma özelliği bu düzeltmenin parçası değil.
 
 ### PlayerView+tvOS.swift:1506, 1542, 1557 — scrubber dikey komutları (P1, açık)
 
@@ -107,17 +109,22 @@ UIFocusGuide oluşturulup boyutlandırılıyor, fakat hiçbir `preferredFocusEnv
 | ChannelSelectionToolbar.swift:37–68 | Toplu işlem başlayınca birden çok düğme focus zincirinden çıkarılıyor. | `.disabled(isBusy)` → tvOS action guard, busy açıklaması; iOS doğrulamasını koru. |
 | MediaLanguageFilterBar.swift:24 / OriginalLanguageFilterBar.swift:23 | Dikey içerikteki yatay filtre satırları focus bölümü oluşturmalı. | Yatay ScrollView → tvOS `.focusSection()`. |
 | MovieVersionPickerView.swift:43 / VODDetailView.swift:1457, 1525 / SportsHubView.swift:43 | Yatay sürüm/oyuncu/benzer/maç satırlarının focus geometrisi ayrılmalı. | Yatay ScrollView → tvOS `.focusSection()`. |
-| DownloadsView+tvOS.swift:39 / VODDetailView.swift:1276 / SeriesDetailView+tvOS.swift:21 | Dikey katalog alanlarının sınırı tanımlanmalı. | Katalog ScrollView → uygun `.focusSection()`, yukarı sekme barına çıkış korunarak cihaz kontrolü. |
+| VODDetailView.swift:1276 / SeriesDetailView+tvOS.swift:21 | Dikey katalog alanlarının sınırı tanımlanmalı. | Katalog ScrollView → uygun `.focusSection()`, yukarı sekme barına çıkış korunarak cihaz kontrolü. Downloads kapsamındaki focus bölümleri #198’de eklendi. |
 | EPGTimelineView.swift | tvOS program başlıkları 10–14 pt, bazı badge’ler 7–9 pt; kanepeden okunabilirlik zayıf. Alt sağ floating navigasyon grid hücreleriyle örtüşüyor. | Küçük metin/floating controls → tvOS tipografi ve row ölçüleri; navigasyonu ayrı inset/bölüme al. |
 
 ## EPG sunum mimarisi araştırması
 
 LiveTV tvOS EPG’yi yerel `fullScreenCover` ile sunuyor; oynatıcı üst AppCoordinator’ın TCARouter cover’ı. Timeline’dan oynatmaya geçerken EPG state’i korunuyor; Guide ise nil yapılıyor. Bu iki yolun sunum ve dönüş sözleşmesi farklı. Kaynak bunu gösteriyor; kullanıcının bildirdiği kapanıp yeniden açılmanın bu farktan kaynaklandığı henüz kanıtlanmadı. Yerel ve koordinatör sunum sahipliği, backlog #201 kapsamında ortak bir akışa taşınmalı ve kullanıcı tarafından cihazda yeniden denenmeli.
 
+## İndirme incelemesinden kalan çapraz ekran işleri
+
+- `VODDetailFeature.downloadTapped` ve `SeriesDetailFeature.downloadEpisode` mevcut dosya indirildi olarak işaretliyken doğrudan silme API’sine gidiyor; queue ekranına eklenen onay bu iki ayrıntı akışında henüz yok. Aynı onay ve görünür hata sözleşmesi bu çağrı noktalarına da taşınmalı. Manager’ın canonical/aktif görev/düzenli dosya koruması bu çağrılar için de uygulanıyor.
+- DownloadManager’ın custom context’leri aynı actor içinde tutulup UI’ye Sendable snapshot dönüyor. `SharedDatabaseConfig.shared` erişimi ise projedeki mevcut MainActor varsayımı nedeniyle iOS derlemesinde Swift 6 uyarısı üretiyor. Container’ın açık actor/isolation enjeksiyonu ayrı bir concurrency incelemesi gerektiriyor; uyarının giderildiği veya uygulamanın Swift 6 modunda temiz olduğu iddia edilmiyor.
+
 ## Devam sırası
 
 1. #211 EPG yanıt/yaşam döngüsü ve viewport düzeltmeleri reviewer + iOS/tvOS compile-only build ile tamamlandı; görev çıktıları temizlendi.
-2. Aktif tvOS indirme kontrollerini #198 içinde tamamla.
+2. #198 indirme UI/veri değişiklikleri reviewer + iOS/tvOS compile-only build ile tamamlandı; görev çıktıları temizlendi.
 3. Player scrubber / Up Next / görünmez kontroller ve HUD focus dönüşlerini düzelt.
 4. İç içe profil/playlist kontrollerini ayır; kategori sıralamasına remote yolu ekle.
 5. Filtre/row focus geometrisi, scroll döngüleri, tvOS tipografi ve örtüşen kontrol alanlarını düzelt.

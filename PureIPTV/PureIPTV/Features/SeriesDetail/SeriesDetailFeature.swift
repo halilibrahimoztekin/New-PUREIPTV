@@ -270,7 +270,7 @@ public struct SeriesDetailFeature {
 
                 let downloadEffect: Effect<Action> = .run { send in
                     let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
-                    let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                    let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
                     await send(.downloadedEpisodesLoaded(dict))
                 }
 
@@ -732,7 +732,7 @@ public struct SeriesDetailFeature {
                     return .run { send in
                         try? await downloadClient.deleteDownloadedMedia(episode.id)
                         let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
-                        let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                        let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
                         await send(.downloadedEpisodesLoaded(dict))
                     }
                 } else {
@@ -756,7 +756,7 @@ public struct SeriesDetailFeature {
                     return .run { send in
                         try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
                         let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
-                        let dict = Dictionary(uniqueKeysWithValues: downloaded.map { ($0.id, true) })
+                        let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
                         await send(.downloadedEpisodesLoaded(dict))
                     }
                 }

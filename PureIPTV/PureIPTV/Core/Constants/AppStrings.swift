@@ -761,6 +761,22 @@ public enum AppStrings {
         public static let resumeDownload = "İndirmeye Devam Et".localized
         public static let completedDownloads = "İndirilen İçerikler".localized
         public static let totalStorage = "Kullanılan Alan".localized
+        public static let availableStorage = "Kullanılabilir Alan".localized
+        public static let storageUnavailable = "Alan bilgisi alınamadı".localized
+        public static let refreshDownloads = "İndirmeleri Yenile".localized
+        public static let failedDownloads = "Başarısız İndirmeler".localized
+        public static let failedDownload = "İndirme tamamlanamadı".localized
+        public static let failedDownloadHint = "İçerik ekranından indirmeyi yeniden başlatabilirsiniz.".localized
+        public static let dismissFailedDownload = "Listeden Kaldır".localized
+        public static let cancelDownload = "İndirmeyi İptal Et".localized
+        public static let missingDownload = "İndirilen dosya bu cihazda kullanılamıyor.".localized
+        public static let deleteDownloadTitle = "İndirilen Dosyayı Sil".localized
+        public static func deleteDownloadMessage(_ title: String) -> String {
+            "“%@” bu cihazdan silinecek. İzleme geçmişiniz korunacak.".localized(title)
+        }
+        public static let deleteDownloadFailure = "Dosya silinemedi. Aktif indirmeyi ve depolama alanını kontrol edip yeniden deneyin.".localized
+        public static let downloadLoadFailure = "İndirme listesi alınamadı. Yeniden deneyin.".localized
+        public static let downloadCommandFailure = "İndirme işlemi tamamlanamadı. Yeniden deneyin.".localized
         public static let clearCompleted = "Tamamlananları Sil".localized
         public static let clearCompletedTitle = "Tamamlanan İndirmeleri Sil".localized
         public static let clearCompletedMessage = "Tamamlanmış tüm indirmeler bu cihazdan silinir. Devam eden ve sıradaki indirmeler korunur.".localized

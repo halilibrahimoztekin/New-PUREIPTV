@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
+public nonisolated struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let coverURL: String?
@@ -13,6 +13,7 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     public var isQueued: Bool
     public var isPaused: Bool
     public var isFailed: Bool
+    public var isCancelled: Bool
 
     public init(
         id: String,
@@ -26,7 +27,8 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         speedBytesPerSecond: Double = 0,
         isQueued: Bool = false,
         isPaused: Bool = false,
-        isFailed: Bool = false
+        isFailed: Bool = false,
+        isCancelled: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -40,10 +42,12 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
         self.isQueued = isQueued
         self.isPaused = isPaused
         self.isFailed = isFailed
+        self.isCancelled = isCancelled
     }
 
     public var formattedProgress: String {
-        "%\(Int(progress * 100))"
+        let boundedProgress = progress.isFinite ? min(1, max(0, progress)) : 0
+        return "%\(Int(boundedProgress * 100))"
     }
 
     public var formattedSize: String {
@@ -60,10 +64,10 @@ public struct DownloadProgressItem: Equatable, Identifiable, Sendable {
     }
 
     public var formattedSpeed: String {
-        guard speedBytesPerSecond > 0 else { return "" }
+        guard speedBytesPerSecond.isFinite, speedBytesPerSecond > 0 else { return "" }
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB]
         formatter.countStyle = .file
-        return "\(formatter.string(fromByteCount: Int64(speedBytesPerSecond)))/s"
+        return "\(formatter.string(fromByteCount: Int64(min(speedBytesPerSecond, Double(Int64.max / 2)))))/s"
     }
 }

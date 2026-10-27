@@ -1,11 +1,42 @@
 import Foundation
 import SwiftData
 
-struct DownloadMetadata: Codable, Sendable {
+nonisolated struct DownloadMetadata: Codable, Sendable {
     let id: String
     let title: String
     let coverURL: String?
     let userAgentOverride: String?
+}
+
+private nonisolated enum DownloadStorageError: LocalizedError {
+    case invalidPath
+    case activeDownload
+    case destinationExists
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPath: NSLocalizedString("İndirme dosyası bu cihazda kullanılamıyor.", comment: "")
+        case .activeDownload: NSLocalizedString("Bu dosya için aktif bir indirme var.", comment: "")
+        case .destinationExists: NSLocalizedString("Aynı adlı bir dosya zaten var. Mevcut dosya korundu.", comment: "")
+        }
+    }
+}
+
+private nonisolated func removeRegularFileIfPresent(_ url: URL) throws -> Bool {
+    let attributes: [FileAttributeKey: Any]
+    do {
+        attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+    } catch {
+        let cocoaError = error as NSError
+        if cocoaError.domain == NSCocoaErrorDomain,
+           cocoaError.code == NSFileNoSuchFileError || cocoaError.code == NSFileReadNoSuchFileError {
+            return false
+        }
+        throw error
+    }
+    guard attributes[.type] as? FileAttributeType == .typeRegular else { throw DownloadStorageError.invalidPath }
+    try FileManager.default.removeItem(at: url)
+    return true
 }
 
 actor DownloadManager {
@@ -20,10 +51,14 @@ actor DownloadManager {
 
     private var tasks: [String: URLSessionDownloadTask] = [:]
     private var activeDownloads: [String: DownloadProgressItem] = [:]
+    private var failedDownloads: [DownloadProgressItem] = []
+    private var failedArtifacts: [String: Set<URL>] = [:]
     private var progressContinuations: [String: AsyncStream<Double>.Continuation] = [:]
+    private var progressObserverIDs: [String: UUID] = [:]
     private var progressBroadcasters: [UUID: AsyncStream<DownloadProgressItem>.Continuation] = [:]
     private var lastSpeedCalculationTimes: [String: Date] = [:]
     private var lastBytesWritten: [String: Int64] = [:]
+    private var lastProgressEmissionTimes: [String: ContinuousClock.Instant] = [:]
     private var hasRestoredBackgroundTasks = false
     private var backgroundTaskRestorationsInProgress = 0
     private var invalidatedDownloadIDs: Set<String> = []
@@ -44,6 +79,13 @@ actor DownloadManager {
             _ = await getActiveDownloads()
         }
         guard tasks[id] == nil else { return }
+        guard canonicalDownloadDestinationURL(id: id) != nil else { throw DownloadStorageError.invalidPath }
+        try removeFailedArtifact(id: id)
+        if let existing = try getDownloadedMedia().first(where: { $0.id == id && $0.isAvailable }) {
+            failedDownloads.removeAll { $0.id == id }
+            broadcast(DownloadProgressItem(id: id, title: existing.title, coverURL: existing.coverURL, userAgentOverride: existing.userAgentOverride, progress: 1, isCompleted: true, bytesWritten: existing.fileSize, totalBytesExpected: existing.fileSize))
+            return
+        }
         invalidatedDownloadIDs.remove(id)
         manuallyPausedDownloadIDs.remove(id)
         persistManuallyPausedDownloadIDs()
@@ -64,6 +106,7 @@ actor DownloadManager {
         }
 
         tasks[id] = task
+        failedDownloads.removeAll { $0.id == id }
         let item = DownloadProgressItem(
             id: id,
             title: title,
@@ -84,6 +127,7 @@ actor DownloadManager {
     }
 
     func cancelDownload(id: String) {
+        let removedItem = activeDownloads[id]
         manuallyPausedDownloadIDs.remove(id)
         persistManuallyPausedDownloadIDs()
         if backgroundTaskRestorationsInProgress > 0 {
@@ -101,8 +145,14 @@ actor DownloadManager {
         activeDownloads.removeValue(forKey: id)
         lastSpeedCalculationTimes.removeValue(forKey: id)
         lastBytesWritten.removeValue(forKey: id)
+        lastProgressEmissionTimes.removeValue(forKey: id)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
+        progressObserverIDs.removeValue(forKey: id)
+        if var removedItem {
+            removedItem.isCancelled = true
+            broadcast(removedItem)
+        }
         resumeQueuedDownloads()
     }
 
@@ -146,7 +196,7 @@ actor DownloadManager {
 
     func getActiveDownloads(scheduleQueuedTasks: Bool = true) async -> [DownloadProgressItem] {
         guard !hasRestoredBackgroundTasks else {
-            return Array(activeDownloads.values)
+            return orderedActiveDownloads()
         }
         backgroundTaskRestorationsInProgress += 1
         let restoredTasks: [URLSessionDownloadTask] = await withCheckedContinuation { continuation in
@@ -210,7 +260,58 @@ actor DownloadManager {
             suspendExcessRunningTasks()
             resumeQueuedDownloads()
         }
-        return Array(activeDownloads.values)
+        return orderedActiveDownloads()
+    }
+
+    private func orderedActiveDownloads() -> [DownloadProgressItem] {
+        activeDownloads.values.sorted {
+            let lhs = tasks[$0.id]?.taskIdentifier ?? Int.max
+            let rhs = tasks[$1.id]?.taskIdentifier ?? Int.max
+            return lhs == rhs ? $0.id < $1.id : lhs < rhs
+        }
+    }
+
+    func getLibrarySnapshot() async throws -> DownloadLibrarySnapshot {
+        _ = await getActiveDownloads()
+        let items = try getDownloadedMedia()
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let attributes = try? FileManager.default.attributesOfFileSystem(forPath: documentsURL.path)
+        let availableBytes = (attributes?[.systemFreeSize] as? NSNumber)?.int64Value
+        return DownloadLibrarySnapshot(
+            downloadedItems: items,
+            activeDownloads: orderedActiveDownloads(),
+            failedDownloads: failedDownloads,
+            storageSummary: DownloadStorageSummary(
+                downloadedBytes: items.reduce(0) { $0 + $1.fileSize },
+                availableBytes: availableBytes.map { max(0, $0) }
+            )
+        )
+    }
+
+    func dismissFailedDownload(id: String) throws {
+        try removeFailedArtifact(id: id)
+        guard let index = failedDownloads.firstIndex(where: { $0.id == id }) else { return }
+        var item = failedDownloads.remove(at: index)
+        item.isCancelled = true
+        broadcast(item)
+    }
+
+    private func removeFailedArtifact(id: String) throws {
+        guard let artifacts = failedArtifacts[id] else { return }
+        guard tasks[id] == nil else { throw DownloadStorageError.activeDownload }
+        let hasIndexedFile = try getDownloadedMedia().contains(where: { $0.id == id && $0.isAvailable })
+        for artifact in artifacts {
+            if hasIndexedFile, artifact == canonicalDownloadDestinationURL(id: id) {
+                failedArtifacts[id]?.remove(artifact)
+                continue
+            }
+            guard artifact == canonicalDownloadDestinationURL(id: id) || validatedStagingURL(artifact) != nil else {
+                throw DownloadStorageError.invalidPath
+            }
+            _ = try removeRegularFileIfPresent(artifact)
+            failedArtifacts[id]?.remove(artifact)
+        }
+        if failedArtifacts[id]?.isEmpty == true { failedArtifacts.removeValue(forKey: id) }
     }
 
     func observeDownloads() -> AsyncStream<DownloadProgressItem> {
@@ -296,14 +397,18 @@ actor DownloadManager {
         }
 
         if var item = activeDownloads[id] {
-            item.progress = progress
+            item.progress = progress.isFinite ? min(1, max(0, progress)) : 0
             item.bytesWritten = bytesWritten
             item.totalBytesExpected = totalBytesExpected
             item.speedBytesPerSecond = speed
             activeDownloads[id] = item
-            broadcast(item)
+            let instant = ContinuousClock().now
+            if lastProgressEmissionTimes[id].map({ $0.duration(to: instant) >= .milliseconds(250) }) ?? true {
+                lastProgressEmissionTimes[id] = instant
+                broadcast(item)
+            }
         }
-        progressContinuations[id]?.yield(progress)
+        progressContinuations[id]?.yield(progress.isFinite ? min(0.999, max(0, progress)) : 0)
     }
 
     func completeDownload(id: String, taskIdentifier: Int) {
@@ -322,8 +427,11 @@ actor DownloadManager {
         tasks.removeValue(forKey: id)
         lastSpeedCalculationTimes.removeValue(forKey: id)
         lastBytesWritten.removeValue(forKey: id)
+        lastProgressEmissionTimes.removeValue(forKey: id)
+        progressContinuations[id]?.yield(1)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
+        progressObserverIDs.removeValue(forKey: id)
         queuedDownloadIDs.removeAll { $0 == id }
         resumeQueuedDownloads()
     }
@@ -336,39 +444,75 @@ actor DownloadManager {
         userAgentOverride: String?,
         stagedFileURL: URL
     ) {
+        guard let stagedFileURL = validatedStagingURL(stagedFileURL) else {
+            failDownload(id: id, taskIdentifier: taskIdentifier)
+            return
+        }
+        let stagingAttributes = try? FileManager.default.attributesOfItem(atPath: stagedFileURL.path)
+        guard stagingAttributes?[.type] as? FileAttributeType == .typeRegular else {
+            failDownload(id: id, taskIdentifier: taskIdentifier)
+            return
+        }
         guard tasks[id]?.taskIdentifier == taskIdentifier else {
             try? FileManager.default.removeItem(at: stagedFileURL)
             return
         }
 
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let destinationURL = documentsPath.appendingPathComponent("\(id).mp4")
+        let fileManager = FileManager.default
+        var createdDestinationURL: URL?
         do {
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
+            guard let destinationURL = canonicalDownloadDestinationURL(id: id) else {
+                throw DownloadStorageError.invalidPath
             }
-            try FileManager.default.moveItem(at: stagedFileURL, to: destinationURL)
-            let attributes = try FileManager.default.attributesOfItem(atPath: destinationURL.path)
-            let fileSize = attributes[.size] as? Int64 ?? 0
             let context = ModelContext(SharedDatabaseConfig.shared)
-            context.insert(OfflineMedia(
-                id: id,
-                title: title,
-                localFilePath: destinationURL.path,
-                coverURL: coverURL,
-                fileSize: fileSize,
-                userAgentOverride: userAgentOverride
-            ))
-            try context.save()
+            let descriptor = FetchDescriptor<OfflineMedia>(predicate: #Predicate { $0.id == id })
+            let existingRecords = try context.fetch(descriptor)
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                // An already indexed file wins over a duplicate/restored task.
+                // Never destroy a last-good file to install a second copy.
+                let attributes = try fileManager.attributesOfItem(atPath: destinationURL.path)
+                guard attributes[.type] as? FileAttributeType == .typeRegular,
+                      existingRecords.contains(where: { canonicalCompletedDownloadURL(for: $0) == destinationURL }) else {
+                    throw DownloadStorageError.destinationExists
+                }
+                try fileManager.removeItem(at: stagedFileURL)
+                completeDownload(id: id, taskIdentifier: taskIdentifier)
+                return
+            }
+            try fileManager.moveItem(at: stagedFileURL, to: destinationURL)
+            createdDestinationURL = destinationURL
+            let attributes = try fileManager.attributesOfItem(atPath: destinationURL.path)
+            let fileSize = attributes[.size] as? Int64 ?? 0
+            let media = existingRecords.first ?? OfflineMedia(id: id, title: title, localFilePath: destinationURL.path, coverURL: coverURL, fileSize: fileSize, userAgentOverride: userAgentOverride)
+            if existingRecords.isEmpty { context.insert(media) }
+            media.title = title
+            media.localFilePath = destinationURL.path
+            media.coverURL = coverURL
+            media.userAgentOverride = userAgentOverride
+            media.fileSize = fileSize
+            media.downloadedAt = Date()
+            for duplicate in existingRecords.dropFirst() { context.delete(duplicate) }
+            do {
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
             completeDownload(id: id, taskIdentifier: taskIdentifier)
         } catch {
-            print("File error: \(error)")
-            try? FileManager.default.removeItem(at: stagedFileURL)
-            failDownload(id: id, taskIdentifier: taskIdentifier)
+            var retainedArtifacts = Set<URL>()
+            for ownedURL in [createdDestinationURL, stagedFileURL].compactMap({ $0 }) {
+                do {
+                    _ = try removeRegularFileIfPresent(ownedURL)
+                } catch {
+                    retainedArtifacts.insert(ownedURL)
+                }
+            }
+            failDownload(id: id, taskIdentifier: taskIdentifier, artifactURLs: retainedArtifacts)
         }
     }
 
-    func failDownload(id: String, taskIdentifier: Int) {
+    func failDownload(id: String, taskIdentifier: Int, artifactURLs: Set<URL> = []) {
         guard tasks[id]?.taskIdentifier == taskIdentifier else { return }
         manuallyPausedDownloadIDs.remove(id)
         persistManuallyPausedDownloadIDs()
@@ -379,41 +523,88 @@ actor DownloadManager {
         queuedDownloadIDs.removeAll { $0 == id }
         if var item = activeDownloads.removeValue(forKey: id) {
             item.isFailed = true
+            item.isQueued = false
+            item.isPaused = false
+            item.speedBytesPerSecond = 0
+            failedDownloads.removeAll { $0.id == id }
+            failedDownloads.insert(item, at: 0)
+            if !artifactURLs.isEmpty { failedArtifacts[id, default: []].formUnion(artifactURLs) }
+            let discardableIDs = failedDownloads.filter { failedArtifacts[$0.id] == nil }.dropFirst(50).map(\.id)
+            failedDownloads.removeAll { discardableIDs.contains($0.id) }
             broadcast(item)
         }
         lastSpeedCalculationTimes.removeValue(forKey: id)
         lastBytesWritten.removeValue(forKey: id)
+        lastProgressEmissionTimes.removeValue(forKey: id)
         progressContinuations[id]?.finish()
         progressContinuations.removeValue(forKey: id)
+        progressObserverIDs.removeValue(forKey: id)
         resumeQueuedDownloads()
     }
 
     func getProgressStream(id: String) -> AsyncStream<Double> {
-        AsyncStream { continuation in
+        let observerID = UUID()
+        return AsyncStream { continuation in
+            progressContinuations[id]?.finish()
+            progressObserverIDs[id] = observerID
             progressContinuations[id] = continuation
-            guard let taskIdentifier = tasks[id]?.taskIdentifier else { return }
-            DownloadDelegate.shared.registerProgressCallback(for: id, taskIdentifier: taskIdentifier) { progress in
-                continuation.yield(progress)
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeProgressObserver(id: id, observerID: observerID) }
             }
+            guard tasks[id] != nil else {
+                if (try? getDownloadedMedia().contains(where: { $0.id == id && $0.isAvailable })) == true {
+                    continuation.yield(1)
+                }
+                continuation.finish()
+                return
+            }
+            continuation.yield(min(0.999, activeDownloads[id]?.progress ?? 0))
         }
     }
 
-    func getDownloadedMedia() throws -> [OfflineMedia] {
-        let context = ModelContext(SharedDatabaseConfig.shared)
-        let descriptor = FetchDescriptor<OfflineMedia>(sortBy: [SortDescriptor(\.downloadedAt, order: .reverse)])
-        return try context.fetch(descriptor)
+    private func removeProgressObserver(id: String, observerID: UUID) {
+        guard progressObserverIDs[id] == observerID else { return }
+        progressContinuations.removeValue(forKey: id)
+        progressObserverIDs.removeValue(forKey: id)
     }
 
-    func deleteDownloadedMedia(id: String) throws {
+    func getDownloadedMedia() throws -> [OfflineMediaSnapshot] {
+        let context = ModelContext(SharedDatabaseConfig.shared)
+        let descriptor = FetchDescriptor<OfflineMedia>(sortBy: [SortDescriptor(\.downloadedAt, order: .reverse)])
+        let records = try context.fetch(descriptor)
+        var items: [String: OfflineMediaSnapshot] = [:]
+        for media in records {
+            let attributes = canonicalCompletedDownloadURL(for: media).flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path) }
+            let isAvailable = attributes?[.type] as? FileAttributeType == .typeRegular
+            let fileSize = isAvailable ? max(0, (attributes?[.size] as? NSNumber)?.int64Value ?? 0) : 0
+            let item = OfflineMediaSnapshot(id: media.id, title: media.title, localFilePath: media.localFilePath, coverURL: media.coverURL, userAgentOverride: media.userAgentOverride, downloadedAt: media.downloadedAt, fileSize: fileSize, isAvailable: isAvailable)
+            if items[media.id] == nil || (items[media.id]?.isAvailable == false && isAvailable) {
+                items[media.id] = item
+            }
+        }
+        return items.values.sorted { $0.downloadedAt == $1.downloadedAt ? $0.id < $1.id : $0.downloadedAt > $1.downloadedAt }
+    }
+
+    func deleteDownloadedMedia(id: String) async throws {
+        _ = await getActiveDownloads(scheduleQueuedTasks: false)
+        guard tasks[id] == nil, activeDownloads[id] == nil, !queuedDownloadIDs.contains(id) else {
+            throw DownloadStorageError.activeDownload
+        }
         let context = ModelContext(SharedDatabaseConfig.shared)
         let descriptor = FetchDescriptor<OfflineMedia>(predicate: #Predicate { $0.id == id })
-        if let existing = try context.fetch(descriptor).first {
-            // Delete file
-            let fileURL = URL(fileURLWithPath: existing.localFilePath)
-            try? FileManager.default.removeItem(at: fileURL)
-            // Delete from DB
-            context.delete(existing)
+        let records = try context.fetch(descriptor)
+        guard !records.isEmpty else { return }
+        guard let fileURL = canonicalCompletedDownloadURL(for: records[0]),
+              records.allSatisfy({ canonicalCompletedDownloadURL(for: $0) == fileURL }) else {
+            throw DownloadStorageError.invalidPath
+        }
+        _ = try removeRegularFileIfPresent(fileURL)
+        for media in records { context.delete(media) }
+        do {
             try context.save()
+        } catch {
+            context.rollback()
+            throw error
         }
     }
 
@@ -431,7 +622,6 @@ actor DownloadManager {
         var removedCount = 0
         var bytesFreed: Int64 = 0
         var failureCount = 0
-        let fileManager = FileManager.default
 
         for media in records where !protectedIDs.contains(media.id) {
             guard let fileURL = canonicalCompletedDownloadURL(for: media) else {
@@ -439,14 +629,12 @@ actor DownloadManager {
                 continue
             }
 
-            let fileExists = fileManager.fileExists(atPath: fileURL.path)
-            if fileExists {
-                do {
-                    try fileManager.removeItem(at: fileURL)
-                } catch {
-                    failureCount += 1
-                    continue
-                }
+            let fileExists: Bool
+            do {
+                fileExists = try removeRegularFileIfPresent(fileURL)
+            } catch {
+                failureCount += 1
+                continue
             }
 
             context.delete(media)
@@ -472,13 +660,21 @@ actor DownloadManager {
     }
 
     private func canonicalCompletedDownloadURL(for media: OfflineMedia) -> URL? {
+        guard let expectedURL = canonicalDownloadDestinationURL(id: media.id) else { return nil }
+        let recordedURL = URL(fileURLWithPath: media.localFilePath).standardizedFileURL.resolvingSymlinksInPath()
+        guard recordedURL == expectedURL else { return nil }
+        return expectedURL
+    }
+
+    private func canonicalDownloadDestinationURL(id: String) -> URL? {
         guard
-            !media.id.isEmpty,
-            media.id != ".",
-            media.id != "..",
-            !media.id.contains("/"),
-            !media.id.contains("\\"),
-            !media.id.hasPrefix(".download-")
+            !id.isEmpty,
+            id != ".",
+            id != "..",
+            !id.contains("/"),
+            !id.contains("\\"),
+            !id.utf8.contains(0),
+            !id.hasPrefix(".download-")
         else { return nil }
 
         let documentsURL = FileManager.default
@@ -486,23 +682,30 @@ actor DownloadManager {
             .standardizedFileURL
             .resolvingSymlinksInPath()
         let expectedURL = documentsURL
-            .appendingPathComponent("\(media.id).mp4", isDirectory: false)
+            .appendingPathComponent("\(id).mp4", isDirectory: false)
             .standardizedFileURL
         let resolvedExpectedURL = expectedURL.resolvingSymlinksInPath().standardizedFileURL
-        let recordedURL = URL(fileURLWithPath: media.localFilePath)
-            .standardizedFileURL
-            .resolvingSymlinksInPath()
 
         // The download manager writes only <id>.mp4 directly in Documents.
         // Exact path equality also excludes temporary staging files and
         // symlinks that resolve outside the app's Documents directory.
         guard
             expectedURL.deletingLastPathComponent() == documentsURL,
-            resolvedExpectedURL == expectedURL,
-            recordedURL == expectedURL
+            resolvedExpectedURL == expectedURL
         else { return nil }
         return expectedURL
     }
+
+    private func validatedStagingURL(_ url: URL) -> URL? {
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = documentsURL.appendingPathComponent(url.lastPathComponent).standardizedFileURL
+        guard url.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath() == documentsURL,
+              candidate.lastPathComponent.hasPrefix(".download-"), candidate.pathExtension == "tmp",
+              candidate.resolvingSymlinksInPath() == candidate else { return nil }
+        return candidate
+    }
+
+
 }
 
 class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
@@ -520,7 +723,7 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         progressCallbacks[id] = (taskIdentifier, callback)
     }
 
-    private func removeProgressCallback(for id: String, taskIdentifier: Int) {
+    func removeProgressCallback(for id: String, taskIdentifier: Int) {
         progressCallbacksLock.lock()
         defer { progressCallbacksLock.unlock() }
         guard progressCallbacks[id]?.taskIdentifier == taskIdentifier else { return }
@@ -567,8 +770,12 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         do {
             try FileManager.default.copyItem(at: location, to: stagedFileURL)
         } catch {
+            var retainedArtifact: URL?
+            do { _ = try removeRegularFileIfPresent(stagedFileURL) }
+            catch { retainedArtifact = stagedFileURL }
+            let artifactURLs = Set(retainedArtifact.map { [$0] } ?? [])
             Task {
-                await DownloadManager.shared.failDownload(id: metadata.id, taskIdentifier: downloadTask.taskIdentifier)
+                await DownloadManager.shared.failDownload(id: metadata.id, taskIdentifier: downloadTask.taskIdentifier, artifactURLs: artifactURLs)
             }
             return
         }

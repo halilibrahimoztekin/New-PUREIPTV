@@ -9,10 +9,18 @@ public struct DownloadsView: View {
     }
 
     public var body: some View {
-        #if os(tvOS)
-            DownloadsView_tvOS(store: store)
-        #else
-            DownloadsView_iOS(store: store)
-        #endif
+        Group {
+            #if os(tvOS)
+                DownloadsView_tvOS(store: store)
+            #else
+                DownloadsView_iOS(store: store)
+            #endif
+        }
+        .onAppear {
+            store.send(.onAppear)
+        }
+        .onDisappear {
+            store.send(.onDisappear)
+        }
     }
 }
