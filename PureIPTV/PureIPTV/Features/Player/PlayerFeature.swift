@@ -36,6 +36,9 @@ public struct PlayerFeature {
         public static let scrubThumbnail = "PlayerFeature.scrubThumbnail"
         public static let catchupSeek = "PlayerFeature.catchupSeek"
         public static let catchupSeekFeedback = "PlayerFeature.catchupSeekFeedback"
+        public static let vodSeek = "PlayerFeature.vodSeek"
+        public static let vodSeekFeedback = "PlayerFeature.vodSeekFeedback"
+        public static let highFPSFeedback = "PlayerFeature.highFPSFeedback"
         public static let recordingMonitor = "PlayerFeature.recordingMonitor"
         public static let recordingStatus = "PlayerFeature.recordingStatus"
         public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
@@ -175,6 +178,14 @@ public struct PlayerFeature {
         public var scrubThumbnailData: Data?
         public var scrubThumbnailRequestID: UUID?
         public var mediaInfo: MediaInfo?
+        public var mediaInfoRequestID: UUID?
+        public var playbackRequestID = UUID()
+        public var firstPresentedFrameLatency: Duration?
+        public var firstPresentedFrameFeedbackRequestID: UUID?
+        public var activeVODSeekRequestID: UUID?
+        public var vodSeekPreviousPosition: Double?
+        public var vodSeekPreviousTime: Duration?
+        public var vodSeekFailureRequestID: UUID?
         public var isInfoVisible: Bool = false
         public var lastDragTranslation: CGSize = .zero
         public var lastDragScreenWidth: CGFloat = 1.0
@@ -208,6 +219,21 @@ public struct PlayerFeature {
         public var catchupSeekFailureRequestID: UUID?
         public var isPlayingCatchup: Bool {
             activeCatchupProgram != nil
+        }
+
+        public var isHighFrameRateVOD: Bool {
+            guard !item.isLive, !isPlayingCatchup, playbackEngine == .vlc,
+                  let frameRate = mediaInfo?.reportedFrameRate,
+                  frameRate.isFinite
+            else { return false }
+            return frameRate >= 48
+        }
+
+        public var firstPresentedFrameLatencySeconds: Double? {
+            guard let firstPresentedFrameLatency else { return nil }
+            let components = firstPresentedFrameLatency.components
+            let seconds = Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+            return seconds.isFinite && seconds >= 0 ? seconds : nil
         }
 
         public var canSwitchPlaybackEngine: Bool {
@@ -549,6 +575,10 @@ public struct PlayerFeature {
         case restartPlayback
         case seek(Double)
         case seekToTime(Duration)
+        case vodSeekCompleted(requestID: UUID, itemID: String, playbackRequestID: UUID, result: PlaybackSeekResult)
+        case clearVODSeekFailure(requestID: UUID, itemID: String, playbackRequestID: UUID)
+        case playbackHealthEvent(PlaybackHealthEvent, itemID: String, playbackRequestID: UUID, baselineGeneration: PlaybackGeneration, baselineHadPresentedFrame: Bool)
+        case clearHighFPSFrameMetric(requestID: UUID, itemID: String, playbackRequestID: UUID)
         case catchupSeekCompleted(requestID: UUID, itemID: String, result: CatchupSeekResult)
         case clearCatchupSeekFailureMessage(requestID: UUID, itemID: String)
         case loadSkipMarkers
@@ -619,7 +649,7 @@ public struct PlayerFeature {
         case sharePlayTapped
 
         case fetchMediaInfo
-        case mediaInfoResponse(MediaInfo?)
+        case mediaInfoResponse(MediaInfo?, itemID: String, playbackRequestID: UUID, requestID: UUID)
 
         // Track actions
         case toggleTracksMenu
@@ -768,6 +798,28 @@ public struct PlayerFeature {
         )
     }
 
+    private static func vodSeekEffect(
+        requestID: UUID,
+        itemID: String,
+        playbackRequestID: UUID,
+        command: PlaybackSeekCommand,
+        client: PlayerClient
+    ) -> Effect<Action> {
+        .merge(
+            .cancel(id: CancelID.vodSeekFeedback),
+            .run { send in
+                let result = await client.seekAndConfirm(command)
+                await send(.vodSeekCompleted(
+                    requestID: requestID,
+                    itemID: itemID,
+                    playbackRequestID: playbackRequestID,
+                    result: result
+                ))
+            }
+            .cancellable(id: CancelID.vodSeek, cancelInFlight: true)
+        )
+    }
+
     public var body: some Reducer<State, Action> {
         let playerClient = playerClient
         let databaseClient = databaseClient
@@ -902,6 +954,15 @@ public struct PlayerFeature {
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.mediaInfo = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             state.isMinimized = false
             state.isUserPaused = false
             state.playbackEngine = state.item.config?.type == .plex || state.item.config?.type == .emby
@@ -939,6 +1000,7 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let playbackRequestID = state.playbackRequestID
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
             let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
             if requiresAuthenticatedMediaServer, !isAlreadyPlaying {
@@ -988,6 +1050,9 @@ public struct PlayerFeature {
                 .send(.loadSkipMarkers),
                 recentEffect,
                 .send(.startOLEDDimTimer),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .run { _ in
                     #if os(iOS)
                         await MainActor.run {
@@ -1013,6 +1078,8 @@ public struct PlayerFeature {
                         try? await playerClient.stop()
                     }
                     let eventsStream = await playerClient.events()
+                    let healthBaseline = await playerClient.playbackHealthSnapshot()
+                    let healthStream = await playerClient.playbackHealthEvents()
                     if isPreviewPromotion {
                         // The preview may have reached `.playing` before this
                         // feature subscribed. Reconcile its current state once,
@@ -1023,6 +1090,20 @@ public struct PlayerFeature {
                         group.addTask {
                             for await event in eventsStream {
                                 await send(.handlePlayerEvent(event))
+                            }
+                        }
+
+                        if let healthBaseline {
+                            group.addTask {
+                                for await event in healthStream {
+                                    await send(.playbackHealthEvent(
+                                        event,
+                                        itemID: itemID,
+                                        playbackRequestID: playbackRequestID,
+                                        baselineGeneration: healthBaseline.generation,
+                                        baselineHadPresentedFrame: healthBaseline.lastPresentedAt != nil
+                                    ))
+                                }
                             }
                         }
 
@@ -1113,6 +1194,14 @@ public struct PlayerFeature {
                 return .cancel(id: CancelID.scrubThumbnail)
             }
             state.isClosing = true
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             state.mediaServerPlaybackRequestID = nil
             state.mediaServerProxyURL = nil
             state.activeCatchupSeekRequestID = nil
@@ -1124,6 +1213,9 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.seriesPlaylist),
@@ -1360,8 +1452,19 @@ public struct PlayerFeature {
             state.mediaServerProxyURL = nil
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             return .merge(
                 .cancel(id: CancelID.playbackEngineSwitch),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .run { send in
                     if shouldStopRecording {
                         await playerClient.requestRecordingStop()
@@ -1384,6 +1487,15 @@ public struct PlayerFeature {
             }
             state.isReconnecting = true
             state.isDeinterlaceModeKnown = false
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.mediaInfo = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             let url = state.activePlaybackURL
             let oldMediaServerProxyURL = state.mediaServerProxyURL
             state.mediaServerProxyURL = nil
@@ -1413,6 +1525,7 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let playbackRequestID = state.playbackRequestID
             let categoryID = state.item.categoryID
             let config = state.item.config
             let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
@@ -1420,6 +1533,9 @@ public struct PlayerFeature {
             state.mediaServerPlaybackRequestID = requiresAuthenticatedMediaServer ? mediaServerPlaybackRequestID : nil
             return .concatenate(
                 .cancel(id: CancelID.statsTimer),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .run { send in
                     // Flush and cleanly reset VLC engine to avoid pipeline lockups
                     if shouldStopRecording {
@@ -1431,10 +1547,28 @@ public struct PlayerFeature {
                     await MediaServerStreamProxy.shared.closeSession(for: oldMediaServerProxyURL)
 
                     let eventsStream = await playerClient.events()
+                    let healthBaseline = await playerClient.playbackHealthSnapshot()
+                    let healthStream = await playerClient.playbackHealthEvents()
                     await withTaskGroup(of: Void.self) { group in
                         group.addTask {
                             for await event in eventsStream {
+                                guard !Task.isCancelled else { return }
                                 await send(.handlePlayerEvent(event))
+                            }
+                        }
+
+                        if let healthBaseline {
+                            group.addTask {
+                                for await event in healthStream {
+                                    guard !Task.isCancelled else { return }
+                                    await send(.playbackHealthEvent(
+                                        event,
+                                        itemID: itemID,
+                                        playbackRequestID: playbackRequestID,
+                                        baselineGeneration: healthBaseline.generation,
+                                        baselineHadPresentedFrame: healthBaseline.lastPresentedAt != nil
+                                    ))
+                                }
                             }
                         }
 
@@ -2026,6 +2160,39 @@ public struct PlayerFeature {
             }
             let currentSecs = Double(state.currentTime.components.seconds)
             let totalSecs = Double(state.totalTime.components.seconds)
+            if !state.item.isLive {
+                let requestID = UUID()
+                let previousPosition = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousPosition ?? state.position
+                    : state.position
+                let previousTime = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousTime ?? state.currentTime
+                    : state.currentTime
+                state.activeVODSeekRequestID = requestID
+                state.vodSeekPreviousPosition = previousPosition
+                state.vodSeekPreviousTime = previousTime
+                state.vodSeekFailureRequestID = nil
+                let targetSecs = max(0, currentSecs + Double(offset))
+                if totalSecs > 0 {
+                    let clampedSecs = min(totalSecs, targetSecs)
+                    state.currentTime = .seconds(clampedSecs)
+                    state.position = clampedSecs / totalSecs
+                } else {
+                    state.currentTime = .seconds(targetSecs)
+                }
+                let playbackRequestID = state.playbackRequestID
+                let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+                return .merge(
+                    Self.vodSeekEffect(
+                        requestID: requestID,
+                        itemID: state.item.id,
+                        playbackRequestID: playbackRequestID,
+                        command: .relative(seconds: offset),
+                        client: playerClient
+                    ),
+                    upNextEffect
+                )
+            }
             let targetSecs = currentSecs + Double(offset)
             if totalSecs > 0 {
                 let clampedSecs = min(totalSecs, max(0, targetSecs))
@@ -2070,6 +2237,36 @@ public struct PlayerFeature {
                         command: .position(clamped),
                         client: playerClient
                     )
+                )
+            }
+            if !state.item.isLive {
+                let requestID = UUID()
+                let previousPosition = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousPosition ?? state.position
+                    : state.position
+                let previousTime = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousTime ?? state.currentTime
+                    : state.currentTime
+                state.activeVODSeekRequestID = requestID
+                state.vodSeekPreviousPosition = previousPosition
+                state.vodSeekPreviousTime = previousTime
+                state.vodSeekFailureRequestID = nil
+                state.position = clamped
+                if state.totalTime.components.seconds > 0 {
+                    state.currentTime = Duration.seconds(Double(state.totalTime.components.seconds) * clamped)
+                }
+                let playbackRequestID = state.playbackRequestID
+                let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+                return .merge(
+                    .cancel(id: CancelID.scrubThumbnail),
+                    Self.vodSeekEffect(
+                        requestID: requestID,
+                        itemID: state.item.id,
+                        playbackRequestID: playbackRequestID,
+                        command: .position(clamped),
+                        client: playerClient
+                    ),
+                    upNextEffect
                 )
             }
             state.position = clamped
@@ -2140,6 +2337,36 @@ public struct PlayerFeature {
                     )
                 )
             }
+            if !state.item.isLive {
+                let requestID = UUID()
+                let previousPosition = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousPosition ?? state.position
+                    : state.position
+                let previousTime = state.activeVODSeekRequestID != nil
+                    ? state.vodSeekPreviousTime ?? state.currentTime
+                    : state.currentTime
+                state.activeVODSeekRequestID = requestID
+                state.vodSeekPreviousPosition = previousPosition
+                state.vodSeekPreviousTime = previousTime
+                state.vodSeekFailureRequestID = nil
+                state.currentTime = time
+                if state.totalTime.components.seconds > 0 {
+                    state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
+                }
+                let playbackRequestID = state.playbackRequestID
+                let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+                return .merge(
+                    .cancel(id: CancelID.scrubThumbnail),
+                    Self.vodSeekEffect(
+                        requestID: requestID,
+                        itemID: state.item.id,
+                        playbackRequestID: playbackRequestID,
+                        command: .time(time),
+                        client: playerClient
+                    ),
+                    upNextEffect
+                )
+            }
             state.currentTime = time
             if state.totalTime.components.seconds > 0 {
                 state.position = min(1.0, max(0.0, Double(time.components.seconds) / Double(state.totalTime.components.seconds)))
@@ -2150,6 +2377,50 @@ public struct PlayerFeature {
                 .run { _ in try await playerClient.seekToTime(time) },
                 upNextEffect
             )
+
+        case let .vodSeekCompleted(requestID, itemID, playbackRequestID, result):
+            guard
+                state.activeVODSeekRequestID == requestID,
+                state.item.id == itemID,
+                state.playbackRequestID == playbackRequestID,
+                !state.isSwitchingPlaybackEngine,
+                !state.item.isLive,
+                !state.isPlayingCatchup
+            else { return .none }
+            state.activeVODSeekRequestID = nil
+            if let currentTime = result.currentTime {
+                state.currentTime = currentTime
+            } else {
+                state.currentTime = state.vodSeekPreviousTime ?? state.currentTime
+            }
+            if let position = result.position, position.isFinite {
+                state.position = max(0, min(1, position))
+            } else {
+                state.position = state.vodSeekPreviousPosition ?? state.position
+            }
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            let shouldShowFailure = result.status != .settled && result.status != .superseded
+            state.vodSeekFailureRequestID = shouldShowFailure ? requestID : nil
+            let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
+            guard shouldShowFailure else {
+                return .merge(.cancel(id: CancelID.vodSeekFeedback), upNextEffect)
+            }
+            let failureFeedback: Effect<Action> = .run { send in
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                await send(.clearVODSeekFailure(requestID: requestID, itemID: itemID, playbackRequestID: playbackRequestID))
+            }
+            .cancellable(id: CancelID.vodSeekFeedback, cancelInFlight: true)
+            return .merge(failureFeedback, upNextEffect)
+
+        case let .clearVODSeekFailure(requestID, itemID, playbackRequestID):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.vodSeekFailureRequestID == requestID
+            else { return .none }
+            state.vodSeekFailureRequestID = nil
+            return .none
 
         case let .catchupSeekCompleted(requestID, itemID, result):
             guard
@@ -2557,6 +2828,14 @@ public struct PlayerFeature {
             let streamHealthGenerationID = UUID()
             state.streamHealthGenerationID = streamHealthGenerationID
             state.streamHealthMetrics = nil
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             state.activePlaybackURL = newItem.streamURL
             state.mediaServerPlaybackRequestID = nil
             state.mediaServerProxyURL = nil
@@ -2615,6 +2894,9 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.stallWatchdog),
                 .cancel(id: CancelID.reconnectTimer),
                 .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.deinterlaceModeChange),
                 .run { send in
@@ -3162,13 +3444,81 @@ public struct PlayerFeature {
 
         case .fetchMediaInfo:
             guard state.playbackEngine == .vlc else { return .none }
+            let requestID = UUID()
+            let itemID = state.item.id
+            let playbackRequestID = state.playbackRequestID
+            state.mediaInfoRequestID = requestID
             return .run { send in
                 let info = await playerClient.getMediaInfo()
-                await send(.mediaInfoResponse(info))
+                await send(.mediaInfoResponse(
+                    info,
+                    itemID: itemID,
+                    playbackRequestID: playbackRequestID,
+                    requestID: requestID
+                ))
             }
 
-        case let .mediaInfoResponse(info):
+        case let .mediaInfoResponse(info, itemID, playbackRequestID, requestID):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.mediaInfoRequestID == requestID,
+                  state.playbackEngine == .vlc
+            else { return .none }
             state.mediaInfo = info
+            if state.isHighFrameRateVOD,
+               state.firstPresentedFrameLatency != nil,
+               state.firstPresentedFrameFeedbackRequestID == nil
+            {
+                let feedbackID = UUID()
+                state.firstPresentedFrameFeedbackRequestID = feedbackID
+                return .run { send in
+                    try? await Task.sleep(for: .seconds(4))
+                    guard !Task.isCancelled else { return }
+                    await send(.clearHighFPSFrameMetric(
+                        requestID: feedbackID,
+                        itemID: itemID,
+                        playbackRequestID: playbackRequestID
+                    ))
+                }
+                .cancellable(id: CancelID.highFPSFeedback, cancelInFlight: true)
+            }
+            return .none
+
+        case let .playbackHealthEvent(event, itemID, playbackRequestID, baselineGeneration, baselineHadPresentedFrame):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  !state.isSwitchingPlaybackEngine,
+                  !state.item.isLive,
+                  !state.isPlayingCatchup,
+                  state.playbackEngine == .vlc,
+                  case .firstPresentedFrame = event.kind,
+                  let latency = event.snapshot.lastPresentedAt
+            else { return .none }
+            let generationIsCurrent = event.snapshot.generation > baselineGeneration
+                || (event.snapshot.generation == baselineGeneration && !baselineHadPresentedFrame)
+            guard generationIsCurrent else { return .none }
+            state.firstPresentedFrameLatency = latency
+            guard state.isHighFrameRateVOD else { return .none }
+            let feedbackID = UUID()
+            state.firstPresentedFrameFeedbackRequestID = feedbackID
+            return .run { send in
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                await send(.clearHighFPSFrameMetric(
+                    requestID: feedbackID,
+                    itemID: itemID,
+                    playbackRequestID: playbackRequestID
+                ))
+            }
+            .cancellable(id: CancelID.highFPSFeedback, cancelInFlight: true)
+
+        case let .clearHighFPSFrameMetric(requestID, itemID, playbackRequestID):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.firstPresentedFrameFeedbackRequestID == requestID
+            else { return .none }
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.firstPresentedFrameLatency = nil
             return .none
 
         case .toggleTracksMenu:
@@ -3656,8 +4006,21 @@ public struct PlayerFeature {
                   target != state.playbackEngine else { return .none }
             state.isSwitchingPlaybackEngine = true
             state.playbackEngineError = nil
+            if state.activeVODSeekRequestID != nil {
+                if let previousTime = state.vodSeekPreviousTime {
+                    state.currentTime = previousTime
+                }
+                if let previousPosition = state.vodSeekPreviousPosition {
+                    state.position = previousPosition
+                }
+            }
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekFailureRequestID = nil
             let requestID = UUID()
             state.playbackEngineSwitchID = requestID
+            state.mediaInfoRequestID = nil
             let itemID = state.item.id
             let item = state.item
             let request = PlaybackEngineSwitchRequest(
@@ -3676,23 +4039,37 @@ public struct PlayerFeature {
                 selectedSubtitleName: state.selectedSubtitleTrack?.name,
                 selectedSubtitleLanguage: state.selectedSubtitleTrack?.language
             )
-            return .run { send in
-                do {
-                    let appliedMode = try await playerClient.switchEngine(request)
-                    if target == .vlc {
-                        await playerClient.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
+            return .merge(
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .run { send in
+                    do {
+                        let appliedMode = try await playerClient.switchEngine(request)
+                        if target == .vlc {
+                            await playerClient.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
+                        }
+                        await send(.playbackEngineSwitchFinished(target, appliedMode, requestID, itemID))
+                    } catch {
+                        await send(.playbackEngineSwitchFailed(error.localizedDescription, requestID, itemID))
                     }
-                    await send(.playbackEngineSwitchFinished(target, appliedMode, requestID, itemID))
-                } catch {
-                    await send(.playbackEngineSwitchFailed(error.localizedDescription, requestID, itemID))
                 }
-            }.cancellable(id: CancelID.playbackEngineSwitch, cancelInFlight: true)
+                .cancellable(id: CancelID.playbackEngineSwitch, cancelInFlight: true)
+            )
 
         case let .playbackEngineSwitchFinished(engine, deinterlaceMode, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             state.playbackEngine = engine
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.mediaInfo = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             let requestedMode = state.deinterlaceMode
             state.deinterlaceMode = deinterlaceMode
             state.isDeinterlaceModeKnown = true
@@ -3706,7 +4083,14 @@ public struct PlayerFeature {
                 state.isAudioSyncHUDVisible = false
                 state.isAudioEQHUDVisible = false
             }
-            return .merge(.cancel(id: CancelID.playerEvents), .send(.listenForPlayerEvents))
+            return .merge(
+                .cancel(id: CancelID.playerEvents),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
+                .send(.listenForPlayerEvents),
+                engine == .vlc ? .send(.fetchMediaInfo) : .none
+            )
 
         case let .playbackEngineSwitchFailed(message, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
@@ -3717,11 +4101,32 @@ public struct PlayerFeature {
             return .none
 
         case .listenForPlayerEvents:
+            let itemID = state.item.id
+            let playbackRequestID = state.playbackRequestID
             return .run { send in
                 let stream = await playerClient.events()
-                for await event in stream {
-                    guard !Task.isCancelled else { return }
-                    await send(.handlePlayerEvent(event))
+                let healthBaseline = await playerClient.playbackHealthSnapshot()
+                let healthStream = await playerClient.playbackHealthEvents()
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        for await event in stream {
+                            guard !Task.isCancelled else { return }
+                            await send(.handlePlayerEvent(event))
+                        }
+                    }
+                    if let healthBaseline {
+                        group.addTask {
+                            for await event in healthStream {
+                                await send(.playbackHealthEvent(
+                                    event,
+                                    itemID: itemID,
+                                    playbackRequestID: playbackRequestID,
+                                    baselineGeneration: healthBaseline.generation,
+                                    baselineHadPresentedFrame: healthBaseline.lastPresentedAt != nil
+                                ))
+                            }
+                        }
+                    }
                 }
             }.cancellable(id: CancelID.playerEvents, cancelInFlight: true)
 
@@ -3731,6 +4136,14 @@ public struct PlayerFeature {
         case .closeTapped:
             guard !state.isClosing else { return .none }
             state.isClosing = true
+            state.playbackRequestID = UUID()
+            state.mediaInfoRequestID = nil
+            state.firstPresentedFrameLatency = nil
+            state.firstPresentedFrameFeedbackRequestID = nil
+            state.activeVODSeekRequestID = nil
+            state.vodSeekPreviousPosition = nil
+            state.vodSeekPreviousTime = nil
+            state.vodSeekFailureRequestID = nil
             state.activeCatchupSeekRequestID = nil
             state.catchupSeekFailureMessage = nil
             state.catchupSeekFailureRequestID = nil
@@ -3752,6 +4165,9 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.scrubThumbnail),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
+                .cancel(id: CancelID.vodSeek),
+                .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.highFPSFeedback),
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
                 .cancel(id: CancelID.audioRoute),

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8B4DA6AFDC6244379A753249 /* PureIPTVTopShelf.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8B4DA6AFDC6244379A753249 /* PureIPTVTopShelf.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */; platformFilters = (tvos,); settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8B6B3B8576EF49D88584BCDE /* PureIPTVTopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3241A677C77847148BB1CCB7 /* PureIPTVTopShelfContentProvider.swift */; };
 		4A85C31E36B44066AED9BC0F /* TopShelfService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85780DAD7A7645229EC0B87A /* TopShelfService.swift */; };
 		17D57DDEDD937193E18883B6 /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = F8D6AE8C55A98894700C6740 /* Shimmer */; };
@@ -448,6 +448,7 @@
 		};
 		2DF4000BC8DB4F15AAC65F9E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (tvos,);
 			target = C0A2BCB1670F494BA6A7E799 /* PureIPTVTopShelf */;
 			targetProxy = 1299454B909041E7A5BCFD3B /* PBXContainerItemProxy */;
 		};

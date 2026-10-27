@@ -1794,10 +1794,16 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Temizlik:** `/private/tmp/PureIPTV187-20261027` final build sonrası **2,158,068 KiB** idi; `lsof +D` açık handle bulmadı ve yalnız bu task’a ait geçici klasör silindi. Son `/private/tmp` **2,360 KiB**, hiçbir `DerivedData` dizini yok. Normal PureIPTV DerivedData’da task’a ait `Build`, `Index.noindex` veya `ModuleCache.noindex` yoktu; ortak `SourcePackages` (**1,873,636 KiB**), `SDKExplicitPrecompiledModules` (**507,784 KiB**) ve `Logs` (**12 KiB**) korundu. Amaç/kaynak belirsiz diğer tmp verilerine dokunulmadı. ContactCleaner’a ve `Localizable.xcstrings` içeriğine dokunulmadı.
 - **Durum:** `[DONE]` — Reviewer onayı, tvOS Release compile-only build’i ve task kaynaklı temp DerivedData temizliği tamamlandı.
 
-### 188. [PENDING] Yüksek Kare Hızlı VOD’da İlk Kare ve Seek Hata Göstergesi
+### 188. [IN_PROGRESS] Yüksek Kare Hızlı VOD’da İlk Kare ve Seek Hata Göstergesi
 - **Fırsat:** 50/60 fps VOD başlangıç ve seek süresini gerçek player event’lerinden ölç; süre aşımı/başarısızlıkta mevcut retry bilgisini göster ve ölçülemeyen değeri uydurma.
 - **Keşif:** IPTVX sürüm notları bazı yüksek kare hızlı videolarda başlatma ve seek iyileştirmesi bildirdi. Bu madde #145’e bağlı ölçümlü VOD deneyimi olarak ele alınmalı.
+- **Kod incelemesi:** SwiftVLC `Track.frameRate` bildirilen kaynak FPS’ini verir; generation-scoped `PlaybackHealthEvent.firstPresentedFrame` ve `snapshot.lastPresentedAt` ilk sunulan kare için monotonik gerçek süre sağlar. İkisi `PlayerClient`/UI’ya aktarılmıyor. `StreamHealthClient.fps` yalnızca Nerd Stats açıkken 1 sn sayaç farkından ölçülüyor ve health değerlendirmesi HEAD gecikme isteği de yapıyor; startup feedback için uygun değil. VLC normal seek sonucu bugün beklenmiyor; SwiftVLC `requestSeek(...).outcome` bunu doğrulayabiliyor. AVPlayer seek completion verebiliyor; video sunum ölçümü `AVPlayerLayer.isReadyForDisplay` kanıtını gerektiriyor.
 - **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · #145
+- **Uygulama:** VLC kaynak track’inden bildirilen FPS taşındı; 48+ fps VOD’da ilk sunulan kare olayının generation-elapsed süresi kısa süreli gösteriliyor. VLC seek outcome ve AVPlayer seek completion ile iniş doğrulanıyor; başarısız/doğrulanamayan seek’te uydurma konum yerine önceki zaman çizelgesi korunuyor. Superseded istek hata sayılmıyor; engine geçişi ve medya değişimi eski istekleri iptal ediyor. AVPlayer ilk kare ölçümü için `isReadyForDisplay` kanıtı olmadığından değer kullanılamıyor olarak bırakıldı. Top Shelf extension embed ve target bağımlılığı `tvos` platform filtresine alındı; iOS ürününe uzantı gömülmüyor.
+- **PR Reviewer:** `[APPROVED]` — Seek/engine geçişi yarışları, item/request/generation korumaları, seek konumunun geri yüklenmesi, frame-time API anlamı ve iOS/tvOS platform filtreleri incelendi; ek engelleyici bulgu yok.
+- **Derleme:** Generic iOS Release ve generic tvOS Release Xcode build’leri `BUILD SUCCEEDED` (exit code 0). iOS ürününde Top Shelf embed/doğrulama adımı yok; tvOS build logunda `.appex` kopyalama ve `ValidateEmbeddedBinary` başarılı. Sadece Xcode build alındı; test, simulator veya uygulama akışı çalıştırılmadı. Projedeki Swift concurrency ve SwiftFormat script uyarıları derlemeyi engellemedi.
+- **Temizlik:** `/private/tmp/PureIPTV188-20261027` **4,175,352 KiB** idi; iki build tamamlandıktan sonra task ağacında ve task’ın başarısız ilk deneme result bundle’ında açık handle olmadığı doğrulandı; yalnız bu task çıktıları silindi. Son `/private/tmp` **2,360 KiB**, DerivedData dizini yok. Normal PureIPTV DerivedData’da task’a ait Build/Index/ModuleCache yoktu; `SourcePackages` (**1,873,636 KiB**), `SDKExplicitPrecompiledModules` (**507,784 KiB**) ve mevcut `Logs` (**12 KiB**) korundu. Git index snapshot’ları, patch’ler, PDF/ikon yedeği ve sistem/Codex öğeleri amaçları belirsiz veya canlı oldukları için korundu. ContactCleaner ve `Localizable.xcstrings` dosyalarına dokunulmadı.
+- **Durum:** `[DONE]` — Reviewer onayı, iOS/tvOS compile-only build’leri ve task kaynaklı geçici DerivedData temizliği tamamlandı.
 
 ### 189. [PENDING] Tam Ekran Oynatma Hatasında Açık Retry ve Kaynak Eylemleri
 - **Fırsat:** Hata panelinden aynı URL’ye retry, varsa güvenli alternatif kaynağa geçiş veya oynatıcıyı değiştirme eylemlerini açıkça ayır; her seçimde pozisyon korunabildiğini bildir.
@@ -1808,3 +1814,53 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Fırsat:** Plex/Emby’nin gerçek playback-session/stream metadata’sını kullanarak direct play veya sunucu dönüştürmesini kullanıcıya açıkla; desteklenmeyen bir formatı sessizce garanti etme.
 - **Keşif:** IPTVX v25 yüksek kare hızındaki playback iyileştirmelerini, UHF ise Plex/Emby medya merkezlerini ve sunucu kaynaklı aramayı duyurdu. Playback capability kararları provider protokolünden doğrulanmalı.
 - **Kaynak:** https://apps.apple.com/xk/app/iptvx/id1451470024?platform=tv · https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=tv
+
+### 191. [PENDING] Canlı Yayında Görüntü Donması ile Sesin İlerlemesini Ayırt Et
+- **Fırsat:** Gerçek sunulan video kareleri dururken audio ilerliyorsa bunu ağ buffering’i gibi göstermeden tanı; akış/decoder değişimini yalnız kullanıcı seçimiyle öner.
+- **Keşif:** TiviMate kullanıcı raporu 1080p50 H.264 akışlarda görüntü donarken sesin sürmesini ve başka oynatıcıyla farklı sonuç alınmasını anlatıyor. Bu, #188’deki VOD ilk kare/seek ölçümünden ayrı bir canlı playback arızası.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1w9rtm6/video_freezes_but_audio_keeps_playing_on_google/
+
+### 192. [PENDING] Xtream için Sağlayıcı Çıktı Biçimini Güvenli Seçme
+- **Fırsat:** Xtream sağlayıcısı destekliyorsa HLS/MPEG-TS çıktı biçimini playlist başına seçtir; URL/katalog kimliğini koru ve seçilmeyen biçimi otomatik varsayma.
+- **Keşif:** TiviMate kullanıcıları bazı 4K/HLS akışlarda sürekli buffering bildirmiş, bazı yorumlarda aynı kanalın farklı çıktı biçiminde denendiğini aktarmış. Sorunun kaynağı sağlayıcı/cihaz olabileceğinden seçenek yalnız açık kullanıcı kontrolüyle ve gerçek hata sonrasında sunulmalı.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1x9vcv3/buffering_issues/ · https://www.reddit.com/r/TiviMate/comments/1w9rtm6/video_freezes_but_audio_keeps_playing_on_google/
+
+### 193. [PENDING] Kullanıcı Onaylı Player Seçimini Kaynağa Göre Hatırla
+- **Fırsat:** Kullanıcı aynı kaynak/format için in-app veya harici oynatıcı seçtiyse, sonraki açılışta seçimi hatırlat; otomatik engine değiştirmeden önce açık tercih göster.
+- **Keşif:** TiviMate raporlarında sorunlu akışın harici oynatıcıda açılması geçici çözüm olarak paylaşılmış. #189 hata panelindeki tek seferlik eylemlerden farklı olarak bu fikir kullanıcı onaylı tercihin kapsamını ve sıfırlamasını ele alır.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1vzfw27/possible_solution_to_533_buffering/ · https://www.reddit.com/r/TiviMate/comments/1w9rtm6/video_freezes_but_audio_keeps_playing_on_google/
+
+### 194. [PENDING] Live, VOD ve Archive için Ayrı Player Varsayılanları
+- **Fırsat:** Kullanıcının oynatıcı, görüntü, altyazı/ses ve buffer tercihlerini Live, VOD ve Archive için ayrı sakla; motor veya stream’in sunmadığı seçenekleri gösterme.
+- **Keşif:** IPTVX’in resmi playback rehberi Apple TV’de Live, VOD ve Archive için ayrı player varsayılanlarını ve ayarların cihaz/stream’e göre değiştiğini açıklıyor.
+- **Kaynak:** https://iptvx.app/features/feature.html?feature=playback-settings
+
+### 195. [PENDING] Fragman Hatasında Uyumlu Oynatma ve Yeniden Dene
+- **Fırsat:** Fragman kaynağı açılamadığında nedenini ve güvenli retry’ı göster; ana içerik oynatımını veya seçili player ayarını değiştirme.
+- **Keşif:** UHF 1.101.2 sürüm notları fragman oynatma sorunlarını düzelttiğini belirtiyor. PureIPTV’de fragman hero’su mevcut; hata sonrası kullanıcıya sunulan kontrol ayrıca incelenmeli.
+- **Kaynak:** https://apps.apple.com/us/app/uhf-love-your-iptv/id6443751726?platform=ipad
+
+### 196. [PENDING] Çoklu EPG’de Yalnız Başarısız Kaynağı Yenile
+- **Fırsat:** Birden çok EPG kaynağı varsa başarılı kaynakları ve manuel eşlemeleri koruyup yalnız başarısız kaynağı yeniden dene; sonucu kaynak bazında açıkla.
+- **Keşif:** Kullanıcılar EPG “no information” sorunu için playlist’i silip yeniden eklemek zorunda kaldığını ve favorilerinin kaybolduğunu bildiriyor. Mevcut EPG yenileme durumu bu görevi uygularken kaynak-başına kurtarmanın gerekip gerekmediğini doğrulamalı.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1sgj2tt/tivimate_not_loading_epg/ · https://www.reddit.com/r/TiviMate/comments/1xf5645/epg_not_updating/
+
+### 197. [PENDING] EPG Yenilemesinde Sağlayıcı İstek Bütçesi
+- **Fırsat:** Otomatik ve manuel EPG isteklerini son deneme/başarı bilgisi ve kaynak cooldown’ıyla sınırla; kullanıcıya bir sonraki güvenli deneme zamanını göster.
+- **Keşif:** Son tarihli EPG şikâyetinde bazı sağlayıcıların EPG ve playlist yenileme sıklığını kısıtladığı kullanıcılarca belirtiliyor. Mevcut global cadence’in provider limitini bilmediği doğrulanmalı; yeni ağ isteği veya tahmini kota eklenmemeli.
+- **Kaynak:** https://www.reddit.com/r/TiviMate/comments/1xf5645/epg_not_updating/
+
+### 198. [PENDING] İndirme Kuyruğunda Depolama ve Temizleme Kontrolleri
+- **Fırsat:** İndirme kuyruğunda kullanılan/boş alanı ve başarısız/tamamlanan dosya durumunu göster; silme işlemini içerik geçmişinden ayır ve kullanıcı onayıyla uygula.
+- **Keşif:** IPTVX v25 indirme ekranında kapak, ilerleme ve duraklatma/sürdürme/iptal kontrollerini duyurdu. PureIPTV indirme yönetiminde depolama tüketimi ve bitmiş dosyaları temizleme akışı ayrıca incelenebilir.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://apps.apple.com/gr/app/iptvx/id1451470024?platform=ipad
+
+### 199. [PENDING] tvOS Güncelleme Sonrası Güvenli Açılış ve Playlist Kurtarma
+- **Fırsat:** Başlangıç/migration hatasında playlist, favori ve ayar verisini değiştirmeden son tutarlı durumu koru; güvenli kurtarma ve tanı bilgisi sun.
+- **Keşif:** iPlayTV’nin son sürüm notları tvOS 26 açılış çökmeleri ve iCloud sync hataları için düzeltmeler bildiriyor. PureIPTV’nin persistence migration ve startup recovery sınırları koddan doğrulanmalı.
+- **Kaynak:** https://apps.apple.com/us/app/iplaytv-iptv-m3u-player/id1072226801
+
+### 200. [PENDING] tvOS Aramada İçerik Alanı Seçimini ve Sorguyu Koruma
+- **Fırsat:** Movies, Shows, People, Live ve Programs arama kapsamları arasında geçerken sorguyu ve odak konumunu koru; geç gelen sonuçları yanlış kapsamda gösterme.
+- **Keşif:** IPTVX v25 araması bu altı kapsamı ayrı sunuyor. PureIPTV’deki #186 odak/filtre akışından farklı olarak scope değişiminde sorgu ve asenkron sonuç sahipliği incelenmeli.
+- **Kaynak:** https://iptvx.app/newsroom/iptvx-25-for-you-redesign/ · https://apps.apple.com/gr/app/iptvx/id1451470024?platform=ipad

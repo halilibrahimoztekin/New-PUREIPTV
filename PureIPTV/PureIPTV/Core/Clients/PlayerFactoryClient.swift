@@ -97,6 +97,9 @@ extension PlayerFactoryClient: DependencyKey {
                     }
                     _ = player.jump(by: offsetDuration)
                 },
+                seekAndConfirm: { command in
+                    await confirmedVLCSeek(player: box.getPlayer(), command: command)
+                },
                 seek: { position in
                     let player = box.getPlayer()
                     let clamped = max(0.0, min(1.0, position))
@@ -142,6 +145,7 @@ extension PlayerFactoryClient: DependencyKey {
 
                     if let video = player.videoTracks.first {
                         info.videoCodec = video.codecString
+                        info.reportedFrameRate = video.frameRate
                         if let w = video.width, let h = video.height, w > 0, h > 0 {
                             info.resolution = "\(w)x\(h)"
                         }
@@ -155,7 +159,7 @@ extension PlayerFactoryClient: DependencyKey {
                         }
                     }
 
-                    return info.videoCodec != nil || info.audioCodec != nil ? info : nil
+                    return info.videoCodec != nil || info.audioCodec != nil || info.reportedFrameRate != nil ? info : nil
                 },
                 getAudioTracks: {
                     box.getPlayer().audioTracks
@@ -220,6 +224,12 @@ extension PlayerFactoryClient: DependencyKey {
                             task.cancel()
                         }
                     }
+                },
+                playbackHealthEvents: {
+                    box.getPlayer().playbackHealthEvents
+                },
+                playbackHealthSnapshot: {
+                    box.getPlayer().playbackHealth
                 }
             )
         }

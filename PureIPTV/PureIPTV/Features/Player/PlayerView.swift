@@ -48,6 +48,50 @@ public struct PlayerView: View {
                 PlayerView_iOS(store: store, pipController: $pipController)
             #endif
 
+            VStack(spacing: 8) {
+                if store.vodSeekFailureRequestID != nil {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(.black.opacity(0.82), in: Capsule())
+                        .accessibilityLabel(String(format: AppStrings.Common.error, locale: Locale.current, arguments: [""]))
+                        .accessibilityAddTraits(.isStaticText)
+                }
+
+                if store.isHighFrameRateVOD,
+                   store.firstPresentedFrameFeedbackRequestID != nil,
+                   let sourceFrameRate = store.mediaInfo?.reportedFrameRate,
+                   let firstFrameLatency = store.firstPresentedFrameLatencySeconds
+                {
+                    let frameRateText = sourceFrameRate.formatted(.number.precision(.fractionLength(0 ... 2)))
+                    let latencyText = firstFrameLatency.formatted(.number.precision(.fractionLength(2)))
+                    HStack(spacing: 7) {
+                        Image(systemName: "film")
+                        Text("\(frameRateText) fps")
+                        Image(systemName: "clock")
+                        Text("\(latencyText) s")
+                    }
+                    .font(.callout.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(.black.opacity(0.82), in: Capsule())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(AppStrings.Player.technicalDetails)
+                    .accessibilityValue("\(frameRateText) fps · \(latencyText) s")
+                    .accessibilityAddTraits(.isStaticText)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 120)
+            .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.2), value: store.vodSeekFailureRequestID)
+            .animation(.easeInOut(duration: 0.2), value: store.firstPresentedFrameFeedbackRequestID)
+
             if let message = store.playbackEngineError {
                 VStack {
                     Text(message)

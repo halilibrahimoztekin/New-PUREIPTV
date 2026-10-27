@@ -9,12 +9,21 @@ public struct MediaInfo: Equatable, Sendable {
     public var videoCodec: String?
     public var audioCodec: String?
     public var bitrate: Int?
+    /// Nominal or average frame rate reported by the source track.
+    public var reportedFrameRate: Double?
 
-    public init(resolution: String? = nil, videoCodec: String? = nil, audioCodec: String? = nil, bitrate: Int? = nil) {
+    public init(
+        resolution: String? = nil,
+        videoCodec: String? = nil,
+        audioCodec: String? = nil,
+        bitrate: Int? = nil,
+        reportedFrameRate: Double? = nil
+    ) {
         self.resolution = resolution
         self.videoCodec = videoCodec
         self.audioCodec = audioCodec
         self.bitrate = bitrate
+        self.reportedFrameRate = reportedFrameRate
     }
 }
 
@@ -212,6 +221,82 @@ public struct CatchupSeekResult: Equatable, Sendable {
     }
 }
 
+public enum PlaybackSeekCommand: Sendable {
+    case position(Double)
+    case time(Duration)
+    case relative(seconds: Int64)
+}
+
+public enum PlaybackSeekStatus: Equatable, Sendable {
+    case settled
+    case inaccurate
+    case rejected
+    case timedOut
+    case superseded
+}
+
+public struct PlaybackSeekResult: Equatable, Sendable {
+    public let currentTime: Duration?
+    public let position: Double?
+    public let status: PlaybackSeekStatus
+
+    public init(currentTime: Duration?, position: Double?, status: PlaybackSeekStatus) {
+        self.currentTime = currentTime
+        self.position = position
+        self.status = status
+    }
+}
+
+@MainActor
+func confirmedVLCSeek(player: Player, command: PlaybackSeekCommand) async -> PlaybackSeekResult {
+    func snapshot(_ status: PlaybackSeekStatus) -> PlaybackSeekResult {
+        let rawPosition = player.position
+        let duration = player.duration
+        let time = player.currentTime
+        let durationSeconds = duration.map {
+            Double($0.components.seconds) + Double($0.components.attoseconds) / 1_000_000_000_000_000_000
+        }
+        let timeSeconds = Double(time.components.seconds) + Double(time.components.attoseconds) / 1_000_000_000_000_000_000
+        let measuredPosition: Double? = if rawPosition.isFinite {
+            max(0, min(1, rawPosition))
+        } else if let durationSeconds, durationSeconds.isFinite, durationSeconds > 0, timeSeconds.isFinite {
+            max(0, min(1, timeSeconds / durationSeconds))
+        } else {
+            nil
+        }
+        return PlaybackSeekResult(
+            currentTime: time,
+            position: measuredPosition,
+            status: status
+        )
+    }
+
+    let request: SeekRequest
+    do {
+        switch command {
+        case let .position(position):
+            request = try player.requestSeek(to: PlaybackPosition(max(0, min(1, position))), fast: false)
+        case let .time(time):
+            request = try player.requestSeek(to: max(.zero, time), fast: false)
+        case let .relative(seconds):
+            request = try player.requestSeek(by: .seconds(Double(seconds)), fast: false)
+        }
+    } catch {
+        return snapshot(.rejected)
+    }
+
+    let outcome = request.initialOutcome == .pending ? await request.outcome : request.initialOutcome
+    let status: PlaybackSeekStatus = switch outcome {
+    case .settled: .settled
+    case .inaccurate: .inaccurate
+    case .rejected: .rejected
+    case .timedOut: .timedOut
+    case .superseded: .superseded
+    case .pending: .timedOut
+    }
+    return snapshot(status)
+}
+
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
     public var avPlayer: @MainActor @Sendable () -> AVPlayer = { AVPlayer() }
@@ -236,6 +321,10 @@ public struct PlayerClient: Sendable {
         CatchupSeekResult(currentTime: .zero, position: 0, didSucceed: false)
     }
 
+    public var seekAndConfirm: @MainActor @Sendable (_ command: PlaybackSeekCommand) async -> PlaybackSeekResult = { _ in
+        PlaybackSeekResult(currentTime: .zero, position: 0, status: .rejected)
+    }
+
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
     public var thumbnail: @Sendable (_ url: URL, _ userAgentOverride: String?, _ time: Duration) async throws -> Data
@@ -255,6 +344,8 @@ public struct PlayerClient: Sendable {
     public var setEqualizerPreset: @MainActor @Sendable (_ preset: AudioEQPreset) async -> Void
 
     public var events: @MainActor @Sendable () async -> AsyncStream<PlayerEvent>
+    public var playbackHealthEvents: @MainActor @Sendable () async -> AsyncStream<PlaybackHealthEvent>
+    public var playbackHealthSnapshot: @MainActor @Sendable () -> PlaybackHealthSnapshot? = { nil }
 }
 
 extension PlayerClient: DependencyKey {
@@ -648,6 +739,56 @@ extension PlayerClient: DependencyKey {
                 let outcome = await request.outcome
                 return snapshot(didSucceed: outcome == .settled || outcome == .inaccurate)
             },
+            seekAndConfirm: { command in
+                if box.playbackEngine == .avPlayer {
+                    let session = box.getAlternateSession()
+                    let rawCurrentTime = session.player.currentTime().seconds
+                    let currentTime = rawCurrentTime.isFinite ? max(0, rawCurrentTime) : nil
+                    let duration = session.player.currentItem?.duration.seconds ?? 0
+                    guard duration.isFinite, duration > 0 else {
+                        return PlaybackSeekResult(currentTime: currentTime.map { .seconds($0) }, position: nil, status: .rejected)
+                    }
+                    let target: Double
+                    switch command {
+                    case let .position(position):
+                        target = max(0, min(1, position)) * duration
+                    case let .time(time):
+                        target = Double(time.components.seconds)
+                    case let .relative(seconds):
+                        guard let currentTime else {
+                            return PlaybackSeekResult(currentTime: nil, position: nil, status: .rejected)
+                        }
+                        target = currentTime + Double(seconds)
+                    }
+                    guard target.isFinite else {
+                        return PlaybackSeekResult(
+                            currentTime: currentTime.map { .seconds($0) },
+                            position: nil,
+                            status: .rejected
+                        )
+                    }
+                    let clampedTarget = max(0, min(duration, target))
+                    do {
+                        try await session.seek(to: clampedTarget)
+                        let rawLandedTime = session.player.currentTime().seconds
+                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : nil
+                        return PlaybackSeekResult(
+                            currentTime: landedTime.map { .seconds($0) },
+                            position: landedTime.map { max(0, min(1, $0 / duration)) },
+                            status: .settled
+                        )
+                    } catch {
+                        let rawLandedTime = session.player.currentTime().seconds
+                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : nil
+                        return PlaybackSeekResult(
+                            currentTime: landedTime.map { .seconds($0) },
+                            position: landedTime.map { max(0, min(1, $0 / duration)) },
+                            status: .rejected
+                        )
+                    }
+                }
+                return await confirmedVLCSeek(player: box.getPlayer(), command: command)
+            },
             seek: { position in
                 if box.playbackEngine == .avPlayer {
                     let item = box.getAlternateSession().player.currentItem
@@ -707,6 +848,7 @@ extension PlayerClient: DependencyKey {
 
                 if let video = player.videoTracks.first {
                     info.videoCodec = video.codecString
+                    info.reportedFrameRate = video.frameRate
                     if let w = video.width, let h = video.height, w > 0, h > 0 {
                         info.resolution = "\(w)x\(h)"
                     }
@@ -720,7 +862,7 @@ extension PlayerClient: DependencyKey {
                     }
                 }
 
-                return info.videoCodec != nil || info.audioCodec != nil ? info : nil
+                return info.videoCodec != nil || info.audioCodec != nil || info.reportedFrameRate != nil ? info : nil
             },
             getAudioTracks: {
                 if box.playbackEngine == .avPlayer {
@@ -849,6 +991,14 @@ extension PlayerClient: DependencyKey {
                         task.cancel()
                     }
                 }
+            },
+            playbackHealthEvents: {
+                guard box.playbackEngine == .vlc else { return AsyncStream { $0.finish() } }
+                return box.getPlayer().playbackHealthEvents
+            },
+            playbackHealthSnapshot: {
+                guard box.playbackEngine == .vlc else { return nil }
+                return box.getPlayer().playbackHealth
             }
         )
     }()
@@ -866,6 +1016,7 @@ extension PlayerClient: DependencyKey {
         setVolume: { _ in },
         setPlaybackRate: { _ in },
         jump: { _ in },
+        seekAndConfirm: { _ in PlaybackSeekResult(currentTime: .zero, position: 0, status: .rejected) },
         seek: { _ in },
         seekToTime: { _ in },
         thumbnail: { _, _, _ in Data() },
@@ -882,7 +1033,9 @@ extension PlayerClient: DependencyKey {
         getStats: { nil },
         getPlaybackCounters: { PlayerPlaybackCounters() },
         setEqualizerPreset: { _ in },
-        events: { AsyncStream { $0.finish() } }
+        events: { AsyncStream { $0.finish() } },
+        playbackHealthEvents: { AsyncStream { $0.finish() } },
+        playbackHealthSnapshot: { nil }
     )
 }
 
