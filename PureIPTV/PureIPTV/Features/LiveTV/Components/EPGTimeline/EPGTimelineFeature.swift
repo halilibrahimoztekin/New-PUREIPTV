@@ -384,10 +384,11 @@ public struct EPGTimelineFeature {
                 state.savedFocusedProgramID = focusedProgramID
                 state.savedFocusedChannelID = focusedChannelID
                 let shouldStopPreview = state.activePreviewChannel != nil || state.isPiPActive
-                let syncChannelIDs = Array(state.syncPendingEPGChannels)
+                let pendingChannelIDs = Array(state.epgRequestIDs.keys)
                 state.isSyncingEPG = false
                 state.syncPendingEPGChannels = []
-                for streamID in syncChannelIDs {
+                state.syncStatusMessage = nil
+                for streamID in pendingChannelIDs {
                     state.epgRequestIDs[streamID] = nil
                     state.isLoading[streamID] = false
                 }
@@ -401,6 +402,7 @@ public struct EPGTimelineFeature {
                 state.recentChannelLoadRequestID = nil
                 var effects: [Effect<Action>] = [
                     .cancel(id: EPGTimelineCancelID.syncEPG),
+                    .cancel(id: EPGTimelineCancelID.clearSyncStatusMessage),
                     .cancel(id: EPGTimelineCancelID.clockTimer),
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
@@ -413,7 +415,7 @@ public struct EPGTimelineFeature {
                         await previewPlayerClient.stopPreview()
                     })
                 }
-                effects.append(contentsOf: syncChannelIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
+                effects.append(contentsOf: pendingChannelIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
                 return .merge(effects)
 
             case let .saveNavigationState(horizontalOffset, focusedProgramID, focusedChannelID):

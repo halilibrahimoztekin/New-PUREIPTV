@@ -4,6 +4,7 @@ import SwiftUI
 public struct EPGTimelineView: View {
     @Bindable var store: StoreOf<EPGTimelineFeature>
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Dimensions
     #if os(tvOS)
@@ -167,6 +168,9 @@ public struct EPGTimelineView: View {
                 withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
                     shimmerPhase = 1.0
                 }
+            }
+            .onChange(of: availableGridWidth) { _, width in
+                horizontalOffset = min(max(0, totalTimelineWidth - width), max(0, horizontalOffset))
             }
             #if os(tvOS)
             .onChange(of: focusedChannelId) { _, channelID in
@@ -710,7 +714,7 @@ public struct EPGTimelineView: View {
                             ZStack(alignment: .leading) {
                                 Color(hex: "#101014")
 
-                                programsRow(for: channel)
+                                programsRow(for: channel, viewportWidth: availableWidth)
                                     .offset(x: -horizontalOffset)
 
                                 // Live Current Time Vertical Laser Line Indicator (only when viewing today)
@@ -975,7 +979,7 @@ public struct EPGTimelineView: View {
 
     // MARK: - Programs Strip
 
-    private func programsRow(for channel: MediaModels.Item) -> some View {
+    private func programsRow(for channel: MediaModels.Item, viewportWidth: CGFloat) -> some View {
         ZStack(alignment: .leading) {
             if store.epgLoadFailures.contains(channel.id), store.epgData[channel.id]?.isEmpty != false {
                 epgLoadFailureRow(channel)
@@ -992,7 +996,7 @@ public struct EPGTimelineView: View {
 
                     // Render only within reasonable bounds around total timeline
                     if width > 0, xPos + width > 0, xPos < Double(totalTimelineWidth) {
-                        programBlock(program: program, channel: channel, width: CGFloat(width))
+                        programBlock(program: program, channel: channel, width: CGFloat(width), viewportWidth: viewportWidth)
                             .offset(x: CGFloat(xPos))
                     }
                 }
@@ -1129,7 +1133,7 @@ public struct EPGTimelineView: View {
 
     // MARK: - Program Block
 
-    private func programBlock(program: EPGProgram, channel: MediaModels.Item, width: CGFloat) -> some View {
+    private func programBlock(program: EPGProgram, channel: MediaModels.Item, width: CGFloat, viewportWidth: CGFloat) -> some View {
         let isNow = program.isPlayingNow
         let isCatchUp = program.endTime < Date() && channel.tvArchive == 1
         let isFuture = program.startTime > Date()
@@ -1357,9 +1361,11 @@ public struct EPGTimelineView: View {
                 }
                 restoringProgramFocusID = nil
                 focusedChannelId = nil
-                let targetX = (program.startTime.timeIntervalSince(timelineStart) / 3600.0) * hourWidth - 200
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    horizontalOffset = max(0, min(totalTimelineWidth - 800, targetX))
+                let targetOffset = horizontalOffsetRevealing(program, width: width, viewportWidth: viewportWidth)
+                if abs(horizontalOffset - targetOffset) > 1 {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        horizontalOffset = targetOffset
+                    }
                 }
                 store.send(.saveNavigationState(
                     horizontalOffset: horizontalOffset,
@@ -1369,6 +1375,28 @@ public struct EPGTimelineView: View {
             }
         }
         #endif
+    }
+
+    private func horizontalOffsetRevealing(_ program: EPGProgram, width: CGFloat, viewportWidth: CGFloat) -> CGFloat {
+        let start = CGFloat(program.startTime.timeIntervalSince(timelineStart) / 3600) * hourWidth
+        let visibleStart = max(0, start)
+        let visibleEnd = min(totalTimelineWidth, start + width)
+        let inset = min(24, viewportWidth / 8)
+        var target = horizontalOffset
+        if visibleEnd - visibleStart >= viewportWidth - 2 * inset {
+            if visibleStart > horizontalOffset + inset {
+                target = visibleStart - inset
+            } else if visibleEnd < horizontalOffset + viewportWidth - inset {
+                target = visibleEnd - viewportWidth + inset
+            }
+        } else {
+            if visibleStart < horizontalOffset + inset {
+                target = visibleStart - inset
+            } else if visibleEnd > horizontalOffset + viewportWidth - inset {
+                target = visibleEnd - viewportWidth + inset
+            }
+        }
+        return min(max(0, totalTimelineWidth - viewportWidth), max(0, target))
     }
 
     // MARK: - Floating Action Buttons

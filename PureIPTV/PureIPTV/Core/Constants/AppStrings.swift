@@ -934,6 +934,8 @@ public enum AppStrings {
         public static let error = "Hata: ".localized
         public static let noData = "Bu kanal için EPG verisi bulunamadı.".localized
         public static let loadingEPG = "Yayın akışı yükleniyor...".localized
+        public static let mutePreview = "Önizleme sesini kapat".localized
+        public static let unmutePreview = "Önizleme sesini aç".localized
     }
 
     // MARK: - Splash

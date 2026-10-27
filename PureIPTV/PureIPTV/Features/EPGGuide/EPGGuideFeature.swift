@@ -3,6 +3,7 @@ import FactoryKit
 import Foundation
 
 private nonisolated enum EPGGuideCancelID: Hashable, Sendable {
+    case epgRequest
     case previewDebounce
     case previewPlayback
 }
@@ -17,6 +18,9 @@ public struct EPGGuideFeature {
         public var selectedChannel: MediaModels.Item?
         public var epgListings: [EPGProgram] = []
         public var isLoadingEPG = false
+        public var epgRequestID: UUID?
+        public var loadedEPGChannelID: String?
+        public var isVisible = false
         public var errorMessage: String?
         public var lastEPGRefreshDate: Date?
         public var lastEPGRefreshFailureDate: Date?
@@ -60,8 +64,9 @@ public struct EPGGuideFeature {
 
     public enum Action {
         case onAppear
+        case onDisappear
         case selectChannel(MediaModels.Item)
-        case epgResponse(Result<[EPGProgram], Error>)
+        case epgResponse(channelID: String, requestID: UUID, Result<[EPGProgram], Error>)
         case closeTapped
         case playTapped(MediaModels.Item)
         case playCatchUp(EPGProgram, MediaModels.Item)
@@ -92,29 +97,56 @@ public struct EPGGuideFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                guard !state.isVisible else { return .none }
+                state.isVisible = true
                 state.lastEPGRefreshDate = settingsClient.getLastEPGRefreshDate(state.config.playlistID)
                 state.lastEPGRefreshFailureDate = settingsClient.getLastEPGRefreshFailureDate(state.config.playlistID)
                 if let channel = state.selectedChannel {
+                    if state.loadedEPGChannelID == channel.id, state.errorMessage == nil {
+                        return .send(.channelFocused(channel))
+                    }
                     return .send(.selectChannel(channel))
                 }
                 return .none
 
+            case .onDisappear:
+                state.isVisible = false
+                state.epgRequestID = nil
+                state.isLoadingEPG = false
+                state.previewGeneration &+= 1
+                state.activePreviewChannel = nil
+                state.isPreviewPlaying = false
+                return .merge(
+                    .cancel(id: EPGGuideCancelID.epgRequest),
+                    .cancel(id: EPGGuideCancelID.previewDebounce),
+                    .cancel(id: EPGGuideCancelID.previewPlayback),
+                    .run { [previewPlayerClient] _ in
+                        await previewPlayerClient.stopPreview()
+                    }
+                )
+
             case let .selectChannel(channel):
+                if state.selectedChannel?.id != channel.id {
+                    state.epgListings = []
+                    state.loadedEPGChannelID = nil
+                }
                 state.selectedChannel = channel
                 state.isLoadingEPG = true
                 state.errorMessage = nil
-                state.epgListings = []
+                let requestID = UUID()
+                state.epgRequestID = requestID
                 state.previewGeneration &+= 1
                 let previewGeneration = state.previewGeneration
 
                 let config = state.config
                 let streamID = channel.id
 
-                let epgEffect: Effect<Action> = .run { send in
-                    await send(.epgResponse(
-                        Result { try await iptvClient.fetchShortEPG(config, streamID, 20) }
-                    ))
+                let epgEffect: Effect<Action> = .run { [iptvClient] send in
+                    let result = await Result { try await iptvClient.fetchShortEPG(config, streamID, 20) }
+                    guard !Task.isCancelled else { return }
+                    await send(.epgResponse(channelID: streamID, requestID: requestID, result))
                 }
+                .cancellable(id: EPGGuideCancelID.epgRequest, cancelInFlight: true)
 
                 let previewEffect: Effect<Action> = state.isAutoPreviewEnabled ? .run { [clock] send in
                     try await clock.sleep(for: .milliseconds(400))
@@ -190,19 +222,27 @@ public struct EPGGuideFeature {
                     }
                 )
 
-            case let .epgResponse(.success(listings)):
+            case let .epgResponse(channelID, requestID, .success(listings)):
+                guard state.selectedChannel?.id == channelID, state.epgRequestID == requestID else { return .none }
+                state.epgRequestID = nil
                 state.isLoadingEPG = false
                 state.epgListings = listings
+                state.loadedEPGChannelID = channelID
                 return .none
 
-            case let .epgResponse(.failure(error)):
+            case let .epgResponse(channelID, requestID, .failure(error)):
+                guard state.selectedChannel?.id == channelID, state.epgRequestID == requestID else { return .none }
+                state.epgRequestID = nil
                 state.isLoadingEPG = false
                 state.errorMessage = error.localizedDescription
                 return .none
 
             case .closeTapped:
+                state.epgRequestID = nil
+                state.isLoadingEPG = false
                 state.previewGeneration &+= 1
                 return .concatenate(
+                    .cancel(id: EPGGuideCancelID.epgRequest),
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
                     .run { [previewPlayerClient] _ in
@@ -212,9 +252,12 @@ public struct EPGGuideFeature {
                 )
 
             case let .playTapped(channel):
+                state.epgRequestID = nil
+                state.isLoadingEPG = false
                 state.previewGeneration &+= 1
                 let startsMuted = settingsClient.startMuted()
                 return .concatenate(
+                    .cancel(id: EPGGuideCancelID.epgRequest),
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
                     .run { [previewPlayerClient, playerClient] send in
@@ -249,6 +292,8 @@ public struct EPGGuideFeature {
                 ]
 
                 if let finalURL = components?.url {
+                    state.epgRequestID = nil
+                    state.isLoadingEPG = false
                     let catchupItem = MediaModels.Item(
                         id: "\(channel.id)_catchup_\(startUnix)",
                         title: "\(channel.title) (Tekrar: \(program.title))",
@@ -261,6 +306,7 @@ public struct EPGGuideFeature {
                         userAgentOverride: channel.userAgentOverride
                     )
                     return .concatenate(
+                        .cancel(id: EPGGuideCancelID.epgRequest),
                         .cancel(id: EPGGuideCancelID.previewDebounce),
                         .cancel(id: EPGGuideCancelID.previewPlayback),
                         .run { [previewPlayerClient] _ in

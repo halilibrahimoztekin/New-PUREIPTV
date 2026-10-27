@@ -66,6 +66,9 @@ import SwiftVLC
                     focusedChannelID = initialID
                 }
             }
+            .onDisappear {
+                store.send(.onDisappear)
+            }
         }
 
         // MARK: - Left: Channel Column
@@ -265,6 +268,7 @@ import SwiftVLC
                             .foregroundStyle(.white.opacity(0.75))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
+                        retryEPGButton
                     }
                     Spacer()
                 } else if store.epgListings.isEmpty {
@@ -276,11 +280,22 @@ import SwiftVLC
                         Text(AppStrings.EPG.noData)
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
+                        retryEPGButton
                     }
                     Spacer()
                 } else {
                     programScrollView
                 }
+            }
+        }
+
+        @ViewBuilder
+        private var retryEPGButton: some View {
+            if let channel = store.selectedChannel {
+                Button(AppStrings.Common.retry) {
+                    store.send(.selectChannel(channel))
+                }
+                .buttonStyle(.bordered)
             }
         }
 
@@ -320,12 +335,13 @@ import SwiftVLC
                                 store.send(.togglePreviewMute)
                             } label: {
                                 Image(systemName: store.isPreviewMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.caption.weight(.bold))
                                     .foregroundStyle(.white)
-                                    .padding(4)
+                                    .frame(width: 44, height: 44)
                                     .background(Color.black.opacity(0.6), in: Circle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(store.isPreviewMuted ? AppStrings.EPG.unmutePreview : AppStrings.EPG.mutePreview)
                             .padding(4)
                         }
                     } else {
@@ -417,6 +433,7 @@ import SwiftVLC
                             .padding(12)
                     }
                     .buttonStyle(TVCircleButtonStyle())
+                    .accessibilityLabel(AppStrings.Common.close)
                 }
             }
             .padding(.horizontal, 40)

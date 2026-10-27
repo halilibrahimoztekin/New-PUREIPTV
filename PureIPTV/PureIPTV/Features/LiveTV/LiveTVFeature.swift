@@ -420,6 +420,7 @@ public struct LiveTVFeature {
     @Dependency(\.favoriteChannelListsClient) var favoriteChannelListsClient
     @Dependency(\.favoriteChannelOrderClient) var favoriteChannelOrderClient
     @Dependency(\.channelPresentationOverrideClient) var channelPresentationOverrideClient
+    @Dependency(\.previewPlayerClient) var previewPlayerClient
 
     public init() {}
 
@@ -2355,6 +2356,11 @@ public struct LiveTVFeature {
             case let .epgGuide(.presented(.delegate(.playChannel(channel)))):
                 state.epgGuide = nil
                 return .send(.channelSelected(channel))
+
+            case .epgGuide(.dismiss):
+                return .run { [previewPlayerClient] _ in
+                    await previewPlayerClient.stopPreview()
+                }
 
             case .epgGuide:
                 return .none

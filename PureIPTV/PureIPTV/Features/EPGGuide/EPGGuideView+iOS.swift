@@ -55,6 +55,9 @@ import SwiftUI
                 .onAppear {
                     store.send(.onAppear)
                 }
+                .onDisappear {
+                    store.send(.onDisappear)
+                }
             }
         }
 
@@ -175,6 +178,16 @@ import SwiftUI
 
         // MARK: - EPG List
 
+        @ViewBuilder
+        private var retryEPGButton: some View {
+            if let channel = store.selectedChannel {
+                Button(AppStrings.Common.retry) {
+                    store.send(.selectChannel(channel))
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+
         private var epgList: some View {
             VStack(spacing: 0) {
                 // Selected Channel Header
@@ -218,10 +231,13 @@ import SwiftUI
                     Spacer()
                 } else if let error = store.errorMessage {
                     Spacer()
-                    Text("\(AppStrings.EPG.error)\(error)")
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding()
+                    VStack(spacing: 12) {
+                        Text("\(AppStrings.EPG.error)\(error)")
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding()
+                        retryEPGButton
+                    }
                     Spacer()
                 } else if store.epgListings.isEmpty {
                     Spacer()
@@ -231,6 +247,7 @@ import SwiftUI
                             .foregroundColor(.white.opacity(0.3))
                         Text(AppStrings.EPG.noData)
                             .foregroundColor(.white.opacity(0.5))
+                        retryEPGButton
                     }
                     Spacer()
                 } else {
