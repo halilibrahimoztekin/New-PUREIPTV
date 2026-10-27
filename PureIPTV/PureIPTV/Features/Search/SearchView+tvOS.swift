@@ -11,6 +11,9 @@
         @State private var requestedFocusResultID: String?
         @State private var focusRequestSequence = UUID()
         @State private var resultsScrollPosition = ScrollPosition(idType: String.self)
+        @State private var isViewVisible = false
+        @State private var shouldRestoreScopeFocus = false
+        @State private var renderedResultIDs: Set<String> = []
 
         private enum SearchFocusTarget: Hashable {
             case search
@@ -93,18 +96,33 @@
                 }
             }
             .onAppear {
+                isViewVisible = true
                 store.send(.onAppear(config: config))
-                if store.focusedResultID != nil {
-                    Task { @MainActor in
-                        await Task.yield()
-                        focusFirstResult()
-                    }
-                }
+            }
+            .onDisappear {
+                isViewVisible = false
+                cancelPendingResultFocus()
+                renderedResultIDs = []
+            }
+            .onChange(of: store.searchQuery) { _, _ in
+                shouldRestoreScopeFocus = false
+                cancelPendingResultFocus()
             }
             .onChange(of: focusedTarget) { _, target in
-                if case let .result(id) = target, isResultVisible(id) {
-                    store.send(.focusedResultChanged(id))
+                if shouldFocusResultsWhenAvailable {
+                    cancelPendingResultFocus()
+                } else if let requestedFocusResultID, target != .result(requestedFocusResultID) {
+                    cancelPendingResultFocus()
                 }
+                guard case let .result(id) = target, isResultVisible(id) else { return }
+                if shouldRestoreScopeFocus {
+                    shouldRestoreScopeFocus = false
+                    if let savedID = restoredResultID, savedID != id {
+                        requestResultFocus(savedID)
+                        return
+                    }
+                }
+                store.send(.focusedResultChanged(id))
             }
             .onChange(of: store.totalResultsCount) { _, count in
                 guard shouldFocusResultsWhenAvailable else { return }
@@ -149,8 +167,7 @@
 
                 if !store.searchQuery.isEmpty {
                     Button {
-                        shouldFocusResultsWhenAvailable = false
-                        requestedFocusResultID = nil
+                        cancelPendingResultFocus()
                         focusedTarget = .search
                         accessibilityFocusedTarget = .search
                         store.send(.queryChanged(""))
@@ -277,7 +294,7 @@
                     let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedLiveResults
 
@@ -302,6 +319,11 @@
                                     .id(result.id)
                                     .focused($focusedTarget, equals: .result(result.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                    .onAppear {
+                                        renderedResultIDs.insert(result.id)
+                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                    }
+                                    .onDisappear { renderedResultIDs.remove(result.id) }
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -329,7 +351,7 @@
                     let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#BF5AF2")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedVODResults
 
@@ -347,6 +369,11 @@
                                     .id(result.id)
                                     .focused($focusedTarget, equals: .result(result.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                    .onAppear {
+                                        renderedResultIDs.insert(result.id)
+                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                    }
+                                    .onDisappear { renderedResultIDs.remove(result.id) }
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -374,7 +401,7 @@
                     let series = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#FF9F0A")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedSeriesResults
 
@@ -392,6 +419,11 @@
                                     .id(result.id)
                                     .focused($focusedTarget, equals: .result(result.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                    .onAppear {
+                                        renderedResultIDs.insert(result.id)
+                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                    }
+                                    .onDisappear { renderedResultIDs.remove(result.id) }
                                     .contextMenu {
                                         Button {
                                             store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
@@ -452,6 +484,11 @@
                                     .id(credit.id)
                                     .focused($focusedTarget, equals: .result(credit.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(credit.id))
+                                    .onAppear {
+                                        renderedResultIDs.insert(credit.id)
+                                        focusRenderedResultIfRequested(credit.id, requestID: focusRequestSequence)
+                                    }
+                                    .onDisappear { renderedResultIDs.remove(credit.id) }
                                     .accessibilityLabel("\(credit.personName), \(credit.result.item.title)")
                                     .accessibilityHint(AppStrings.Common.watchNow)
                                 }
@@ -470,6 +507,11 @@
                                     .id(match.id)
                                     .focused($focusedTarget, equals: .result(match.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(match.id))
+                                    .onAppear {
+                                        renderedResultIDs.insert(match.id)
+                                        focusRenderedResultIfRequested(match.id, requestID: focusRequestSequence)
+                                    }
+                                    .onDisappear { renderedResultIDs.remove(match.id) }
                                 }
                             }
                             .scrollTargetLayout()
@@ -482,48 +524,25 @@
             }
             .scrollPosition($resultsScrollPosition, anchor: .center)
             .focusSection()
-            .onChange(of: focusedTarget) { _, target in
-                guard case let .result(id) = target else { return }
-                resultsScrollPosition.scrollTo(id: id, anchor: .center)
-            }
-            .onChange(of: store.focusedResultID) { _, id in
-                guard let id else { return }
-                resultsScrollPosition.scrollTo(id: id, anchor: .center)
-            }
             .onChange(of: focusRequestSequence) { _, requestID in
-                guard let id = requestedFocusResultID, isResultVisible(id) else {
+                guard isViewVisible, let id = requestedFocusResultID, isResultVisible(id) else {
                     requestedFocusResultID = nil
                     return
                 }
                 resultsScrollPosition.scrollTo(id: id, anchor: .center)
-                Task { @MainActor in
-                    await Task.yield()
-                    guard focusRequestSequence == requestID,
-                          requestedFocusResultID == id,
-                          isResultVisible(id)
-                    else { return }
-                    focusedTarget = .result(id)
-                    accessibilityFocusedTarget = .result(id)
-                    requestedFocusResultID = nil
-                }
+                focusRenderedResultIfRequested(id, requestID: requestID)
             }
-            .onAppear {
-                guard !isSearchOrFilterControlFocused,
-                      let id = restoredResultID
-                      ?? requestedFocusResultID.flatMap({ isResultVisible($0) ? $0 : nil })
-                      ?? firstResultID
+            .task {
+                let sequence = focusRequestSequence
+                let origin = focusedTarget
+                await Task.yield()
+                guard !Task.isCancelled, isViewVisible,
+                      focusRequestSequence == sequence, focusedTarget == origin
                 else { return }
-                resultsScrollPosition.scrollTo(id: id, anchor: .center)
-                Task { @MainActor in
-                    await Task.yield()
-                    guard isResultVisible(id),
-                          requestedFocusResultID == id || restoredResultID == id || firstResultID == id
-                    else { return }
-                    focusedTarget = .result(id)
-                    accessibilityFocusedTarget = .result(id)
-                    if requestedFocusResultID == id {
-                        requestedFocusResultID = nil
-                    }
+                if let id = requestedFocusResultID, isResultVisible(id) {
+                    requestResultFocus(id)
+                } else if !isSearchOrFilterControlFocused {
+                    focusFirstResult()
                 }
             }
         }
@@ -658,22 +677,51 @@
                 requestedFocusResultID = nil
                 return
             }
+            requestResultFocus(resultID)
+        }
+
+        private func requestResultFocus(_ id: String) {
+            guard isViewVisible, isResultVisible(id) else { return }
             shouldFocusResultsWhenAvailable = false
-            requestedFocusResultID = resultID
+            requestedFocusResultID = id
+            focusRequestSequence = UUID()
+        }
+
+        private func focusRenderedResultIfRequested(_ id: String, requestID: UUID) {
+            guard isViewVisible, requestedFocusResultID == id, renderedResultIDs.contains(id) else { return }
+            let origin = focusedTarget
+            Task { @MainActor in
+                await Task.yield()
+                guard isViewVisible,
+                      focusRequestSequence == requestID,
+                      requestedFocusResultID == id,
+                      renderedResultIDs.contains(id),
+                      focusedTarget == origin || focusedTarget == .result(id),
+                      isResultVisible(id)
+                else { return }
+                requestedFocusResultID = nil
+                focusedTarget = .result(id)
+                accessibilityFocusedTarget = .result(id)
+            }
+        }
+
+        private func cancelPendingResultFocus() {
+            shouldFocusResultsWhenAvailable = false
+            requestedFocusResultID = nil
             focusRequestSequence = UUID()
         }
 
         private func selectFilter(_ filter: SearchFeature.SearchFilter) {
-            shouldFocusResultsWhenAvailable = false
-            requestedFocusResultID = nil
+            cancelPendingResultFocus()
+            shouldRestoreScopeFocus = store.filter != filter
             focusedTarget = .filter(filter)
             accessibilityFocusedTarget = .filter(filter)
             store.send(.filterChanged(filter))
         }
 
         private func selectPlaylistFilter(_ playlistID: UUID?) {
-            shouldFocusResultsWhenAvailable = false
-            requestedFocusResultID = nil
+            cancelPendingResultFocus()
+            shouldRestoreScopeFocus = store.selectedPlaylistID != playlistID
             focusedTarget = .playlist(playlistID)
             accessibilityFocusedTarget = .playlist(playlistID)
             store.send(.selectPlaylistFilter(playlistID))
@@ -697,46 +745,11 @@
         }
 
         private var visibleResultIDs: [String] {
-            let fallbackBadge = PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
-            let liveIDs = store.enrichedLiveResults.isEmpty
-                ? store.liveResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
-                : store.enrichedLiveResults.map(\.id)
-            let vodIDs = store.enrichedVODResults.isEmpty
-                ? store.vodResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
-                : store.enrichedVODResults.map(\.id)
-            let seriesIDs = store.enrichedSeriesResults.isEmpty
-                ? store.seriesResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
-                : store.enrichedSeriesResults.map(\.id)
-            return switch store.filter {
-            case .all:
-                liveIDs
-                    + vodIDs
-                    + seriesIDs
-                    + store.peopleResults.map(\.id)
-                    + store.programResults.map(\.id)
-            case .uhd4k:
-                liveIDs + vodIDs + seriesIDs
-            case .live, .epgMatches:
-                liveIDs
-            case .vod:
-                vodIDs
-            case .series:
-                seriesIDs
-            case .people:
-                store.peopleResults.map(\.id)
-            case .programs:
-                store.programResults.map(\.id)
-            }
+            store.visibleResultIDs
         }
 
         private var firstResultID: String? {
             visibleResultIDs.first
-        }
-
-        private func fallbackResultID(from items: [MediaModels.Item]) -> String? {
-            guard let item = items.first else { return nil }
-            let badge = PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
-            return GlobalSearchResultItem(item: item, playlistBadge: badge).id
         }
 
         private var loadingView: some View {

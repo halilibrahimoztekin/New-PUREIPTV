@@ -5,7 +5,8 @@ import SwiftUI
 
 public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
     public var id: String {
-        "\(playlistBadge.id)_\(item.id)"
+        let components = [item.type.rawValue, playlistBadge.id, item.id]
+        return "search-result-v1|" + components.map { "\($0.utf8.count):\($0)" }.joined()
     }
 
     public let item: MediaModels.Item

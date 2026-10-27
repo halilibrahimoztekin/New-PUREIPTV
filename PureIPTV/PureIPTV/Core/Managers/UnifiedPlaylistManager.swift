@@ -4,7 +4,7 @@ import SwiftUI
 
 private func stablePlaylistSourceID(for config: PlaylistConfig) -> String {
     if let playlistID = config.playlistID {
-        return "playlist:\(playlistID.uuidString.lowercased())"
+        return PlaylistSourceBadge.sourceID(for: playlistID)
     }
 
     // Unsaved sources still need distinct identities. Hash the full source
@@ -24,6 +24,10 @@ private func stablePlaylistSourceID(for config: PlaylistConfig) -> String {
 }
 
 public struct PlaylistSourceBadge: Identifiable, Equatable, Sendable {
+    public nonisolated static func sourceID(for playlistID: UUID) -> String {
+        "playlist:\(playlistID.uuidString.lowercased())"
+    }
+
     public let id: String
     public let reminderIdentity: String
     public let playlistName: String

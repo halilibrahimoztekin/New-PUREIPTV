@@ -258,7 +258,7 @@
                     let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedLiveResults
 
@@ -325,7 +325,7 @@
                     let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#BF5AF2")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedVODResults
 
@@ -367,7 +367,7 @@
                     let seriesList = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
                         GlobalSearchResultItem(
                             item: $0,
-                            playlistBadge: PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#FF9F0A")
+                            playlistBadge: store.fallbackSourceBadge
                         )
                     } : store.enrichedSeriesResults
 

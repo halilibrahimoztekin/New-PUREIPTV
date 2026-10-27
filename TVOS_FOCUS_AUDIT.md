@@ -72,11 +72,11 @@ Kategori dönüşünde hafızadan gelen kimlik, güncel filtrelenmiş listede do
 
 Önce: yalnız `.onMove` → Öneri: satır context menu’sünde uygun olduğunda Yukarı/Aşağı Taşı eylemleri.
 
-### SearchView+tvOS.swift:104, 485 — aynı focus için yinelenen scroll (P2, açık)
+### SearchView+tvOS.swift — kapsam odağı ve yinelenen scroll (#200)
 
-Yerel focus değişimi reducer’a aktarılıyor; hem yerel focus hem reducer’daki kimlik aynı hedefe `scrollTo` çağırıyor. Kural: focus ile scroll birbirini tekrar tekrar tetiklememeli.
+Yerel focus değişimi reducer’a aktarılıyor; hem yerel focus hem reducer’daki kimlik aynı hedefe `scrollTo` çağırıyordu. Kapsam değişimi odağı siliyordu; gecikmiş restoration kullanıcının yeni seçimini ezebiliyordu. Kural: görünür kimlikleri kapsamına göre hatırla; doğal gezinmede focus/scroll feedback döngüsü oluşturma.
 
-Önce: iki `onChange` yolundan aynı scroll → Öneri: yerel yön gezinmesinde tek yol; dış restoration için yalnız gerçekten farklı bir hedef olduğunda scroll.
+#200’de aynı sorgu boyunca filtre/playlist başına 64 kayıtla sınırlı geçerli odak hafızası; ortak görünür ID/fallback kaynak kimliği; yalnız açık restoration isteğinden ScrollPosition kaydırması eklendi. Sonuçlara girişte bir kez hatırlanan karta dönüş, LazyVGrid hücresi çizildikten sonra ve görünürlük/istek/origin guard’larıyla yapılacak. Kullanıcının input/odak değişimi eski isteği etkisiz kılıyor. EPG yanıtında eksik UUID ve playlist kimliği karşılaştırma hatası da aynı incelemede ele alınıyor. Katalog değişiminde tam pipeline yenileme, kaynak/type/item kimlik ayrımı ve dedupe düzeltmeleri de eklendi. Bağımsız reviewer onayladı; iOS/tvOS Release compile-only build’leri başarılı ve görev çıktıları temizlendi. Cihaz akışı çalıştırılmadı.
 
 ### VODDetailView.swift:1604 — gecikmiş başlangıç odağı (P2, açık)
 

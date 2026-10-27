@@ -14,6 +14,26 @@ private let searchEPGCancelID = "SearchFeature.searchEPG"
 private let searchPeopleCancelID = "SearchFeature.searchPeople"
 private let searchProgramsCancelID = "SearchFeature.searchPrograms"
 
+private nonisolated func searchSourceBadge(for config: PlaylistConfig?) -> PlaylistSourceBadge {
+    guard let config else {
+        return PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
+    }
+    return UnifiedPlaylistManager.shared.badge(for: config)
+}
+
+private nonisolated struct SearchCatalogSource: Equatable, Sendable {
+    let id: UUID
+    let config: PlaylistConfig?
+}
+
+private nonisolated func searchCatalogSources(_ playlists: [SavedPlaylist]) -> [SearchCatalogSource] {
+    playlists.map { SearchCatalogSource(id: $0.id, config: $0.toPlaylistConfig()) }
+}
+
+private nonisolated func lengthPrefixedSearchIdentity(_ components: [String]) -> String {
+    components.map { "\($0.utf8.count):\($0)" }.joined()
+}
+
 @Reducer
 public struct SearchFeature: Sendable {
     public enum SearchFilter: String, CaseIterable, Equatable, Hashable, Sendable {
@@ -103,7 +123,7 @@ public struct SearchFeature: Sendable {
         public let portraitURL: URL?
         public let result: GlobalSearchResultItem
         public var id: String {
-            "\(personID)|\(result.playlistBadge.id)|\(result.item.id)"
+            "person-credit-v1|" + lengthPrefixedSearchIdentity([String(personID), result.id])
         }
     }
 
@@ -111,12 +131,22 @@ public struct SearchFeature: Sendable {
         public let program: EPGProgram
         public let result: GlobalSearchResultItem
         public var id: String {
-            "\(program.id)|\(result.playlistBadge.id)"
+            "program-result-v1|" + lengthPrefixedSearchIdentity([program.id, result.id])
         }
     }
 
     @ObservableState
     public struct State: Equatable {
+        public struct ResultScope: Hashable, Sendable {
+            public let filter: SearchFilter
+            public let selectedPlaylistID: UUID?
+
+            public init(filter: SearchFilter, selectedPlaylistID: UUID?) {
+                self.filter = filter
+                self.selectedPlaylistID = selectedPlaylistID
+            }
+        }
+
         // Data sources (everything fetched once)
         public var allChannels: [MediaModels.Item] = []
         public var allVODs: [MediaModels.Item] = []
@@ -134,6 +164,9 @@ public struct SearchFeature: Sendable {
         public var focusedResultID: String?
         public var debouncedQuery: String = ""
         public var filter: SearchFilter = .all
+        public var focusedResultIDsByScope: [ResultScope: String] = [:]
+        public var focusedResultScopeRecency: [ResultScope] = []
+        public var pendingFocusRestorationID: String?
         public var recentSearches: [SearchHistoryItem] = []
         public var quickTags: [QuickSearchTag] = QuickSearchTag.defaults
 
@@ -168,8 +201,81 @@ public struct SearchFeature: Sendable {
         public var activePeopleSearchRequestID: UUID?
         public var activeProgramsSearchRequestID: UUID?
         public var activeSearchRequestID: UUID?
+        public var activeEPGEnrichmentRequestID: UUID?
         public var filterCounts: [SearchFilter: Int] = [:]
         public var baseAllResultsCount = 0
+
+        public var fallbackSourceBadge: PlaylistSourceBadge {
+            searchSourceBadge(for: lastLoadedConfig)
+        }
+
+        public var visibleResultIDs: [String] {
+            let fallbackBadge = fallbackSourceBadge
+            let liveIDs = enrichedLiveResults.isEmpty
+                ? liveResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
+                : enrichedLiveResults.map(\.id)
+            let vodIDs = enrichedVODResults.isEmpty
+                ? vodResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
+                : enrichedVODResults.map(\.id)
+            let seriesIDs = enrichedSeriesResults.isEmpty
+                ? seriesResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
+                : enrichedSeriesResults.map(\.id)
+            return switch filter {
+            case .all: liveIDs + vodIDs + seriesIDs + peopleResults.map(\.id) + programResults.map(\.id)
+            case .uhd4k: liveIDs + vodIDs + seriesIDs
+            case .live, .epgMatches: liveIDs
+            case .vod: vodIDs
+            case .series: seriesIDs
+            case .people: peopleResults.map(\.id)
+            case .programs: programResults.map(\.id)
+            }
+        }
+
+        public var isSearchWorkComplete: Bool {
+            !isSearching && !isCurrentScopeSearching
+        }
+
+        public var currentResultScope: ResultScope {
+            ResultScope(filter: filter, selectedPlaylistID: selectedPlaylistID)
+        }
+
+        public mutating func invalidateFocusMemory() {
+            focusedResultIDsByScope.removeAll(keepingCapacity: true)
+            focusedResultScopeRecency.removeAll(keepingCapacity: true)
+            pendingFocusRestorationID = nil
+            focusedResultID = nil
+        }
+
+        public mutating func prepareFocusRestorationForCurrentScope() {
+            pendingFocusRestorationID = focusedResultIDsByScope[currentResultScope]
+            focusedResultID = nil
+        }
+
+        public mutating func rememberFocusedResult(_ id: String) {
+            guard visibleResultIDs.contains(id) else { return }
+            pendingFocusRestorationID = nil
+            let scope = currentResultScope
+            focusedResultIDsByScope[scope] = id
+            focusedResultScopeRecency.removeAll { $0 == scope }
+            focusedResultScopeRecency.append(scope)
+            while focusedResultScopeRecency.count > 64 {
+                let oldest = focusedResultScopeRecency.removeFirst()
+                focusedResultIDsByScope.removeValue(forKey: oldest)
+            }
+        }
+
+        public mutating func restoreFocusedResultIfPossible() {
+            guard let pendingFocusRestorationID else { return }
+            if visibleResultIDs.contains(pendingFocusRestorationID) {
+                focusedResultID = pendingFocusRestorationID
+                self.pendingFocusRestorationID = nil
+            } else if isSearchWorkComplete {
+                let scope = currentResultScope
+                focusedResultIDsByScope.removeValue(forKey: scope)
+                focusedResultScopeRecency.removeAll { $0 == scope }
+                self.pendingFocusRestorationID = nil
+            }
+        }
 
         public var playlistIDsByBadgeID: [String: UUID] {
             var identifiers: [String: UUID] = [:]
@@ -237,6 +343,7 @@ public struct SearchFeature: Sendable {
 
         public var isCurrentScopeSearching: Bool {
             switch filter {
+            case .all: isPeopleSearchLoading || isProgramsSearchLoading
             case .people: isPeopleSearchLoading
             case .programs: isProgramsSearchLoading
             default: false
@@ -250,11 +357,7 @@ public struct SearchFeature: Sendable {
                 return
             }
 
-            let defaultBadge = PlaylistSourceBadge(
-                id: lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
-                playlistName: lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
-                colorHex: "#0A84FF"
-            )
+            let defaultBadge = searchSourceBadge(for: lastLoadedConfig)
 
             let chSource = !indexedChannels.isEmpty ? indexedChannels : allChannels.map {
                 GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge)
@@ -309,7 +412,7 @@ public struct SearchFeature: Sendable {
         case performSearch(String)
         case searchCompleted(query: String, filter: SearchFilter, live: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])
         case searchEnrichedCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, output: GlobalSearchEngine.SearchResultOutput)
-        case liveEPGEnriched(query: String, filter: SearchFilter, playlistID: UUID?, results: [GlobalSearchResultItem])
+        case liveEPGEnriched(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, results: [GlobalSearchResultItem])
         case peopleSearchCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, results: [PersonCreditResult])
         case programsSearchCompleted(requestID: UUID, query: String, filter: SearchFilter, playlistID: UUID?, results: [ProgramResult])
         case filterChanged(SearchFilter)
@@ -369,6 +472,19 @@ public struct SearchFeature: Sendable {
             switch action {
             case let .onAppear(config):
                 let playlists = playlistRepository.getPlaylists()
+                let oldCatalog = searchCatalogSources(state.savedPlaylists)
+                let newCatalog = searchCatalogSources(playlists)
+                let sourceCatalogChanged = oldCatalog != newCatalog
+                let validPlaylistIDs = Set(newCatalog.compactMap { $0.config == nil ? nil : $0.id })
+                if let selectedPlaylistID = state.selectedPlaylistID,
+                   !validPlaylistIDs.contains(selectedPlaylistID)
+                {
+                    state.selectedPlaylistID = nil
+                }
+                if sourceCatalogChanged {
+                    state.invalidateFocusMemory()
+                    state.activeEPGEnrichmentRequestID = nil
+                }
                 state.savedPlaylists = playlists
 
                 let loadHistory: Effect<Action> = .run { send in
@@ -383,7 +499,12 @@ public struct SearchFeature: Sendable {
                 }
 
                 let currentAdultHidden = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
-                if state.lastLoadedConfig != config || state.lastAdultHidden != currentAdultHidden {
+                let configurationChanged = state.lastLoadedConfig != config
+                let adultVisibilityChanged = state.lastAdultHidden != currentAdultHidden
+                let privacyReset = configurationChanged || adultVisibilityChanged
+                if privacyReset || sourceCatalogChanged {
+                    state.invalidateFocusMemory()
+                    state.activeEPGEnrichmentRequestID = nil
                     state.hasLoaded = false
                     state.isLoading = false
                     state.primaryCatalogLoadRequestID = nil
@@ -407,17 +528,31 @@ public struct SearchFeature: Sendable {
                     state.activeSearchRequestID = nil
                     state.filterCounts = [:]
                     state.baseAllResultsCount = 0
-                    state.searchQuery = ""
-                    state.debouncedQuery = ""
-                    state.isSearching = false
-                    state.isPeopleSearchLoading = false
-                    state.isProgramsSearchLoading = false
+                    if privacyReset {
+                        state.searchQuery = ""
+                        state.debouncedQuery = ""
+                        state.isSearching = false
+                        state.isPeopleSearchLoading = false
+                        state.isProgramsSearchLoading = false
+                    } else {
+                        let query = state.searchQuery
+                        state.debouncedQuery = query
+                        let hasQuery = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        state.isSearching = hasQuery
+                        state.isPeopleSearchLoading = hasQuery && query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+                        state.isProgramsSearchLoading = hasQuery
+                    }
                     state.lastLoadedConfig = config
                     state.lastAdultHidden = currentAdultHidden
                 }
 
                 guard !state.hasLoaded, !state.isLoading else {
-                    return .merge(loadHistory, loadFavs, .send(.loadReminders))
+                    return .merge(
+                        loadHistory,
+                        loadFavs,
+                        .send(.loadReminders),
+                        sourceCatalogChanged ? .cancel(id: searchEPGCancelID) : .none
+                    )
                 }
                 state.isLoading = true
                 state.errorMessage = nil
@@ -495,6 +630,10 @@ public struct SearchFeature: Sendable {
                 return .concatenate(
                     .cancel(id: searchCatalogLoadCancelID),
                     .cancel(id: searchMultiPlaylistLoadCancelID),
+                    .cancel(id: searchCancelID),
+                    .cancel(id: searchEPGCancelID),
+                    .cancel(id: searchPeopleCancelID),
+                    .cancel(id: searchProgramsCancelID),
                     .merge(
                         loadHistory,
                         loadFavs,
@@ -505,6 +644,23 @@ public struct SearchFeature: Sendable {
                 )
 
             case let .loadSavedPlaylistsResponse(playlists):
+                let catalogChanged = searchCatalogSources(state.savedPlaylists) != searchCatalogSources(playlists)
+                if catalogChanged {
+                    guard let config = state.lastLoadedConfig else {
+                        state.invalidateFocusMemory()
+                        state.activeEPGEnrichmentRequestID = nil
+                        state.savedPlaylists = playlists
+                        return .merge(
+                            .cancel(id: searchEPGCancelID),
+                            .cancel(id: searchCancelID),
+                            .cancel(id: searchPeopleCancelID),
+                            .cancel(id: searchProgramsCancelID)
+                        )
+                    }
+                    // Keep the previous catalog in state until onAppear compares
+                    // and rebuilds the indexes from the repository's current set.
+                    return .send(.onAppear(config: config))
+                }
                 state.savedPlaylists = playlists
                 return .none
 
@@ -541,17 +697,14 @@ public struct SearchFeature: Sendable {
 
                 // Create initial default indexed items if no multi-playlist items yet
                 if state.indexedChannels.isEmpty {
-                    let defaultBadge = PlaylistSourceBadge(
-                        id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
-                        playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
-                        colorHex: "#0A84FF"
-                    )
+                    let defaultBadge = searchSourceBadge(for: state.lastLoadedConfig)
                     state.indexedChannels = state.allChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     state.indexedVODs = state.allVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     state.indexedSeries = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                 }
 
                 if !state.debouncedQuery.isEmpty {
+                    guard state.multiPlaylistLoadRequestID == nil else { return .none }
                     return .send(.performSearch(state.debouncedQuery))
                 }
                 return .none
@@ -563,6 +716,9 @@ public struct SearchFeature: Sendable {
                 state.primaryCatalogLoadRequestID = nil
                 state.isLoading = false
                 state.errorMessage = AppStrings.Errors.searchFailed(desc: error.localizedDescription)
+                if state.multiPlaylistLoadRequestID == nil, !state.debouncedQuery.isEmpty {
+                    return .send(.performSearch(state.debouncedQuery))
+                }
                 return .none
 
             case let .loadPlaylistsDataResponse(requestID, responseConfig, list):
@@ -604,16 +760,20 @@ public struct SearchFeature: Sendable {
                 state.indexedVODs = allIndexedVo
                 state.indexedSeries = allIndexedSe
 
-                if !state.debouncedQuery.isEmpty {
+                if state.primaryCatalogLoadRequestID == nil, !state.debouncedQuery.isEmpty {
                     return .send(.performSearch(state.debouncedQuery))
                 }
                 return .none
 
             case let .queryChanged(query):
+                if state.searchQuery != query {
+                    state.invalidateFocusMemory()
+                }
                 state.searchQuery = query
                 state.activePeopleSearchRequestID = nil
                 state.activeProgramsSearchRequestID = nil
                 state.activeSearchRequestID = nil
+                state.activeEPGEnrichmentRequestID = nil
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty {
                     state.debouncedQuery = ""
@@ -624,6 +784,7 @@ public struct SearchFeature: Sendable {
                     state.activePeopleSearchRequestID = nil
                     state.activeProgramsSearchRequestID = nil
                     state.activeSearchRequestID = nil
+                    state.activeEPGEnrichmentRequestID = nil
                     return .merge(
                         .cancel(id: searchCancelID),
                         .cancel(id: searchEPGCancelID),
@@ -644,6 +805,7 @@ public struct SearchFeature: Sendable {
                 return .merge(.cancel(id: searchEPGCancelID), .cancel(id: searchPeopleCancelID), .cancel(id: searchProgramsCancelID), debounceEffect)
 
             case let .performSearch(query):
+                guard state.searchQuery == query else { return .none }
                 state.debouncedQuery = query
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty {
@@ -654,6 +816,26 @@ public struct SearchFeature: Sendable {
                     state.activePeopleSearchRequestID = nil
                     state.activeProgramsSearchRequestID = nil
                     state.activeSearchRequestID = nil
+                    state.activeEPGEnrichmentRequestID = nil
+                    return .merge(
+                        .cancel(id: searchCancelID),
+                        .cancel(id: searchEPGCancelID),
+                        .cancel(id: searchPeopleCancelID),
+                        .cancel(id: searchProgramsCancelID)
+                    )
+                }
+
+                guard state.primaryCatalogLoadRequestID == nil,
+                      state.multiPlaylistLoadRequestID == nil
+                else {
+                    state.isSearching = true
+                    state.isPeopleSearchLoading = trimmed.count >= 2
+                    state.isProgramsSearchLoading = true
+                    state.activeSearchRequestID = nil
+                    state.activePeopleSearchRequestID = nil
+                    state.activeProgramsSearchRequestID = nil
+                    state.activeEPGEnrichmentRequestID = nil
+                    state.clearSearchResults()
                     return .merge(
                         .cancel(id: searchCancelID),
                         .cancel(id: searchEPGCancelID),
@@ -665,10 +847,13 @@ public struct SearchFeature: Sendable {
                 state.isSearching = true
                 let filter = state.filter
                 let selectedPID = state.selectedPlaylistID
+                let selectedSourceID = selectedPID.map(PlaylistSourceBadge.sourceID(for:))
                 let searchRequestID = UUID()
                 let peopleRequestID = UUID()
                 let programsRequestID = UUID()
                 state.activeSearchRequestID = searchRequestID
+                state.activeEPGEnrichmentRequestID = nil
+                state.pendingFocusRestorationID = state.focusedResultIDsByScope[state.currentResultScope]
                 state.activePeopleSearchRequestID = peopleRequestID
                 state.activeProgramsSearchRequestID = programsRequestID
                 state.isPeopleSearchLoading = trimmed.count >= 2
@@ -684,22 +869,14 @@ public struct SearchFeature: Sendable {
                     vods = state.indexedVODs
                     series = state.indexedSeries
                 } else {
-                    let defaultBadge = PlaylistSourceBadge(
-                        id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
-                        playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
-                        colorHex: "#0A84FF"
-                    )
+                    let defaultBadge = searchSourceBadge(for: state.lastLoadedConfig)
                     channels = state.allChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     vods = state.allVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     series = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                 }
 
                 var configsByBadgeID: [String: (config: PlaylistConfig, badge: PlaylistSourceBadge)] = [:]
-                let primaryBadge = PlaylistSourceBadge(
-                    id: state.lastLoadedConfig.map(EPGReminderIdentifier.playlistIdentity(for:)) ?? "default",
-                    playlistName: state.lastLoadedConfig?.serverURL?.host ?? "Varsayılan",
-                    colorHex: "#0A84FF"
-                )
+                let primaryBadge = searchSourceBadge(for: state.lastLoadedConfig)
                 if let primaryConfig = state.lastLoadedConfig {
                     configsByBadgeID[primaryBadge.id] = (primaryConfig, primaryBadge)
                 }
@@ -709,7 +886,7 @@ public struct SearchFeature: Sendable {
                     configsByBadgeID[badge.id] = (config, badge)
                 }
                 let scopedConfigs = Array(configsByBadgeID.values
-                    .filter { selectedPID == nil || $0.badge.id == selectedPID?.uuidString }
+                    .filter { selectedPID == nil || $0.badge.id == selectedSourceID }
                     .sorted { $0.badge.id < $1.badge.id })
                 let adultFilteringEnabled = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdultContent = settingsClient.isAdultContent
@@ -737,10 +914,10 @@ public struct SearchFeature: Sendable {
                             }
                         }
                     }
-                    let knownVODIDs = Set(vods.map { "\($0.playlistBadge.id)_\($0.item.id)" })
-                    let knownSeriesIDs = Set(series.map { "\($0.playlistBadge.id)_\($0.item.id)" })
-                    remoteVODs.removeAll { knownVODIDs.contains("\($0.playlistBadge.id)_\($0.item.id)") }
-                    remoteSeries.removeAll { knownSeriesIDs.contains("\($0.playlistBadge.id)_\($0.item.id)") }
+                    let knownVODIDs = Set(vods.map(\.id))
+                    let knownSeriesIDs = Set(series.map(\.id))
+                    remoteVODs.removeAll { knownVODIDs.contains($0.id) }
+                    remoteSeries.removeAll { knownSeriesIDs.contains($0.id) }
                     guard !Task.isCancelled else { return }
                     let output = GlobalSearchEngine.search(
                         query: trimmed,
@@ -757,7 +934,7 @@ public struct SearchFeature: Sendable {
                 }
                 .cancellable(id: searchCancelID, cancelInFlight: true)
                 let catalog = (vods + series).filter {
-                    selectedPID == nil || $0.playlistBadge.id == selectedPID?.uuidString
+                    selectedPID == nil || $0.playlistBadge.id == selectedSourceID
                 }
                 let allLiveChannels = state.allChannels
                 let personSearchEffect: Effect<Action> = .run { send in
@@ -792,8 +969,7 @@ public struct SearchFeature: Sendable {
                             let creditYear = (credit.releaseDate ?? credit.firstAirDate).flatMap { Int($0.prefix(4)) }
                             for title in creditTitles {
                                 for result in catalogByNormalizedTitle[title] ?? [] {
-                                    let key = "\(result.playlistBadge.id)|\(result.item.id)"
-                                    guard seenCandidates.insert(key).inserted else { continue }
+                                    guard seenCandidates.insert(result.id).inserted else { continue }
                                     if let expectedType {
                                         guard result.item.type == expectedType else { continue }
                                     }
@@ -809,7 +985,7 @@ public struct SearchFeature: Sendable {
                                 })
                                 guard distinctTitles.count == 1 else { continue }
                             }
-                            for result in playable where seen.insert("\(person.id)|\(result.playlistBadge.id)|\(result.item.id)").inserted {
+                            for result in playable where seen.insert(lengthPrefixedSearchIdentity([String(person.id), result.id])).inserted {
                                 matches.append(PersonCreditResult(personID: person.id, personName: name, portraitURL: portraitURL, result: result))
                                 if matches.count >= 80 {
                                     break
@@ -843,8 +1019,9 @@ public struct SearchFeature: Sendable {
                         }
                         for match in found {
                             let result = GlobalSearchResultItem(item: match.channel, playlistBadge: source.badge, matchedEPGTitle: match.program.title, matchedEPGProgram: match.program)
-                            if seen.insert("\(match.program.id)|\(source.badge.id)").inserted {
-                                matches.append(ProgramResult(program: match.program, result: result))
+                            let programResult = ProgramResult(program: match.program, result: result)
+                            if seen.insert(programResult.id).inserted {
+                                matches.append(programResult)
                             }
                             if matches.count >= 100 {
                                 break
@@ -866,6 +1043,7 @@ public struct SearchFeature: Sendable {
                 state.liveResults = live
                 state.vodResults = vods
                 state.seriesResults = series
+                state.restoreFocusedResultIfPossible()
                 return .none
 
             case let .searchEnrichedCompleted(requestID, query, filter, playlistID, output):
@@ -885,9 +1063,11 @@ public struct SearchFeature: Sendable {
                 state.filterCounts[.people] = state.peopleResults.count
                 state.filterCounts[.programs] = state.programResults.count
                 state.updateAllResultsCount()
+                state.restoreFocusedResultIfPossible()
+                state.activeEPGEnrichmentRequestID = nil
                 guard let primaryConfig = state.lastLoadedConfig, !output.live.isEmpty else { return .none }
                 var playlistConfigs: [String: PlaylistConfig] = [:]
-                let primaryBadgeID = EPGReminderIdentifier.playlistIdentity(for: primaryConfig)
+                let primaryBadgeID = UnifiedPlaylistManager.shared.badge(for: primaryConfig).id
                 playlistConfigs[primaryBadgeID] = primaryConfig
                 for (index, playlist) in state.savedPlaylists.enumerated() {
                     guard let config = playlist.toPlaylistConfig() else { continue }
@@ -896,6 +1076,8 @@ public struct SearchFeature: Sendable {
                 }
                 let channelResults = Array(output.live.prefix(6))
                 let selectedPlaylistID = state.selectedPlaylistID
+                let epgRequestID = UUID()
+                state.activeEPGEnrichmentRequestID = epgRequestID
                 return .run { send in
                     var programByResultID: [String: EPGProgram] = [:]
                     // M3U channels share one XMLTV feed. Fetch serially so concurrent
@@ -928,6 +1110,7 @@ public struct SearchFeature: Sendable {
                         )
                     }
                     await send(.liveEPGEnriched(
+                        requestID: epgRequestID,
                         query: query,
                         filter: filter,
                         playlistID: selectedPlaylistID,
@@ -936,14 +1119,17 @@ public struct SearchFeature: Sendable {
                 }
                 .cancellable(id: searchEPGCancelID, cancelInFlight: true)
 
-            case let .liveEPGEnriched(query, filter, playlistID, results):
+            case let .liveEPGEnriched(requestID, query, filter, playlistID, results):
                 guard
+                    state.activeEPGEnrichmentRequestID == requestID,
                     state.debouncedQuery == query,
                     state.searchQuery == query,
                     state.filter == filter,
                     state.selectedPlaylistID == playlistID
                 else { return .none }
+                state.activeEPGEnrichmentRequestID = nil
                 state.enrichedLiveResults = results
+                state.restoreFocusedResultIfPossible()
                 return .none
 
             case let .peopleSearchCompleted(requestID, query, filter, playlistID, results):
@@ -953,6 +1139,7 @@ public struct SearchFeature: Sendable {
                 state.peopleResults = results
                 state.filterCounts[.people] = results.count
                 state.updateAllResultsCount()
+                state.restoreFocusedResultIfPossible()
                 return .none
 
             case let .programsSearchCompleted(requestID, query, filter, playlistID, results):
@@ -962,6 +1149,7 @@ public struct SearchFeature: Sendable {
                 state.programResults = results
                 state.filterCounts[.programs] = results.count
                 state.updateAllResultsCount()
+                state.restoreFocusedResultIfPossible()
                 return .none
 
             case .loadReminders:
@@ -1064,28 +1252,34 @@ public struct SearchFeature: Sendable {
             case let .filterChanged(filter):
                 guard state.filter != filter else { return .none }
                 state.filter = filter
-                state.focusedResultID = nil
+                state.prepareFocusRestorationForCurrentScope()
+                state.activeEPGEnrichmentRequestID = nil
                 let query = state.searchQuery
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     state.isSearching = true
                     state.clearSearchResults()
                     return .send(.performSearch(query))
                 }
-                return .none
+                state.restoreFocusedResultIfPossible()
+                return .cancel(id: searchEPGCancelID)
 
             case let .selectPlaylistFilter(playlistID):
                 guard state.selectedPlaylistID != playlistID else { return .none }
                 state.selectedPlaylistID = playlistID
-                state.focusedResultID = nil
+                state.prepareFocusRestorationForCurrentScope()
+                state.activeEPGEnrichmentRequestID = nil
                 let query = state.searchQuery
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     state.isSearching = true
                     state.clearSearchResults()
                     return .send(.performSearch(query))
                 }
-                return .none
+                state.restoreFocusedResultIfPossible()
+                return .cancel(id: searchEPGCancelID)
 
             case .resetCache:
+                state.invalidateFocusMemory()
+                state.activeEPGEnrichmentRequestID = nil
                 state.hasLoaded = false
                 state.isLoading = false
                 state.primaryCatalogLoadRequestID = nil
@@ -1134,7 +1328,9 @@ public struct SearchFeature: Sendable {
                 }
 
             case let .focusedResultChanged(id):
+                guard state.visibleResultIDs.contains(id) else { return .none }
                 state.focusedResultID = id
+                state.rememberFocusedResult(id)
                 return .none
 
             case let .vodSelected(vod):
@@ -1191,11 +1387,13 @@ public struct SearchFeature: Sendable {
                 }
 
             case let .recentSearchTapped(query):
+                if state.searchQuery != query { state.invalidateFocusMemory() }
                 state.searchQuery = query
                 state.debouncedQuery = query
                 return .send(.performSearch(query))
 
             case let .tagSelected(tag):
+                if state.searchQuery != tag.title { state.invalidateFocusMemory() }
                 state.searchQuery = tag.title
                 state.debouncedQuery = tag.title
                 return .send(.performSearch(tag.title))

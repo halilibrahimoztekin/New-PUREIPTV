@@ -88,14 +88,15 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         let isLookingFor4K = intent.requires4K
 
         // 1. Filter by selected playlist if specified
+        let selectedSourceID = selectedPlaylistID.map(PlaylistSourceBadge.sourceID(for:))
         let scopedChannels = selectedPlaylistID == nil ? channels : channels.filter {
-            $0.playlistBadge.id == selectedPlaylistID?.uuidString
+            $0.playlistBadge.id == selectedSourceID
         }
         let scopedVods = selectedPlaylistID == nil ? vods : vods.filter {
-            $0.playlistBadge.id == selectedPlaylistID?.uuidString
+            $0.playlistBadge.id == selectedSourceID
         }
         let scopedSeries = selectedPlaylistID == nil ? series : series.filter {
-            $0.playlistBadge.id == selectedPlaylistID?.uuidString
+            $0.playlistBadge.id == selectedSourceID
         }
 
         // 2. Score and search Channels
