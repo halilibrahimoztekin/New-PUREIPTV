@@ -20,6 +20,7 @@ public struct XtreamAuthResponseDTO: Codable, Sendable {
         public let activeCons: String?
         public let createdAt: String?
         public let maxConnections: String?
+        public let allowedOutputFormats: [String]?
 
         enum CodingKeys: String, CodingKey {
             case username, password, message, auth, status
@@ -28,6 +29,22 @@ public struct XtreamAuthResponseDTO: Codable, Sendable {
             case activeCons = "active_cons"
             case createdAt = "created_at"
             case maxConnections = "max_connections"
+            case allowedOutputFormats = "allowed_output_formats"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            username = try container.decodeIfPresent(String.self, forKey: .username)
+            password = try container.decodeIfPresent(String.self, forKey: .password)
+            message = try container.decodeIfPresent(String.self, forKey: .message)
+            auth = try container.decodeIfPresent(Int.self, forKey: .auth)
+            status = try container.decodeIfPresent(String.self, forKey: .status)
+            expDate = try container.decodeIfPresent(String.self, forKey: .expDate)
+            isTrial = try container.decodeIfPresent(String.self, forKey: .isTrial)
+            activeCons = try container.decodeIfPresent(String.self, forKey: .activeCons)
+            createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+            maxConnections = try container.decodeIfPresent(String.self, forKey: .maxConnections)
+            allowedOutputFormats = try? container.decode([String].self, forKey: .allowedOutputFormats)
         }
     }
 

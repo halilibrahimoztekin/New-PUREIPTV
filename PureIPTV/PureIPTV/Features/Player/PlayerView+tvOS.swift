@@ -111,6 +111,10 @@
                     // Error Overlay (Madde #89)
                     if let errorMessage = store.errorMessage, !store.isReconnecting {
                         let alternatePlaybackEngine: PlaybackEngine = store.playbackEngine == .vlc ? .avPlayer : .vlc
+                        let canRequestXtreamOutputFormats = store.item.isLive
+                            && store.item.config?.type == .xtream
+                            && store.activeCatchupProgram == nil
+                            && !store.isPlayingCatchup
                         let positionRecoveryHint = (!store.item.isLive || store.activeCatchupProgram != nil)
                             ? AppStrings.Player.playbackPositionMayBeRestored
                             : nil
@@ -135,6 +139,16 @@
                                 : nil,
                             positionRecoveryHint: positionRecoveryHint,
                             onOpenSpeedTest: nil,
+                            onRequestXtreamLiveOutputFormats: canRequestXtreamOutputFormats ? {
+                                store.send(.requestXtreamLiveOutputFormats)
+                            } : nil,
+                            onSelectXtreamLiveOutputFormat: canRequestXtreamOutputFormats ? { format in
+                                store.send(.selectXtreamLiveOutputFormat(format))
+                            } : nil,
+                            xtreamLiveOutputFormatOptions: store.xtreamLiveOutputFormatOptions,
+                            didRequestXtreamLiveOutputFormats: store.didRequestXtreamLiveOutputFormats,
+                            isLoadingXtreamLiveOutputFormats: store.isLoadingXtreamLiveOutputFormats,
+                            xtreamLiveOutputFormatError: store.xtreamLiveOutputFormatError,
                             onDismiss: {
                                 store.send(.closeTapped)
                             }

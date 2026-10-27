@@ -40,6 +40,7 @@ public struct PlayerFeature {
         public static let catchupSeekFeedback = "PlayerFeature.catchupSeekFeedback"
         public static let vodSeek = "PlayerFeature.vodSeek"
         public static let vodSeekFeedback = "PlayerFeature.vodSeekFeedback"
+        public static let xtreamLiveOutputFormats = "PlayerFeature.xtreamLiveOutputFormats"
         public static let highFPSFeedback = "PlayerFeature.highFPSFeedback"
         public static let recordingMonitor = "PlayerFeature.recordingMonitor"
         public static let recordingStatus = "PlayerFeature.recordingStatus"
@@ -139,6 +140,27 @@ public struct PlayerFeature {
                 userAgentOverride: value.userAgentOverride
             )
         }
+
+        public func replacingLiveStreamURL(_ value: URL, playlistConfig: PlaylistConfig? = nil) -> Self {
+            let resolvedConfig = playlistConfig ?? config
+            return Self(
+                id: id,
+                title: title,
+                seriesTitle: seriesTitle,
+                streamURL: value,
+                coverURL: coverURL,
+                seriesID: seriesID,
+                startPosition: startPosition,
+                initialDuration: initialDuration,
+                initialProgress: initialProgress,
+                isLive: isLive,
+                config: resolvedConfig,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                categoryID: categoryID,
+                userAgentOverride: resolvedConfig?.userAgentOverride ?? userAgentOverride
+            )
+        }
     }
 
     @ObservableState
@@ -162,6 +184,11 @@ public struct PlayerFeature {
         public var playbackEngineError: String?
         public var isControlsVisible: Bool = true
         public var errorMessage: String?
+        public var didRequestXtreamLiveOutputFormats = false
+        public var isLoadingXtreamLiveOutputFormats = false
+        public var xtreamLiveOutputFormatOptions: [XtreamLiveOutputFormat] = []
+        public var xtreamLiveOutputFormatError: String?
+        public var activeXtreamLiveOutputFormatRequestID: UUID?
         public var playbackRecoveryErrorMessage: String?
         public var playbackPositionRecoveryRequestID: UUID?
         public var isRecording: Bool = false
@@ -532,6 +559,15 @@ public struct PlayerFeature {
         case pause
         case stop
         case retryPlayback
+        case requestXtreamLiveOutputFormats
+        case xtreamLiveOutputFormatsResponse(
+            requestID: UUID,
+            itemID: String,
+            playlistID: UUID,
+            configuration: PlaylistConfig,
+            result: Result<[XtreamLiveOutputFormat], Error>
+        )
+        case selectXtreamLiveOutputFormat(XtreamLiveOutputFormat)
         case switchPlaybackEngineFromError(PlaybackEngine)
         case playbackPositionRecoveryFinished(PlaybackSeekResult, itemID: String, playbackRequestID: UUID)
         case streamStalled
@@ -806,6 +842,7 @@ public struct PlayerFeature {
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
+            case didSelectXtreamLiveOutputFormat(PlaylistConfig)
         }
     }
 
@@ -823,6 +860,7 @@ public struct PlayerFeature {
     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
     @Dependency(\.playbackSkipMarkerClient) var playbackSkipMarkerClient
     @Dependency(\.mediaServerClient) var mediaServerClient
+    @Injected(\.playlistRepository) var playlistRepository
 
     public init() {}
 
@@ -878,9 +916,10 @@ public struct PlayerFeature {
         let displayModeClient = displayModeClient
         let customEPGMappingClient = customEPGMappingClient
         let playbackSkipMarkerClient = playbackSkipMarkerClient
+        let playlistRepository = playlistRepository
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, profileContextClient: profileContextClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, playlistRepository: playlistRepository, profileContextClient: profileContextClient)
         }
     }
 
@@ -1067,7 +1106,7 @@ public struct PlayerFeature {
         )
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, profileContextClient: ProfileContextClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             Self.resetLiveVideoStallTracking(state: &state)
@@ -1301,6 +1340,7 @@ public struct PlayerFeature {
                 displayModeClient: displayModeClient,
                 customEPGMappingClient: customEPGMappingClient,
                 playbackSkipMarkerClient: playbackSkipMarkerClient,
+                playlistRepository: playlistRepository,
                 profileContextClient: profileContextClient
             )
             return .merge(appearanceEffect, .send(.fetchEPG))
@@ -1333,6 +1373,11 @@ public struct PlayerFeature {
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             state.mediaServerPlaybackRequestID = nil
             state.mediaServerProxyURL = nil
             state.activeCatchupSeekRequestID = nil
@@ -1343,6 +1388,7 @@ public struct PlayerFeature {
             return .merge(
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
                 .cancel(id: CancelID.vodSeek),
@@ -1674,12 +1720,18 @@ public struct PlayerFeature {
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             Self.resetLiveVideoStallTracking(state: &state)
             return .merge(
                 .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.highFPSFeedback),
                 .run { send in
                     if shouldStopRecording {
@@ -1692,8 +1744,129 @@ public struct PlayerFeature {
                 .send(.traktScrobbleStop)
             )
 
+        case .requestXtreamLiveOutputFormats:
+            guard state.errorMessage != nil,
+                  !state.isReconnecting,
+                  !state.isSwitchingPlaybackEngine,
+                  !state.isLoadingXtreamLiveOutputFormats,
+                  state.item.isLive,
+                  !state.isPlayingCatchup,
+                  state.activeCatchupProgram == nil,
+                  let config = state.item.config,
+                  config.type == .xtream,
+                  let playlistID = config.playlistID else { return .none }
+            let requestID = UUID()
+            let itemID = state.item.id
+            state.didRequestXtreamLiveOutputFormats = true
+            state.isLoadingXtreamLiveOutputFormats = true
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = requestID
+            return .run { send in
+                do {
+                    let formats = try await iptvClient.fetchSupportedXtreamLiveOutputFormats(config)
+                    await send(.xtreamLiveOutputFormatsResponse(
+                        requestID: requestID,
+                        itemID: itemID,
+                        playlistID: playlistID,
+                        configuration: config,
+                        result: .success(formats)
+                    ))
+                } catch is CancellationError {
+                    return
+                } catch {
+                    await send(.xtreamLiveOutputFormatsResponse(
+                        requestID: requestID,
+                        itemID: itemID,
+                        playlistID: playlistID,
+                        configuration: config,
+                        result: .failure(error)
+                    ))
+                }
+            }
+            .cancellable(id: CancelID.xtreamLiveOutputFormats, cancelInFlight: true)
+
+        case let .xtreamLiveOutputFormatsResponse(requestID, itemID, playlistID, configuration, result):
+            guard state.activeXtreamLiveOutputFormatRequestID == requestID else { return .none }
+            state.activeXtreamLiveOutputFormatRequestID = nil
+            state.isLoadingXtreamLiveOutputFormats = false
+            guard state.item.id == itemID,
+                  state.item.config?.playlistID == playlistID,
+                  state.item.config == configuration,
+                  state.errorMessage != nil,
+                  !state.isReconnecting,
+                  state.item.isLive,
+                  !state.isPlayingCatchup,
+                  state.activeCatchupProgram == nil else {
+                state.didRequestXtreamLiveOutputFormats = false
+                state.xtreamLiveOutputFormatOptions = []
+                state.xtreamLiveOutputFormatError = nil
+                return .none
+            }
+            switch result {
+            case let .success(formats):
+                state.xtreamLiveOutputFormatOptions = Array(Set(formats))
+                    .filter { $0 != configuration.xtreamLiveOutputFormat }
+                    .sorted { $0.rawValue < $1.rawValue }
+                state.xtreamLiveOutputFormatError = nil
+            case .failure:
+                state.xtreamLiveOutputFormatOptions = []
+                state.xtreamLiveOutputFormatError = "Sağlayıcı biçimleri alınamadı."
+            }
+            return .none
+
+        case let .selectXtreamLiveOutputFormat(format):
+            guard state.errorMessage != nil,
+                  !state.isReconnecting,
+                  !state.isSwitchingPlaybackEngine,
+                  state.item.isLive,
+                  !state.isPlayingCatchup,
+                  state.activeCatchupProgram == nil,
+                  state.xtreamLiveOutputFormatOptions.contains(format),
+                  let config = state.item.config,
+                  config.type == .xtream,
+                  config.xtreamLiveOutputFormat != format,
+                  let playlistID = config.playlistID else { return .none }
+            let updatedConfig = config.replacingXtreamLiveOutputFormat(format)
+            guard let currentStreamURL = makeXtreamLiveStreamURL(config: updatedConfig, streamID: state.item.id) else {
+                state.xtreamLiveOutputFormatError = "Yayın bağlantısı oluşturulamadı."
+                return .none
+            }
+            guard let savedPlaylist = playlistRepository.getPlaylists().first(where: { $0.id == playlistID }),
+                  playlistRepository.updatePlaylist(savedPlaylist.replacingXtreamLiveOutputFormat(format)) else {
+                state.xtreamLiveOutputFormatError = "Biçim tercihi kaydedilemedi."
+                return .none
+            }
+
+            func updatedItem(_ item: PlayableItem) -> PlayableItem {
+                guard item.config?.playlistID == playlistID else { return item }
+                if item.isLive, let streamURL = makeXtreamLiveStreamURL(config: updatedConfig, streamID: item.id) {
+                    return item.replacingLiveStreamURL(streamURL, playlistConfig: updatedConfig)
+                }
+                return item.replacingPlaylistConfig(updatedConfig)
+            }
+
+            let selectedItem = state.item.replacingLiveStreamURL(currentStreamURL, playlistConfig: updatedConfig)
+            state.item = selectedItem
+            state.activePlaybackURL = currentStreamURL
+            state.playlist = state.playlist?.map(updatedItem)
+            state.liveChannels = state.liveChannels.map(updatedItem)
+            state.epgBrowseChannel = state.epgBrowseChannel.map(updatedItem)
+            state.didRequestXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            return .merge(
+                .send(.delegate(.didSelectXtreamLiveOutputFormat(updatedConfig))),
+                .send(.retryPlayback)
+            )
+
         case .retryPlayback:
             guard !state.isSwitchingPlaybackEngine else { return .none }
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             state.errorMessage = nil
             state.isUserPaused = false
@@ -1763,6 +1936,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.highFPSFeedback),
                 .run { send in
                     // Flush and cleanly reset VLC engine to avoid pipeline lockups
@@ -1875,7 +2049,15 @@ public struct PlayerFeature {
             state.playbackRecoveryErrorMessage = errorMessage
             state.errorMessage = nil
             state.isReconnecting = true
-            return .send(.switchPlaybackEngine(target))
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
+            return .merge(
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
+                .send(.switchPlaybackEngine(target))
+            )
 
         case let .playbackPositionRecoveryFinished(result, itemID, playbackRequestID):
             guard state.item.id == itemID,
@@ -3136,6 +3318,11 @@ public struct PlayerFeature {
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             state.activePlaybackURL = newItem.streamURL
             state.mediaServerPlaybackRequestID = nil
             state.mediaServerProxyURL = nil
@@ -3200,6 +3387,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.playerEvents),
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.highFPSFeedback),
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.deinterlaceModeChange),
@@ -3639,9 +3827,18 @@ public struct PlayerFeature {
             let startTimeString = startFormat.string(from: archiveStart)
             let durationMinutes = Int(program.endTime.timeIntervalSince(program.startTime) / 60)
 
-            guard let streamURL = URL(string: state.item.streamURL.absoluteString),
-                  var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: true)
-            else {
+            let catchupBaseURL: URL
+            if let config = state.item.config, config.type == .xtream {
+                guard let tsStreamURL = makeXtreamLiveStreamURL(
+                    config: config.replacingXtreamLiveOutputFormat(.ts),
+                    streamID: state.item.id
+                ) else { return .none }
+                catchupBaseURL = tsStreamURL
+            } else {
+                guard let streamURL = URL(string: state.item.streamURL.absoluteString) else { return .none }
+                catchupBaseURL = streamURL
+            }
+            guard var components = URLComponents(url: catchupBaseURL, resolvingAgainstBaseURL: true) else {
                 return .none
             }
 
@@ -4391,6 +4588,11 @@ public struct PlayerFeature {
             state.vodSeekPreviousTime = nil
             state.vodSeekPreviousPosition = nil
             state.vodSeekFailureRequestID = nil
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             let requestID = UUID()
             state.playbackEngineSwitchID = requestID
             state.mediaInfoRequestID = nil
@@ -4420,6 +4622,7 @@ public struct PlayerFeature {
             return .merge(
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .run { send in
                     do {
                         let appliedMode = try await playerClient.switchEngine(request)
@@ -4536,6 +4739,11 @@ public struct PlayerFeature {
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            state.didRequestXtreamLiveOutputFormats = false
+            state.isLoadingXtreamLiveOutputFormats = false
+            state.xtreamLiveOutputFormatOptions = []
+            state.xtreamLiveOutputFormatError = nil
+            state.activeXtreamLiveOutputFormatRequestID = nil
             state.activeCatchupSeekRequestID = nil
             state.catchupSeekFailureMessage = nil
             state.catchupSeekFailureRequestID = nil
@@ -4559,6 +4767,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.playbackEngineSwitch),
                 .cancel(id: CancelID.channelSwitch),
                 .cancel(id: CancelID.scrubThumbnail),
+                .cancel(id: CancelID.xtreamLiveOutputFormats),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
                 .cancel(id: CancelID.vodSeek),

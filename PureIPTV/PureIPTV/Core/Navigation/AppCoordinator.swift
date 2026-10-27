@@ -597,6 +597,67 @@ public struct AppCoordinator {
             return .none
 
         // ── Player Delegates ─────────────────────────────────────
+        case let .router(.routeAction(_, .player(.delegate(.didSelectXtreamLiveOutputFormat(config))))):
+            guard config.type == .xtream, let playlistID = config.playlistID else { return .none }
+
+            func refreshedMediaItem(_ item: MediaModels.Item) -> MediaModels.Item {
+                guard item.type == .live,
+                      item.playlistID == nil || item.playlistID == playlistID,
+                      let streamURL = makeXtreamLiveStreamURL(config: config, streamID: item.id) else { return item }
+                return item.replacingStreamURL(streamURL)
+            }
+
+            func refreshedPlayableItem(_ item: PlayerFeature.PlayableItem) -> PlayerFeature.PlayableItem {
+                guard item.config?.playlistID == playlistID else { return item }
+                if item.isLive,
+                   let streamURL = makeXtreamLiveStreamURL(config: config, streamID: item.id) {
+                    return item.replacingLiveStreamURL(streamURL, playlistConfig: config)
+                }
+                return item.replacingPlaylistConfig(config)
+            }
+
+            for index in state.routes.indices {
+                switch state.routes[index].screen {
+                case var .home(homeState) where homeState.config.playlistID == playlistID:
+                    homeState.config = config
+                    homeState.liveTV.config = config
+                    homeState.liveTV.channelsByCategory = homeState.liveTV.channelsByCategory.mapValues {
+                        $0.map(refreshedMediaItem)
+                    }
+                    homeState.liveTV.selectedChannel = homeState.liveTV.selectedChannel.map(refreshedMediaItem)
+                    homeState.liveTV.smartGroupChannels = homeState.liveTV.smartGroupChannels.map(refreshedMediaItem)
+                    homeState.liveTV.favoriteListResolvedChannels = homeState.liveTV.favoriteListResolvedChannels.map(refreshedMediaItem)
+                    if var epgTimeline = homeState.liveTV.epgTimeline {
+                        epgTimeline.channels = epgTimeline.channels.map(refreshedMediaItem)
+                        epgTimeline.providerOrderChannels = epgTimeline.providerOrderChannels.map(refreshedMediaItem)
+                        homeState.liveTV.epgTimeline = epgTimeline
+                    }
+                    homeState.dashboard.featuredChannels = homeState.dashboard.featuredChannels.map(refreshedMediaItem)
+                    homeState.dashboard.epgCandidateChannels = homeState.dashboard.epgCandidateChannels.map(refreshedMediaItem)
+                    state.routes[index].screen = .home(homeState)
+                case var .player(playerState) where playerState.item.config?.playlistID == playlistID:
+                    playerState.item = refreshedPlayableItem(playerState.item)
+                    playerState.activePlaybackURL = playerState.item.streamURL
+                    playerState.playlist = playerState.playlist?.map(refreshedPlayableItem)
+                    playerState.liveChannels = playerState.liveChannels.map(refreshedPlayableItem)
+                    playerState.epgBrowseChannel = playerState.epgBrowseChannel.map(refreshedPlayableItem)
+                    state.routes[index].screen = .player(playerState)
+                default:
+                    continue
+                }
+            }
+
+            if let miniPlayer = state.miniPlayer, miniPlayer.item.config?.playlistID == playlistID {
+                var updated = miniPlayer
+                updated.item = refreshedPlayableItem(updated.item)
+                updated.activePlaybackURL = updated.item.streamURL
+                updated.playlist = updated.playlist?.map(refreshedPlayableItem)
+                updated.liveChannels = updated.liveChannels.map(refreshedPlayableItem)
+                updated.epgBrowseChannel = updated.epgBrowseChannel.map(refreshedPlayableItem)
+                state.miniPlayer = updated
+            }
+            return .none
+
         case .router(.routeAction(_, .player(.delegate(.didClose)))):
             state.miniPlayer = nil
             state.isPlayerMini = false

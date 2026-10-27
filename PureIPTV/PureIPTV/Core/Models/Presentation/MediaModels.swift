@@ -200,6 +200,33 @@ public nonisolated enum MediaModels: Sendable {
                 serverPlaybackStatus: serverPlaybackStatus
             )
         }
+
+        public func replacingStreamURL(_ value: URL?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: value,
+                coverURL: coverURL,
+                logoURLOverride: logoURLOverride,
+                categoryID: categoryID,
+                type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: userAgentOverride,
+                playlistID: playlistID,
+                seriesID: seriesID,
+                resumePosition: resumePosition,
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
+            )
+        }
     }
 
     public struct Category: Equatable, Identifiable, Sendable {

@@ -9,6 +9,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
     public let serverURL: String?
     public let username: String?
     public let password: String?
+    /// Optional to decode Keychain records saved before Xtream output selection existed.
+    public let xtreamLiveOutputFormat: XtreamLiveOutputFormat?
 
     /// M3U fields
     public let m3uURL: String?
@@ -27,6 +29,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         serverURL: String? = nil,
         username: String? = nil,
         password: String? = nil,
+        xtreamLiveOutputFormat: XtreamLiveOutputFormat? = nil,
         m3uURL: String? = nil,
         mediaServerCredentials: MediaServerCredentials? = nil,
         mediaServerPlaybackPreference: MediaServerPlaybackPreference? = nil,
@@ -39,6 +42,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.serverURL = serverURL
         self.username = username
         self.password = password
+        self.xtreamLiveOutputFormat = xtreamLiveOutputFormat
         self.m3uURL = m3uURL
         self.mediaServerCredentials = mediaServerCredentials
         self.mediaServerPlaybackPreference = mediaServerPlaybackPreference
@@ -62,6 +66,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 serverURL: url,
                 username: username,
                 password: password,
+                xtreamLiveOutputFormat: xtreamLiveOutputFormat ?? .ts,
                 userAgentOverride: userAgentOverride,
                 channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
             )
@@ -106,6 +111,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             serverURL: serverURL,
             username: username,
             password: password,
+            xtreamLiveOutputFormat: xtreamLiveOutputFormat,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
@@ -122,6 +128,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             serverURL: serverURL,
             username: username,
             password: password,
+            xtreamLiveOutputFormat: xtreamLiveOutputFormat,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
@@ -143,6 +150,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             serverURL: serverURL,
             username: username,
             password: password,
+            xtreamLiveOutputFormat: xtreamLiveOutputFormat,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
@@ -159,9 +167,27 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             serverURL: serverURL,
             username: username,
             password: password,
+            xtreamLiveOutputFormat: xtreamLiveOutputFormat,
             m3uURL: m3uURL,
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: value,
+            userAgentOverride: userAgentOverride,
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+        )
+    }
+
+    public func replacingXtreamLiveOutputFormat(_ value: XtreamLiveOutputFormat?) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            xtreamLiveOutputFormat: value,
+            m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: userAgentOverride,
             channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
         )

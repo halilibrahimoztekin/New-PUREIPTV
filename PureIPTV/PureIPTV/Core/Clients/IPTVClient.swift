@@ -170,6 +170,7 @@ public struct IPTVClient {
     ) async throws -> Void = { _, _, _ in }
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
     public var fetchM3UCategoryTags: @Sendable (_ config: PlaylistConfig) async -> [String] = { _ in [] }
+    public var fetchSupportedXtreamLiveOutputFormats: @Sendable (_ config: PlaylistConfig) async throws -> [XtreamLiveOutputFormat] = { _ in [] }
     public var fetchLiveChannels: @Sendable (_ config: PlaylistConfig, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var resolveLiveItem: @Sendable (_ config: PlaylistConfig, _ itemID: String, _ categoryID: String?) async throws -> MediaModels.Item?
     public var fetchVODCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
@@ -223,6 +224,22 @@ private func makeXtreamStreamURL(
           result.scheme?.lowercased() == scheme,
           result.user == nil, result.password == nil else { return nil }
     return result
+}
+
+func makeXtreamLiveStreamURL(config: PlaylistConfig, streamID: String) -> URL? {
+    guard !streamID.isEmpty,
+          streamID.count <= 32,
+          streamID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+          Int(streamID) != nil,
+          let serverURL = config.serverURL,
+          let username = config.username,
+          let password = config.password else { return nil }
+    return makeXtreamStreamURL(
+        baseURL: serverURL,
+        username: username,
+        password: password,
+        path: ["live", username, password, "\(streamID).\(config.xtreamLiveOutputFormat.rawValue)"]
+    )
 }
 
 extension IPTVClient: DependencyKey {
@@ -364,6 +381,24 @@ extension IPTVClient: DependencyKey {
                     return tag.isEmpty || tag.count > 160 ? nil : tag
                 })).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             },
+            fetchSupportedXtreamLiveOutputFormats: { config in
+                guard config.type == .xtream,
+                      let serverURL = config.serverURL,
+                      let username = config.username,
+                      let password = config.password else { return [] }
+                let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
+                let url = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
+                let dto: XtreamAuthResponseDTO = try await networkClient.fetch(
+                    url: url,
+                    userAgentOverride: config.userAgentOverride
+                )
+                var seenFormats = Set<XtreamLiveOutputFormat>()
+                return (dto.userInfo.allowedOutputFormats ?? []).compactMap { value in
+                    guard let format = XtreamLiveOutputFormat(rawValue: value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()),
+                          seenFormats.insert(format).inserted else { return nil }
+                    return format
+                }
+            },
             fetchLiveChannels: { config, categoryID in
                 if config.type == .plex || config.type == .emby {
                     return []
@@ -401,8 +436,10 @@ extension IPTVClient: DependencyKey {
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveStreams(categoryID: categoryID).url(with: xtreamConfig)
                 let dtos: [XtreamLiveStreamDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
-                let channels = dtos.map { dto in
-                    let streamURL = xtreamConfig.baseURL.appendingPathComponent("live/\(xtreamConfig.username)/\(xtreamConfig.password)/\(dto.streamId).ts")
+                let channels = dtos.compactMap { dto -> MediaModels.Item? in
+                    guard let streamURL = makeXtreamLiveStreamURL(config: config, streamID: String(dto.streamId)) else {
+                        return nil
+                    }
                     return MediaModels.Item(
                         id: String(dto.streamId),
                         title: dto.name,
@@ -458,19 +495,8 @@ extension IPTVClient: DependencyKey {
                     let overrides = await logoOverrideClient.fetchOverrides(playlistID, [itemID])
                     return resolved.replacingLogoURLOverride(overrides[itemID])
                 }
-                guard itemID.count <= 32,
-                      itemID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
-                      Int(itemID) != nil else { return nil }
                 guard config.type == .xtream,
-                      let serverURL = config.serverURL,
-                      let username = config.username,
-                      let password = config.password,
-                      let streamURL = makeXtreamStreamURL(
-                          baseURL: serverURL,
-                          username: username,
-                          password: password,
-                          path: ["live", username, password, "\(itemID).ts"]
-                      ) else { return nil }
+                      let streamURL = makeXtreamLiveStreamURL(config: config, streamID: itemID) else { return nil }
                 let resolved = MediaModels.Item(
                     id: itemID,
                     title: itemID,
@@ -1037,6 +1063,7 @@ extension IPTVClient: DependencyKey {
         refreshContent: { _, _, _ in },
         fetchLiveCategories: { _ in [] },
         fetchM3UCategoryTags: { _ in [] },
+        fetchSupportedXtreamLiveOutputFormats: { _ in [] },
         fetchLiveChannels: { _, _ in [] },
         resolveLiveItem: { _, _, _ in nil },
         fetchVODCategories: { _ in [] },

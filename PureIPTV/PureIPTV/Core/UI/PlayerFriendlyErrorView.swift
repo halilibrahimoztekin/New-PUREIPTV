@@ -74,6 +74,12 @@ public struct PlayerFriendlyErrorView: View {
     public let playbackEngineTitle: String?
     public let positionRecoveryHint: String?
     public let onOpenSpeedTest: (() -> Void)?
+    public let onRequestXtreamLiveOutputFormats: (() -> Void)?
+    public let onSelectXtreamLiveOutputFormat: ((XtreamLiveOutputFormat) -> Void)?
+    public let xtreamLiveOutputFormatOptions: [XtreamLiveOutputFormat]
+    public let didRequestXtreamLiveOutputFormats: Bool
+    public let isLoadingXtreamLiveOutputFormats: Bool
+    public let xtreamLiveOutputFormatError: String?
     public let onDismiss: () -> Void
 
     @FocusState private var focusedAction: FocusedAction?
@@ -84,6 +90,8 @@ public struct PlayerFriendlyErrorView: View {
         case backup
         case playbackEngine
         case speedTest
+        case outputFormatRequest
+        case outputFormat(XtreamLiveOutputFormat)
         case dismiss
     }
 
@@ -96,6 +104,12 @@ public struct PlayerFriendlyErrorView: View {
         playbackEngineTitle: String? = nil,
         positionRecoveryHint: String? = nil,
         onOpenSpeedTest: (() -> Void)? = nil,
+        onRequestXtreamLiveOutputFormats: (() -> Void)? = nil,
+        onSelectXtreamLiveOutputFormat: ((XtreamLiveOutputFormat) -> Void)? = nil,
+        xtreamLiveOutputFormatOptions: [XtreamLiveOutputFormat] = [],
+        didRequestXtreamLiveOutputFormats: Bool = false,
+        isLoadingXtreamLiveOutputFormats: Bool = false,
+        xtreamLiveOutputFormatError: String? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.errorMessage = errorMessage
@@ -106,6 +120,12 @@ public struct PlayerFriendlyErrorView: View {
         self.playbackEngineTitle = playbackEngineTitle
         self.positionRecoveryHint = positionRecoveryHint
         self.onOpenSpeedTest = onOpenSpeedTest
+        self.onRequestXtreamLiveOutputFormats = onRequestXtreamLiveOutputFormats
+        self.onSelectXtreamLiveOutputFormat = onSelectXtreamLiveOutputFormat
+        self.xtreamLiveOutputFormatOptions = xtreamLiveOutputFormatOptions
+        self.didRequestXtreamLiveOutputFormats = didRequestXtreamLiveOutputFormats
+        self.isLoadingXtreamLiveOutputFormats = isLoadingXtreamLiveOutputFormats
+        self.xtreamLiveOutputFormatError = xtreamLiveOutputFormatError
         self.onDismiss = onDismiss
     }
 
@@ -236,6 +256,74 @@ public struct PlayerFriendlyErrorView: View {
                     .focused($focusedAction, equals: .speedTest)
                     .accessibilityFocused($accessibilityFocusedAction, equals: .speedTest)
                     .accessibilityHint(AppStrings.Player.serverSpeedTestHint)
+                }
+
+                if let onRequestXtreamLiveOutputFormats {
+                    Button {
+                        guard !isLoadingXtreamLiveOutputFormats else { return }
+                        onRequestXtreamLiveOutputFormats()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "rectangle.on.rectangle.angled")
+                            Text("Sağlayıcı biçimlerini göster")
+                                .fontWeight(.semibold)
+                            if isLoadingXtreamLiveOutputFormats {
+                                ProgressView()
+                                    .tint(.white)
+                                    .scaleEffect(0.8)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(PlayerErrorActionButtonStyle())
+                    .focused($focusedAction, equals: .outputFormatRequest)
+                    .accessibilityFocused($accessibilityFocusedAction, equals: .outputFormatRequest)
+                    .accessibilityHint("Sağlayıcının bu kanal için ilan ettiği alternatifleri ister.")
+
+                    if isLoadingXtreamLiveOutputFormats {
+                        Text("Sağlayıcı biçimleri yükleniyor…")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .accessibilityAddTraits(.updatesFrequently)
+                    } else if let xtreamLiveOutputFormatError {
+                        Text(xtreamLiveOutputFormatError)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .accessibilityAddTraits(.isStaticText)
+                    } else if didRequestXtreamLiveOutputFormats, xtreamLiveOutputFormatOptions.isEmpty {
+                        Text("Sağlayıcı başka bir canlı biçim ilan etmedi.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .accessibilityAddTraits(.isStaticText)
+                    }
+
+                    if let onSelectXtreamLiveOutputFormat {
+                        ForEach(xtreamLiveOutputFormatOptions) { format in
+                            Button {
+                                onSelectXtreamLiveOutputFormat(format)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "play.rectangle")
+                                    Text(format.displayName)
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color(hex: "#0A84FF"))
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(PlayerErrorActionButtonStyle())
+                            .focused($focusedAction, equals: .outputFormat(format))
+                            .accessibilityFocused($accessibilityFocusedAction, equals: .outputFormat(format))
+                            .accessibilityLabel("\(format.displayName) canlı biçimini seç")
+                            .accessibilityHint("Seçilen biçimi bu playlist için kaydeder ve kanalı yeniden açar.")
+                        }
+                    }
                 }
 
                 Button {
