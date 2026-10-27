@@ -16,7 +16,7 @@ private let searchProgramsCancelID = "SearchFeature.searchPrograms"
 
 @Reducer
 public struct SearchFeature: Sendable {
-    public enum SearchFilter: String, CaseIterable, Equatable, Sendable {
+    public enum SearchFilter: String, CaseIterable, Equatable, Hashable, Sendable {
         case all = "Tümü"
         case live = "Canlı TV"
         case vod = "Filmler"
@@ -203,6 +203,7 @@ public struct SearchFeature: Sendable {
         }
 
         public mutating func clearSearchResults() {
+            focusedResultID = nil
             liveResults = []
             vodResults = []
             seriesResults = []
@@ -1063,6 +1064,7 @@ public struct SearchFeature: Sendable {
             case let .filterChanged(filter):
                 guard state.filter != filter else { return .none }
                 state.filter = filter
+                state.focusedResultID = nil
                 let query = state.searchQuery
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     state.isSearching = true
@@ -1074,6 +1076,7 @@ public struct SearchFeature: Sendable {
             case let .selectPlaylistFilter(playlistID):
                 guard state.selectedPlaylistID != playlistID else { return .none }
                 state.selectedPlaylistID = playlistID
+                state.focusedResultID = nil
                 let query = state.searchQuery
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     state.isSearching = true
@@ -1108,6 +1111,8 @@ public struct SearchFeature: Sendable {
                 state.baseAllResultsCount = 0
                 state.searchQuery = ""
                 state.debouncedQuery = ""
+                state.filter = .all
+                state.focusedResultID = nil
                 state.lastLoadedConfig = nil
                 state.selectedPlaylistID = nil
                 return .merge(
