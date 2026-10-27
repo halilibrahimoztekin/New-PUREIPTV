@@ -24,6 +24,7 @@ public actor FeedbackReportManager {
             case .invalidResponse: "invalid_response"
             case .unauthorized: "unauthorized"
             case let .serverError(statusCode): "http_\(min(max(statusCode, 100), 599))"
+            case .rateLimited: "rate_limited"
             case .decodingFailed: "decoding_failed"
             case .underlying: "network_error"
             }

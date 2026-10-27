@@ -410,6 +410,10 @@ public enum AppStrings {
         public static let epgDataStale = "EPG verisi eski".localized
         public static let epgLastRefreshIssue = "Son EPG yenilemesinde hata oluştu".localized
         public static let epgFreshnessUnknown = "EPG güncelleme durumu bilinmiyor".localized
+        public static func epgProviderCooldownUntil(_ date: String) -> String {
+            "Sağlayıcının bildirdiği EPG bekleme süresi %@ tarihinde doluyor".localized(date)
+        }
+        public static let epgProviderRateLimitedWithoutDate = "Sağlayıcı EPG isteklerini sınırladı ancak yeniden deneme zamanı bildirmedi.".localized
 
         public static let automaticBroadcast = "Canlı Yayın".localized
         public static let broadcastIntermission = "Yayın Arası".localized
@@ -461,6 +465,7 @@ public enum AppStrings {
     public enum Errors {
         public static let invalidURL = "Geçersiz URL adresi.".localized
         public static let invalidResponse = "Sunucudan geçersiz yanıt alındı.".localized
+        public static let rateLimited = "Sunucu istekleri geçici olarak sınırladı.".localized
         public static let unauthorized = "Kullanıcı adı veya şifre hatalı.".localized
         public static let pinMismatch = "PIN kodları eşleşmiyor. Tekrar deneyin.".localized
         public static let incorrectPIN = "Hatalı PIN".localized

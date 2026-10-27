@@ -19,6 +19,18 @@ private nonisolated enum EPGTimelineCancelID: Hashable, Sendable {
     case loadRecentChannels
 }
 
+private func epgRetryDateText(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .short
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+}
+
+private func epgProviderRateLimitMessage(retryAfter: Date?) -> String {
+    guard let retryAfter else { return AppStrings.Player.epgProviderRateLimitedWithoutDate }
+    return AppStrings.Player.epgProviderCooldownUntil(epgRetryDateText(retryAfter))
+}
+
 @Reducer
 public struct EPGTimelineFeature {
     @ObservableState
@@ -59,6 +71,8 @@ public struct EPGTimelineFeature {
         public var isSyncingEPG: Bool = false
         public var lastSyncTimestamp: Date?
         public var lastSyncFailureTimestamp: Date?
+        public var providerCooldownUntil: Date?
+        public var isProviderRateLimited = false
         public var successfulEPGChannelCount = 0
         public var failedEPGChannelCount = 0
         public var syncStatusMessage: String?
@@ -82,6 +96,11 @@ public struct EPGTimelineFeature {
             let formatter = DateFormatter()
             formatter.timeStyle = .short
             return formatter.string(from: lastSyncTimestamp)
+        }
+
+        public var providerCooldownFormatted: String? {
+            guard let providerCooldownUntil, providerCooldownUntil > currentTime else { return nil }
+            return epgRetryDateText(providerCooldownUntil)
         }
 
         public var epgFreshnessLabel: String {
@@ -281,8 +300,9 @@ public struct EPGTimelineFeature {
         case updateCurrentTime
         case refreshEPGTapped
         case performSync(forced: Bool)
-        case syncEPGCacheRefreshFailed
+        case syncEPGCacheRefreshFailed(NetworkError?)
         case syncEPGSourceRefreshed([MediaModels.Item])
+        case syncEPGChannelRequestStarted(streamID: String, requestID: UUID)
         case cancelEPGSync
         case syncCompleted(Date)
         case clearSyncStatusMessage
@@ -335,6 +355,8 @@ public struct EPGTimelineFeature {
                 if state.lastSyncFailureTimestamp == nil {
                     state.lastSyncFailureTimestamp = settingsClient.getLastEPGRefreshFailureDate(state.config.playlistID)
                 }
+                state.providerCooldownUntil = settingsClient.getEPGProviderCooldownUntil(state.config.playlistID)
+                state.isProviderRateLimited = state.providerCooldownUntil.map { $0 > Date() } ?? false
                 let shouldAutoSync = settingsClient.autoUpdateEPG()
                 let refreshInterval = settingsClient.epgAutoRefreshInterval().duration
                 let lastAutoAttempt = settingsClient.getLastEPGAutoRefreshAttemptDate(state.config.playlistID)
@@ -352,7 +374,6 @@ public struct EPGTimelineFeature {
                 if shouldAutoSync, state.config.playlistID != nil {
                     let referenceDate = max(state.lastSyncTimestamp ?? .distantPast, lastAutoAttempt ?? .distantPast)
                     if Date().timeIntervalSince(referenceDate) >= refreshInterval {
-                        settingsClient.setLastEPGAutoRefreshAttemptDate(state.config.playlistID, Date())
                         effects.append(.send(.performSync(forced: false)))
                     }
                 }
@@ -499,6 +520,19 @@ public struct EPGTimelineFeature {
 
             case .performSync:
                 guard !state.isSyncingEPG else { return .none }
+                let now = Date()
+                state.providerCooldownUntil = settingsClient.getEPGProviderCooldownUntil(state.config.playlistID)
+                if let retryAfter = state.providerCooldownUntil, retryAfter > now {
+                    state.isProviderRateLimited = true
+                    state.syncStatusMessage = epgProviderRateLimitMessage(retryAfter: retryAfter)
+                    return .none
+                }
+                if state.providerCooldownUntil != nil {
+                    settingsClient.setEPGProviderCooldownUntil(state.config.playlistID, nil)
+                    state.providerCooldownUntil = nil
+                }
+                state.isProviderRateLimited = false
+                settingsClient.setLastEPGAutoRefreshAttemptDate(state.config.playlistID, now)
                 state.isSyncingEPG = true
                 state.syncStatusMessage = "Rehber kaynağı yenileniyor…"
                 state.successfulEPGChannelCount = 0
@@ -521,7 +555,7 @@ public struct EPGTimelineFeature {
                             try await iptvClient.refreshEPGCache(config)
                         } catch {
                             guard !Task.isCancelled else { return }
-                            await send(.syncEPGCacheRefreshFailed)
+                            await send(.syncEPGCacheRefreshFailed(error as? NetworkError))
                             return
                         }
                         await send(.syncEPGSourceRefreshed(channelsToPrewarm))
@@ -532,12 +566,34 @@ public struct EPGTimelineFeature {
             case let .syncEPGSourceRefreshed(channels):
                 guard state.isSyncingEPG else { return .none }
                 state.syncStatusMessage = "Programlar güncelleniyor (0/\(channels.count))…"
-                return .run { send in
+                let config = state.config
+                return .run { [iptvClient] send in
                     for channel in channels {
-                        await send(.refreshEPG(streamID: channel.id))
+                        guard !Task.isCancelled else { return }
+                        let requestID = UUID()
+                        await send(.syncEPGChannelRequestStarted(streamID: channel.id, requestID: requestID))
+                        do {
+                            let programs = try await iptvClient.fetchShortEPG(config, channel.id, 20)
+                            await send(.epgResponse(streamID: channel.id, requestID: requestID, .success(programs)))
+                        } catch {
+                            await send(.epgResponse(streamID: channel.id, requestID: requestID, .failure(error)))
+                            if let networkError = error as? NetworkError, case .rateLimited = networkError {
+                                return
+                            }
+                        }
                     }
                 }
                 .cancellable(id: EPGTimelineCancelID.syncEPG, cancelInFlight: true)
+
+            case let .syncEPGChannelRequestStarted(streamID, requestID):
+                guard state.isSyncingEPG, state.syncPendingEPGChannels.contains(streamID) else { return .none }
+                state.isLoading[streamID] = true
+                state.epgLoadFailures.remove(streamID)
+                if state.epgData[streamID]?.isEmpty == true {
+                    state.epgData[streamID] = nil
+                }
+                state.epgRequestIDs[streamID] = requestID
+                return .cancel(id: EPGTimelineCancelID.request(streamID))
 
             case .cancelEPGSync:
                 guard state.isSyncingEPG else { return .none }
@@ -551,8 +607,26 @@ public struct EPGTimelineFeature {
                 }
                 return .merge([.cancel(id: EPGTimelineCancelID.syncEPG)] + streamIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
 
-            case .syncEPGCacheRefreshFailed:
+            case let .syncEPGCacheRefreshFailed(error):
                 guard state.isSyncingEPG else { return .none }
+                if let error, case let .rateLimited(retryAfter) = error {
+                    state.isSyncingEPG = false
+                    state.syncPendingEPGChannels = []
+                    state.providerCooldownUntil = retryAfter
+                    state.isProviderRateLimited = true
+                    state.lastSyncFailureTimestamp = Date()
+                    settingsClient.setLastEPGRefreshFailureDate(state.config.playlistID, state.lastSyncFailureTimestamp)
+                    state.syncStatusMessage = epgProviderRateLimitMessage(retryAfter: retryAfter)
+                    let activeEPGStreamIDs = Array(state.epgRequestIDs.keys)
+                    for activeID in activeEPGStreamIDs {
+                        state.epgRequestIDs[activeID] = nil
+                        state.isLoading[activeID] = false
+                    }
+                    return .merge(
+                        [.cancel(id: EPGTimelineCancelID.syncEPG)]
+                            + activeEPGStreamIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) }
+                    )
+                }
                 state.syncPendingEPGChannels = []
                 state.failedEPGChannelCount = max(1, state.failedEPGChannelCount)
                 return .send(.syncCompleted(Date()))
@@ -998,6 +1072,10 @@ public struct EPGTimelineFeature {
                 state.isLoading[streamID] = false
                 state.epgData[streamID] = programs
                 state.epgLoadFailures.remove(streamID)
+                if let retryAfter = settingsClient.getEPGProviderCooldownUntil(state.config.playlistID), retryAfter > state.currentTime {
+                    state.providerCooldownUntil = retryAfter
+                    state.isProviderRateLimited = true
+                }
                 state.rebuildAvailableProgramCategories()
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {
@@ -1009,7 +1087,7 @@ public struct EPGTimelineFeature {
                 }
                 return .none
 
-            case let .epgResponse(streamID, requestID, .failure):
+            case let .epgResponse(streamID, requestID, .failure(error)):
                 guard state.epgRequestIDs[streamID] == requestID else { return .none }
                 state.epgRequestIDs[streamID] = nil
                 state.isLoading[streamID] = false
@@ -1017,6 +1095,30 @@ public struct EPGTimelineFeature {
                 // Retain the last successful guide while refresh is failing.
                 if state.epgData[streamID] == nil {
                     state.epgData[streamID] = []
+                }
+                if let networkError = error as? NetworkError,
+                   case let .rateLimited(retryAfter) = networkError
+                {
+                    if let retryAfter {
+                        settingsClient.setEPGProviderCooldownUntil(state.config.playlistID, retryAfter)
+                    }
+                    state.providerCooldownUntil = retryAfter
+                    state.isProviderRateLimited = true
+                    state.lastSyncFailureTimestamp = Date()
+                    settingsClient.setLastEPGRefreshFailureDate(state.config.playlistID, state.lastSyncFailureTimestamp)
+                    state.syncStatusMessage = epgProviderRateLimitMessage(retryAfter: retryAfter)
+
+                    let activeEPGStreamIDs = Array(state.epgRequestIDs.keys)
+                    state.syncPendingEPGChannels = []
+                    state.isSyncingEPG = false
+                    for activeID in activeEPGStreamIDs {
+                        state.epgRequestIDs[activeID] = nil
+                        state.isLoading[activeID] = false
+                    }
+                    return .merge(
+                        [.cancel(id: EPGTimelineCancelID.syncEPG)]
+                            + activeEPGStreamIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) }
+                    )
                 }
                 let responseCompletedSyncChannel = state.syncPendingEPGChannels.remove(streamID) != nil
                 if responseCompletedSyncChannel {

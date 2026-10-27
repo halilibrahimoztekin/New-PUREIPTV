@@ -199,6 +199,31 @@ private func decodeEPGItems(_ data: Data) throws -> [EPGItemDTO] {
     }
 }
 
+private func isEPGRateLimit(_ error: Error) -> Bool {
+    guard let networkError = error as? NetworkError else { return false }
+    if case .rateLimited = networkError { return true }
+    return false
+}
+
+private func checkEPGProviderCooldown(for config: PlaylistConfig, settingsClient: SettingsClient) throws {
+    guard let playlistID = config.playlistID,
+          let retryAfter = settingsClient.getEPGProviderCooldownUntil(playlistID) else { return }
+    guard retryAfter > .now else {
+        settingsClient.setEPGProviderCooldownUntil(playlistID, nil)
+        return
+    }
+    throw NetworkError.rateLimited(retryAfter: retryAfter)
+}
+
+private func recordEPGProviderCooldown(from error: Error, for config: PlaylistConfig, settingsClient: SettingsClient) {
+    guard let playlistID = config.playlistID,
+          let networkError = error as? NetworkError,
+          case let .rateLimited(retryAfter) = networkError,
+          let retryAfter else { return }
+    let existingRetryAfter = settingsClient.getEPGProviderCooldownUntil(playlistID)
+    settingsClient.setEPGProviderCooldownUntil(playlistID, max(existingRetryAfter ?? .distantPast, retryAfter))
+}
+
 private func makeXtreamStreamURL(
     baseURL: URL,
     username _: String,
@@ -282,6 +307,33 @@ extension IPTVClient: DependencyKey {
             }
             guard let url = config.m3uURL else { return [] }
             guard let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride) else { return [] }
+            do {
+                let parsedResult = try await parseValidatedM3U(data)
+                try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
+                return parsedResult.items
+            } catch {
+                return await m3uCache.getItems(for: key)
+            }
+        }
+
+        let ensureM3UCacheForEPG: @Sendable (PlaylistConfig, SettingsClient) async throws -> [M3UItemDTO] = { config, settingsClient in
+            let key = m3uCacheKey(config)
+            let existing = await m3uCache.getItems(for: key)
+            if !existing.isEmpty {
+                return existing
+            }
+            try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
+            guard let url = config.m3uURL else { return [] }
+            let data: Data
+            do {
+                data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+            } catch {
+                recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
+                if isEPGRateLimit(error) {
+                    throw error
+                }
+                return []
+            }
             do {
                 let parsedResult = try await parseValidatedM3U(data)
                 try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
@@ -806,15 +858,23 @@ extension IPTVClient: DependencyKey {
             },
             fetchShortEPG: { config, streamID, limit in
                 @Dependency(\.xmltvParser) var xmltvParser
+                @Dependency(\.settingsClient) var settingsClient
                 if config.type == .m3u {
-                    _ = await ensureM3UCache(config)
+                    _ = try await ensureM3UCacheForEPG(config, settingsClient)
                     let cacheKey = m3uCacheKey(config)
                     guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
                         throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
                     }
                     var currentXMLTV = await m3uCache.getXmltvData(for: cacheKey)
                     if currentXMLTV == nil {
-                        let data = try await networkClient.fetchData(url: epgURL, userAgentOverride: config.userAgentOverride)
+                        try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
+                        let data: Data
+                        do {
+                            data = try await networkClient.fetchData(url: epgURL, userAgentOverride: config.userAgentOverride)
+                        } catch {
+                            recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
+                            throw error
+                        }
                         currentXMLTV = try await xmltvParser.parse(data)
                         if let parsed = currentXMLTV {
                             await m3uCache.setXmltvData(parsed, for: cacheKey)
@@ -850,28 +910,35 @@ extension IPTVClient: DependencyKey {
 
                 // Strategy 1: Attempt action=get_short_epg
                 do {
+                    try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
                     let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
                     let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                     response = try decodeEPGItems(data)
                     receivedValidResponse = true
                 } catch {
+                    recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
                     lastRequestError = error
                 }
 
                 // Strategy 2: If empty, attempt action=get_simple_data_table
-                if response.isEmpty {
+                if response.isEmpty, !isEPGRateLimit(lastRequestError) {
                     do {
+                        try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
                         let url = try XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig)
                         let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                         response = try decodeEPGItems(data)
                         receivedValidResponse = true
                     } catch {
+                        recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
                         lastRequestError = error
                     }
                 }
 
                 // Strategy 3: If still empty, check mapped XMLTV sources via CustomEPGMappingClient
                 if response.isEmpty {
+                    if isEPGRateLimit(lastRequestError) {
+                        throw lastRequestError
+                    }
                     @Dependency(\.customEPGMappingClient) var customEPGMappingClient
                     let customPrograms = await customEPGMappingClient.fetchProgramsForChannel(streamID, "", nil)
                     if !customPrograms.isEmpty {
@@ -965,15 +1032,23 @@ extension IPTVClient: DependencyKey {
             refreshEPGCache: { config in
                 guard config.type == .m3u else { return }
                 @Dependency(\.xmltvParser) var xmltvParser
-                _ = await ensureM3UCache(config)
+                @Dependency(\.settingsClient) var settingsClient
+                _ = try await ensureM3UCacheForEPG(config, settingsClient)
                 let cacheKey = m3uCacheKey(config)
                 guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
                     throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
                 }
-                let data = try await networkClient.fetchData(
-                    url: epgURL,
-                    userAgentOverride: config.userAgentOverride
-                )
+                try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
+                let data: Data
+                do {
+                    data = try await networkClient.fetchData(
+                        url: epgURL,
+                        userAgentOverride: config.userAgentOverride
+                    )
+                } catch {
+                    recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
+                    throw error
+                }
                 // Keep the current parsed XMLTV value intact until parsing has
                 // completed successfully; malformed responses never evict the
                 // last-good cache.

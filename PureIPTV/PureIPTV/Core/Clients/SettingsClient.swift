@@ -110,6 +110,8 @@ public struct SettingsClient: Sendable {
     public var setLastEPGRefreshFailureDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
     public var getLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
     public var setLastEPGAutoRefreshAttemptDate: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
+    public var getEPGProviderCooldownUntil: @Sendable (_ playlistID: UUID?) -> Date? = { _ in nil }
+    public var setEPGProviderCooldownUntil: @Sendable (_ playlistID: UUID?, _ date: Date?) -> Void = { _, _ in }
 
     public var hideAdultContent: @Sendable () -> Bool = { false }
     public var setHideAdultContent: @Sendable (Bool) -> Void = { _ in }
@@ -195,6 +197,7 @@ extension SettingsClient: DependencyKey {
         let lastEPGRefreshPrefix = "com.pureiptv.lastEPGRefresh."
         let lastEPGRefreshFailurePrefix = "com.pureiptv.lastEPGRefreshFailure."
         let lastEPGAutoRefreshAttemptPrefix = "com.pureiptv.lastEPGAutoRefreshAttempt."
+        let epgProviderCooldownPrefix = "com.pureiptv.epgProviderCooldownUntil."
         let hideAdultKey = "com.pureiptv.hideAdultContent"
         let startupTabKey = "com.pureiptv.defaultStartupTab"
         let hideEmptyContentTabsKey = "com.pureiptv.hideEmptyContentTabs"
@@ -388,6 +391,19 @@ extension SettingsClient: DependencyKey {
             setLastEPGAutoRefreshAttemptDate: { playlistID, date in
                 guard let playlistID else { return }
                 let key = lastEPGAutoRefreshAttemptPrefix + playlistID.uuidString
+                if let date {
+                    defaults.set(date, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            },
+            getEPGProviderCooldownUntil: { playlistID in
+                guard let playlistID else { return nil }
+                return defaults.object(forKey: epgProviderCooldownPrefix + playlistID.uuidString) as? Date
+            },
+            setEPGProviderCooldownUntil: { playlistID, date in
+                guard let playlistID else { return }
+                let key = epgProviderCooldownPrefix + playlistID.uuidString
                 if let date {
                     defaults.set(date, forKey: key)
                 } else {

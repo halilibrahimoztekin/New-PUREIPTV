@@ -44,9 +44,13 @@ public struct NetworkClient {
         var request = URLRequest(url: url)
         UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
         let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
         }
+        if httpResponse.statusCode == 429 {
+            throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+        }
+        guard (200 ... 299).contains(httpResponse.statusCode) else { throw NetworkError.invalidResponse }
         return data
     }
 
@@ -57,9 +61,13 @@ public struct NetworkClient {
             request.url = mediaServerCredentialSafeURL(url)
         }
         let (data, response) = try await credentialedSession.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
         }
+        if httpResponse.statusCode == 429 {
+            throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+        }
+        guard (200 ... 299).contains(httpResponse.statusCode) else { throw NetworkError.invalidResponse }
         return data
     }
 
@@ -104,6 +112,9 @@ public struct NetworkClient {
         #endif
 
         guard (200 ... 299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 429 {
+                throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+            }
             // Xtream usually returns 200 even for auth errors, but just in case
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw NetworkError.unauthorized
@@ -131,6 +142,21 @@ public struct NetworkClient {
             return "<invalid-url>"
         }
         return mediaServerCredentialSafeURL(url, redactingAdditionalQueryKeys: ["code"]).absoluteString
+    }
+
+    private nonisolated static func retryAfterDate(from response: HTTPURLResponse, now: Date = .now) -> Date? {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+
+        if let seconds = TimeInterval(value), seconds.isFinite, seconds >= 0 {
+            return now.addingTimeInterval(seconds)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        return formatter.date(from: value)
     }
 }
 

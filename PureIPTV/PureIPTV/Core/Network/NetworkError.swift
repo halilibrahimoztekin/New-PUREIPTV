@@ -5,6 +5,7 @@ public enum NetworkError: Error, Equatable {
     case invalidResponse
     case unauthorized
     case serverError(statusCode: Int)
+    case rateLimited(retryAfter: Date?)
     case decodingFailed(description: String)
     case underlying(description: String)
 
@@ -14,6 +15,7 @@ public enum NetworkError: Error, Equatable {
         case .invalidResponse: AppStrings.Errors.invalidResponse
         case .unauthorized: AppStrings.Errors.unauthorized
         case let .serverError(code): AppStrings.Errors.serverError(code: code)
+        case .rateLimited: AppStrings.Errors.rateLimited
         case let .decodingFailed(desc): AppStrings.Errors.decodingFailed(desc: desc)
         case let .underlying(desc): AppStrings.Errors.underlying(desc: desc)
         }

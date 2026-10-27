@@ -344,20 +344,29 @@ public struct EPGTimelineView: View {
     // MARK: - Sync Status Badge
 
     private var epgFreshnessBadge: some View {
-        HStack(spacing: 6) {
-            Image(systemName: store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
-                ? "exclamationmark.triangle.fill"
-                : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
-                    ? "clock.fill" : "checkmark.circle.fill"))
-                .foregroundColor(store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
-                    ? .orange
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
+                    ? "exclamationmark.triangle.fill"
                     : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
-                        ? .yellow : .green))
-            Text(store.epgFreshnessLabel)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.8))
-            if store.isSyncingEPG {
-                ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .cyan)).scaleEffect(0.6)
+                        ? "clock.fill" : "checkmark.circle.fill"))
+                    .foregroundColor(store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
+                        ? .orange
+                        : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
+                            ? .yellow : .green))
+                Text(store.epgFreshnessLabel)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                if store.isSyncingEPG {
+                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .cyan)).scaleEffect(0.6)
+                }
+            }
+
+            if let retryAt = store.providerCooldownFormatted {
+                Label(AppStrings.Player.epgProviderCooldownUntil(retryAt), systemImage: "clock.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 12)
@@ -371,6 +380,10 @@ public struct EPGTimelineView: View {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .cyan))
                     .scaleEffect(0.65)
+            } else if store.isProviderRateLimited {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.caption2)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
