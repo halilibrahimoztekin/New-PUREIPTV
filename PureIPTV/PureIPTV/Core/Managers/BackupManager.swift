@@ -6,6 +6,7 @@ public struct PureIPTVBackupData: Codable, Sendable {
     public let backupDate: Date
     public let preferredAudioLanguage: String?
     public let preferredSubtitleLanguage: String?
+    public let playbackDefaultsByKind: [String: PlaybackDefaults]?
     public let hideAdultContent: Bool?
     public let defaultStartupTab: String?
     public let vodSortMethod: String?
@@ -20,6 +21,7 @@ public struct PureIPTVBackupData: Codable, Sendable {
         backupDate: Date = Date(),
         preferredAudioLanguage: String? = nil,
         preferredSubtitleLanguage: String? = nil,
+        playbackDefaultsByKind: [String: PlaybackDefaults]? = nil,
         hideAdultContent: Bool? = nil,
         defaultStartupTab: String? = nil,
         vodSortMethod: String? = nil,
@@ -33,6 +35,7 @@ public struct PureIPTVBackupData: Codable, Sendable {
         self.backupDate = backupDate
         self.preferredAudioLanguage = preferredAudioLanguage
         self.preferredSubtitleLanguage = preferredSubtitleLanguage
+        self.playbackDefaultsByKind = playbackDefaultsByKind
         self.hideAdultContent = hideAdultContent
         self.defaultStartupTab = defaultStartupTab
         self.vodSortMethod = vodSortMethod
@@ -62,12 +65,19 @@ public final class BackupManager: Sendable {
 
     public func createBackupFile() throws -> URL {
         let defaults = UserDefaults.standard
+        let vodPlaybackDefaults = PlaybackDefaultsStore.load(for: .vod, defaults: defaults)
+        let playbackDefaultsByKind = Dictionary(
+            uniqueKeysWithValues: PlaybackContentKind.allCases.map { kind in
+                (kind.rawValue, PlaybackDefaultsStore.load(for: kind, defaults: defaults))
+            }
+        )
 
         let backup = PureIPTVBackupData(
             appVersion: "1.0",
             backupDate: Date(),
-            preferredAudioLanguage: defaults.string(forKey: "com.pureiptv.preferredAudioLanguage"),
-            preferredSubtitleLanguage: defaults.string(forKey: "com.pureiptv.preferredSubtitleLanguage"),
+            preferredAudioLanguage: vodPlaybackDefaults.preferredAudioLanguage,
+            preferredSubtitleLanguage: vodPlaybackDefaults.preferredSubtitleLanguage,
+            playbackDefaultsByKind: playbackDefaultsByKind,
             hideAdultContent: defaults.object(forKey: "com.pureiptv.hideAdultContent") as? Bool,
             defaultStartupTab: defaults.string(forKey: "com.pureiptv.defaultStartupTab"),
             vodSortMethod: defaults.string(forKey: "com.pureiptv.vodSortMethod"),
@@ -104,11 +114,24 @@ public final class BackupManager: Sendable {
             existingKeys.formUnion(keys.filter { defaults.object(forKey: $0) != nil })
         }
 
-        if backup.preferredAudioLanguage != nil {
-            include("Tercih edilen ses dili", keys: ["com.pureiptv.preferredAudioLanguage"])
+        let playbackDefaultsKeys = PlaybackContentKind.allCases.map {
+            "com.pureiptv.playbackDefaults.v1.\($0.rawValue)"
         }
-        if backup.preferredSubtitleLanguage != nil {
-            include("Tercih edilen altyazı dili", keys: ["com.pureiptv.preferredSubtitleLanguage"])
+        if backup.playbackDefaultsByKind != nil {
+            include(
+                "İçerik türüne göre oynatma varsayılanları",
+                keys: [
+                    "com.pureiptv.preferredAudioLanguage",
+                    "com.pureiptv.preferredSubtitleLanguage",
+                ] + playbackDefaultsKeys
+            )
+        } else {
+            if backup.preferredAudioLanguage != nil {
+                include("Tercih edilen ses dili", keys: ["com.pureiptv.preferredAudioLanguage"] + playbackDefaultsKeys)
+            }
+            if backup.preferredSubtitleLanguage != nil {
+                include("Tercih edilen altyazı dili", keys: ["com.pureiptv.preferredSubtitleLanguage"] + playbackDefaultsKeys)
+            }
         }
         if backup.hideAdultContent != nil {
             include("Yetişkin içeriğini gizle", keys: ["com.pureiptv.hideAdultContent"])
@@ -146,6 +169,26 @@ public final class BackupManager: Sendable {
         }
         if let sub = backup.preferredSubtitleLanguage {
             defaults.set(sub, forKey: "com.pureiptv.preferredSubtitleLanguage")
+        }
+        if let scopedPlaybackDefaults = backup.playbackDefaultsByKind {
+            for kind in PlaybackContentKind.allCases {
+                if let value = scopedPlaybackDefaults[kind.rawValue] {
+                    PlaybackDefaultsStore.save(value, for: kind, defaults: defaults)
+                }
+            }
+        } else if backup.preferredAudioLanguage != nil || backup.preferredSubtitleLanguage != nil {
+            // Older backups stored one global language choice. Apply it to every
+            // content kind so previously saved scoped values cannot mask restore.
+            for kind in PlaybackContentKind.allCases {
+                var value = PlaybackDefaultsStore.load(for: kind, defaults: defaults)
+                if let audio = backup.preferredAudioLanguage {
+                    value.preferredAudioLanguage = audio
+                }
+                if let subtitle = backup.preferredSubtitleLanguage {
+                    value.preferredSubtitleLanguage = subtitle
+                }
+                PlaybackDefaultsStore.save(value, for: kind, defaults: defaults)
+            }
         }
         if let hideAdult = backup.hideAdultContent {
             defaults.set(hideAdult, forKey: "com.pureiptv.hideAdultContent")
@@ -195,6 +238,14 @@ public final class BackupManager: Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup = try decoder.decode(PureIPTVBackupData.self, from: data)
+        let validPlaybackDefaults = backup.playbackDefaultsByKind.map { values in
+            let knownKinds = Set(PlaybackContentKind.allCases.map(\.rawValue))
+            return Set(values.keys).isSubset(of: knownKinds)
+                && values.values.allSatisfy {
+                    Self.isSafeString($0.preferredAudioLanguage, maximumLength: 512)
+                        && Self.isSafeString($0.preferredSubtitleLanguage, maximumLength: 512)
+                }
+        } ?? true
         guard !backup.appVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               backup.appVersion.count <= 64,
               backup.backupDate <= Date().addingTimeInterval(5 * 60),
@@ -211,7 +262,8 @@ public final class BackupManager: Sendable {
               Self.isSafeString(backup.customUserAgentString, maximumLength: 512),
               Self.isValidThemeColor(backup.themeColorHex),
               Self.isSafeString(backup.themePresetID, maximumLength: 64),
-              backup.themePresetID.map({ presetID in ThemeManager.shared.availablePresets.contains(where: { $0.id == presetID }) }) ?? true
+              backup.themePresetID.map({ presetID in ThemeManager.shared.availablePresets.contains(where: { $0.id == presetID }) }) ?? true,
+              validPlaybackDefaults
         else {
             throw NSError(domain: "PureIPTVBackup", code: 2, userInfo: [NSLocalizedDescriptionKey: "Yedek içeriği geçersiz veya desteklenmeyen değerler içeriyor."])
         }

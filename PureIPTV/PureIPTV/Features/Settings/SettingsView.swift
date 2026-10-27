@@ -33,6 +33,11 @@ public struct SettingsView: View {
         self.store = store
     }
 
+    private var selectedPlaybackDefaults: PlaybackDefaults {
+        store.playbackDefaultsByKind[store.selectedPlaybackContentKind]
+            ?? .legacy(for: store.selectedPlaybackContentKind)
+    }
+
     public var body: some View {
         List {
             Section(header: Text(AppStrings.Settings.accounts)) {
@@ -290,6 +295,57 @@ public struct SettingsView: View {
                     set: { store.send(.setStartMuted($0)) }
                 ))
 
+                Picker("İçerik Türü", selection: Binding(
+                    get: { store.selectedPlaybackContentKind },
+                    set: { store.send(.selectPlaybackContentKind($0)) }
+                )) {
+                    ForEach(PlaybackContentKind.allCases) { kind in
+                        Text(kind.title).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if store.selectedPlaybackContentKind == .vod {
+                    Picker("Varsayılan Oynatıcı", selection: Binding(
+                        get: { selectedPlaybackDefaults.preferredEngine },
+                        set: { store.send(.updatePlaybackDefaults(.preferredEngine($0))) }
+                    )) {
+                        ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                            Text(engine.title).tag(engine)
+                        }
+                    }
+                    Text("AVPlayer uyumsuz akışlarda otomatik olarak VLC kullanılır.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Bu içerik türünde şu anda VLC oynatıcısı kullanılır.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if store.selectedPlaybackContentKind != .vod || selectedPlaybackDefaults.preferredEngine == .vlc {
+                    Picker("Arabellek", selection: Binding(
+                        get: { selectedPlaybackDefaults.bufferChoice },
+                        set: { store.send(.updatePlaybackDefaults(.bufferChoice($0))) }
+                    )) {
+                        ForEach(PlaybackBufferChoice.allCases) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }
+                    Text("Otomatik, VOD için eski arabellek ayarını; Canlı ve Arşiv için motorun varsayılanını kullanır.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("Deinterlace", selection: Binding(
+                        get: { selectedPlaybackDefaults.deinterlaceMode },
+                        set: { store.send(.updatePlaybackDefaults(.deinterlaceMode($0))) }
+                    )) {
+                        ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                }
+
                 #if os(iOS)
                     Picker(AppStrings.Settings.downloadConcurrencyLimit, selection: Binding(
                         get: { store.downloadConcurrencyLimit },
@@ -304,19 +360,6 @@ public struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 #endif
 
-                Picker("Film ve Dizi Arabellek Boyutu", selection: Binding(
-                    get: { store.bufferProfile },
-                    set: { store.send(.setBufferProfile($0)) }
-                )) {
-                    ForEach(BufferProfile.allCases, id: \.self) { profile in
-                        Text(profile.rawValue).tag(profile)
-                    }
-                }
-
-                Text("Yüksek arabellek yavaş bağlantılarda kesintiyi azaltabilir; ilk oynatma biraz daha uzun sürebilir. Yalnızca film ve dizi akışlarında kullanılır.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 Toggle(AppStrings.Settings.oledDimming, isOn: Binding(
                     get: { store.isOLEDDimmingEnabled },
                     set: { store.send(.setOLEDDimmingEnabled($0)) }
@@ -328,23 +371,18 @@ public struct SettingsView: View {
                 ))
             }
 
-            Section(header: Text("Ekran & Kare Hızı Eşleme (AFR)")) {
-                Toggle("Canlı TV için Kare Hızı Eşleme", isOn: Binding(
-                    get: { store.isAFREnabledForLive },
-                    set: { store.send(.setAFREnabledForLive($0)) }
-                ))
-
-                Toggle("Filmler ve Diziler için Kare Hızı Eşleme", isOn: Binding(
-                    get: { store.isAFREnabledForVOD },
-                    set: { store.send(.setAFREnabledForVOD($0)) }
+            Section(header: Text("Ekran & Kare Hızı Eşleme (AFR) — \(store.selectedPlaybackContentKind.title)")) {
+                Toggle("\(store.selectedPlaybackContentKind.title) için Kare Hızı Eşleme", isOn: Binding(
+                    get: { selectedPlaybackDefaults.isAFREnabled },
+                    set: { store.send(.updatePlaybackDefaults(.isAFREnabled($0))) }
                 ))
 
                 Toggle("Dinamik Aralık Eşleme (HDR / Dolby Vision)", isOn: Binding(
-                    get: { store.isMatchDynamicRangeEnabled },
-                    set: { store.send(.setMatchDynamicRangeEnabled($0)) }
+                    get: { selectedPlaybackDefaults.isMatchDynamicRangeEnabled },
+                    set: { store.send(.updatePlaybackDefaults(.isMatchDynamicRangeEnabled($0))) }
                 ))
 
-                Text("Canlı yayınlar ve filmler/diziler için eşlemeyi ayrı ayrı açın. Etkin olduğunda içerik kare hızı (24p, 50/60 Hz) ve HDR renk aralığıyla ekran yenileme hızı eşlenir.")
+                Text("Bu varsayılanlar sonraki oynatımlarda uygulanır. Eşleme etkin olduğunda desteklenen içerik, oynatım başlarken kare hızı ve renk aralığına göre ekrana eşlenir.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -387,10 +425,10 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section(header: Text(AppStrings.Settings.audioAndSubtitleSettings)) {
+            Section(header: Text("\(AppStrings.Settings.audioAndSubtitleSettings) — \(store.selectedPlaybackContentKind.title)")) {
                 Picker(AppStrings.Settings.defaultAudioLanguage, selection: Binding(
-                    get: { store.preferredAudioLanguage },
-                    set: { store.send(.setPreferredAudioLanguage($0)) }
+                    get: { selectedPlaybackDefaults.preferredAudioLanguage },
+                    set: { store.send(.updatePlaybackDefaults(.preferredAudioLanguage($0))) }
                 )) {
                     Text("🇹🇷 Türkçe").tag("tr")
                     Text("🇬🇧 English").tag("en")
@@ -404,8 +442,8 @@ public struct SettingsView: View {
                 }
 
                 Picker(AppStrings.Settings.defaultSubtitleLanguage, selection: Binding(
-                    get: { store.preferredSubtitleLanguage },
-                    set: { store.send(.setPreferredSubtitleLanguage($0)) }
+                    get: { selectedPlaybackDefaults.preferredSubtitleLanguage },
+                    set: { store.send(.updatePlaybackDefaults(.preferredSubtitleLanguage($0))) }
                 )) {
                     Text(AppStrings.Player.off).tag("off")
                     Text("🇹🇷 Türkçe").tag("tr")
@@ -417,17 +455,19 @@ public struct SettingsView: View {
                     Text("🇸🇦 العربية").tag("ar")
                 }
 
-                Picker(AppStrings.Settings.subtitleTextSize, selection: Binding(
-                    get: { store.subtitleTextSize },
-                    set: { store.send(.setSubtitleTextSize($0)) }
-                )) {
-                    ForEach(SubtitleTextSize.allCases) { size in
-                        Text(size.title).tag(size)
+                if store.selectedPlaybackContentKind != .vod || selectedPlaybackDefaults.preferredEngine == .vlc {
+                    Picker(AppStrings.Settings.subtitleTextSize, selection: Binding(
+                        get: { selectedPlaybackDefaults.subtitleTextSize },
+                        set: { store.send(.updatePlaybackDefaults(.subtitleTextSize($0))) }
+                    )) {
+                        ForEach(SubtitleTextSize.allCases) { size in
+                            Text(size.title).tag(size)
+                        }
                     }
+                    Text(AppStrings.Settings.subtitleTextSizeDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Text(AppStrings.Settings.subtitleTextSizeDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 Toggle(AppStrings.Settings.rememberTrackPreferences, isOn: Binding(
                     get: { store.rememberMediaTrackPreferences },

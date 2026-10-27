@@ -216,17 +216,19 @@ final class AVPlayerPlaybackSession {
         name: String?,
         language: String?
     ) -> AVMediaSelectionOption? {
-        if let language, !language.isEmpty {
-            let normalized = language.lowercased()
+        if let name, !name.isEmpty {
             if let match = group.options.first(where: {
-                let tag = ($0.extendedLanguageTag ?? "").lowercased()
-                return tag == normalized || tag.hasPrefix(normalized + "-")
+                $0.displayName.localizedCaseInsensitiveCompare(name) == .orderedSame
             }) {
                 return match
             }
         }
-        if let name, !name.isEmpty {
-            return group.options.first(where: { $0.displayName.localizedCaseInsensitiveCompare(name) == .orderedSame })
+        if let language, !language.isEmpty {
+            let normalized = language.lowercased()
+            return group.options.first(where: {
+                let tag = ($0.extendedLanguageTag ?? "").lowercased()
+                return tag == normalized || tag.hasPrefix(normalized + "-")
+            })
         }
         return nil
     }

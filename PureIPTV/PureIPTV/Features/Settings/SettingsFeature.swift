@@ -4,32 +4,6 @@ import Foundation
 import Kingfisher
 import RevenueCat
 
-public enum BufferProfile: String, CaseIterable, Sendable, Equatable {
-    case lowLatency = "Düşük Gecikme (1s)"
-    case balanced = "Dengeli (3s)"
-    case smooth = "Kesintisiz / Yüksek Arabellek (8s)"
-
-    public var seconds: Double {
-        switch self {
-        case .lowLatency: 1.0
-        case .balanced: 3.0
-        case .smooth: 8.0
-        }
-    }
-
-    public var networkCachingMilliseconds: Int {
-        Int(seconds * 1000)
-    }
-
-    public static func activeNetworkCachingMilliseconds(for isLive: Bool) -> Int? {
-        guard !isLive else { return nil }
-        let key = "pureiptv_buffer_profile"
-        let storedValue = UserDefaults.standard.string(forKey: key)
-        let profile = storedValue.flatMap(Self.init(rawValue:)) ?? .balanced
-        return profile.networkCachingMilliseconds
-    }
-}
-
 @Reducer
 public struct SettingsFeature {
     @ObservableState
@@ -70,6 +44,8 @@ public struct SettingsFeature {
         public var preferredAudioLanguage: String = "tr"
         public var preferredSubtitleLanguage: String = "off"
         public var subtitleTextSize: SubtitleTextSize = .standard
+        public var selectedPlaybackContentKind: PlaybackContentKind = .vod
+        public var playbackDefaultsByKind: [PlaybackContentKind: PlaybackDefaults] = [:]
         public var rememberMediaTrackPreferences: Bool = true
         public var isICloudSyncEnabled: Bool = true
 
@@ -188,11 +164,14 @@ public struct SettingsFeature {
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
         case setSubtitleTextSize(SubtitleTextSize)
+        case selectPlaybackContentKind(PlaybackContentKind)
+        case updatePlaybackDefaults(PlaybackPreferenceUpdate)
         case setRememberMediaTrackPreferences(Bool)
         case setICloudSyncEnabled(Bool)
         case setTvOSMatchContent(Bool)
         case setAFREnabledForLive(Bool)
         case setAFREnabledForVOD(Bool)
+        case setAFREnabledForArchive(Bool)
         case setMatchDynamicRangeEnabled(Bool)
         case setTopShelfStyle(TopShelfStyle)
         case setBufferProfile(BufferProfile)
@@ -284,6 +263,23 @@ public struct SettingsFeature {
 
     public init() {}
 
+    private static func updatePlaybackDefaults(
+        state: inout State,
+        kind explicitKind: PlaybackContentKind? = nil,
+        update: PlaybackPreferenceUpdate,
+        settingsClient: SettingsClient
+    ) -> Effect<Action> {
+        let kind = explicitKind ?? state.selectedPlaybackContentKind
+        var defaults = state.playbackDefaultsByKind[kind] ?? settingsClient.playbackDefaults(kind)
+        update.apply(to: &defaults)
+        state.playbackDefaultsByKind[kind] = defaults
+        if kind == .vod {
+            state.bufferProfile = defaults.bufferChoice.profile ?? .balanced
+        }
+        settingsClient.setPlaybackDefaults(kind, defaults)
+        return .none
+    }
+
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Scope(state: \.traktState, action: \.traktAction) {
@@ -345,8 +341,22 @@ public struct SettingsFeature {
                 // Apple TV Top Shelf Style (Madde #22)
                 state.topShelfStyle = topShelfClient.getPreferredStyle()
 
-                let storedBufferProfile = UserDefaults.standard.string(forKey: "pureiptv_buffer_profile")
-                state.bufferProfile = storedBufferProfile.flatMap(BufferProfile.init(rawValue:)) ?? .balanced
+                state.playbackDefaultsByKind = Dictionary(
+                    uniqueKeysWithValues: PlaybackContentKind.allCases.map { kind in
+                        (kind, settingsClient.playbackDefaults(kind))
+                    }
+                )
+                if let vodDefaults = state.playbackDefaultsByKind[.vod] {
+                    state.preferredAudioLanguage = vodDefaults.preferredAudioLanguage
+                    state.preferredSubtitleLanguage = vodDefaults.preferredSubtitleLanguage
+                    state.subtitleTextSize = vodDefaults.subtitleTextSize
+                    state.isAFREnabledForVOD = vodDefaults.isAFREnabled
+                    state.isMatchDynamicRangeEnabled = vodDefaults.isMatchDynamicRangeEnabled
+                }
+                if let liveDefaults = state.playbackDefaultsByKind[.live] {
+                    state.isAFREnabledForLive = liveDefaults.isAFREnabled
+                }
+                state.bufferProfile = state.playbackDefaultsByKind[.vod]?.bufferChoice.profile ?? .balanced
 
                 // Custom EPG XMLTV & Time-Shift (Madde #23)
                 state.customEPGSources = customEPGMappingClient.getSources()
@@ -522,18 +532,38 @@ public struct SettingsFeature {
 
             case let .setPreferredAudioLanguage(val):
                 state.preferredAudioLanguage = val
-                return .run { _ in settingsClient.setPreferredAudioLanguage(val) }
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    update: .preferredAudioLanguage(val),
+                    settingsClient: settingsClient
+                )
 
             case let .setPreferredSubtitleLanguage(val):
                 state.preferredSubtitleLanguage = val
-                return .run { _ in settingsClient.setPreferredSubtitleLanguage(val) }
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    update: .preferredSubtitleLanguage(val),
+                    settingsClient: settingsClient
+                )
 
             case let .setSubtitleTextSize(size):
                 state.subtitleTextSize = size
-                return .run { _ in
-                    settingsClient.setSubtitleTextSize(size)
-                    await playerClient.setSubtitleTextScale(size.scale)
-                }
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    update: .subtitleTextSize(size),
+                    settingsClient: settingsClient
+                )
+
+            case let .selectPlaybackContentKind(kind):
+                state.selectedPlaybackContentKind = kind
+                return .none
+
+            case let .updatePlaybackDefaults(update):
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    update: update,
+                    settingsClient: settingsClient
+                )
 
             case let .setRememberMediaTrackPreferences(val):
                 state.rememberMediaTrackPreferences = val
@@ -553,18 +583,37 @@ public struct SettingsFeature {
 
             case let .setAFREnabledForLive(enabled):
                 state.isAFREnabledForLive = enabled
-                displayModeClient.setAFREnabledForLive(enabled)
-                return .none
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    kind: .live,
+                    update: .isAFREnabled(enabled),
+                    settingsClient: settingsClient
+                )
 
             case let .setAFREnabledForVOD(enabled):
                 state.isAFREnabledForVOD = enabled
-                displayModeClient.setAFREnabledForVOD(enabled)
-                return .none
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    kind: .vod,
+                    update: .isAFREnabled(enabled),
+                    settingsClient: settingsClient
+                )
+
+            case let .setAFREnabledForArchive(enabled):
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    kind: .archive,
+                    update: .isAFREnabled(enabled),
+                    settingsClient: settingsClient
+                )
 
             case let .setMatchDynamicRangeEnabled(enabled):
                 state.isMatchDynamicRangeEnabled = enabled
-                displayModeClient.setMatchDynamicRangeEnabled(enabled)
-                return .none
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    update: .isMatchDynamicRangeEnabled(enabled),
+                    settingsClient: settingsClient
+                )
 
             case let .setTopShelfStyle(style):
                 state.topShelfStyle = style
@@ -573,8 +622,12 @@ public struct SettingsFeature {
 
             case let .setBufferProfile(profile):
                 state.bufferProfile = profile
-                UserDefaults.standard.set(profile.rawValue, forKey: "pureiptv_buffer_profile")
-                return .none
+                return Self.updatePlaybackDefaults(
+                    state: &state,
+                    kind: state.selectedPlaybackContentKind,
+                    update: .bufferChoice(PlaybackBufferChoice.choice(for: profile)),
+                    settingsClient: settingsClient
+                )
 
             case let .setComplianceDemoMode(enabled):
                 state.isComplianceDemoMode = enabled

@@ -268,6 +268,10 @@ public struct PlayerFeature {
             activeCatchupProgram != nil
         }
 
+        public var playbackContentKind: PlaybackContentKind {
+            PlaybackContentKind.resolve(isLive: item.isLive, isArchive: isPlayingCatchup)
+        }
+
         public var isHighFrameRateVOD: Bool {
             guard !item.isLive, !isPlayingCatchup, playbackEngine == .vlc,
                   let frameRate = mediaInfo?.reportedFrameRate,
@@ -456,8 +460,17 @@ public struct PlayerFeature {
         /// Auto Frame Rate & Match Dynamic Range (Madde #21)
         public var isAFREnabledForLive: Bool = true
         public var isAFREnabledForVOD: Bool = true
+        public var isAFREnabledForArchive: Bool = true
         public var isAFREnabledForCurrentItem: Bool {
-            item.isLive ? isAFREnabledForLive : isAFREnabledForVOD
+            switch playbackContentKind {
+            case .live: isAFREnabledForLive
+            case .vod: isAFREnabledForVOD
+            case .archive: isAFREnabledForArchive
+            }
+        }
+
+        public var isDisplayModeMatchingEnabledForCurrentItem: Bool {
+            isAFREnabledForCurrentItem || isMatchDynamicRangeEnabled
         }
 
         public var isMatchDynamicRangeEnabled: Bool = true
@@ -665,7 +678,8 @@ public struct PlayerFeature {
         case setDeinterlaceMode(DeinterlaceMode)
         case deinterlaceModeApplied(DeinterlaceMode, UUID, String, URL)
         case deinterlaceModeFailed(UUID, String, URL)
-        case deinterlaceModePlaybackResolved(requested: DeinterlaceMode, applied: DeinterlaceMode?, revision: UUID, itemID: String, streamURL: URL)
+        case deinterlaceModePlaybackResolved(requested: DeinterlaceMode, applied: DeinterlaceMode?, engine: PlaybackEngine, revision: UUID, itemID: String, streamURL: URL)
+        case playbackEngineStartFailed(engine: PlaybackEngine, itemID: String, streamURL: URL, playbackRequestID: UUID)
         case mediaServerPlaybackResolved(
             requestID: UUID,
             itemID: String,
@@ -841,6 +855,7 @@ public struct PlayerFeature {
         case loadAFRPreferences
         case setAFREnabledForLive(Bool)
         case setAFREnabledForVOD(Bool)
+        case setAFREnabledForArchive(Bool)
         case setMatchDynamicRangeEnabled(Bool)
         case matchDisplayMode
         case displayModeSwitched(DisplayMatchResult)
@@ -1161,6 +1176,38 @@ public struct PlayerFeature {
         return .none
     }
 
+    private static func resolvedPlaybackEngine(
+        item: PlayableItem,
+        kind: PlaybackContentKind,
+        defaults: PlaybackDefaults,
+        settingsClient: SettingsClient
+    ) -> PlaybackEngine {
+        guard kind == .vod, defaults.preferredEngine == .avPlayer,
+              item.config?.type != .plex, item.config?.type != .emby,
+              ["m3u8", "mp4", "m4v"].contains(item.streamURL.pathExtension.lowercased()),
+              ["http", "https"].contains(item.streamURL.scheme?.lowercased() ?? ""),
+              item.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+              (settingsClient.getChannelAudioEQPreset(item.id) ?? settingsClient.audioEQPreset()) == .flat,
+              (settingsClient.getChannelAudioDelay(item.id) ?? 0) == 0,
+              (settingsClient.getChannelSubtitleDelay(item.id) ?? 0) == 0
+        else { return .vlc }
+        return .avPlayer
+    }
+
+    private static func savedAudioTrackName(itemID: String, settingsClient: SettingsClient) -> String? {
+        settingsClient.getChannelPreferredAudioTrack(itemID)
+            ?? (settingsClient.rememberMediaTrackPreferences()
+                ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(itemID)_audio")
+                : nil)
+    }
+
+    private static func savedSubtitleTrackName(itemID: String, settingsClient: SettingsClient) -> String? {
+        settingsClient.getChannelPreferredSubtitleTrack(itemID)
+            ?? (settingsClient.rememberMediaTrackPreferences()
+                ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(itemID)_subtitle")
+                : nil)
+    }
+
     static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient) -> Effect<Action> {
         switch action {
         case .onAppear:
@@ -1180,9 +1227,24 @@ public struct PlayerFeature {
             state.isMinimized = false
             state.isAppInBackground = false
             state.isUserPaused = false
-            state.playbackEngine = state.item.config?.type == .plex || state.item.config?.type == .emby
-                ? .vlc
-                : playerClient.activeEngine()
+            let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
+            let playbackKind = state.playbackContentKind
+            let playbackDefaults = settingsClient.playbackDefaults(playbackKind)
+            if state.item.config?.type == .plex || state.item.config?.type == .emby {
+                state.playbackEngine = .vlc
+            } else if isAlreadyPlaying {
+                state.playbackEngine = playerClient.activeEngine()
+            } else {
+                state.playbackEngine = Self.resolvedPlaybackEngine(
+                    item: state.item,
+                    kind: playbackKind,
+                    defaults: playbackDefaults,
+                    settingsClient: settingsClient
+                )
+            }
+            if !isAlreadyPlaying {
+                state.deinterlaceMode = playbackDefaults.deinterlaceMode
+            }
             let profileScope = profileContextClient.snapshot()
             if !state.didLoadRememberedPlaybackChoice {
                 state.didLoadRememberedPlaybackChoice = true
@@ -1197,9 +1259,10 @@ public struct PlayerFeature {
             state.backgroundPlaybackMode = pipClient.backgroundPlaybackMode()
             state.hiddenChannelIDs = parentalControlClient.hiddenChannelIDs()
             state.blacklistedCategoryIDs = parentalControlClient.blacklistedCategoryIDs()
-            state.isAFREnabledForLive = displayModeClient.isAFREnabledForLive()
-            state.isAFREnabledForVOD = displayModeClient.isAFREnabledForVOD()
-            state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
+            state.isAFREnabledForLive = settingsClient.playbackDefaults(.live).isAFREnabled
+            state.isAFREnabledForVOD = settingsClient.playbackDefaults(.vod).isAFREnabled
+            state.isAFREnabledForArchive = settingsClient.playbackDefaults(.archive).isAFREnabled
+            state.isMatchDynamicRangeEnabled = playbackDefaults.isMatchDynamicRangeEnabled
 
             // Restore per-channel lip-sync and subtitle preferences
             if let savedAudio = settingsClient.getChannelAudioDelay(state.item.id) {
@@ -1215,14 +1278,18 @@ public struct PlayerFeature {
             let config = state.item.config
             let userAgentOverride = state.item.userAgentOverride
             let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
-            let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
-            let subtitleTextScale = settingsClient.subtitleTextSize().scale
+            let networkCachingMilliseconds = playbackDefaults.networkCachingMilliseconds(for: playbackKind)
+            let subtitleTextScale = playbackDefaults.subtitleTextSize.scale
+            let preferredAudioLanguage = playbackDefaults.preferredAudioLanguage
+            let preferredSubtitleLanguage = playbackDefaults.preferredSubtitleLanguage
+            let playbackEngine = state.playbackEngine
+            let audioName = Self.savedAudioTrackName(itemID: state.item.id, settingsClient: settingsClient)
+            let subtitleName = Self.savedSubtitleTrackName(itemID: state.item.id, settingsClient: settingsClient)
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
             let playbackRequestID = state.playbackRequestID
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
-            let isAlreadyPlaying = state.playerState == .playing || state.playerState == .buffering
             if requiresAuthenticatedMediaServer, !isAlreadyPlaying {
                 state.mediaServerPlaybackRequestID = UUID()
             } else if !requiresAuthenticatedMediaServer {
@@ -1262,7 +1329,7 @@ public struct PlayerFeature {
                     try? await Task.sleep(nanoseconds: 3_500_000_000)
                     await send(.hideDynamicRangeHUD)
                 }.cancellable(id: CancelID.dynamicRangeHUD, cancelInFlight: true) : .none,
-                state.isAFREnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
+                state.isDisplayModeMatchingEnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
                 .send(.loadChannelSortPreferences),
                 .send(.loadAudioEQPreferences),
                 .send(.loadSkipMarkers),
@@ -1362,8 +1429,18 @@ public struct PlayerFeature {
                                         playbackURL = url
                                         activeURL = url
                                     }
-                                    let appliedMode = try await playerClient.play(playbackURL, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
-                                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
+                                    let playbackResult = try await playerClient.play(
+                                        playbackURL,
+                                        userAgentOverride,
+                                        networkCachingMilliseconds,
+                                        deinterlaceMode,
+                                        playbackEngine,
+                                        audioName,
+                                        preferredAudioLanguage,
+                                        subtitleName,
+                                        preferredSubtitleLanguage
+                                    )
+                                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
                                     await playerClient.setSubtitleTextScale(subtitleTextScale)
                                     if settingsClient.startMuted() {
                                         try? await playerClient.setVolume(0)
@@ -1371,6 +1448,12 @@ public struct PlayerFeature {
 
                                 } catch {
                                     print("Player error: \(error)")
+                                await send(.playbackEngineStartFailed(
+                                    engine: await playerClient.activeEngine(),
+                                    itemID: itemID,
+                                    streamURL: url,
+                                    playbackRequestID: playbackRequestID
+                                ))
                                     await send(.handlePlayerEvent(.encounteredError))
                                 }
                             }
@@ -1955,6 +2038,7 @@ public struct PlayerFeature {
             state.vodSeekFailureRequestID = nil
             state.playbackPositionRecoveryRequestID = nil
             let url = state.activePlaybackURL
+            let playbackRequestID = state.playbackRequestID
             let oldMediaServerProxyURL = state.mediaServerProxyURL
             state.mediaServerProxyURL = nil
             state.streamHealthGenerationID = UUID()
@@ -1979,11 +2063,25 @@ public struct PlayerFeature {
             }
             let currentRate = state.playbackRate
             let userAgentOverride = state.item.userAgentOverride
-            let networkCachingMilliseconds = BufferProfile.activeNetworkCachingMilliseconds(for: isLive)
+            let playbackKind = state.playbackContentKind
+            let playbackDefaults = settingsClient.playbackDefaults(playbackKind)
+            state.playbackEngine = Self.resolvedPlaybackEngine(
+                item: state.item,
+                kind: playbackKind,
+                defaults: playbackDefaults,
+                settingsClient: settingsClient
+            )
+            state.deinterlaceMode = playbackDefaults.deinterlaceMode
+            let networkCachingMilliseconds = playbackDefaults.networkCachingMilliseconds(for: playbackKind)
+            let subtitleTextScale = playbackDefaults.subtitleTextSize.scale
+            let preferredAudioLanguage = playbackDefaults.preferredAudioLanguage
+            let preferredSubtitleLanguage = playbackDefaults.preferredSubtitleLanguage
+            let playbackEngine = state.playbackEngine
+            let audioName = Self.savedAudioTrackName(itemID: state.item.id, settingsClient: settingsClient)
+            let subtitleName = Self.savedSubtitleTrackName(itemID: state.item.id, settingsClient: settingsClient)
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
-            let playbackRequestID = state.playbackRequestID
             state.playbackPositionRecoveryRequestID = shouldRestorePosition && position > 0 ? playbackRequestID : nil
             let categoryID = state.item.categoryID
             let config = state.item.config
@@ -2059,8 +2157,19 @@ public struct PlayerFeature {
                                     playbackURL = url
                                     activeURL = url
                                 }
-                                let appliedMode = try await playerClient.play(playbackURL, userAgentOverride, networkCachingMilliseconds, deinterlaceMode)
-                                await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
+                                let playbackResult = try await playerClient.play(
+                                    playbackURL,
+                                    userAgentOverride,
+                                    networkCachingMilliseconds,
+                                    deinterlaceMode,
+                                    playbackEngine,
+                                    audioName,
+                                    preferredAudioLanguage,
+                                    subtitleName,
+                                    preferredSubtitleLanguage
+                                )
+                                await playerClient.setSubtitleTextScale(subtitleTextScale)
+                                await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
                                 if shouldRestorePosition, position > 0 {
                                     var reachedPlayingState = false
                                     for _ in 0 ..< 200 {
@@ -2091,6 +2200,12 @@ public struct PlayerFeature {
                                 return
                             } catch {
                                 print("Player retry error: \(error)")
+                                await send(.playbackEngineStartFailed(
+                                    engine: await playerClient.activeEngine(),
+                                    itemID: itemID,
+                                    streamURL: url,
+                                    playbackRequestID: playbackRequestID
+                                ))
                                 await send(.handlePlayerEvent(.encounteredError))
                             }
                         }
@@ -3099,6 +3214,9 @@ public struct PlayerFeature {
 
         case let .setDeinterlaceMode(mode):
             guard state.playbackEngine == .vlc, !state.isSwitchingPlaybackEngine else { return .none }
+            var playbackDefaults = settingsClient.playbackDefaults(state.playbackContentKind)
+            playbackDefaults.deinterlaceMode = mode
+            settingsClient.setPlaybackDefaults(state.playbackContentKind, playbackDefaults)
             state.playbackEngineError = nil
             let requestID = UUID()
             state.deinterlaceModeRequestID = requestID
@@ -3163,22 +3281,43 @@ public struct PlayerFeature {
             }
             return .none
 
-        case let .deinterlaceModePlaybackResolved(requested, applied, revision, itemID, streamURL):
+        case let .deinterlaceModePlaybackResolved(requested, applied, engine, revision, itemID, streamURL):
             guard state.item.id == itemID,
                   state.activePlaybackURL == streamURL,
                   state.deinterlaceModeRequestID == nil,
                   state.deinterlaceModeRevision == revision
             else { return .none }
+            let didFallbackToVLC = state.playbackEngine == .avPlayer && engine == .vlc
+            state.playbackEngine = engine
+            state.isPiPSupported = engine == .vlc && pipClient.isPiPSupported()
+            if engine == .avPlayer {
+                state.audioTracks = []
+                state.subtitleTracks = []
+                state.selectedAudioTrack = nil
+                state.selectedSubtitleTrack = nil
+                state.deinterlaceMode = requested
+                state.isDeinterlaceModeKnown = false
+                return .none
+            }
             guard let applied else {
                 state.isDeinterlaceModeKnown = false
                 state.playbackEngineError = AppStrings.Player.deinterlaceUnknown
-                return .none
+                return didFallbackToVLC ? .send(.fetchTracks) : .none
             }
             state.deinterlaceMode = applied
             state.isDeinterlaceModeKnown = true
             if applied != requested {
                 state.playbackEngineError = AppStrings.Player.deinterlaceFallback
             }
+            return didFallbackToVLC ? .send(.fetchTracks) : .none
+
+        case let .playbackEngineStartFailed(engine, itemID, streamURL, playbackRequestID):
+            guard state.playbackRequestID == playbackRequestID,
+                  state.item.id == itemID,
+                  state.activePlaybackURL == streamURL
+            else { return .none }
+            state.playbackEngine = engine
+            state.isPiPSupported = engine == .vlc && pipClient.isPiPSupported()
             return .none
 
         case .toggleChannelList:
@@ -3373,6 +3512,11 @@ public struct PlayerFeature {
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
             state.playbackRecoveryErrorMessage = nil
+            state.activeCatchupProgram = nil
+            state.activeCatchupSeekRequestID = nil
+            state.catchupSeekFailureMessage = nil
+            state.catchupSeekFailureRequestID = nil
+            state.isCatchupTimelineVisible = false
             state.activeVODSeekRequestID = nil
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
@@ -3918,6 +4062,10 @@ public struct PlayerFeature {
                 state.catchupSeekFailureMessage = nil
                 state.catchupSeekFailureRequestID = nil
                 state.activePlaybackURL = catchupURL
+                let playbackDefaults = settingsClient.playbackDefaults(.archive)
+                state.playbackEngine = .vlc
+                state.deinterlaceMode = playbackDefaults.deinterlaceMode
+                state.isMatchDynamicRangeEnabled = playbackDefaults.isMatchDynamicRangeEnabled
                 Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
                 state.currentTime = .zero
                 state.totalTime = .zero
@@ -3927,17 +4075,46 @@ public struct PlayerFeature {
                 let deinterlaceMode = state.deinterlaceMode
                 let deinterlaceModeRevision = state.deinterlaceModeRevision
                 let itemID = state.item.id
+                let playbackRequestID = state.playbackRequestID
+                let networkCachingMilliseconds = playbackDefaults.networkCachingMilliseconds(for: .archive)
+                let playbackEngine = state.playbackEngine
+                let subtitleTextScale = playbackDefaults.subtitleTextSize.scale
+                let audioName = Self.savedAudioTrackName(itemID: itemID, settingsClient: settingsClient)
+                let subtitleName = Self.savedSubtitleTrackName(itemID: itemID, settingsClient: settingsClient)
                 state.isDeinterlaceModeKnown = false
                 return .merge(
                     .cancel(id: CancelID.statsTimer),
                     .cancel(id: CancelID.liveVideoStallMonitor),
                     .cancel(id: CancelID.catchupSeek),
                     .cancel(id: CancelID.catchupSeekFeedback),
+                    state.isDisplayModeMatchingEnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
                     .run { send in
-                        let appliedMode = try await playerClient.play(catchupURL, userAgentOverride, nil, deinterlaceMode)
-                        await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: catchupURL))
-                    } catch: { error, _ in
-                        print("Failed to play catchup: \(error)")
+                        do {
+                            let playbackResult = try await playerClient.play(
+                                catchupURL,
+                                userAgentOverride,
+                                networkCachingMilliseconds,
+                                deinterlaceMode,
+                                playbackEngine,
+                                audioName,
+                                playbackDefaults.preferredAudioLanguage,
+                                subtitleName,
+                                playbackDefaults.preferredSubtitleLanguage
+                            )
+                            await playerClient.setSubtitleTextScale(subtitleTextScale)
+                            await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: catchupURL))
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            print("Failed to play catchup: \(error)")
+                            let activeEngine = await playerClient.activeEngine()
+                            await send(Action.playbackEngineStartFailed(
+                                engine: activeEngine,
+                                itemID: itemID,
+                                streamURL: catchupURL,
+                                playbackRequestID: playbackRequestID
+                            ))
+                        }
                     }
                 )
             }
@@ -3953,6 +4130,10 @@ public struct PlayerFeature {
             state.playerState = .playing
             let liveURL = state.item.streamURL
             state.activePlaybackURL = liveURL
+            let playbackDefaults = settingsClient.playbackDefaults(.live)
+            state.playbackEngine = .vlc
+            state.deinterlaceMode = playbackDefaults.deinterlaceMode
+            state.isMatchDynamicRangeEnabled = playbackDefaults.isMatchDynamicRangeEnabled
             Self.loadRememberedPlaybackChoice(state: &state, profileScope: profileContextClient.snapshot())
             state.streamHealthGenerationID = UUID()
             state.streamHealthMetrics = nil
@@ -3960,17 +4141,46 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let playbackRequestID = state.playbackRequestID
+            let networkCachingMilliseconds = playbackDefaults.networkCachingMilliseconds(for: .live)
+            let playbackEngine = state.playbackEngine
+            let subtitleTextScale = playbackDefaults.subtitleTextSize.scale
+            let audioName = Self.savedAudioTrackName(itemID: itemID, settingsClient: settingsClient)
+            let subtitleName = Self.savedSubtitleTrackName(itemID: itemID, settingsClient: settingsClient)
             state.isDeinterlaceModeKnown = false
             return .merge(
                 .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.liveVideoStallMonitor),
                 .cancel(id: CancelID.catchupSeek),
                 .cancel(id: CancelID.catchupSeekFeedback),
+                state.isDisplayModeMatchingEnabledForCurrentItem ? .send(.matchDisplayMode) : .none,
                 .run { send in
-                    let appliedMode = try await playerClient.play(liveURL, userAgentOverride, nil, deinterlaceMode)
-                    await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: appliedMode, revision: deinterlaceModeRevision, itemID: itemID, streamURL: liveURL))
-                } catch: { error, _ in
-                    print("Failed to return to live stream: \(error)")
+                    do {
+                        let playbackResult = try await playerClient.play(
+                            liveURL,
+                            userAgentOverride,
+                            networkCachingMilliseconds,
+                            deinterlaceMode,
+                            playbackEngine,
+                            audioName,
+                            playbackDefaults.preferredAudioLanguage,
+                            subtitleName,
+                            playbackDefaults.preferredSubtitleLanguage
+                        )
+                        await playerClient.setSubtitleTextScale(subtitleTextScale)
+                        await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: liveURL))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        print("Failed to return to live stream: \(error)")
+                        let activeEngine = await playerClient.activeEngine()
+                        await send(Action.playbackEngineStartFailed(
+                            engine: activeEngine,
+                            itemID: itemID,
+                            streamURL: liveURL,
+                            playbackRequestID: playbackRequestID
+                        ))
+                    }
                 }
             )
 
@@ -4120,6 +4330,7 @@ public struct PlayerFeature {
         case .fetchTracks:
             guard state.playbackEngine == .vlc else { return .none }
             let mediaID = state.item.id
+            let playbackDefaults = settingsClient.playbackDefaults(state.playbackContentKind)
             return .run { send in
                 var audio = await playerClient.getAudioTracks()
                 var subtitle = await playerClient.getSubtitleTracks()
@@ -4143,7 +4354,7 @@ public struct PlayerFeature {
                 let remember = settingsClient.rememberMediaTrackPreferences()
                 let legacyMediaAudio = remember ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(mediaID)_audio") : nil
                 let channelAudioPref = settingsClient.getChannelPreferredAudioTrack(mediaID) ?? legacyMediaAudio
-                let primaryAudioLang = settingsClient.preferredAudioLanguage()
+                let primaryAudioLang = playbackDefaults.preferredAudioLanguage
                 let secondaryAudioLang = settingsClient.secondaryAudioLanguage()
 
                 let audioResult = AudioTrackSelector.selectAudioTrack(
@@ -4168,7 +4379,7 @@ public struct PlayerFeature {
                 // Subtitle Selection: Channel-Specific -> Global Preference -> Off
                 let legacyMediaSub = remember ? UserDefaults.standard.string(forKey: "com.pureiptv.media_\(mediaID)_subtitle") : nil
                 let channelSubPref = settingsClient.getChannelPreferredSubtitleTrack(mediaID) ?? legacyMediaSub
-                let preferredSubLang = settingsClient.preferredSubtitleLanguage()
+                let preferredSubLang = playbackDefaults.preferredSubtitleLanguage
 
                 let subResult = AudioTrackSelector.selectSubtitleTrack(
                     from: subtitle,
@@ -4201,6 +4412,12 @@ public struct PlayerFeature {
             state.isTracksMenuVisible = false
             let trackName = track?.name
             let mediaID = state.item.id
+            let playbackKind = state.playbackContentKind
+            let updatedPlaybackDefaults = trackName.map { _ in
+                var playbackDefaults = settingsClient.playbackDefaults(playbackKind)
+                playbackDefaults.preferredAudioLanguage = track?.language ?? playbackDefaults.preferredAudioLanguage
+                return playbackDefaults
+            }
             let displayName = trackName.map { TrackLanguageFormatter.format(trackName: $0).titleWithFlag } ?? AppStrings.Player.off
             let hudMessage = AppStrings.Player.audioTrackChanged(displayName)
             return .merge(
@@ -4211,8 +4428,9 @@ public struct PlayerFeature {
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set(trackName, forKey: "com.pureiptv.media_\(mediaID)_audio")
                         }
-                        UserDefaults.standard.set(trackName, forKey: "com.pureiptv.preferredAudioLanguage")
-                        settingsClient.setPreferredAudioLanguage(trackName)
+                        if let updatedPlaybackDefaults {
+                            settingsClient.setPlaybackDefaults(playbackKind, updatedPlaybackDefaults)
+                        }
                     }
                     await playerClient.setAudioTrack(track)
                 }
@@ -4223,6 +4441,16 @@ public struct PlayerFeature {
             state.isTracksMenuVisible = false
             let trackName = track?.name
             let mediaID = state.item.id
+            let playbackKind = state.playbackContentKind
+            let updatedPlaybackDefaults: PlaybackDefaults = {
+                var defaults = settingsClient.playbackDefaults(playbackKind)
+                if let track {
+                    defaults.preferredSubtitleLanguage = track.language ?? defaults.preferredSubtitleLanguage
+                } else {
+                    defaults.preferredSubtitleLanguage = "off"
+                }
+                return defaults
+            }()
             let displayName = trackName.map { TrackLanguageFormatter.format(trackName: $0, isSubtitle: true).titleWithFlag } ?? AppStrings.Player.off
             let hudMessage = AppStrings.Player.subtitleTrackChanged(displayName)
             return .merge(
@@ -4233,15 +4461,13 @@ public struct PlayerFeature {
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set(trackName, forKey: "com.pureiptv.media_\(mediaID)_subtitle")
                         }
-                        UserDefaults.standard.set(trackName, forKey: "com.pureiptv.preferredSubtitleLanguage")
-                        settingsClient.setPreferredSubtitleLanguage(trackName)
+                        settingsClient.setPlaybackDefaults(playbackKind, updatedPlaybackDefaults)
                     } else {
                         settingsClient.setChannelPreferredSubtitleTrack(mediaID, "off")
                         if settingsClient.rememberMediaTrackPreferences() {
                             UserDefaults.standard.set("off", forKey: "com.pureiptv.media_\(mediaID)_subtitle")
                         }
-                        UserDefaults.standard.set("off", forKey: "com.pureiptv.preferredSubtitleLanguage")
-                        settingsClient.setPreferredSubtitleLanguage("off")
+                        settingsClient.setPlaybackDefaults(playbackKind, updatedPlaybackDefaults)
                     }
                     await playerClient.setSubtitleTrack(track)
                 }
@@ -4664,6 +4890,8 @@ public struct PlayerFeature {
             state.mediaInfoRequestID = nil
             let itemID = state.item.id
             let item = state.item
+            let playbackDefaults = settingsClient.playbackDefaults(state.playbackContentKind)
+            let subtitleTextScale = playbackDefaults.subtitleTextSize.scale
             let currentTimeComponents = state.currentTime.components
             let currentPositionSeconds = Double(currentTimeComponents.seconds)
                 + Double(currentTimeComponents.attoseconds) / 1_000_000_000_000_000_000
@@ -4672,7 +4900,7 @@ public struct PlayerFeature {
                 target: target,
                 url: item.streamURL,
                 userAgentOverride: item.userAgentOverride,
-                networkCachingMilliseconds: BufferProfile.activeNetworkCachingMilliseconds(for: false),
+                networkCachingMilliseconds: playbackDefaults.networkCachingMilliseconds(for: state.playbackContentKind),
                 deinterlaceMode: state.isDeinterlaceModeKnown ? state.deinterlaceMode : .automatic,
                 positionSeconds: currentPositionSeconds,
                 isPlaying: state.playbackRecoveryErrorMessage != nil
@@ -4693,7 +4921,7 @@ public struct PlayerFeature {
                     do {
                         let appliedMode = try await playerClient.switchEngine(request)
                         if target == .vlc {
-                            await playerClient.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
+                            await playerClient.setSubtitleTextScale(subtitleTextScale)
                         }
                         await send(.playbackEngineSwitchFinished(target, appliedMode, requestID, itemID))
                     } catch {
@@ -5254,38 +5482,58 @@ public struct PlayerFeature {
 
         // ── Auto Frame Rate & Match Dynamic Range (Madde #21) ──
         case .loadAFRPreferences:
-            state.isAFREnabledForLive = displayModeClient.isAFREnabledForLive()
-            state.isAFREnabledForVOD = displayModeClient.isAFREnabledForVOD()
-            state.isMatchDynamicRangeEnabled = displayModeClient.isMatchDynamicRangeEnabled()
+            state.isAFREnabledForLive = settingsClient.playbackDefaults(.live).isAFREnabled
+            state.isAFREnabledForVOD = settingsClient.playbackDefaults(.vod).isAFREnabled
+            state.isAFREnabledForArchive = settingsClient.playbackDefaults(.archive).isAFREnabled
+            state.isMatchDynamicRangeEnabled = settingsClient.playbackDefaults(state.playbackContentKind).isMatchDynamicRangeEnabled
             return .none
 
         case let .setAFREnabledForLive(enabled):
             state.isAFREnabledForLive = enabled
-            displayModeClient.setAFREnabledForLive(enabled)
+            var playbackDefaults = settingsClient.playbackDefaults(.live)
+            playbackDefaults.isAFREnabled = enabled
+            settingsClient.setPlaybackDefaults(.live, playbackDefaults)
             return .none
 
         case let .setAFREnabledForVOD(enabled):
             state.isAFREnabledForVOD = enabled
-            displayModeClient.setAFREnabledForVOD(enabled)
+            var playbackDefaults = settingsClient.playbackDefaults(.vod)
+            playbackDefaults.isAFREnabled = enabled
+            settingsClient.setPlaybackDefaults(.vod, playbackDefaults)
+            return .none
+
+        case let .setAFREnabledForArchive(enabled):
+            state.isAFREnabledForArchive = enabled
+            var playbackDefaults = settingsClient.playbackDefaults(.archive)
+            playbackDefaults.isAFREnabled = enabled
+            settingsClient.setPlaybackDefaults(.archive, playbackDefaults)
             return .none
 
         case let .setMatchDynamicRangeEnabled(enabled):
             state.isMatchDynamicRangeEnabled = enabled
-            displayModeClient.setMatchDynamicRangeEnabled(enabled)
-            return .none
+            var playbackDefaults = settingsClient.playbackDefaults(state.playbackContentKind)
+            playbackDefaults.isMatchDynamicRangeEnabled = enabled
+            settingsClient.setPlaybackDefaults(state.playbackContentKind, playbackDefaults)
+            return state.isDisplayModeMatchingEnabledForCurrentItem ? .send(.matchDisplayMode) : .none
 
         case .matchDisplayMode:
-            guard state.isAFREnabledForCurrentItem else { return .none }
-            let detectedFPS = state.currentFrameRate ?? FrameRateDetector.detect(
-                title: state.item.title,
-                urlString: state.item.streamURL.absoluteString,
-                isLive: state.item.isLive
-            )
-            state.currentFrameRate = detectedFPS
-            let dRange = state.videoDynamicRange ?? .sdr
+            guard state.isDisplayModeMatchingEnabledForCurrentItem else { return .none }
+            let frameRate: Float
+            if state.isAFREnabledForCurrentItem {
+                let detectedFPS = state.currentFrameRate ?? FrameRateDetector.detect(
+                    title: state.item.title,
+                    urlString: state.item.streamURL.absoluteString,
+                    isLive: state.item.isLive
+                )
+                state.currentFrameRate = detectedFPS
+                frameRate = detectedFPS.rawValue
+            } else {
+                frameRate = displayModeClient.currentDisplayRefreshRate()
+            }
+            let dRange = state.isMatchDynamicRangeEnabled ? (state.videoDynamicRange ?? .sdr) : .sdr
 
             return .run { [displayModeClient] send in
-                let result = await displayModeClient.switchDisplayMode(detectedFPS.rawValue, dRange)
+                let result = await displayModeClient.switchDisplayMode(frameRate, dRange)
                 await send(.displayModeSwitched(result))
             }
 

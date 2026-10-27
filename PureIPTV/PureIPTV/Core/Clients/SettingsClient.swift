@@ -131,6 +131,12 @@ public struct SettingsClient: Sendable {
     public var setPreferredSubtitleLanguage: @Sendable (String) -> Void = { _ in }
     public var subtitleTextSize: @Sendable () -> SubtitleTextSize = { .standard }
     public var setSubtitleTextSize: @Sendable (SubtitleTextSize) -> Void = { _ in }
+    public var playbackDefaults: @Sendable (_ kind: PlaybackContentKind) -> PlaybackDefaults = {
+        PlaybackDefaultsStore.load(for: $0)
+    }
+    public var setPlaybackDefaults: @Sendable (_ kind: PlaybackContentKind, _ defaults: PlaybackDefaults) -> Void = {
+        PlaybackDefaultsStore.save($1, for: $0)
+    }
 
     public var getChannelPreferredAudioTrack: @Sendable (_ channelID: String) -> String? = { _ in nil }
     public var setChannelPreferredAudioTrack: @Sendable (_ channelID: String, _ track: String?) -> Void = { _, _ in }
@@ -406,6 +412,10 @@ extension SettingsClient: DependencyKey {
                 SubtitleTextSize(rawValue: defaults.integer(forKey: subtitleTextSizeKey)) ?? .standard
             },
             setSubtitleTextSize: { defaults.set($0.rawValue, forKey: subtitleTextSizeKey) },
+            playbackDefaults: { PlaybackDefaultsStore.load(for: $0, defaults: defaults) },
+            setPlaybackDefaults: { kind, playbackDefaults in
+                PlaybackDefaultsStore.save(playbackDefaults, for: kind, defaults: defaults)
+            },
             getChannelPreferredAudioTrack: { channelID in
                 defaults.string(forKey: channelAudioTrackPrefix + channelID)
             },

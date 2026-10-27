@@ -789,8 +789,20 @@ private struct MultiViewPlayer: View {
             // cannot briefly become audible during decoder startup.
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             let events = await client.events()
-            _ = try await client.play(url, item.userAgentOverride, nil, .automatic)
-            await client.setSubtitleTextScale(settingsClient.subtitleTextSize().scale)
+            let playbackContentKind: PlaybackContentKind = item.type == .live ? .live : .vod
+            let playbackDefaults = settingsClient.playbackDefaults(playbackContentKind)
+            _ = try await client.play(
+                url,
+                item.userAgentOverride,
+                playbackDefaults.networkCachingMilliseconds(for: playbackContentKind),
+                playbackDefaults.deinterlaceMode,
+                .vlc,
+                nil,
+                playbackDefaults.preferredAudioLanguage,
+                nil,
+                playbackDefaults.preferredSubtitleLanguage
+            )
+            await client.setSubtitleTextScale(playbackDefaults.subtitleTextSize.scale)
             try await client.setVolume(latestIsActiveAudio ? 100 : 0)
             hasStartedPlayback = true
             if let position = item.resumePosition, position > 0, item.type != .live {
