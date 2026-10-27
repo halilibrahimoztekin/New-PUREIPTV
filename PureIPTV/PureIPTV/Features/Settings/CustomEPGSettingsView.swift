@@ -22,6 +22,10 @@ public struct CustomEPGSettingsView: View {
         }
     }
 
+    private var retryableCustomEPGFailureCount: Int {
+        store.customEPGSources.filter { $0.isEnabled && store.customEPGSourceErrors[$0.id] != nil }.count
+    }
+
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
     }
@@ -115,6 +119,7 @@ public struct CustomEPGSettingsView: View {
                                         set: { store.send(.toggleCustomEPGSource(id: source.id, enabled: $0)) }
                                     ))
                                     .labelsHidden()
+                                    .disabled(store.isCustomEPGLoading)
                                 }
 
                                 HStack(spacing: 12) {
@@ -143,6 +148,14 @@ public struct CustomEPGSettingsView: View {
                                     #if !os(tvOS)
                                     .buttonStyle(.bordered)
                                     #endif
+                                    .disabled(store.isCustomEPGLoading)
+                                }
+
+                                if let error = store.customEPGSourceErrors[source.id] {
+                                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.red)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                             .padding(.vertical, 6)
@@ -173,6 +186,24 @@ public struct CustomEPGSettingsView: View {
                                     Spacer()
                                     ProgressView()
                                         .controlSize(.small)
+                                }
+                            }
+                        }
+                        .disabled(store.isCustomEPGLoading)
+                    }
+
+                    if retryableCustomEPGFailureCount > 0 {
+                        Button {
+                            store.send(.retryFailedCustomEPGSources)
+                        } label: {
+                            HStack {
+                                Label(
+                                    AppStrings.Settings.retryFailedCustomEPGSources(retryableCustomEPGFailureCount),
+                                    systemImage: "arrow.clockwise.circle"
+                                )
+                                if store.isCustomEPGLoading {
+                                    Spacer()
+                                    ProgressView().controlSize(.small)
                                 }
                             }
                         }

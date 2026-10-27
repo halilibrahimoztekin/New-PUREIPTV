@@ -104,6 +104,7 @@ public struct SettingsFeature {
         public var newCustomEPGURLString: String = ""
         public var customEPGErrorMessage: String?
         public var isCustomEPGLoading: Bool = false
+        public var customEPGSourceErrors: [String: String] = [:]
 
         // iCloud Cross-Device Sync (Madde #24)
         public var cloudSyncStatus: CloudSyncStatus = .idle
@@ -230,9 +231,11 @@ public struct SettingsFeature {
         case removeCustomEPGSource(String)
         case toggleCustomEPGSource(id: String, enabled: Bool)
         case refreshCustomEPGSource(String)
-        case refreshCustomEPGSourceResponse(TaskResult<CustomEPGSource>)
+        case refreshCustomEPGSourceResponse(id: String, result: TaskResult<CustomEPGSource>)
         case refreshAllCustomEPGSources
-        case refreshAllCustomEPGSourcesCompleted
+        case refreshAllCustomEPGSourcesCompleted(CustomEPGRefreshSummary)
+        case retryFailedCustomEPGSources
+        case retryFailedCustomEPGSourcesCompleted(attemptedIDs: [String], failures: [String: String])
         case loadEPGMappingSuggestions
         case epgMappingInputsLoaded(UUID, playlistID: UUID, channels: [MediaModels.Item], options: [CustomEPGChannelOption])
         case epgMappingSuggestionsLoaded(UUID, playlistID: UUID, [EPGMappingSuggestion])
@@ -1031,6 +1034,7 @@ public struct SettingsFeature {
             case let .removeCustomEPGSource(id):
                 customEPGMappingClient.removeSource(id)
                 state.customEPGSources.removeAll { $0.id == id }
+                state.customEPGSourceErrors.removeValue(forKey: id)
                 return .none
 
             case let .toggleCustomEPGSource(id, enabled):
@@ -1041,36 +1045,85 @@ public struct SettingsFeature {
                 return .none
 
             case let .refreshCustomEPGSource(id):
+                guard !state.isCustomEPGLoading else { return .none }
+                guard state.customEPGSources.contains(where: { $0.id == id }) else { return .none }
                 state.isCustomEPGLoading = true
                 return .run { send in
-                    await send(.refreshCustomEPGSourceResponse(TaskResult {
+                    await send(.refreshCustomEPGSourceResponse(id: id, result: TaskResult {
                         try await customEPGMappingClient.refreshSource(id)
                     }))
                 }
 
-            case let .refreshCustomEPGSourceResponse(.success(source)):
+            case let .refreshCustomEPGSourceResponse(id, .success(source)):
                 state.isCustomEPGLoading = false
                 if let idx = state.customEPGSources.firstIndex(where: { $0.id == source.id }) {
                     state.customEPGSources[idx] = source
                 }
+                state.customEPGSourceErrors.removeValue(forKey: id)
                 return .none
 
-            case let .refreshCustomEPGSourceResponse(.failure(error)):
+            case let .refreshCustomEPGSourceResponse(id, .failure(error)):
                 state.isCustomEPGLoading = false
-                state.customEPGErrorMessage = "Güncelleme başarısız: \(error.localizedDescription)"
+                if state.customEPGSources.contains(where: { $0.id == id }) {
+                    state.customEPGSourceErrors[id] = error.localizedDescription
+                }
                 return .none
 
             case .refreshAllCustomEPGSources:
+                guard !state.isCustomEPGLoading else { return .none }
                 state.isCustomEPGLoading = true
                 return .run { send in
-                    _ = try? await customEPGMappingClient.refreshAllSources()
-                    await send(.refreshAllCustomEPGSourcesCompleted)
+                    let summary = await customEPGMappingClient.refreshAllSources()
+                    await send(.refreshAllCustomEPGSourcesCompleted(summary))
                 }
 
-            case .refreshAllCustomEPGSourcesCompleted:
+            case let .refreshAllCustomEPGSourcesCompleted(summary):
                 state.isCustomEPGLoading = false
                 state.customEPGSources = customEPGMappingClient.getSources()
-                state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                let currentSourceIDs = Set(state.customEPGSources.map(\.id))
+                state.customEPGSourceErrors = state.customEPGSourceErrors.filter { currentSourceIDs.contains($0.key) }
+                for sourceID in summary.refreshedSourceIDs {
+                    state.customEPGSourceErrors.removeValue(forKey: sourceID)
+                }
+                for failure in summary.failures where currentSourceIDs.contains(failure.sourceID) {
+                    state.customEPGSourceErrors[failure.sourceID] = failure.message
+                }
+                return .none
+
+            case .retryFailedCustomEPGSources:
+                guard !state.isCustomEPGLoading else { return .none }
+                let failedSources = state.customEPGSources.filter {
+                    $0.isEnabled && state.customEPGSourceErrors[$0.id] != nil
+                }
+                guard !failedSources.isEmpty else { return .none }
+
+                state.isCustomEPGLoading = true
+                return .run { send in
+                    var failures: [String: String] = [:]
+                    for source in failedSources {
+                        do {
+                            _ = try await customEPGMappingClient.refreshSource(source.id)
+                        } catch {
+                            failures[source.id] = error.localizedDescription
+                        }
+                    }
+                    await send(.retryFailedCustomEPGSourcesCompleted(
+                        attemptedIDs: failedSources.map(\.id),
+                        failures: failures
+                    ))
+                }
+
+            case let .retryFailedCustomEPGSourcesCompleted(attemptedIDs, failures):
+                state.isCustomEPGLoading = false
+                state.customEPGSources = customEPGMappingClient.getSources()
+                let currentSourceIDs = Set(state.customEPGSources.map(\.id))
+                state.customEPGSourceErrors = state.customEPGSourceErrors.filter { currentSourceIDs.contains($0.key) }
+                for sourceID in attemptedIDs {
+                    state.customEPGSourceErrors.removeValue(forKey: sourceID)
+                }
+                for (sourceID, message) in failures where currentSourceIDs.contains(sourceID) {
+                    state.customEPGSourceErrors[sourceID] = message
+                }
                 return .none
 
             // iCloud Cross-Device Sync (Madde #24)

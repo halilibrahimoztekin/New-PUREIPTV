@@ -575,6 +575,9 @@ public enum AppStrings {
         public static let findEPGMappingSuggestions = "Önerileri Bul veya Yenile".localized
         public static let noEPGMappingSuggestions = "Güvenilir bir EPG eşleşmesi önerisi bulunamadı.".localized
         public static let confirmEPGMapping = "Eşlemeyi Onayla".localized
+        public static func retryFailedCustomEPGSources(_ count: Int) -> String {
+            "Başarısız EPG Kaynaklarını Yeniden Dene (%lld)".localized(Int64(count))
+        }
         public static func epgMappingConfidence(_ confidence: Int) -> String {
             "Güven: %lld%%".localized(Int64(confidence))
         }

@@ -117,6 +117,30 @@ public struct CustomEPGChannelOption: Equatable, Identifiable, Sendable {
     }
 }
 
+public struct CustomEPGRefreshFailure: Equatable, Identifiable, Sendable {
+    public let sourceID: String
+    public let sourceName: String
+    public let message: String
+
+    public var id: String { sourceID }
+
+    public init(sourceID: String, sourceName: String, message: String) {
+        self.sourceID = sourceID
+        self.sourceName = sourceName
+        self.message = message
+    }
+}
+
+public struct CustomEPGRefreshSummary: Equatable, Sendable {
+    public let refreshedSourceIDs: [String]
+    public let failures: [CustomEPGRefreshFailure]
+
+    public init(refreshedSourceIDs: [String] = [], failures: [CustomEPGRefreshFailure] = []) {
+        self.refreshedSourceIDs = refreshedSourceIDs
+        self.failures = failures
+    }
+}
+
 // MARK: - In-Memory EPG Storage Actor
 
 public actor CustomEPGStore {
@@ -165,7 +189,7 @@ public struct CustomEPGMappingClient: Sendable {
     public var removeSource: @Sendable (_ id: String) -> Void
     public var toggleSource: @Sendable (_ id: String, _ enabled: Bool) -> Void
     public var refreshSource: @Sendable (_ id: String) async throws -> CustomEPGSource
-    public var refreshAllSources: @Sendable () async throws -> [CustomEPGSource] = { [] }
+    public var refreshAllSources: @Sendable () async -> CustomEPGRefreshSummary = { .init() }
 
     public var getChannelMapping: @Sendable (_ channelID: String) -> ChannelEPGMapping?
     public var setChannelMapping: @Sendable (_ mapping: ChannelEPGMapping) -> Void
@@ -287,39 +311,61 @@ extension CustomEPGMappingClient: DependencyKey {
                 }
             },
             refreshSource: { id in
-                var sources = loadSources()
-                guard let idx = sources.firstIndex(where: { $0.id == id }) else {
+                guard let source = loadSources().first(where: { $0.id == id }) else {
                     throw NSError(domain: "CustomEPGMappingClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Kaynak bulunamadı"])
                 }
-                let source = sources[idx]
                 let parsed = try await parseXMLTVData(from: source.url)
-                let totalChannels = parsed.channels.count
-                let totalProgs = parsed.programmes.values.reduce(0) { $0 + $1.count }
 
-                sources[idx].lastFetched = .now
-                sources[idx].channelCount = totalChannels
-                sources[idx].programmeCount = totalProgs
-                saveSources(sources)
-
-                await CustomEPGStore.shared.setSourceData(sourceID: id, data: parsed)
-                return sources[idx]
-            },
-            refreshAllSources: {
-                var sources = loadSources()
-                var updatedSources: [CustomEPGSource] = []
-
-                for var source in sources where source.isEnabled {
-                    if let parsed = try? await parseXMLTVData(from: source.url) {
-                        source.lastFetched = .now
-                        source.channelCount = parsed.channels.count
-                        source.programmeCount = parsed.programmes.values.reduce(0) { $0 + $1.count }
-                        await CustomEPGStore.shared.setSourceData(sourceID: source.id, data: parsed)
-                    }
-                    updatedSources.append(source)
+                var currentSources = loadSources()
+                guard
+                    let index = currentSources.firstIndex(where: { $0.id == id }),
+                    currentSources[index].url == source.url
+                else {
+                    throw NSError(domain: "CustomEPGMappingClient", code: 409, userInfo: [NSLocalizedDescriptionKey: "Kaynak yenileme sırasında silindi veya adresi değişti"])
                 }
 
-                saveSources(updatedSources)
-                return updatedSources
+                currentSources[index].lastFetched = .now
+                currentSources[index].channelCount = parsed.channels.count
+                currentSources[index].programmeCount = parsed.programmes.values.reduce(0) { $0 + $1.count }
+                saveSources(currentSources)
+
+                await CustomEPGStore.shared.setSourceData(sourceID: id, data: parsed)
+                return currentSources[index]
+            },
+            refreshAllSources: {
+                let sourceSnapshot = loadSources()
+                var refreshedSourceIDs: [String] = []
+                var failures: [CustomEPGRefreshFailure] = []
+
+                for source in sourceSnapshot where source.isEnabled {
+                    do {
+                        let parsed = try await parseXMLTVData(from: source.url)
+                        var currentSources = loadSources()
+                        guard
+                            let index = currentSources.firstIndex(where: { $0.id == source.id }),
+                            currentSources[index].isEnabled,
+                            currentSources[index].url == source.url
+                        else { continue }
+
+                        currentSources[index].lastFetched = .now
+                        currentSources[index].channelCount = parsed.channels.count
+                        currentSources[index].programmeCount = parsed.programmes.values.reduce(0) { $0 + $1.count }
+                        saveSources(currentSources)
+                        await CustomEPGStore.shared.setSourceData(sourceID: source.id, data: parsed)
+                        refreshedSourceIDs.append(source.id)
+                    } catch {
+                        failures.append(CustomEPGRefreshFailure(
+                            sourceID: source.id,
+                            sourceName: source.name,
+                            message: error.localizedDescription
+                        ))
+                    }
+                }
+
+                return CustomEPGRefreshSummary(
+                    refreshedSourceIDs: refreshedSourceIDs,
+                    failures: failures
+                )
             },
             getChannelMapping: { channelID in
                 let mappings = loadMappings()
