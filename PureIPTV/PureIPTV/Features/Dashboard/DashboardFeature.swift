@@ -10,6 +10,12 @@ private enum DashboardPrimaryCatalogResult: Sendable {
 
 @Reducer
 public struct DashboardFeature {
+    public enum PrimaryCatalog: CaseIterable, Hashable, Sendable {
+        case live
+        case movies
+        case series
+    }
+
     public struct EPGEvent: Equatable, Identifiable, Sendable {
         public let channel: MediaModels.Item
         public let program: EPGProgram
@@ -49,6 +55,7 @@ public struct DashboardFeature {
         public var hasMovieContent = true
         public var hasResolvedSeriesCatalog = false
         public var hasSeriesContent = true
+        public var failedPrimaryCatalogs: Set<PrimaryCatalog> = []
         public var epgCandidateChannels: [MediaModels.Item] = []
         public var epgCandidatePlaylistID: UUID?
         public var epgCandidateSourceLoaded = false
@@ -106,6 +113,7 @@ public struct DashboardFeature {
         public var activeEPGRefreshID: UUID?
         public var activeProfileScope: ProfileContextSnapshot?
         public var activePersonalizationRefreshID: UUID?
+        public var isPersonalizationEnabled = false
         public var lastSportsHubVisibility: Bool?
         public var deferInitialRemoteRefresh = false
 
@@ -130,6 +138,26 @@ public struct DashboardFeature {
             }
         }
 
+        public var isLoadingPersonalizedContent: Bool {
+            activePersonalizationRefreshID != nil
+                || activeActorRecommendationRefreshID != nil
+                || activeNewEpisodeRefreshID != nil
+                || activeMovieRatingRefreshID != nil
+                || activeAwardRefreshID != nil
+        }
+
+        public var hasPersonalizedContent: Bool {
+            !recommendedVODs.isEmpty
+                || !newEpisodeSeries.isEmpty
+                || !mostRatedMovies.isEmpty
+                || !highestRatedMovies.isEmpty
+                || !awardWinningMovies.isEmpty
+                || !awardNomineeMovies.isEmpty
+                || !actorRecommendationCollections.isEmpty
+                || !mostWatchedActors.isEmpty
+                || !selectedActorCollections.isEmpty
+        }
+
         public var errorMessage: String?
         public var lastAdultHidden: Bool?
 
@@ -148,7 +176,7 @@ public struct DashboardFeature {
         case localDataLoaded(favorites: [FavoriteItem], history: [WatchHistoryItem], scope: ProfileContextSnapshot)
         case localPersonalizationPreferencesChanged
         case localRecommendationsLoaded(playlistID: UUID?, refreshID: UUID, profileScope: ProfileContextSnapshot, recommendations: [MediaModels.Item], reasons: [String: SmartRecommendationEngine.Reason])
-        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
+        case dataLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, channels: [MediaModels.Item]?, epgCandidateChannels: [MediaModels.Item], epgSourceLoaded: Bool, vods: [MediaModels.Item]?, series: [MediaModels.Item]?, failedPrimaryCatalogs: Set<PrimaryCatalog>, actorMovieCandidates: [MediaModels.Item], actorSeriesCandidates: [MediaModels.Item], vodExploreCollections: [ExploreCollection]?, seriesExploreCollections: [ExploreCollection]?, yearExploreCollections: [ExploreCollection]?, homeCategoryCollections: [ExploreCollection]?)
         case actorRecommendationsLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, collections: [ActorRecommendationEngine.Collection], actors: [ActorRecommendationEngine.MostWatchedActor])
         case newEpisodeSeriesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, series: [NewEpisodeDiscoveryEngine.SeriesEntry])
         case movieRatingShelvesLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, shelves: MovieRatingDiscoveryEngine.Shelves)
@@ -228,6 +256,7 @@ public struct DashboardFeature {
                 let personalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
                     for: profileScope.profileID
                 )
+                state.isPersonalizationEnabled = personalizationEnabled
                 if profileChanged || playlistChanged || !personalizationEnabled {
                     Self.clearPersonalizationState(&state)
                 }
@@ -249,6 +278,8 @@ public struct DashboardFeature {
                     state.hasMovieContent = true
                     state.hasResolvedSeriesCatalog = false
                     state.hasSeriesContent = true
+                    state.failedPrimaryCatalogs = []
+                    state.errorMessage = nil
                     state.newEpisodeSeries = []
                     state.favoriteSeriesUnwatchedEpisodeCounts = [:]
                     state.activeNewEpisodeRefreshID = nil
@@ -293,6 +324,8 @@ public struct DashboardFeature {
                     state.hasMovieContent = true
                     state.hasResolvedSeriesCatalog = false
                     state.hasSeriesContent = true
+                    state.failedPrimaryCatalogs = []
+                    state.errorMessage = nil
                     // Drop both rendered and pin-management candidates before
                     // the refreshed adult-filtered catalog arrives.
                     state.availableHomeCategoryCollections = []
@@ -359,6 +392,7 @@ public struct DashboardFeature {
                         || sportsHubVisibilityChanged
                         || (state.lastRemoteRefreshAt.map { Date().timeIntervalSince($0) >= 15 * 60 } ?? true)
                         || (state.featuredChannels.isEmpty && state.featuredVODs.isEmpty && state.featuredSeries.isEmpty)
+                        || !state.failedPrimaryCatalogs.isEmpty
                 )
                 state.activePlaylistID = playlistID
                 state.lastAdultHidden = currentAdultHidden
@@ -457,6 +491,7 @@ public struct DashboardFeature {
                 )
 
             case .refreshTapped:
+                guard state.activeRefreshID == nil else { return .none }
                 guard let config = state.activePlaylistConfig else { return .none }
                 state.deferInitialRemoteRefresh = false
                 let refreshID = UUID()
@@ -558,13 +593,16 @@ public struct DashboardFeature {
             case .localPersonalizationPreferencesChanged:
                 let profileScope = profileContextClient.snapshot()
                 state.activeProfileScope = profileScope
+                state.isPersonalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
+                    for: profileScope.profileID
+                )
                 let personalizationCancellations = Effect<Action>.merge(
                     .cancel(id: CancelID.localRecommendations),
                     .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
                     .cancel(id: CancelID.newEpisodeDiscovery)
                 )
-                guard LocalPersonalizationPreferences.recommendationsEnabled(for: profileScope.profileID) else {
+                guard state.isPersonalizationEnabled else {
                     Self.clearPersonalizationState(&state)
                     return personalizationCancellations
                 }
@@ -762,14 +800,17 @@ public struct DashboardFeature {
 
                 switch type {
                 case .live:
+                    state.failedPrimaryCatalogs.remove(.live)
                     state.hasResolvedLiveCatalog = true
                     state.hasLiveContent = !items.isEmpty
                     state.featuredChannels = items
                 case .vod:
+                    state.failedPrimaryCatalogs.remove(.movies)
                     state.hasResolvedMovieCatalog = true
                     state.hasMovieContent = !items.isEmpty
                     state.featuredVODs = items
                 case .series:
+                    state.failedPrimaryCatalogs.remove(.series)
                     state.hasResolvedSeriesCatalog = true
                     state.hasSeriesContent = !items.isEmpty
                     state.featuredSeries = items
@@ -788,6 +829,8 @@ public struct DashboardFeature {
                     state.activePlaylistID == playlistID,
                     state.activeRefreshID == refreshID
                 else { return .none }
+                state.isPersonalizationEnabled = personalizationEnabled
+                state.failedPrimaryCatalogs = []
                 state.activePersonalizationRefreshID = nil
                 if !personalizationEnabled {
                     Self.clearPersonalizationState(&state)
@@ -906,6 +949,11 @@ public struct DashboardFeature {
                     let fetchedLiveCategories = await liveCategories
                     let fetchedVODs = primaryCatalogs.vods
                     let fetchedSeries = primaryCatalogs.series
+                    let failedPrimaryCatalogs = Set([
+                        fetchedChannels == nil ? PrimaryCatalog.live : nil,
+                        fetchedVODs == nil ? PrimaryCatalog.movies : nil,
+                        fetchedSeries == nil ? PrimaryCatalog.series : nil,
+                    ].compactMap(\.self))
                     let fetchedVODCategories = await vodCategories
                     let fetchedSeriesCategories = await seriesCategories
                     guard !Task.isCancelled else { return }
@@ -1009,6 +1057,7 @@ public struct DashboardFeature {
                             epgSourceLoaded: fetchedChannels != nil,
                             vods: vods,
                             series: series,
+                            failedPrimaryCatalogs: failedPrimaryCatalogs,
                             actorMovieCandidates: actorMovieCandidates,
                             actorSeriesCandidates: actorSeriesCandidates,
                             vodExploreCollections: vodExploreCollections,
@@ -1116,7 +1165,7 @@ public struct DashboardFeature {
                 state.recommendationReasons = reasons
                 return .none
 
-            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, actorMovieCandidates, actorSeriesCandidates, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
+            case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, channels, epgCandidateChannels, epgSourceLoaded, vods, series, failedPrimaryCatalogs, actorMovieCandidates, actorSeriesCandidates, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
                 guard
                     state.activePlaylistID == playlistID,
                     state.lastAdultHidden == hideAdult,
@@ -1129,8 +1178,14 @@ public struct DashboardFeature {
                 )
                 state.isLoading = false
                 state.hasLoadedRemoteData = true
-                state.lastRemoteRefreshAt = Date()
                 state.activeRefreshID = nil
+                state.failedPrimaryCatalogs = failedPrimaryCatalogs
+                if failedPrimaryCatalogs.isEmpty {
+                    state.lastRemoteRefreshAt = Date()
+                }
+                state.errorMessage = failedPrimaryCatalogs.isEmpty
+                    ? nil
+                    : URLError(.cannotLoadFromNetwork).localizedDescription
                 if let channels {
                     state.hasResolvedLiveCatalog = true
                     state.hasLiveContent = !channels.isEmpty
@@ -1285,11 +1340,8 @@ public struct DashboardFeature {
                 state.activeEPGRefreshID = nil
                 state.activeActorRecommendationRefreshID = nil
                 state.hasLoadedEPGEvents = false
-                state.errorMessage = state.featuredChannels.isEmpty
-                    && state.featuredVODs.isEmpty
-                    && state.featuredSeries.isEmpty
-                    ? error.localizedDescription
-                    : nil
+                state.failedPrimaryCatalogs = Set(PrimaryCatalog.allCases)
+                state.errorMessage = error.localizedDescription
                 return .none
 
             case let .channelSelected(channel):

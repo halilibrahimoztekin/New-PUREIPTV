@@ -34,77 +34,101 @@
                     titleSeed: store.featuredVODs.first?.title ?? "PureIPTV"
                 )
 
-                if store.isLoading {
-                    tvLoadingView
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 50) {
-                            // Top Bar: Active Playlist Fast Switcher
-                            HStack(spacing: 20) {
-                                Spacer()
-                                VPNStatusBadge(compact: false)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 50) {
+                        // Top Bar: Active Playlist Fast Switcher
+                        HStack(spacing: 20) {
+                            Spacer()
+                            VPNStatusBadge(compact: false)
+                            Button {
+                                store.send(.refreshTapped)
+                            } label: {
+                                Label {
+                                    if let refreshedAt = store.lastRemoteRefreshAt {
+                                        Text(refreshedAt, style: .relative)
+                                    } else {
+                                        Text(AppStrings.Common.retry)
+                                    }
+                                } icon: {
+                                    if store.activeRefreshID != nil {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                }
+                                .font(.system(size: 18, weight: .semibold))
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                            .disabled(store.activeRefreshID != nil)
+                            .accessibilityLabel(AppStrings.Common.retry)
+                            Button {
+                                isCategoryManagementPresented = true
+                            } label: {
+                                Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
+                                    .font(.system(size: 20, weight: .semibold))
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                            Button {
+                                isHomeSettingsPresented = true
+                            } label: {
+                                Label("Ana Ekranı Düzenle", systemImage: "slider.horizontal.3")
+                                    .font(.system(size: 20, weight: .semibold))
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                            Button {
+                                store.send(.openManagePlaylistsTapped)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 12, height: 12)
+                                    Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(Color(hex: "#0A84FF"))
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                        }
+                        .padding(.horizontal, 60)
+                        .padding(.top, 20)
+
+                        if store.isLoading {
+                            tvLoadingView
+                                .frame(maxWidth: .infinity)
+                        }
+                        if let error = store.errorMessage {
+                            HStack(spacing: 18) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text(error)
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 Button {
                                     store.send(.refreshTapped)
                                 } label: {
-                                    Label {
-                                        if let refreshedAt = store.lastRemoteRefreshAt {
-                                            Text(refreshedAt, style: .relative)
-                                        } else {
-                                            Text(AppStrings.Common.retry)
-                                        }
-                                    } icon: {
-                                        Image(systemName: "arrow.clockwise")
-                                    }
-                                    .font(.system(size: 18, weight: .semibold))
+                                    Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
                                 }
-                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                                .accessibilityLabel(AppStrings.Common.retry)
-                                Button {
-                                    isCategoryManagementPresented = true
-                                } label: {
-                                    Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
-                                        .font(.system(size: 20, weight: .semibold))
-                                }
-                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                                Button {
-                                    isHomeSettingsPresented = true
-                                } label: {
-                                    Label("Ana Ekranı Düzenle", systemImage: "slider.horizontal.3")
-                                        .font(.system(size: 20, weight: .semibold))
-                                }
-                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                                Button {
-                                    store.send(.openManagePlaylistsTapped)
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Circle()
-                                            .fill(Color.green)
-                                            .frame(width: 12, height: 12)
-                                        Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
-                                            .font(.system(size: 22, weight: .semibold))
-                                            .foregroundStyle(.white)
-                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
-                                    }
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+                                .disabled(store.activeRefreshID != nil)
                             }
                             .padding(.horizontal, 60)
-                            .padding(.top, 20)
-
-                            ForEach(store.homeSections.filter(\.isVisible)) { section in
-                                homeSectionView(section)
-                            }
                         }
-                        .padding(.bottom, 80)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: store.isLoading)
+
+                        ForEach(store.homeSections.filter(\.isVisible)) { section in
+                            homeSectionView(section)
+                        }
                     }
-                    .focusSection()
+                    .padding(.bottom, 80)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: store.isLoading)
                 }
+                .focusSection()
             }
             .onAppear {
                 store.send(.onAppear(config: config))
@@ -215,6 +239,12 @@
                         }
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .live,
+                    message: AppStrings.LiveTV.noChannels,
+                    hasContent: !store.featuredChannels.isEmpty,
+                    isResolved: store.hasResolvedLiveCatalog
+                )
             case .sportsHub:
                 if store.isSportsHubVisible, !store.epgEvents.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
@@ -385,6 +415,28 @@
                         }
                     }
                 }
+                if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
+                    if store.isLoadingPersonalizedContent {
+                        ProgressView(AppStrings.Common.loading)
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 40)
+                    } else if store.hasLoadedRemoteData {
+                        HStack(spacing: 22) {
+                            Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                            Button {
+                                store.send(.refreshTapped)
+                            } label: {
+                                Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+                            .disabled(store.activeRefreshID != nil)
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                }
                 ForEach(store.actorRecommendationCollections) { collection in
                     let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
                                        collection.actorName,
@@ -436,6 +488,12 @@
                         }
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .movies,
+                    message: AppStrings.VOD.noMovies,
+                    hasContent: !store.featuredVODs.isEmpty,
+                    isResolved: store.hasResolvedMovieCatalog
+                )
             case .trendingSeries:
                 if !store.featuredSeries.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.newSeries) {
@@ -457,10 +515,36 @@
                         }
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .series,
+                    message: AppStrings.Series.noSeries,
+                    hasContent: !store.featuredSeries.isEmpty,
+                    isResolved: store.hasResolvedSeriesCatalog
+                )
             case .discoverCollections:
                 ForEach(store.visibleExploreCollections) { collection in
                     homeCategorySection(collection)
                 }
+            }
+        }
+
+        @ViewBuilder
+        private func primaryCatalogFeedback(
+            catalog: DashboardFeature.PrimaryCatalog,
+            message: String,
+            hasContent: Bool,
+            isResolved: Bool
+        ) -> some View {
+            if !hasContent, store.failedPrimaryCatalogs.contains(catalog) || isResolved {
+                RetryableSectionEmptyState(message: message) {
+                    store.send(.refreshTapped)
+                }
+                .frame(height: 300)
+            } else if !hasContent, store.activeRefreshID != nil, !store.isLoading {
+                ProgressView(AppStrings.Common.loading)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 40)
             }
         }
 

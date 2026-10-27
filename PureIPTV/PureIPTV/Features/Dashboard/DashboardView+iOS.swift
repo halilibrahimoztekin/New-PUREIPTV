@@ -51,7 +51,12 @@
                                         Text(AppStrings.Common.retry)
                                     }
                                 } icon: {
-                                    Image(systemName: "arrow.clockwise")
+                                    if store.activeRefreshID != nil {
+                                        ProgressView()
+                                            .tint(Color(hex: "#0A84FF"))
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
                                 }
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color(hex: "#0A84FF"))
@@ -60,6 +65,7 @@
                                 .background(Color(hex: "#1F1F23"), in: Capsule())
                             }
                             .buttonStyle(.plain)
+                            .disabled(store.activeRefreshID != nil)
                             .accessibilityLabel(AppStrings.Common.retry)
 
                             Button {
@@ -117,14 +123,27 @@
 
                         if store.isLoading {
                             loadingView
-                        } else if let error = store.errorMessage {
-                            Text(error)
-                                .foregroundColor(.red)
-                                .padding()
-                        } else {
-                            ForEach(store.homeSections.filter(\.isVisible)) { section in
-                                homeSectionView(section)
+                        }
+                        if let error = store.errorMessage {
+                            HStack(spacing: 12) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text(error)
+                                    .font(.callout)
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button {
+                                    store.send(.refreshTapped)
+                                } label: {
+                                    Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(store.activeRefreshID != nil)
                             }
+                            .padding(.horizontal, 16)
+                        }
+                        ForEach(store.homeSections.filter(\.isVisible)) { section in
+                            homeSectionView(section)
                         }
                     }
                     .padding(.bottom, 24)
@@ -196,6 +215,12 @@
                             .frame(width: 240)
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .live,
+                    message: AppStrings.LiveTV.noChannels,
+                    hasContent: !store.featuredChannels.isEmpty,
+                    isResolved: store.hasResolvedLiveCatalog
+                )
             case .sportsHub:
                 if store.isSportsHubVisible, !store.epgEvents.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.epgPrograms, items: store.epgEvents) { event in
@@ -285,6 +310,29 @@
                         .frame(width: 140, alignment: .leading)
                     }
                 }
+                if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
+                    if store.isLoadingPersonalizedContent {
+                        ProgressView(AppStrings.Common.loading)
+                            .tint(.white)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                    } else if store.hasLoadedRemoteData {
+                        HStack(spacing: 12) {
+                            Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
+                                .foregroundStyle(.white.opacity(0.78))
+                            Spacer()
+                            Button {
+                                store.send(.refreshTapped)
+                            } label: {
+                                Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(store.activeRefreshID != nil)
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
                 ForEach(store.actorRecommendationCollections) { collection in
                     let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
                                        collection.actorName,
@@ -325,6 +373,12 @@
                             .frame(width: 140)
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .movies,
+                    message: AppStrings.VOD.noMovies,
+                    hasContent: !store.featuredVODs.isEmpty,
+                    isResolved: store.hasResolvedMovieCatalog
+                )
             case .trendingSeries:
                 if !store.featuredSeries.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.newSeries, items: store.featuredSeries) { series in
@@ -332,10 +386,37 @@
                             .frame(width: 140)
                     }
                 }
+                primaryCatalogFeedback(
+                    catalog: .series,
+                    message: AppStrings.Series.noSeries,
+                    hasContent: !store.featuredSeries.isEmpty,
+                    isResolved: store.hasResolvedSeriesCatalog
+                )
             case .discoverCollections:
                 ForEach(store.visibleExploreCollections) { collection in
                     homeCategorySection(collection)
                 }
+            }
+        }
+
+        @ViewBuilder
+        private func primaryCatalogFeedback(
+            catalog: DashboardFeature.PrimaryCatalog,
+            message: String,
+            hasContent: Bool,
+            isResolved: Bool
+        ) -> some View {
+            if !hasContent, store.failedPrimaryCatalogs.contains(catalog) || isResolved {
+                RetryableSectionEmptyState(message: message) {
+                    store.send(.refreshTapped)
+                }
+                .frame(height: 210)
+            } else if !hasContent, store.activeRefreshID != nil, !store.isLoading {
+                ProgressView(AppStrings.Common.loading)
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
             }
         }
 
