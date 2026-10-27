@@ -233,7 +233,6 @@ extension WatchProgressSyncClient: DependencyKey {
         let store = NSUbiquitousKeyValueStore.default
         let localDeviceID = deviceUUID
         let writer = WatchProgressSyncWriter(store: store, deviceID: localDeviceID)
-        let modelContainer = SharedDatabaseConfig.shared
 
         // Default to enabled if not explicitly set
         if UserDefaults.standard.object(forKey: enabledKey) == nil {
@@ -253,12 +252,14 @@ extension WatchProgressSyncClient: DependencyKey {
             },
             syncItem: { item in
                 guard isEnabled() else { return }
+                _ = try SharedDatabaseConfig.shared
 
                 let record = WatchProgressSyncRecord(from: item, deviceId: localDeviceID)
                 try await writer.write(record)
             },
             markUnwatched: { id in
                 guard isEnabled() else { return }
+                _ = try SharedDatabaseConfig.shared
                 let record = WatchProgressSyncRecord(
                     id: id,
                     type: "deleted",
@@ -273,6 +274,7 @@ extension WatchProgressSyncClient: DependencyKey {
             },
             pullAndMergeRemoteChanges: {
                 guard isEnabled() else { return 0 }
+                let modelContainer = try SharedDatabaseConfig.shared
 
                 store.synchronize()
                 let values = store.dictionaryRepresentation
@@ -386,7 +388,7 @@ extension WatchProgressSyncClient: DependencyKey {
                     let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
                         $0.id == id && $0.type == type && $0.profileID == profileID
                     })
-                    let localItem = try? context.fetch(descriptor).first(where: { $0.playlistID == playlistID })
+                    let localItem = try context.fetch(descriptor).first(where: { $0.playlistID == playlistID })
                     let legacyWildcard = profileID == nil ? (legacyWildcardDeletions[id] ?? .distantPast) : .distantPast
                     let tombstoneDate = max(
                         newestDeletion[identity]?.lastWatchedAt ?? .distantPast,
@@ -437,7 +439,7 @@ extension WatchProgressSyncClient: DependencyKey {
                     let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
                         $0.id == id && $0.profileID == nil
                     })
-                    for item in (try? context.fetch(descriptor)) ?? [] where item.lastWatchedAt <= date {
+                    for item in try context.fetch(descriptor) where item.lastWatchedAt <= date {
                         item.lastWatchedAt = max(item.lastWatchedAt, date)
                         item.removedAt = max(item.removedAt ?? .distantPast, date)
                         mergedCount += 1
@@ -445,7 +447,7 @@ extension WatchProgressSyncClient: DependencyKey {
                 }
 
                 if mergedCount > 0 {
-                    try? context.save()
+                    try context.save()
                     NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
                 }
 

@@ -8,6 +8,11 @@ public final class PlaylistRepository: @unchecked Sendable {
         case failed
     }
 
+    public enum ActivePlaylistReadResult {
+        case loaded(SavedPlaylist?)
+        case failed
+    }
+
     private let keychainKey = "com.pureiptv.savedPlaylists"
     private let keychainManager = KeychainManager.shared
 
@@ -34,16 +39,28 @@ public final class PlaylistRepository: @unchecked Sendable {
 
     /// Retrieves the currently active playlist
     public nonisolated func getActivePlaylist() -> SavedPlaylist? {
-        let playlists = getPlaylists()
-        if let activeID = getActivePlaylistID(), let playlist = playlists.first(where: { $0.id == activeID }) {
-            return playlist
+        switch readActivePlaylist() {
+        case let .loaded(playlist): return playlist
+        case .failed: return nil
         }
-        // Fallback to first if active is not set
+    }
+
+    /// A protected/unreadable Keychain must not look like an empty library at startup.
+    public nonisolated func readActivePlaylist() -> ActivePlaylistReadResult {
+        let playlists: [SavedPlaylist]
+        switch readPlaylists() {
+        case let .loaded(saved): playlists = saved
+        case .notFound: return .loaded(nil)
+        case .failed: return .failed
+        }
+        if let activeID = getActivePlaylistID(), let playlist = playlists.first(where: { $0.id == activeID }) {
+            return .loaded(playlist)
+        }
         if let first = playlists.first {
             setActivePlaylistID(first.id)
-            return first
+            return .loaded(first)
         }
-        return nil
+        return .loaded(nil)
     }
 
     /// Retrieves all saved playlists from iCloud Keychain

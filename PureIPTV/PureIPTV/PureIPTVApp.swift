@@ -49,94 +49,184 @@ struct PureIPTVApp: App {
                 print("Failed to configure audio session: \(error)")
             }
         }
-
-        // Cross-device iCloud watch progress sync (Madde #43)
-        Task.detached(priority: .utility) {
-            _ = try? await WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()
-        }
     }
 
-    /// The single store that drives the entire app logic
-    let store = Store(initialState: AppCoordinator.State.initialState) {
-        AppCoordinator()
-    }
-
-    var sharedModelContainer: ModelContainer = SharedDatabaseConfig.shared
+    @State private var store: StoreOf<AppCoordinator>?
+    @State private var sharedModelContainer: ModelContainer?
+    @State private var isStarting = false
+    @State private var startupFailureCode: String?
+    @State private var pendingURL: URL?
+    @State private var pendingHandoff: StreamHandoffRequest?
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                AppCoordinatorView(store: store)
-                    .preferredColorScheme(.dark)
-                    .tint(themeManager.accentColor)
-                    .ignoresSafeArea()
-                    .modelContainer(sharedModelContainer)
-                    .onChange(of: scenePhase) { newPhase, _ in
-                        if newPhase == .background {
-                            appDelegate.scheduleAppRefresh()
-                            store.send(.appEnteredBackground)
-                        } else if newPhase == .active {
-                            store.send(.appEnteredForeground)
-                        }
-                    }
-
-                #if os(iOS)
-                    if let playerStore = store.scope(state: \.miniPlayer, action: \.miniPlayer) {
-                        if store.isPlayerMini {
-                            VStack {
-                                Spacer()
-                                DockedMiniPlayerView(
-                                    store: playerStore,
-                                    onExpand: {
-                                        store.send(.expandPlayer)
-                                    },
-                                    onClose: {
-                                        store.send(.closeMiniPlayer)
-                                    }
-                                )
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 64)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                            }
-                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isPlayerMini)
-                            .zIndex(999)
-                        }
-                    }
-                #endif
+            Group {
+                if let store, let sharedModelContainer {
+                    appContent(store: store, container: sharedModelContainer)
+                } else {
+                    startupContent
+                }
+            }
+            .preferredColorScheme(.dark)
+            .tint(themeManager.accentColor)
+            .onAppear {
+                // Opening the shared store finishes even if this scene temporarily disappears.
+                Task { await initializePersistence() }
             }
             .onOpenURL { url in
-                store.send(.handleDeepLink(url))
+                if let store {
+                    store.send(.handleDeepLink(url))
+                } else {
+                    pendingURL = url
+                }
             }
-            #if os(iOS)
-            .sheet(
-                isPresented: Binding(
-                    get: { store.playlistTransferPairing != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.cancelPlaylistTransfer)
-                        }
-                    }
-                )
-            ) {
-                PlaylistQRTransferConfirmationView(
-                    playlists: store.playlistTransferPlaylists,
-                    selectedID: store.playlistTransferSelectedID,
-                    isLoading: store.isLoadingPlaylistTransfer,
-                    isSubmitting: store.isSubmittingPlaylistTransfer,
-                    error: store.playlistTransferError,
-                    onSelect: { store.send(.selectPlaylistForTransfer($0)) },
-                    onConfirm: { store.send(.confirmPlaylistTransfer) },
-                    onCancel: { store.send(.cancelPlaylistTransfer) }
-                )
-            }
-            #endif
             #if os(tvOS)
             .onContinueUserActivity(StreamHandoffManager.activityType) { activity in
                 guard let request = StreamHandoffManager.shared.parseHandoff(from: activity) else { return }
-                store.send(.receiveStreamHandoff(request))
+                if let store {
+                    store.send(.receiveStreamHandoff(request))
+                } else {
+                    pendingHandoff = request
+                }
             }
             #endif
         }
+    }
+
+    private var startupContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Image(systemName: startupFailureCode == nil ? "externaldrive" : "externaldrive.badge.exclamationmark")
+                    .font(.largeTitle)
+                    .accessibilityHidden(true)
+                if let startupFailureCode {
+                    Text(AppStrings.Startup.unavailableTitle)
+                        .font(.title.bold())
+                        .accessibilityAddTraits(.isHeader)
+                    Text(AppStrings.Startup.unavailableMessage)
+                        .font(.body)
+                    Button {
+                        Task { await initializePersistence() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if isStarting { ProgressView() }
+                            Text(isStarting ? AppStrings.Common.loadingAlt : AppStrings.Common.retry)
+                        }
+                        .frame(minWidth: 220, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityValue(isStarting ? AppStrings.Common.loadingAlt : "")
+                    Text(AppStrings.Startup.supportCode(startupFailureCode))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView(AppStrings.Startup.openingData)
+                }
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 900)
+            .padding(48)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @MainActor
+    private func initializePersistence() async {
+        guard !isStarting, store == nil else { return }
+        isStarting = true
+        defer { isStarting = false }
+        do {
+            let container = try await Task.detached(priority: .userInitiated) {
+                try SharedDatabaseConfig.shared
+            }.value
+            sharedModelContainer = container
+            let readyStore = Store(initialState: AppCoordinator.State.initialState) {
+                AppCoordinator()
+            }
+            store = readyStore
+            startupFailureCode = nil
+            if scenePhase == .active { readyStore.send(.appEnteredForeground) }
+            if let url = pendingURL {
+                pendingURL = nil
+                readyStore.send(.handleDeepLink(url))
+            }
+            if let request = pendingHandoff {
+                pendingHandoff = nil
+                readyStore.send(.receiveStreamHandoff(request))
+            }
+            Task.detached(priority: .utility) {
+                _ = try? await WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()
+            }
+        } catch {
+            let nsError = error as NSError
+            // Avoid exposing database paths or account information in diagnostics.
+            startupFailureCode = "\(nsError.domain) (\(nsError.code))"
+        }
+    }
+
+    private func appContent(store: StoreOf<AppCoordinator>, container: ModelContainer) -> some View {
+        ZStack {
+            AppCoordinatorView(store: store)
+                .preferredColorScheme(.dark)
+                .tint(themeManager.accentColor)
+                .ignoresSafeArea()
+                .modelContainer(container)
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .background {
+                        appDelegate.scheduleAppRefresh()
+                        store.send(.appEnteredBackground)
+                    } else if newPhase == .active {
+                        store.send(.appEnteredForeground)
+                    }
+                }
+
+            #if os(iOS)
+                if let playerStore = store.scope(state: \.miniPlayer, action: \.miniPlayer) {
+                    if store.isPlayerMini {
+                        VStack {
+                            Spacer()
+                            DockedMiniPlayerView(
+                                store: playerStore,
+                                onExpand: {
+                                    store.send(.expandPlayer)
+                                },
+                                onClose: {
+                                    store.send(.closeMiniPlayer)
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 64)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isPlayerMini)
+                        .zIndex(999)
+                    }
+                }
+            #endif
+        }
+        #if os(iOS)
+        .sheet(
+            isPresented: Binding(
+                get: { store.playlistTransferPairing != nil },
+                set: {
+                    if !$0 {
+                        store.send(.cancelPlaylistTransfer)
+                    }
+                }
+            )
+        ) {
+            PlaylistQRTransferConfirmationView(
+                playlists: store.playlistTransferPlaylists,
+                selectedID: store.playlistTransferSelectedID,
+                isLoading: store.isLoadingPlaylistTransfer,
+                isSubmitting: store.isSubmittingPlaylistTransfer,
+                error: store.playlistTransferError,
+                onSelect: { store.send(.selectPlaylistForTransfer($0)) },
+                onConfirm: { store.send(.confirmPlaylistTransfer) },
+                onCancel: { store.send(.cancelPlaylistTransfer) }
+            )
+        }
+        #endif
     }
 }
 

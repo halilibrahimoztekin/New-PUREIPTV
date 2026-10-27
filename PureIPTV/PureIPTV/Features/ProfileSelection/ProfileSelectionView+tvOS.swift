@@ -95,16 +95,15 @@
                     Spacer().frame(height: 20)
                 }
             }
-            .task {
-                // Navigation can mount this view while the store is processing a route action.
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-                await store.send(.onAppear).finish()
-            }
             .onExitCommand {
                 if store.isEditing {
                     store.send(.toggleEditMode)
                 }
+            }
+            .onChange(of: store.profiles.count) { _, _ in
+                newProfileName = ""
+                newProfileIsKids = false
+                newProfileAvatar = ProfileAvatarCatalog.adultDefault
             }
             .sheet(isPresented: $store.showingAddProfile) {
                 TVAddProfileSheet(
@@ -123,9 +122,6 @@
                             isKidsMode: newProfileIsKids,
                             avatarIcon: newProfileAvatar
                         ))
-                        newProfileName = ""
-                        newProfileIsKids = false
-                        newProfileAvatar = ProfileAvatarCatalog.adultDefault
                     }
                 )
             }

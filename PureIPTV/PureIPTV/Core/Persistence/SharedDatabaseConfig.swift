@@ -1,7 +1,24 @@
 import Foundation
 import SwiftData
 
-public enum SharedDatabaseConfig {
+public nonisolated enum SharedDatabaseConfig {
+    /// Serializes the first store open and caches only a successfully created container.
+    private nonisolated final class ContainerCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var container: ModelContainer?
+
+        func load() throws -> ModelContainer {
+            lock.lock()
+            defer { lock.unlock() }
+            if let container {
+                return container
+            }
+            let container = try SharedDatabaseConfig.createModelContainer()
+            self.container = container
+            return container
+        }
+    }
+    private nonisolated static let cache = ContainerCache()
     public static var cloudModels: [any PersistentModel.Type] {
         [
             FavoriteItem.self,
@@ -43,13 +60,11 @@ public enum SharedDatabaseConfig {
         }
     }
 
-    public static let shared: ModelContainer = {
-        do {
-            return try createModelContainer()
-        } catch {
-            fatalError("Failed to create shared ModelContainer: \(error)")
+    public static var shared: ModelContainer {
+        get throws {
+            try cache.load()
         }
-    }()
+    }
 
     public static func createModelContainer() throws -> ModelContainer {
         try ModelContainer(for: schema, configurations: createConfigurations())

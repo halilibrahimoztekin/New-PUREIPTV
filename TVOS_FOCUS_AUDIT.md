@@ -121,6 +121,12 @@ LiveTV tvOS EPG’yi yerel `fullScreenCover` ile sunuyor; oynatıcı üst AppCoo
 - `VODDetailFeature.downloadTapped` ve `SeriesDetailFeature.downloadEpisode` mevcut dosya indirildi olarak işaretliyken doğrudan silme API’sine gidiyor; queue ekranına eklenen onay bu iki ayrıntı akışında henüz yok. Aynı onay ve görünür hata sözleşmesi bu çağrı noktalarına da taşınmalı. Manager’ın canonical/aktif görev/düzenli dosya koruması bu çağrılar için de uygulanıyor.
 - DownloadManager’ın custom context’leri aynı actor içinde tutulup UI’ye Sendable snapshot dönüyor. `SharedDatabaseConfig.shared` erişimi ise projedeki mevcut MainActor varsayımı nedeniyle iOS derlemesinde Swift 6 uyarısı üretiyor. Container’ın açık actor/isolation enjeksiyonu ayrı bir concurrency incelemesi gerektiriyor; uyarının giderildiği veya uygulamanın Swift 6 modunda temiz olduğu iddia edilmiyor.
 
+## Başlangıç ve veri koruma incelemesi (#199)
+
+- SwiftData container açılamazsa uygulama `fatalError` ile kapanıyordu. Başarılı açılış cache’i, throwing provider ve Store/sync’ten önce çalışan başlangıç gate’i eklendi; native Retry ve sınırlı domain/kod tanısı sunuluyor. Genişletilmiş profil/Keychain akışı ve iki profil yarışı da bağımsız reviewer’dan onay aldı; iOS/tvOS Release compile-only build başarılı ve görev çıktıları temizlendi. Cihaz akışı çalıştırılmadı.
+- Keychain okunamadığında playlist’lerin gerçekten boş olduğu varsayılıyordu; başlangıçta typed okuma hatası ve Retry ayrı ele alınıyor. Profil fetch hataları için de görünür recovery yolu eklendi; başarılı boş sonuç varsayılanları tek MainActor işlemiyle oluşturuyor. Save sonrası committed action, sonraki okuma hata verse de listeyi uzlaştırıyor.
+- **Açık veri konumu riski:** İstenen App Group `group.com.pureiptv.shared`, entitlements içindeki değer `group.com.pureiptv.app`. Mevcut fallback/default store konumları bu görevde değiştirilmedi. Üretimdeki eski store URL’leri doğrulanmadan entitlement/URL değiştirmek önceki veriyi görünmez yapabilir; ayrı migration tasarımı gerekiyor. Gerçek uyumsuz şema onarımı bu gate’in çözdüğü iddia edilmiyor.
+
 ## Devam sırası
 
 1. #211 EPG yanıt/yaşam döngüsü ve viewport düzeltmeleri reviewer + iOS/tvOS compile-only build ile tamamlandı; görev çıktıları temizlendi.

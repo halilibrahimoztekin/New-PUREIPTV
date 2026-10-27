@@ -460,11 +460,25 @@ actor DownloadManager {
 
         let fileManager = FileManager.default
         var createdDestinationURL: URL?
+        let modelContainer: ModelContainer
+        do {
+            modelContainer = try SharedDatabaseConfig.shared
+        } catch {
+            // The media is already downloaded. Keep its owned staging file so
+            // the failed-download entry can expose it for explicit cleanup.
+            failDownload(
+                id: id,
+                taskIdentifier: taskIdentifier,
+                artifactURLs: [stagedFileURL]
+            )
+            return
+        }
+
         do {
             guard let destinationURL = canonicalDownloadDestinationURL(id: id) else {
                 throw DownloadStorageError.invalidPath
             }
-            let context = ModelContext(SharedDatabaseConfig.shared)
+            let context = ModelContext(modelContainer)
             let descriptor = FetchDescriptor<OfflineMedia>(predicate: #Predicate { $0.id == id })
             let existingRecords = try context.fetch(descriptor)
             if fileManager.fileExists(atPath: destinationURL.path) {
@@ -569,7 +583,7 @@ actor DownloadManager {
     }
 
     func getDownloadedMedia() throws -> [OfflineMediaSnapshot] {
-        let context = ModelContext(SharedDatabaseConfig.shared)
+        let context = ModelContext(try SharedDatabaseConfig.shared)
         let descriptor = FetchDescriptor<OfflineMedia>(sortBy: [SortDescriptor(\.downloadedAt, order: .reverse)])
         let records = try context.fetch(descriptor)
         var items: [String: OfflineMediaSnapshot] = [:]
@@ -590,7 +604,7 @@ actor DownloadManager {
         guard tasks[id] == nil, activeDownloads[id] == nil, !queuedDownloadIDs.contains(id) else {
             throw DownloadStorageError.activeDownload
         }
-        let context = ModelContext(SharedDatabaseConfig.shared)
+        let context = ModelContext(try SharedDatabaseConfig.shared)
         let descriptor = FetchDescriptor<OfflineMedia>(predicate: #Predicate { $0.id == id })
         let records = try context.fetch(descriptor)
         guard !records.isEmpty else { return }
@@ -617,7 +631,7 @@ actor DownloadManager {
             .union(queuedDownloadIDs)
             .union(activeDownloads.keys)
             .union(restoredActiveDownloads.map(\.id))
-        let context = ModelContext(SharedDatabaseConfig.shared)
+        let context = ModelContext(try SharedDatabaseConfig.shared)
         let records = try context.fetch(FetchDescriptor<OfflineMedia>())
         var removedCount = 0
         var bytesFreed: Int64 = 0

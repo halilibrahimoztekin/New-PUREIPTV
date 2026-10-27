@@ -109,11 +109,10 @@
                     .padding(.top, 20)
                 }
             }
-            .task {
-                // Navigation can mount this view while the store is processing a route action.
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-                await store.send(.onAppear).finish()
+            .onChange(of: store.profiles.count) { _, _ in
+                newProfileName = ""
+                newProfileIsKids = false
+                newProfileAvatar = ProfileAvatarCatalog.adultDefault
             }
             .sheet(isPresented: $store.showingAddProfile) {
                 NavigationStack {
@@ -176,9 +175,6 @@
                                     isKidsMode: newProfileIsKids,
                                     avatarIcon: newProfileAvatar
                                 ))
-                                newProfileName = ""
-                                newProfileIsKids = false
-                                newProfileAvatar = ProfileAvatarCatalog.adultDefault
                             }
                             .disabled(newProfileName.isEmpty)
                         }

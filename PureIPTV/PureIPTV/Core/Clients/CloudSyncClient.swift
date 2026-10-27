@@ -166,7 +166,6 @@ extension CloudSyncClient: DependencyKey {
     public static let liveValue: CloudSyncClient = {
         let store = NSUbiquitousKeyValueStore.default
         let defaults = UserDefaults.standard
-        let modelContainer = SharedDatabaseConfig.shared
 
         let localHiddenChannelsKey = "com.pureiptv.hiddenChannelsMetadata"
         let localCategoriesKey = "com.pureiptv.blacklistedCategoriesMetadata"
@@ -226,7 +225,7 @@ extension CloudSyncClient: DependencyKey {
             store.synchronize()
         }
 
-        @Sendable func mergeRemoteFavoritesIntoDatabase(remote: [FavoriteSyncDTO]) async -> Int {
+        @Sendable func mergeRemoteFavoritesIntoDatabase(remote: [FavoriteSyncDTO], modelContainer: ModelContainer) async throws -> Int {
             guard !remote.isEmpty else { return 0 }
             let context = ModelContext(modelContainer)
             var merged = 0
@@ -238,7 +237,7 @@ extension CloudSyncClient: DependencyKey {
                 let descriptor = FetchDescriptor<FavoriteItem>(
                     predicate: #Predicate { $0.id == id && $0.type == type && $0.profileID == profileID }
                 )
-                if let local = try? context.fetch(descriptor).first(where: { $0.playlistID == dto.playlistID }) {
+                if let local = try context.fetch(descriptor).first(where: { $0.playlistID == dto.playlistID }) {
                     // Preserve timestamped soft-deletes even when addedAt is unchanged.
                     if favoriteSyncWins(dto, over: FavoriteSyncDTO(from: local)) {
                         local.title = dto.title
@@ -258,7 +257,7 @@ extension CloudSyncClient: DependencyKey {
             }
 
             if merged > 0 {
-                try? context.save()
+                try context.save()
                 await MainActor.run {
                     NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
                 }
@@ -343,15 +342,18 @@ extension CloudSyncClient: DependencyKey {
                 )
             }
 
+            // Open persistence before touching either cloud or local sync state.
+            let modelContainer = try SharedDatabaseConfig.shared
+
             store.synchronize()
 
             // 1. Pull & Merge Remote Favorites
             let remoteFavorites = pullRemoteFavorites()
-            _ = await mergeRemoteFavoritesIntoDatabase(remote: remoteFavorites)
+            _ = try await mergeRemoteFavoritesIntoDatabase(remote: remoteFavorites, modelContainer: modelContainer)
 
             // 2. Read all local favorites and push union to cloud
             let context = ModelContext(modelContainer)
-            let localFavorites = (try? context.fetch(FetchDescriptor<FavoriteItem>())) ?? []
+            let localFavorites = try context.fetch(FetchDescriptor<FavoriteItem>())
             func identity(_ dto: FavoriteSyncDTO) -> String {
                 "\(dto.profileID?.uuidString ?? "legacy")|\(dto.type)|\(dto.playlistID?.uuidString ?? "")|\(dto.id)"
             }
@@ -411,7 +413,7 @@ extension CloudSyncClient: DependencyKey {
             pushLocalHiddenItems(mergedHidden)
 
             // 5. Watch Progress Sync
-            let watchMerged = await (try? WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()) ?? 0
+            let watchMerged = try await WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()
 
             let now = Date()
             defaults.set(now.timeIntervalSince1970, forKey: lastSyncKey)

@@ -202,28 +202,27 @@ private func watchHistory(in context: ModelContext, profileID: UUID?) throws -> 
 extension DatabaseClient: DependencyKey {
     public static let liveValue: DatabaseClient = {
         // SwiftData Context Setup - Use shared container
-        let modelContainer = SharedDatabaseConfig.shared
         let profileContextClient = ProfileContextClient.liveValue
 
         return DatabaseClient(
             fetchFavorites: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID)
             },
             fetchFavoritesByType: { type, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID, type: type)
             },
             isFavorite: { id, type, playlistID, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID, type: type).contains { $0.id == id && $0.playlistID == playlistID }
             },
             toggleFavorite: { item, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let id = item.id
                 let type = item.type
                 let descriptor = FetchDescriptor<FavoriteItem>(predicate: #Predicate {
@@ -269,13 +268,13 @@ extension DatabaseClient: DependencyKey {
                     items,
                     isFavorite: isFavorite,
                     scope: scope,
-                    modelContainer: modelContainer,
+                    modelContainer: try SharedDatabaseConfig.shared,
                     profileContextClient: profileContextClient
                 )
             },
             fetchWatchHistory: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let allItems = try watchHistory(in: context, profileID: profileID)
                 var seenSeriesIDs = Set<String>()
                 var deduplicatedItems: [WatchHistoryItem] = []
@@ -295,14 +294,14 @@ extension DatabaseClient: DependencyKey {
                 return deduplicatedItems
             },
             fetchEpisodeWatchHistory: { scope in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).filter {
                     $0.type.caseInsensitiveCompare("episode") == .orderedSame
                 }
             },
             saveWatchProgress: { item, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let id = item.id
                 let type = item.type
                 let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
@@ -350,7 +349,7 @@ extension DatabaseClient: DependencyKey {
             },
             deleteWatchProgress: { id, type, playlistID, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
                     $0.id == id && $0.type == type && $0.profileID == profileID
                 })
@@ -372,7 +371,7 @@ extension DatabaseClient: DependencyKey {
             },
             clearWatchHistory: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let existing = try watchHistory(in: context, profileID: profileID)
                 let deletionDate = Date()
                 for item in existing {
@@ -388,23 +387,23 @@ extension DatabaseClient: DependencyKey {
                 NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
             },
             getWatchProgress: { id, type, playlistID, scope in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).first { $0.id == id && $0.type == type && $0.playlistID == playlistID }
             },
             getSeriesWatchProgress: { seriesID, playlistID, scope in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).first {
                     $0.seriesID == seriesID && $0.type == "episode" && $0.playlistID == playlistID
                 }
             },
             fetchSeriesEpisodesWatchHistory: { seriesID, playlistID, scope in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).filter {
                     $0.seriesID == seriesID && $0.type == "episode" && $0.playlistID == playlistID
                 }
             },
             fetchCategoryPreferences: { type in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<CategoryPreference>(
                     predicate: #Predicate { $0.type == type },
                     sortBy: [SortDescriptor(\.orderIndex)]
@@ -422,7 +421,7 @@ extension DatabaseClient: DependencyKey {
                 }
             },
             saveCategoryPreferences: { preferences in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 for pref in preferences {
                     let id = pref.id
                     let descriptor = FetchDescriptor<CategoryPreference>(
@@ -447,12 +446,12 @@ extension DatabaseClient: DependencyKey {
                 try context.save()
             },
             fetchSearchHistory: {
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
                 return try context.fetch(descriptor)
             },
             saveSearchHistory: { query in
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<SearchHistoryItem>(predicate: #Predicate { $0.query == query })
                 let existing = try context.fetch(descriptor)
 
@@ -475,7 +474,7 @@ extension DatabaseClient: DependencyKey {
                 try context.save()
             },
             clearSearchHistory: {
-                let context = ModelContext(modelContainer)
+                let context = ModelContext(try SharedDatabaseConfig.shared)
                 try context.delete(model: SearchHistoryItem.self)
                 try context.save()
             }

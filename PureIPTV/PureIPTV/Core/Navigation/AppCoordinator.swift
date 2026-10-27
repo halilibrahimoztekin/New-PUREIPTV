@@ -31,6 +31,7 @@ public struct AppCoordinator {
         public var miniPlayer: PlayerFeature.State?
         public var isPlayerMini: Bool = false
 
+        public var isStartupPlaylistReadFailed = false
         public var isPremium: Bool = false
         public var activeStreamHandoffRequestID: UUID?
         public var isStreamHandoffErrorPresented = false
@@ -133,7 +134,15 @@ public struct AppCoordinator {
 
         // ── Proceed To App ───────────────────────────────────────
         case .proceedToApp:
-            let activePlaylist = playlistRepository.getActivePlaylist()
+            let activePlaylist: SavedPlaylist?
+            switch playlistRepository.readActivePlaylist() {
+            case let .loaded(playlist):
+                activePlaylist = playlist
+                state.isStartupPlaylistReadFailed = false
+            case .failed:
+                state.isStartupPlaylistReadFailed = true
+                return .none
+            }
             if let activePlaylist,
                parentalControlClient.isPlaylistLocked(activePlaylist.id),
                !state.unlockedPlaylistIDs.contains(activePlaylist.id)
@@ -157,7 +166,10 @@ public struct AppCoordinator {
 
         // ── Profile Selection ────────────────────────────────────
         case .router(.routeAction(_, .profileSelection(.delegate(.didSelectProfile)))):
-            let activePlaylist = playlistRepository.getActivePlaylist()
+            guard case let .loaded(activePlaylist) = playlistRepository.readActivePlaylist() else {
+                state.isStartupPlaylistReadFailed = true
+                return .none
+            }
             guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
 
             withAnimation(.easeInOut(duration: 0.35)) {
@@ -169,7 +181,11 @@ public struct AppCoordinator {
             state.unlockedPlaylistIDs.insert(id)
             state.miniPlayer = nil
             state.isPlayerMini = false
-            guard let playlist = playlistRepository.getActivePlaylist(), let config = playlist.toPlaylistConfig() else { return .none }
+            guard case let .loaded(activePlaylist) = playlistRepository.readActivePlaylist() else {
+                state.isStartupPlaylistReadFailed = true
+                return .none
+            }
+            guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
             state.routes = [.root(.home(HomeFeature.State(config: config)), withNavigation: true)]
             return .send(.checkSubscriptionStatus)
 
@@ -919,6 +935,38 @@ public struct AppCoordinatorView: View {
     }
 
     public var body: some View {
+        Group {
+            if store.isStartupPlaylistReadFailed {
+                playlistRecoveryContent
+            } else {
+                routerContent
+            }
+        }
+    }
+
+    private var playlistRecoveryContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Image(systemName: "lock.icloud")
+                    .font(.largeTitle)
+                    .accessibilityHidden(true)
+                Text(AppStrings.Startup.playlistUnavailableTitle)
+                    .font(.title.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Text(AppStrings.Startup.playlistUnavailableMessage)
+                    .font(.body)
+                Button(AppStrings.Common.retry) { store.send(.proceedToApp) }
+                    .buttonStyle(.borderedProminent)
+                    .frame(minHeight: 48)
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 900)
+            .padding(48)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var routerContent: some View {
         TCARouter(store.scope(state: \.routes, action: \.router)) { screen in
             switch screen.case {
             case let .splash(store):

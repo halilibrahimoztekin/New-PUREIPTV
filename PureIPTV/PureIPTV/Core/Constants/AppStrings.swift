@@ -57,6 +57,19 @@ public enum AppStrings {
         public static let noTagsHint = LiveTV.emptyCategoryLive
     }
 
+    public enum Startup {
+        public static let playlistUnavailableTitle = "Kayıtlı playlist’ler okunamadı".localized
+        public static let playlistUnavailableMessage = "Playlist bilgilerine şu anda erişilemiyor. Kayıtlı playlist’lerinizi silmeden yeniden deneyin.".localized
+        public static let profilesUnavailableTitle = "Profiller yüklenemedi".localized
+        public static let profilesUnavailableMessage = "Kayıtlı profillerinize erişilemiyor. Yeniden deneyin.".localized
+        public static let openingData = "Kaydedilmiş veriler açılıyor…".localized
+        public static let unavailableTitle = "Kaydedilmiş veriler açılamadı".localized
+        public static let unavailableMessage = "PureIPTV başlatılamadı. Verilerinizi silmeden yeniden deneyebilirsiniz. Sorun sürerse uygulamayı güncelledikten sonra tekrar açın.".localized
+        public static func supportCode(_ code: String) -> String {
+            "Destek kodu: %@".localized(code)
+        }
+    }
+
     // MARK: - VOD (Movies)
 
     public enum VOD {
