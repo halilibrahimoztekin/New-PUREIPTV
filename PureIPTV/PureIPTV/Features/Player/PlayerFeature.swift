@@ -159,6 +159,8 @@ public struct PlayerFeature {
         public var playbackEngineError: String?
         public var isControlsVisible: Bool = true
         public var errorMessage: String?
+        public var playbackRecoveryErrorMessage: String?
+        public var playbackPositionRecoveryRequestID: UUID?
         public var isRecording: Bool = false
         public var isRecordingStartPending: Bool = false
         public var isRecordingStopPending: Bool = false
@@ -450,9 +452,15 @@ public struct PlayerFeature {
         }
 
         public var backupStreamItem: PlayableItem? {
-            guard let playlist, !playlist.isEmpty else { return nil }
+            guard item.isLive,
+                  activeCatchupProgram == nil,
+                  let playlistID = item.config?.playlistID,
+                  let playlist,
+                  !playlist.isEmpty
+            else { return nil }
             return playlist.first(where: { candidate in
                 candidate.id != item.id &&
+                    candidate.config?.playlistID == playlistID &&
                     candidate.isLive == item.isLive &&
                     !failedStreamIDs.contains(candidate.id) &&
                     !hiddenChannelIDs.contains(candidate.id) &&
@@ -511,6 +519,8 @@ public struct PlayerFeature {
         case pause
         case stop
         case retryPlayback
+        case switchPlaybackEngineFromError(PlaybackEngine)
+        case playbackPositionRecoveryFinished(PlaybackSeekResult, itemID: String, playbackRequestID: UUID)
         case streamStalled
         case initiateAutoReconnect
         case autoReconnectPulse
@@ -1453,6 +1463,8 @@ public struct PlayerFeature {
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             state.playbackRequestID = UUID()
+            state.playbackRecoveryErrorMessage = nil
+            state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
@@ -1492,10 +1504,19 @@ public struct PlayerFeature {
             state.mediaInfo = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
+            if state.activeVODSeekRequestID != nil {
+                if let previousTime = state.vodSeekPreviousTime {
+                    state.currentTime = previousTime
+                }
+                if let previousPosition = state.vodSeekPreviousPosition {
+                    state.position = previousPosition
+                }
+            }
             state.activeVODSeekRequestID = nil
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
+            state.playbackPositionRecoveryRequestID = nil
             let url = state.activePlaybackURL
             let oldMediaServerProxyURL = state.mediaServerProxyURL
             state.mediaServerProxyURL = nil
@@ -1514,7 +1535,7 @@ public struct PlayerFeature {
                 max(0, min(1, resumeTimeSeconds / durationSeconds))
             } else if state.position > 0 {
                 state.position
-            } else if state.activeCatchupProgram == nil {
+            } else if state.activeCatchupProgram == nil, !state.hasAppliedInitialSeek {
                 state.item.startPosition ?? 0.0
             } else {
                 0.0
@@ -1526,6 +1547,7 @@ public struct PlayerFeature {
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
             let playbackRequestID = state.playbackRequestID
+            state.playbackPositionRecoveryRequestID = shouldRestorePosition && position > 0 ? playbackRequestID : nil
             let categoryID = state.item.categoryID
             let config = state.item.config
             let requiresAuthenticatedMediaServer = config?.type == .plex || config?.type == .emby
@@ -1614,7 +1636,13 @@ public struct PlayerFeature {
                                         await send(.handlePlayerEvent(.encounteredError))
                                         return
                                     }
-                                    try await playerClient.seek(position)
+                                    let seekResult = await playerClient.seekAndConfirm(.position(position))
+                                    try Task.checkCancellation()
+                                    await send(.playbackPositionRecoveryFinished(
+                                        seekResult,
+                                        itemID: itemID,
+                                        playbackRequestID: playbackRequestID
+                                    ))
                                 }
                                 if currentRate != 1.0 {
                                     try? await playerClient.setPlaybackRate(currentRate)
@@ -1631,6 +1659,48 @@ public struct PlayerFeature {
                 .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
             )
 
+        case let .switchPlaybackEngineFromError(target):
+            guard let errorMessage = state.errorMessage,
+                  state.canSwitchPlaybackEngine,
+                  !state.isSwitchingPlaybackEngine,
+                  target != state.playbackEngine
+            else { return .none }
+            state.playbackRecoveryErrorMessage = errorMessage
+            state.errorMessage = nil
+            state.isReconnecting = true
+            return .send(.switchPlaybackEngine(target))
+
+        case let .playbackPositionRecoveryFinished(result, itemID, playbackRequestID):
+            guard state.item.id == itemID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.playbackPositionRecoveryRequestID == playbackRequestID
+            else { return .none }
+            state.playbackPositionRecoveryRequestID = nil
+            let timeSeconds = result.currentTime.map { time in
+                Double(time.components.seconds) + Double(time.components.attoseconds) / 1_000_000_000_000_000_000
+            }
+            let durationSeconds = Double(state.totalTime.components.seconds)
+                + Double(state.totalTime.components.attoseconds) / 1_000_000_000_000_000_000
+            let position = result.position ?? timeSeconds.flatMap { time in
+                durationSeconds.isFinite && durationSeconds > 0 ? time / durationSeconds : nil
+            }
+            let didRestorePosition = (result.status == .settled || result.status == .inaccurate)
+                && timeSeconds?.isFinite == true
+                && (timeSeconds ?? -1) >= 0
+                && position?.isFinite == true
+                && (position ?? -1) >= 0
+                && (position ?? 2) <= 1
+            state.isReconnecting = false
+            guard didRestorePosition, let currentTime = result.currentTime, let position else {
+                return .send(.showGestureFeedback(AppStrings.Player.playbackPositionNotRestored))
+            }
+            state.currentTime = currentTime
+            state.position = position
+            let feedback = result.status == .settled
+                ? AppStrings.Player.playbackPositionRestored
+                : AppStrings.Player.playbackPositionRestoredApproximately
+            return .send(.showGestureFeedback(feedback))
+
         case .streamStalled:
             guard !state.isUserPaused, !state.isMinimized else { return .none }
             if state.playerState == .buffering || state.playerState == .opening {
@@ -1643,6 +1713,7 @@ public struct PlayerFeature {
 
             // If within retry limit for current item, attempt retry with progressive jittered exponential backoff
             if state.retryCount < state.maxReconnectAttempts {
+                state.playbackPositionRecoveryRequestID = nil
                 state.retryCount += 1
                 state.isReconnecting = true
                 state.isFallbackSwitching = false
@@ -1684,6 +1755,8 @@ public struct PlayerFeature {
                     // No alternate backup sources available in playlist
                     state.isReconnecting = false
                     state.isFallbackSwitching = false
+                    state.fallbackStreamName = nil
+                    state.playbackPositionRecoveryRequestID = nil
                     state.errorMessage = AppStrings.Errors.cannotPlayStream
 
                     // For live streams, schedule silent background pulse (every 12 seconds)
@@ -2800,6 +2873,8 @@ public struct PlayerFeature {
             let shouldStopRecording = state.isRecording || state.isRecordingStartPending
             let currentItem = state.item
             let oldMediaServerProxyURL = state.mediaServerProxyURL
+            let isPreservingFallbackStatus = state.isReconnecting && state.isFallbackSwitching
+            let fallbackStreamName = state.fallbackStreamName
             let channelZappingDelay: Int = if
                 !state.isReconnecting,
                 !state.isFallbackSwitching,
@@ -2829,9 +2904,11 @@ public struct PlayerFeature {
             state.streamHealthGenerationID = streamHealthGenerationID
             state.streamHealthMetrics = nil
             state.playbackRequestID = UUID()
+            state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
+            state.playbackRecoveryErrorMessage = nil
             state.activeVODSeekRequestID = nil
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
@@ -2880,9 +2957,9 @@ public struct PlayerFeature {
             state.isZappingHUDVisible = true
             state.isChannelOSDVisible = newItem.isLive
             state.isUserPaused = false
-            state.isReconnecting = false
-            state.isFallbackSwitching = false
-            state.fallbackStreamName = nil
+            state.isReconnecting = isPreservingFallbackStatus
+            state.isFallbackSwitching = isPreservingFallbackStatus
+            state.fallbackStreamName = isPreservingFallbackStatus ? fallbackStreamName : nil
             state.retryCount = 0
             state.errorMessage = nil
             state.isUpNextVisible = false
@@ -3734,7 +3811,9 @@ public struct PlayerFeature {
                 state.playerState = newState
                 if newState == .playing {
                     state.retryCount = 0 // Reset on successful play
-                    state.isReconnecting = false
+                    state.isReconnecting = state.playbackPositionRecoveryRequestID == state.playbackRequestID
+                    state.isFallbackSwitching = false
+                    state.fallbackStreamName = nil
                     state.errorMessage = nil
                     state.failedStreamIDs.removeAll()
                     var actions: [Effect<Action>] = [
@@ -4023,6 +4102,9 @@ public struct PlayerFeature {
             state.mediaInfoRequestID = nil
             let itemID = state.item.id
             let item = state.item
+            let currentTimeComponents = state.currentTime.components
+            let currentPositionSeconds = Double(currentTimeComponents.seconds)
+                + Double(currentTimeComponents.attoseconds) / 1_000_000_000_000_000_000
             let request = PlaybackEngineSwitchRequest(
                 requestID: requestID,
                 target: target,
@@ -4030,8 +4112,10 @@ public struct PlayerFeature {
                 userAgentOverride: item.userAgentOverride,
                 networkCachingMilliseconds: BufferProfile.activeNetworkCachingMilliseconds(for: false),
                 deinterlaceMode: state.isDeinterlaceModeKnown ? state.deinterlaceMode : .automatic,
-                positionSeconds: Double(state.currentTime.components.seconds),
-                isPlaying: state.playerState == .playing || state.playerState == .buffering,
+                positionSeconds: currentPositionSeconds,
+                isPlaying: state.playbackRecoveryErrorMessage != nil
+                    || state.playerState == .playing
+                    || state.playerState == .buffering,
                 playbackRate: state.playbackRate,
                 volume: state.volume,
                 selectedAudioName: state.selectedAudioTrack?.name,
@@ -4058,10 +4142,17 @@ public struct PlayerFeature {
 
         case let .playbackEngineSwitchFinished(engine, deinterlaceMode, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
+            let isErrorRecovery = state.playbackRecoveryErrorMessage != nil
+            state.playbackRecoveryErrorMessage = nil
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             state.playbackEngine = engine
+            if isErrorRecovery {
+                state.errorMessage = nil
+                state.isReconnecting = false
+            }
             state.playbackRequestID = UUID()
+            state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
             state.mediaInfo = nil
             state.firstPresentedFrameLatency = nil
@@ -4094,6 +4185,11 @@ public struct PlayerFeature {
 
         case let .playbackEngineSwitchFailed(message, requestID, itemID):
             guard state.playbackEngineSwitchID == requestID, state.item.id == itemID else { return .none }
+            if let recoveryError = state.playbackRecoveryErrorMessage {
+                state.errorMessage = recoveryError
+                state.isReconnecting = false
+            }
+            state.playbackRecoveryErrorMessage = nil
             state.isSwitchingPlaybackEngine = false
             state.playbackEngineSwitchID = nil
             _ = message
@@ -4137,6 +4233,8 @@ public struct PlayerFeature {
             guard !state.isClosing else { return .none }
             state.isClosing = true
             state.playbackRequestID = UUID()
+            state.playbackRecoveryErrorMessage = nil
+            state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil

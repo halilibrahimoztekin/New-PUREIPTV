@@ -47,7 +47,7 @@ public enum PlayerDiagnosticCategory: Sendable {
         case .connectionLimitExceeded:
             "IPTV paketinizin izin verdiği eşzamanlı cihaz limitine (örn. 1/1 veya 2/2) ulaşılmış olabilir. Diğer cihazlardaki yayını kapatıp tekrar deneyin."
         case .codecOrFormatUnsupported:
-            "Yayın kodlayıcısı mevcut oynatıcı motorunda çözümlenemedi. Harici oynatıcı (VLC/Infuse) ile açmayı deneyebilirsiniz."
+            "Bu yayın biçimi mevcut oynatıcıyla uyumsuz olabilir. Oynatıcı seçimi destekleniyorsa hata kartında diğer yerleşik oynatıcıyı deneyebilirsiniz."
         case let .generic(msg):
             msg
         }
@@ -70,14 +70,31 @@ public struct PlayerFriendlyErrorView: View {
     public let onRetry: () -> Void
     public let onSwitchToBackup: (() -> Void)?
     public let backupChannelName: String?
+    public let onSwitchPlaybackEngine: (() -> Void)?
+    public let playbackEngineTitle: String?
+    public let positionRecoveryHint: String?
     public let onOpenSpeedTest: (() -> Void)?
     public let onDismiss: () -> Void
+
+    @FocusState private var focusedAction: FocusedAction?
+    @AccessibilityFocusState private var accessibilityFocusedAction: FocusedAction?
+
+    private enum FocusedAction: Hashable {
+        case retry
+        case backup
+        case playbackEngine
+        case speedTest
+        case dismiss
+    }
 
     public init(
         errorMessage: String,
         onRetry: @escaping () -> Void,
         onSwitchToBackup: (() -> Void)? = nil,
         backupChannelName: String? = nil,
+        onSwitchPlaybackEngine: (() -> Void)? = nil,
+        playbackEngineTitle: String? = nil,
+        positionRecoveryHint: String? = nil,
         onOpenSpeedTest: (() -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
@@ -85,8 +102,19 @@ public struct PlayerFriendlyErrorView: View {
         self.onRetry = onRetry
         self.onSwitchToBackup = onSwitchToBackup
         self.backupChannelName = backupChannelName
+        self.onSwitchPlaybackEngine = onSwitchPlaybackEngine
+        self.playbackEngineTitle = playbackEngineTitle
+        self.positionRecoveryHint = positionRecoveryHint
         self.onOpenSpeedTest = onOpenSpeedTest
         self.onDismiss = onDismiss
+    }
+
+    private var maximumCardWidth: CGFloat {
+        #if os(tvOS)
+            620
+        #else
+            440
+        #endif
     }
 
     public var body: some View {
@@ -113,15 +141,68 @@ public struct PlayerFriendlyErrorView: View {
                     .padding(.horizontal, 8)
             }
 
-            // Action Buttons
             VStack(spacing: 10) {
+                Button(action: onRetry) {
+                    VStack(spacing: 3) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise")
+                            Text(AppStrings.Player.retrySameStream)
+                                .fontWeight(.semibold)
+                        }
+                        if let positionRecoveryHint {
+                            Text(positionRecoveryHint)
+                                .font(.caption)
+                                .fontWeight(.regular)
+                                .foregroundStyle(.white.opacity(0.84))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .font(.body)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(hex: "#0A84FF"))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(PlayerErrorActionButtonStyle())
+                .focused($focusedAction, equals: .retry)
+                .accessibilityFocused($accessibilityFocusedAction, equals: .retry)
+                .accessibilityHint(positionRecoveryHint ?? AppStrings.Player.retrySameStreamHint)
+
+                if let onSwitchPlaybackEngine, let playbackEngineTitle {
+                    Button(action: onSwitchPlaybackEngine) {
+                        VStack(spacing: 3) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "cpu")
+                                Text(playbackEngineTitle)
+                                    .fontWeight(.semibold)
+                            }
+                            if let positionRecoveryHint {
+                                Text(positionRecoveryHint)
+                                    .font(.caption)
+                                    .fontWeight(.regular)
+                                    .foregroundStyle(.white.opacity(0.84))
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .font(.body)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.14))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(PlayerErrorActionButtonStyle())
+                    .focused($focusedAction, equals: .playbackEngine)
+                    .accessibilityFocused($accessibilityFocusedAction, equals: .playbackEngine)
+                    .accessibilityHint(positionRecoveryHint ?? AppStrings.Player.tryOtherPlaybackEngineHint)
+                }
+
                 if let onSwitchToBackup {
-                    Button {
-                        onSwitchToBackup()
-                    } label: {
+                    Button(action: onSwitchToBackup) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.triangle.swap")
-                            Text(backupChannelName != nil ? "\(AppStrings.Player.switchToBackup) (\(backupChannelName!))" : AppStrings.Player.switchToBackup)
+                            Text(backupChannelName.map { "\(AppStrings.Player.switchToBackup) (\($0))" } ?? AppStrings.Player.switchToBackup)
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -130,24 +211,11 @@ public struct PlayerFriendlyErrorView: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PlayerErrorActionButtonStyle())
+                    .focused($focusedAction, equals: .backup)
+                    .accessibilityFocused($accessibilityFocusedAction, equals: .backup)
+                    .accessibilityHint(AppStrings.Player.backupLiveSourceHint)
                 }
-
-                Button {
-                    onRetry()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Yeniden Bağlan")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
 
                 if let onOpenSpeedTest {
                     Button {
@@ -164,7 +232,10 @@ public struct PlayerFriendlyErrorView: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PlayerErrorActionButtonStyle())
+                    .focused($focusedAction, equals: .speedTest)
+                    .accessibilityFocused($accessibilityFocusedAction, equals: .speedTest)
+                    .accessibilityHint(AppStrings.Player.serverSpeedTestHint)
                 }
 
                 Button {
@@ -175,7 +246,10 @@ public struct PlayerFriendlyErrorView: View {
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PlayerErrorActionButtonStyle())
+                .focused($focusedAction, equals: .dismiss)
+                .accessibilityFocused($accessibilityFocusedAction, equals: .dismiss)
+                .accessibilityHint(AppStrings.Player.closePlayerHint)
             }
             .padding(.top, 6)
         }
@@ -188,7 +262,38 @@ public struct PlayerFriendlyErrorView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .frame(maxWidth: 440)
+        .frame(maxWidth: maximumCardWidth)
         .shadow(color: Color.black.opacity(0.6), radius: 16, y: 8)
+        .accessibilityAddTraits(.isModal)
+        .onAppear {
+            focusedAction = .retry
+            accessibilityFocusedAction = .retry
+        }
+    }
+}
+
+private struct PlayerErrorActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        FocusableButton(configuration: configuration)
+    }
+
+    private struct FocusableButton: View {
+        @Environment(\.isFocused) private var isFocused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        let configuration: ButtonStyle.Configuration
+
+        var body: some View {
+            configuration.label
+                .overlay {
+                    Capsule()
+                        .strokeBorder(isFocused ? Color.white : .clear, lineWidth: 3)
+                        .padding(2)
+                }
+                .scaleEffect(configuration.isPressed ? 0.98 : (isFocused && !reduceMotion ? 1.035 : 1))
+                .shadow(color: isFocused ? Color.white.opacity(0.24) : .clear, radius: isFocused ? 10 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isFocused)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        }
     }
 }

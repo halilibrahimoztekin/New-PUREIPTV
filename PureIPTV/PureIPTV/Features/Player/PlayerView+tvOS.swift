@@ -65,6 +65,7 @@
 
                     controllerView(playerWidth: proxy.size.width)
                         .ignoresSafeArea()
+                        .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
 
                     // Buffering Indicator
                     if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil, !store.isReconnecting {
@@ -109,6 +110,14 @@
 
                     // Error Overlay (Madde #89)
                     if let errorMessage = store.errorMessage, !store.isReconnecting {
+                        let alternatePlaybackEngine: PlaybackEngine = store.playbackEngine == .vlc ? .avPlayer : .vlc
+                        let positionRecoveryHint = (!store.item.isLive || store.activeCatchupProgram != nil)
+                            ? AppStrings.Player.playbackPositionMayBeRestored
+                            : nil
+                        Color.black.opacity(0.72)
+                            .ignoresSafeArea()
+                            .accessibilityHidden(true)
+
                         PlayerFriendlyErrorView(
                             errorMessage: errorMessage,
                             onRetry: {
@@ -118,6 +127,13 @@
                                 store.send(.switchToBackupStream)
                             } : nil,
                             backupChannelName: store.backupStreamItem?.title,
+                            onSwitchPlaybackEngine: store.canSwitchPlaybackEngine ? {
+                                store.send(.switchPlaybackEngineFromError(alternatePlaybackEngine))
+                            } : nil,
+                            playbackEngineTitle: store.canSwitchPlaybackEngine
+                                ? AppStrings.Player.tryPlaybackEngine(alternatePlaybackEngine.title)
+                                : nil,
+                            positionRecoveryHint: positionRecoveryHint,
                             onOpenSpeedTest: nil,
                             onDismiss: {
                                 store.send(.closeTapped)

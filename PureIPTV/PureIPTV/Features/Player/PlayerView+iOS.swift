@@ -827,6 +827,14 @@
 
                 // Global Error Overlay with Diagnostic Support (Madde #89)
                 if let error = store.errorMessage, !store.isReconnecting {
+                    let alternatePlaybackEngine: PlaybackEngine = store.playbackEngine == .vlc ? .avPlayer : .vlc
+                    let positionRecoveryHint = (!store.item.isLive || store.activeCatchupProgram != nil)
+                        ? AppStrings.Player.playbackPositionMayBeRestored
+                        : nil
+                    Color.black.opacity(0.72)
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
+
                     PlayerFriendlyErrorView(
                         errorMessage: error,
                         onRetry: {
@@ -838,6 +846,14 @@
                             store.send(.switchToBackupStream)
                         } : nil,
                         backupChannelName: store.backupStreamItem?.title,
+                        onSwitchPlaybackEngine: store.canSwitchPlaybackEngine ? {
+                            HapticManager.shared.trigger(.medium)
+                            store.send(.switchPlaybackEngineFromError(alternatePlaybackEngine))
+                        } : nil,
+                        playbackEngineTitle: store.canSwitchPlaybackEngine
+                            ? AppStrings.Player.tryPlaybackEngine(alternatePlaybackEngine.title)
+                            : nil,
+                        positionRecoveryHint: positionRecoveryHint,
                         onOpenSpeedTest: {
                             isShowingSpeedTest = true
                         },

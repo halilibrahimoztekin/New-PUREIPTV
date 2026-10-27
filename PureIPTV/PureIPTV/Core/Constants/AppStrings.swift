@@ -195,6 +195,20 @@ public enum AppStrings {
         public static let deinterlaceUnknown = "Deinterlace durumu doğrulanamadı.".localized
         public static let deinterlaceUnknownShort = "Bilinmiyor".localized
         public static let playbackEngineSwitchFailed = "Oynatma motoru değiştirilemedi.".localized
+        public static let retrySameStream = "Aynı Yayını Yeniden Dene".localized
+        public static let retrySameStreamHint = "Aynı yayın bağlantısı yeniden denenir.".localized
+        public static let tryOtherPlaybackEngineHint = "Yayını diğer yerleşik oynatıcıda açmayı dener.".localized
+        public static let backupLiveSourceHint = "Aynı kanalın kullanılabilir alternatif canlı yayını açılır.".localized
+        public static let serverSpeedTestHint = "Sunucu bağlantı hızını ölçer.".localized
+        public static let closePlayerHint = "Oynatıcıyı kapatır.".localized
+        public static let playbackPositionMayBeRestored = "Mümkünse mevcut oynatma konumundan devam eder.".localized
+        public static let playbackPositionRestored = "Oynatma konumu korundu.".localized
+        public static let playbackPositionRestoredApproximately = "Yakın bir konumdan devam ediliyor.".localized
+        public static let playbackPositionNotRestored = "Oynatma konumu doğrulanamadı.".localized
+        public static func tryPlaybackEngine(_ engine: String) -> String {
+            "%@ ile Dene".localized(engine)
+        }
+
         public static let originalLanguageFilter = "Orijinal Dil".localized
         public static let originalLanguageUnknownHint = "Dili bilinmeyen içerikler gösterilmeye devam eder.".localized
         public static let startRecording = "Kaydı Başlat".localized
