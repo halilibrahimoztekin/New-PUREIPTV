@@ -596,7 +596,7 @@
                     Color.black.ignoresSafeArea()
 
                     VStack(spacing: 0) {
-                        TrailerWebView(videoKey: videoKey)
+                        TrailerPlaybackView(videoKey: videoKey)
                             .aspectRatio(16 / 9, contentMode: .fit)
                             .frame(maxWidth: .infinity)
                             .cornerRadius(12)

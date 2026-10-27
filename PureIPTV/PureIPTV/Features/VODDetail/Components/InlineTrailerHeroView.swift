@@ -12,6 +12,10 @@ public struct InlineTrailerHeroView: View {
     public let onOpenTrailerSheet: () -> Void
 
     @State private var kenBurnsZoom: Bool = false
+    #if os(iOS)
+        @State private var inlineTrailerFailure: TrailerPlaybackFailure?
+        @State private var inlineTrailerRetryAttempt = 0
+    #endif
 
     public init(
         backdropURL: URL?,
@@ -36,10 +40,16 @@ public struct InlineTrailerHeroView: View {
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
             #if os(iOS)
-                if isAutoPlayActive, let key = trailerKey {
+                if isAutoPlayActive, let key = trailerKey, inlineTrailerFailure == nil {
                     // Inline Video Trailer
                     ZStack(alignment: .bottomTrailing) {
-                        TrailerWebView(videoKey: key, isMuted: isMuted, showControls: false)
+                        TrailerWebView(
+                            videoKey: key,
+                            isMuted: isMuted,
+                            showControls: false,
+                            retryAttempt: inlineTrailerRetryAttempt,
+                            onPlaybackFailure: { inlineTrailerFailure = $0 }
+                        )
                             .frame(maxWidth: .infinity)
                             .frame(height: 260)
                             .clipped()
@@ -91,7 +101,17 @@ public struct InlineTrailerHeroView: View {
                     }
                     .transition(.opacity)
                 } else {
-                    staticBackdropView
+                    ZStack {
+                        staticBackdropView
+
+                        if isAutoPlayActive, let inlineTrailerFailure {
+                            TrailerPlaybackFailureOverlay(failure: inlineTrailerFailure) {
+                                self.inlineTrailerFailure = nil
+                                inlineTrailerRetryAttempt += 1
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                    }
                 }
             #else
                 // tvOS Backdrop with Ken Burns Dynamic Zoom
@@ -101,6 +121,18 @@ public struct InlineTrailerHeroView: View {
         .frame(height: 260)
         .clipped()
         .animation(.easeInOut(duration: 0.4), value: isAutoPlayActive)
+        #if os(iOS)
+            .onChange(of: trailerKey) { _, _ in
+                inlineTrailerFailure = nil
+                inlineTrailerRetryAttempt = 0
+            }
+            .onChange(of: isAutoPlayActive) { _, isActive in
+                if isActive {
+                    inlineTrailerFailure = nil
+                    inlineTrailerRetryAttempt = 0
+                }
+            }
+        #endif
     }
 
     private var staticBackdropView: some View {

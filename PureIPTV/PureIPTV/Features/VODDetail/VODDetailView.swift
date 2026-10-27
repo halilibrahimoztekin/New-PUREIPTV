@@ -1034,7 +1034,7 @@ public struct VODDetailView: View {
                     VStack(spacing: 20) {
                         // 16:9 Video Player Frame
                         #if os(iOS)
-                            TrailerWebView(videoKey: videoKey)
+                            TrailerPlaybackView(videoKey: videoKey)
                                 .aspectRatio(16 / 9, contentMode: .fit)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
