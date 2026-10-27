@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8B4DA6AFDC6244379A753249 /* PureIPTVTopShelf.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		8B6B3B8576EF49D88584BCDE /* PureIPTVTopShelfContentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3241A677C77847148BB1CCB7 /* PureIPTVTopShelfContentProvider.swift */; };
+		4A85C31E36B44066AED9BC0F /* TopShelfService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85780DAD7A7645229EC0B87A /* TopShelfService.swift */; };
 		17D57DDEDD937193E18883B6 /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = F8D6AE8C55A98894700C6740 /* Shimmer */; };
 		2BCD5B67B86EBB0D7D5AFB9A /* FactoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1ACC1B7879E41AC566C59AFD /* FactoryKit */; };
 		708AE876E82687A841367079 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 0FFFBBD30FDF80E26C25F72D /* SwiftVLC */; };
@@ -36,9 +39,21 @@
 			remoteGlobalIDString = 8BCF6C743035797400E02EB4;
 			remoteInfo = PureIPTV;
 		};
+		1299454B909041E7A5BCFD3B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BCF6C6D3035797400E02EB4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0A2BCB1670F494BA6A7E799;
+			remoteInfo = PureIPTVTopShelf;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PureIPTVTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3241A677C77847148BB1CCB7 /* PureIPTVTopShelfContentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PureIPTV/Core/Services/PureIPTVTopShelfContentProvider.swift; sourceTree = "<group>"; };
+		85780DAD7A7645229EC0B87A /* TopShelfService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PureIPTV/Core/Services/TopShelfService.swift; sourceTree = "<group>"; };
+		6394CECA439949E29457ACCD /* TopShelfExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = TopShelfExtension-Info.plist; sourceTree = "<group>"; };
+		50F0ECECFBB24E889284A0C4 /* TopShelfExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopShelfExtension.entitlements; sourceTree = "<group>"; };
 		8BCF6C753035797400E02EB4 /* PureIPTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PureIPTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PureIPTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -109,6 +124,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D22F9386CFB64F81AC85D512 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -116,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				8BCF6C773035797400E02EB4 /* PureIPTV */,
+				D4271D1243F24C32BFD3C762 /* Top Shelf Extension */,
 				8BCF6C893035797500E02EB4 /* PureIPTVTests */,
 				8BCF6C933035797500E02EB4 /* PureIPTVUITests */,
 				8BCF6C763035797400E02EB4 /* Products */,
@@ -126,10 +149,22 @@
 			isa = PBXGroup;
 			children = (
 				8BCF6C753035797400E02EB4 /* PureIPTV.app */,
+				C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */,
 				8BCF6C863035797500E02EB4 /* PureIPTVTests.xctest */,
 				8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D4271D1243F24C32BFD3C762 /* Top Shelf Extension */ = {
+			isa = PBXGroup;
+			children = (
+				3241A677C77847148BB1CCB7 /* PureIPTVTopShelfContentProvider.swift */,
+				85780DAD7A7645229EC0B87A /* TopShelfService.swift */,
+				6394CECA439949E29457ACCD /* TopShelfExtension-Info.plist */,
+				50F0ECECFBB24E889284A0C4 /* TopShelfExtension.entitlements */,
+			);
+			name = "Top Shelf Extension";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,10 +178,12 @@
 				8BCF6C713035797400E02EB4 /* Sources */,
 				8BCF6C723035797400E02EB4 /* Frameworks */,
 				8BCF6C733035797400E02EB4 /* Resources */,
+				DAC12E4ADA984D92B948A87F /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2DF4000BC8DB4F15AAC65F9E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8BCF6C773035797400E02EB4 /* PureIPTV */,
@@ -214,6 +251,23 @@
 			productReference = 8BCF6C903035797500E02EB4 /* PureIPTVUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C0A2BCB1670F494BA6A7E799 /* PureIPTVTopShelf */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F89A88FC1EFD405F9C6C502C /* Build configuration list for PBXNativeTarget "PureIPTVTopShelf" */;
+			buildPhases = (
+				763F23B7022F406C9B180A0C /* Sources */,
+				D22F9386CFB64F81AC85D512 /* Frameworks */,
+				3407B8F2A6584731B6E2112F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PureIPTVTopShelf;
+			productName = PureIPTVTopShelf;
+			productReference = C23FB441E2904858A6885CB3 /* PureIPTVTopShelf.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -234,6 +288,9 @@
 					8BCF6C8F3035797500E02EB4 = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = 8BCF6C743035797400E02EB4;
+					};
+					C0A2BCB1670F494BA6A7E799 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -285,6 +342,7 @@
 			projectRoot = "";
 			targets = (
 				8BCF6C743035797400E02EB4 /* PureIPTV */,
+				C0A2BCB1670F494BA6A7E799 /* PureIPTVTopShelf */,
 				8BCF6C853035797500E02EB4 /* PureIPTVTests */,
 				8BCF6C8F3035797500E02EB4 /* PureIPTVUITests */,
 			);
@@ -307,6 +365,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8BCF6C8E3035797500E02EB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3407B8F2A6584731B6E2112F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -359,6 +424,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		763F23B7022F406C9B180A0C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B6B3B8576EF49D88584BCDE /* PureIPTVTopShelfContentProvider.swift in Sources */,
+				4A85C31E36B44066AED9BC0F /* TopShelfService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -372,7 +446,26 @@
 			target = 8BCF6C743035797400E02EB4 /* PureIPTV */;
 			targetProxy = 8BCF6C913035797500E02EB4 /* PBXContainerItemProxy */;
 		};
+		2DF4000BC8DB4F15AAC65F9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0A2BCB1670F494BA6A7E799 /* PureIPTVTopShelf */;
+			targetProxy = 1299454B909041E7A5BCFD3B /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DAC12E4ADA984D92B948A87F /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				8B4DA6AFDC6244379A753249 /* PureIPTVTopShelf.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		8BCF6C9A3035797500E02EB4 /* Debug */ = {
@@ -380,6 +473,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PureIPTV/PureIPTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
@@ -422,6 +516,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PureIPTV/PureIPTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 7N2H5HVDGB;
@@ -686,6 +781,62 @@
 			};
 			name = Release;
 		};
+		DB55C0FDB548471686EC2D20 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TopShelfExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TopShelfExtension-Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 5.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV.TopShelf;
+				PRODUCT_NAME = PureIPTVTopShelf;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "TOPSHELF_EXTENSION $(inherited)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		56C1FAE6A1834912BCC98E94 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = TopShelfExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 7N2H5HVDGB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TopShelfExtension-Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 5.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oztech.PureIPTV.TopShelf;
+				PRODUCT_NAME = PureIPTVTopShelf;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "TOPSHELF_EXTENSION $(inherited)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -721,6 +872,15 @@
 			buildConfigurations = (
 				8BCF6CA23035797500E02EB4 /* Debug */,
 				8BCF6CA33035797500E02EB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F89A88FC1EFD405F9C6C502C /* Build configuration list for PBXNativeTarget "PureIPTVTopShelf" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB55C0FDB548471686EC2D20 /* Debug */,
+				56C1FAE6A1834912BCC98E94 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

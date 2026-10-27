@@ -1,5 +1,8 @@
-import ComposableArchitecture
 import Foundation
+
+#if !TOPSHELF_EXTENSION
+    import ComposableArchitecture
+#endif
 
 #if os(tvOS)
     import TVServices
@@ -27,29 +30,44 @@ public struct TopShelfItemDTO: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let subtitle: String?
+    public let summary: String?
     public let imageURL: String?
+    public let landscapeImageURL: String?
     public let deepLinkURL: String
     public let progress: Double? // 0.0 to 1.0
     public let duration: Double?
+    public let rating: Double?
+    public let creationDate: Date?
+    public let genre: String?
     public let isLive: Bool
 
     public init(
         id: String,
         title: String,
         subtitle: String? = nil,
+        summary: String? = nil,
         imageURL: String? = nil,
+        landscapeImageURL: String? = nil,
         deepLinkURL: String,
         progress: Double? = nil,
         duration: Double? = nil,
+        rating: Double? = nil,
+        creationDate: Date? = nil,
+        genre: String? = nil,
         isLive: Bool = false
     ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
+        self.summary = summary
         self.imageURL = imageURL
+        self.landscapeImageURL = landscapeImageURL
         self.deepLinkURL = deepLinkURL
         self.progress = progress
         self.duration = duration
+        self.rating = rating
+        self.creationDate = creationDate
+        self.genre = genre
         self.isLive = isLive
     }
 }
@@ -99,13 +117,14 @@ public final class TopShelfService: @unchecked Sendable {
 
     private init() {}
 
-    private var sharedDefaults: UserDefaults {
-        UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
+    private var sharedDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupID)
     }
 
     public var preferredStyle: TopShelfStyle {
         get {
-            guard let raw = sharedDefaults.string(forKey: topShelfStyleKey),
+            guard let sharedDefaults,
+                  let raw = sharedDefaults.string(forKey: topShelfStyleKey),
                   let style = TopShelfStyle(rawValue: raw)
             else {
                 return .sectioned
@@ -113,23 +132,21 @@ public final class TopShelfService: @unchecked Sendable {
             return style
         }
         set {
+            guard let sharedDefaults, preferredStyle != newValue else { return }
             sharedDefaults.set(newValue.rawValue, forKey: topShelfStyleKey)
-            // Also update the payload's style if payload exists
-            if var payload = loadTopShelfData() {
-                payload = TopShelfDataDTO(
+            if let payload = loadTopShelfData(), payload.preferredStyle != newValue {
+                let updatedPayload = TopShelfDataDTO(
                     continueWatching: payload.continueWatching,
                     favoriteChannels: payload.favoriteChannels,
                     recentMovies: payload.recentMovies,
                     preferredStyle: newValue,
                     updatedAt: .now
                 )
-                if let encoded = try? JSONEncoder().encode(payload) {
+                if let encoded = try? JSONEncoder().encode(updatedPayload) {
                     sharedDefaults.set(encoded, forKey: topShelfKey)
                 }
+                notifyContentDidChange()
             }
-            #if os(tvOS)
-                NotificationCenter.default.post(name: .TVTopShelfItemsDidChange, object: nil)
-            #endif
         }
     }
 
@@ -140,7 +157,17 @@ public final class TopShelfService: @unchecked Sendable {
         recentMovies: [TopShelfItemDTO],
         style: TopShelfStyle? = nil
     ) {
+        guard let sharedDefaults else { return }
         let currentStyle = style ?? preferredStyle
+        if let currentPayload = loadTopShelfData(),
+           currentPayload.continueWatching == continueWatching,
+           currentPayload.favoriteChannels == favoriteChannels,
+           currentPayload.recentMovies == recentMovies,
+           currentPayload.preferredStyle == currentStyle
+        {
+            return
+        }
+
         let payload = TopShelfDataDTO(
             continueWatching: continueWatching,
             favoriteChannels: favoriteChannels,
@@ -149,19 +176,22 @@ public final class TopShelfService: @unchecked Sendable {
             updatedAt: .now
         )
 
-        if let encoded = try? JSONEncoder().encode(payload) {
-            sharedDefaults.set(encoded, forKey: topShelfKey)
-        }
-
-        #if os(tvOS)
-            NotificationCenter.default.post(name: .TVTopShelfItemsDidChange, object: nil)
-        #endif
+        guard let encoded = try? JSONEncoder().encode(payload) else { return }
+        sharedDefaults.set(encoded, forKey: topShelfKey)
+        notifyContentDidChange()
     }
 
     /// Kaydedilen verileri okur
     public func loadTopShelfData() -> TopShelfDataDTO? {
+        guard let sharedDefaults else { return nil }
         guard let data = sharedDefaults.data(forKey: topShelfKey) else { return nil }
         return try? JSONDecoder().decode(TopShelfDataDTO.self, from: data)
+    }
+
+    private func notifyContentDidChange() {
+        #if os(tvOS)
+            TVTopShelfContentProvider.topShelfContentDidChange()
+        #endif
     }
 
     /// Deep Link URL üretici
@@ -193,49 +223,52 @@ public final class TopShelfService: @unchecked Sendable {
     }
 }
 
-// MARK: - TopShelfClient (TCA)
+#if !TOPSHELF_EXTENSION
 
-@DependencyClient
-public struct TopShelfClient: Sendable {
-    public var updateTopShelfData: @Sendable (
-        _ continueWatching: [TopShelfItemDTO],
-        _ favoriteChannels: [TopShelfItemDTO],
-        _ recentMovies: [TopShelfItemDTO]
-    ) -> Void
-    public var loadTopShelfData: @Sendable () -> TopShelfDataDTO? = { nil }
-    public var getPreferredStyle: @Sendable () -> TopShelfStyle = { .sectioned }
-    public var setPreferredStyle: @Sendable (_ style: TopShelfStyle) -> Void
-}
+    // MARK: - TopShelfClient (TCA)
 
-extension TopShelfClient: DependencyKey {
-    public static let liveValue: TopShelfClient = {
-        let service = TopShelfService.shared
-        return TopShelfClient(
-            updateTopShelfData: { continueWatching, favoriteChannels, recentMovies in
-                service.updateTopShelfData(
-                    continueWatching: continueWatching,
-                    favoriteChannels: favoriteChannels,
-                    recentMovies: recentMovies
-                )
-            },
-            loadTopShelfData: {
-                service.loadTopShelfData()
-            },
-            getPreferredStyle: {
-                service.preferredStyle
-            },
-            setPreferredStyle: { style in
-                service.preferredStyle = style
-            }
-        )
-    }()
-
-    public static let testValue = TopShelfClient()
-}
-
-public extension DependencyValues {
-    var topShelfClient: TopShelfClient {
-        get { self[TopShelfClient.self] }
-        set { self[TopShelfClient.self] = newValue }
+    @DependencyClient
+    public struct TopShelfClient: Sendable {
+        public var updateTopShelfData: @Sendable (
+            _ continueWatching: [TopShelfItemDTO],
+            _ favoriteChannels: [TopShelfItemDTO],
+            _ recentMovies: [TopShelfItemDTO]
+        ) -> Void
+        public var loadTopShelfData: @Sendable () -> TopShelfDataDTO? = { nil }
+        public var getPreferredStyle: @Sendable () -> TopShelfStyle = { .sectioned }
+        public var setPreferredStyle: @Sendable (_ style: TopShelfStyle) -> Void
     }
-}
+
+    extension TopShelfClient: DependencyKey {
+        public static let liveValue: TopShelfClient = {
+            let service = TopShelfService.shared
+            return TopShelfClient(
+                updateTopShelfData: { continueWatching, favoriteChannels, recentMovies in
+                    service.updateTopShelfData(
+                        continueWatching: continueWatching,
+                        favoriteChannels: favoriteChannels,
+                        recentMovies: recentMovies
+                    )
+                },
+                loadTopShelfData: {
+                    service.loadTopShelfData()
+                },
+                getPreferredStyle: {
+                    service.preferredStyle
+                },
+                setPreferredStyle: { style in
+                    service.preferredStyle = style
+                }
+            )
+        }()
+
+        public static let testValue = TopShelfClient()
+    }
+
+    public extension DependencyValues {
+        var topShelfClient: TopShelfClient {
+            get { self[TopShelfClient.self] }
+            set { self[TopShelfClient.self] = newValue }
+        }
+    }
+#endif

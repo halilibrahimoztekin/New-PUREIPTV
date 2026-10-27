@@ -1566,9 +1566,10 @@ public struct DashboardFeature {
                 startPosition: item.progress
             )
             return TopShelfItemDTO(
-                id: item.id,
+                id: topShelfItemIdentifier(type: item.type, playlistID: item.playlistID, itemID: item.id),
                 title: item.title,
                 subtitle: item.seriesTitle,
+                summary: topShelfContinueSummary(seriesTitle: item.seriesTitle, progress: prog),
                 imageURL: item.coverURL,
                 deepLinkURL: link,
                 progress: prog,
@@ -1586,9 +1587,10 @@ public struct DashboardFeature {
                 coverURL: fav.coverURL
             )
             return TopShelfItemDTO(
-                id: fav.id,
+                id: topShelfItemIdentifier(type: "live", playlistID: fav.playlistID, itemID: fav.id),
                 title: fav.title,
                 subtitle: nil,
+                summary: "Favori TV Kanalı",
                 imageURL: fav.coverURL,
                 deepLinkURL: link,
                 progress: nil,
@@ -1606,13 +1608,17 @@ public struct DashboardFeature {
                 coverURL: vod.coverURL?.absoluteString
             )
             return TopShelfItemDTO(
-                id: vod.id,
+                id: topShelfItemIdentifier(type: "vod", playlistID: vod.playlistID, itemID: vod.id),
                 title: vod.title,
                 subtitle: nil,
+                summary: topShelfMovieSummary(rating: vod.rating, releaseDate: vod.releaseDate, duration: vod.duration),
                 imageURL: vod.coverURL?.absoluteString,
+                landscapeImageURL: nil,
                 deepLinkURL: link,
                 progress: nil,
-                duration: nil,
+                duration: topShelfDuration(from: vod.duration),
+                rating: vod.rating,
+                creationDate: topShelfCreationDate(from: vod.releaseDate),
                 isLive: false
             )
         }
@@ -1622,6 +1628,81 @@ public struct DashboardFeature {
             favoriteChannels: Array(favoriteChannels),
             recentMovies: Array(recentMovies)
         )
+    }
+
+    private nonisolated static func topShelfItemIdentifier(type: String, playlistID: UUID?, itemID: String) -> String {
+        let playlist = playlistID?.uuidString ?? "default"
+        return "\(type):\(playlist):\(itemID)"
+    }
+
+    private nonisolated static func topShelfContinueSummary(seriesTitle: String?, progress: Double?) -> String {
+        var details = ["Kaldığın yerden devam et"]
+        if let seriesTitle, !seriesTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            details.append(seriesTitle)
+        }
+        if let progress, progress.isFinite, progress > 0 {
+            details.append("%\(Int((min(1, progress) * 100).rounded())) izlendi")
+        }
+        return details.joined(separator: " · ")
+    }
+
+    private nonisolated static func topShelfMovieSummary(rating: Double?, releaseDate: String?, duration: String?) -> String? {
+        var details: [String] = []
+        if let year = releaseDate.flatMap(topShelfYear(from:)) {
+            details.append(String(year))
+        }
+        if let rating, rating.isFinite, rating > 0 {
+            details.append("★ \(rating.formatted(.number.precision(.fractionLength(1))))")
+        }
+        if let duration = duration?.trimmingCharacters(in: .whitespacesAndNewlines),
+           topShelfDuration(from: duration) != nil
+        {
+            details.append(duration)
+        }
+        return details.isEmpty ? nil : details.joined(separator: " · ")
+    }
+
+    private nonisolated static func topShelfCreationDate(from value: String?) -> Date? {
+        guard let year = value.flatMap(topShelfYear(from:)) else { return nil }
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.year = year
+        components.month = 1
+        components.day = 1
+        return components.date
+    }
+
+    private nonisolated static func topShelfYear(from value: String) -> Int? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 4,
+              let year = Int(trimmed.prefix(4)),
+              (1900 ... Calendar.current.component(.year, from: .now) + 2).contains(year)
+        else {
+            return nil
+        }
+        return year
+    }
+
+    private nonisolated static func topShelfDuration(from value: String?) -> Double? {
+        guard let value else { return nil }
+        let parts = value.split(whereSeparator: \.isWhitespace)
+        guard !parts.isEmpty else { return nil }
+
+        var seconds = 0.0
+        for part in parts {
+            guard let unit = part.last,
+                  let amount = Double(part.dropLast()), amount.isFinite, amount >= 0
+            else {
+                return nil
+            }
+            switch unit {
+            case "h": seconds += amount * 3600
+            case "m": seconds += amount * 60
+            case "s": seconds += amount
+            default: return nil
+            }
+        }
+        return seconds > 0 ? seconds : nil
     }
 
     private nonisolated static func fetchEPGEvents(

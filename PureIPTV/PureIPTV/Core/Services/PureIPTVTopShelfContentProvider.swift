@@ -45,14 +45,12 @@
             // 1. Devam Eden İçerikler
             for dto in data.continueWatching.prefix(4) {
                 guard let deepLink = URL(string: dto.deepLinkURL) else { continue }
-                let item = TVTopShelfCarouselItem(identifier: dto.id)
+                let item = TVTopShelfCarouselItem(identifier: itemIdentifier(section: "continue", id: dto.id))
                 item.contextTitle = "KALDIĞIN YERDEN İZLE"
                 item.title = dto.title
-                item.summary = dto.subtitle ?? "Kaldığınız yerden izlemeye devam edin."
-                if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                    item.setImageURL(imageURL, for: .screenScale1x)
-                    item.setImageURL(imageURL, for: .screenScale2x)
-                }
+                item.summary = dto.summary ?? dto.subtitle ?? "Kaldığınız yerden izlemeye devam edin."
+                applyMetadata(from: dto, to: item)
+                setImageURLs(on: item, dto: dto, prefersLandscape: true)
                 item.displayAction = TVTopShelfAction(url: deepLink)
                 item.playAction = TVTopShelfAction(url: deepLink)
                 items.append(item)
@@ -61,14 +59,12 @@
             // 2. Yeni Eklenen / Öne Çıkan Filmler
             for dto in data.recentMovies.prefix(4) {
                 guard let deepLink = URL(string: dto.deepLinkURL) else { continue }
-                let item = TVTopShelfCarouselItem(identifier: dto.id)
+                let item = TVTopShelfCarouselItem(identifier: itemIdentifier(section: "recent", id: dto.id))
                 item.contextTitle = "ÖNE ÇIKAN FİLM"
                 item.title = dto.title
-                item.summary = dto.subtitle ?? "PureIPTV Sinema Kütüphanesi"
-                if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                    item.setImageURL(imageURL, for: .screenScale1x)
-                    item.setImageURL(imageURL, for: .screenScale2x)
-                }
+                item.summary = dto.summary ?? dto.subtitle ?? "PureIPTV Sinema Kütüphanesi"
+                applyMetadata(from: dto, to: item)
+                setImageURLs(on: item, dto: dto, prefersLandscape: true)
                 item.displayAction = TVTopShelfAction(url: deepLink)
                 item.playAction = TVTopShelfAction(url: deepLink)
                 items.append(item)
@@ -77,14 +73,12 @@
             // 3. Favori Canlı Kanallar
             for dto in data.favoriteChannels.prefix(4) {
                 guard let deepLink = URL(string: dto.deepLinkURL) else { continue }
-                let item = TVTopShelfCarouselItem(identifier: dto.id)
+                let item = TVTopShelfCarouselItem(identifier: itemIdentifier(section: "favorite", id: dto.id))
                 item.contextTitle = "CANLI YAYIN"
                 item.title = dto.title
-                item.summary = "Favori TV Kanalı"
-                if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                    item.setImageURL(imageURL, for: .screenScale1x)
-                    item.setImageURL(imageURL, for: .screenScale2x)
-                }
+                item.summary = dto.summary ?? "Favori TV Kanalı"
+                applyMetadata(from: dto, to: item)
+                setImageURLs(on: item, dto: dto, prefersLandscape: true)
                 item.displayAction = TVTopShelfAction(url: deepLink)
                 item.playAction = TVTopShelfAction(url: deepLink)
                 items.append(item)
@@ -103,18 +97,15 @@
             if !data.continueWatching.isEmpty {
                 let items: [TVTopShelfSectionedItem] = data.continueWatching.compactMap { (dto: TopShelfItemDTO) -> TVTopShelfSectionedItem? in
                     guard let deepLink = URL(string: dto.deepLinkURL) else { return nil }
-                    let item = TVTopShelfSectionedItem(identifier: dto.id)
+                    let item = TVTopShelfSectionedItem(identifier: itemIdentifier(section: "continue", id: dto.id))
                     if let subtitle = dto.subtitle, !subtitle.isEmpty {
                         item.title = "\(dto.title) - \(subtitle)"
                     } else {
                         item.title = dto.title
                     }
-                    if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                        item.setImageURL(imageURL, for: .screenScale1x)
-                        item.setImageURL(imageURL, for: .screenScale2x)
-                    }
+                    setImageURLs(on: item, dto: dto, prefersLandscape: false)
                     if let progress = dto.progress {
-                        item.playbackProgress = progress
+                        item.playbackProgress = min(1, max(0, progress.isFinite ? progress : 0))
                     }
                     item.imageShape = .poster
                     item.displayAction = TVTopShelfAction(url: deepLink)
@@ -132,12 +123,9 @@
             if !data.favoriteChannels.isEmpty {
                 let items: [TVTopShelfSectionedItem] = data.favoriteChannels.compactMap { (dto: TopShelfItemDTO) -> TVTopShelfSectionedItem? in
                     guard let deepLink = URL(string: dto.deepLinkURL) else { return nil }
-                    let item = TVTopShelfSectionedItem(identifier: dto.id)
+                    let item = TVTopShelfSectionedItem(identifier: itemIdentifier(section: "favorite", id: dto.id))
                     item.title = dto.title
-                    if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                        item.setImageURL(imageURL, for: .screenScale1x)
-                        item.setImageURL(imageURL, for: .screenScale2x)
-                    }
+                    setImageURLs(on: item, dto: dto, prefersLandscape: false)
                     item.imageShape = .hdtv
                     item.displayAction = TVTopShelfAction(url: deepLink)
                     item.playAction = TVTopShelfAction(url: deepLink)
@@ -154,12 +142,9 @@
             if !data.recentMovies.isEmpty {
                 let items: [TVTopShelfSectionedItem] = data.recentMovies.compactMap { (dto: TopShelfItemDTO) -> TVTopShelfSectionedItem? in
                     guard let deepLink = URL(string: dto.deepLinkURL) else { return nil }
-                    let item = TVTopShelfSectionedItem(identifier: dto.id)
+                    let item = TVTopShelfSectionedItem(identifier: itemIdentifier(section: "recent", id: dto.id))
                     item.title = dto.title
-                    if let imageURLStr = dto.imageURL, let imageURL = URL(string: imageURLStr) {
-                        item.setImageURL(imageURL, for: .screenScale1x)
-                        item.setImageURL(imageURL, for: .screenScale2x)
-                    }
+                    setImageURLs(on: item, dto: dto, prefersLandscape: false)
                     item.imageShape = .poster
                     item.displayAction = TVTopShelfAction(url: deepLink)
                     item.playAction = TVTopShelfAction(url: deepLink)
@@ -174,6 +159,52 @@
 
             guard !sections.isEmpty else { return nil }
             return TVTopShelfSectionedContent(sections: sections)
+        }
+
+        private func itemIdentifier(section: String, id: String) -> String {
+            "\(section):\(id)"
+        }
+
+        private func setImageURLs(on item: TVTopShelfItem, dto: TopShelfItemDTO, prefersLandscape: Bool) {
+            let primaryImageURL = validImageURL(dto.imageURL)
+            let landscapeImageURL = validImageURL(dto.landscapeImageURL)
+            let imageURL = prefersLandscape
+                ? landscapeImageURL ?? primaryImageURL
+                : primaryImageURL ?? landscapeImageURL
+            guard let imageURL else { return }
+            item.setImageURL(imageURL, for: .screenScale1x)
+            item.setImageURL(imageURL, for: .screenScale2x)
+        }
+
+        private func validImageURL(_ value: String?) -> URL? {
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+            return URL(string: value)
+        }
+
+        private func applyMetadata(from dto: TopShelfItemDTO, to item: TVTopShelfCarouselItem) {
+            if let duration = dto.duration, duration.isFinite, duration > 0 {
+                item.duration = duration
+            }
+            item.creationDate = dto.creationDate
+            item.genre = dto.genre
+
+            var attributes: [TVTopShelfNamedAttribute] = []
+            if let creationDate = dto.creationDate {
+                let year = Calendar(identifier: .gregorian).component(.year, from: creationDate)
+                if year > 0 {
+                    attributes.append(TVTopShelfNamedAttribute(name: "Yıl", values: [String(year)]))
+                }
+            }
+            if let rating = dto.rating, rating.isFinite, rating > 0 {
+                attributes.append(TVTopShelfNamedAttribute(name: "Puan", values: [rating.formatted(.number.precision(.fractionLength(1)))]))
+            }
+            if let progress = dto.progress, progress.isFinite, progress > 0, progress < 1 {
+                attributes.append(TVTopShelfNamedAttribute(
+                    name: "İzleme",
+                    values: ["%\(Int((progress * 100).rounded())) tamamlandı"]
+                ))
+            }
+            item.namedAttributes = Array(attributes.prefix(4))
         }
     }
 #endif
