@@ -35,8 +35,6 @@ public struct VODFeature {
         public var categoryUnlockProfileScope: ProfileContextSnapshot?
         public var categoryUnlockPlaylistID: UUID?
 
-        @Presents public var parentalLock: ParentalLockFeature.State?
-
         /// Language & Audio Filter
         public var selectedLanguageFilter: MediaLanguageFilter = .all
         public var selectedOriginalLanguageCode: String?
@@ -103,12 +101,13 @@ public struct VODFeature {
         case reloadPreferences
         case applySortIfChanged
         case editCategoriesTapped
-        case parentalLock(PresentationAction<ParentalLockFeature.Action>)
+        case coordinatorParentalLockUnlocked(category: MediaModels.Category?, item: MediaModels.Item?)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case didSelectVOD(MediaModels.Item)
             case presentCategoryManagement(CategoryManagementFeature.State)
+            case presentParentalLock(ParentalLockFeature.State, closeVODDetailsOnExpiry: Bool)
         }
     }
 
@@ -350,8 +349,10 @@ public struct VODFeature {
                 let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
 
                 if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
-                    state.parentalLock = ParentalLockFeature.State(category: category)
-                    return .none
+                    return .send(.delegate(.presentParentalLock(ParentalLockFeature.State(
+                        category: category,
+                        isCoordinatorRoute: true
+                    ), closeVODDetailsOnExpiry: false)))
                 }
 
                 state.isLoadingVODs = false
@@ -484,8 +485,7 @@ public struct VODFeature {
                 }
                 return .none
 
-            case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
-                state.parentalLock = nil
+            case let .coordinatorParentalLockUnlocked(category, item):
                 if let category {
                     let requestID = UUID()
                     let unlockedCategoryID = category.id
@@ -526,31 +526,26 @@ public struct VODFeature {
                 guard state.categoryUnlockRequestIDs[categoryID] == requestID else { return .none }
                 state.categoryUnlockRequestIDs.removeValue(forKey: categoryID)
                 state.unlockedCategoryIDs.remove(categoryID)
+                var expiredCategoryToPresent: MediaModels.Category?
                 if state.selectedCategoryID == categoryID {
                     state.selectedCategoryID = nil
                     state.rebuildDerivedData()
-                    if let category = state.categories.first(where: { $0.id == categoryID }) {
-                        state.parentalLock = ParentalLockFeature.State(category: category)
-                    }
+                    expiredCategoryToPresent = state.categories.first(where: { $0.id == categoryID })
                 }
                 if state.selectedVOD?.categoryID == categoryID {
                     state.selectedVOD = nil
                 }
-                return .none
-
-            case .parentalLock(.presented(.delegate(.didCancel))):
-                state.parentalLock = nil
-                return .none
-
-            case .parentalLock:
+                if let category = expiredCategoryToPresent {
+                    return .send(.delegate(.presentParentalLock(
+                        ParentalLockFeature.State(category: category, isCoordinatorRoute: true),
+                        closeVODDetailsOnExpiry: true
+                    )))
+                }
                 return .none
 
             case .delegate:
                 return .none
             }
-        }
-        .ifLet(\.$parentalLock, action: \.parentalLock) {
-            ParentalLockFeature()
         }
     }
 }

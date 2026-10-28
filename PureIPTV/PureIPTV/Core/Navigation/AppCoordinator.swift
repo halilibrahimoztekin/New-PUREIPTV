@@ -1756,7 +1756,32 @@ public struct AppCoordinator {
                   parentalLockState.presentationID == presentationID
             else { return .none }
             state.routes.dismiss()
-            return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
+            switch parentalLockState.parent {
+            case let .vod(homeRouteIndex, config):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .movies,
+                      homeState.vod.config == config
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.vod(.coordinatorParentalLockUnlocked(category: category, item: item)))
+                )))
+
+            case let .series(homeRouteIndex, config):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == config
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.coordinatorParentalLockUnlocked(category: category, item: item)))
+                )))
+
+            case nil:
+                return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
+            }
 
         case let .router(.routeAction(routeIndex, .smartChannelGroupManagement(.delegate(.close(presentationID))))):
             guard state.routes.indices.contains(routeIndex),
@@ -2108,6 +2133,53 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
             return .send(.presentParentalLock(parentalLockState))
+
+        case let .router(.routeAction(
+            homeRouteIndex,
+            .home(.delegate(.presentVODParentalLock(parentalLockState, closeVODDetailsOnExpiry)))
+        )):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .movies,
+                  let config = homeState.vod.config,
+                  parentalLockState.pendingCategory != nil,
+                  parentalLockState.isCoordinatorRoute
+            else { return .none }
+
+            let categoryID = parentalLockState.pendingCategory?.id
+            let hasMatchingVODDetail = state.routes.indices.contains { routeIndex in
+                guard routeIndex > homeRouteIndex,
+                      case let .vodDetail(detailState) = state.routes[routeIndex].screen
+                else { return false }
+                return detailState.config == config && detailState.vod.categoryID == categoryID
+            }
+            let homeIsTopRoute = homeRouteIndex == state.routes.count - 1
+            guard homeIsTopRoute || (closeVODDetailsOnExpiry && hasMatchingVODDetail) else { return .none }
+
+            if closeVODDetailsOnExpiry, hasMatchingVODDetail {
+                while state.routes.count - 1 > homeRouteIndex {
+                    state.routes.dismiss()
+                }
+            }
+
+            var parentalLockState = parentalLockState
+            parentalLockState.parent = .vod(routeIndex: homeRouteIndex, config: config)
+            state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesParentalLock(parentalLockState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .series,
+                  let config = homeState.series.config,
+                  parentalLockState.pendingCategory != nil,
+                  parentalLockState.isCoordinatorRoute
+            else { return .none }
+            var parentalLockState = parentalLockState
+            parentalLockState.parent = .series(routeIndex: homeRouteIndex, config: config)
+            state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
 
         case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSmartGroupManager)))):
             guard state.routes.indices.contains(homeRouteIndex),

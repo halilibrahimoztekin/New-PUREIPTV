@@ -62,9 +62,6 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
-            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
-                ParentalLockView(store: store)
-            }
         }
 
         private var focusedSeries: MediaModels.Item? {

@@ -5,8 +5,14 @@ import Foundation
 public struct ParentalLockFeature {
     @ObservableState
     public struct State: Equatable {
+        public enum Parent: Equatable {
+            case vod(routeIndex: Int, config: PlaylistConfig)
+            case series(routeIndex: Int, config: PlaylistConfig)
+        }
+
         public let presentationID: UUID
         public let isCoordinatorRoute: Bool
+        public var parent: Parent?
         public var pinInput: String = ""
         public var errorMessage: String?
         public var pendingItem: MediaModels.Item?
@@ -16,10 +22,12 @@ public struct ParentalLockFeature {
             category: MediaModels.Category? = nil,
             item: MediaModels.Item? = nil,
             presentationID: UUID = UUID(),
-            isCoordinatorRoute: Bool = false
+            isCoordinatorRoute: Bool = false,
+            parent: Parent? = nil
         ) {
             self.presentationID = presentationID
             self.isCoordinatorRoute = isCoordinatorRoute
+            self.parent = parent
             pendingCategory = category
             pendingItem = item
         }

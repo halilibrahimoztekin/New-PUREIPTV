@@ -32,8 +32,6 @@ public struct SeriesFeature {
         public private(set) var derivedData = MediaLibraryDerivedData()
         public var unlockedCategoryIDs: Set<String> = []
 
-        @Presents public var parentalLock: ParentalLockFeature.State?
-
         /// Language & Audio Filter
         public var selectedLanguageFilter: MediaLanguageFilter = .all
         public var selectedOriginalLanguageCode: String?
@@ -99,12 +97,13 @@ public struct SeriesFeature {
         case reloadPreferences
         case applySortIfChanged
         case editCategoriesTapped
-        case parentalLock(PresentationAction<ParentalLockFeature.Action>)
+        case coordinatorParentalLockUnlocked(category: MediaModels.Category?, item: MediaModels.Item?)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case didSelectSeries(MediaModels.Item)
             case presentCategoryManagement(CategoryManagementFeature.State)
+            case presentParentalLock(ParentalLockFeature.State)
         }
     }
 
@@ -336,8 +335,10 @@ public struct SeriesFeature {
                 let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
 
                 if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
-                    state.parentalLock = ParentalLockFeature.State(category: category)
-                    return .none
+                    return .send(.delegate(.presentParentalLock(ParentalLockFeature.State(
+                        category: category,
+                        isCoordinatorRoute: true
+                    ))))
                 }
 
                 state.isLoadingSeries = false
@@ -470,8 +471,7 @@ public struct SeriesFeature {
                 }
                 return .none
 
-            case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
-                state.parentalLock = nil
+            case let .coordinatorParentalLockUnlocked(category, item):
                 if let category {
                     state.unlockedCategoryIDs.insert(category.id)
                     state.selectedCategoryID = category.id
@@ -497,19 +497,9 @@ public struct SeriesFeature {
                 }
                 return .none
 
-            case .parentalLock(.presented(.delegate(.didCancel))):
-                state.parentalLock = nil
-                return .none
-
-            case .parentalLock:
-                return .none
-
             case .delegate:
                 return .none
             }
-        }
-        .ifLet(\.$parentalLock, action: \.parentalLock) {
-            ParentalLockFeature()
         }
     }
 }

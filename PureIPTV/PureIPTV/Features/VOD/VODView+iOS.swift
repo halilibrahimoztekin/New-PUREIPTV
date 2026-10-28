@@ -119,10 +119,6 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
-            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
-                ParentalLockView(store: store)
-                    .presentationDetents([.height(300)])
-            }
         }
 
         // MARK: – Category Bar
