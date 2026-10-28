@@ -64,23 +64,6 @@ public struct MultiView: View {
                 }
             }
         #endif
-            .sheet(
-                isPresented: Binding(
-                    get: { store.isSelectingChannelForSlotID != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.channelSelectionDismissed)
-                        }
-                    }
-                )
-            ) {
-                ChannelSelectionSheet(
-                    store: store,
-                    onSelect: { store.send(.channelSelected($0)) },
-                    onDismiss: { store.send(.channelSelectionDismissed) }
-                )
-                .presentationDetents([.medium, .large])
-            }
     }
 
     // MARK: - Top Navigation Bar
@@ -559,8 +542,9 @@ public struct MultiView: View {
 
 // MARK: - Channel Selection Sheet
 
-private struct ChannelSelectionSheet: View {
-    let store: StoreOf<MultiViewFeature>
+struct ChannelSelectionSheet: View {
+    let state: MultiViewFeature.State
+    let send: (MultiViewFeature.Action) -> Void
     let onSelect: (MediaModels.Item) -> Void
     let onDismiss: () -> Void
 
@@ -588,12 +572,12 @@ private struct ChannelSelectionSheet: View {
 
     var filteredChannels: [MediaModels.Item] {
         let items: [MediaModels.Item] = if selectedSeries != nil {
-            store.episodeItems
+            state.episodeItems
         } else {
             switch selectedSource {
-            case .live: store.channels
-            case .movies: store.vodItems
-            case .series: store.seriesItems
+            case .live: state.channels
+            case .movies: state.vodItems
+            case .series: state.seriesItems
             }
         }
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -616,7 +600,7 @@ private struct ChannelSelectionSheet: View {
                     .padding(.horizontal)
                 }
 
-                if store.isLoadingSources || store.isLoadingEpisodes {
+                if state.isLoadingSources || state.isLoadingEpisodes {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -625,7 +609,7 @@ private struct ChannelSelectionSheet: View {
                             if channel.type == .series, channel.streamURL == nil {
                                 selectedSeries = channel
                                 searchText = ""
-                                store.send(.loadEpisodes(channel))
+                                send(.loadEpisodes(channel))
                             } else {
                                 onSelect(channel)
                             }
@@ -662,7 +646,7 @@ private struct ChannelSelectionSheet: View {
                             Button(AppStrings.Common.back) {
                                 selectedSeries = nil
                                 searchText = ""
-                                store.send(.backFromEpisodes)
+                                send(.backFromEpisodes)
                             }
                         }
                     }
@@ -677,7 +661,7 @@ private struct ChannelSelectionSheet: View {
                 .onExitCommand {
                     if selectedSeries != nil {
                         selectedSeries = nil
-                        store.send(.backFromEpisodes)
+                        send(.backFromEpisodes)
                     } else {
                         onDismiss()
                     }

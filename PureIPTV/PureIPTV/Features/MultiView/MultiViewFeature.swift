@@ -134,6 +134,8 @@ public struct MultiViewFeature {
         case delegate(Delegate)
         public enum Delegate: Equatable {
             case close
+            case presentChannelSelection(slotID: Int, presentationID: UUID)
+            case channelSelectionFinished(slotID: Int, presentationID: UUID)
         }
     }
 
@@ -396,18 +398,45 @@ public struct MultiViewFeature {
                 return .none
 
             case let .selectChannelTapped(slotID):
+                guard state.isSelectingChannelForSlotID == nil,
+                      state.slots.contains(where: { $0.id == slotID && $0.item == nil })
+                else { return .none }
                 state.isSelectingChannelForSlotID = slotID
-                return .none
+                return .send(.delegate(.presentChannelSelection(
+                    slotID: slotID,
+                    presentationID: state.presentationID
+                )))
 
             case let .channelSelected(item):
                 guard let slotID = state.isSelectingChannelForSlotID else { return .none }
+                guard let slotIndex = state.slots.firstIndex(where: { $0.id == slotID }),
+                      state.slots[slotIndex].item == nil else {
+                    state.isSelectingChannelForSlotID = nil
+                    state.selectedSeriesID = nil
+                    state.episodeItems = []
+                    state.episodeRequestID = nil
+                    state.isLoadingEpisodes = false
+                    return .merge(
+                        .cancel(id: CancelID.episodes),
+                        .send(.delegate(.channelSelectionFinished(
+                            slotID: slotID,
+                            presentationID: state.presentationID
+                        )))
+                    )
+                }
                 guard item.type != .live || !state.restrictedLiveCategoryIDs.contains(item.categoryID) else {
                     state.isSelectingChannelForSlotID = nil
                     state.selectedSeriesID = nil
                     state.episodeItems = []
                     state.episodeRequestID = nil
                     state.isLoadingEpisodes = false
-                    return .cancel(id: CancelID.episodes)
+                    return .merge(
+                        .cancel(id: CancelID.episodes),
+                        .send(.delegate(.channelSelectionFinished(
+                            slotID: slotID,
+                            presentationID: state.presentationID
+                        )))
+                    )
                 }
                 if item.type != .live,
                    state.loadedSourceProfileScope != profileContextClient.snapshot()
@@ -424,25 +453,29 @@ public struct MultiViewFeature {
                         .send(.onAppear)
                     )
                 }
-                if let index = state.slots.firstIndex(where: { $0.id == slotID }) {
-                    state.slots[index].item = item
-                    state.slots[index].aspectRatioMode = .fit
-                    state.slots[index].instanceID = UUID() // Force new player
+                state.slots[slotIndex].item = item
+                state.slots[slotIndex].aspectRatioMode = .fit
+                state.slots[slotIndex].instanceID = UUID() // Force new player
 
-                    // If no audio is active, make this one active
-                    let hasActiveAudioItem = state.activeAudioSlotID.flatMap { activeID in
-                        state.slots.first(where: { $0.id == activeID })?.item
-                    } != nil
-                    if !hasActiveAudioItem {
-                        state.activeAudioSlotID = slotID
-                    }
+                // If no audio is active, make this one active
+                let hasActiveAudioItem = state.activeAudioSlotID.flatMap { activeID in
+                    state.slots.first(where: { $0.id == activeID })?.item
+                } != nil
+                if !hasActiveAudioItem {
+                    state.activeAudioSlotID = slotID
                 }
                 state.isSelectingChannelForSlotID = nil
                 state.selectedSeriesID = nil
                 state.episodeItems = []
                 state.episodeRequestID = nil
                 state.isLoadingEpisodes = false
-                return .cancel(id: CancelID.episodes)
+                return .merge(
+                    .cancel(id: CancelID.episodes),
+                    .send(.delegate(.channelSelectionFinished(
+                        slotID: slotID,
+                        presentationID: state.presentationID
+                    )))
+                )
 
             case .channelSelectionDismissed:
                 state.isSelectingChannelForSlotID = nil

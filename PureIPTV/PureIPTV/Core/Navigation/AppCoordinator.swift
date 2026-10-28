@@ -94,6 +94,12 @@ public struct AppCoordinator {
         case epgReminderMonitorTick([EPGReminder])
         case epgGuideRouteDidDisappear(UUID)
         case epgTimelineRouteDidDisappear(UUID)
+        case multiViewChannelSelectionRouteDidDisappear(
+            presentationID: UUID,
+            multiViewRouteIndex: Int,
+            multiViewPresentationID: UUID,
+            slotID: Int
+        )
         case m3uCategoryMappingsSaved(
             presentationID: UUID,
             categoryRouteIndex: Int,
@@ -485,6 +491,57 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .multiViewChannelSelection(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .multiViewChannelSelection(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[routeState.multiViewRouteIndex].screen,
+                  multiViewState.presentationID == routeState.multiViewPresentationID,
+                  multiViewState.isSelectingChannelForSlotID == routeState.slotID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.multiViewRouteIndex,
+                action: .multiView(.channelSelectionDismissed)
+            )))
+
+        case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
+            if let selectionRouteIndex = state.routes.indices.last(where: { index in
+                if case let .multiViewChannelSelection(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), selectionRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == multiViewPresentationID,
+                  multiViewState.isSelectingChannelForSlotID == slotID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: multiViewRouteIndex,
+                action: .multiView(.channelSelectionDismissed)
+            )))
+
+        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == presentationID,
+                  multiViewState.isSelectingChannelForSlotID == nil,
+                  case let .multiViewChannelSelection(selectionState) = state.routes.last?.screen,
+                  selectionState.multiViewRouteIndex == multiViewRouteIndex,
+                  selectionState.multiViewPresentationID == presentationID,
+                  selectionState.slotID == slotID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         case let .router(.routeAction(routeIndex, .categoryManagement(.delegate(.close)))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
@@ -627,6 +684,23 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentMultiView(multiViewState))))):
             state.routes.presentCover(.multiView(multiViewState))
+            return .none
+
+        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.presentChannelSelection(slotID, presentationID))))):
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  multiViewRouteIndex == state.routes.count - 1,
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == presentationID,
+                  multiViewState.isSelectingChannelForSlotID == slotID,
+                  multiViewState.slots.contains(where: { $0.id == slotID && $0.item == nil })
+            else { return .none }
+            state.routes.presentSheet(.multiViewChannelSelection(
+                MultiViewChannelSelectionRouteFeature.State(
+                    multiViewRouteIndex: multiViewRouteIndex,
+                    multiViewPresentationID: presentationID,
+                    slotID: slotID
+                )
+            ))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.presentCategoryManagement(categoryState))))):
@@ -1354,6 +1428,11 @@ public struct AppCoordinatorView: View {
                     }
             case let .multiView(screenStore):
                 MultiView(store: screenStore)
+            case let .multiViewChannelSelection(screenStore):
+                MultiViewChannelSelectionRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .categoryManagement(screenStore):
                 CategoryManagementView(store: screenStore)
             case let .m3uCategoryMappingEditor(screenStore):
@@ -1532,5 +1611,70 @@ private struct M3UCategoryMappingEditorRouteView: View {
                 routeStore.send(.closeTapped)
             }
         )
+    }
+}
+
+private struct MultiViewChannelSelectionRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<MultiViewChannelSelectionRouteFeature>
+
+    var body: some View {
+        Group {
+            if let multiViewState, isCurrentContext(multiViewState) {
+                ChannelSelectionSheet(
+                    state: multiViewState,
+                    send: sendToMultiView,
+                    onSelect: { sendToMultiView(.channelSelected($0)) },
+                    onDismiss: { routeStore.send(.closeTapped) }
+                )
+                .presentationDetents([.medium, .large])
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear(perform: closeIfContextChanged)
+        .onChange(of: multiViewState?.presentationID) { _, _ in closeIfContextChanged() }
+        .onChange(of: multiViewState?.isSelectingChannelForSlotID) { _, _ in closeIfContextChanged() }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var multiViewState: MultiViewFeature.State? {
+        guard coordinatorStore.routes.indices.contains(routeStore.multiViewRouteIndex),
+              case let .multiView(multiViewState) = coordinatorStore.routes[routeStore.multiViewRouteIndex].screen
+        else { return nil }
+        return multiViewState
+    }
+
+    private func isCurrentContext(_ multiViewState: MultiViewFeature.State) -> Bool {
+        multiViewState.presentationID == routeStore.multiViewPresentationID
+            && multiViewState.isSelectingChannelForSlotID == routeStore.slotID
+            && multiViewState.slots.contains(where: { $0.id == routeStore.slotID && $0.item == nil })
+    }
+
+    private func closeIfContextChanged() {
+        guard let multiViewState, isCurrentContext(multiViewState) else {
+            notifyRouteDidDisappear()
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.multiViewChannelSelectionRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            multiViewRouteIndex: routeStore.multiViewRouteIndex,
+            multiViewPresentationID: routeStore.multiViewPresentationID,
+            slotID: routeStore.slotID
+        ))
+    }
+
+    private func sendToMultiView(_ action: MultiViewFeature.Action) {
+        guard let multiViewState, isCurrentContext(multiViewState) else {
+            notifyRouteDidDisappear()
+            return
+        }
+        coordinatorStore.send(.router(.routeAction(
+            id: routeStore.multiViewRouteIndex,
+            action: .multiView(action)
+        )))
     }
 }
