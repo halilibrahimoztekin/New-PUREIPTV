@@ -929,12 +929,6 @@ public struct SettingsView: View {
         )) {
             HiddenContentManagementView(store: store)
         }
-        .sheet(isPresented: Binding(
-            get: { store.isCustomEPGSheetPresented },
-            set: { store.send(.setCustomEPGSheetPresented($0)) }
-        )) {
-            CustomEPGSettingsView(store: store)
-        }
         .sheet(isPresented: $isShowingTraktWatchlist) {
             NavigationStack {
                 TraktWatchlistView(store: store.scope(state: \.traktState, action: \.traktAction))

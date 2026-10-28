@@ -100,6 +100,7 @@ public struct SettingsFeature {
         public var epgMappingRequestID: UUID?
         public var epgMappingSuggestionsPlaylistID: UUID?
         public var isCustomEPGSheetPresented: Bool = false
+        public var customEPGPresentationRequestID: UUID?
         public var isAddCustomEPGSourceSheetPresented: Bool = false
         public var newCustomEPGName: String = ""
         public var newCustomEPGURLString: String = ""
@@ -131,12 +132,14 @@ public struct SettingsFeature {
         case managePlaylistsTapped
         case speedTestTapped
         case closeSpeedTest(requestID: UUID)
+        case coordinatorDismissCustomEPGSettings(requestID: UUID)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case openManagePlaylists
             case switchProfile
             case presentSpeedTest(requestID: UUID)
+            case presentCustomEPGSettings(requestID: UUID)
         }
 
         case onAppear
@@ -919,12 +922,23 @@ public struct SettingsFeature {
 
             // Custom EPG & Time-Shift (Madde #23)
             case let .setCustomEPGSheetPresented(val):
-                state.isCustomEPGSheetPresented = val
-                if val {
-                    state.customEPGSources = customEPGMappingClient.getSources()
-                    state.channelEPGMappings = customEPGMappingClient.getAllMappings()
-                    state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
+                guard val else {
+                    state.isCustomEPGSheetPresented = false
+                    return .none
                 }
+                guard state.customEPGPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.customEPGPresentationRequestID = requestID
+                state.isCustomEPGSheetPresented = true
+                state.customEPGSources = customEPGMappingClient.getSources()
+                state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
+                return .send(.delegate(.presentCustomEPGSettings(requestID: requestID)))
+
+            case let .coordinatorDismissCustomEPGSettings(requestID):
+                guard state.customEPGPresentationRequestID == requestID else { return .none }
+                state.isCustomEPGSheetPresented = false
+                state.customEPGPresentationRequestID = nil
                 return .none
 
             case .loadEPGMappingSuggestions:

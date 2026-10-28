@@ -614,6 +614,50 @@ public struct DetailTMDBMatchPickerRouteFeature {
 }
 
 @Reducer
+public struct CustomEPGSettingsRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let requestID: UUID
+
+        public init(
+            homeRouteIndex: Int,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -639,6 +683,7 @@ public enum AppScreen {
     case playerSubtitleSearch(PlayerSubtitleSearchRouteFeature)
     case settingsSpeedTest(SettingsSpeedTestRouteFeature)
     case detailTMDBMatchPicker(DetailTMDBMatchPickerRouteFeature)
+    case customEPGSettings(CustomEPGSettingsRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -672,6 +717,7 @@ extension AppScreen.State: Hashable {
         case let (.playerSubtitleSearch(l), .playerSubtitleSearch(r)): l.presentationID == r.presentationID
         case let (.settingsSpeedTest(l), .settingsSpeedTest(r)): l.presentationID == r.presentationID
         case let (.detailTMDBMatchPicker(l), .detailTMDBMatchPicker(r)): l.presentationID == r.presentationID
+        case let (.customEPGSettings(l), .customEPGSettings(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -748,6 +794,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .detailTMDBMatchPicker(state):
             hasher.combine(27)
+            hasher.combine(state.presentationID)
+        case let .customEPGSettings(state):
+            hasher.combine(28)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

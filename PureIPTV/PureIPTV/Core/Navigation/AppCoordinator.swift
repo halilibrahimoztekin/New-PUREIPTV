@@ -130,6 +130,11 @@ public struct AppCoordinator {
             parent: DetailTMDBMatchPickerRouteFeature.Parent,
             requestID: UUID
         )
+        case customEPGSettingsRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -842,6 +847,27 @@ public struct AppCoordinator {
                 return .none
             }
 
+        case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let customEPGRouteIndex = state.routes.indices.last(where: { index in
+                if case let .customEPGSettings(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let customEPGRouteIndex {
+                guard customEPGRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
+            )))
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -999,6 +1025,27 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.homeRouteIndex,
                 action: .home(.settings(.closeSpeedTest(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .customEPGSettings(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .customEPGSettings(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
             )))
 
         case let .router(.routeAction(
@@ -1202,6 +1249,22 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.presentSheet(.settingsSpeedTest(
                 SettingsSpeedTestRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentCustomEPGSettings(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.customEPGPresentationRequestID == requestID,
+                  homeState.settings.isCustomEPGSheetPresented
+            else { return .none }
+            state.routes.presentSheet(.customEPGSettings(
+                CustomEPGSettingsRouteFeature.State(
                     homeRouteIndex: homeRouteIndex,
                     requestID: requestID
                 )
@@ -2274,6 +2337,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .customEPGSettings(screenStore):
+                CustomEPGSettingsRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .playlistManagement(store):
                 PlaylistManagementView(store: store)
             case let .paywall(store):
@@ -3154,6 +3222,81 @@ private struct DetailTMDBMatchPickerRouteView: View {
             presentationID: routeStore.presentationID,
             detailRouteIndex: routeStore.detailRouteIndex,
             parent: routeStore.parent,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct CustomEPGSettingsRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<CustomEPGSettingsRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                CustomEPGSettingsView(store: settingsStore, onClose: close)
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var settingsStore: StoreOf<SettingsFeature> {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen
+                else { return SettingsFeature.State() }
+                return homeState.settings
+            },
+            action: { action in
+                .router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(action))
+                ))
+            }
+        )
+    }
+
+    private var isCurrentPresentation: Bool {
+        homeState?.selectedTab == .settings
+            && homeState?.settings.isCustomEPGSheetPresented == true
+            && homeState?.settings.customEPGPresentationRequestID == routeStore.requestID
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .customEPGSettings(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentPresentation, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.customEPGSettingsRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID
         ))
     }

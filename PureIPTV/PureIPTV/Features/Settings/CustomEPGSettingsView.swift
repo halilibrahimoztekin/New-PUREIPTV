@@ -8,6 +8,7 @@ import SwiftUI
 public struct CustomEPGSettingsView: View {
     @Bindable var store: StoreOf<SettingsFeature>
     @Environment(\.dismiss) private var dismiss
+    private let onClose: (() -> Void)?
     @State private var epgMappingSearchText = ""
 
     private var visibleEPGMappingSuggestions: [EPGMappingSuggestion] {
@@ -26,8 +27,9 @@ public struct CustomEPGSettingsView: View {
         store.customEPGSources.filter { $0.isEnabled && store.customEPGSourceErrors[$0.id] != nil }.count
     }
 
-    public init(store: StoreOf<SettingsFeature>) {
+    public init(store: StoreOf<SettingsFeature>, onClose: (() -> Void)? = nil) {
         self.store = store
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -315,7 +317,7 @@ public struct CustomEPGSettingsView: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Kapat") {
-                            dismiss()
+                            close()
                         }
                     }
                 }
@@ -325,6 +327,14 @@ public struct CustomEPGSettingsView: View {
                 )) {
                     addSourceSheet
                 }
+        }
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
         }
     }
 
