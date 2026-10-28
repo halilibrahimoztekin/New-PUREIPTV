@@ -3802,6 +3802,23 @@ public struct AppCoordinatorView: View {
                         sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
                     }
                 }
+            case let .recommendationHistoryResetConfirmation(routeIndex):
+                Button("Öneri geçmişini sıfırla", role: .destructive) {
+                    performRootAlertButtonAction(for: .recommendationHistoryResetConfirmation(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.confirmRecommendationHistoryReset, routeIndex: routeIndex)
+                    }
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    performRootAlertButtonAction(for: .recommendationHistoryResetConfirmation(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.cancelRecommendationHistoryReset, routeIndex: routeIndex)
+                    }
+                }
+            case let .recommendationHistoryResetSuccess(routeIndex):
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    performRootAlertButtonAction(for: .recommendationHistoryResetSuccess(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.recommendationHistoryResetSuccessDismissed, routeIndex: routeIndex)
+                    }
+                }
             case let .backupImportError(routeIndex, message):
                 Button(AppStrings.Common.ok, role: .cancel) {
                     performRootAlertButtonAction(for: .backupImportError(routeIndex: routeIndex, message: message)) {
@@ -3827,6 +3844,10 @@ public struct AppCoordinatorView: View {
                 Text(AppStrings.Settings.clearCacheMessage)
             case .clearCacheSuccess:
                 Text(AppStrings.Settings.clearCacheSuccess)
+            case .recommendationHistoryResetConfirmation:
+                Text("Bu profildeki eski izleme geçmişi öneri sinyali olmaktan çıkar. İzlemeye Devam Et ilerlemesi ve favoriler silinmez.")
+            case .recommendationHistoryResetSuccess:
+                Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
             case let .backupImportError(_, message):
                 Text(message)
             case let .backupExportNotice(_, message):
@@ -3890,6 +3911,8 @@ public struct AppCoordinatorView: View {
         case rememberedPlaybackChoice(routeIndex: Int, reminder: PlaybackChoiceReminder)
         case clearCacheConfirmation(routeIndex: Int)
         case clearCacheSuccess(routeIndex: Int)
+        case recommendationHistoryResetConfirmation(routeIndex: Int)
+        case recommendationHistoryResetSuccess(routeIndex: Int)
         case backupImportError(routeIndex: Int, message: String)
         case backupExportNotice(routeIndex: Int, message: String)
 
@@ -3901,6 +3924,10 @@ public struct AppCoordinatorView: View {
                 AppStrings.Player.rememberedPlaybackChoiceTitle
             case .clearCacheConfirmation, .clearCacheSuccess:
                 AppStrings.Settings.clearCacheTitle
+            case .recommendationHistoryResetConfirmation:
+                "Öneri geçmişi sıfırlansın mı?"
+            case .recommendationHistoryResetSuccess:
+                "Öneri geçmişi sıfırlandı"
             case .backupImportError, .backupExportNotice:
                 "PureIPTV Bildirimi"
             }
@@ -3934,6 +3961,11 @@ public struct AppCoordinatorView: View {
                 ? .clearCacheSuccess(routeIndex: context.routeIndex)
                 : .clearCacheConfirmation(routeIndex: context.routeIndex)
         }
+        if let context = recommendationHistoryResetAlertContext {
+            return context.isSuccess
+                ? .recommendationHistoryResetSuccess(routeIndex: context.routeIndex)
+                : .recommendationHistoryResetConfirmation(routeIndex: context.routeIndex)
+        }
         if let routeIndex = store.routes.indices.last,
            case let .home(state) = store.routes[routeIndex].screen,
            state.selectedTab == .settings,
@@ -3965,6 +3997,20 @@ public struct AppCoordinatorView: View {
         return nil
     }
 
+    private var recommendationHistoryResetAlertContext: (routeIndex: Int, isSuccess: Bool)? {
+        guard let routeIndex = store.routes.indices.last,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .settings
+        else { return nil }
+        if state.settings.isShowingRecommendationHistoryResetConfirmation {
+            return (routeIndex, false)
+        }
+        if state.settings.isShowingRecommendationHistoryResetSuccess {
+            return (routeIndex, true)
+        }
+        return nil
+    }
+
     private var rootAlertIsPresented: Binding<Bool> {
         Binding(
             get: { rootAlertContext != nil },
@@ -3984,6 +4030,10 @@ public struct AppCoordinatorView: View {
                     sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
                 case let .clearCacheSuccess(routeIndex):
                     sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                case let .recommendationHistoryResetConfirmation(routeIndex):
+                    sendSettingsAlertAction(.cancelRecommendationHistoryReset, routeIndex: routeIndex)
+                case let .recommendationHistoryResetSuccess(routeIndex):
+                    sendSettingsAlertAction(.recommendationHistoryResetSuccessDismissed, routeIndex: routeIndex)
                 case let .backupImportError(routeIndex, _):
                     sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
                 case let .backupExportNotice(routeIndex, _):

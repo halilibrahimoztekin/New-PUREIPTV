@@ -846,29 +846,6 @@ public struct SettingsView: View {
         .onAppear {
             store.send(.onAppear)
         }
-        .alert(
-            "Öneri geçmişi sıfırlansın mı?",
-            isPresented: $store.isShowingRecommendationHistoryResetConfirmation
-        ) {
-            Button("Öneri geçmişini sıfırla", role: .destructive) {
-                store.send(.confirmRecommendationHistoryReset)
-            }
-            Button(AppStrings.Common.cancel, role: .cancel) {
-                store.send(.cancelRecommendationHistoryReset)
-            }
-        } message: {
-            Text("Bu profildeki eski izleme geçmişi öneri sinyali olmaktan çıkar. İzlemeye Devam Et ilerlemesi ve favoriler silinmez.")
-        }
-        .alert(
-            "Öneri geçmişi sıfırlandı",
-            isPresented: $store.isShowingRecommendationHistoryResetSuccess
-        ) {
-            Button(AppStrings.Common.ok, role: .cancel) {
-                store.send(.recommendationHistoryResetSuccessDismissed)
-            }
-        } message: {
-            Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
-        }
         #if os(iOS)
         .fileImporter(
             isPresented: $isImportingBackup,
