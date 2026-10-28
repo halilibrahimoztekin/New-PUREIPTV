@@ -3755,19 +3755,51 @@ public struct AppCoordinatorView: View {
             Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
         }
         .confirmationDialog(
-            AppStrings.Common.delete,
-            isPresented: playlistDeletionIsPresented,
+            confirmationDialogContext?.title ?? "",
+            isPresented: confirmationDialogIsPresented,
             titleVisibility: .visible
         ) {
-            Button(AppStrings.Common.delete, role: .destructive) {
-                sendPlaylistDeletionAction(.deletePlaylistConfirmed)
-            }
-            Button(AppStrings.Common.cancel, role: .cancel) {
-                sendPlaylistDeletionAction(.cancelDeletePlaylist)
+            switch confirmationDialogContext {
+            case .playlistDeletion:
+                Button(AppStrings.Common.delete, role: .destructive) {
+                    confirmActiveConfirmation()
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    cancelActiveConfirmation()
+                }
+            case let .hideSelectedChannels(_, selectedCount):
+                Button("\(selectedCount) Kanalı Gizle", role: .destructive) {
+                    confirmActiveConfirmation()
+                }
+                Button("İptal", role: .cancel) {
+                    cancelActiveConfirmation()
+                }
+            case nil:
+                EmptyView()
             }
         } message: {
-            if let name = playlistDeletionContext?.playlist.name {
+            switch confirmationDialogContext {
+            case let .playlistDeletion(_, playlist):
+                let name = playlist.name
                 Text("\"\(name)\" çalma listesini silmek istediğinize emin misiniz?")
+            case .hideSelectedChannels:
+                Text("Seçili kanallar görünür listelerden kaldırılacak. Ayarlar > Gizlenen İçerikler bölümünden kanalları geri alabilirsiniz.")
+            case nil:
+                EmptyView()
+            }
+        }
+    }
+
+    private enum ConfirmationDialogContext {
+        case playlistDeletion(routeIndex: Int, playlist: SavedPlaylist)
+        case hideSelectedChannels(routeIndex: Int, selectedCount: Int)
+
+        var title: String {
+            switch self {
+            case .playlistDeletion:
+                AppStrings.Common.delete
+            case .hideSelectedChannels:
+                "Seçili Kanalları Gizle"
             }
         }
     }
@@ -3783,14 +3815,60 @@ public struct AppCoordinatorView: View {
         return (routeIndex, playlist)
     }
 
-    private var playlistDeletionIsPresented: Binding<Bool> {
+    private var hideSelectedChannelsContext: (routeIndex: Int, selectedCount: Int)? {
+        guard let routeIndex = store.routes.indices.last(where: { index in
+                  guard case let .home(state) = store.routes[index].screen else { return false }
+                  return state.selectedTab == .liveTV
+                      && state.liveTV.isChannelSelectionMode
+                      && state.liveTV.isConfirmingHideSelectedChannels
+                      && !state.liveTV.selectedCurrentChannelIDs.isEmpty
+              }),
+              case let .home(state) = store.routes[routeIndex].screen
+        else { return nil }
+        return (routeIndex, state.liveTV.selectedCurrentChannelIDs.count)
+    }
+
+    private var confirmationDialogContext: ConfirmationDialogContext? {
+        if let context = playlistDeletionContext {
+            return .playlistDeletion(routeIndex: context.routeIndex, playlist: context.playlist)
+        }
+        if let context = hideSelectedChannelsContext {
+            return .hideSelectedChannels(routeIndex: context.routeIndex, selectedCount: context.selectedCount)
+        }
+        return nil
+    }
+
+    private var confirmationDialogIsPresented: Binding<Bool> {
         Binding(
-            get: { playlistDeletionContext != nil },
+            get: { confirmationDialogContext != nil },
             set: { isPresented in
-                guard !isPresented, playlistDeletionContext != nil else { return }
-                sendPlaylistDeletionAction(.cancelDeletePlaylist)
+                if !isPresented {
+                    cancelActiveConfirmation()
+                }
             }
         )
+    }
+
+    private func confirmActiveConfirmation() {
+        switch confirmationDialogContext {
+        case .playlistDeletion:
+            sendPlaylistDeletionAction(.deletePlaylistConfirmed)
+        case let .hideSelectedChannels(routeIndex, _):
+            sendHideSelectedChannelsAction(.hideSelectedChannels, routeIndex: routeIndex)
+        case nil:
+            return
+        }
+    }
+
+    private func cancelActiveConfirmation() {
+        switch confirmationDialogContext {
+        case .playlistDeletion:
+            sendPlaylistDeletionAction(.cancelDeletePlaylist)
+        case let .hideSelectedChannels(routeIndex, _):
+            sendHideSelectedChannelsAction(.cancelHideSelectedChannelsConfirmation, routeIndex: routeIndex)
+        case nil:
+            return
+        }
     }
 
     private func sendPlaylistDeletionAction(_ action: PlaylistManagementFeature.Action) {
@@ -3798,6 +3876,18 @@ public struct AppCoordinatorView: View {
         store.send(.router(.routeAction(
             id: context.routeIndex,
             action: .playlistManagement(action)
+        )))
+    }
+
+    private func sendHideSelectedChannelsAction(_ action: LiveTVFeature.Action, routeIndex: Int) {
+        guard store.routes.indices.contains(routeIndex),
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .liveTV,
+              state.liveTV.isChannelSelectionMode
+        else { return }
+        store.send(.router(.routeAction(
+            id: routeIndex,
+            action: .home(.liveTV(action))
         )))
     }
 }

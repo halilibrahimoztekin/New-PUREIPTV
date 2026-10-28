@@ -152,6 +152,7 @@ public struct LiveTVFeature {
         public var favoriteListLoadRequestID: UUID?
         public var favoriteListPendingMutations: [FavoriteChannelListPendingMutation] = []
         public var isChannelSelectionMode = false
+        public var isConfirmingHideSelectedChannels = false
         public var selectedChannelIDs: Set<String> = []
         public var channelSelectionGenerationID: UUID?
         public var channelSelectionPlaylistID: UUID?
@@ -226,6 +227,7 @@ public struct LiveTVFeature {
 
         public mutating func resetChannelSelection() {
             isChannelSelectionMode = false
+            isConfirmingHideSelectedChannels = false
             selectedChannelIDs = []
             channelSelectionPlaylistID = nil
             channelSelectionProfileScope = nil
@@ -373,6 +375,8 @@ public struct LiveTVFeature {
         case selectAllCurrentChannels
         case clearChannelSelection
         case exitChannelSelectionMode
+        case requestHideSelectedChannelsConfirmation
+        case cancelHideSelectedChannelsConfirmation
         case hideSelectedChannels
         case dismissBulkFavoriteNotice
         case bulkFavoriteAction(targetListID: UUID?, operation: BulkFavoriteOperation)
@@ -1654,13 +1658,28 @@ public struct LiveTVFeature {
 
             case .clearChannelSelection:
                 state.selectedChannelIDs = []
+                state.isConfirmingHideSelectedChannels = false
                 return .none
 
             case .exitChannelSelectionMode:
                 state.resetChannelSelection()
                 return .none
 
+            case .requestHideSelectedChannelsConfirmation:
+                guard state.isChannelSelectionMode,
+                      state.channelSelectionPlaylistID == state.config?.playlistID,
+                      state.channelSelectionProfileScope == profileContextClient.snapshot(),
+                      !state.selectedCurrentChannelIDs.isEmpty
+                else { return .none }
+                state.isConfirmingHideSelectedChannels = true
+                return .none
+
+            case .cancelHideSelectedChannelsConfirmation:
+                state.isConfirmingHideSelectedChannels = false
+                return .none
+
             case .hideSelectedChannels:
+                state.isConfirmingHideSelectedChannels = false
                 guard
                     state.isChannelSelectionMode,
                     let playlistID = state.config?.playlistID,
