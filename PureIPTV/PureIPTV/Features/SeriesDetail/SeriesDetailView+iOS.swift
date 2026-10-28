@@ -84,20 +84,6 @@
                     }
                 }
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { store.isTrailerPresented },
-                    set: { isPresented in
-                        if !isPresented {
-                            store.send(.dismissTrailer)
-                        }
-                    }
-                )
-            ) {
-                if let key = store.trailerVideoKey, let title = store.trailerTitle {
-                    trailerPlayerSheet(videoKey: key, title: title)
-                }
-            }
         }
 
         private var headerView: some View {
@@ -570,38 +556,6 @@
             }
         }
 
-        // MARK: - In-App Trailer Player Sheet
 
-        private func trailerPlayerSheet(videoKey: String, title: String) -> some View {
-            NavigationStack {
-                ZStack {
-                    Color.black.ignoresSafeArea()
-
-                    VStack(spacing: 0) {
-                        TrailerPlaybackView(videoKey: videoKey)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                            .shadow(color: .black.opacity(0.8), radius: 10, y: 5)
-
-                        Spacer()
-                    }
-                    .padding(.top, 16)
-                }
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(AppStrings.Common.close) {
-                            store.send(.dismissTrailer)
-                        }
-                        .foregroundColor(.white)
-                    }
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
     }
 #endif

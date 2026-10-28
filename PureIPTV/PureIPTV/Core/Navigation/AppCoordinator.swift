@@ -172,6 +172,12 @@ public struct AppCoordinator {
             itemID: String,
             requestID: UUID
         )
+        case detailTrailerRouteDidDisappear(
+            presentationID: UUID,
+            parentRouteIndex: Int,
+            parent: DetailTrailerRouteFeature.Parent,
+            requestID: UUID
+        )
         case presentDetailSynopsis(parent: DetailSynopsisRouteFeature.Parent, text: String)
         case customEPGSettingsRouteDidDisappear(
             presentationID: UUID,
@@ -1063,6 +1069,41 @@ public struct AppCoordinator {
                 action: .vodDetail(.coordinatorDismissActorBiography(requestID: requestID))
             )))
 
+        case let .detailTrailerRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
+            let trailerRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailTrailer(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.parent == parent
+                        && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let trailerRouteIndex {
+                guard trailerRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(parentRouteIndex) else { return .none }
+            switch (parent, state.routes[parentRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.trailerPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: parentRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTrailer(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.trailerPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: parentRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTrailer(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
+
         case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
             let customEPGRouteIndex = state.routes.indices.last(where: { index in
                 if case let .customEPGSettings(routeState) = state.routes[index].screen {
@@ -1501,6 +1542,50 @@ public struct AppCoordinator {
                 itemID: routeState.itemID,
                 requestID: requestID
             ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailTrailer(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailTrailer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            return .send(.detailTrailerRouteDidDisappear(
+                presentationID: presentationID,
+                parentRouteIndex: routeState.parentRouteIndex,
+                parent: routeState.parent,
+                requestID: requestID
+            ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailTrailer(.delegate(.startPlayback(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailTrailer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID,
+                  case let .vod(itemID) = routeState.parent,
+                  state.routes.indices.contains(routeState.parentRouteIndex),
+                  case let .vodDetail(vodState) = state.routes[routeState.parentRouteIndex].screen,
+                  vodState.vod.id == itemID,
+                  vodState.trailerPresentationRequestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+            return .run { send in
+                await send(.router(.routeAction(
+                    id: routeState.parentRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTrailer(requestID: requestID))
+                )))
+                await send(.router(.routeAction(
+                    id: routeState.parentRouteIndex,
+                    action: .vodDetail(.playTapped)
+                )))
+            }
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
             if let editorRouteIndex = state.routes.indices.last(where: { index in
@@ -2039,6 +2124,33 @@ public struct AppCoordinator {
             ))
             return .none
 
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .seriesDetail(.delegate(.presentTrailer(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
+                  seriesState.trailerPresentationRequestID == requestID,
+                  seriesState.isTrailerPresented,
+                  seriesState.trailerVideoKey != nil,
+                  seriesState.trailerTitle != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailTrailer(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailTrailer(
+                DetailTrailerRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    parent: .series(itemID: seriesState.series.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
         // ── VOD Detail Delegates ─────────────────────────────────
         case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectPlay(playable))))):
             let playerState = PlayerFeature.State(item: playable)
@@ -2094,6 +2206,33 @@ public struct AppCoordinator {
                 DetailActorBiographyRouteFeature.State(
                     parentRouteIndex: detailRouteIndex,
                     itemID: vodState.vod.id,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentTrailer(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.trailerPresentationRequestID == requestID,
+                  vodState.isTrailerPresented,
+                  vodState.trailerVideoKey != nil,
+                  vodState.trailerTitle != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailTrailer(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailTrailer(
+                DetailTrailerRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    parent: .vod(itemID: vodState.vod.id),
                     requestID: requestID
                 )
             ))
@@ -2976,6 +3115,11 @@ public struct AppCoordinatorView: View {
                 )
             case let .detailActorBiography(screenStore):
                 DetailActorBiographyRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
+            case let .detailTrailer(screenStore):
+                DetailTrailerRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -4337,6 +4481,113 @@ private struct DetailActorBiographyRouteView: View {
             presentationID: routeStore.presentationID,
             parentRouteIndex: routeStore.parentRouteIndex,
             itemID: routeStore.itemID,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct DetailTrailerRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<DetailTrailerRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentParent {
+                trailerContent
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentParent) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    @ViewBuilder
+    private var trailerContent: some View {
+        switch routeStore.parent {
+        case .vod:
+            if let vodState, let videoKey = vodState.trailerVideoKey, let title = vodState.trailerTitle {
+                DetailTrailerRouteContent(
+                    kind: .vod,
+                    videoKey: videoKey,
+                    title: title,
+                    close: close,
+                    startPlayback: startPlayback
+                )
+            }
+        case .series:
+            if let seriesState, let videoKey = seriesState.trailerVideoKey, let title = seriesState.trailerTitle {
+                DetailTrailerRouteContent(
+                    kind: .series,
+                    videoKey: videoKey,
+                    title: title,
+                    close: close,
+                    startPlayback: startPlayback
+                )
+            }
+        }
+    }
+
+    private var vodState: VODDetailFeature.State? {
+        let parentRouteIndex = routeStore.parentRouteIndex
+        guard case let .vod(itemID) = routeStore.parent,
+              coordinatorStore.routes.indices.contains(parentRouteIndex),
+              case let .vodDetail(state) = coordinatorStore.routes[parentRouteIndex].screen,
+              state.vod.id == itemID,
+              state.trailerPresentationRequestID == routeStore.requestID,
+              state.isTrailerPresented
+        else { return nil }
+        return state
+    }
+
+    private var seriesState: SeriesDetailFeature.State? {
+        let parentRouteIndex = routeStore.parentRouteIndex
+        guard case let .series(itemID) = routeStore.parent,
+              coordinatorStore.routes.indices.contains(parentRouteIndex),
+              case let .seriesDetail(state) = coordinatorStore.routes[parentRouteIndex].screen,
+              state.series.id == itemID,
+              state.trailerPresentationRequestID == routeStore.requestID,
+              state.isTrailerPresented
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentParent: Bool {
+        switch routeStore.parent {
+        case .vod:
+            return vodState?.trailerVideoKey != nil && vodState?.trailerTitle != nil
+        case .series:
+            return seriesState?.trailerVideoKey != nil && seriesState?.trailerTitle != nil
+        }
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .detailTrailer(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func startPlayback() {
+        routeStore.send(.startPlaybackTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentParent, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.detailTrailerRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            parentRouteIndex: routeStore.parentRouteIndex,
+            parent: routeStore.parent,
             requestID: routeStore.requestID
         ))
     }

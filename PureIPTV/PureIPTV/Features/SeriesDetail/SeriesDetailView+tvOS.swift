@@ -57,18 +57,6 @@
             .onDisappear {
                 store.send(.viewDidDisappear)
             }
-            .sheet(isPresented: Binding(
-                get: { store.isTrailerPresented },
-                set: {
-                    if !$0 {
-                        store.send(.dismissTrailer)
-                    }
-                }
-            )) {
-                if let title = store.trailerTitle {
-                    tvOSTrailerSheet(title: title)
-                }
-            }
             .onExitCommand {
                 store.send(.closeTapped)
             }
@@ -455,45 +443,6 @@
                 }
 
                 Spacer().frame(height: 80)
-            }
-        }
-
-        // MARK: - tvOS Trailer Sheet
-
-        private func tvOSTrailerSheet(title: String) -> some View {
-            ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
-
-                VStack(spacing: 30) {
-                    Text(title)
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.white)
-
-                    Text(AppStrings.VODDetail.watchTrailer)
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.7))
-
-                    if let key = store.trailerVideoKey, let youtubeURL = URL(string: "https://www.youtube.com/watch?v=\(key)") {
-                        Button {
-                            UIApplication.shared.open(youtubeURL)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "play.rectangle.fill")
-                                Text(AppStrings.VODDetail.watchTrailer)
-                                    .fontWeight(.bold)
-                            }
-                            .padding(.horizontal, 36)
-                            .padding(.vertical, 18)
-                        }
-                        .buttonStyle(.card)
-                    }
-
-                    Button(AppStrings.Common.close) {
-                        store.send(.dismissTrailer)
-                    }
-                    .buttonStyle(.card)
-                }
-                .padding(60)
             }
         }
     }

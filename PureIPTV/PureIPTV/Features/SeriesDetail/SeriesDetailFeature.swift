@@ -48,6 +48,7 @@ public struct SeriesDetailFeature {
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
         public var trailerTitle: String?
+        public var trailerPresentationRequestID: UUID?
 
         public var resolvedTrailerKey: String? {
             if let videos = tmdbTV?.videos?.results {
@@ -181,7 +182,7 @@ public struct SeriesDetailFeature {
         case resumeTapped
         case restartTapped
         case trailerTapped
-        case dismissTrailer
+        case coordinatorDismissTrailer(requestID: UUID)
         case delegate(Delegate)
         case closeTapped
         case viewDidDisappear
@@ -189,6 +190,7 @@ public struct SeriesDetailFeature {
         public enum Delegate: Equatable {
             case didSelectEpisode(PlayerFeature.PlayableItem, playlist: [PlayerFeature.PlayableItem]?)
             case presentTMDBMatchPicker(requestID: UUID)
+            case presentTrailer(requestID: UUID)
             case close
         }
     }
@@ -708,16 +710,21 @@ public struct SeriesDetailFeature {
                 return .none
 
             case .trailerTapped:
+                guard state.trailerPresentationRequestID == nil else { return .none }
                 guard let key = state.resolvedTrailerKey else { return .none }
+                let requestID = UUID()
+                state.trailerPresentationRequestID = requestID
                 state.trailerVideoKey = key
                 state.trailerTitle = "\(state.tmdbTV?.name ?? state.series.title) - \(AppStrings.VODDetail.trailer)"
                 state.isTrailerPresented = true
-                return .none
+                return .send(.delegate(.presentTrailer(requestID: requestID)))
 
-            case .dismissTrailer:
+            case let .coordinatorDismissTrailer(requestID):
+                guard state.trailerPresentationRequestID == requestID else { return .none }
                 state.isTrailerPresented = false
                 state.trailerVideoKey = nil
                 state.trailerTitle = nil
+                state.trailerPresentationRequestID = nil
                 return .none
 
             case let .historyStatusLoaded(history, scope):

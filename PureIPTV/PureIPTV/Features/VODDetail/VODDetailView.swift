@@ -237,6 +237,154 @@ struct VODActorBiographyContent: View {
     #endif
 }
 
+enum DetailTrailerPresentationKind: Equatable {
+    case vod
+    case series
+}
+
+struct DetailTrailerRouteContent: View {
+    let kind: DetailTrailerPresentationKind
+    let videoKey: String
+    let title: String
+    let close: () -> Void
+    let startPlayback: () -> Void
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        #if os(tvOS)
+            tvOSContent
+        #else
+            iOSContent
+        #endif
+    }
+
+    #if !os(tvOS)
+    private var iOSContent: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                VStack(spacing: kind == .vod ? 20 : 0) {
+                    if kind == .vod {
+                        TrailerPlaybackView(videoKey: videoKey)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.8), radius: 16, y: 8)
+                            .padding(.horizontal, 16)
+                    } else {
+                        TrailerPlaybackView(videoKey: videoKey)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                            .shadow(color: .black.opacity(0.8), radius: 10, y: 5)
+                    }
+
+                    if kind == .vod {
+                        Button {
+                            HapticManager.shared.trigger(.medium)
+                            startPlayback()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill")
+                                Text(AppStrings.VODDetail.startMovieNow)
+                                    .fontWeight(.bold)
+                            }
+                            .font(.system(size: 16))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 8, y: 3)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                    }
+
+                    Spacer()
+                }
+                .padding(.top, kind == .vod ? 20 : 16)
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: kind == .vod ? .cancellationAction : .confirmationAction) {
+                    Button(AppStrings.Common.close) {
+                        if kind == .vod {
+                            HapticManager.shared.trigger(.light)
+                        }
+                        close()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+    #endif
+
+    #if os(tvOS)
+    private var tvOSContent: some View {
+        ZStack {
+            Color(hex: "#0F0F13").ignoresSafeArea()
+
+            VStack(spacing: 30) {
+                Text(title)
+                    .font(.largeTitle.bold())
+                    .foregroundColor(.white)
+
+                Text(AppStrings.VODDetail.watchTrailer)
+                    .font(.title2)
+                    .foregroundColor(.white.opacity(0.7))
+
+                if kind == .vod {
+                    Button(action: startPlayback) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                            Text(AppStrings.VODDetail.startMovieNow)
+                                .fontWeight(.bold)
+                        }
+                        .padding(.horizontal, 36)
+                        .padding(.vertical, 18)
+                    }
+                    .buttonStyle(.card)
+                } else if let youtubeURL = URL(string: "https://www.youtube.com/watch?v=\(videoKey)") {
+                    Button {
+                        openURL(youtubeURL)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.rectangle.fill")
+                            Text(AppStrings.VODDetail.watchTrailer)
+                                .fontWeight(.bold)
+                        }
+                        .padding(.horizontal, 36)
+                        .padding(.vertical, 18)
+                    }
+                    .buttonStyle(.card)
+                }
+
+                Button(AppStrings.Common.close, action: close)
+                    .buttonStyle(.card)
+            }
+            .padding(60)
+        }
+    }
+    #endif
+}
+
 struct ExpandableSynopsisView: View {
     let text: String
     let font: Font
@@ -357,18 +505,6 @@ public struct VODDetailView: View {
                     if let item = store.selectedUnmatchedMovie {
                         unmatchedMovieSheet(item: item)
                     }
-                }
-            }
-            .sheet(isPresented: Binding(
-                get: { store.isTrailerPresented },
-                set: {
-                    if !$0 {
-                        store.send(.dismissTrailer)
-                    }
-                }
-            )) {
-                if let key = store.trailerVideoKey, let title = store.trailerTitle {
-                    trailerPlayerSheet(videoKey: key, title: title)
                 }
             }
             .onAppear {
@@ -1076,80 +1212,6 @@ public struct VODDetailView: View {
             }
         }
 
-        // MARK: - In-App Trailer Player Sheet
-
-        private func trailerPlayerSheet(videoKey: String, title: String) -> some View {
-            NavigationStack {
-                ZStack {
-                    Color.black.ignoresSafeArea()
-
-                    VStack(spacing: 20) {
-                        // 16:9 Video Player Frame
-                        #if os(iOS)
-                            TrailerPlaybackView(videoKey: videoKey)
-                                .aspectRatio(16 / 9, contentMode: .fit)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                                )
-                                .shadow(color: .black.opacity(0.8), radius: 16, y: 8)
-                                .padding(.horizontal, 16)
-                        #else
-                            Text(title)
-                                .foregroundColor(.white)
-                        #endif
-
-                        // Direct "Filmi Şimdi Başlat" Action Button
-                        Button {
-                            HapticManager.shared.trigger(.medium)
-                            store.send(.dismissTrailer)
-                            store.send(.playTapped)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "play.fill")
-                                Text(AppStrings.VODDetail.startMovieNow)
-                                    .fontWeight(.bold)
-                            }
-                            .font(.system(size: 16))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 8, y: 3)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 12)
-
-                        Spacer()
-                    }
-                    .padding(.top, 20)
-                }
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.close) {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.dismissTrailer)
-                        }
-                        .foregroundColor(.white)
-                    }
-                }
-            }
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            #endif
-        }
-
         // MARK: - Unmatched Similar Movie Synopsis Sheet
 
         private func unmatchedMovieSheet(item: TMDBSimilarItemDTO) -> some View {
@@ -1670,18 +1732,6 @@ public struct VODDetailView: View {
                 }
             }
             .sheet(isPresented: Binding(
-                get: { store.isTrailerPresented },
-                set: {
-                    if !$0 {
-                        store.send(.dismissTrailer)
-                    }
-                }
-            )) {
-                if let title = store.trailerTitle {
-                    tvOSTrailerSheet(title: title)
-                }
-            }
-            .sheet(isPresented: Binding(
                 get: { store.selectedUnmatchedMovie != nil },
                 set: {
                     if !$0 {
@@ -1695,42 +1745,6 @@ public struct VODDetailView: View {
             }
             .onExitCommand {
                 store.send(.closeTapped)
-            }
-        }
-
-        private func tvOSTrailerSheet(title: String) -> some View {
-            ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
-
-                VStack(spacing: 30) {
-                    Text(title)
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.white)
-
-                    Text(AppStrings.VODDetail.watchTrailer)
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.7))
-
-                    Button {
-                        store.send(.dismissTrailer)
-                        store.send(.playTapped)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
-                            Text(AppStrings.VODDetail.startMovieNow)
-                                .fontWeight(.bold)
-                        }
-                        .padding(.horizontal, 36)
-                        .padding(.vertical, 18)
-                    }
-                    .buttonStyle(.card)
-
-                    Button(AppStrings.Common.close) {
-                        store.send(.dismissTrailer)
-                    }
-                    .buttonStyle(.card)
-                }
-                .padding(60)
             }
         }
 

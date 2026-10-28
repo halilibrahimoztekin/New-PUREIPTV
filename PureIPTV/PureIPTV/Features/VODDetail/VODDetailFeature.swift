@@ -44,6 +44,7 @@ public struct VODDetailFeature {
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
         public var trailerTitle: String?
+        public var trailerPresentationRequestID: UUID?
         public var isAutoPlayTrailerActive: Bool = false
         public var isTrailerMuted: Bool = true
         public var isAutoPlayTrailerEnabled: Bool = false
@@ -123,7 +124,7 @@ public struct VODDetailFeature {
         case actorDetailsResponse(requestID: UUID, result: Result<TMDBPersonDetailsDTO, Error>)
         case coordinatorDismissActorBiography(requestID: UUID)
         case trailerTapped
-        case dismissTrailer
+        case coordinatorDismissTrailer(requestID: UUID)
         case startInlineTrailer
         case toggleTrailerMute
         case stopInlineTrailer
@@ -141,6 +142,7 @@ public struct VODDetailFeature {
             case didSelectVOD(MediaModels.Item)
             case presentTMDBMatchPicker(requestID: UUID)
             case presentActorBiography(requestID: UUID)
+            case presentTrailer(requestID: UUID)
             case close
         }
     }
@@ -633,16 +635,24 @@ public struct VODDetailFeature {
 
             case .trailerTapped:
                 state.isAutoPlayTrailerActive = false
+                guard state.trailerPresentationRequestID == nil else { return .none }
                 guard let key = state.resolvedTrailerKey else { return .none }
+                let requestID = UUID()
+                state.trailerPresentationRequestID = requestID
                 state.trailerVideoKey = key
                 state.trailerTitle = "\(state.tmdbMovie?.title ?? state.vod.title) - \(AppStrings.VODDetail.trailer)"
                 state.isTrailerPresented = true
-                return .cancel(id: CancelID.autoPlayTrailer)
+                return .merge(
+                    .cancel(id: CancelID.autoPlayTrailer),
+                    .send(.delegate(.presentTrailer(requestID: requestID)))
+                )
 
-            case .dismissTrailer:
+            case let .coordinatorDismissTrailer(requestID):
+                guard state.trailerPresentationRequestID == requestID else { return .none }
                 state.isTrailerPresented = false
                 state.trailerVideoKey = nil
                 state.trailerTitle = nil
+                state.trailerPresentationRequestID = nil
                 return .none
 
             case .startInlineTrailer:
