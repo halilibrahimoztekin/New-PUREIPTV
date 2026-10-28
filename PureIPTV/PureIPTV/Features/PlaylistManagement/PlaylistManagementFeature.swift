@@ -31,6 +31,7 @@ public struct PlaylistManagementFeature {
         public var playlistPINError: String?
         public var playlistToDelete: SavedPlaylist?
         public var playlistBeingEdited: SavedPlaylist?
+        public var playlistSettingsEditRequestID: UUID?
         public var userAgentDraft = ""
         public var channelZappingDelayDraft = 0
         public var mediaServerPlaybackPreferenceDraft: MediaServerPlaybackPreference = .automatic
@@ -41,6 +42,12 @@ public struct PlaylistManagementFeature {
         public var playlistValidationMessage: String?
         public var isRefreshingPlaylist = false
         @Presents public var addPlaylist: AddPlaylistFeature.State?
+
+        public var canSaveUserAgentDraft: Bool {
+            let value = userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.utf8.count <= 512
+                && value.rangeOfCharacter(from: .controlCharacters) == nil
+        }
 
         public init(startupUnlockPlaylistID: UUID? = nil) {
             self.startupUnlockPlaylistID = startupUnlockPlaylistID
@@ -60,8 +67,8 @@ public struct PlaylistManagementFeature {
         case cancelPlaylistPIN
         case editPlaylistSettings(SavedPlaylist)
         case savePlaylistSettings
-        case playlistSettingsSaveSucceeded(SavedPlaylist)
-        case playlistSettingsSaveFailed(String)
+        case playlistSettingsSaveSucceeded(requestID: UUID, playlist: SavedPlaylist)
+        case playlistSettingsSaveFailed(requestID: UUID, message: String)
         case cancelPlaylistSettings
         case deletePlaylist(UUID)
         case confirmDeletePlaylist(SavedPlaylist)
@@ -77,6 +84,7 @@ public struct PlaylistManagementFeature {
         public enum Delegate: Equatable, Sendable {
             case didChangeActivePlaylist
             case didUpdateActivePlaylistSettings(PlaylistConfig)
+            case presentPlaylistSettings(requestID: UUID, playlistID: UUID)
             case didChangePlaylistLock(UUID, isLocked: Bool)
             case didUnlockPlaylist(UUID)
             case didUnlockStartupPlaylist(UUID)
@@ -245,19 +253,25 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case let .editPlaylistSettings(playlist):
-                state.playlistBeingEdited = playlist
-                state.userAgentDraft = playlist.userAgentOverride ?? ""
-                state.channelZappingDelayDraft = playlist.channelZappingDelayMilliseconds ?? 0
-                state.mediaServerPlaybackPreferenceDraft = playlist.mediaServerPlaybackPreference ?? .automatic
-                state.serverURLDraft = playlist.serverURL ?? ""
-                state.usernameDraft = playlist.username ?? ""
-                state.passwordDraft = playlist.password ?? ""
-                state.m3uURLDraft = playlist.m3uURL ?? ""
+                guard let currentPlaylist = state.playlists.first(where: { $0.id == playlist.id }) else { return .none }
+                let requestID = UUID()
+                state.playlistBeingEdited = currentPlaylist
+                state.playlistSettingsEditRequestID = requestID
+                state.userAgentDraft = currentPlaylist.userAgentOverride ?? ""
+                state.channelZappingDelayDraft = currentPlaylist.channelZappingDelayMilliseconds ?? 0
+                state.mediaServerPlaybackPreferenceDraft = currentPlaylist.mediaServerPlaybackPreference ?? .automatic
+                state.serverURLDraft = currentPlaylist.serverURL ?? ""
+                state.usernameDraft = currentPlaylist.username ?? ""
+                state.passwordDraft = currentPlaylist.password ?? ""
+                state.m3uURLDraft = currentPlaylist.m3uURL ?? ""
                 state.playlistValidationMessage = nil
-                return .none
+                return .send(.delegate(.presentPlaylistSettings(requestID: requestID, playlistID: currentPlaylist.id)))
 
             case .savePlaylistSettings:
-                guard !state.isRefreshingPlaylist, let playlist = state.playlistBeingEdited else { return .none }
+                guard !state.isRefreshingPlaylist,
+                      let requestID = state.playlistSettingsEditRequestID,
+                      let playlist = state.playlistBeingEdited
+                else { return .none }
                 let value = state.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard
                     value.utf8.count <= 512,
@@ -317,17 +331,23 @@ public struct PlaylistManagementFeature {
                     return .run { [iptvClient] send in
                         do {
                             try await iptvClient.authenticate(config)
-                            await send(.playlistSettingsSaveSucceeded(updatedPlaylist))
+                            await send(.playlistSettingsSaveSucceeded(requestID: requestID, playlist: updatedPlaylist))
                         } catch is CancellationError {
                             return
                         } catch {
-                            await send(.playlistSettingsSaveFailed(error.localizedDescription))
+                            await send(.playlistSettingsSaveFailed(
+                                requestID: requestID,
+                                message: error.localizedDescription
+                            ))
                         }
                     }.cancellable(id: "PlaylistManagementFeature.connectionValidation", cancelInFlight: true)
                 }
-                return .send(.playlistSettingsSaveSucceeded(updatedPlaylist))
+                return .send(.playlistSettingsSaveSucceeded(requestID: requestID, playlist: updatedPlaylist))
 
-            case let .playlistSettingsSaveSucceeded(updatedPlaylist):
+            case let .playlistSettingsSaveSucceeded(requestID, updatedPlaylist):
+                guard state.playlistSettingsEditRequestID == requestID,
+                      state.playlistBeingEdited?.id == updatedPlaylist.id
+                else { return .none }
                 state.isRefreshingPlaylist = false
                 guard playlistRepository.updatePlaylist(updatedPlaylist) else {
                     state.playlistValidationMessage = "Ayarlar güvenli olarak kaydedilemedi. iCloud Keychain erişimini kontrol edip tekrar deneyin."
@@ -335,6 +355,7 @@ public struct PlaylistManagementFeature {
                 }
                 Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 state.playlistBeingEdited = nil
+                state.playlistSettingsEditRequestID = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
                 state.mediaServerPlaybackPreferenceDraft = .automatic
@@ -349,7 +370,8 @@ public struct PlaylistManagementFeature {
                 else { return .none }
                 return .send(.delegate(.didUpdateActivePlaylistSettings(config)))
 
-            case let .playlistSettingsSaveFailed(message):
+            case let .playlistSettingsSaveFailed(requestID, message):
+                guard state.playlistSettingsEditRequestID == requestID else { return .none }
                 state.isRefreshingPlaylist = false
                 state.playlistValidationMessage = "Playlist doğrulanamadı; mevcut ayarlar korundu. \(message)"
                 return .none
@@ -357,6 +379,7 @@ public struct PlaylistManagementFeature {
             case .cancelPlaylistSettings:
                 state.isRefreshingPlaylist = false
                 state.playlistBeingEdited = nil
+                state.playlistSettingsEditRequestID = nil
                 state.userAgentDraft = ""
                 state.channelZappingDelayDraft = 0
                 state.mediaServerPlaybackPreferenceDraft = .automatic

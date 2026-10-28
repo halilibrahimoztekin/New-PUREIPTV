@@ -272,6 +272,53 @@ public struct PlaylistQRTransferConfirmationRouteFeature {
 }
 
 @Reducer
+public struct PlaylistManagementSettingsRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let playlistManagementRouteIndex: Int
+        public let editRequestID: UUID
+        public let playlistID: UUID
+
+        public init(
+            playlistManagementRouteIndex: Int,
+            editRequestID: UUID,
+            playlistID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.playlistManagementRouteIndex = playlistManagementRouteIndex
+            self.editRequestID = editRequestID
+            self.playlistID = playlistID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, editRequestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    editRequestID: state.editRequestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -290,6 +337,7 @@ public enum AppScreen {
     case multiViewChannelSelection(MultiViewChannelSelectionRouteFeature)
     case dashboardPresentation(DashboardPresentationRouteFeature)
     case playlistQRTransferConfirmation(PlaylistQRTransferConfirmationRouteFeature)
+    case playlistManagementSettings(PlaylistManagementSettingsRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -316,6 +364,7 @@ extension AppScreen.State: Hashable {
         case let (.multiViewChannelSelection(l), .multiViewChannelSelection(r)): l.presentationID == r.presentationID
         case let (.dashboardPresentation(l), .dashboardPresentation(r)): l.presentationID == r.presentationID
         case let (.playlistQRTransferConfirmation(l), .playlistQRTransferConfirmation(r)): l.presentationID == r.presentationID
+        case let (.playlistManagementSettings(l), .playlistManagementSettings(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -371,6 +420,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .playlistQRTransferConfirmation(state):
             hasher.combine(20)
+            hasher.combine(state.presentationID)
+        case let .playlistManagementSettings(state):
+            hasher.combine(21)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

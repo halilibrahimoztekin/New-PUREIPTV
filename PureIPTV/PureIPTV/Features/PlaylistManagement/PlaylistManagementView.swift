@@ -173,36 +173,6 @@ public struct PlaylistManagementView: View {
             }
             .sheet(
                 isPresented: Binding(
-                    get: { store.playlistBeingEdited != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            store.send(.cancelPlaylistSettings)
-                        }
-                    }
-                )
-            ) {
-                if let playlist = store.playlistBeingEdited {
-                    NavigationStack {
-                        playlistSettingsForm(for: playlist)
-                            .navigationTitle(AppStrings.PlaylistMgmt.playbackSettings)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button(AppStrings.Common.cancel) {
-                                        store.send(.cancelPlaylistSettings)
-                                    }
-                                }
-                                ToolbarItem(placement: .confirmationAction) {
-                                    Button(AppStrings.Common.save) {
-                                        guard canSaveUserAgentDraft, !store.isRefreshingPlaylist else { return }
-                                        store.send(.savePlaylistSettings)
-                                    }
-                                }
-                            }
-                    }
-                }
-            }
-            .sheet(
-                isPresented: Binding(
                     get: { store.pinFlow != nil },
                     set: { isPresented in
                         if !isPresented {
@@ -420,18 +390,12 @@ public struct PlaylistManagementView: View {
         return "Devam Et"
     }
 
-    private var canSaveUserAgentDraft: Bool {
-        let value = store.userAgentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.utf8.count <= 512
-            && value.rangeOfCharacter(from: .controlCharacters) == nil
-    }
-
     private var channelZappingDelayValue: String {
         guard store.channelZappingDelayDraft > 0 else { return AppStrings.Player.off }
         return AppStrings.PlaylistMgmt.channelZappingDelayValue(store.channelZappingDelayDraft)
     }
 
-    private func playlistSettingsForm(for playlist: SavedPlaylist) -> some View {
+    func playlistSettingsForm(for playlist: SavedPlaylist) -> some View {
         Form {
             Section(playlist.name) {
                 if playlist.type == .xtream {
