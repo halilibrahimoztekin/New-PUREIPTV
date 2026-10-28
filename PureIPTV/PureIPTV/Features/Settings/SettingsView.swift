@@ -906,12 +906,6 @@ public struct SettingsView: View {
             Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
         }
         .sheet(isPresented: Binding(
-            get: { store.isShowingHiddenContentSheet },
-            set: { _ in store.send(.closeHiddenContentManagement) }
-        )) {
-            HiddenContentManagementView(store: store)
-        }
-        .sheet(isPresented: Binding(
             get: { diagnosticReportURL != nil },
             set: {
                 if !$0 {

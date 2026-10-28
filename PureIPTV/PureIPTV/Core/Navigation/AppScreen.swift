@@ -694,6 +694,50 @@ public struct SettingsTraktWatchlistRouteFeature {
 }
 
 @Reducer
+public struct SettingsHiddenContentRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let requestID: UUID
+
+        public init(
+            homeRouteIndex: Int,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public struct DetailTMDBMatchPickerRouteFeature {
     public enum Parent: Equatable {
         case vod(itemID: String)
@@ -864,6 +908,7 @@ public enum AppScreen {
     case settingsPINSetup(SettingsPINSetupRouteFeature)
     case settingsTraktAuth(SettingsTraktAuthRouteFeature)
     case settingsTraktWatchlist(SettingsTraktWatchlistRouteFeature)
+    case settingsHiddenContent(SettingsHiddenContentRouteFeature)
     case detailTMDBMatchPicker(DetailTMDBMatchPickerRouteFeature)
     case customEPGSettings(CustomEPGSettingsRouteFeature)
     case customEPGSourceAdd(CustomEPGSourceAddRouteFeature)
@@ -902,6 +947,7 @@ extension AppScreen.State: Hashable {
         case let (.settingsPINSetup(l), .settingsPINSetup(r)): l.presentationID == r.presentationID
         case let (.settingsTraktAuth(l), .settingsTraktAuth(r)): l.presentationID == r.presentationID
         case let (.settingsTraktWatchlist(l), .settingsTraktWatchlist(r)): l.presentationID == r.presentationID
+        case let (.settingsHiddenContent(l), .settingsHiddenContent(r)): l.presentationID == r.presentationID
         case let (.detailTMDBMatchPicker(l), .detailTMDBMatchPicker(r)): l.presentationID == r.presentationID
         case let (.customEPGSettings(l), .customEPGSettings(r)): l.presentationID == r.presentationID
         case let (.customEPGSourceAdd(l), .customEPGSourceAdd(r)): l.presentationID == r.presentationID
@@ -987,6 +1033,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .settingsTraktWatchlist(state):
             hasher.combine(32)
+            hasher.combine(state.presentationID)
+        case let .settingsHiddenContent(state):
+            hasher.combine(33)
             hasher.combine(state.presentationID)
         case let .detailTMDBMatchPicker(state):
             hasher.combine(27)

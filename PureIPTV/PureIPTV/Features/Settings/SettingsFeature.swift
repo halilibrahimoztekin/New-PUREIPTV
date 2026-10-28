@@ -87,6 +87,7 @@ public struct SettingsFeature {
         public var hiddenChannelsCount: Int = 0
         public var blacklistedCategoriesCount: Int = 0
         public var isShowingHiddenContentSheet: Bool = false
+        public var hiddenContentPresentationRequestID: UUID?
         public var hiddenChannelsList: [HiddenItemDTO] = []
         public var blacklistedCategoriesList: [HiddenItemDTO] = []
         public var isUnlockingHiddenContent: Bool = false
@@ -151,6 +152,7 @@ public struct SettingsFeature {
             case presentPINSetup(requestID: UUID)
             case presentTraktAuth(requestID: UUID)
             case presentTraktWatchlist(requestID: UUID)
+            case presentHiddenContentManagement(requestID: UUID)
         }
 
         case onAppear
@@ -230,11 +232,12 @@ public struct SettingsFeature {
         // Hidden Content & Category Blacklist (Madde #19)
         case openHiddenContentManagement
         case closeHiddenContentManagement
+        case coordinatorDismissHiddenContentManagement(requestID: UUID)
         case loadHiddenContentData
         case hiddenContentUnlockPINChanged(String)
         case cancelHiddenContentUnlock
         case submitHiddenContentUnlock
-        case biometricUnlockResult(Bool)
+        case biometricUnlockResult(requestID: UUID, success: Bool)
         case unhideChannelFromSettings(String)
         case unblacklistCategoryFromSettings(String)
         case unhideAllChannelsFromSettings
@@ -880,24 +883,40 @@ public struct SettingsFeature {
 
             // ── Hidden Content & Category Blacklist (Madde #19) ──
             case .openHiddenContentManagement:
+                guard state.hiddenContentPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.hiddenContentPresentationRequestID = requestID
+                state.isShowingHiddenContentSheet = true
+
                 if parentalControlClient.isParentalControlEnabled() {
+                    state.isUnlockingHiddenContent = true
+                    state.hiddenContentUnlockPIN = ""
+                    state.hiddenContentUnlockError = nil
                     #if os(tvOS)
-                        state.isUnlockingHiddenContent = true
-                        state.hiddenContentUnlockPIN = ""
-                        state.hiddenContentUnlockError = nil
-                        return .none
+                        return .send(.delegate(.presentHiddenContentManagement(requestID: requestID)))
                     #else
-                        return .run { send in
-                            let authSuccess = await parentalControlClient.authenticateWithBiometrics("Gizlenen kanalları yönetmek için doğrulayın")
-                            await send(.biometricUnlockResult(authSuccess))
-                        }
+                        return .merge(
+                            .send(.delegate(.presentHiddenContentManagement(requestID: requestID))),
+                            .run { send in
+                                let authSuccess = await parentalControlClient.authenticateWithBiometrics("Gizlenen kanalları yönetmek için doğrulayın")
+                                await send(.biometricUnlockResult(requestID: requestID, success: authSuccess))
+                            }
+                        )
                     #endif
                 } else {
-                    return .send(.loadHiddenContentData)
+                    state.isUnlockingHiddenContent = false
+                    return .merge(
+                        .send(.delegate(.presentHiddenContentManagement(requestID: requestID))),
+                        .send(.loadHiddenContentData)
+                    )
                 }
 
-            case let .biometricUnlockResult(success):
+            case let .biometricUnlockResult(requestID, success):
+                guard state.hiddenContentPresentationRequestID == requestID,
+                      state.isShowingHiddenContentSheet
+                else { return .none }
                 if success {
+                    state.isUnlockingHiddenContent = false
                     return .send(.loadHiddenContentData)
                 } else {
                     state.isUnlockingHiddenContent = true
@@ -944,6 +963,19 @@ public struct SettingsFeature {
 
             case .closeHiddenContentManagement:
                 state.isShowingHiddenContentSheet = false
+                state.hiddenContentPresentationRequestID = nil
+                state.isUnlockingHiddenContent = false
+                state.hiddenContentUnlockPIN = ""
+                state.hiddenContentUnlockError = nil
+                return .none
+
+            case let .coordinatorDismissHiddenContentManagement(requestID):
+                guard state.hiddenContentPresentationRequestID == requestID else { return .none }
+                state.isShowingHiddenContentSheet = false
+                state.hiddenContentPresentationRequestID = nil
+                state.isUnlockingHiddenContent = false
+                state.hiddenContentUnlockPIN = ""
+                state.hiddenContentUnlockError = nil
                 return .none
 
             case let .unhideChannelFromSettings(id):
