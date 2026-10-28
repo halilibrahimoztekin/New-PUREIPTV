@@ -4,7 +4,6 @@ import SwiftUI
 public struct PlaylistManagementView: View {
     @Bindable var store: StoreOf<PlaylistManagementFeature>
     @State private var hasDisappeared = false
-    @FocusState private var isPlaylistPINFocused: Bool
 
     public init(store: StoreOf<PlaylistManagementFeature>) {
         self.store = store
@@ -171,18 +170,6 @@ public struct PlaylistManagementView: View {
                     #endif
                 }
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { store.pinFlow != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            store.send(.cancelPlaylistPIN)
-                        }
-                    }
-                )
-            ) {
-                playlistPINPrompt
-            }
     }
 
     private var playlistStoreStatusTitle: String {
@@ -308,88 +295,6 @@ public struct PlaylistManagementView: View {
         }
     }
 
-    private var playlistPINPrompt: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    SecureField("4 haneli PIN", text: Binding(
-                        get: { store.playlistPIN },
-                        set: { store.send(.playlistPINChanged($0)) }
-                    ))
-                    .focused($isPlaylistPINFocused)
-                    #if os(iOS)
-                        .keyboardType(.numberPad)
-                    #endif
-                        .accessibilityLabel("Playlist PIN")
-                    if isConfiguringPIN {
-                        SecureField("PIN'i tekrar girin", text: Binding(
-                            get: { store.playlistPINConfirmation },
-                            set: { store.send(.playlistPINConfirmationChanged($0)) }
-                        ))
-                        #if os(iOS)
-                        .keyboardType(.numberPad)
-                        #endif
-                        .accessibilityLabel("PIN doğrulaması")
-                    }
-                    if let error = store.playlistPINError {
-                        Text(error)
-                            .foregroundStyle(.red)
-                    }
-                } footer: {
-                    Text("PIN bu playlist için ayrı saklanır ve iCloud Keychain ile eşitlenebilir.")
-                }
-            }
-            .navigationTitle(playlistPINTitle)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    if store.startupUnlockPlaylistID == nil {
-                        Button(AppStrings.Common.cancel) {
-                            store.send(.cancelPlaylistPIN)
-                        }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(playlistPINActionTitle) {
-                        guard store.playlistPIN.count == 4,
-                              !isConfiguringPIN || store.playlistPINConfirmation.count == 4
-                        else { return }
-                        store.send(.submitPlaylistPIN)
-                    }
-                }
-            }
-            .onAppear {
-                isPlaylistPINFocused = true
-            }
-        }
-    }
-
-    private var isConfiguringPIN: Bool {
-        if case .configure? = store.pinFlow {
-            return true
-        }
-        return false
-    }
-
-    private var playlistPINTitle: String {
-        switch store.pinFlow {
-        case .configure?: "PIN Kilidi Ayarla"
-        case .activate?: "Playlist Kilidini Aç"
-        case .remove?: "Kilidi Kaldırmak için PIN"
-        case .startup?: "Başlamak için PIN"
-        case nil: "Playlist PIN"
-        }
-    }
-
-    private var playlistPINActionTitle: String {
-        if isConfiguringPIN {
-            return "Kilitle"
-        }
-        if case .remove? = store.pinFlow {
-            return "Kilidi Kaldır"
-        }
-        return "Devam Et"
-    }
-
     private var channelZappingDelayValue: String {
         guard store.channelZappingDelayDraft > 0 else { return AppStrings.Player.off }
         return AppStrings.PlaylistMgmt.channelZappingDelayValue(store.channelZappingDelayDraft)
@@ -482,5 +387,92 @@ public struct PlaylistManagementView: View {
                 }
             }
         }
+    }
+}
+
+struct PlaylistManagementPINPromptView: View {
+    @Bindable var store: StoreOf<PlaylistManagementFeature>
+    let isStartupUnlock: Bool
+    let onCancel: () -> Void
+    @FocusState private var isPINFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("4 haneli PIN", text: Binding(
+                        get: { store.playlistPIN },
+                        set: { store.send(.playlistPINChanged($0)) }
+                    ))
+                    .focused($isPINFocused)
+                    #if os(iOS)
+                        .keyboardType(.numberPad)
+                    #endif
+                        .accessibilityLabel("Playlist PIN")
+                    if isConfiguringPIN {
+                        SecureField("PIN'i tekrar girin", text: Binding(
+                            get: { store.playlistPINConfirmation },
+                            set: { store.send(.playlistPINConfirmationChanged($0)) }
+                        ))
+                        #if os(iOS)
+                            .keyboardType(.numberPad)
+                        #endif
+                            .accessibilityLabel("PIN doğrulaması")
+                    }
+                    if let error = store.playlistPINError {
+                        Text(error)
+                            .foregroundStyle(.red)
+                    }
+                } footer: {
+                    Text("PIN bu playlist için ayrı saklanır ve iCloud Keychain ile eşitlenebilir.")
+                }
+            }
+            .navigationTitle(playlistPINTitle)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if !isStartupUnlock {
+                        Button(AppStrings.Common.cancel, action: onCancel)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(playlistPINActionTitle) {
+                        guard store.playlistPIN.count == 4,
+                              !isConfiguringPIN || store.playlistPINConfirmation.count == 4
+                        else { return }
+                        store.send(.submitPlaylistPIN)
+                    }
+                }
+            }
+            .onAppear {
+                isPINFocused = true
+            }
+        }
+    }
+
+    private var isConfiguringPIN: Bool {
+        if case .configure? = store.pinFlow {
+            return true
+        }
+        return false
+    }
+
+    private var playlistPINTitle: String {
+        switch store.pinFlow {
+        case .configure?: "PIN Kilidi Ayarla"
+        case .activate?: "Playlist Kilidini Aç"
+        case .remove?: "Kilidi Kaldırmak için PIN"
+        case .startup?: "Başlamak için PIN"
+        case nil: "Playlist PIN"
+        }
+    }
+
+    private var playlistPINActionTitle: String {
+        if isConfiguringPIN {
+            return "Kilitle"
+        }
+        if case .remove? = store.pinFlow {
+            return "Kilidi Kaldır"
+        }
+        return "Devam Et"
     }
 }

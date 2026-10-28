@@ -12,7 +12,7 @@ public struct PlaylistManagementFeature {
             case unavailable
         }
 
-        public enum PINFlow: Equatable {
+        public enum PINFlow: Equatable, Sendable {
             case configure(UUID)
             case activate(UUID)
             case remove(UUID)
@@ -29,6 +29,7 @@ public struct PlaylistManagementFeature {
         public var playlistPIN = ""
         public var playlistPINConfirmation = ""
         public var playlistPINError: String?
+        public var pinPresentationRequestID: UUID?
         public var playlistToDelete: SavedPlaylist?
         public var playlistBeingEdited: SavedPlaylist?
         public var playlistSettingsEditRequestID: UUID?
@@ -85,6 +86,7 @@ public struct PlaylistManagementFeature {
             case didChangeActivePlaylist
             case didUpdateActivePlaylistSettings(PlaylistConfig)
             case presentPlaylistSettings(requestID: UUID, playlistID: UUID)
+            case presentPlaylistPIN(requestID: UUID, flow: State.PINFlow)
             case didChangePlaylistLock(UUID, isLocked: Bool)
             case didUnlockPlaylist(UUID)
             case didUnlockStartupPlaylist(UUID)
@@ -122,9 +124,18 @@ public struct PlaylistManagementFeature {
                 if let startupID = state.startupUnlockPlaylistID,
                    state.lockedPlaylistIDs.contains(startupID)
                 {
+                    if state.pinFlow == .startup(startupID), state.pinPresentationRequestID != nil {
+                        return .none
+                    }
+                    let requestID = UUID()
                     state.pinFlow = .startup(startupID)
+                    state.pinPresentationRequestID = requestID
                     state.playlistPIN = ""
                     state.playlistPINError = nil
+                    return .send(.delegate(.presentPlaylistPIN(
+                        requestID: requestID,
+                        flow: .startup(startupID)
+                    )))
                 }
                 return .none
 
@@ -146,11 +157,14 @@ public struct PlaylistManagementFeature {
             case let .setActivePlaylist(id):
                 guard state.activePlaylistID != id else { return .none }
                 if state.lockedPlaylistIDs.contains(id), !state.unlockedPlaylistIDs.contains(id) {
-                    state.pinFlow = .activate(id)
+                    let flow = State.PINFlow.activate(id)
+                    let requestID = UUID()
+                    state.pinFlow = flow
+                    state.pinPresentationRequestID = requestID
                     state.playlistPIN = ""
                     state.playlistPINConfirmation = ""
                     state.playlistPINError = nil
-                    return .none
+                    return .send(.delegate(.presentPlaylistPIN(requestID: requestID, flow: flow)))
                 }
                 playlistRepository.setActivePlaylistID(id)
                 state.activePlaylistID = id
@@ -158,11 +172,14 @@ public struct PlaylistManagementFeature {
 
             case let .playlistLockTapped(id):
                 guard state.playlists.contains(where: { $0.id == id }) else { return .none }
-                state.pinFlow = state.lockedPlaylistIDs.contains(id) ? .remove(id) : .configure(id)
+                let flow = state.lockedPlaylistIDs.contains(id) ? State.PINFlow.remove(id) : .configure(id)
+                let requestID = UUID()
+                state.pinFlow = flow
+                state.pinPresentationRequestID = requestID
                 state.playlistPIN = ""
                 state.playlistPINConfirmation = ""
                 state.playlistPINError = nil
-                return .none
+                return .send(.delegate(.presentPlaylistPIN(requestID: requestID, flow: flow)))
 
             case let .playlistPINChanged(input):
                 state.playlistPIN = String(input.filter { $0 >= "0" && $0 <= "9" }.prefix(4))
@@ -194,6 +211,7 @@ public struct PlaylistManagementFeature {
                     parentalControlClient.clearPlaylistPINFailures(id)
                     state.lockedPlaylistIDs.insert(id)
                     state.pinFlow = nil
+                    state.pinPresentationRequestID = nil
                     state.playlistPIN = ""
                     state.playlistPINConfirmation = ""
                     return .send(.delegate(.didChangePlaylistLock(id, isLocked: true)))
@@ -222,10 +240,12 @@ public struct PlaylistManagementFeature {
                         playlistRepository.setActivePlaylistID(id)
                         state.activePlaylistID = id
                         state.pinFlow = nil
+                        state.pinPresentationRequestID = nil
                         return .send(.delegate(.didUnlockPlaylist(id)))
                     case .startup:
                         state.unlockedPlaylistIDs.insert(id)
                         state.pinFlow = nil
+                        state.pinPresentationRequestID = nil
                         state.startupUnlockPlaylistID = nil
                         return .send(.delegate(.didUnlockStartupPlaylist(id)))
                     case .remove:
@@ -236,6 +256,7 @@ public struct PlaylistManagementFeature {
                         state.lockedPlaylistIDs.remove(id)
                         state.unlockedPlaylistIDs.remove(id)
                         state.pinFlow = nil
+                        state.pinPresentationRequestID = nil
                         return .send(.delegate(.didChangePlaylistLock(id, isLocked: false)))
                     case .configure:
                         return .none
@@ -247,6 +268,7 @@ public struct PlaylistManagementFeature {
                     return .none
                 }
                 state.pinFlow = nil
+                state.pinPresentationRequestID = nil
                 state.playlistPIN = ""
                 state.playlistPINConfirmation = ""
                 state.playlistPINError = nil
