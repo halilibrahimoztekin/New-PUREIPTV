@@ -6,9 +6,16 @@ import SwiftUI
 public struct CategoryManagementFeature {
     @ObservableState
     public struct State: Equatable {
+        public enum Parent: Equatable {
+            case liveTV(routeIndex: Int)
+            case vod(routeIndex: Int)
+            case series(routeIndex: Int)
+        }
+
         public let presentationID: UUID
         public let config: PlaylistConfig
         public var type: CategoryType
+        public var parent: Parent? = nil
         public var isLoading = false
         public var loadRequestID: UUID?
         public var categories: [MediaModels.Category] = []

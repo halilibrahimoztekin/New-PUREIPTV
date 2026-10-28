@@ -124,6 +124,8 @@ public struct HomeFeature {
             case presentCategoryManagement(CategoryManagementFeature.State)
             case presentParentalLock(ParentalLockFeature.State)
             case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
+            case presentVODCategoryManagement(CategoryManagementFeature.State)
+            case presentSeriesCategoryManagement(CategoryManagementFeature.State)
             case presentSmartGroupManager
             case presentChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
             case didSelectVOD(MediaModels.Item)
@@ -246,11 +248,17 @@ public struct HomeFeature {
             case let .vod(.delegate(.didSelectVOD(vod))):
                 return .send(.delegate(.didSelectVOD(vod)))
 
+            case let .vod(.delegate(.presentCategoryManagement(categoryState))):
+                return .send(.delegate(.presentVODCategoryManagement(categoryState)))
+
             case .vod:
                 return .none
 
             case let .series(.delegate(.didSelectSeries(series))):
                 return .send(.delegate(.didSelectSeries(series)))
+
+            case let .series(.delegate(.presentCategoryManagement(categoryState))):
+                return .send(.delegate(.presentSeriesCategoryManagement(categoryState)))
 
             case .series:
                 return .none

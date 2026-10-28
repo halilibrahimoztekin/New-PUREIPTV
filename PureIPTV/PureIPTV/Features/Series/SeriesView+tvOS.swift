@@ -65,9 +65,6 @@
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
             }
-            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
-                CategoryManagementView(store: store)
-            }
         }
 
         private var focusedSeries: MediaModels.Item? {

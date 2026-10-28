@@ -35,7 +35,6 @@ public struct VODFeature {
         public var categoryUnlockProfileScope: ProfileContextSnapshot?
         public var categoryUnlockPlaylistID: UUID?
 
-        @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
 
         /// Language & Audio Filter
@@ -104,12 +103,12 @@ public struct VODFeature {
         case reloadPreferences
         case applySortIfChanged
         case editCategoriesTapped
-        case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case didSelectVOD(MediaModels.Item)
+            case presentCategoryManagement(CategoryManagementFeature.State)
         }
     }
 
@@ -479,18 +478,10 @@ public struct VODFeature {
 
             case .editCategoriesTapped:
                 if let config = state.config {
-                    state.categoryManagement = CategoryManagementFeature.State(config: config, type: .vod)
+                    return .send(.delegate(.presentCategoryManagement(
+                        CategoryManagementFeature.State(config: config, type: .vod)
+                    )))
                 }
-                return .none
-
-            case .categoryManagement(.presented(.delegate(.categoriesUpdated))):
-                return .send(.reloadPreferences)
-
-            case .categoryManagement(.presented(.delegate(.close))):
-                state.categoryManagement = nil
-                return .none
-
-            case .categoryManagement:
                 return .none
 
             case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
@@ -557,9 +548,6 @@ public struct VODFeature {
             case .delegate:
                 return .none
             }
-        }
-        .ifLet(\.$categoryManagement, action: \.categoryManagement) {
-            CategoryManagementFeature()
         }
         .ifLet(\.$parentalLock, action: \.parentalLock) {
             ParentalLockFeature()

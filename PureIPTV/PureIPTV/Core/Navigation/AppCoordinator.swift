@@ -1671,8 +1671,51 @@ public struct AppCoordinator {
                 action: .home(.liveTV(.liveCategoryMappingsUpdated))
             )))
 
-        case .router(.routeAction(_, .categoryManagement(.delegate(.categoriesUpdated)))):
-            return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoriesUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
+            else { return .none }
+
+            switch categoryState.parent {
+            case let .liveTV(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .liveTV,
+                      homeState.liveTV.config == categoryState.config,
+                      categoryState.type == .live
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.liveTV(.categoryPreferencesUpdated))
+                )))
+
+            case let .vod(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .movies,
+                      homeState.vod.config == categoryState.config,
+                      categoryState.type == .vod
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.vod(.reloadPreferences))
+                )))
+
+            case let .series(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == categoryState.config,
+                      categoryState.type == .series
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.reloadPreferences))
+                )))
+
+            case nil:
+                return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
+            }
 
         case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
             guard state.routes.indices.contains(categoryRouteIndex),
@@ -1997,7 +2040,42 @@ public struct AppCoordinator {
             ))
             return .none
 
-        case let .router(.routeAction(_, .home(.delegate(.presentCategoryManagement(categoryState))))):
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .liveTV,
+                  homeState.liveTV.config == categoryState.config,
+                  categoryState.type == .live
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .liveTV(routeIndex: homeRouteIndex)
+            state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentVODCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .movies,
+                  homeState.vod.config == categoryState.config,
+                  categoryState.type == .vod
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .vod(routeIndex: homeRouteIndex)
+            state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .series,
+                  homeState.series.config == categoryState.config,
+                  categoryState.type == .series
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .series(routeIndex: homeRouteIndex)
             state.routes.presentSheet(.categoryManagement(categoryState))
             return .none
 
