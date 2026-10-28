@@ -204,6 +204,12 @@ public struct AppCoordinator {
         case epgReminderMonitorTick([EPGReminder])
         case epgGuideRouteDidDisappear(UUID)
         case epgTimelineRouteDidDisappear(UUID)
+        case epgTimelineProgramDetailRouteDidDisappear(
+            presentationID: UUID,
+            timelineRouteIndex: Int,
+            timelinePresentationID: UUID,
+            detailRequestID: UUID
+        )
         case favoriteChannelListManagementRouteDidDisappear(UUID)
         case addPlaylistQRTransferRouteDidDisappear(
             presentationID: UUID,
@@ -571,6 +577,61 @@ public struct AppCoordinator {
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
             return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentProgramDetails(
+            timelinePresentationID: timelinePresentationID,
+            detailRequestID: detailRequestID,
+            program: program,
+            channel: channel
+        ))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.presentationID == timelinePresentationID,
+                  timelineState.selectedProgramDetailRequestID == detailRequestID,
+                  timelineState.selectedProgramDetail == program,
+                  timelineState.selectedProgramChannel == channel
+            else { return .none }
+
+            state.routes.presentSheet(.epgTimelineProgramDetail(
+                EPGTimelineProgramDetailRouteFeature.State(
+                    timelineRouteIndex: routeIndex,
+                    timelinePresentationID: timelinePresentationID,
+                    detailRequestID: detailRequestID,
+                    config: timelineState.config,
+                    program: program,
+                    channel: channel
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.dismissProgramDetails))):
+            guard state.routes.indices.contains(routeIndex),
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  let detailRequestID = timelineState.selectedProgramDetailRequestID
+            else { return .none }
+
+            if let detailRouteIndex = state.routes.indices.last(where: { index in
+                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
+                return detailState.timelineRouteIndex == routeIndex
+                    && detailState.timelinePresentationID == timelineState.presentationID
+                    && detailState.detailRequestID == detailRequestID
+            }), detailRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimelineProgramDetail(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimelineProgramDetail(detailState) = state.routes[routeIndex].screen,
+                  detailState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: detailState.timelineRouteIndex,
+                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailState.detailRequestID))
+            )))
 
         case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.close)))):
             guard state.routes.indices.contains(routeIndex),
@@ -3010,6 +3071,30 @@ public struct AppCoordinator {
                 await previewPlayerClient.stopPreviewOwned(presentationID)
             }
 
+        case let .epgTimelineProgramDetailRouteDidDisappear(
+            presentationID,
+            timelineRouteIndex,
+            timelinePresentationID,
+            detailRequestID
+        ):
+            if let detailRouteIndex = state.routes.indices.last(where: { index in
+                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
+                return detailState.presentationID == presentationID
+            }) {
+                guard detailRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(timelineRouteIndex),
+                  case let .epgTimeline(timelineState) = state.routes[timelineRouteIndex].screen,
+                  timelineState.presentationID == timelinePresentationID,
+                  timelineState.selectedProgramDetailRequestID == detailRequestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: timelineRouteIndex,
+                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailRequestID))
+            )))
+
         // ── Deep Linking ─────────────────────────────────────────
         case let .handleDeepLink(url):
             guard url.scheme == "pureiptv" else { return .none }
@@ -3372,6 +3457,11 @@ public struct AppCoordinatorView: View {
                     .onDisappear {
                         store.send(.epgTimelineRouteDidDisappear(presentationID))
                     }
+            case let .epgTimelineProgramDetail(screenStore):
+                EPGTimelineProgramDetailRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .multiView(screenStore):
                 MultiView(store: screenStore)
             case let .multiViewChannelSelection(screenStore):
@@ -3835,6 +3925,81 @@ private struct M3UCategoryMappingEditorRouteView: View {
                 routeStore.send(.closeTapped)
             }
         )
+    }
+}
+
+private struct EPGTimelineProgramDetailRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<EPGTimelineProgramDetailRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentContext {
+                EPGTimelineView(store: timelineStore)
+                    .programDetailSheet(program: routeStore.program, channel: routeStore.channel)
+                    #if os(tvOS)
+                    .onExitCommand { routeStore.send(.closeTapped) }
+                    #endif
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear(perform: closeIfContextChanged)
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var isCurrentContext: Bool {
+        guard let timelineState else { return false }
+        return timelineState.selectedProgramDetailRequestID == routeStore.detailRequestID
+            && timelineState.selectedProgramDetail == routeStore.program
+            && timelineState.selectedProgramChannel == routeStore.channel
+    }
+
+    private var timelineState: EPGTimelineFeature.State? {
+        guard coordinatorStore.routes.indices.contains(routeStore.timelineRouteIndex),
+              case let .epgTimeline(state) = coordinatorStore.routes[routeStore.timelineRouteIndex].screen,
+              state.presentationID == routeStore.timelinePresentationID
+        else { return nil }
+        return state
+    }
+
+    private var timelineStore: StoreOf<EPGTimelineFeature> {
+        let timelineRouteIndex = routeStore.timelineRouteIndex
+        let fallbackState = EPGTimelineFeature.State(
+            config: routeStore.config,
+            channels: [],
+            presentationID: routeStore.timelinePresentationID
+        )
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(timelineRouteIndex),
+                      case let .epgTimeline(state) = coordinatorState.routes[timelineRouteIndex].screen
+                else { return fallbackState }
+                return state
+            },
+            action: {
+                .router(.routeAction(
+                    id: timelineRouteIndex,
+                    action: .epgTimeline($0)
+                ))
+            }
+        )
+    }
+
+    private func closeIfContextChanged() {
+        guard isCurrentContext else {
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.epgTimelineProgramDetailRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            timelineRouteIndex: routeStore.timelineRouteIndex,
+            timelinePresentationID: routeStore.timelinePresentationID,
+            detailRequestID: routeStore.detailRequestID
+        ))
     }
 }
 

@@ -57,6 +57,7 @@ public struct EPGTimelineFeature {
         public var searchQuery: String = ""
         public var selectedProgramDetail: EPGProgram?
         public var selectedProgramChannel: MediaModels.Item?
+        public var selectedProgramDetailRequestID: UUID?
         public var scheduledReminderIDs: Set<String> = []
         public var pendingReminderRequestIDs: [String: UUID] = [:]
         public var reminderLoadRequestID: UUID?
@@ -277,6 +278,7 @@ public struct EPGTimelineFeature {
         case programTapped(EPGProgram, MediaModels.Item)
         case showProgramDetails(EPGProgram, MediaModels.Item)
         case dismissProgramDetails
+        case dismissProgramDetailsIfCurrent(UUID)
         case selectCategory(String?)
         case selectProgramCategory(String?)
         case selectDate(Date)
@@ -328,6 +330,12 @@ public struct EPGTimelineFeature {
             case close
             case playChannel(MediaModels.Item)
             case channelLogoOverrideChanged(channelID: String, playlistID: UUID, url: URL?)
+            case presentProgramDetails(
+                timelinePresentationID: UUID,
+                detailRequestID: UUID,
+                program: EPGProgram,
+                channel: MediaModels.Item
+            )
         }
     }
 
@@ -1139,13 +1147,28 @@ public struct EPGTimelineFeature {
                 return .none
 
             case let .showProgramDetails(program, channel):
+                let detailRequestID = UUID()
                 state.selectedProgramDetail = program
                 state.selectedProgramChannel = channel
-                return .none
+                state.selectedProgramDetailRequestID = detailRequestID
+                return .send(.delegate(.presentProgramDetails(
+                    timelinePresentationID: state.presentationID,
+                    detailRequestID: detailRequestID,
+                    program: program,
+                    channel: channel
+                )))
 
             case .dismissProgramDetails:
                 state.selectedProgramDetail = nil
                 state.selectedProgramChannel = nil
+                state.selectedProgramDetailRequestID = nil
+                return .none
+
+            case let .dismissProgramDetailsIfCurrent(detailRequestID):
+                guard state.selectedProgramDetailRequestID == detailRequestID else { return .none }
+                state.selectedProgramDetail = nil
+                state.selectedProgramChannel = nil
+                state.selectedProgramDetailRequestID = nil
                 return .none
 
             case let .selectCategory(categoryID):

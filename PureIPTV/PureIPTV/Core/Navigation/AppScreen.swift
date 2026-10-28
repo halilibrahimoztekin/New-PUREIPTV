@@ -168,6 +168,59 @@ public struct M3UCategoryMappingEditorRouteFeature {
 }
 
 @Reducer
+public struct EPGTimelineProgramDetailRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let timelineRouteIndex: Int
+        public let timelinePresentationID: UUID
+        public let detailRequestID: UUID
+        public let config: PlaylistConfig
+        public let program: EPGProgram
+        public let channel: MediaModels.Item
+
+        public init(
+            timelineRouteIndex: Int,
+            timelinePresentationID: UUID,
+            detailRequestID: UUID,
+            config: PlaylistConfig,
+            program: EPGProgram,
+            channel: MediaModels.Item,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.timelineRouteIndex = timelineRouteIndex
+            self.timelinePresentationID = timelinePresentationID
+            self.detailRequestID = detailRequestID
+            self.config = config
+            self.program = program
+            self.channel = channel
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public struct MultiViewChannelSelectionRouteFeature {
     @ObservableState
     public struct State: Equatable {
@@ -1276,6 +1329,7 @@ public enum AppScreen {
     case player(PlayerFeature)
     case epgGuide(EPGGuideFeature)
     case epgTimeline(EPGTimelineFeature)
+    case epgTimelineProgramDetail(EPGTimelineProgramDetailRouteFeature)
     case multiView(MultiViewFeature)
     case categoryManagement(CategoryManagementFeature)
     case parentalLock(ParentalLockFeature)
@@ -1323,6 +1377,7 @@ extension AppScreen.State: Hashable {
         case let (.player(l), .player(r)): l == r
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
+        case let (.epgTimelineProgramDetail(l), .epgTimelineProgramDetail(r)): l.presentationID == r.presentationID
         case let (.multiView(l), .multiView(r)): l.presentationID == r.presentationID
         case let (.categoryManagement(l), .categoryManagement(r)): l.presentationID == r.presentationID
         case let (.parentalLock(l), .parentalLock(r)): l.presentationID == r.presentationID
@@ -1381,6 +1436,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .epgTimeline(state):
             hasher.combine(11)
+            hasher.combine(state.presentationID)
+        case let .epgTimelineProgramDetail(state):
+            hasher.combine(42)
             hasher.combine(state.presentationID)
         case let .multiView(state):
             hasher.combine(12)

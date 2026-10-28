@@ -206,33 +206,12 @@ public struct EPGTimelineView: View {
                 navigateToSearchMatch(store.searchQuery, availableWidth: availableGridWidth)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { store.selectedProgramDetail != nil },
-            set: {
-                if !$0 {
-                    store.send(.dismissProgramDetails)
-                }
-            }
-        )) {
-            if let program = store.selectedProgramDetail, let channel = store.selectedProgramChannel {
-                programDetailSheet(program: program, channel: channel)
-                #if os(tvOS)
-                    .onExitCommand {
-                        store.send(.dismissProgramDetails)
-                    }
-                #endif
-            }
-        }
         .sheet(item: $logoEditorChannel) { channel in
             channelLogoEditorSheet(for: channel)
         }
         #if os(tvOS)
         .onExitCommand {
-            if store.selectedProgramDetail != nil {
-                store.send(.dismissProgramDetails)
-            } else {
-                store.send(.closeTapped)
-            }
+            store.send(.closeTapped)
         }
         #endif
     }
@@ -1461,7 +1440,7 @@ public struct EPGTimelineView: View {
 
     // MARK: - Program Detail Sheet & Live Preview Window
 
-    private func programDetailSheet(program: EPGProgram, channel: MediaModels.Item) -> some View {
+    func programDetailSheet(program: EPGProgram, channel: MediaModels.Item) -> some View {
         let isNow = program.isPlayingNow
         let isCatchUp = program.endTime < Date() && channel.tvArchive == 1
         let isFuture = program.startTime > Date()
