@@ -418,6 +418,7 @@ public struct LiveTVFeature {
         case categoryPreferencesUpdated
         case liveCategoryMappingsUpdated
         case parentalLockUnlocked(category: MediaModels.Category?, item: MediaModels.Item?)
+        case smartGroupManagerTapped
         case openMultiViewTapped
         case openEPGTimelineTapped
         case setTabMode(State.TabMode)
@@ -433,6 +434,7 @@ public struct LiveTVFeature {
             case presentCategoryManagement(CategoryManagementFeature.State)
             case presentParentalLock(ParentalLockFeature.State)
             case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
+            case presentSmartGroupManager
         }
     }
 
@@ -2511,6 +2513,9 @@ public struct LiveTVFeature {
                     )))
                 }
                 return .send(.delegate(.restrictMultiViewCategory(categoryID)))
+
+            case .smartGroupManagerTapped:
+                return .send(.delegate(.presentSmartGroupManager))
 
             case .openMultiViewTapped:
                 return .send(.delegate(.presentMultiView(

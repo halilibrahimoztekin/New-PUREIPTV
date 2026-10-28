@@ -9,7 +9,6 @@ import SwiftUI
         @Environment(\.locale) private var locale
         @State private var categorySearchQuery: String = ""
         @State private var channelSearchQuery: String = ""
-        @State private var isSmartGroupManagerPresented = false
         @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
@@ -39,9 +38,6 @@ import SwiftUI
                 channelListView
                 Divider().background(Color.white.opacity(0.15))
                 detailView
-            }
-            .sheet(isPresented: $isSmartGroupManagerPresented) {
-                SmartChannelGroupManagementView(store: store)
             }
             .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
@@ -84,7 +80,7 @@ import SwiftUI
                     .accessibilityHidden(config.type != .m3u)
 
                     Button {
-                        isSmartGroupManagerPresented = true
+                        store.send(.smartGroupManagerTapped)
                     } label: {
                         Image(systemName: "square.stack.3d.up")
                     }

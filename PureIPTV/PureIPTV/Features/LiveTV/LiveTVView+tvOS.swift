@@ -13,8 +13,6 @@
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
         @Environment(\.scenePhase) private var scenePhase
-        @State private var isSmartGroupManagerPresented = false
-
         @FocusState private var focusedCategory: String?
         @FocusState private var focusedChannelID: String?
 
@@ -104,9 +102,6 @@
                 else { return }
                 self.focusedChannelID = store.currentChannels.first?.id
             }
-            .sheet(isPresented: $isSmartGroupManagerPresented) {
-                SmartChannelGroupManagementView(store: store)
-            }
             .sheet(item: $editingPresentationTarget) { target in
                 let channel = target.channel
                 let override = store.channelPresentationOverrides[channel.id]
@@ -182,7 +177,7 @@
                                 .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
 
                                 Button {
-                                    isSmartGroupManagerPresented = true
+                                    store.send(.smartGroupManagerTapped)
                                 } label: {
                                     Image(systemName: "square.stack.3d.up")
                                         .font(.system(size: 18))

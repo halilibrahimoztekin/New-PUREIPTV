@@ -10,7 +10,6 @@
     public struct LiveTVView_iOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
-        @State private var isSmartGroupManagerPresented = false
         @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         private let columns: [GridItem] = [
@@ -67,9 +66,6 @@
             }
             .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
-            .sheet(isPresented: $isSmartGroupManagerPresented) {
-                SmartChannelGroupManagementView(store: store)
-            }
             .sheet(item: $editingPresentationTarget) { target in
                 let channel = target.channel
                 let override = store.channelPresentationOverrides[channel.id]
@@ -132,7 +128,7 @@
                             .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
 
                             Button {
-                                isSmartGroupManagerPresented = true
+                                store.send(.smartGroupManagerTapped)
                             } label: {
                                 Image(systemName: "square.stack.3d.up")
                                     .font(.system(size: 15, weight: .semibold))

@@ -510,6 +510,15 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
 
+        case let .router(.routeAction(routeIndex, .smartChannelGroupManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .smartChannelGroupManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
@@ -545,6 +554,15 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
             return .send(.presentParentalLock(parentalLockState))
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSmartGroupManager)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case .home = state.routes[homeRouteIndex].screen
+            else { return .none }
+            state.routes.presentSheet(.smartChannelGroupManagement(
+                SmartChannelGroupManagementRouteFeature.State(homeRouteIndex: homeRouteIndex)
+            ))
+            return .none
 
         case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(categoryID, parentalLockState))))):
             let multiViewRouteIndices = state.routes.indices.filter { routeIndex in
@@ -1220,6 +1238,11 @@ public struct AppCoordinatorView: View {
                 #else
                     ParentalLockView(store: screenStore)
                 #endif
+            case let .smartChannelGroupManagement(screenStore):
+                SmartChannelGroupManagementRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):
@@ -1248,5 +1271,45 @@ public struct AppCoordinatorView: View {
         } message: {
             Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
         }
+    }
+}
+
+private struct SmartChannelGroupManagementRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<SmartChannelGroupManagementRouteFeature>
+
+    @ViewBuilder
+    var body: some View {
+        if coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
+           case let .home(homeState) = coordinatorStore.routes[routeStore.homeRouteIndex].screen
+        {
+            let liveTVState = homeState.liveTV
+            SmartChannelGroupManagementView(
+                groups: liveTVState.smartChannelGroups,
+                selectableCategories: liveTVState.smartGroupSelectableCategories,
+                isLoading: liveTVState.isLoadingSmartGroups,
+                onSave: { id, name, categoryIDs in
+                    sendToLiveTV(.saveSmartChannelGroup(id: id, name: name, categoryIDs: categoryIDs))
+                },
+                onDelete: { groupID in
+                    sendToLiveTV(.deleteSmartChannelGroup(groupID))
+                },
+                onClose: {
+                    routeStore.send(.closeTapped)
+                }
+            )
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func sendToLiveTV(_ action: LiveTVFeature.Action) {
+        guard coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
+              case .home = coordinatorStore.routes[routeStore.homeRouteIndex].screen
+        else { return }
+        coordinatorStore.send(.router(.routeAction(
+            id: routeStore.homeRouteIndex,
+            action: .home(.liveTV(action))
+        )))
     }
 }

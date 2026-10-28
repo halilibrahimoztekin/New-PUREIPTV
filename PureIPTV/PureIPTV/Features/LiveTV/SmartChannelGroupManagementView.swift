@@ -1,22 +1,37 @@
-import ComposableArchitecture
 import SwiftUI
 
 public struct SmartChannelGroupManagementView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Bindable private var store: StoreOf<LiveTVFeature>
+    let groups: [SmartChannelGroup]
+    let selectableCategories: [MediaModels.Category]
+    let isLoading: Bool
+    let onSave: (String?, String, [String]) -> Void
+    let onDelete: (String) -> Void
+    let onClose: () -> Void
     @State private var editingID: String?
     @State private var name = ""
     @State private var selectedCategoryIDs: [String] = []
 
-    public init(store: StoreOf<LiveTVFeature>) {
-        self.store = store
+    public init(
+        groups: [SmartChannelGroup],
+        selectableCategories: [MediaModels.Category],
+        isLoading: Bool,
+        onSave: @escaping (String?, String, [String]) -> Void,
+        onDelete: @escaping (String) -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        self.groups = groups
+        self.selectableCategories = selectableCategories
+        self.isLoading = isLoading
+        self.onSave = onSave
+        self.onDelete = onDelete
+        self.onClose = onClose
     }
 
     public var body: some View {
         NavigationStack {
             List {
                 Section(AppStrings.LiveTV.smartGroups) {
-                    ForEach(store.smartChannelGroups) { group in
+                    ForEach(groups) { group in
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(group.name)
@@ -32,7 +47,7 @@ public struct SmartChannelGroupManagementView: View {
                             }
                             .accessibilityLabel("\(AppStrings.Common.edit): \(group.name)")
                             Button(role: .destructive) {
-                                store.send(.deleteSmartChannelGroup(group.id))
+                                onDelete(group.id)
                                 if editingID == group.id {
                                     resetEditor()
                                 }
@@ -53,24 +68,20 @@ public struct SmartChannelGroupManagementView: View {
                     TextField(AppStrings.LiveTV.smartGroupName, text: $name)
                         .textInputAutocapitalization(.words)
                         .accessibilityLabel(AppStrings.LiveTV.smartGroupName)
-                    ForEach(store.smartGroupSelectableCategories) { category in
+                    ForEach(selectableCategories) { category in
                         categoryChoice(id: category.id, title: category.name, isUnavailable: false)
                     }
-                    ForEach(selectedCategoryIDs.filter { id in !store.smartGroupSelectableCategories.contains(where: { $0.id == id }) }, id: \.self) { categoryID in
+                    ForEach(selectedCategoryIDs.filter { id in !selectableCategories.contains(where: { $0.id == id }) }, id: \.self) { categoryID in
                         categoryChoice(id: categoryID, title: "\(AppStrings.LiveTV.unavailableSmartGroupCategory): \(categoryID)", isUnavailable: true)
                     }
                     Button {
                         let groupID = editingID ?? UUID().uuidString
                         editingID = groupID
-                        store.send(.saveSmartChannelGroup(
-                            id: groupID,
-                            name: name,
-                            categoryIDs: selectedCategoryIDs
-                        ))
+                        onSave(groupID, name, selectedCategoryIDs)
                     } label: {
                         Label(AppStrings.Common.save, systemImage: "checkmark")
                     }
-                    .disabled(store.isLoadingSmartGroups || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedCategoryIDs.isEmpty)
+                    .disabled(isLoading || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedCategoryIDs.isEmpty)
                     .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
                 } header: {
                     Text(editingID == nil ? AppStrings.LiveTV.newSmartGroup : AppStrings.LiveTV.editSmartGroup)
@@ -81,7 +92,7 @@ public struct SmartChannelGroupManagementView: View {
             .navigationTitle(AppStrings.LiveTV.smartGroups)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(AppStrings.Common.done) { dismiss() }
+                    Button(AppStrings.Common.done, action: onClose)
                 }
             }
         }

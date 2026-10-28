@@ -2,6 +2,41 @@ import ComposableArchitecture
 import Foundation
 
 @Reducer
+public struct SmartChannelGroupManagementRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+
+        public init(homeRouteIndex: Int, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -14,6 +49,7 @@ public enum AppScreen {
     case multiView(MultiViewFeature)
     case categoryManagement(CategoryManagementFeature)
     case parentalLock(ParentalLockFeature)
+    case smartChannelGroupManagement(SmartChannelGroupManagementRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -34,6 +70,7 @@ extension AppScreen.State: Hashable {
         case let (.multiView(l), .multiView(r)): l.presentationID == r.presentationID
         case let (.categoryManagement(l), .categoryManagement(r)): l.presentationID == r.presentationID
         case let (.parentalLock(l), .parentalLock(r)): l.presentationID == r.presentationID
+        case let (.smartChannelGroupManagement(l), .smartChannelGroupManagement(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -71,6 +108,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .parentalLock(state):
             hasher.combine(14)
+            hasher.combine(state.presentationID)
+        case let .smartChannelGroupManagement(state):
+            hasher.combine(15)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)
