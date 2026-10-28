@@ -128,9 +128,6 @@
             .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
                 EPGTimelineView(store: store)
             }
-            .fullScreenCover(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
-                EPGGuideView_tvOS(store: store)
-            }
             .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
                 MultiView(store: store)
             }

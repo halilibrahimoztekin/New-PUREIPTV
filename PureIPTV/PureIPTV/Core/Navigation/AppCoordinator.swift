@@ -91,6 +91,7 @@ public struct AppCoordinator {
         case appEnteredForeground
         case appEnteredBackground
         case epgReminderMonitorTick([EPGReminder])
+        case epgGuideRouteDidDisappear(UUID)
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -98,6 +99,7 @@ public struct AppCoordinator {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.reminderClient) var reminderClient
+    @Dependency(\.previewPlayerClient) var previewPlayerClient
     @Dependency(\.purchases) var purchases
 
     public init() {}
@@ -115,6 +117,7 @@ public struct AppCoordinator {
     private func core(state: inout State, action: Action) -> Effect<Action> {
         let playlistRepository = playlistRepository
         let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
 
         switch action {
         // ── Splash ───────────────────────────────────────────────
@@ -389,45 +392,47 @@ public struct AppCoordinator {
             }
             return .send(.checkSubscriptionStatus)
 
-        // ── Home Delegates ───────────────────────────────────────
-        case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
-            guard let streamURL = channel.streamURL else { return .none }
-            guard let config = state.activeConfig else { return .none }
-
-            let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
-                guard let itemStreamURL = item.streamURL else { return nil }
-                return PlayerFeature.PlayableItem(
-                    id: item.id,
-                    title: item.title,
-                    streamURL: itemStreamURL,
-                    coverURL: item.displayLogoURL,
-                    seriesID: nil,
-                    startPosition: nil,
-                    isLive: true,
-                    config: config,
-                    epgChannelID: item.epgChannelID,
-                    categoryID: item.categoryID
-                )
+        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgGuide(guideState) = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .run { [previewPlayerClient, ownerID = guideState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
             }
 
-            let playerState = PlayerFeature.State(
-                item: .init(
-                    id: channel.id,
-                    title: channel.title,
-                    streamURL: streamURL,
-                    coverURL: channel.displayLogoURL,
-                    seriesID: nil,
-                    startPosition: nil,
-                    isLive: true,
-                    config: config,
-                    epgChannelID: channel.epgChannelID,
-                    categoryID: channel.categoryID
-                ),
-                playlist: playablePlaylist
-            )
+        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.playChannel(channel))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgGuide(guideState) = state.routes[routeIndex].screen,
+                  let playerState = makeLivePlayerState(
+                      channel: channel,
+                      playlist: guideState.channels,
+                      config: guideState.config
+                  )
+            else { return .none }
+            state.routes.dismiss()
             state.isPlayerMini = false
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
+            return .none
+
+        // ── Home Delegates ───────────────────────────────────────
+        case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
+            guard let config = state.activeConfig else { return .none }
+            guard let playerState = makeLivePlayerState(channel: channel, playlist: playlist, config: config) else { return .none }
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentEPGGuide(guideState))))):
+            #if os(tvOS)
+                state.routes.presentCover(.epgGuide(guideState))
+            #else
+                state.routes.presentSheet(.epgGuide(guideState))
+            #endif
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.didSelectVOD(vod))))):
@@ -730,6 +735,11 @@ public struct AppCoordinator {
             state.isPlayerMini.toggle()
             return .none
 
+        case let .epgGuideRouteDidDisappear(presentationID):
+            return .run { [previewPlayerClient] _ in
+                await previewPlayerClient.stopPreviewOwned(presentationID)
+            }
+
         // ── Deep Linking ─────────────────────────────────────────
         case let .handleDeepLink(url):
             guard url.scheme == "pureiptv" else { return .none }
@@ -870,6 +880,42 @@ public struct AppCoordinator {
         }
     }
 
+    private func makeLivePlayerState(
+        channel: MediaModels.Item,
+        playlist: [MediaModels.Item]?,
+        config: PlaylistConfig
+    ) -> PlayerFeature.State? {
+        guard let streamURL = channel.streamURL else { return nil }
+        let playablePlaylist = playlist?.compactMap { item -> PlayerFeature.PlayableItem? in
+            guard let itemStreamURL = item.streamURL else { return nil }
+            return PlayerFeature.PlayableItem(
+                id: item.id,
+                title: item.title,
+                streamURL: itemStreamURL,
+                coverURL: item.displayLogoURL,
+                seriesID: nil,
+                startPosition: nil,
+                isLive: true,
+                config: config,
+                epgChannelID: item.epgChannelID,
+                categoryID: item.categoryID
+            )
+        }
+        let playable = PlayerFeature.PlayableItem(
+            id: channel.id,
+            title: channel.title,
+            streamURL: streamURL,
+            coverURL: channel.displayLogoURL,
+            seriesID: nil,
+            startPosition: nil,
+            isLive: true,
+            config: config,
+            epgChannelID: channel.epgChannelID,
+            categoryID: channel.categoryID
+        )
+        return PlayerFeature.State(item: playable, playlist: playablePlaylist)
+    }
+
     private func playHistoryItem(_ item: WatchHistoryItem, state: inout State, forceRestart: Bool = false) -> Effect<Action> {
         if item.seriesID != nil || item.type == "vod" || item.type == "episode", !state.isPremium {
             return .send(.presentPaywall)
@@ -981,6 +1027,19 @@ public struct AppCoordinatorView: View {
                 HomeView(store: store)
             case let .player(store):
                 PlayerView(store: store)
+            case let .epgGuide(screenStore):
+                let presentationID = screenStore.presentationID
+                #if os(tvOS)
+                    EPGGuideView_tvOS(store: screenStore)
+                        .onDisappear {
+                            store.send(.epgGuideRouteDidDisappear(presentationID))
+                        }
+                #else
+                    EPGGuideView_iOS(store: screenStore)
+                        .onDisappear {
+                            store.send(.epgGuideRouteDidDisappear(presentationID))
+                        }
+                #endif
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):

@@ -73,9 +73,6 @@
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
             }
-            .sheet(item: $store.scope(state: \.epgGuide, action: \.epgGuide)) { store in
-                EPGGuideView_iOS(store: store)
-            }
             .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
                 ParentalLockView(store: store)
                     .presentationDetents([.height(300)])

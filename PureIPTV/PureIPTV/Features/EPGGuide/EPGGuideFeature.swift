@@ -12,6 +12,7 @@ private nonisolated enum EPGGuideCancelID: Hashable, Sendable {
 public struct EPGGuideFeature {
     @ObservableState
     public struct State: Equatable {
+        public let presentationID: UUID
         public let config: PlaylistConfig
         public let channels: [MediaModels.Item]
 
@@ -55,7 +56,13 @@ public struct EPGGuideFeature {
         public var isAutoPreviewEnabled: Bool = true
         public var previewGeneration: Int = 0
 
-        public init(config: PlaylistConfig, channels: [MediaModels.Item], initialChannel: MediaModels.Item?) {
+        public init(
+            config: PlaylistConfig,
+            channels: [MediaModels.Item],
+            initialChannel: MediaModels.Item?,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
             self.config = config
             self.channels = channels
             selectedChannel = initialChannel ?? channels.first
@@ -120,8 +127,8 @@ public struct EPGGuideFeature {
                     .cancel(id: EPGGuideCancelID.epgRequest),
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
-                    .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
+                    .run { [previewPlayerClient, ownerID = state.presentationID] _ in
+                        await previewPlayerClient.stopPreviewOwned(ownerID)
                     }
                 )
 
@@ -187,11 +194,12 @@ public struct EPGGuideFeature {
                 else { return .none }
                 state.activePreviewChannel = channel
                 state.isPreviewPlaying = true
+                let playbackID = UUID()
                 return .concatenate(
                     .cancel(id: EPGGuideCancelID.previewPlayback),
-                    .run { [previewPlayerClient] send in
+                    .run { [previewPlayerClient, ownerID = state.presentationID, playbackID] send in
                         do {
-                            try await previewPlayerClient.playPreview(channel)
+                            try await previewPlayerClient.playPreviewOwned(channel, ownerID, playbackID)
                             await send(.previewPlaybackStarted(channel.id))
                         } catch {
                             guard !Task.isCancelled else { return }
@@ -217,8 +225,8 @@ public struct EPGGuideFeature {
                 return .concatenate(
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
-                    .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
+                    .run { [previewPlayerClient, ownerID = state.presentationID] _ in
+                        await previewPlayerClient.stopPreviewOwned(ownerID)
                     }
                 )
 
@@ -245,9 +253,6 @@ public struct EPGGuideFeature {
                     .cancel(id: EPGGuideCancelID.epgRequest),
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
-                    .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
-                    },
                     .send(.delegate(.close))
                 )
 
@@ -260,13 +265,13 @@ public struct EPGGuideFeature {
                     .cancel(id: EPGGuideCancelID.epgRequest),
                     .cancel(id: EPGGuideCancelID.previewDebounce),
                     .cancel(id: EPGGuideCancelID.previewPlayback),
-                    .run { [previewPlayerClient, playerClient] send in
+                    .run { [previewPlayerClient, playerClient, ownerID = state.presentationID] send in
                         if let streamURL = channel.streamURL,
                            let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
                         {
                             await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
                         } else {
-                            await previewPlayerClient.stopPreview()
+                            await previewPlayerClient.stopPreviewOwned(ownerID)
                         }
                         await send(.delegate(.playChannel(channel)))
                     }
@@ -309,8 +314,8 @@ public struct EPGGuideFeature {
                         .cancel(id: EPGGuideCancelID.epgRequest),
                         .cancel(id: EPGGuideCancelID.previewDebounce),
                         .cancel(id: EPGGuideCancelID.previewPlayback),
-                        .run { [previewPlayerClient] _ in
-                            await previewPlayerClient.stopPreview()
+                        .run { [previewPlayerClient, ownerID = state.presentationID] _ in
+                            await previewPlayerClient.stopPreviewOwned(ownerID)
                         },
                         .send(.delegate(.playChannel(catchupItem)))
                     )

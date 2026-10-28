@@ -50,6 +50,8 @@ public struct PreviewPlayerHandoff: Sendable {
 public struct PreviewPlayerClient: Sendable {
     public var playPreview: @MainActor @Sendable (_ channel: MediaModels.Item) async throws -> Void
     public var stopPreview: @MainActor @Sendable () async -> Void
+    public var playPreviewOwned: @MainActor @Sendable (_ channel: MediaModels.Item, _ ownerID: UUID, _ playbackID: UUID) async throws -> Void = { _, _, _ in }
+    public var stopPreviewOwned: @MainActor @Sendable (_ ownerID: UUID) async -> Void = { _ in }
     public var takePreviewForPromotion: @MainActor @Sendable (_ channelID: String, _ streamURL: URL) -> PreviewPlayerHandoff? = { _, _ in nil }
     public var toggleMute: @MainActor @Sendable () async -> Bool = { true }
     public var setMuted: @MainActor @Sendable (_ isMuted: Bool) async -> Void
@@ -62,6 +64,8 @@ extension PreviewPlayerClient: DependencyKey {
         final class PreviewBox: @unchecked Sendable {
             @MainActor private var player: Player?
             @MainActor private var status = PreviewPlaybackStatus()
+            @MainActor private var ownerID: UUID?
+            @MainActor private var playbackID: UUID?
 
             @MainActor func getPlayer() -> Player {
                 if let p = player {
@@ -73,8 +77,15 @@ extension PreviewPlayerClient: DependencyKey {
                 return p
             }
 
-            @MainActor func play(channel: MediaModels.Item) throws {
+            @MainActor func claim(ownerID: UUID, playbackID: UUID) {
+                self.ownerID = ownerID
+                self.playbackID = playbackID
+            }
+
+            @MainActor func play(channel: MediaModels.Item, ownerID: UUID?, playbackID: UUID?) throws {
                 guard let streamURL = channel.streamURL else {
+                    self.ownerID = ownerID
+                    self.playbackID = playbackID
                     status = PreviewPlaybackStatus(
                         isPlaying: false,
                         isMuted: status.isMuted,
@@ -87,10 +98,14 @@ extension PreviewPlayerClient: DependencyKey {
                 }
 
                 if status.isPlaying && status.currentChannelID == channel.id {
+                    self.ownerID = ownerID
+                    self.playbackID = playbackID
                     return
                 }
 
                 let p = getPlayer()
+                self.ownerID = ownerID
+                self.playbackID = playbackID
                 let targetVol: Float = status.isMuted ? 0.0 : 0.85
                 _ = try? p.setAudioVolume(Volume(targetVol))
                 let userAgent = channel.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -114,6 +129,8 @@ extension PreviewPlayerClient: DependencyKey {
 
             @MainActor func stop() {
                 player?.stop()
+                ownerID = nil
+                playbackID = nil
                 status = PreviewPlaybackStatus(
                     isPlaying: false,
                     isMuted: status.isMuted,
@@ -123,6 +140,16 @@ extension PreviewPlayerClient: DependencyKey {
                     hasError: false,
                     errorMessage: nil
                 )
+            }
+
+            @MainActor func stop(ownerID: UUID) {
+                guard self.ownerID == ownerID else { return }
+                stop()
+            }
+
+            @MainActor func stop(ownerID: UUID, playbackID: UUID) {
+                guard self.ownerID == ownerID, self.playbackID == playbackID else { return }
+                stop()
             }
 
             @MainActor func takeForPromotion(channelID: String, streamURL: URL) -> PreviewPlayerHandoff? {
@@ -135,6 +162,8 @@ extension PreviewPlayerClient: DependencyKey {
                 else { return nil }
 
                 player = nil
+                ownerID = nil
+                playbackID = nil
                 status = PreviewPlaybackStatus(
                     isPlaying: false,
                     isMuted: status.isMuted
@@ -165,10 +194,24 @@ extension PreviewPlayerClient: DependencyKey {
             playPreview: { channel in
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
-                try box.play(channel: channel)
+                try box.play(channel: channel, ownerID: nil, playbackID: nil)
             },
             stopPreview: {
                 box.stop()
+            },
+            playPreviewOwned: { channel, ownerID, playbackID in
+                box.claim(ownerID: ownerID, playbackID: playbackID)
+                do {
+                    try await PlaybackAudioSession.setActive(true)
+                    try Task.checkCancellation()
+                    try box.play(channel: channel, ownerID: ownerID, playbackID: playbackID)
+                } catch {
+                    box.stop(ownerID: ownerID, playbackID: playbackID)
+                    throw error
+                }
+            },
+            stopPreviewOwned: { ownerID in
+                box.stop(ownerID: ownerID)
             },
             takePreviewForPromotion: { channelID, streamURL in
                 box.takeForPromotion(channelID: channelID, streamURL: streamURL)
@@ -191,11 +234,15 @@ extension PreviewPlayerClient: DependencyKey {
     public static let testValue: PreviewPlayerClient = {
         final class TestBox: @unchecked Sendable {
             @MainActor var status = PreviewPlaybackStatus()
+            @MainActor var ownerID: UUID?
+            @MainActor var playbackID: UUID?
         }
         let box = TestBox()
 
         return PreviewPlayerClient(
             playPreview: { channel in
+                box.ownerID = nil
+                box.playbackID = nil
                 box.status = PreviewPlaybackStatus(
                     isPlaying: true,
                     isMuted: true,
@@ -205,6 +252,28 @@ extension PreviewPlayerClient: DependencyKey {
                 )
             },
             stopPreview: {
+                box.ownerID = nil
+                box.playbackID = nil
+                box.status = PreviewPlaybackStatus(
+                    isPlaying: false,
+                    isMuted: box.status.isMuted
+                )
+            },
+            playPreviewOwned: { channel, ownerID, playbackID in
+                box.ownerID = ownerID
+                box.playbackID = playbackID
+                box.status = PreviewPlaybackStatus(
+                    isPlaying: true,
+                    isMuted: true,
+                    currentChannelID: channel.id,
+                    currentTitle: channel.title,
+                    currentStreamURL: channel.streamURL
+                )
+            },
+            stopPreviewOwned: { ownerID in
+                guard box.ownerID == ownerID else { return }
+                box.ownerID = nil
+                box.playbackID = nil
                 box.status = PreviewPlaybackStatus(
                     isPlaying: false,
                     isMuted: box.status.isMuted

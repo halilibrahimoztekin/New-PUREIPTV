@@ -260,7 +260,6 @@ public struct LiveTVFeature {
         public var selectedTabMode: TabMode = .channels
 
         @Presents public var categoryManagement: CategoryManagementFeature.State?
-        @Presents public var epgGuide: EPGGuideFeature.State?
         @Presents public var epgTimeline: EPGTimelineFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
         @Presents public var multiView: MultiViewFeature.State?
@@ -396,7 +395,6 @@ public struct LiveTVFeature {
         case editCategoriesTapped
         case epgGuideTapped
         case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
-        case epgGuide(PresentationAction<EPGGuideFeature.Action>)
         case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
         case multiView(PresentationAction<MultiViewFeature.Action>)
@@ -407,6 +405,7 @@ public struct LiveTVFeature {
 
         public enum Delegate: Equatable {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
+            case presentEPGGuide(EPGGuideFeature.State)
         }
     }
 
@@ -420,7 +419,6 @@ public struct LiveTVFeature {
     @Dependency(\.favoriteChannelListsClient) var favoriteChannelListsClient
     @Dependency(\.favoriteChannelOrderClient) var favoriteChannelOrderClient
     @Dependency(\.channelPresentationOverrideClient) var channelPresentationOverrideClient
-    @Dependency(\.previewPlayerClient) var previewPlayerClient
 
     public init() {}
 
@@ -2303,11 +2301,12 @@ public struct LiveTVFeature {
             case let .openChannelGuide(channel):
                 guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
                 if let config = state.config {
-                    state.epgGuide = EPGGuideFeature.State(
+                    let guide = EPGGuideFeature.State(
                         config: config,
                         channels: state.currentChannels,
                         initialChannel: channel
                     )
+                    return .send(.delegate(.presentEPGGuide(guide)))
                 }
                 return .none
 
@@ -2341,28 +2340,13 @@ public struct LiveTVFeature {
 
             case .epgGuideTapped:
                 if let config = state.config, !state.currentChannels.isEmpty {
-                    state.epgGuide = EPGGuideFeature.State(
+                    let guide = EPGGuideFeature.State(
                         config: config,
                         channels: state.currentChannels,
                         initialChannel: state.selectedChannel
                     )
+                    return .send(.delegate(.presentEPGGuide(guide)))
                 }
-                return .none
-
-            case .epgGuide(.presented(.delegate(.close))):
-                state.epgGuide = nil
-                return .none
-
-            case let .epgGuide(.presented(.delegate(.playChannel(channel)))):
-                state.epgGuide = nil
-                return .send(.channelSelected(channel))
-
-            case .epgGuide(.dismiss):
-                return .run { [previewPlayerClient] _ in
-                    await previewPlayerClient.stopPreview()
-                }
-
-            case .epgGuide:
                 return .none
 
             case .openEPGTimelineTapped:
@@ -2535,9 +2519,6 @@ public struct LiveTVFeature {
         }
         .ifLet(\.$categoryManagement, action: \.categoryManagement) {
             CategoryManagementFeature()
-        }
-        .ifLet(\.$epgGuide, action: \.epgGuide) {
-            EPGGuideFeature()
         }
         .ifLet(\.$epgTimeline, action: \.epgTimeline) {
             EPGTimelineFeature()

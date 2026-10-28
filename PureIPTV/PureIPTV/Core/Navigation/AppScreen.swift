@@ -9,6 +9,7 @@ public enum AppScreen {
     case profileSelection(ProfileSelectionFeature)
     case home(HomeFeature)
     case player(PlayerFeature)
+    case epgGuide(EPGGuideFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -24,6 +25,7 @@ extension AppScreen.State: Hashable {
         case let (.profileSelection(l), .profileSelection(r)): l == r
         case let (.home(l), .home(r)): l == r
         case let (.player(l), .player(r)): l == r
+        case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -47,6 +49,9 @@ extension AppScreen.State: Hashable {
         case let .player(state):
             hasher.combine(5)
             hasher.combine(state.item.id)
+        case let .epgGuide(state):
+            hasher.combine(10)
+            hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)
             hasher.combine(state.series.id)
