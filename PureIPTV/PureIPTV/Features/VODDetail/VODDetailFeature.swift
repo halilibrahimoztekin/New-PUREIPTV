@@ -40,6 +40,7 @@ public struct VODDetailFeature {
         public var selectedActor: TMDBCastMemberDTO?
         public var selectedActorDetails: TMDBPersonDetailsDTO?
         public var isLoadingActorDetails: Bool = false
+        public var actorBiographyPresentationRequestID: UUID?
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
         public var trailerTitle: String?
@@ -119,8 +120,8 @@ public struct VODDetailFeature {
         case historyStatusLoaded(id: String, item: WatchHistoryItem?, scope: ProfileContextSnapshot)
         case markUnwatched
         case actorTapped(TMDBCastMemberDTO)
-        case actorDetailsResponse(Result<TMDBPersonDetailsDTO, Error>)
-        case dismissActorDetails
+        case actorDetailsResponse(requestID: UUID, result: Result<TMDBPersonDetailsDTO, Error>)
+        case coordinatorDismissActorBiography(requestID: UUID)
         case trailerTapped
         case dismissTrailer
         case startInlineTrailer
@@ -139,6 +140,7 @@ public struct VODDetailFeature {
             case didSelectPlay(PlayerFeature.PlayableItem)
             case didSelectVOD(MediaModels.Item)
             case presentTMDBMatchPicker(requestID: UUID)
+            case presentActorBiography(requestID: UUID)
             case close
         }
     }
@@ -592,25 +594,38 @@ public struct VODDetailFeature {
                 return .none
 
             case let .actorTapped(actor):
+                guard state.actorBiographyPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.actorBiographyPresentationRequestID = requestID
                 state.selectedActor = actor
                 state.selectedActorDetails = nil
                 state.isLoadingActorDetails = true
-                return .run { send in
-                    await send(.actorDetailsResponse(Result {
-                        try await tmdbClient.fetchPersonDetails(actor.id)
-                    }))
-                }
+                return .merge(
+                    .run { send in
+                        await send(.actorDetailsResponse(
+                            requestID: requestID,
+                            result: Result {
+                                try await tmdbClient.fetchPersonDetails(actor.id)
+                            }
+                        ))
+                    },
+                    .send(.delegate(.presentActorBiography(requestID: requestID)))
+                )
 
-            case let .actorDetailsResponse(.success(details)):
+            case let .actorDetailsResponse(requestID, .success(details)):
+                guard state.actorBiographyPresentationRequestID == requestID else { return .none }
                 state.isLoadingActorDetails = false
                 state.selectedActorDetails = details
                 return .none
 
-            case .actorDetailsResponse(.failure):
+            case let .actorDetailsResponse(requestID, .failure):
+                guard state.actorBiographyPresentationRequestID == requestID else { return .none }
                 state.isLoadingActorDetails = false
                 return .none
 
-            case .dismissActorDetails:
+            case let .coordinatorDismissActorBiography(requestID):
+                guard state.actorBiographyPresentationRequestID == requestID else { return .none }
+                state.actorBiographyPresentationRequestID = nil
                 state.selectedActor = nil
                 state.selectedActorDetails = nil
                 state.isLoadingActorDetails = false

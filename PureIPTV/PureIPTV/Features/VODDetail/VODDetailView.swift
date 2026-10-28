@@ -4,6 +4,239 @@ import SwiftUI
     import WebKit
 #endif
 
+struct VODActorBiographyContent: View {
+    let actor: TMDBCastMemberDTO
+    let details: TMDBPersonDetailsDTO?
+    let isLoading: Bool
+    let close: () -> Void
+
+    var body: some View {
+        #if os(tvOS)
+            tvOSContent
+        #else
+            iOSContent
+        #endif
+    }
+
+    #if !os(tvOS)
+    private var iOSContent: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: "#0D0D12").ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(spacing: 18) {
+                            let avatarURL = (details?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w300\($0)" }
+                            if let urlString = avatarURL, let url = URL(string: urlString) {
+                                AsyncImage(url: url) { phase in
+                                    if case let .success(image) = phase {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        avatarFallback
+                                    }
+                                }
+                                .frame(width: 90, height: 90)
+                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
+                                .shadow(color: .black.opacity(0.6), radius: 10, y: 5)
+                            } else {
+                                avatarFallback
+                                    .frame(width: 90, height: 90)
+                                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(actor.name ?? "")
+                                    .font(.title2.bold())
+                                    .foregroundColor(.white)
+
+                                if let character = actor.character, !character.isEmpty {
+                                    Text("\(AppStrings.VODDetail.character): \(character)")
+                                        .font(.subheadline)
+                                        .foregroundColor(Color(hex: "#66B2FF"))
+                                }
+
+                                if let department = details?.knownForDepartment {
+                                    Text(department)
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.6))
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+
+                        if let details {
+                            HStack(spacing: 10) {
+                                if let birthday = details.birthday, !birthday.isEmpty {
+                                    detailChip(symbol: "calendar", color: .cyan, text: birthday)
+                                }
+                                if let placeOfBirth = details.placeOfBirth, !placeOfBirth.isEmpty {
+                                    detailChip(symbol: "mappin.and.ellipse", color: .red, text: placeOfBirth)
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                        }
+
+                        Divider().background(Color.white.opacity(0.12)).padding(.horizontal, 24)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(AppStrings.VODDetail.biography)
+                                .font(.headline.bold())
+                                .foregroundColor(.white)
+
+                            if isLoading {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(height: 14)
+                                    RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(height: 14)
+                                    RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(width: 200, height: 14)
+                                }
+                                .shimmeringPlaceholder(isLoading: true)
+                            } else if let biography = details?.biography,
+                                      !biography.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            {
+                                Text(biography)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .lineSpacing(5)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text(AppStrings.VODDetail.noBiography)
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .italic()
+                            }
+                        }
+                        .padding(.horizontal, 24)
+
+                        Spacer().frame(height: 32)
+                    }
+                }
+            }
+            .navigationTitle(actor.name ?? "")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.close) {
+                        HapticManager.shared.trigger(.light)
+                        close()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        #endif
+    }
+    #endif
+
+    #if os(tvOS)
+    private var tvOSContent: some View {
+        ZStack {
+            Color(hex: "#0F0F13").ignoresSafeArea()
+
+            HStack(spacing: 40) {
+                let avatarURL = (details?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w500\($0)" }
+                if let urlString = avatarURL, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        if case let .success(image) = phase {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Rectangle().fill(Color(hex: "#1E293B"))
+                        }
+                    }
+                    .frame(width: 240, height: 320)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
+                }
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(actor.name ?? "")
+                        .font(.largeTitle.bold())
+                        .foregroundColor(.white)
+
+                    if let character = actor.character, !character.isEmpty {
+                        Text("\(AppStrings.VODDetail.character): \(character)")
+                            .font(.title3)
+                            .foregroundColor(Color(hex: "#66B2FF"))
+                    }
+
+                    if let birthday = details?.birthday {
+                        Text("\(AppStrings.VODDetail.born): \(birthday)")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+
+                    if let placeOfBirth = details?.placeOfBirth {
+                        Text("\(AppStrings.VODDetail.birthplace): \(placeOfBirth)")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+
+                    if let biography = details?.biography, !biography.isEmpty {
+                        Text(biography)
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(8)
+                    } else if isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text(AppStrings.VODDetail.noBiography)
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.5))
+                            .italic()
+                    }
+
+                    Button(AppStrings.Common.close, action: close)
+                        .buttonStyle(.card)
+                        .padding(.top, 16)
+                }
+                .frame(maxWidth: 600, alignment: .leading)
+            }
+            .padding(60)
+        }
+    }
+    #endif
+
+    #if !os(tvOS)
+    private var avatarFallback: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: "#1E293B"), Color(hex: "#0F172A")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            if let firstLetter = actor.name?.first {
+                Text(String(firstLetter).uppercased())
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+        }
+    }
+
+    private func detailChip(symbol: String, color: Color, text: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).foregroundColor(color)
+            Text(text).lineLimit(1)
+        }
+        .font(.caption.bold())
+        .foregroundColor(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.08), in: Capsule())
+    }
+    #endif
+}
+
 struct ExpandableSynopsisView: View {
     let text: String
     let font: Font
@@ -155,18 +388,6 @@ public struct VODDetailView: View {
                             .padding(8)
                             .background(.ultraThinMaterial, in: Circle())
                     }
-                }
-            }
-            .sheet(isPresented: Binding(
-                get: { store.selectedActor != nil },
-                set: {
-                    if !$0 {
-                        store.send(.dismissActorDetails)
-                    }
-                }
-            )) {
-                if let actor = store.selectedActor {
-                    actorBiographySheet(actor: actor)
                 }
             }
         }
@@ -855,143 +1076,6 @@ public struct VODDetailView: View {
             }
         }
 
-        // MARK: - Actor Biography Sheet
-
-        private func actorBiographySheet(actor: TMDBCastMemberDTO) -> some View {
-            NavigationStack {
-                ZStack {
-                    Color(hex: "#0D0D12").ignoresSafeArea()
-
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            // Header Profile
-                            HStack(spacing: 18) {
-                                let avatarURL = (store.selectedActorDetails?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w300\($0)" }
-                                if let urlString = avatarURL, let url = URL(string: urlString) {
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case let .success(img):
-                                            img.resizable().scaledToFill()
-                                        default:
-                                            actorAvatarFallback(name: actor.name)
-                                        }
-                                    }
-                                    .frame(width: 90, height: 90)
-                                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
-                                    .shadow(color: .black.opacity(0.6), radius: 10, y: 5)
-                                } else {
-                                    actorAvatarFallback(name: actor.name)
-                                        .frame(width: 90, height: 90)
-                                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(actor.name ?? "")
-                                        .font(.title2.bold())
-                                        .foregroundColor(.white)
-
-                                    if let char = actor.character, !char.isEmpty {
-                                        Text("\(AppStrings.VODDetail.character): \(char)")
-                                            .font(.subheadline)
-                                            .foregroundColor(Color(hex: "#66B2FF"))
-                                    }
-
-                                    if let department = store.selectedActorDetails?.knownForDepartment {
-                                        Text(department)
-                                            .font(.caption)
-                                            .foregroundColor(.white.opacity(0.6))
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.top, 24)
-
-                            // Personal Details Chips
-                            if let details = store.selectedActorDetails {
-                                HStack(spacing: 10) {
-                                    if let bday = details.birthday, !bday.isEmpty {
-                                        HStack(spacing: 5) {
-                                            Image(systemName: "calendar")
-                                                .foregroundColor(.cyan)
-                                            Text(bday)
-                                        }
-                                        .font(.caption.bold())
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(Color.white.opacity(0.08), in: Capsule())
-                                    }
-
-                                    if let pob = details.placeOfBirth, !pob.isEmpty {
-                                        HStack(spacing: 5) {
-                                            Image(systemName: "mappin.and.ellipse")
-                                                .foregroundColor(.red)
-                                            Text(pob)
-                                                .lineLimit(1)
-                                        }
-                                        .font(.caption.bold())
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(Color.white.opacity(0.08), in: Capsule())
-                                    }
-                                }
-                                .padding(.horizontal, 24)
-                            }
-
-                            Divider().background(Color.white.opacity(0.12)).padding(.horizontal, 24)
-
-                            // Biography Text
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(AppStrings.VODDetail.biography)
-                                    .font(.headline.bold())
-                                    .foregroundColor(.white)
-
-                                if store.isLoadingActorDetails {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(height: 14)
-                                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(height: 14)
-                                        RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.1)).frame(width: 200, height: 14)
-                                    }
-                                    .shimmeringPlaceholder(isLoading: true)
-                                } else if let bio = store.selectedActorDetails?.biography, !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text(bio)
-                                        .font(.subheadline)
-                                        .foregroundColor(.white.opacity(0.85))
-                                        .lineSpacing(5)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                } else {
-                                    Text(AppStrings.VODDetail.noBiography)
-                                        .font(.subheadline)
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .italic()
-                                }
-                            }
-                            .padding(.horizontal, 24)
-
-                            Spacer().frame(height: 32)
-                        }
-                    }
-                }
-                .navigationTitle(actor.name ?? "")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.close) {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.dismissActorDetails)
-                        }
-                        .foregroundColor(.white)
-                    }
-                }
-            }
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            #endif
-        }
-
         // MARK: - In-App Trailer Player Sheet
 
         private func trailerPlayerSheet(videoKey: String, title: String) -> some View {
@@ -1586,18 +1670,6 @@ public struct VODDetailView: View {
                 }
             }
             .sheet(isPresented: Binding(
-                get: { store.selectedActor != nil },
-                set: {
-                    if !$0 {
-                        store.send(.dismissActorDetails)
-                    }
-                }
-            )) {
-                if let actor = store.selectedActor {
-                    tvOSActorBioSheet(actor: actor)
-                }
-            }
-            .sheet(isPresented: Binding(
                 get: { store.isTrailerPresented },
                 set: {
                     if !$0 {
@@ -1657,73 +1729,6 @@ public struct VODDetailView: View {
                         store.send(.dismissTrailer)
                     }
                     .buttonStyle(.card)
-                }
-                .padding(60)
-            }
-        }
-
-        private func tvOSActorBioSheet(actor: TMDBCastMemberDTO) -> some View {
-            ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
-
-                HStack(spacing: 40) {
-                    let avatarURL = (store.selectedActorDetails?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w500\($0)" }
-                    if let urlString = avatarURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case let .success(img):
-                                img.resizable().scaledToFill()
-                            default:
-                                Rectangle().fill(Color(hex: "#1E293B"))
-                            }
-                        }
-                        .frame(width: 240, height: 320)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
-                    }
-
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text(actor.name ?? "")
-                            .font(.largeTitle.bold())
-                            .foregroundColor(.white)
-
-                        if let char = actor.character, !char.isEmpty {
-                            Text("\(AppStrings.VODDetail.character): \(char)")
-                                .font(.title3)
-                                .foregroundColor(Color(hex: "#66B2FF"))
-                        }
-
-                        if let bday = store.selectedActorDetails?.birthday {
-                            Text("\(AppStrings.VODDetail.born): \(bday)")
-                                .font(.headline)
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-
-                        if let pob = store.selectedActorDetails?.placeOfBirth {
-                            Text("\(AppStrings.VODDetail.birthplace): \(pob)")
-                                .font(.headline)
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-
-                        if let bio = store.selectedActorDetails?.biography, !bio.isEmpty {
-                            Text(bio)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineLimit(8)
-                        } else {
-                            Text(AppStrings.VODDetail.noBiography)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.5))
-                                .italic()
-                        }
-
-                        Button(AppStrings.Common.close) {
-                            store.send(.dismissActorDetails)
-                        }
-                        .buttonStyle(.card)
-                        .padding(.top, 16)
-                    }
-                    .frame(maxWidth: 600, alignment: .leading)
                 }
                 .padding(60)
             }

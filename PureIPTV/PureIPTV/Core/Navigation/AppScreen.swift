@@ -884,6 +884,53 @@ public struct DetailSynopsisRouteFeature {
 }
 
 @Reducer
+public struct DetailActorBiographyRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let parentRouteIndex: Int
+        public let itemID: String
+        public let requestID: UUID
+
+        public init(
+            parentRouteIndex: Int,
+            itemID: String,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.parentRouteIndex = parentRouteIndex
+            self.itemID = itemID
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public struct DetailTMDBMatchPickerRouteFeature {
     public enum Parent: Equatable {
         case vod(itemID: String)
@@ -1058,6 +1105,7 @@ public enum AppScreen {
     case settingsDiagnosticReport(SettingsDiagnosticReportRouteFeature)
     case settingsBackupPreview(SettingsBackupPreviewRouteFeature)
     case detailSynopsis(DetailSynopsisRouteFeature)
+    case detailActorBiography(DetailActorBiographyRouteFeature)
     case detailTMDBMatchPicker(DetailTMDBMatchPickerRouteFeature)
     case customEPGSettings(CustomEPGSettingsRouteFeature)
     case customEPGSourceAdd(CustomEPGSourceAddRouteFeature)
@@ -1100,6 +1148,7 @@ extension AppScreen.State: Hashable {
         case let (.settingsDiagnosticReport(l), .settingsDiagnosticReport(r)): l.presentationID == r.presentationID
         case let (.settingsBackupPreview(l), .settingsBackupPreview(r)): l.presentationID == r.presentationID
         case let (.detailSynopsis(l), .detailSynopsis(r)): l.presentationID == r.presentationID
+        case let (.detailActorBiography(l), .detailActorBiography(r)): l.presentationID == r.presentationID
         case let (.detailTMDBMatchPicker(l), .detailTMDBMatchPicker(r)): l.presentationID == r.presentationID
         case let (.customEPGSettings(l), .customEPGSettings(r)): l.presentationID == r.presentationID
         case let (.customEPGSourceAdd(l), .customEPGSourceAdd(r)): l.presentationID == r.presentationID
@@ -1197,6 +1246,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .detailSynopsis(state):
             hasher.combine(36)
+            hasher.combine(state.presentationID)
+        case let .detailActorBiography(state):
+            hasher.combine(37)
             hasher.combine(state.presentationID)
         case let .detailTMDBMatchPicker(state):
             hasher.combine(27)
