@@ -45,22 +45,6 @@ public struct PlayerView: View {
         .accessibilityAddTraits(.isStaticText)
     }
 
-    private var rememberedPlaybackChoiceAlertBinding: Binding<Bool> {
-        Binding(
-            get: {
-                store.rememberedPlaybackChoice != nil
-                    && store.playerState == .playing
-                    && store.errorMessage == nil
-                    && !store.isReconnecting
-                    && !store.isSwitchingPlaybackEngine
-                    && !store.isMinimized
-                    && !store.isPiPActive
-                    && !store.isAppInBackground
-            },
-            set: { _ in }
-        )
-    }
-
     public var body: some View {
         ZStack {
             if store.playbackEngine == .avPlayer {
@@ -159,26 +143,6 @@ public struct PlayerView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .alert(
-            AppStrings.Player.rememberedPlaybackChoiceTitle,
-            isPresented: rememberedPlaybackChoiceAlertBinding
-        ) {
-            if let reminder = store.rememberedPlaybackChoice {
-                Button(AppStrings.Player.useRememberedPlaybackChoice(reminder.choice.title)) {
-                    store.send(.applyRememberedPlaybackChoice)
-                }
-                Button(AppStrings.Player.forgetRememberedPlaybackChoice, role: .destructive) {
-                    store.send(.forgetRememberedPlaybackChoice)
-                }
-            }
-            Button(AppStrings.Common.cancel, role: .cancel) {
-                store.send(.dismissRememberedPlaybackChoice)
-            }
-        } message: {
-            if let reminder = store.rememberedPlaybackChoice {
-                Text(AppStrings.Player.rememberedPlaybackChoiceMessage(reminder.choice.title))
-            }
-        }
         .onAppear {
             store.send(.onAppear)
         }

@@ -4,6 +4,7 @@ import FlowStacks
 import Foundation
 import RevenueCat
 import SwiftUI
+import SwiftVLC
 import TCACoordinators
 
 // MARK: - App Coordinator Reducer
@@ -3738,21 +3739,48 @@ public struct AppCoordinatorView: View {
         }
         .useNavigationStack(.whenAvailable)
         .alert(
-            AppStrings.Common.handoffPlaybackUnavailableTitle,
-            isPresented: Binding(
-                get: { store.isStreamHandoffErrorPresented },
-                set: { isPresented in
-                    if !isPresented {
-                        store.send(.dismissStreamHandoffError)
-                    }
-                }
-            )
+            rootAlertContext?.title ?? "",
+            isPresented: rootAlertIsPresented
         ) {
-            Button("OK", role: .cancel) {
-                store.send(.dismissStreamHandoffError)
+            switch rootAlertContext {
+            case .streamHandoff:
+                Button("OK", role: .cancel) {
+                    store.send(.dismissStreamHandoffError)
+                }
+            case let .rememberedPlaybackChoice(routeIndex, reminder):
+                Button(AppStrings.Player.useRememberedPlaybackChoice(reminder.choice.title)) {
+                    sendRememberedPlaybackChoiceAction(
+                        .applyRememberedPlaybackChoice,
+                        routeIndex: routeIndex,
+                        reminder: reminder
+                    )
+                }
+                Button(AppStrings.Player.forgetRememberedPlaybackChoice, role: .destructive) {
+                    sendRememberedPlaybackChoiceAction(
+                        .forgetRememberedPlaybackChoice,
+                        routeIndex: routeIndex,
+                        reminder: reminder
+                    )
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    sendRememberedPlaybackChoiceAction(
+                        .dismissRememberedPlaybackChoice,
+                        routeIndex: routeIndex,
+                        reminder: reminder
+                    )
+                }
+            case nil:
+                EmptyView()
             }
         } message: {
-            Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
+            switch rootAlertContext {
+            case .streamHandoff:
+                Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
+            case let .rememberedPlaybackChoice(_, reminder):
+                Text(AppStrings.Player.rememberedPlaybackChoiceMessage(reminder.choice.title))
+            case nil:
+                EmptyView()
+            }
         }
         .confirmationDialog(
             confirmationDialogContext?.title ?? "",
@@ -3804,6 +3832,58 @@ public struct AppCoordinatorView: View {
         }
     }
 
+    private enum RootAlertContext {
+        case streamHandoff
+        case rememberedPlaybackChoice(routeIndex: Int, reminder: PlaybackChoiceReminder)
+
+        var title: String {
+            switch self {
+            case .streamHandoff:
+                AppStrings.Common.handoffPlaybackUnavailableTitle
+            case .rememberedPlaybackChoice:
+                AppStrings.Player.rememberedPlaybackChoiceTitle
+            }
+        }
+    }
+
+    private var rememberedPlaybackChoiceContext: (routeIndex: Int, reminder: PlaybackChoiceReminder)? {
+        guard let routeIndex = store.routes.indices.last,
+              case let .player(state) = store.routes[routeIndex].screen,
+              let reminder = state.rememberedPlaybackChoice,
+              state.playerState == .playing,
+              state.errorMessage == nil,
+              !state.isReconnecting,
+              !state.isSwitchingPlaybackEngine,
+              !state.isMinimized,
+              !state.isPiPActive,
+              !state.isAppInBackground
+        else { return nil }
+        return (routeIndex, reminder)
+    }
+
+    private var rootAlertContext: RootAlertContext? {
+        if store.isStreamHandoffErrorPresented {
+            return .streamHandoff
+        }
+        if let context = rememberedPlaybackChoiceContext {
+            return .rememberedPlaybackChoice(routeIndex: context.routeIndex, reminder: context.reminder)
+        }
+        return nil
+    }
+
+    private var rootAlertIsPresented: Binding<Bool> {
+        Binding(
+            get: { rootAlertContext != nil },
+            set: { isPresented in
+                guard !isPresented,
+                      let context = rootAlertContext,
+                      case .streamHandoff = context
+                else { return }
+                store.send(.dismissStreamHandoffError)
+            }
+        )
+    }
+
     private var playlistDeletionContext: (routeIndex: Int, playlist: SavedPlaylist)? {
         guard let routeIndex = store.routes.indices.last(where: { index in
                   guard case let .playlistManagement(state) = store.routes[index].screen else { return false }
@@ -3847,6 +3927,21 @@ public struct AppCoordinatorView: View {
                 }
             }
         )
+    }
+
+    private func sendRememberedPlaybackChoiceAction(
+        _ action: PlayerFeature.Action,
+        routeIndex: Int,
+        reminder: PlaybackChoiceReminder
+    ) {
+        guard let currentContext = rememberedPlaybackChoiceContext,
+              currentContext.routeIndex == routeIndex,
+              currentContext.reminder == reminder
+        else { return }
+        store.send(.router(.routeAction(
+            id: routeIndex,
+            action: .player(action)
+        )))
     }
 
     private func confirmActiveConfirmation() {
