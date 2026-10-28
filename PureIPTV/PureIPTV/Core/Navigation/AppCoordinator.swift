@@ -144,6 +144,11 @@ public struct AppCoordinator {
             homeRouteIndex: Int,
             requestID: UUID
         )
+        case settingsDiagnosticReportRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID
+        )
         case detailTMDBMatchPickerRouteDidDisappear(
             presentationID: UUID,
             detailRouteIndex: Int,
@@ -925,6 +930,27 @@ public struct AppCoordinator {
                 action: .home(.settings(.coordinatorDismissHiddenContentManagement(requestID: requestID)))
             )))
 
+        case let .settingsDiagnosticReportRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let diagnosticReportRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsDiagnosticReport(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let diagnosticReportRouteIndex {
+                guard diagnosticReportRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+            )))
+
         case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
             let pickerRouteIndex = state.routes.indices.last(where: { index in
                 if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
@@ -1248,6 +1274,27 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(
             routeIndex,
+            .settingsDiagnosticReport(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsDiagnosticReport(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
             .customEPGSettings(.delegate(.close(presentationID, requestID)))
         )):
             guard state.routes.indices.contains(routeIndex),
@@ -1559,6 +1606,29 @@ public struct AppCoordinator {
                 SettingsHiddenContentRouteFeature.State(
                     homeRouteIndex: homeRouteIndex,
                     requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentDiagnosticReport(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID,
+                  let url = homeState.settings.diagnosticReportURL
+            else { return .none }
+            guard homeRouteIndex == state.routes.count - 1,
+                  homeState.selectedTab == .settings
+            else {
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+                )))
+            }
+            state.routes.presentSheet(.settingsDiagnosticReport(
+                SettingsDiagnosticReportRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID,
+                    url: url
                 )
             ))
             return .none
@@ -2679,6 +2749,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .settingsDiagnosticReport(screenStore):
+                SettingsDiagnosticReportRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .detailTMDBMatchPicker(screenStore):
                 DetailTMDBMatchPickerRouteView(
                     coordinatorStore: store,
@@ -3720,6 +3795,63 @@ private struct SettingsHiddenContentRouteView: View {
 
     private func notifyRouteDidDisappear() {
         coordinatorStore.send(.settingsHiddenContentRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct SettingsDiagnosticReportRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<SettingsDiagnosticReportRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                DiagnosticReportPreviewView(url: routeStore.url, onClose: close)
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        homeState?.selectedTab == .settings
+            && homeState?.settings.diagnosticReportPresentationRequestID == routeStore.requestID
+            && homeState?.settings.diagnosticReportURL == routeStore.url
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .settingsDiagnosticReport(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentPresentation, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.settingsDiagnosticReportRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID

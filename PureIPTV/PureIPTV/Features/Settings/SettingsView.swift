@@ -18,7 +18,6 @@ public struct SettingsView: View {
     @State private var pendingBackupURL: URL?
     @State private var backupPreviewMessage: String?
     @State private var backupRestoreCompleted = false
-    @State private var diagnosticReportURL: URL?
     @State private var isGeneratingDiagnosticReport = false
     #if os(tvOS)
         @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
@@ -821,10 +820,7 @@ public struct SettingsView: View {
                         isGeneratingDiagnosticReport = true
                         defer { isGeneratingDiagnosticReport = false }
                         if let reportURL = await FeedbackReportManager.shared.generateDiagnosticReport() {
-                            if let previousURL = diagnosticReportURL {
-                                try? FileManager.default.removeItem(at: previousURL)
-                            }
-                            diagnosticReportURL = reportURL
+                            store.send(.presentDiagnosticReport(reportURL))
                         }
                     }
                 }) {
@@ -904,18 +900,6 @@ public struct SettingsView: View {
             }
         } message: {
             Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
-        }
-        .sheet(isPresented: Binding(
-            get: { diagnosticReportURL != nil },
-            set: {
-                if !$0 {
-                    removeDiagnosticReport()
-                }
-            }
-        ), onDismiss: removeDiagnosticReport) {
-            if let diagnosticReportURL {
-                DiagnosticReportPreviewView(url: diagnosticReportURL)
-            }
         }
         .alert(
             "PureIPTV Bildirimi",
@@ -1048,17 +1032,11 @@ public struct SettingsView: View {
         backupRestoreCompleted = false
     }
 
-    private func removeDiagnosticReport() {
-        if let diagnosticReportURL {
-            try? FileManager.default.removeItem(at: diagnosticReportURL)
-        }
-        diagnosticReportURL = nil
-    }
 }
 
-private struct DiagnosticReportPreviewView: View {
+struct DiagnosticReportPreviewView: View {
     let url: URL
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
 
     private var reportText: String {
         (try? String(contentsOf: url, encoding: .utf8)) ?? AppStrings.Settings.diagnosticReportUnavailable
@@ -1078,7 +1056,7 @@ private struct DiagnosticReportPreviewView: View {
             .navigationTitle(AppStrings.Settings.diagnosticReportTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(AppStrings.Common.close) { dismiss() }
+                    Button(AppStrings.Common.close, action: onClose)
                         .accessibilityLabel(AppStrings.Common.close)
                 }
                 #if os(iOS)

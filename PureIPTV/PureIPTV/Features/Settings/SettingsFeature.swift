@@ -72,6 +72,8 @@ public struct SettingsFeature {
         public var isShowingClearCacheSuccess: Bool = false
         public var isPremium: Bool = false
         public var speedTestPresentationRequestID: UUID?
+        public var diagnosticReportURL: URL?
+        public var diagnosticReportPresentationRequestID: UUID?
 
         // Trakt.tv Integration (Madde #17)
         public var isTraktAuthenticated: Bool = false
@@ -153,6 +155,7 @@ public struct SettingsFeature {
             case presentTraktAuth(requestID: UUID)
             case presentTraktWatchlist(requestID: UUID)
             case presentHiddenContentManagement(requestID: UUID)
+            case presentDiagnosticReport(requestID: UUID)
         }
 
         case onAppear
@@ -221,6 +224,8 @@ public struct SettingsFeature {
         case coordinatorDismissTraktAuth(requestID: UUID)
         case openTraktWatchlist
         case coordinatorDismissTraktWatchlist(requestID: UUID)
+        case presentDiagnosticReport(URL)
+        case coordinatorDismissDiagnosticReport(requestID: UUID)
         case traktAction(TraktFeature.Action)
         case toggleTraktAutoScrobble(Bool)
         case traktLogout
@@ -861,6 +866,31 @@ public struct SettingsFeature {
                 state.isTraktWatchlistPresented = false
                 state.traktWatchlistPresentationRequestID = nil
                 return .none
+
+            case let .presentDiagnosticReport(url):
+                guard state.diagnosticReportPresentationRequestID == nil else {
+                    guard state.diagnosticReportURL != url else { return .none }
+                    return .run { _ in try? FileManager.default.removeItem(at: url) }
+                }
+                let previousURL = state.diagnosticReportURL
+                let requestID = UUID()
+                state.diagnosticReportURL = url
+                state.diagnosticReportPresentationRequestID = requestID
+                if let previousURL, previousURL != url {
+                    return .merge(
+                        .send(.delegate(.presentDiagnosticReport(requestID: requestID))),
+                        .run { _ in try? FileManager.default.removeItem(at: previousURL) }
+                    )
+                }
+                return .send(.delegate(.presentDiagnosticReport(requestID: requestID)))
+
+            case let .coordinatorDismissDiagnosticReport(requestID):
+                guard state.diagnosticReportPresentationRequestID == requestID else { return .none }
+                let reportURL = state.diagnosticReportURL
+                state.diagnosticReportURL = nil
+                state.diagnosticReportPresentationRequestID = nil
+                guard let reportURL else { return .none }
+                return .run { _ in try? FileManager.default.removeItem(at: reportURL) }
 
             case let .toggleTraktAutoScrobble(enabled):
                 state.isTraktAutoScrobbleEnabled = enabled
