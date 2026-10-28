@@ -14,7 +14,6 @@
         @Bindable var store: StoreOf<AddPlaylistFeature>
 
         @FocusState private var focusedField: TVField?
-        @State private var isShowingQRTransfer = false
 
         private enum TVField: Hashable {
             case xtreamPicker, m3uPicker, plexPicker, embyPicker
@@ -94,7 +93,7 @@
                         tvConnectButton
 
                         Button {
-                            isShowingQRTransfer = true
+                            store.send(.qrTransferTapped)
                         } label: {
                             Label("iPhone ile QR üzerinden aktar", systemImage: "qrcode")
                                 .font(.system(size: 22, weight: .semibold))
@@ -113,12 +112,9 @@
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.playlistType)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.errorMessage)
-            .sheet(isPresented: $isShowingQRTransfer) {
-                TVOnboardingQRView {
-                    isShowingQRTransfer = false
+            .onChange(of: store.qrTransferFocusRequestID) { _, requestID in
+                if requestID != nil {
                     focusedField = .qrTransfer
-                } onPaired: {
-                    store.send(.delegate(.didReceiveTransferredPlaylist))
                 }
             }
         }

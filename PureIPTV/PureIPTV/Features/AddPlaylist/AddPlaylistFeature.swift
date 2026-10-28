@@ -35,6 +35,7 @@ public struct AddPlaylistFeature {
         public var isLoading: Bool = false
         public var errorMessage: String?
         public var isPasswordVisible: Bool = false
+        public var qrTransferFocusRequestID: UUID?
 
         /// Validation
         public var canConnect: Bool {
@@ -67,6 +68,8 @@ public struct AddPlaylistFeature {
         case binding(BindingAction<State>)
         case playlistTypeChanged(PlaylistType)
         case connectTapped
+        case qrTransferTapped
+        case qrTransferRouteDidDismiss(UUID)
         case connectResponse(PlaylistType, Result<String, Error>)
         case plexPINCreated(PlexSignInPIN)
         case plexAccountTokenReceived(String)
@@ -85,6 +88,7 @@ public struct AddPlaylistFeature {
         public enum Delegate: Equatable {
             case didConnect(serverURL: String, username: String, password: String)
             case didReceiveTransferredPlaylist
+            case presentQRTransfer
         }
     }
 
@@ -167,6 +171,13 @@ public struct AddPlaylistFeature {
 
             case .togglePasswordVisibility:
                 state.isPasswordVisible.toggle()
+                return .none
+
+            case .qrTransferTapped:
+                return .send(.delegate(.presentQRTransfer))
+
+            case let .qrTransferRouteDidDismiss(presentationID):
+                state.qrTransferFocusRequestID = presentationID
                 return .none
 
             case .connectTapped:

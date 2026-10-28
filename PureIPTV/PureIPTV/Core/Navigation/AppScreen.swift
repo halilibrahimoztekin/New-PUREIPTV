@@ -271,6 +271,55 @@ public struct DashboardPresentationRouteFeature {
 }
 
 @Reducer
+public struct AddPlaylistQRTransferRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public enum Parent: Equatable {
+            case addPlaylistRoute(routeIndex: Int)
+            case playlistManagementAddPlaylistRoute(routeIndex: Int, presentationID: UUID, requestID: UUID)
+        }
+
+        public let presentationID: UUID
+        public let parent: Parent
+        public var isPaired = false
+
+        public init(parent: Parent, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+            self.parent = parent
+        }
+    }
+
+    public enum Action {
+        case paired
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+            case complete(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .paired:
+                guard !state.isPaired else { return .none }
+                state.isPaired = true
+                return .send(.delegate(.complete(presentationID: state.presentationID)))
+
+            case .closeTapped:
+                guard !state.isPaired else { return .none }
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public struct PlaylistQRTransferConfirmationRouteFeature {
     @ObservableState
     public struct State: Equatable {
@@ -1236,6 +1285,7 @@ public enum AppScreen {
     case m3uCategoryMappingEditor(M3UCategoryMappingEditorRouteFeature)
     case multiViewChannelSelection(MultiViewChannelSelectionRouteFeature)
     case dashboardPresentation(DashboardPresentationRouteFeature)
+    case addPlaylistQRTransfer(AddPlaylistQRTransferRouteFeature)
     case playlistQRTransferConfirmation(PlaylistQRTransferConfirmationRouteFeature)
     case playlistManagementSettings(PlaylistManagementSettingsRouteFeature)
     case playlistManagementPIN(PlaylistManagementPINRouteFeature)
@@ -1282,6 +1332,7 @@ extension AppScreen.State: Hashable {
         case let (.m3uCategoryMappingEditor(l), .m3uCategoryMappingEditor(r)): l.presentationID == r.presentationID
         case let (.multiViewChannelSelection(l), .multiViewChannelSelection(r)): l.presentationID == r.presentationID
         case let (.dashboardPresentation(l), .dashboardPresentation(r)): l.presentationID == r.presentationID
+        case let (.addPlaylistQRTransfer(l), .addPlaylistQRTransfer(r)): l.presentationID == r.presentationID
         case let (.playlistQRTransferConfirmation(l), .playlistQRTransferConfirmation(r)): l.presentationID == r.presentationID
         case let (.playlistManagementSettings(l), .playlistManagementSettings(r)): l.presentationID == r.presentationID
         case let (.playlistManagementPIN(l), .playlistManagementPIN(r)): l.presentationID == r.presentationID
@@ -1357,6 +1408,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .dashboardPresentation(state):
             hasher.combine(19)
+            hasher.combine(state.presentationID)
+        case let .addPlaylistQRTransfer(state):
+            hasher.combine(41)
             hasher.combine(state.presentationID)
         case let .playlistQRTransferConfirmation(state):
             hasher.combine(20)

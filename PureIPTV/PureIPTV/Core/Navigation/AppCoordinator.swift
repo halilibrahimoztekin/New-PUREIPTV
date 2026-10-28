@@ -205,6 +205,11 @@ public struct AppCoordinator {
         case epgGuideRouteDidDisappear(UUID)
         case epgTimelineRouteDidDisappear(UUID)
         case favoriteChannelListManagementRouteDidDisappear(UUID)
+        case addPlaylistQRTransferRouteDidDisappear(
+            presentationID: UUID,
+            parent: AddPlaylistQRTransferRouteFeature.State.Parent,
+            wasPaired: Bool
+        )
         case multiViewChannelSelectionRouteDidDisappear(
             presentationID: UUID,
             multiViewRouteIndex: Int,
@@ -341,6 +346,18 @@ public struct AppCoordinator {
             return .none
 
         // ── Add Playlist ─────────────────────────────────────────
+        case let .router(.routeAction(routeIndex, .addPlaylist(.delegate(.presentQRTransfer)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .addPlaylist = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.presentSheet(.addPlaylistQRTransfer(
+                AddPlaylistQRTransferRouteFeature.State(
+                    parent: .addPlaylistRoute(routeIndex: routeIndex)
+                )
+            ))
+            return .none
+
         case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))),
              .router(.routeAction(_, .addPlaylist(.delegate(.didReceiveTransferredPlaylist)))):
             withAnimation(.easeInOut(duration: 0.35)) {
@@ -644,6 +661,31 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            return .send(.addPlaylistQRTransferRouteDidDisappear(
+                presentationID: presentationID,
+                parent: routeState.parent,
+                wasPaired: routeState.isPaired
+            ))
+
+        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.complete(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.isPaired
+            else { return .none }
+            return .send(.addPlaylistQRTransferRouteDidDisappear(
+                presentationID: presentationID,
+                parent: routeState.parent,
+                wasPaired: true
+            ))
+
         case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.selectEPGChannel(presentationID, channel))))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
@@ -712,6 +754,57 @@ public struct AppCoordinator {
                 state.routes.dismiss()
             }
             return .none
+
+        case let .addPlaylistQRTransferRouteDidDisappear(presentationID, parent, wasPaired):
+            var didPair = wasPaired
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .addPlaylistQRTransfer(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }) {
+                guard routeIndex == state.routes.count - 1,
+                      case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen
+                else { return .none }
+                didPair = didPair || routeState.isPaired
+                state.routes.dismiss()
+            }
+
+            switch parent {
+            case let .addPlaylistRoute(routeIndex):
+                guard state.routes.indices.contains(routeIndex),
+                      routeIndex == state.routes.count - 1,
+                      case .addPlaylist = state.routes[routeIndex].screen
+                else { return .none }
+                let childAction: AddPlaylistFeature.Action = didPair
+                    ? .delegate(.didReceiveTransferredPlaylist)
+                    : .qrTransferRouteDidDismiss(presentationID)
+                return .send(.router(.routeAction(
+                    id: routeIndex,
+                    action: .addPlaylist(childAction)
+                )))
+
+            case let .playlistManagementAddPlaylistRoute(routeIndex, parentPresentationID, requestID):
+                guard state.routes.indices.contains(routeIndex),
+                      routeIndex == state.routes.count - 1,
+                      case let .playlistManagementAddPlaylist(addPlaylistState) = state.routes[routeIndex].screen,
+                      addPlaylistState.presentationID == parentPresentationID,
+                      addPlaylistState.requestID == requestID,
+                      state.routes.indices.contains(addPlaylistState.playlistManagementRouteIndex),
+                      case let .playlistManagement(managementState) = state.routes[addPlaylistState.playlistManagementRouteIndex].screen,
+                      managementState.addPlaylistPresentationRequestID == requestID,
+                      managementState.addPlaylist != nil,
+                      managementState.startupUnlockPlaylistID == nil
+                else { return .none }
+                let childAction: AddPlaylistFeature.Action = didPair
+                    ? .delegate(.didReceiveTransferredPlaylist)
+                    : .qrTransferRouteDidDismiss(presentationID)
+                return .send(.playlistManagementAddPlaylistChildAction(
+                    presentationID: parentPresentationID,
+                    requestID: requestID,
+                    action: childAction
+                ))
+            }
 
         case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
             if let selectionRouteIndex = state.routes.indices.last(where: { index in
@@ -829,6 +922,7 @@ public struct AppCoordinator {
                   managementState.addPlaylist != nil,
                   managementState.startupUnlockPlaylistID == nil
             else { return .none }
+
             return .send(.router(.routeAction(
                 id: addPlaylistRouteState.playlistManagementRouteIndex,
                 action: .playlistManagement(.addPlaylist(.presented(childAction)))
@@ -2226,6 +2320,36 @@ public struct AppCoordinator {
             ))
             return .none
 
+        case let .router(.routeAction(
+            playlistManagementRouteIndex,
+            .playlistManagement(.delegate(.presentAddPlaylistQRTransfer(requestID)))
+        )):
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil,
+                  managementState.startupUnlockPlaylistID == nil,
+                  let addPlaylistRouteIndex = state.routes.indices.last(where: { routeIndex in
+                      guard routeIndex > playlistManagementRouteIndex,
+                            case let .playlistManagementAddPlaylist(routeState) = state.routes[routeIndex].screen
+                      else { return false }
+                      return routeState.playlistManagementRouteIndex == playlistManagementRouteIndex
+                          && routeState.requestID == requestID
+                  }),
+                  addPlaylistRouteIndex == state.routes.count - 1,
+                  case let .playlistManagementAddPlaylist(addPlaylistRouteState) = state.routes[addPlaylistRouteIndex].screen
+            else { return .none }
+            state.routes.presentSheet(.addPlaylistQRTransfer(
+                AddPlaylistQRTransferRouteFeature.State(
+                    parent: .playlistManagementAddPlaylistRoute(
+                        routeIndex: addPlaylistRouteIndex,
+                        presentationID: addPlaylistRouteState.presentationID,
+                        requestID: requestID
+                    )
+                )
+            ))
+            return .none
+
         case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))))):
             guard state.routes.indices.contains(homeRouteIndex),
                   case let .home(homeState) = state.routes[homeRouteIndex].screen,
@@ -3260,6 +3384,15 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .addPlaylistQRTransfer(screenStore):
+                #if os(tvOS)
+                    AddPlaylistQRTransferRouteView(
+                        coordinatorStore: store,
+                        routeStore: screenStore
+                    )
+                #else
+                    EmptyView()
+                #endif
             case let .playlistQRTransferConfirmation(screenStore):
                 #if os(iOS)
                     PlaylistQRTransferConfirmationRouteView(
@@ -3550,6 +3683,72 @@ private struct FavoriteChannelListManagementRouteView: View {
             routeStore.send(.closeTapped)
             return
         }
+    }
+}
+
+private struct AddPlaylistQRTransferRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<AddPlaylistQRTransferRouteFeature>
+
+    var body: some View {
+        Group {
+            if isParentCurrent {
+                TVOnboardingQRView(
+                    onDismiss: { routeStore.send(.closeTapped) },
+                    onPaired: { routeStore.send(.paired) }
+                )
+                #if os(tvOS)
+                    .onExitCommand { routeStore.send(.closeTapped) }
+                #endif
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isParentCurrent) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear {
+            coordinatorStore.send(.addPlaylistQRTransferRouteDidDisappear(
+                presentationID: routeStore.presentationID,
+                parent: routeStore.parent,
+                wasPaired: routeStore.isPaired
+            ))
+        }
+    }
+
+    private var isParentCurrent: Bool {
+        switch routeStore.parent {
+        case let .addPlaylistRoute(routeIndex):
+            guard coordinatorStore.routes.indices.contains(routeIndex),
+                  case .addPlaylist = coordinatorStore.routes[routeIndex].screen
+            else { return false }
+            return true
+
+        case let .playlistManagementAddPlaylistRoute(routeIndex, presentationID, requestID):
+            guard coordinatorStore.routes.indices.contains(routeIndex),
+                  case let .playlistManagementAddPlaylist(addPlaylistState) = coordinatorStore.routes[routeIndex].screen,
+                  addPlaylistState.presentationID == presentationID,
+                  addPlaylistState.requestID == requestID,
+                  coordinatorStore.routes.indices.contains(addPlaylistState.playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = coordinatorStore.routes[addPlaylistState.playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil,
+                  managementState.startupUnlockPlaylistID == nil
+            else { return false }
+            return true
+        }
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .addPlaylistQRTransfer(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID
+    }
+
+    private func closeIfStale() {
+        guard !isParentCurrent, isRouteActive else { return }
+        routeStore.send(.closeTapped)
     }
 }
 

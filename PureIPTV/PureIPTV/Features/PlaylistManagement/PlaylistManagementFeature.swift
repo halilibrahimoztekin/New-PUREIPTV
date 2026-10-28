@@ -93,6 +93,7 @@ public struct PlaylistManagementFeature {
             case didUnlockStartupPlaylist(UUID)
             case addPlaylistTapped
             case presentAddPlaylist(requestID: UUID)
+            case presentAddPlaylistQRTransfer(requestID: UUID)
             case addPlaylistDidConnect
             case dismissed
         }
@@ -461,6 +462,13 @@ public struct PlaylistManagementFeature {
                 state.addPlaylistPresentationRequestID = nil
                 state.addPlaylist = nil
                 return .send(.delegate(.addPlaylistDidConnect))
+
+            case .addPlaylist(.presented(.delegate(.presentQRTransfer))):
+                guard state.startupUnlockPlaylistID == nil,
+                      state.addPlaylist != nil,
+                      let requestID = state.addPlaylistPresentationRequestID
+                else { return .none }
+                return .send(.delegate(.presentAddPlaylistQRTransfer(requestID: requestID)))
 
             case .addPlaylist:
                 return .none
