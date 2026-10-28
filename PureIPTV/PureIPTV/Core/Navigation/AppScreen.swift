@@ -658,6 +658,53 @@ public struct CustomEPGSettingsRouteFeature {
 }
 
 @Reducer
+public struct CustomEPGSourceAddRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let customEPGSettingsPresentationID: UUID
+        public let homeRouteIndex: Int
+        public let requestID: UUID
+
+        public init(
+            customEPGSettingsPresentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.customEPGSettingsPresentationID = customEPGSettingsPresentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -684,6 +731,7 @@ public enum AppScreen {
     case settingsSpeedTest(SettingsSpeedTestRouteFeature)
     case detailTMDBMatchPicker(DetailTMDBMatchPickerRouteFeature)
     case customEPGSettings(CustomEPGSettingsRouteFeature)
+    case customEPGSourceAdd(CustomEPGSourceAddRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -718,6 +766,7 @@ extension AppScreen.State: Hashable {
         case let (.settingsSpeedTest(l), .settingsSpeedTest(r)): l.presentationID == r.presentationID
         case let (.detailTMDBMatchPicker(l), .detailTMDBMatchPicker(r)): l.presentationID == r.presentationID
         case let (.customEPGSettings(l), .customEPGSettings(r)): l.presentationID == r.presentationID
+        case let (.customEPGSourceAdd(l), .customEPGSourceAdd(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -797,6 +846,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .customEPGSettings(state):
             hasher.combine(28)
+            hasher.combine(state.presentationID)
+        case let .customEPGSourceAdd(state):
+            hasher.combine(29)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

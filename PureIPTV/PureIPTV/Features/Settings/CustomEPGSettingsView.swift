@@ -321,12 +321,6 @@ public struct CustomEPGSettingsView: View {
                         }
                     }
                 }
-                .sheet(isPresented: Binding(
-                    get: { store.isAddCustomEPGSourceSheetPresented },
-                    set: { store.send(.setAddCustomEPGSourceSheetPresented($0)) }
-                )) {
-                    addSourceSheet
-                }
         }
     }
 
@@ -338,9 +332,27 @@ public struct CustomEPGSettingsView: View {
         }
     }
 
-    // MARK: - Add Source Sheet
+    private func timeShiftText(_ hours: Int) -> String {
+        if hours == 0 {
+            "0 Saat"
+        } else if hours > 0 {
+            "+\(hours) Saat"
+        } else {
+            "\(hours) Saat"
+        }
+    }
+}
 
-    private var addSourceSheet: some View {
+public struct CustomEPGSourceEntryView: View {
+    @Bindable var store: StoreOf<SettingsFeature>
+    private let onClose: () -> Void
+
+    public init(store: StoreOf<SettingsFeature>, onClose: @escaping () -> Void) {
+        self.store = store
+        self.onClose = onClose
+    }
+
+    public var body: some View {
         NavigationStack {
             Form {
                 Section(header: Text("Kaynak Bilgileri")) {
@@ -394,20 +406,10 @@ public struct CustomEPGSettingsView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Vazgeç") {
-                            store.send(.setAddCustomEPGSourceSheetPresented(false))
+                            onClose()
                         }
                     }
                 }
-        }
-    }
-
-    private func timeShiftText(_ hours: Int) -> String {
-        if hours == 0 {
-            "0 Saat"
-        } else if hours > 0 {
-            "+\(hours) Saat"
-        } else {
-            "\(hours) Saat"
         }
     }
 }

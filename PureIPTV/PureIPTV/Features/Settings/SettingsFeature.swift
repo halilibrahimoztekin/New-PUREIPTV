@@ -102,6 +102,7 @@ public struct SettingsFeature {
         public var isCustomEPGSheetPresented: Bool = false
         public var customEPGPresentationRequestID: UUID?
         public var isAddCustomEPGSourceSheetPresented: Bool = false
+        public var customEPGSourceAddPresentationRequestID: UUID?
         public var newCustomEPGName: String = ""
         public var newCustomEPGURLString: String = ""
         public var customEPGErrorMessage: String?
@@ -133,6 +134,7 @@ public struct SettingsFeature {
         case speedTestTapped
         case closeSpeedTest(requestID: UUID)
         case coordinatorDismissCustomEPGSettings(requestID: UUID)
+        case coordinatorDismissCustomEPGSourceAdd(requestID: UUID)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -140,6 +142,7 @@ public struct SettingsFeature {
             case switchProfile
             case presentSpeedTest(requestID: UUID)
             case presentCustomEPGSettings(requestID: UUID)
+            case presentCustomEPGSourceAdd(requestID: UUID)
         }
 
         case onAppear
@@ -939,6 +942,10 @@ public struct SettingsFeature {
                 guard state.customEPGPresentationRequestID == requestID else { return .none }
                 state.isCustomEPGSheetPresented = false
                 state.customEPGPresentationRequestID = nil
+                state.isAddCustomEPGSourceSheetPresented = false
+                state.customEPGSourceAddPresentationRequestID = nil
+                state.newCustomEPGName = ""
+                state.newCustomEPGURLString = ""
                 return .none
 
             case .loadEPGMappingSuggestions:
@@ -1005,12 +1012,30 @@ public struct SettingsFeature {
                 return .none
 
             case let .setAddCustomEPGSourceSheetPresented(val):
-                state.isAddCustomEPGSourceSheetPresented = val
-                state.customEPGErrorMessage = nil
-                if !val {
+                guard val else {
+                    state.isAddCustomEPGSourceSheetPresented = false
+                    state.customEPGErrorMessage = nil
                     state.newCustomEPGName = ""
                     state.newCustomEPGURLString = ""
+                    return .none
                 }
+                guard state.isCustomEPGSheetPresented,
+                      state.customEPGPresentationRequestID != nil,
+                      state.customEPGSourceAddPresentationRequestID == nil
+                else { return .none }
+                let requestID = UUID()
+                state.customEPGSourceAddPresentationRequestID = requestID
+                state.isAddCustomEPGSourceSheetPresented = true
+                state.customEPGErrorMessage = nil
+                return .send(.delegate(.presentCustomEPGSourceAdd(requestID: requestID)))
+
+            case let .coordinatorDismissCustomEPGSourceAdd(requestID):
+                guard state.customEPGSourceAddPresentationRequestID == requestID else { return .none }
+                state.isAddCustomEPGSourceSheetPresented = false
+                state.customEPGSourceAddPresentationRequestID = nil
+                state.customEPGErrorMessage = nil
+                state.newCustomEPGName = ""
+                state.newCustomEPGURLString = ""
                 return .none
 
             case let .setNewCustomEPGName(val):
