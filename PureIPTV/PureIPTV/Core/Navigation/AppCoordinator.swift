@@ -134,6 +134,11 @@ public struct AppCoordinator {
             homeRouteIndex: Int,
             requestID: UUID
         )
+        case settingsTraktWatchlistRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID
+        )
         case detailTMDBMatchPickerRouteDidDisappear(
             presentationID: UUID,
             detailRouteIndex: Int,
@@ -873,6 +878,27 @@ public struct AppCoordinator {
                 action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
             )))
 
+        case let .settingsTraktWatchlistRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let traktWatchlistRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsTraktWatchlist(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let traktWatchlistRouteIndex {
+                guard traktWatchlistRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
+            )))
+
         case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
             let pickerRouteIndex = state.routes.indices.last(where: { index in
                 if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
@@ -1154,6 +1180,27 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(
             routeIndex,
+            .settingsTraktWatchlist(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsTraktWatchlist(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
             .customEPGSettings(.delegate(.close(presentationID, requestID)))
         )):
             guard state.routes.indices.contains(routeIndex),
@@ -1431,6 +1478,22 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.presentSheet(.settingsTraktAuth(
                 SettingsTraktAuthRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktWatchlist(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID,
+                  homeState.settings.isTraktWatchlistPresented
+            else { return .none }
+            state.routes.presentSheet(.settingsTraktWatchlist(
+                SettingsTraktWatchlistRouteFeature.State(
                     homeRouteIndex: homeRouteIndex,
                     requestID: requestID
                 )
@@ -2543,6 +2606,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .settingsTraktWatchlist(screenStore):
+                SettingsTraktWatchlistRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .detailTMDBMatchPicker(screenStore):
                 DetailTMDBMatchPickerRouteView(
                     coordinatorStore: store,
@@ -3429,6 +3497,90 @@ private struct SettingsTraktAuthRouteView: View {
 
     private func notifyRouteDidDisappear() {
         coordinatorStore.send(.settingsTraktAuthRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct SettingsTraktWatchlistRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<SettingsTraktWatchlistRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                NavigationStack {
+                    TraktWatchlistView(store: traktStore)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(AppStrings.Common.close) {
+                                    close()
+                                }
+                            }
+                        }
+                }
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var traktStore: StoreOf<TraktFeature> {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen
+                else { return TraktFeature.State() }
+                return homeState.settings.traktState
+            },
+            action: { action in
+                .router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(.traktAction(action)))
+                ))
+            }
+        )
+    }
+
+    private var isCurrentPresentation: Bool {
+        homeState?.selectedTab == .settings
+            && homeState?.settings.isTraktWatchlistPresented == true
+            && homeState?.settings.traktWatchlistPresentationRequestID == routeStore.requestID
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .settingsTraktWatchlist(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentPresentation, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.settingsTraktWatchlistRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID

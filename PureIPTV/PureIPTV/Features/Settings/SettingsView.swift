@@ -20,7 +20,6 @@ public struct SettingsView: View {
     @State private var backupRestoreCompleted = false
     @State private var diagnosticReportURL: URL?
     @State private var isGeneratingDiagnosticReport = false
-    @State private var isShowingTraktWatchlist: Bool = false
     #if os(tvOS)
         @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
         @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var playerRemoteDownAction = TVPlayerRemoteAction.channelDown.rawValue
@@ -668,7 +667,7 @@ public struct SettingsView: View {
                     .tint(Color(hex: "#ED1C24"))
 
                     Button {
-                        isShowingTraktWatchlist = true
+                        store.send(.openTraktWatchlist)
                     } label: {
                         HStack {
                             Image(systemName: "bookmark.fill")
@@ -911,18 +910,6 @@ public struct SettingsView: View {
             set: { _ in store.send(.closeHiddenContentManagement) }
         )) {
             HiddenContentManagementView(store: store)
-        }
-        .sheet(isPresented: $isShowingTraktWatchlist) {
-            NavigationStack {
-                TraktWatchlistView(store: store.scope(state: \.traktState, action: \.traktAction))
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(AppStrings.Common.close) {
-                                isShowingTraktWatchlist = false
-                            }
-                        }
-                    }
-            }
         }
         .sheet(isPresented: Binding(
             get: { diagnosticReportURL != nil },

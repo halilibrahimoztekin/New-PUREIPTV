@@ -79,6 +79,8 @@ public struct SettingsFeature {
         public var isTraktAutoScrobbleEnabled: Bool = true
         public var isTraktAuthSheetPresented: Bool = false
         public var traktAuthPresentationRequestID: UUID?
+        public var isTraktWatchlistPresented: Bool = false
+        public var traktWatchlistPresentationRequestID: UUID?
         public var traktState: TraktFeature.State = .init()
 
         // Hidden Content & Category Blacklist (Madde #19)
@@ -148,6 +150,7 @@ public struct SettingsFeature {
             case presentCustomEPGSourceAdd(requestID: UUID)
             case presentPINSetup(requestID: UUID)
             case presentTraktAuth(requestID: UUID)
+            case presentTraktWatchlist(requestID: UUID)
         }
 
         case onAppear
@@ -214,6 +217,8 @@ public struct SettingsFeature {
         // Trakt.tv Actions (Madde #17)
         case setTraktAuthSheetPresented(Bool)
         case coordinatorDismissTraktAuth(requestID: UUID)
+        case openTraktWatchlist
+        case coordinatorDismissTraktWatchlist(requestID: UUID)
         case traktAction(TraktFeature.Action)
         case toggleTraktAutoScrobble(Bool)
         case traktLogout
@@ -839,6 +844,19 @@ public struct SettingsFeature {
                 state.traktAuthPresentationRequestID = nil
                 state.isTraktAuthenticated = traktClient.isAuthenticated()
                 state.traktUsername = traktClient.currentUser()?.username
+                return .none
+
+            case .openTraktWatchlist:
+                guard state.traktWatchlistPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.isTraktWatchlistPresented = true
+                state.traktWatchlistPresentationRequestID = requestID
+                return .send(.delegate(.presentTraktWatchlist(requestID: requestID)))
+
+            case let .coordinatorDismissTraktWatchlist(requestID):
+                guard state.traktWatchlistPresentationRequestID == requestID else { return .none }
+                state.isTraktWatchlistPresented = false
+                state.traktWatchlistPresentationRequestID = nil
                 return .none
 
             case let .toggleTraktAutoScrobble(enabled):
