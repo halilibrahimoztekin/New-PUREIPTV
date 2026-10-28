@@ -3482,6 +3482,8 @@ public typealias AppFeature = AppCoordinator
 
 public struct AppCoordinatorView: View {
     let store: StoreOf<AppCoordinator>
+    // Alert buttons act on the context currently presented before SwiftUI clears the binding.
+    @State private var rootAlertButtonActionContext: RootAlertContext?
 
     public init(store: StoreOf<AppCoordinator>) {
         self.store = store
@@ -3745,44 +3747,72 @@ public struct AppCoordinatorView: View {
             switch rootAlertContext {
             case .streamHandoff:
                 Button("OK", role: .cancel) {
-                    store.send(.dismissStreamHandoffError)
+                    performRootAlertButtonAction(for: .streamHandoff) {
+                        store.send(.dismissStreamHandoffError)
+                    }
                 }
             case let .rememberedPlaybackChoice(routeIndex, reminder):
                 Button(AppStrings.Player.useRememberedPlaybackChoice(reminder.choice.title)) {
-                    sendRememberedPlaybackChoiceAction(
-                        .applyRememberedPlaybackChoice,
-                        routeIndex: routeIndex,
-                        reminder: reminder
-                    )
+                    performRootAlertButtonAction(
+                        for: .rememberedPlaybackChoice(routeIndex: routeIndex, reminder: reminder)
+                    ) {
+                        sendRememberedPlaybackChoiceAction(
+                            .applyRememberedPlaybackChoice,
+                            routeIndex: routeIndex,
+                            reminder: reminder
+                        )
+                    }
                 }
                 Button(AppStrings.Player.forgetRememberedPlaybackChoice, role: .destructive) {
-                    sendRememberedPlaybackChoiceAction(
-                        .forgetRememberedPlaybackChoice,
-                        routeIndex: routeIndex,
-                        reminder: reminder
-                    )
+                    performRootAlertButtonAction(
+                        for: .rememberedPlaybackChoice(routeIndex: routeIndex, reminder: reminder)
+                    ) {
+                        sendRememberedPlaybackChoiceAction(
+                            .forgetRememberedPlaybackChoice,
+                            routeIndex: routeIndex,
+                            reminder: reminder
+                        )
+                    }
                 }
                 Button(AppStrings.Common.cancel, role: .cancel) {
-                    sendRememberedPlaybackChoiceAction(
-                        .dismissRememberedPlaybackChoice,
-                        routeIndex: routeIndex,
-                        reminder: reminder
-                    )
+                    performRootAlertButtonAction(
+                        for: .rememberedPlaybackChoice(routeIndex: routeIndex, reminder: reminder)
+                    ) {
+                        sendRememberedPlaybackChoiceAction(
+                            .dismissRememberedPlaybackChoice,
+                            routeIndex: routeIndex,
+                            reminder: reminder
+                        )
+                    }
                 }
             case let .clearCacheConfirmation(routeIndex):
                 Button(AppStrings.Settings.clearCacheConfirm, role: .destructive) {
-                    sendSettingsAlertAction(.confirmClearCache, routeIndex: routeIndex)
+                    performRootAlertButtonAction(for: .clearCacheConfirmation(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.confirmClearCache, routeIndex: routeIndex)
+                    }
                 }
                 Button(AppStrings.Common.cancel, role: .cancel) {
-                    sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
+                    performRootAlertButtonAction(for: .clearCacheConfirmation(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
+                    }
                 }
             case let .clearCacheSuccess(routeIndex):
                 Button(AppStrings.Common.ok, role: .cancel) {
-                    sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                    performRootAlertButtonAction(for: .clearCacheSuccess(routeIndex: routeIndex)) {
+                        sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                    }
                 }
-            case let .backupImportError(routeIndex, _):
+            case let .backupImportError(routeIndex, message):
                 Button(AppStrings.Common.ok, role: .cancel) {
-                    sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
+                    performRootAlertButtonAction(for: .backupImportError(routeIndex: routeIndex, message: message)) {
+                        sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
+                    }
+                }
+            case let .backupExportNotice(routeIndex, message):
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    performRootAlertButtonAction(for: .backupExportNotice(routeIndex: routeIndex, message: message)) {
+                        sendSettingsAlertAction(.backupExportAlertDismissed, routeIndex: routeIndex)
+                    }
                 }
             case nil:
                 EmptyView()
@@ -3798,6 +3828,8 @@ public struct AppCoordinatorView: View {
             case .clearCacheSuccess:
                 Text(AppStrings.Settings.clearCacheSuccess)
             case let .backupImportError(_, message):
+                Text(message)
+            case let .backupExportNotice(_, message):
                 Text(message)
             case nil:
                 EmptyView()
@@ -3859,6 +3891,7 @@ public struct AppCoordinatorView: View {
         case clearCacheConfirmation(routeIndex: Int)
         case clearCacheSuccess(routeIndex: Int)
         case backupImportError(routeIndex: Int, message: String)
+        case backupExportNotice(routeIndex: Int, message: String)
 
         var title: String {
             switch self {
@@ -3868,7 +3901,7 @@ public struct AppCoordinatorView: View {
                 AppStrings.Player.rememberedPlaybackChoiceTitle
             case .clearCacheConfirmation, .clearCacheSuccess:
                 AppStrings.Settings.clearCacheTitle
-            case .backupImportError:
+            case .backupImportError, .backupExportNotice:
                 "PureIPTV Bildirimi"
             }
         }
@@ -3908,6 +3941,13 @@ public struct AppCoordinatorView: View {
         {
             return .backupImportError(routeIndex: routeIndex, message: message)
         }
+        if let routeIndex = store.routes.indices.last,
+           case let .home(state) = store.routes[routeIndex].screen,
+           state.selectedTab == .settings,
+           let message = state.settings.backupExportAlertMessage
+        {
+            return .backupExportNotice(routeIndex: routeIndex, message: message)
+        }
         return nil
     }
 
@@ -3929,7 +3969,12 @@ public struct AppCoordinatorView: View {
         Binding(
             get: { rootAlertContext != nil },
             set: { isPresented in
-                guard !isPresented, let context = rootAlertContext else { return }
+                guard !isPresented else { return }
+                if rootAlertButtonActionContext != nil {
+                    rootAlertButtonActionContext = nil
+                    return
+                }
+                guard let context = rootAlertContext else { return }
                 switch context {
                 case .streamHandoff:
                     store.send(.dismissStreamHandoffError)
@@ -3941,9 +3986,16 @@ public struct AppCoordinatorView: View {
                     sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
                 case let .backupImportError(routeIndex, _):
                     sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
+                case let .backupExportNotice(routeIndex, _):
+                    sendSettingsAlertAction(.backupExportAlertDismissed, routeIndex: routeIndex)
                 }
             }
         )
+    }
+
+    private func performRootAlertButtonAction(for context: RootAlertContext, action: () -> Void) {
+        rootAlertButtonActionContext = context
+        action()
     }
 
     private var playlistDeletionContext: (routeIndex: Int, playlist: SavedPlaylist)? {

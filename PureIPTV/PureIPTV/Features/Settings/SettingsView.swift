@@ -10,8 +10,6 @@ public struct SettingsView: View {
     @Bindable var store: StoreOf<SettingsFeature>
 
     @State private var backupExportURL: URL? = nil
-    @State private var backupExportAlertMessage: String? = nil
-    @State private var isShowingBackupExportAlert = false
     @State private var isImportingBackup = false
     @State private var isGeneratingDiagnosticReport = false
     #if os(tvOS)
@@ -794,11 +792,9 @@ public struct SettingsView: View {
                     do {
                         let url = try BackupManager.shared.createBackupFile()
                         backupExportURL = url
-                        backupExportAlertMessage = "Yedek dosyası başarıyla oluşturuldu:\n\(url.lastPathComponent)"
-                        isShowingBackupExportAlert = true
+                        store.send(.backupExportAlertPresented("Yedek dosyası başarıyla oluşturuldu:\n\(url.lastPathComponent)"))
                     } catch {
-                        backupExportAlertMessage = "Yedekleme oluşturulamadı: \(error.localizedDescription)"
-                        isShowingBackupExportAlert = true
+                        store.send(.backupExportAlertPresented("Yedekleme oluşturulamadı: \(error.localizedDescription)"))
                     }
                 }) {
                     HStack {
@@ -872,14 +868,6 @@ public struct SettingsView: View {
             }
         } message: {
             Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
-        }
-        .alert(
-            "PureIPTV Bildirimi",
-            isPresented: $isShowingBackupExportAlert
-        ) {
-            Button(AppStrings.Common.ok, role: .cancel) {}
-        } message: {
-            Text(backupExportAlertMessage ?? "")
         }
         #if os(iOS)
         .fileImporter(
