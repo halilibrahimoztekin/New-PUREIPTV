@@ -211,6 +211,7 @@ public struct AppCoordinator {
             detailRequestID: UUID
         )
         case epgTimelineChannelLogoEditorRouteDidDisappear(UUID)
+        case profileAddProfileRouteDidDisappear(presentationID: UUID, profileSelectionRouteIndex: Int)
         case favoriteChannelListManagementRouteDidDisappear(UUID)
         case addPlaylistQRTransferRouteDidDisappear(
             presentationID: UUID,
@@ -312,6 +313,57 @@ public struct AppCoordinator {
             return .none
 
         // ── Profile Selection ────────────────────────────────────
+        case let .router(.routeAction(routeIndex, .profileSelection(.addProfileTapped))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .profileSelection(profileState) = state.routes[routeIndex].screen,
+                  !profileState.isEditing,
+                  profileState.profiles.count < 6,
+                  !state.routes.contains(where: { route in
+                      guard case let .profileAddProfile(routeState) = route.screen else { return false }
+                      return routeState.profileSelectionRouteIndex == routeIndex
+                  })
+            else { return .none }
+
+            state.routes.presentSheet(.profileAddProfile(
+                ProfileAddProfileRouteFeature.State(
+                    profileSelectionRouteIndex: routeIndex,
+                    profileCountAtPresentation: profileState.profiles.count
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(routeIndex, .profileAddProfile(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .profileAddProfile(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  state.routes.indices.contains(routeState.profileSelectionRouteIndex),
+                  case .profileSelection = state.routes[routeState.profileSelectionRouteIndex].screen
+            else { return .none }
+
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: routeState.profileSelectionRouteIndex,
+                action: .profileSelection(.binding(.set(\.showingAddProfile, false)))
+            )))
+
+        case let .profileAddProfileRouteDidDisappear(presentationID, profileSelectionRouteIndex):
+            guard !state.routes.contains(where: { route in
+                      guard case let .profileAddProfile(routeState) = route.screen else { return false }
+                      return routeState.presentationID == presentationID
+                          || routeState.profileSelectionRouteIndex == profileSelectionRouteIndex
+                  }),
+                  state.routes.indices.contains(profileSelectionRouteIndex),
+                  case let .profileSelection(profileState) = state.routes[profileSelectionRouteIndex].screen,
+                  profileState.showingAddProfile
+            else { return .none }
+
+            return .send(.router(.routeAction(
+                id: profileSelectionRouteIndex,
+                action: .profileSelection(.binding(.set(\.showingAddProfile, false)))
+            )))
+
         case .router(.routeAction(_, .profileSelection(.delegate(.didSelectProfile)))):
             guard case let .loaded(activePlaylist) = playlistRepository.readActivePlaylist() else {
                 state.isStartupPlaylistReadFailed = true
@@ -3475,6 +3527,8 @@ public struct AppCoordinatorView: View {
                 AddPlaylistView(store: store)
             case let .profileSelection(store):
                 ProfileSelectionView(store: store)
+            case let .profileAddProfile(screenStore):
+                ProfileAddProfileRouteView(coordinatorStore: store, routeStore: screenStore)
             case let .home(store):
                 HomeView(store: store)
             case let .player(store):
@@ -3971,6 +4025,98 @@ private struct M3UCategoryMappingEditorRouteView: View {
                 routeStore.send(.closeTapped)
             }
         )
+    }
+}
+
+private struct ProfileAddProfileRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<ProfileAddProfileRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentContext {
+                ProfileAddProfileRouteForm(
+                    isPerformingProfileOperation: profileSelectionState?.isPerformingProfileOperation ?? false,
+                    errorMessage: profileSelectionState?.errorMessage,
+                    onClose: close,
+                    onRetry: { profileSelectionStore.send(.retry) },
+                    onAdd: { name, isKidsMode, avatarIcon in
+                        profileSelectionStore.send(.addProfile(
+                            name: name,
+                            isKidsMode: isKidsMode,
+                            avatarIcon: avatarIcon
+                        ))
+                    }
+                )
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear(perform: closeIfContextChanged)
+        .onChange(of: profileSelectionState?.profiles.count) { _, newCount in
+            guard let newCount, newCount > routeStore.profileCountAtPresentation else { return }
+            routeStore.send(.closeTapped)
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var profileSelectionState: ProfileSelectionFeature.State? {
+        let routeIndex = routeStore.profileSelectionRouteIndex
+        guard coordinatorStore.routes.indices.contains(routeIndex),
+              case let .profileSelection(state) = coordinatorStore.routes[routeIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var profileSelectionStore: StoreOf<ProfileSelectionFeature> {
+        let routeIndex = routeStore.profileSelectionRouteIndex
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(routeIndex),
+                      case let .profileSelection(state) = coordinatorState.routes[routeIndex].screen
+                else { return ProfileSelectionFeature.State() }
+                return state
+            },
+            action: {
+                .router(.routeAction(
+                    id: routeIndex,
+                    action: .profileSelection($0)
+                ))
+            }
+        )
+    }
+
+    private var isCurrentContext: Bool {
+        guard let profileSelectionState else { return false }
+        return !profileSelectionState.isEditing && profileSelectionState.profiles.count < 6
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .profileAddProfile(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID
+    }
+
+    private func closeIfContextChanged() {
+        guard !isCurrentContext, isRouteActive else { return }
+        routeStore.send(.closeTapped)
+    }
+
+    private func close() {
+        if profileSelectionState?.errorMessage != nil {
+            profileSelectionStore.send(.dismissError)
+        }
+        routeStore.send(.closeTapped)
+    }
+
+    private func notifyRouteDidDisappear() {
+        if isRouteActive {
+            routeStore.send(.closeTapped)
+        }
+        coordinatorStore.send(.profileAddProfileRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            profileSelectionRouteIndex: routeStore.profileSelectionRouteIndex
+        ))
     }
 }
 

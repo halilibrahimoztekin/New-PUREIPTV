@@ -1354,11 +1354,53 @@ public struct CustomEPGSourceAddRouteFeature {
 }
 
 @Reducer
+public struct ProfileAddProfileRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let profileSelectionRouteIndex: Int
+        public let profileCountAtPresentation: Int
+
+        public init(
+            profileSelectionRouteIndex: Int,
+            profileCountAtPresentation: Int,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.profileSelectionRouteIndex = profileSelectionRouteIndex
+            self.profileCountAtPresentation = profileCountAtPresentation
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
     case addPlaylist(AddPlaylistFeature)
     case profileSelection(ProfileSelectionFeature)
+    case profileAddProfile(ProfileAddProfileRouteFeature)
     case home(HomeFeature)
     case player(PlayerFeature)
     case epgGuide(EPGGuideFeature)
@@ -1408,6 +1450,7 @@ extension AppScreen.State: Hashable {
         case let (.onboarding(l), .onboarding(r)): l == r
         case let (.addPlaylist(l), .addPlaylist(r)): l == r
         case let (.profileSelection(l), .profileSelection(r)): l == r
+        case let (.profileAddProfile(l), .profileAddProfile(r)): l.presentationID == r.presentationID
         case let (.home(l), .home(r)): l == r
         case let (.player(l), .player(r)): l == r
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
@@ -1462,6 +1505,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(2)
         case .profileSelection:
             hasher.combine(3)
+        case let .profileAddProfile(state):
+            hasher.combine(44)
+            hasher.combine(state.presentationID)
         case .home:
             hasher.combine(4)
         case let .player(state):

@@ -6,9 +6,6 @@
 
     public struct ProfileSelectionView_iOS: View {
         @Bindable var store: StoreOf<ProfileSelectionFeature>
-        @State private var newProfileName = ""
-        @State private var newProfileIsKids = false
-        @State private var newProfileAvatar = ProfileAvatarCatalog.adultDefault
 
         public init(store: StoreOf<ProfileSelectionFeature>) {
             self.store = store
@@ -108,79 +105,6 @@
                     }
                     .padding(.top, 20)
                 }
-            }
-            .onChange(of: store.profiles.count) { _, _ in
-                newProfileName = ""
-                newProfileIsKids = false
-                newProfileAvatar = ProfileAvatarCatalog.adultDefault
-            }
-            .sheet(isPresented: $store.showingAddProfile) {
-                NavigationStack {
-                    Form {
-                        Section(header: Text(AppStrings.Profile.profileInfo)) {
-                            TextField(AppStrings.Profile.profileName, text: $newProfileName)
-                            Toggle(AppStrings.Profile.kidsProfileInfo, isOn: $newProfileIsKids)
-                                .onChange(of: newProfileIsKids) { _, isKids in
-                                    if newProfileAvatar == ProfileAvatarCatalog.adultDefault
-                                        || newProfileAvatar == ProfileAvatarCatalog.kidsDefault
-                                    {
-                                        newProfileAvatar = ProfileAvatarCatalog.defaultAvatar(isKidsMode: isKids)
-                                    }
-                                }
-                        }
-
-                        Section(header: Text(AppStrings.Profile.profileAvatar)) {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 14) {
-                                ForEach(ProfileAvatarCatalog.options) { option in
-                                    Button {
-                                        newProfileAvatar = option.symbolName
-                                    } label: {
-                                        Image(systemName: option.symbolName)
-                                            .font(.system(size: 24, weight: .semibold))
-                                            .foregroundStyle(newProfileAvatar == option.symbolName ? .white : .primary)
-                                            .frame(maxWidth: .infinity, minHeight: 52)
-                                            .background(
-                                                newProfileAvatar == option.symbolName
-                                                    ? Color.accentColor
-                                                    : Color.secondary.opacity(0.12),
-                                                in: RoundedRectangle(cornerRadius: 12)
-                                            )
-                                            .overlay {
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .strokeBorder(
-                                                        newProfileAvatar == option.symbolName ? Color.accentColor : .clear,
-                                                        lineWidth: 2
-                                                    )
-                                            }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(option.name)
-                                    .accessibilityAddTraits(newProfileAvatar == option.symbolName ? .isSelected : [])
-                                }
-                            }
-                        }
-                    }
-                    .navigationTitle(AppStrings.Profile.newProfile)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(AppStrings.Common.cancel) {
-                                store.send(.binding(.set(\.showingAddProfile, false)))
-                            }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button(AppStrings.Common.add) {
-                                store.send(.addProfile(
-                                    name: newProfileName,
-                                    isKidsMode: newProfileIsKids,
-                                    avatarIcon: newProfileAvatar
-                                ))
-                            }
-                            .disabled(newProfileName.isEmpty)
-                        }
-                    }
-                }
-                .presentationDetents([.medium])
             }
         }
     }

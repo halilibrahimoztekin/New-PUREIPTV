@@ -6,9 +6,6 @@
 
     public struct ProfileSelectionView_tvOS: View {
         @Bindable var store: StoreOf<ProfileSelectionFeature>
-        @State private var newProfileName = ""
-        @State private var newProfileIsKids = false
-        @State private var newProfileAvatar = ProfileAvatarCatalog.adultDefault
 
         public init(store: StoreOf<ProfileSelectionFeature>) {
             self.store = store
@@ -99,31 +96,6 @@
                 if store.isEditing {
                     store.send(.toggleEditMode)
                 }
-            }
-            .onChange(of: store.profiles.count) { _, _ in
-                newProfileName = ""
-                newProfileIsKids = false
-                newProfileAvatar = ProfileAvatarCatalog.adultDefault
-            }
-            .sheet(isPresented: $store.showingAddProfile) {
-                TVAddProfileSheet(
-                    name: $newProfileName,
-                    isKids: $newProfileIsKids,
-                    avatarIcon: $newProfileAvatar,
-                    onCancel: {
-                        store.send(.binding(.set(\.showingAddProfile, false)))
-                        newProfileName = ""
-                        newProfileIsKids = false
-                        newProfileAvatar = ProfileAvatarCatalog.adultDefault
-                    },
-                    onAdd: {
-                        store.send(.addProfile(
-                            name: newProfileName,
-                            isKidsMode: newProfileIsKids,
-                            avatarIcon: newProfileAvatar
-                        ))
-                    }
-                )
             }
         }
     }
@@ -416,109 +388,4 @@
         }
     }
 
-    // MARK: - TV Add Profile Sheet
-
-    private struct TVAddProfileSheet: View {
-        @Binding var name: String
-        @Binding var isKids: Bool
-        @Binding var avatarIcon: String
-        let onCancel: () -> Void
-        let onAdd: () -> Void
-
-        var body: some View {
-            ZStack {
-                Color(hex: "#101016").ignoresSafeArea()
-
-                VStack(spacing: 32) {
-                    Text(AppStrings.Profile.createProfile)
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundStyle(.white)
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(AppStrings.Profile.profileName)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.7))
-
-                        TextField(AppStrings.Profile.enterProfileName, text: $name)
-                            .font(.system(size: 22))
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                        Toggle(AppStrings.Profile.kidsProfileDesc, isOn: $isKids)
-                            .font(.system(size: 22))
-                            .padding(.vertical, 8)
-                            .onChange(of: isKids) { _, newValue in
-                                if avatarIcon == ProfileAvatarCatalog.adultDefault
-                                    || avatarIcon == ProfileAvatarCatalog.kidsDefault
-                                {
-                                    avatarIcon = ProfileAvatarCatalog.defaultAvatar(isKidsMode: newValue)
-                                }
-                            }
-
-                        Text(AppStrings.Profile.profileAvatar)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.7))
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 14) {
-                                ForEach(ProfileAvatarCatalog.options) { option in
-                                    Button {
-                                        avatarIcon = option.symbolName
-                                    } label: {
-                                        VStack(spacing: 8) {
-                                            Image(systemName: option.symbolName)
-                                                .font(.system(size: 30, weight: .semibold))
-                                            Text(option.name)
-                                                .font(.system(size: 14, weight: .medium))
-                                                .lineLimit(1)
-                                        }
-                                        .foregroundStyle(.white)
-                                        .frame(width: 96, height: 92)
-                                        .background(
-                                            avatarIcon == option.symbolName
-                                                ? Color(hex: "#0A84FF").opacity(0.85)
-                                                : Color.white.opacity(0.08),
-                                            in: RoundedRectangle(cornerRadius: 16)
-                                        )
-                                        .overlay {
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .strokeBorder(
-                                                    avatarIcon == option.symbolName ? Color.white : Color.white.opacity(0.12),
-                                                    lineWidth: avatarIcon == option.symbolName ? 2.5 : 1
-                                                )
-                                        }
-                                    }
-                                    .buttonStyle(.tvGridCard)
-                                    .accessibilityLabel(option.name)
-                                    .accessibilityAddTraits(avatarIcon == option.symbolName ? .isSelected : [])
-                                }
-                            }
-                            .padding(.vertical, 10)
-                        }
-                        .focusSection()
-                    }
-                    .frame(maxWidth: 600)
-
-                    HStack(spacing: 24) {
-                        Button(AppStrings.Common.cancel, action: onCancel)
-                            .font(.system(size: 22, weight: .semibold))
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 14)
-
-                        Button(AppStrings.Common.create) {
-                            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                            onAdd()
-                        }
-                        .font(.system(size: 22, weight: .bold))
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 14)
-                    }
-                    .padding(.top, 16)
-                }
-                .padding(48)
-            }
-            .onExitCommand(perform: onCancel)
-        }
-    }
 #endif
