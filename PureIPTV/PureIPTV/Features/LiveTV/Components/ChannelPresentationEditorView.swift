@@ -5,8 +5,8 @@ public struct ChannelPresentationEditorView: View {
     let currentName: String?
     let currentNumber: Int?
     let onSave: (String, Int?) -> Void
+    let onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var numberText: String
 
@@ -14,12 +14,14 @@ public struct ChannelPresentationEditorView: View {
         channelTitle: String,
         currentName: String?,
         currentNumber: Int?,
-        onSave: @escaping (String, Int?) -> Void
+        onSave: @escaping (String, Int?) -> Void,
+        onClose: @escaping () -> Void
     ) {
         self.channelTitle = channelTitle
         self.currentName = currentName
         self.currentNumber = currentNumber
         self.onSave = onSave
+        self.onClose = onClose
         _name = State(initialValue: currentName ?? "")
         _numberText = State(initialValue: currentNumber.map(String.init) ?? "")
     }
@@ -51,7 +53,7 @@ public struct ChannelPresentationEditorView: View {
                         name = ""
                         numberText = ""
                         onSave("", nil)
-                        dismiss()
+                        onClose()
                     }
                 }
             }
@@ -61,12 +63,12 @@ public struct ChannelPresentationEditorView: View {
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.cancel) { dismiss() }
+                        Button(AppStrings.Common.cancel, action: onClose)
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button(AppStrings.Common.save) {
                             onSave(name, parsedNumber)
-                            dismiss()
+                            onClose()
                         }
                         .disabled(!numberIsValid)
                     }

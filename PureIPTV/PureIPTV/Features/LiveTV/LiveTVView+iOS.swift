@@ -10,7 +10,6 @@
     public struct LiveTVView_iOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
-        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
@@ -62,20 +61,6 @@
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background {
                     store.send(.cancelRefreshForBackground)
-                }
-            }
-            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
-            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
-            .sheet(item: $editingPresentationTarget) { target in
-                let channel = target.channel
-                let override = store.channelPresentationOverrides[channel.id]
-                ChannelPresentationEditorView(
-                    channelTitle: channel.title,
-                    currentName: override?.name,
-                    currentNumber: override?.number
-                ) { name, number in
-                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
-                                                                playlistID: target.playlistID, profileScope: target.profileScope))
                 }
             }
         }
@@ -404,9 +389,9 @@
                                         Button {
                                             guard let playlistID = store.channelPresentationPlaylistID,
                                                   let profileScope = store.channelPresentationProfileScope else { return }
-                                            editingPresentationTarget = ChannelPresentationEditorTarget(
+                                            store.send(.openChannelPresentationEditor(
                                                 channel: channel, playlistID: playlistID, profileScope: profileScope
-                                            )
+                                            ))
                                         } label: {
                                             Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
                                         }

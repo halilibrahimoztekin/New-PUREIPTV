@@ -384,6 +384,7 @@ public struct LiveTVFeature {
         case channelsResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
         case channelPresentationOverridesLoaded([String: ChannelPresentationOverride], playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
         case saveChannelPresentationOverride(channelID: String, name: String, number: Int?, playlistID: UUID, profileScope: ProfileContextSnapshot)
+        case openChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case channelSelected(MediaModels.Item)
         case selectChannelPreview(MediaModels.Item)
         case channelEPGResponse(Result<[EPGProgram], Error>)
@@ -435,6 +436,7 @@ public struct LiveTVFeature {
             case presentParentalLock(ParentalLockFeature.State)
             case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
             case presentSmartGroupManager
+            case presentChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
         }
     }
 
@@ -653,6 +655,18 @@ public struct LiveTVFeature {
                 return .run { _ in
                     await channelPresentationOverrideClient.save(value, channelID, profileScope.profileID, playlistID)
                 }
+
+            case let .openChannelPresentationEditor(channel, playlistID, profileScope):
+                guard state.config?.playlistID == playlistID,
+                      state.channelPresentationPlaylistID == playlistID,
+                      state.channelPresentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                return .send(.delegate(.presentChannelPresentationEditor(
+                    channel: channel,
+                    playlistID: playlistID,
+                    profileScope: profileScope
+                )))
 
             case .onDisappear:
                 state.isRefreshingContent = false

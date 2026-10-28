@@ -519,6 +519,15 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .channelPresentationEditor(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .channelPresentationEditor(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
@@ -561,6 +570,23 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.presentSheet(.smartChannelGroupManagement(
                 SmartChannelGroupManagementRouteFeature.State(homeRouteIndex: homeRouteIndex)
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.playlistID == playlistID,
+                  homeState.liveTV.channelPresentationPlaylistID == playlistID,
+                  homeState.liveTV.channelPresentationProfileScope == profileScope
+            else { return .none }
+            state.routes.presentSheet(.channelPresentationEditor(
+                ChannelPresentationEditorRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    channel: channel,
+                    playlistID: playlistID,
+                    profileScope: profileScope
+                )
             ))
             return .none
 
@@ -1243,6 +1269,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .channelPresentationEditor(screenStore):
+                ChannelPresentationEditorRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):
@@ -1307,6 +1338,69 @@ private struct SmartChannelGroupManagementRouteView: View {
         guard coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
               case .home = coordinatorStore.routes[routeStore.homeRouteIndex].screen
         else { return }
+        coordinatorStore.send(.router(.routeAction(
+            id: routeStore.homeRouteIndex,
+            action: .home(.liveTV(action))
+        )))
+    }
+}
+
+private struct ChannelPresentationEditorRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<ChannelPresentationEditorRouteFeature>
+
+    var body: some View {
+        Group {
+            if let liveTVState, isCurrentContext(liveTVState) {
+                let override = liveTVState.channelPresentationOverrides[routeStore.channel.id]
+                ChannelPresentationEditorView(
+                    channelTitle: routeStore.channel.title,
+                    currentName: override?.name,
+                    currentNumber: override?.number,
+                    onSave: { name, number in
+                        sendToLiveTV(.saveChannelPresentationOverride(
+                            channelID: routeStore.channel.id,
+                            name: name,
+                            number: number,
+                            playlistID: routeStore.playlistID,
+                            profileScope: routeStore.profileScope
+                        ))
+                    },
+                    onClose: {
+                        routeStore.send(.closeTapped)
+                    }
+                )
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear(perform: closeIfContextChanged)
+        .onChange(of: liveTVState?.channelPresentationPlaylistID) { _, _ in closeIfContextChanged() }
+        .onChange(of: liveTVState?.channelPresentationProfileScope) { _, _ in closeIfContextChanged() }
+    }
+
+    private var liveTVState: LiveTVFeature.State? {
+        guard coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
+              case let .home(homeState) = coordinatorStore.routes[routeStore.homeRouteIndex].screen
+        else { return nil }
+        return homeState.liveTV
+    }
+
+    private func isCurrentContext(_ liveTVState: LiveTVFeature.State) -> Bool {
+        liveTVState.config?.playlistID == routeStore.playlistID
+            && liveTVState.channelPresentationPlaylistID == routeStore.playlistID
+            && liveTVState.channelPresentationProfileScope == routeStore.profileScope
+    }
+
+    private func closeIfContextChanged() {
+        guard let liveTVState, isCurrentContext(liveTVState) else {
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func sendToLiveTV(_ action: LiveTVFeature.Action) {
+        guard let liveTVState, isCurrentContext(liveTVState) else { return }
         coordinatorStore.send(.router(.routeAction(
             id: routeStore.homeRouteIndex,
             action: .home(.liveTV(action))

@@ -20,7 +20,6 @@
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
         @State private var selectionRestoreChannelID: String?
-        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -87,8 +86,6 @@
                     store.send(.cancelRefreshForBackground)
                 }
             }
-            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
-            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.isChannelSelectionMode) { _, isSelecting in
                 guard !isSelecting, let selectionRestoreChannelID else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -101,18 +98,6 @@
                       !store.currentChannels.contains(where: { $0.id == focusedChannelID })
                 else { return }
                 self.focusedChannelID = store.currentChannels.first?.id
-            }
-            .sheet(item: $editingPresentationTarget) { target in
-                let channel = target.channel
-                let override = store.channelPresentationOverrides[channel.id]
-                ChannelPresentationEditorView(
-                    channelTitle: channel.title,
-                    currentName: override?.name,
-                    currentNumber: override?.number
-                ) { name, number in
-                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
-                                                                playlistID: target.playlistID, profileScope: target.profileScope))
-                }
             }
         }
 
@@ -523,9 +508,9 @@
                 Button {
                     guard let playlistID = store.channelPresentationPlaylistID,
                           let profileScope = store.channelPresentationProfileScope else { return }
-                    editingPresentationTarget = ChannelPresentationEditorTarget(
+                    store.send(.openChannelPresentationEditor(
                         channel: channel, playlistID: playlistID, profileScope: profileScope
-                    )
+                    ))
                 } label: {
                     Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
                 }

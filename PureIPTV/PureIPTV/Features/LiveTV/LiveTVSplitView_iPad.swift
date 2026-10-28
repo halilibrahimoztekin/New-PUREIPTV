@@ -9,7 +9,6 @@ import SwiftUI
         @Environment(\.locale) private var locale
         @State private var categorySearchQuery: String = ""
         @State private var channelSearchQuery: String = ""
-        @State private var editingPresentationTarget: ChannelPresentationEditorTarget?
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -38,20 +37,6 @@ import SwiftUI
                 channelListView
                 Divider().background(Color.white.opacity(0.15))
                 detailView
-            }
-            .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
-            .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
-            .sheet(item: $editingPresentationTarget) { target in
-                let channel = target.channel
-                let override = store.channelPresentationOverrides[channel.id]
-                ChannelPresentationEditorView(
-                    channelTitle: channel.title,
-                    currentName: override?.name,
-                    currentNumber: override?.number
-                ) { name, number in
-                    store.send(.saveChannelPresentationOverride(channelID: channel.id, name: name, number: number,
-                                                                playlistID: target.playlistID, profileScope: target.profileScope))
-                }
             }
         }
 
@@ -450,9 +435,9 @@ import SwiftUI
                     Button {
                         guard let playlistID = store.channelPresentationPlaylistID,
                               let profileScope = store.channelPresentationProfileScope else { return }
-                        editingPresentationTarget = ChannelPresentationEditorTarget(
+                        store.send(.openChannelPresentationEditor(
                             channel: channel, playlistID: playlistID, profileScope: profileScope
-                        )
+                        ))
                     } label: {
                         Label(AppStrings.LiveTV.editChannelPresentation, systemImage: "character.cursor.ibeam")
                     }
