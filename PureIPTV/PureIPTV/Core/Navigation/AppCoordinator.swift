@@ -39,6 +39,7 @@ public struct AppCoordinator {
         public var handledEPGReminderIDs: Set<String> = []
         public var unlockedPlaylistIDs: Set<UUID> = []
         public var playlistTransferPairing: PlaylistQRTransferManager.Pairing?
+        public var playlistTransferPresentationID: UUID?
         public var playlistTransferPlaylists: [SavedPlaylist] = []
         public var playlistTransferSelectedID: UUID?
         public var isSubmittingPlaylistTransfer = false
@@ -81,11 +82,12 @@ public struct AppCoordinator {
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case handleDeepLink(URL)
-        case selectPlaylistForTransfer(UUID)
-        case playlistTransferPlaylistsLoaded(sessionID: UUID, playlists: [SavedPlaylist]?)
-        case confirmPlaylistTransfer
-        case cancelPlaylistTransfer
-        case playlistTransferSubmissionResponse(sessionID: UUID, succeeded: Bool)
+        case selectPlaylistForTransfer(sessionID: UUID, presentationID: UUID, playlistID: UUID)
+        case playlistTransferPlaylistsLoaded(sessionID: UUID, presentationID: UUID, playlists: [SavedPlaylist]?)
+        case confirmPlaylistTransfer(sessionID: UUID, presentationID: UUID)
+        case cancelPlaylistTransfer(sessionID: UUID, presentationID: UUID)
+        case playlistTransferRouteDidDisappear(presentationID: UUID, sessionID: UUID)
+        case playlistTransferSubmissionResponse(sessionID: UUID, presentationID: UUID, succeeded: Bool)
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -549,6 +551,19 @@ public struct AppCoordinator {
                 )))
             )))
 
+        case let .router(.routeAction(
+            routeIndex,
+            .playlistQRTransferConfirmation(.delegate(.cancel(presentationID, sessionID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playlistQRTransferConfirmation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.sessionID == sessionID
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
+
         case let .dashboardPresentationRouteDidDisappear(presentationID, homeRouteIndex, homeConfig, reloadConfig):
             if let routeIndex = state.routes.indices.last(where: { index in
                 if case let .dashboardPresentation(routeState) = state.routes[index].screen {
@@ -588,6 +603,23 @@ public struct AppCoordinator {
                 id: multiViewRouteIndex,
                 action: .multiView(.channelSelectionDismissed)
             )))
+
+        case let .playlistTransferRouteDidDisappear(presentationID, sessionID):
+            let routeIndex = state.routes.indices.last(where: { index in
+                if case let .playlistQRTransferConfirmation(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.sessionID == sessionID
+                }
+                return false
+            })
+            if let routeIndex {
+                guard routeIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID
+            else { return .none }
+            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
 
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
@@ -1236,15 +1268,25 @@ public struct AppCoordinator {
                 else { return .none }
 
                 let pairing = PlaylistQRTransferManager.Pairing(sessionID: sessionID, secret: secret)
+                let presentationID = UUID()
                 if let previous = state.playlistTransferPairing, previous.sessionID != sessionID {
                     PlaylistQRTransferManager.shared.endSession(previous.sessionID)
                 }
+                state.playlistTransferPresentationID = presentationID
                 state.playlistTransferPairing = pairing
                 state.playlistTransferPlaylists = []
                 state.playlistTransferSelectedID = nil
                 state.isLoadingPlaylistTransfer = true
                 state.isSubmittingPlaylistTransfer = false
                 state.playlistTransferError = nil
+                #if os(iOS)
+                    state.routes.presentSheet(.playlistQRTransferConfirmation(
+                        PlaylistQRTransferConfirmationRouteFeature.State(
+                            sessionID: sessionID,
+                            presentationID: presentationID
+                        )
+                    ))
+                #endif
                 return .merge(
                     .cancel(id: CancelID.playlistTransferLoad),
                     .cancel(id: CancelID.playlistTransferSubmission),
@@ -1252,13 +1294,21 @@ public struct AppCoordinator {
                         for _ in 0 ..< 15 {
                             guard !Task.isCancelled else { return }
                             if let playlists = PlaylistQRTransferManager.shared.availablePlaylists(for: pairing) {
-                                await send(.playlistTransferPlaylistsLoaded(sessionID: sessionID, playlists: playlists))
+                                await send(.playlistTransferPlaylistsLoaded(
+                                    sessionID: sessionID,
+                                    presentationID: presentationID,
+                                    playlists: playlists
+                                ))
                                 return
                             }
                             try? await Task.sleep(for: .seconds(1))
                         }
                         guard !Task.isCancelled else { return }
-                        await send(.playlistTransferPlaylistsLoaded(sessionID: sessionID, playlists: nil))
+                        await send(.playlistTransferPlaylistsLoaded(
+                            sessionID: sessionID,
+                            presentationID: presentationID,
+                            playlists: nil
+                        ))
                     }
                     .cancellable(id: CancelID.playlistTransferLoad, cancelInFlight: true)
                 )
@@ -1299,13 +1349,18 @@ public struct AppCoordinator {
             state.routes.presentCover(.player(playerState))
             return .none
 
-        case let .selectPlaylistForTransfer(id):
-            guard state.playlistTransferPlaylists.contains(where: { $0.id == id }) else { return .none }
-            state.playlistTransferSelectedID = id
+        case let .selectPlaylistForTransfer(sessionID, presentationID, playlistID):
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID,
+                  state.playlistTransferPlaylists.contains(where: { $0.id == playlistID })
+            else { return .none }
+            state.playlistTransferSelectedID = playlistID
             return .none
 
-        case let .playlistTransferPlaylistsLoaded(sessionID, playlists):
-            guard state.playlistTransferPairing?.sessionID == sessionID else { return .none }
+        case let .playlistTransferPlaylistsLoaded(sessionID, presentationID, playlists):
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID
+            else { return .none }
             state.isLoadingPlaylistTransfer = false
             guard let playlists else {
                 state.playlistTransferError = "QR oturumu iCloud Keychain’e ulaşmadı. İki cihazda aynı Apple ID ile iCloud Keychain’in açık olduğunu kontrol edip yeniden tarayın."
@@ -1318,24 +1373,40 @@ public struct AppCoordinator {
             }
             return .none
 
-        case .confirmPlaylistTransfer:
-            guard let pairing = state.playlistTransferPairing,
+        case let .confirmPlaylistTransfer(sessionID, presentationID):
+            guard state.playlistTransferPresentationID == presentationID,
+                  let pairing = state.playlistTransferPairing,
+                  pairing.sessionID == sessionID,
                   let playlistID = state.playlistTransferSelectedID,
-                  state.playlistTransferPlaylists.contains(where: { $0.id == playlistID })
+                  state.playlistTransferPlaylists.contains(where: { $0.id == playlistID }),
+                  !state.isSubmittingPlaylistTransfer
             else { return .none }
             state.isSubmittingPlaylistTransfer = true
             state.playlistTransferError = nil
             return .run { send in
                 let succeeded = (try? PlaylistQRTransferManager.shared.submit(playlistID: playlistID, for: pairing)) != nil
-                await send(.playlistTransferSubmissionResponse(sessionID: pairing.sessionID, succeeded: succeeded))
+                await send(.playlistTransferSubmissionResponse(
+                    sessionID: pairing.sessionID,
+                    presentationID: presentationID,
+                    succeeded: succeeded
+                ))
             }
             .cancellable(id: CancelID.playlistTransferSubmission, cancelInFlight: true)
 
-        case let .playlistTransferSubmissionResponse(sessionID, succeeded):
-            guard state.playlistTransferPairing?.sessionID == sessionID else { return .none }
+        case let .playlistTransferSubmissionResponse(sessionID, presentationID, succeeded):
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID
+            else { return .none }
             state.isSubmittingPlaylistTransfer = false
             if succeeded {
+                if case let .playlistQRTransferConfirmation(routeState) = state.routes.last?.screen,
+                   routeState.presentationID == presentationID,
+                   routeState.sessionID == sessionID
+                {
+                    state.routes.dismiss()
+                }
                 state.playlistTransferPairing = nil
+                state.playlistTransferPresentationID = nil
                 state.playlistTransferPlaylists = []
                 state.playlistTransferSelectedID = nil
             } else {
@@ -1343,11 +1414,13 @@ public struct AppCoordinator {
             }
             return .none
 
-        case .cancelPlaylistTransfer:
-            if let pairing = state.playlistTransferPairing {
-                PlaylistQRTransferManager.shared.endSession(pairing.sessionID)
-            }
+        case let .cancelPlaylistTransfer(sessionID, presentationID):
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID
+            else { return .none }
+            PlaylistQRTransferManager.shared.endSession(sessionID)
             state.playlistTransferPairing = nil
+            state.playlistTransferPresentationID = nil
             state.playlistTransferPlaylists = []
             state.playlistTransferSelectedID = nil
             state.isLoadingPlaylistTransfer = false
@@ -1556,6 +1629,15 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .playlistQRTransferConfirmation(screenStore):
+                #if os(iOS)
+                    PlaylistQRTransferConfirmationRouteView(
+                        coordinatorStore: store,
+                        routeStore: screenStore
+                    )
+                #else
+                    EmptyView()
+                #endif
             case let .categoryManagement(screenStore):
                 CategoryManagementView(store: screenStore)
             case let .m3uCategoryMappingEditor(screenStore):
@@ -1801,6 +1883,64 @@ private struct MultiViewChannelSelectionRouteView: View {
         )))
     }
 }
+
+#if os(iOS)
+    private struct PlaylistQRTransferConfirmationRouteView: View {
+        @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+        let routeStore: StoreOf<PlaylistQRTransferConfirmationRouteFeature>
+
+        var body: some View {
+            Group {
+                if isCurrentPresentation {
+                    PlaylistQRTransferConfirmationView(
+                        playlists: coordinatorStore.playlistTransferPlaylists,
+                        selectedID: coordinatorStore.playlistTransferSelectedID,
+                        isLoading: coordinatorStore.isLoadingPlaylistTransfer,
+                        isSubmitting: coordinatorStore.isSubmittingPlaylistTransfer,
+                        error: coordinatorStore.playlistTransferError,
+                        onSelect: { playlistID in
+                            coordinatorStore.send(.selectPlaylistForTransfer(
+                                sessionID: routeStore.sessionID,
+                                presentationID: routeStore.presentationID,
+                                playlistID: playlistID
+                            ))
+                        },
+                        onConfirm: {
+                            coordinatorStore.send(.confirmPlaylistTransfer(
+                                sessionID: routeStore.sessionID,
+                                presentationID: routeStore.presentationID
+                            ))
+                        },
+                        onCancel: { routeStore.send(.cancelTapped) }
+                    )
+                } else {
+                    EmptyView()
+                }
+            }
+            .onAppear(perform: closeIfStale)
+            .onChange(of: coordinatorStore.playlistTransferPresentationID) { _, _ in closeIfStale() }
+            .onChange(of: coordinatorStore.playlistTransferPairing?.sessionID) { _, _ in closeIfStale() }
+            .onDisappear(perform: notifyRouteDidDisappear)
+        }
+
+        private var isCurrentPresentation: Bool {
+            coordinatorStore.playlistTransferPresentationID == routeStore.presentationID
+                && coordinatorStore.playlistTransferPairing?.sessionID == routeStore.sessionID
+        }
+
+        private func closeIfStale() {
+            guard !isCurrentPresentation else { return }
+            routeStore.send(.cancelTapped)
+        }
+
+        private func notifyRouteDidDisappear() {
+            coordinatorStore.send(.playlistTransferRouteDidDisappear(
+                presentationID: routeStore.presentationID,
+                sessionID: routeStore.sessionID
+            ))
+        }
+    }
+#endif
 
 private struct DashboardPresentationRouteView: View {
     @Bindable var coordinatorStore: StoreOf<AppCoordinator>

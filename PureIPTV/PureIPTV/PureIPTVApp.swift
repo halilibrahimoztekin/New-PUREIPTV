@@ -204,34 +204,11 @@ struct PureIPTVApp: App {
                 }
             #endif
         }
-        #if os(iOS)
-        .sheet(
-            isPresented: Binding(
-                get: { store.playlistTransferPairing != nil },
-                set: {
-                    if !$0 {
-                        store.send(.cancelPlaylistTransfer)
-                    }
-                }
-            )
-        ) {
-            PlaylistQRTransferConfirmationView(
-                playlists: store.playlistTransferPlaylists,
-                selectedID: store.playlistTransferSelectedID,
-                isLoading: store.isLoadingPlaylistTransfer,
-                isSubmitting: store.isSubmittingPlaylistTransfer,
-                error: store.playlistTransferError,
-                onSelect: { store.send(.selectPlaylistForTransfer($0)) },
-                onConfirm: { store.send(.confirmPlaylistTransfer) },
-                onCancel: { store.send(.cancelPlaylistTransfer) }
-            )
-        }
-        #endif
     }
 }
 
 #if os(iOS)
-    private struct PlaylistQRTransferConfirmationView: View {
+    struct PlaylistQRTransferConfirmationView: View {
         let playlists: [SavedPlaylist]
         let selectedID: UUID?
         let isLoading: Bool

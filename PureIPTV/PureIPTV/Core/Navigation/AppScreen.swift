@@ -234,6 +234,44 @@ public struct DashboardPresentationRouteFeature {
 }
 
 @Reducer
+public struct PlaylistQRTransferConfirmationRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let sessionID: UUID
+
+        public init(sessionID: UUID, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+            self.sessionID = sessionID
+        }
+    }
+
+    public enum Action {
+        case cancelTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case cancel(presentationID: UUID, sessionID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .cancelTapped:
+                return .send(.delegate(.cancel(
+                    presentationID: state.presentationID,
+                    sessionID: state.sessionID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -251,6 +289,7 @@ public enum AppScreen {
     case m3uCategoryMappingEditor(M3UCategoryMappingEditorRouteFeature)
     case multiViewChannelSelection(MultiViewChannelSelectionRouteFeature)
     case dashboardPresentation(DashboardPresentationRouteFeature)
+    case playlistQRTransferConfirmation(PlaylistQRTransferConfirmationRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -276,6 +315,7 @@ extension AppScreen.State: Hashable {
         case let (.m3uCategoryMappingEditor(l), .m3uCategoryMappingEditor(r)): l.presentationID == r.presentationID
         case let (.multiViewChannelSelection(l), .multiViewChannelSelection(r)): l.presentationID == r.presentationID
         case let (.dashboardPresentation(l), .dashboardPresentation(r)): l.presentationID == r.presentationID
+        case let (.playlistQRTransferConfirmation(l), .playlistQRTransferConfirmation(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -328,6 +368,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .dashboardPresentation(state):
             hasher.combine(19)
+            hasher.combine(state.presentationID)
+        case let .playlistQRTransferConfirmation(state):
+            hasher.combine(20)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)
