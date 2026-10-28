@@ -260,7 +260,6 @@ public struct LiveTVFeature {
         public var selectedTabMode: TabMode = .channels
 
         @Presents public var epgTimeline: EPGTimelineFeature.State?
-        @Presents public var parentalLock: ParentalLockFeature.State?
 
         // Computed: channels for the currently selected category
         public var currentChannels: [MediaModels.Item] {
@@ -416,9 +415,9 @@ public struct LiveTVFeature {
         case editCategoriesTapped
         case epgGuideTapped
         case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
-        case parentalLock(PresentationAction<ParentalLockFeature.Action>)
         case categoryPreferencesUpdated
         case liveCategoryMappingsUpdated
+        case parentalLockUnlocked(category: MediaModels.Category?, item: MediaModels.Item?)
         case openMultiViewTapped
         case openEPGTimelineTapped
         case setTabMode(State.TabMode)
@@ -432,6 +431,8 @@ public struct LiveTVFeature {
             case presentMultiView(MultiViewFeature.State)
             case restrictMultiViewCategory(String)
             case presentCategoryManagement(CategoryManagementFeature.State)
+            case presentParentalLock(ParentalLockFeature.State)
+            case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
         }
     }
 
@@ -908,8 +909,10 @@ public struct LiveTVFeature {
                 let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
 
                 if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
-                    state.parentalLock = ParentalLockFeature.State(category: category)
-                    return .none
+                    return .send(.delegate(.presentParentalLock(ParentalLockFeature.State(
+                        category: category,
+                        isCoordinatorRoute: true
+                    ))))
                 }
 
                 state.selectedSmartGroupID = nil
@@ -1003,8 +1006,12 @@ public struct LiveTVFeature {
                            && !state.unlockedCategoryIDs.contains(category.id)
                    })
                 {
-                    state.parentalLock = ParentalLockFeature.State(category: restrictedCategory)
-                    return .none
+                    return .send(.delegate(.presentParentalLock(
+                        ParentalLockFeature.State(
+                            category: restrictedCategory,
+                            isCoordinatorRoute: true
+                        )
+                    )))
                 }
                 state.resetChannelSelection()
                 state.selectedSmartGroupID = groupID
@@ -2415,8 +2422,7 @@ public struct LiveTVFeature {
             case .epgTimeline:
                 return .none
 
-            case let .parentalLock(.presented(.delegate(.didUnlock(category, item)))):
-                state.parentalLock = nil
+            case let .parentalLockUnlocked(category, item):
                 if let category {
                     let requestID = UUID()
                     let unlockedCategoryID = category.id
@@ -2474,6 +2480,7 @@ public struct LiveTVFeature {
                 state.unlockedCategoryIDs.remove(categoryID)
                 state.channelsByCategory.removeValue(forKey: categoryID)
                 state.favoriteListResolvedChannels.removeAll { $0.categoryID == categoryID }
+                var parentalLockToPresent: ParentalLockFeature.State?
                 let selectedGroupContainsExpiredCategory = state.smartChannelGroups
                     .first(where: { $0.id == state.selectedSmartGroupID })?
                     .categoryIDs.contains(categoryID) == true
@@ -2482,7 +2489,10 @@ public struct LiveTVFeature {
                     state.selectedSmartGroupID = nil
                     state.smartGroupChannels = []
                     if let category = state.categories.first(where: { $0.id == categoryID }) {
-                        state.parentalLock = ParentalLockFeature.State(category: category)
+                        parentalLockToPresent = ParentalLockFeature.State(
+                            category: category,
+                            isCoordinatorRoute: true
+                        )
                     }
                 }
                 if state.selectedChannel?.categoryID == categoryID {
@@ -2494,14 +2504,13 @@ public struct LiveTVFeature {
                     timeline.selectedCategoryID = nil
                     state.epgTimeline = timeline
                 }
+                if let parentalLockToPresent {
+                    return .send(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(
+                        categoryID: categoryID,
+                        state: parentalLockToPresent
+                    )))
+                }
                 return .send(.delegate(.restrictMultiViewCategory(categoryID)))
-
-            case .parentalLock(.presented(.delegate(.didCancel))):
-                state.parentalLock = nil
-                return .none
-
-            case .parentalLock:
-                return .none
 
             case .openMultiViewTapped:
                 return .send(.delegate(.presentMultiView(
@@ -2514,9 +2523,6 @@ public struct LiveTVFeature {
         }
         .ifLet(\.$epgTimeline, action: \.epgTimeline) {
             EPGTimelineFeature()
-        }
-        .ifLet(\.$parentalLock, action: \.parentalLock) {
-            ParentalLockFeature()
         }
     }
 }

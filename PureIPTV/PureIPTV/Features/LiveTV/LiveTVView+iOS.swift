@@ -70,10 +70,6 @@
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
             }
-            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
-                ParentalLockView(store: store)
-                    .presentationDetents([.height(300)])
-            }
             .sheet(item: $editingPresentationTarget) { target in
                 let channel = target.channel
                 let override = store.channelPresentationOverrides[channel.id]

@@ -122,6 +122,8 @@ public struct HomeFeature {
             case presentMultiView(MultiViewFeature.State)
             case restrictMultiViewCategory(String)
             case presentCategoryManagement(CategoryManagementFeature.State)
+            case presentParentalLock(ParentalLockFeature.State)
+            case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
@@ -216,6 +218,15 @@ public struct HomeFeature {
 
             case let .liveTV(.delegate(.presentCategoryManagement(categoryState))):
                 return .send(.delegate(.presentCategoryManagement(categoryState)))
+
+            case let .liveTV(.delegate(.presentParentalLock(parentalLockState))):
+                return .send(.delegate(.presentParentalLock(parentalLockState)))
+
+            case let .liveTV(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(categoryID, parentalLockState))):
+                return .send(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(
+                    categoryID: categoryID,
+                    state: parentalLockState
+                )))
 
             case .liveTV:
                 return .none

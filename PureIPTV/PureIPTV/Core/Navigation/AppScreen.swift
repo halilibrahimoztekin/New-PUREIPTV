@@ -13,6 +13,7 @@ public enum AppScreen {
     case epgTimeline(EPGTimelineFeature)
     case multiView(MultiViewFeature)
     case categoryManagement(CategoryManagementFeature)
+    case parentalLock(ParentalLockFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -32,6 +33,7 @@ extension AppScreen.State: Hashable {
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
         case let (.multiView(l), .multiView(r)): l.presentationID == r.presentationID
         case let (.categoryManagement(l), .categoryManagement(r)): l.presentationID == r.presentationID
+        case let (.parentalLock(l), .parentalLock(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -66,6 +68,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .categoryManagement(state):
             hasher.combine(13)
+            hasher.combine(state.presentationID)
+        case let .parentalLock(state):
+            hasher.combine(14)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

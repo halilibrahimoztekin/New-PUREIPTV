@@ -77,6 +77,7 @@ public struct AppCoordinator {
         // Global flows
         case proceedToApp
         case presentPaywall
+        case presentParentalLock(ParentalLockFeature.State)
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case handleDeepLink(URL)
@@ -486,10 +487,28 @@ public struct AppCoordinator {
             return .none
 
         case .router(.routeAction(_, .categoryManagement(.delegate(.categoriesUpdated)))):
-            return forwardCategoryManagementResult(.categoryPreferencesUpdated, state: state)
+            return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
 
         case .router(.routeAction(_, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
-            return forwardCategoryManagementResult(.liveCategoryMappingsUpdated, state: state)
+            return forwardLiveTVAction(.liveCategoryMappingsUpdated, state: state)
+
+        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didCancelFromRoute(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
+                  parentalLockState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didUnlockFromRoute(presentationID, category, item))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
+                  parentalLockState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
 
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
@@ -522,6 +541,30 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentCategoryManagement(categoryState))))):
             state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
+            return .send(.presentParentalLock(parentalLockState))
+
+        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(categoryID, parentalLockState))))):
+            let multiViewRouteIndices = state.routes.indices.filter { routeIndex in
+                if case .multiView = state.routes[routeIndex].screen {
+                    return true
+                }
+                return false
+            }
+            return .run { send in
+                for routeIndex in multiViewRouteIndices {
+                    await send(.router(.routeAction(
+                        id: routeIndex,
+                        action: .multiView(.restrictCategory(categoryID))
+                    )))
+                }
+                await send(.presentParentalLock(parentalLockState))
+            }
+
+        case let .presentParentalLock(parentalLockState):
+            state.routes.presentSheet(.parentalLock(parentalLockState))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
@@ -985,7 +1028,7 @@ public struct AppCoordinator {
         }
     }
 
-    private func forwardCategoryManagementResult(
+    private func forwardLiveTVAction(
         _ action: LiveTVFeature.Action,
         state: State
     ) -> Effect<Action> {
@@ -1170,6 +1213,13 @@ public struct AppCoordinatorView: View {
                 MultiView(store: screenStore)
             case let .categoryManagement(screenStore):
                 CategoryManagementView(store: screenStore)
+            case let .parentalLock(screenStore):
+                #if os(iOS)
+                    ParentalLockView(store: screenStore)
+                        .presentationDetents([.height(300)])
+                #else
+                    ParentalLockView(store: screenStore)
+                #endif
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):

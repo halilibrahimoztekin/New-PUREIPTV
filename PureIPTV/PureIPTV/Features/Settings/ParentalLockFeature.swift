@@ -5,12 +5,21 @@ import Foundation
 public struct ParentalLockFeature {
     @ObservableState
     public struct State: Equatable {
+        public let presentationID: UUID
+        public let isCoordinatorRoute: Bool
         public var pinInput: String = ""
         public var errorMessage: String?
         public var pendingItem: MediaModels.Item?
         public var pendingCategory: MediaModels.Category?
 
-        public init(category: MediaModels.Category? = nil, item: MediaModels.Item? = nil) {
+        public init(
+            category: MediaModels.Category? = nil,
+            item: MediaModels.Item? = nil,
+            presentationID: UUID = UUID(),
+            isCoordinatorRoute: Bool = false
+        ) {
+            self.presentationID = presentationID
+            self.isCoordinatorRoute = isCoordinatorRoute
             pendingCategory = category
             pendingItem = item
         }
@@ -27,7 +36,9 @@ public struct ParentalLockFeature {
 
         public enum Delegate: Equatable {
             case didUnlock(category: MediaModels.Category?, item: MediaModels.Item?)
+            case didUnlockFromRoute(presentationID: UUID, category: MediaModels.Category?, item: MediaModels.Item?)
             case didCancel
+            case didCancelFromRoute(presentationID: UUID)
         }
     }
 
@@ -65,6 +76,9 @@ public struct ParentalLockFeature {
                 return .none
 
             case .cancelTapped:
+                if state.isCoordinatorRoute {
+                    return .send(.delegate(.didCancelFromRoute(presentationID: state.presentationID)))
+                }
                 return .send(.delegate(.didCancel))
 
             case let .authenticateWithBiometricsResult(success):
@@ -74,7 +88,17 @@ public struct ParentalLockFeature {
                 return .none
 
             case .unlockSuccess:
-                return .send(.delegate(.didUnlock(category: state.pendingCategory, item: state.pendingItem)))
+                if state.isCoordinatorRoute {
+                    return .send(.delegate(.didUnlockFromRoute(
+                        presentationID: state.presentationID,
+                        category: state.pendingCategory,
+                        item: state.pendingItem
+                    )))
+                }
+                return .send(.delegate(.didUnlock(
+                    category: state.pendingCategory,
+                    item: state.pendingItem
+                )))
 
             case .delegate:
                 return .none

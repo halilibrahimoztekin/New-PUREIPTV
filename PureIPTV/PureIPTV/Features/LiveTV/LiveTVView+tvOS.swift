@@ -104,9 +104,6 @@
                 else { return }
                 self.focusedChannelID = store.currentChannels.first?.id
             }
-            .sheet(item: $store.scope(state: \.parentalLock, action: \.parentalLock)) { store in
-                ParentalLockView(store: store)
-            }
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
             }
