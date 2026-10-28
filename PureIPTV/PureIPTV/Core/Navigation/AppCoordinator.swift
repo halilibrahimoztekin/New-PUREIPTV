@@ -92,6 +92,7 @@ public struct AppCoordinator {
         case appEnteredBackground
         case epgReminderMonitorTick([EPGReminder])
         case epgGuideRouteDidDisappear(UUID)
+        case epgTimelineRouteDidDisappear(UUID)
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -345,7 +346,12 @@ public struct AppCoordinator {
 
         case .appEnteredBackground:
             state.isForeground = false
-            return .cancel(id: CancelID.epgReminderMonitor)
+            var effects: [Effect<Action>] = [.cancel(id: CancelID.epgReminderMonitor)]
+            for routeIndex in state.routes.indices {
+                guard case .epgTimeline = state.routes[routeIndex].screen else { continue }
+                effects.append(.send(.router(.routeAction(id: routeIndex, action: .epgTimeline(.cancelEPGSync)))))
+            }
+            return .merge(effects)
 
         case let .epgReminderMonitorTick(reminders):
             guard state.isForeground,
@@ -418,6 +424,51 @@ public struct AppCoordinator {
             state.routes.presentCover(.player(playerState))
             return .none
 
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
+            }
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.playChannel(channel))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  let playerState = makeLivePlayerState(
+                      channel: channel,
+                      playlist: timelineState.channels,
+                      config: timelineState.config
+                  )
+            else { return .none }
+            state.routes.dismiss()
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
+            }
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.config.playlistID == playlistID,
+                  let homeRouteIndex = state.routes.lastIndex(where: { route in
+                      if case .home = route.screen {
+                          return true
+                      }
+                      return false
+                  })
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.channelLogoOverrideUpdated(channelID: channelID, playlistID: playlistID, url: url)))
+            )))
+
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
@@ -432,6 +483,14 @@ public struct AppCoordinator {
                 state.routes.presentCover(.epgGuide(guideState))
             #else
                 state.routes.presentSheet(.epgGuide(guideState))
+            #endif
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentEPGTimeline(timelineState))))):
+            #if os(tvOS)
+                state.routes.presentCover(.epgTimeline(timelineState))
+            #else
+                state.routes.presentSheet(.epgTimeline(timelineState))
             #endif
             return .none
 
@@ -631,7 +690,8 @@ public struct AppCoordinator {
             func refreshedPlayableItem(_ item: PlayerFeature.PlayableItem) -> PlayerFeature.PlayableItem {
                 guard item.config?.playlistID == playlistID else { return item }
                 if item.isLive,
-                   let streamURL = makeXtreamLiveStreamURL(config: config, streamID: item.id) {
+                   let streamURL = makeXtreamLiveStreamURL(config: config, streamID: item.id)
+                {
                     return item.replacingLiveStreamURL(streamURL, playlistConfig: config)
                 }
                 return item.replacingPlaylistConfig(config)
@@ -736,6 +796,11 @@ public struct AppCoordinator {
             return .none
 
         case let .epgGuideRouteDidDisappear(presentationID):
+            return .run { [previewPlayerClient] _ in
+                await previewPlayerClient.stopPreviewOwned(presentationID)
+            }
+
+        case let .epgTimelineRouteDidDisappear(presentationID):
             return .run { [previewPlayerClient] _ in
                 await previewPlayerClient.stopPreviewOwned(presentationID)
             }
@@ -981,12 +1046,10 @@ public struct AppCoordinatorView: View {
     }
 
     public var body: some View {
-        Group {
-            if store.isStartupPlaylistReadFailed {
-                playlistRecoveryContent
-            } else {
-                routerContent
-            }
+        if store.isStartupPlaylistReadFailed {
+            playlistRecoveryContent
+        } else {
+            routerContent
         }
     }
 
@@ -1040,6 +1103,12 @@ public struct AppCoordinatorView: View {
                             store.send(.epgGuideRouteDidDisappear(presentationID))
                         }
                 #endif
+            case let .epgTimeline(screenStore):
+                let presentationID = screenStore.presentationID
+                EPGTimelineView(store: screenStore)
+                    .onDisappear {
+                        store.send(.epgTimelineRouteDidDisappear(presentationID))
+                    }
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):

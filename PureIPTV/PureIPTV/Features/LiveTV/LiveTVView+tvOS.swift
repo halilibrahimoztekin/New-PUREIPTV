@@ -125,9 +125,6 @@
                                                                 playlistID: target.playlistID, profileScope: target.profileScope))
                 }
             }
-            .fullScreenCover(item: $store.scope(state: \.epgTimeline, action: \.epgTimeline)) { store in
-                EPGTimelineView(store: store)
-            }
             .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
                 MultiView(store: store)
             }

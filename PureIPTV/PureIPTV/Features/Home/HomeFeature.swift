@@ -118,6 +118,7 @@ public struct HomeFeature {
         public enum Delegate: Equatable {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case presentEPGGuide(EPGGuideFeature.State)
+            case presentEPGTimeline(EPGTimelineFeature.State)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
@@ -200,6 +201,9 @@ public struct HomeFeature {
 
             case let .liveTV(.delegate(.presentEPGGuide(guideState))):
                 return .send(.delegate(.presentEPGGuide(guideState)))
+
+            case let .liveTV(.delegate(.presentEPGTimeline(timelineState))):
+                return .send(.delegate(.presentEPGTimeline(timelineState)))
 
             case .liveTV:
                 return .none

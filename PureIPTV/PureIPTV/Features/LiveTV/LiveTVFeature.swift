@@ -300,6 +300,29 @@ public struct LiveTVFeature {
             epgTimeline = timeline
         }
 
+        func makeEPGTimelineState() -> EPGTimelineFeature.State? {
+            guard let config else { return nil }
+            var allLoadedChannels = categories.flatMap { channelsByCategory[$0.id] ?? [] }
+            var seenChannelIDs = Set(allLoadedChannels.map(\.id))
+            for categoryID in channelsByCategory.keys.sorted() {
+                for channel in channelsByCategory[categoryID] ?? [] where seenChannelIDs.insert(channel.id).inserted {
+                    allLoadedChannels.append(channel)
+                }
+            }
+            let channelsToUse = selectedSmartGroupID != nil
+                ? currentChannels
+                : (allLoadedChannels.isEmpty ? currentChannels : allLoadedChannels)
+            return EPGTimelineFeature.State(
+                config: config,
+                channels: channelsToUse,
+                providerOrderChannels: channelsToUse,
+                categories: categories,
+                selectedCategoryID: selectedCategoryID,
+                favoriteIDs: isFavoriteListMode ? selectedFavoriteListChannelIDs : favoriteIDs,
+                favoriteListID: isFavoriteListMode ? selectedFavoriteListID : nil
+            )
+        }
+
         mutating func applyResolvedSmartGroupChannels(_ channels: [MediaModels.Item]) {
             let allowedCategoryIDs = Set(smartGroupSelectableCategories.map(\.id))
             var visibleChannels: [MediaModels.Item] = []
@@ -401,11 +424,13 @@ public struct LiveTVFeature {
         case openMultiViewTapped
         case openEPGTimelineTapped
         case setTabMode(State.TabMode)
+        case channelLogoOverrideUpdated(channelID: String, playlistID: UUID, url: URL?)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case presentEPGGuide(EPGGuideFeature.State)
+            case presentEPGTimeline(EPGTimelineFeature.State)
         }
     }
 
@@ -2350,32 +2375,17 @@ public struct LiveTVFeature {
                 return .none
 
             case .openEPGTimelineTapped:
-                return .send(.setTabMode(.epg))
+                #if os(tvOS)
+                    guard let timelineState = state.makeEPGTimelineState() else { return .none }
+                    return .send(.delegate(.presentEPGTimeline(timelineState)))
+                #else
+                    return .send(.setTabMode(.epg))
+                #endif
 
             case let .setTabMode(mode):
                 state.selectedTabMode = mode
                 if mode == .epg, state.epgTimeline == nil {
-                    if let config = state.config {
-                        var allLoadedChannels = state.categories.flatMap { state.channelsByCategory[$0.id] ?? [] }
-                        var seenChannelIDs = Set(allLoadedChannels.map(\.id))
-                        for categoryID in state.channelsByCategory.keys.sorted() {
-                            for channel in state.channelsByCategory[categoryID] ?? [] where seenChannelIDs.insert(channel.id).inserted {
-                                allLoadedChannels.append(channel)
-                            }
-                        }
-                        let channelsToUse = state.selectedSmartGroupID != nil
-                            ? state.currentChannels
-                            : (allLoadedChannels.isEmpty ? state.currentChannels : allLoadedChannels)
-                        state.epgTimeline = EPGTimelineFeature.State(
-                            config: config,
-                            channels: channelsToUse,
-                            providerOrderChannels: channelsToUse,
-                            categories: state.categories,
-                            selectedCategoryID: state.selectedCategoryID,
-                            favoriteIDs: state.isFavoriteListMode ? state.selectedFavoriteListChannelIDs : state.favoriteIDs,
-                            favoriteListID: state.isFavoriteListMode ? state.selectedFavoriteListID : nil
-                        )
-                    }
+                    state.epgTimeline = state.makeEPGTimelineState()
                 } else if mode == .epg, state.epgTimeline != nil {
                     let channels = state.currentChannels
                     let selectedCategoryID = state.selectedSmartGroupID == nil ? state.selectedCategoryID : nil
@@ -2383,15 +2393,7 @@ public struct LiveTVFeature {
                 }
                 return .run { _ in await hapticClient.impact(.light) }
 
-            case .epgTimeline(.presented(.delegate(.close))):
-                state.epgTimeline = nil
-                state.selectedTabMode = .channels
-                return .none
-
-            case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
-                return .send(.channelSelected(channel))
-
-            case let .epgTimeline(.presented(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url)))):
+            case let .channelLogoOverrideUpdated(channelID, playlistID, url):
                 guard state.config?.playlistID == playlistID else { return .none }
                 for categoryID in Array(state.channelsByCategory.keys) {
                     state.channelsByCategory[categoryID] = state.channelsByCategory[categoryID]?.map { channel in
@@ -2402,6 +2404,17 @@ public struct LiveTVFeature {
                     state.selectedChannel = state.selectedChannel?.replacingLogoURLOverride(url)
                 }
                 return .none
+
+            case .epgTimeline(.presented(.delegate(.close))):
+                state.epgTimeline = nil
+                state.selectedTabMode = .channels
+                return .none
+
+            case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
+                return .send(.channelSelected(channel))
+
+            case let .epgTimeline(.presented(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url)))):
+                return .send(.channelLogoOverrideUpdated(channelID: channelID, playlistID: playlistID, url: url))
 
             case .epgTimeline:
                 return .none

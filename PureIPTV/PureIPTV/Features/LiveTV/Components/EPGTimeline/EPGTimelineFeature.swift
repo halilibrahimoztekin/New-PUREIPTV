@@ -35,6 +35,7 @@ private func epgProviderRateLimitMessage(retryAfter: Date?) -> String {
 public struct EPGTimelineFeature {
     @ObservableState
     public struct State: Equatable {
+        public var presentationID: UUID
         public var config: PlaylistConfig
         public var channels: [MediaModels.Item]
         public var providerOrderChannels: [MediaModels.Item] = []
@@ -89,6 +90,7 @@ public struct EPGTimelineFeature {
         public var isPreviewMuted: Bool = true
         public var isPreviewLoading: Bool = false
         public var previewErrorMessage: String?
+        public var previewPlaybackID: UUID?
         public var focusedChannelID: String?
 
         public var lastSyncFormatted: String? {
@@ -245,8 +247,10 @@ public struct EPGTimelineFeature {
             selectedCategoryID: String? = nil,
             selectedDate: Date = .init(),
             favoriteIDs: Set<String> = [],
-            favoriteListID: UUID? = nil
+            favoriteListID: UUID? = nil,
+            presentationID: UUID = UUID()
         ) {
+            self.presentationID = presentationID
             self.config = config
             self.channels = channels
             self.providerOrderChannels = providerOrderChannels
@@ -310,8 +314,8 @@ public struct EPGTimelineFeature {
         case channelFocused(MediaModels.Item?)
         case focusedPreviewDelayElapsed(MediaModels.Item)
         case startPreviewDebounce(MediaModels.Item)
-        case previewStarted(channelID: String)
-        case previewFailed(channelID: String, message: String)
+        case previewStarted(channelID: String, playbackID: UUID)
+        case previewFailed(channelID: String, playbackID: UUID, message: String)
         case togglePreviewMute
         case setPreviewMuted(Bool)
         case expandPreviewToFullscreen
@@ -384,6 +388,7 @@ public struct EPGTimelineFeature {
                 state.savedFocusedProgramID = focusedProgramID
                 state.savedFocusedChannelID = focusedChannelID
                 let shouldStopPreview = state.activePreviewChannel != nil || state.isPiPActive
+                let previewOwnerID = state.presentationID
                 let pendingChannelIDs = Array(state.epgRequestIDs.keys)
                 state.isSyncingEPG = false
                 state.syncPendingEPGChannels = []
@@ -396,6 +401,7 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = false
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
+                state.previewPlaybackID = nil
                 state.focusedChannelID = nil
                 state.reminderLoadRequestID = nil
                 state.favoriteLoadRequestID = nil
@@ -411,8 +417,8 @@ public struct EPGTimelineFeature {
                     .cancel(id: EPGTimelineCancelID.loadRecentChannels),
                 ]
                 if shouldStopPreview {
-                    effects.append(.run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
+                    effects.append(.run { [previewPlayerClient, previewOwnerID] _ in
+                        await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                     })
                 }
                 effects.append(contentsOf: pendingChannelIDs.map { .cancel(id: EPGTimelineCancelID.request($0)) })
@@ -1206,11 +1212,13 @@ public struct EPGTimelineFeature {
                             userAgentOverride: channel.userAgentOverride
                         )
                         state.focusedChannelID = nil
+                        state.previewPlaybackID = nil
+                        let previewOwnerID = state.presentationID
                         return .concatenate(
                             .cancel(id: EPGTimelineCancelID.previewDebounce),
                             .cancel(id: EPGTimelineCancelID.previewPlayback),
-                            .run { [previewPlayerClient] _ in
-                                await previewPlayerClient.stopPreview()
+                            .run { [previewPlayerClient, previewOwnerID] _ in
+                                await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                             },
                             .send(.delegate(.playChannel(catchupItem)))
                         )
@@ -1224,17 +1232,19 @@ public struct EPGTimelineFeature {
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
                 state.focusedChannelID = nil
+                state.previewPlaybackID = nil
+                let previewOwnerID = state.presentationID
                 let startsMuted = settingsClient.startMuted()
                 return .concatenate(
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
-                    .run { [previewPlayerClient, playerClient] send in
+                    .run { [previewPlayerClient, playerClient, previewOwnerID] send in
                         if let streamURL = channel.streamURL,
                            let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL)
                         {
                             await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
                         } else {
-                            await previewPlayerClient.stopPreview()
+                            await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                         }
                         await send(.delegate(.playChannel(channel)))
                     }
@@ -1245,11 +1255,13 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = false
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
+                state.previewPlaybackID = nil
+                let previewOwnerID = state.presentationID
                 return .concatenate(
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
-                    .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
+                    .run { [previewPlayerClient, previewOwnerID] _ in
+                        await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                     },
                     .send(.delegate(.close))
                 )
@@ -1285,28 +1297,36 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = true
                 state.isPreviewLoading = true
                 state.previewErrorMessage = nil
+                let playbackID = UUID()
+                let previewOwnerID = state.presentationID
+                state.previewPlaybackID = playbackID
 
-                return .run { [previewPlayerClient] send in
+                return .run { [previewPlayerClient, previewOwnerID, playbackID] send in
                     do {
-                        try await previewPlayerClient.playPreview(channel)
-                        await send(.previewStarted(channelID: channel.id))
+                        try await previewPlayerClient.playPreviewOwned(channel, previewOwnerID, playbackID)
+                        await send(.previewStarted(channelID: channel.id, playbackID: playbackID))
                     } catch {
                         guard !Task.isCancelled else { return }
-                        await send(.previewFailed(channelID: channel.id, message: error.localizedDescription))
+                        await send(.previewFailed(channelID: channel.id, playbackID: playbackID, message: error.localizedDescription))
                     }
                 }
                 .cancellable(id: EPGTimelineCancelID.previewPlayback, cancelInFlight: true)
 
-            case let .previewStarted(channelID):
-                guard state.activePreviewChannel?.id == channelID else { return .none }
+            case let .previewStarted(channelID, playbackID):
+                guard state.activePreviewChannel?.id == channelID,
+                      state.previewPlaybackID == playbackID
+                else { return .none }
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
                 return .none
 
-            case let .previewFailed(channelID, message):
-                guard state.activePreviewChannel?.id == channelID else { return .none }
+            case let .previewFailed(channelID, playbackID, message):
+                guard state.activePreviewChannel?.id == channelID,
+                      state.previewPlaybackID == playbackID
+                else { return .none }
                 state.isPreviewLoading = false
                 state.previewErrorMessage = message
+                state.previewPlaybackID = nil
                 return .none
 
             case .togglePreviewMute:
@@ -1327,16 +1347,18 @@ public struct EPGTimelineFeature {
                 state.activePreviewChannel = nil
                 state.isPiPActive = false
                 state.focusedChannelID = nil
+                state.previewPlaybackID = nil
                 guard let streamURL = channel.streamURL else { return .none }
+                let previewOwnerID = state.presentationID
                 let startsMuted = settingsClient.startMuted()
                 return .concatenate(
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
-                    .run { [previewPlayerClient, playerClient] send in
+                    .run { [previewPlayerClient, playerClient, previewOwnerID] send in
                         if let handoff = await previewPlayerClient.takePreviewForPromotion(channel.id, streamURL) {
                             await playerClient.adoptPreviewPlayer(handoff.player, handoff.streamURL, startsMuted)
                         } else {
-                            await previewPlayerClient.stopPreview()
+                            await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                         }
                         await send(.delegate(.playChannel(channel)))
                     }
@@ -1347,11 +1369,13 @@ public struct EPGTimelineFeature {
                     state.activePreviewChannel = nil
                     state.isPiPActive = false
                     state.isPreviewLoading = false
+                    state.previewPlaybackID = nil
+                    let previewOwnerID = state.presentationID
                     return .concatenate(
                         .cancel(id: EPGTimelineCancelID.previewDebounce),
                         .cancel(id: EPGTimelineCancelID.previewPlayback),
-                        .run { [previewPlayerClient] _ in
-                            await previewPlayerClient.stopPreview()
+                        .run { [previewPlayerClient, previewOwnerID] _ in
+                            await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                         }
                     )
                 } else if let channel {
@@ -1368,11 +1392,13 @@ public struct EPGTimelineFeature {
                 state.isPiPActive = false
                 state.isPreviewLoading = false
                 state.previewErrorMessage = nil
+                state.previewPlaybackID = nil
+                let previewOwnerID = state.presentationID
                 return .concatenate(
                     .cancel(id: EPGTimelineCancelID.previewDebounce),
                     .cancel(id: EPGTimelineCancelID.previewPlayback),
-                    .run { [previewPlayerClient] _ in
-                        await previewPlayerClient.stopPreview()
+                    .run { [previewPlayerClient, previewOwnerID] _ in
+                        await previewPlayerClient.stopPreviewOwned(previewOwnerID)
                     }
                 )
 
