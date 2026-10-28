@@ -135,29 +135,6 @@ public struct PlaylistManagementView: View {
                 store.send(.closeTapped)
             }
         #endif
-            .confirmationDialog(
-                AppStrings.Common.delete,
-                isPresented: Binding(
-                    get: { store.playlistToDelete != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.cancelDeletePlaylist)
-                        }
-                    }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button(AppStrings.Common.delete, role: .destructive) {
-                    store.send(.deletePlaylistConfirmed)
-                }
-                Button(AppStrings.Common.cancel, role: .cancel) {
-                    store.send(.cancelDeletePlaylist)
-                }
-            } message: {
-                if let name = store.playlistToDelete?.name {
-                    Text("\"\(name)\" çalma listesini silmek istediğinize emin misiniz?")
-                }
-            }
     }
 
     private var playlistStoreStatusTitle: String {

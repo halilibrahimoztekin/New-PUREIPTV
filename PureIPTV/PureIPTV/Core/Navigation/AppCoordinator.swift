@@ -3754,6 +3754,51 @@ public struct AppCoordinatorView: View {
         } message: {
             Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
         }
+        .confirmationDialog(
+            AppStrings.Common.delete,
+            isPresented: playlistDeletionIsPresented,
+            titleVisibility: .visible
+        ) {
+            Button(AppStrings.Common.delete, role: .destructive) {
+                sendPlaylistDeletionAction(.deletePlaylistConfirmed)
+            }
+            Button(AppStrings.Common.cancel, role: .cancel) {
+                sendPlaylistDeletionAction(.cancelDeletePlaylist)
+            }
+        } message: {
+            if let name = playlistDeletionContext?.playlist.name {
+                Text("\"\(name)\" çalma listesini silmek istediğinize emin misiniz?")
+            }
+        }
+    }
+
+    private var playlistDeletionContext: (routeIndex: Int, playlist: SavedPlaylist)? {
+        guard let routeIndex = store.routes.indices.last(where: { index in
+                  guard case let .playlistManagement(state) = store.routes[index].screen else { return false }
+                  return state.startupUnlockPlaylistID == nil && state.playlistToDelete != nil
+              }),
+              case let .playlistManagement(state) = store.routes[routeIndex].screen,
+              let playlist = state.playlistToDelete
+        else { return nil }
+        return (routeIndex, playlist)
+    }
+
+    private var playlistDeletionIsPresented: Binding<Bool> {
+        Binding(
+            get: { playlistDeletionContext != nil },
+            set: { isPresented in
+                guard !isPresented, playlistDeletionContext != nil else { return }
+                sendPlaylistDeletionAction(.cancelDeletePlaylist)
+            }
+        )
+    }
+
+    private func sendPlaylistDeletionAction(_ action: PlaylistManagementFeature.Action) {
+        guard let context = playlistDeletionContext else { return }
+        store.send(.router(.routeAction(
+            id: context.routeIndex,
+            action: .playlistManagement(action)
+        )))
     }
 }
 
