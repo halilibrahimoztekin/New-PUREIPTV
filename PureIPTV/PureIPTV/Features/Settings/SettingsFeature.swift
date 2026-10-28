@@ -70,6 +70,7 @@ public struct SettingsFeature {
         public var cacheSize: String = AppStrings.Settings.calculating
         public var isShowingClearCacheConfirmation: Bool = false
         public var isShowingClearCacheSuccess: Bool = false
+        public var backupImportAlertMessage: String?
         public var isPremium: Bool = false
         public var speedTestPresentationRequestID: UUID?
         public var diagnosticReportURL: URL?
@@ -236,6 +237,8 @@ public struct SettingsFeature {
         case presentDiagnosticReport(URL)
         case coordinatorDismissDiagnosticReport(requestID: UUID)
         case presentBackupPreview(url: URL, preview: PureIPTVBackupPreview)
+        case backupImportFailed(String)
+        case backupImportAlertDismissed
         case restorePendingBackup(requestID: UUID)
         case backupRestoreResponse(requestID: UUID, errorMessage: String?)
         case traktAction(TraktFeature.Action)
@@ -823,6 +826,14 @@ public struct SettingsFeature {
 
             case .clearCacheSuccessDismissed:
                 state.isShowingClearCacheSuccess = false
+                return .none
+
+            case let .backupImportFailed(message):
+                state.backupImportAlertMessage = message
+                return .none
+
+            case .backupImportAlertDismissed:
+                state.backupImportAlertMessage = nil
                 return .none
 
             case .restorePurchases:

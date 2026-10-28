@@ -10,8 +10,8 @@ public struct SettingsView: View {
     @Bindable var store: StoreOf<SettingsFeature>
 
     @State private var backupExportURL: URL? = nil
-    @State private var backupAlertMessage: String? = nil
-    @State private var isShowingBackupAlert: Bool = false
+    @State private var backupExportAlertMessage: String? = nil
+    @State private var isShowingBackupExportAlert = false
     @State private var isImportingBackup = false
     @State private var isGeneratingDiagnosticReport = false
     #if os(tvOS)
@@ -794,11 +794,11 @@ public struct SettingsView: View {
                     do {
                         let url = try BackupManager.shared.createBackupFile()
                         backupExportURL = url
-                        backupAlertMessage = "Yedek dosyası başarıyla oluşturuldu:\n\(url.lastPathComponent)"
-                        isShowingBackupAlert = true
+                        backupExportAlertMessage = "Yedek dosyası başarıyla oluşturuldu:\n\(url.lastPathComponent)"
+                        isShowingBackupExportAlert = true
                     } catch {
-                        backupAlertMessage = "Yedekleme oluşturulamadı: \(error.localizedDescription)"
-                        isShowingBackupAlert = true
+                        backupExportAlertMessage = "Yedekleme oluşturulamadı: \(error.localizedDescription)"
+                        isShowingBackupExportAlert = true
                     }
                 }) {
                     HStack {
@@ -875,11 +875,11 @@ public struct SettingsView: View {
         }
         .alert(
             "PureIPTV Bildirimi",
-            isPresented: $isShowingBackupAlert
+            isPresented: $isShowingBackupExportAlert
         ) {
             Button(AppStrings.Common.ok, role: .cancel) {}
         } message: {
-            Text(backupAlertMessage ?? "")
+            Text(backupExportAlertMessage ?? "")
         }
         #if os(iOS)
         .fileImporter(
@@ -894,8 +894,7 @@ public struct SettingsView: View {
     private func handleBackupImport(_ result: Result<[URL], Error>) {
         switch result {
         case let .failure(error):
-            backupAlertMessage = "Yedek dosyası açılamadı: \(error.localizedDescription)"
-            isShowingBackupAlert = true
+            store.send(.backupImportFailed("Yedek dosyası açılamadı: \(error.localizedDescription)"))
         case let .success(urls):
             guard let sourceURL = urls.first else { return }
             let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
@@ -924,8 +923,7 @@ public struct SettingsView: View {
                 if let stagedURL {
                     try? FileManager.default.removeItem(at: stagedURL)
                 }
-                backupAlertMessage = "Yedek doğrulanamadı; hiçbir ayar değiştirilmedi. \(error.localizedDescription)"
-                isShowingBackupAlert = true
+                store.send(.backupImportFailed("Yedek doğrulanamadı; hiçbir ayar değiştirilmedi. \(error.localizedDescription)"))
             }
         }
     }

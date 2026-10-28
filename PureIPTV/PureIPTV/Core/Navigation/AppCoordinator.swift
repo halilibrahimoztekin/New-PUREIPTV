@@ -3780,6 +3780,10 @@ public struct AppCoordinatorView: View {
                 Button(AppStrings.Common.ok, role: .cancel) {
                     sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
                 }
+            case let .backupImportError(routeIndex, _):
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
+                }
             case nil:
                 EmptyView()
             }
@@ -3793,6 +3797,8 @@ public struct AppCoordinatorView: View {
                 Text(AppStrings.Settings.clearCacheMessage)
             case .clearCacheSuccess:
                 Text(AppStrings.Settings.clearCacheSuccess)
+            case let .backupImportError(_, message):
+                Text(message)
             case nil:
                 EmptyView()
             }
@@ -3852,6 +3858,7 @@ public struct AppCoordinatorView: View {
         case rememberedPlaybackChoice(routeIndex: Int, reminder: PlaybackChoiceReminder)
         case clearCacheConfirmation(routeIndex: Int)
         case clearCacheSuccess(routeIndex: Int)
+        case backupImportError(routeIndex: Int, message: String)
 
         var title: String {
             switch self {
@@ -3861,6 +3868,8 @@ public struct AppCoordinatorView: View {
                 AppStrings.Player.rememberedPlaybackChoiceTitle
             case .clearCacheConfirmation, .clearCacheSuccess:
                 AppStrings.Settings.clearCacheTitle
+            case .backupImportError:
+                "PureIPTV Bildirimi"
             }
         }
     }
@@ -3891,6 +3900,13 @@ public struct AppCoordinatorView: View {
             return context.isSuccess
                 ? .clearCacheSuccess(routeIndex: context.routeIndex)
                 : .clearCacheConfirmation(routeIndex: context.routeIndex)
+        }
+        if let routeIndex = store.routes.indices.last,
+           case let .home(state) = store.routes[routeIndex].screen,
+           state.selectedTab == .settings,
+           let message = state.settings.backupImportAlertMessage
+        {
+            return .backupImportError(routeIndex: routeIndex, message: message)
         }
         return nil
     }
@@ -3923,6 +3939,8 @@ public struct AppCoordinatorView: View {
                     sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
                 case let .clearCacheSuccess(routeIndex):
                     sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                case let .backupImportError(routeIndex, _):
+                    sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
                 }
             }
         )
