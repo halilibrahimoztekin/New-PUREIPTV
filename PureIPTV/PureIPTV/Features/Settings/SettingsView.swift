@@ -907,17 +907,6 @@ public struct SettingsView: View {
             Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
         }
         .sheet(isPresented: Binding(
-            get: { store.isTraktAuthSheetPresented },
-            set: { store.send(.setTraktAuthSheetPresented($0)) }
-        )) {
-            TraktAuthView(
-                store: store.scope(state: \.traktState, action: \.traktAction),
-                onClose: {
-                    store.send(.setTraktAuthSheetPresented(false))
-                }
-            )
-        }
-        .sheet(isPresented: Binding(
             get: { store.isShowingHiddenContentSheet },
             set: { _ in store.send(.closeHiddenContentManagement) }
         )) {

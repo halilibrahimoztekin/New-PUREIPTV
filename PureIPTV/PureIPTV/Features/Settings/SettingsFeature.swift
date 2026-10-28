@@ -78,6 +78,7 @@ public struct SettingsFeature {
         public var traktUsername: String?
         public var isTraktAutoScrobbleEnabled: Bool = true
         public var isTraktAuthSheetPresented: Bool = false
+        public var traktAuthPresentationRequestID: UUID?
         public var traktState: TraktFeature.State = .init()
 
         // Hidden Content & Category Blacklist (Madde #19)
@@ -146,6 +147,7 @@ public struct SettingsFeature {
             case presentCustomEPGSettings(requestID: UUID)
             case presentCustomEPGSourceAdd(requestID: UUID)
             case presentPINSetup(requestID: UUID)
+            case presentTraktAuth(requestID: UUID)
         }
 
         case onAppear
@@ -211,6 +213,7 @@ public struct SettingsFeature {
 
         // Trakt.tv Actions (Madde #17)
         case setTraktAuthSheetPresented(Bool)
+        case coordinatorDismissTraktAuth(requestID: UUID)
         case traktAction(TraktFeature.Action)
         case toggleTraktAutoScrobble(Bool)
         case traktLogout
@@ -817,11 +820,25 @@ public struct SettingsFeature {
 
             // Trakt.tv Reducer Handlers (Madde #17)
             case let .setTraktAuthSheetPresented(presented):
-                state.isTraktAuthSheetPresented = presented
                 if !presented {
+                    state.isTraktAuthSheetPresented = false
+                    state.traktAuthPresentationRequestID = nil
                     state.isTraktAuthenticated = traktClient.isAuthenticated()
                     state.traktUsername = traktClient.currentUser()?.username
+                    return .none
                 }
+                guard state.traktAuthPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.isTraktAuthSheetPresented = true
+                state.traktAuthPresentationRequestID = requestID
+                return .send(.delegate(.presentTraktAuth(requestID: requestID)))
+
+            case let .coordinatorDismissTraktAuth(requestID):
+                guard state.traktAuthPresentationRequestID == requestID else { return .none }
+                state.isTraktAuthSheetPresented = false
+                state.traktAuthPresentationRequestID = nil
+                state.isTraktAuthenticated = traktClient.isAuthenticated()
+                state.traktUsername = traktClient.currentUser()?.username
                 return .none
 
             case let .toggleTraktAutoScrobble(enabled):
