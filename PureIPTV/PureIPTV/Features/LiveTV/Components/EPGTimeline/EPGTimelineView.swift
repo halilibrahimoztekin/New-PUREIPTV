@@ -45,8 +45,6 @@ public struct EPGTimelineView: View {
     @State private var navigationStepHours = 1
     @State private var lastSearchNavigationKey: String?
     @State private var pendingSearchChannelID: String?
-    @State private var logoEditorChannel: MediaModels.Item?
-    @State private var logoURLDraft = ""
     #if os(tvOS)
         @State private var restoringProgramFocusID: String?
     #endif
@@ -205,9 +203,6 @@ public struct EPGTimelineView: View {
             .onChange(of: store.epgData) { _, _ in
                 navigateToSearchMatch(store.searchQuery, availableWidth: availableGridWidth)
             }
-        }
-        .sheet(item: $logoEditorChannel) { channel in
-            channelLogoEditorSheet(for: channel)
         }
         #if os(tvOS)
         .onExitCommand {
@@ -901,59 +896,11 @@ public struct EPGTimelineView: View {
                 }
 
                 Button {
-                    logoURLDraft = channel.logoURLOverride?.absoluteString ?? ""
-                    logoEditorChannel = channel
+                    store.send(.editChannelLogo(channel))
                 } label: {
                     Label(AppStrings.LiveTV.editChannelLogo, systemImage: "photo")
                 }
             }
-    }
-
-    private func channelLogoEditorSheet(for channel: MediaModels.Item) -> some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("https://example.com/logo.png", text: $logoURLDraft)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    #endif
-                    Text(AppStrings.LiveTV.channelLogoURLHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if !logoURLDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                       ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil
-                    {
-                        Text(AppStrings.LiveTV.invalidChannelLogoURL)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                } header: {
-                    Text(AppStrings.LiveTV.channelLogoURL)
-                }
-
-                Section {
-                    Button(AppStrings.LiveTV.resetChannelLogo, role: .destructive) {
-                        store.send(.saveChannelLogoOverride(channelID: channel.id, rawValue: nil))
-                        logoEditorChannel = nil
-                    }
-                }
-            }
-            .navigationTitle(AppStrings.LiveTV.editChannelLogo)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(AppStrings.Common.cancel) { logoEditorChannel = nil }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(AppStrings.Common.save) {
-                        guard ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) != nil else { return }
-                        store.send(.saveChannelLogoOverride(channelID: channel.id, rawValue: logoURLDraft))
-                        logoEditorChannel = nil
-                    }
-                    .disabled(ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil)
-                }
-            }
-        }
     }
 
     // MARK: - Programs Strip
@@ -2034,5 +1981,58 @@ public struct EPGTimelineView: View {
                 store.send(.closePiPPreview)
             }
         )
+    }
+}
+
+struct EPGTimelineChannelLogoEditorForm: View {
+    @Binding var logoURLDraft: String
+    let onSave: (String?) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("https://example.com/logo.png", text: $logoURLDraft)
+                    #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    #endif
+                    Text(AppStrings.LiveTV.channelLogoURLHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !logoURLDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil
+                    {
+                        Text(AppStrings.LiveTV.invalidChannelLogoURL)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text(AppStrings.LiveTV.channelLogoURL)
+                }
+
+                Section {
+                    Button(AppStrings.LiveTV.resetChannelLogo, role: .destructive) {
+                        onClose()
+                        onSave(nil)
+                    }
+                }
+            }
+            .navigationTitle(AppStrings.LiveTV.editChannelLogo)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.cancel, action: onClose)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(AppStrings.Common.save) {
+                        guard ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) != nil else { return }
+                        onClose()
+                        onSave(logoURLDraft)
+                    }
+                    .disabled(ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil)
+                }
+            }
+        }
     }
 }

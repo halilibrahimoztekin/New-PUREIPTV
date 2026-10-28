@@ -290,6 +290,7 @@ public struct EPGTimelineFeature {
         case reminderSchedulingFailed
         case toggleFavorite(MediaModels.Item)
         case bulkDefaultFavoritesChanged(defaultIDs: Set<String>, changedIDsInProviderOrder: [String], operation: BulkFavoriteOperation)
+        case editChannelLogo(MediaModels.Item)
         case saveChannelLogoOverride(channelID: String, rawValue: String?)
         case channelLogoOverrideSaved(
             channelID: String,
@@ -336,6 +337,7 @@ public struct EPGTimelineFeature {
                 program: EPGProgram,
                 channel: MediaModels.Item
             )
+            case presentChannelLogoEditor(timelinePresentationID: UUID, channelID: String)
         }
     }
 
@@ -899,6 +901,15 @@ public struct EPGTimelineFeature {
                 return .run { _ in
                     await orderClient.save(order, scope.profileID, playlistID, nil)
                 }
+
+            case let .editChannelLogo(channel):
+                guard state.config.playlistID != nil,
+                      let currentChannel = state.channels.first(where: { $0.id == channel.id && $0.type == .live })
+                else { return .none }
+                return .send(.delegate(.presentChannelLogoEditor(
+                    timelinePresentationID: state.presentationID,
+                    channelID: currentChannel.id
+                )))
 
             case let .saveChannelLogoOverride(channelID, rawValue):
                 guard

@@ -221,6 +221,40 @@ public struct EPGTimelineProgramDetailRouteFeature {
 }
 
 @Reducer
+public struct EPGTimelineChannelLogoEditorRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let timelineRouteIndex: Int
+        public let timelinePresentationID: UUID
+        public let playlistID: UUID
+        public let channel: MediaModels.Item
+
+        public init(
+            timelineRouteIndex: Int,
+            timelinePresentationID: UUID,
+            playlistID: UUID,
+            channel: MediaModels.Item,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.timelineRouteIndex = timelineRouteIndex
+            self.timelinePresentationID = timelinePresentationID
+            self.playlistID = playlistID
+            self.channel = channel
+        }
+    }
+
+    public enum Action {
+        case closeTapped(presentationID: UUID)
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { _, _ in .none }
+    }
+}
+
+@Reducer
 public struct MultiViewChannelSelectionRouteFeature {
     @ObservableState
     public struct State: Equatable {
@@ -1330,6 +1364,7 @@ public enum AppScreen {
     case epgGuide(EPGGuideFeature)
     case epgTimeline(EPGTimelineFeature)
     case epgTimelineProgramDetail(EPGTimelineProgramDetailRouteFeature)
+    case epgTimelineChannelLogoEditor(EPGTimelineChannelLogoEditorRouteFeature)
     case multiView(MultiViewFeature)
     case categoryManagement(CategoryManagementFeature)
     case parentalLock(ParentalLockFeature)
@@ -1378,6 +1413,7 @@ extension AppScreen.State: Hashable {
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
         case let (.epgTimelineProgramDetail(l), .epgTimelineProgramDetail(r)): l.presentationID == r.presentationID
+        case let (.epgTimelineChannelLogoEditor(l), .epgTimelineChannelLogoEditor(r)): l.presentationID == r.presentationID
         case let (.multiView(l), .multiView(r)): l.presentationID == r.presentationID
         case let (.categoryManagement(l), .categoryManagement(r)): l.presentationID == r.presentationID
         case let (.parentalLock(l), .parentalLock(r)): l.presentationID == r.presentationID
@@ -1439,6 +1475,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .epgTimelineProgramDetail(state):
             hasher.combine(42)
+            hasher.combine(state.presentationID)
+        case let .epgTimelineChannelLogoEditor(state):
+            hasher.combine(43)
             hasher.combine(state.presentationID)
         case let .multiView(state):
             hasher.combine(12)
