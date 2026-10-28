@@ -414,6 +414,7 @@ public struct LiveTVFeature {
         case contentRefreshFailed(requestID: UUID, config: PlaylistConfig, message: String)
         case reloadPreferences
         case editCategoriesTapped
+        case favoriteListManagementTapped
         case epgGuideTapped
         case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
         case categoryPreferencesUpdated
@@ -436,6 +437,7 @@ public struct LiveTVFeature {
             case presentParentalLock(ParentalLockFeature.State)
             case restrictMultiViewCategoryAndPresentParentalLock(categoryID: String, state: ParentalLockFeature.State)
             case presentSmartGroupManager
+            case presentFavoriteListManagement
             case presentChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
         }
     }
@@ -2530,6 +2532,9 @@ public struct LiveTVFeature {
 
             case .smartGroupManagerTapped:
                 return .send(.delegate(.presentSmartGroupManager))
+
+            case .favoriteListManagementTapped:
+                return .send(.delegate(.presentFavoriteListManagement))
 
             case .openMultiViewTapped:
                 return .send(.delegate(.presentMultiView(

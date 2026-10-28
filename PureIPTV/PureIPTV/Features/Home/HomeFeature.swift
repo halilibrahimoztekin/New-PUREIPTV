@@ -129,6 +129,7 @@ public struct HomeFeature {
             case presentVODParentalLock(ParentalLockFeature.State, closeVODDetailsOnExpiry: Bool)
             case presentSeriesParentalLock(ParentalLockFeature.State)
             case presentSmartGroupManager
+            case presentFavoriteListManagement
             case presentChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
@@ -236,6 +237,9 @@ public struct HomeFeature {
 
             case .liveTV(.delegate(.presentSmartGroupManager)):
                 return .send(.delegate(.presentSmartGroupManager))
+
+            case .liveTV(.delegate(.presentFavoriteListManagement)):
+                return .send(.delegate(.presentFavoriteListManagement))
 
             case let .liveTV(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))):
                 return .send(.delegate(.presentChannelPresentationEditor(

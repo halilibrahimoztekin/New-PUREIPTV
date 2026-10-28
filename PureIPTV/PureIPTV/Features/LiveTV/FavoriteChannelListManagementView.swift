@@ -3,7 +3,6 @@ import SwiftUI
 
 struct FavoriteChannelListSwitcher: View {
     @Bindable var store: StoreOf<LiveTVFeature>
-    @State private var isManagementPresented = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -52,7 +51,7 @@ struct FavoriteChannelListSwitcher: View {
                 }
 
                 Button {
-                    isManagementPresented = true
+                    store.send(.favoriteListManagementTapped)
                 } label: {
                     Label(AppStrings.LiveTV.manageFavoriteLists, systemImage: "slider.horizontal.3")
                         .font(.subheadline.weight(.semibold))
@@ -64,9 +63,6 @@ struct FavoriteChannelListSwitcher: View {
                 .accessibilityHint(AppStrings.LiveTV.manageFavoriteListsHint)
             }
             .padding(.horizontal, 16)
-        }
-        .sheet(isPresented: $isManagementPresented) {
-            FavoriteChannelListManagementView(store: store)
         }
         #if os(tvOS)
         .focusSection()
@@ -108,7 +104,7 @@ struct FavoriteChannelManualOrderActions: View {
 
 struct FavoriteChannelListManagementView: View {
     @Bindable var store: StoreOf<LiveTVFeature>
-    @Environment(\.dismiss) private var dismiss
+    let onDismiss: () -> Void
     @State private var name = ""
     @State private var editingID: UUID?
 
@@ -127,7 +123,7 @@ struct FavoriteChannelListManagementView: View {
                 Section {
                     Button {
                         store.send(.favoriteListSelected(nil))
-                        dismiss()
+                        onDismiss()
                     } label: {
                         Label(AppStrings.Common.favorites, systemImage: store.isFavoriteListMode && store.selectedFavoriteListID == nil ? "checkmark.circle.fill" : "heart")
                     }
@@ -136,7 +132,7 @@ struct FavoriteChannelListManagementView: View {
                         HStack {
                             Button {
                                 store.send(.favoriteListSelected(list.id))
-                                dismiss()
+                                onDismiss()
                             } label: {
                                 HStack {
                                     Text(list.name)
@@ -186,7 +182,7 @@ struct FavoriteChannelListManagementView: View {
             .navigationTitle(AppStrings.LiveTV.favoriteLists)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(AppStrings.Common.done) { dismiss() }
+                    Button(AppStrings.Common.done, action: onDismiss)
                 }
             }
         }

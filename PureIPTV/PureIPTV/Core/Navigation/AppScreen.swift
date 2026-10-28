@@ -37,6 +37,43 @@ public struct SmartChannelGroupManagementRouteFeature {
 }
 
 @Reducer
+public struct FavoriteChannelListManagementRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let homeConfig: PlaylistConfig
+
+        public init(homeRouteIndex: Int, homeConfig: PlaylistConfig, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.homeConfig = homeConfig
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public struct ChannelPresentationEditorRouteFeature {
     @ObservableState
     public struct State: Equatable {
@@ -1194,6 +1231,7 @@ public enum AppScreen {
     case categoryManagement(CategoryManagementFeature)
     case parentalLock(ParentalLockFeature)
     case smartChannelGroupManagement(SmartChannelGroupManagementRouteFeature)
+    case favoriteChannelListManagement(FavoriteChannelListManagementRouteFeature)
     case channelPresentationEditor(ChannelPresentationEditorRouteFeature)
     case m3uCategoryMappingEditor(M3UCategoryMappingEditorRouteFeature)
     case multiViewChannelSelection(MultiViewChannelSelectionRouteFeature)
@@ -1239,6 +1277,7 @@ extension AppScreen.State: Hashable {
         case let (.categoryManagement(l), .categoryManagement(r)): l.presentationID == r.presentationID
         case let (.parentalLock(l), .parentalLock(r)): l.presentationID == r.presentationID
         case let (.smartChannelGroupManagement(l), .smartChannelGroupManagement(r)): l.presentationID == r.presentationID
+        case let (.favoriteChannelListManagement(l), .favoriteChannelListManagement(r)): l.presentationID == r.presentationID
         case let (.channelPresentationEditor(l), .channelPresentationEditor(r)): l.presentationID == r.presentationID
         case let (.m3uCategoryMappingEditor(l), .m3uCategoryMappingEditor(r)): l.presentationID == r.presentationID
         case let (.multiViewChannelSelection(l), .multiViewChannelSelection(r)): l.presentationID == r.presentationID
@@ -1303,6 +1342,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .smartChannelGroupManagement(state):
             hasher.combine(15)
+            hasher.combine(state.presentationID)
+        case let .favoriteChannelListManagement(state):
+            hasher.combine(40)
             hasher.combine(state.presentationID)
         case let .channelPresentationEditor(state):
             hasher.combine(16)

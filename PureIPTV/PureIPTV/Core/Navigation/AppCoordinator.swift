@@ -204,6 +204,7 @@ public struct AppCoordinator {
         case epgReminderMonitorTick([EPGReminder])
         case epgGuideRouteDidDisappear(UUID)
         case epgTimelineRouteDidDisappear(UUID)
+        case favoriteChannelListManagementRouteDidDisappear(UUID)
         case multiViewChannelSelectionRouteDidDisappear(
             presentationID: UUID,
             multiViewRouteIndex: Int,
@@ -634,6 +635,15 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .favoriteChannelListManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .favoriteChannelListManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.selectEPGChannel(presentationID, channel))))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
@@ -691,6 +701,17 @@ public struct AppCoordinator {
                 id: homeRouteIndex,
                 action: .home(.dashboard(.onAppear(config: reloadConfig)))
             )))
+
+        case let .favoriteChannelListManagementRouteDidDisappear(presentationID):
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .favoriteChannelListManagement(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), routeIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+            return .none
 
         case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
             if let selectionRouteIndex = state.routes.indices.last(where: { index in
@@ -2190,6 +2211,21 @@ public struct AppCoordinator {
             ))
             return .none
 
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentFavoriteListManagement)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .liveTV,
+                  homeState.liveTV.config == homeState.config
+            else { return .none }
+            state.routes.presentSheet(.favoriteChannelListManagement(
+                FavoriteChannelListManagementRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config
+                )
+            ))
+            return .none
+
         case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))))):
             guard state.routes.indices.contains(homeRouteIndex),
                   case let .home(homeState) = state.routes[homeRouteIndex].screen,
@@ -3252,6 +3288,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .favoriteChannelListManagement(screenStore):
+                FavoriteChannelListManagementRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .channelPresentationEditor(screenStore):
                 ChannelPresentationEditorRouteView(
                     coordinatorStore: store,
@@ -3430,6 +3471,85 @@ private struct SmartChannelGroupManagementRouteView: View {
             id: routeStore.homeRouteIndex,
             action: .home(.liveTV(action))
         )))
+    }
+}
+
+private struct FavoriteChannelListManagementRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<FavoriteChannelListManagementRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                FavoriteChannelListManagementView(
+                    store: liveTVStore,
+                    onDismiss: { routeStore.send(.closeTapped) }
+                )
+                #if os(tvOS)
+                    .onExitCommand { routeStore.send(.closeTapped) }
+                #endif
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear {
+            coordinatorStore.send(.favoriteChannelListManagementRouteDidDisappear(routeStore.presentationID))
+        }
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(homeState) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return homeState
+    }
+
+    private var isCurrentPresentation: Bool {
+        guard let homeState else { return false }
+        return homeState.selectedTab == .liveTV
+            && homeState.config == routeStore.homeConfig
+            && homeState.liveTV.config == routeStore.homeConfig
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .favoriteChannelListManagement(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID
+    }
+
+    private var liveTVStore: StoreOf<LiveTVFeature> {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        let homeConfig = routeStore.homeConfig
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .liveTV,
+                      homeState.config == homeConfig,
+                      homeState.liveTV.config == homeConfig
+                else { return LiveTVFeature.State() }
+                return homeState.liveTV
+            },
+            action: {
+                .router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.liveTV($0))
+                ))
+            }
+        )
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            routeStore.send(.closeTapped)
+            return
+        }
     }
 }
 
