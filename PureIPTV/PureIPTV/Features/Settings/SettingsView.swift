@@ -851,29 +851,6 @@ public struct SettingsView: View {
             store.send(.onAppear)
         }
         .alert(
-            AppStrings.Settings.clearCacheTitle,
-            isPresented: $store.isShowingClearCacheConfirmation
-        ) {
-            Button(AppStrings.Settings.clearCacheConfirm, role: .destructive) {
-                store.send(.confirmClearCache)
-            }
-            Button(AppStrings.Common.cancel, role: .cancel) {
-                store.send(.cancelClearCache)
-            }
-        } message: {
-            Text(AppStrings.Settings.clearCacheMessage)
-        }
-        .alert(
-            AppStrings.Settings.clearCacheTitle,
-            isPresented: $store.isShowingClearCacheSuccess
-        ) {
-            Button(AppStrings.Common.ok, role: .cancel) {
-                store.send(.clearCacheSuccessDismissed)
-            }
-        } message: {
-            Text(AppStrings.Settings.clearCacheSuccess)
-        }
-        .alert(
             "Öneri geçmişi sıfırlansın mı?",
             isPresented: $store.isShowingRecommendationHistoryResetConfirmation
         ) {

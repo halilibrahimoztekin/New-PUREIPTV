@@ -3769,6 +3769,17 @@ public struct AppCoordinatorView: View {
                         reminder: reminder
                     )
                 }
+            case let .clearCacheConfirmation(routeIndex):
+                Button(AppStrings.Settings.clearCacheConfirm, role: .destructive) {
+                    sendSettingsAlertAction(.confirmClearCache, routeIndex: routeIndex)
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
+                }
+            case let .clearCacheSuccess(routeIndex):
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                }
             case nil:
                 EmptyView()
             }
@@ -3778,6 +3789,10 @@ public struct AppCoordinatorView: View {
                 Text(AppStrings.Common.handoffPlaybackUnavailableMessage)
             case let .rememberedPlaybackChoice(_, reminder):
                 Text(AppStrings.Player.rememberedPlaybackChoiceMessage(reminder.choice.title))
+            case .clearCacheConfirmation:
+                Text(AppStrings.Settings.clearCacheMessage)
+            case .clearCacheSuccess:
+                Text(AppStrings.Settings.clearCacheSuccess)
             case nil:
                 EmptyView()
             }
@@ -3835,6 +3850,8 @@ public struct AppCoordinatorView: View {
     private enum RootAlertContext {
         case streamHandoff
         case rememberedPlaybackChoice(routeIndex: Int, reminder: PlaybackChoiceReminder)
+        case clearCacheConfirmation(routeIndex: Int)
+        case clearCacheSuccess(routeIndex: Int)
 
         var title: String {
             switch self {
@@ -3842,6 +3859,8 @@ public struct AppCoordinatorView: View {
                 AppStrings.Common.handoffPlaybackUnavailableTitle
             case .rememberedPlaybackChoice:
                 AppStrings.Player.rememberedPlaybackChoiceTitle
+            case .clearCacheConfirmation, .clearCacheSuccess:
+                AppStrings.Settings.clearCacheTitle
             }
         }
     }
@@ -3868,6 +3887,25 @@ public struct AppCoordinatorView: View {
         if let context = rememberedPlaybackChoiceContext {
             return .rememberedPlaybackChoice(routeIndex: context.routeIndex, reminder: context.reminder)
         }
+        if let context = clearCacheAlertContext {
+            return context.isSuccess
+                ? .clearCacheSuccess(routeIndex: context.routeIndex)
+                : .clearCacheConfirmation(routeIndex: context.routeIndex)
+        }
+        return nil
+    }
+
+    private var clearCacheAlertContext: (routeIndex: Int, isSuccess: Bool)? {
+        guard let routeIndex = store.routes.indices.last,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .settings
+        else { return nil }
+        if state.settings.isShowingClearCacheConfirmation {
+            return (routeIndex, false)
+        }
+        if state.settings.isShowingClearCacheSuccess {
+            return (routeIndex, true)
+        }
         return nil
     }
 
@@ -3875,11 +3913,17 @@ public struct AppCoordinatorView: View {
         Binding(
             get: { rootAlertContext != nil },
             set: { isPresented in
-                guard !isPresented,
-                      let context = rootAlertContext,
-                      case .streamHandoff = context
-                else { return }
-                store.send(.dismissStreamHandoffError)
+                guard !isPresented, let context = rootAlertContext else { return }
+                switch context {
+                case .streamHandoff:
+                    store.send(.dismissStreamHandoffError)
+                case .rememberedPlaybackChoice:
+                    return
+                case let .clearCacheConfirmation(routeIndex):
+                    sendSettingsAlertAction(.cancelClearCache, routeIndex: routeIndex)
+                case let .clearCacheSuccess(routeIndex):
+                    sendSettingsAlertAction(.clearCacheSuccessDismissed, routeIndex: routeIndex)
+                }
             }
         )
     }
@@ -3941,6 +3985,18 @@ public struct AppCoordinatorView: View {
         store.send(.router(.routeAction(
             id: routeIndex,
             action: .player(action)
+        )))
+    }
+
+    private func sendSettingsAlertAction(_ action: SettingsFeature.Action, routeIndex: Int) {
+        guard store.routes.indices.contains(routeIndex),
+              routeIndex == store.routes.count - 1,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .settings
+        else { return }
+        store.send(.router(.routeAction(
+            id: routeIndex,
+            action: .home(.settings(action))
         )))
     }
 
