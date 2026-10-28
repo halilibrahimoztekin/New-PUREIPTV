@@ -42,6 +42,7 @@ public struct PlaylistManagementFeature {
         public var m3uURLDraft = ""
         public var playlistValidationMessage: String?
         public var isRefreshingPlaylist = false
+        public var addPlaylistPresentationRequestID: UUID?
         @Presents public var addPlaylist: AddPlaylistFeature.State?
 
         public var canSaveUserAgentDraft: Bool {
@@ -76,7 +77,7 @@ public struct PlaylistManagementFeature {
         case cancelDeletePlaylist
         case deletePlaylistConfirmed
         case addPlaylistButtonTapped
-        case closeAddPlaylistTapped
+        case closeAddPlaylistTapped(requestID: UUID)
         case addPlaylist(PresentationAction<AddPlaylistFeature.Action>)
         case closeTapped
         case delegate(Delegate)
@@ -91,6 +92,7 @@ public struct PlaylistManagementFeature {
             case didUnlockPlaylist(UUID)
             case didUnlockStartupPlaylist(UUID)
             case addPlaylistTapped
+            case presentAddPlaylist(requestID: UUID)
             case addPlaylistDidConnect
             case dismissed
         }
@@ -442,11 +444,13 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .addPlaylistButtonTapped:
-                state.addPlaylist = AddPlaylistFeature.State()
-                return .none
+                return Self.beginAddPlaylist(state: &state)
 
-            case .closeAddPlaylistTapped:
-                guard state.startupUnlockPlaylistID == nil else { return .none }
+            case let .closeAddPlaylistTapped(requestID):
+                guard state.startupUnlockPlaylistID == nil,
+                      state.addPlaylistPresentationRequestID == requestID
+                else { return .none }
+                state.addPlaylistPresentationRequestID = nil
                 state.addPlaylist = nil
                 return .none
 
@@ -454,6 +458,7 @@ public struct PlaylistManagementFeature {
                  .addPlaylist(.presented(.delegate(.didReceiveTransferredPlaylist))):
                 Self.refreshPlaylistStore(state: &state, repository: playlistRepository)
                 state.activePlaylistID = playlistRepository.getActivePlaylistID()
+                state.addPlaylistPresentationRequestID = nil
                 state.addPlaylist = nil
                 return .send(.delegate(.addPlaylistDidConnect))
 
@@ -461,8 +466,7 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .delegate(.addPlaylistTapped):
-                state.addPlaylist = AddPlaylistFeature.State()
-                return .none
+                return Self.beginAddPlaylist(state: &state)
 
             case .delegate:
                 return .none
@@ -471,6 +475,18 @@ public struct PlaylistManagementFeature {
         .ifLet(\.$addPlaylist, action: \.addPlaylist) {
             AddPlaylistFeature()
         }
+    }
+
+    private static func beginAddPlaylist(state: inout State) -> Effect<Action> {
+        guard state.startupUnlockPlaylistID == nil,
+              state.addPlaylist == nil,
+              state.addPlaylistPresentationRequestID == nil
+        else { return .none }
+
+        let requestID = UUID()
+        state.addPlaylistPresentationRequestID = requestID
+        state.addPlaylist = AddPlaylistFeature.State()
+        return .send(.delegate(.presentAddPlaylist(requestID: requestID)))
     }
 
     private static func refreshPlaylistStore(state: inout State, repository: PlaylistRepository) {

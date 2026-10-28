@@ -99,6 +99,16 @@ public struct AppCoordinator {
             requestID: UUID,
             flow: PlaylistManagementFeature.State.PINFlow
         )
+        case playlistManagementAddPlaylistRouteDidDisappear(
+            presentationID: UUID,
+            playlistManagementRouteIndex: Int,
+            requestID: UUID
+        )
+        case playlistManagementAddPlaylistChildAction(
+            presentationID: UUID,
+            requestID: UUID,
+            action: AddPlaylistFeature.Action
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -679,6 +689,43 @@ public struct AppCoordinator {
                 action: .playlistManagement(.cancelPlaylistPIN)
             )))
 
+        case let .playlistManagementAddPlaylistRouteDidDisappear(presentationID, playlistManagementRouteIndex, requestID):
+            let addPlaylistRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playlistManagementAddPlaylist(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let addPlaylistRouteIndex {
+                guard addPlaylistRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playlistManagementRouteIndex,
+                action: .playlistManagement(.closeAddPlaylistTapped(requestID: requestID))
+            )))
+
+        case let .playlistManagementAddPlaylistChildAction(presentationID, requestID, childAction):
+            guard case let .playlistManagementAddPlaylist(addPlaylistRouteState) = state.routes.last?.screen,
+                  addPlaylistRouteState.presentationID == presentationID,
+                  addPlaylistRouteState.requestID == requestID,
+                  state.routes.indices.contains(addPlaylistRouteState.playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[addPlaylistRouteState.playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil,
+                  managementState.startupUnlockPlaylistID == nil
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: addPlaylistRouteState.playlistManagementRouteIndex,
+                action: .playlistManagement(.addPlaylist(.presented(childAction)))
+            )))
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -751,6 +798,28 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.playlistManagementRouteIndex,
                 action: .playlistManagement(.cancelPlaylistPIN)
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .playlistManagementAddPlaylist(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playlistManagementAddPlaylist(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[routeState.playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.playlistManagementRouteIndex,
+                action: .playlistManagement(.closeAddPlaylistTapped(requestID: requestID))
             )))
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
@@ -1147,6 +1216,25 @@ public struct AppCoordinator {
                     playlistManagementRouteIndex: playlistManagementRouteIndex,
                     editRequestID: requestID,
                     playlistID: playlistID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            playlistManagementRouteIndex,
+            .playlistManagement(.delegate(.presentAddPlaylist(requestID)))
+        )):
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  playlistManagementRouteIndex == state.routes.count - 1,
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil,
+                  managementState.startupUnlockPlaylistID == nil
+            else { return .none }
+            state.routes.presentSheet(.playlistManagementAddPlaylist(
+                PlaylistManagementAddPlaylistRouteFeature.State(
+                    playlistManagementRouteIndex: playlistManagementRouteIndex,
+                    requestID: requestID
                 )
             ))
             return .none
@@ -1816,6 +1904,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .playlistManagementAddPlaylist(screenStore):
+                PlaylistManagementAddPlaylistRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .playlistManagement(store):
                 PlaylistManagementView(store: store)
             case let .paywall(store):
@@ -2256,6 +2349,92 @@ private struct PlaylistManagementPINRouteView: View {
             playlistManagementRouteIndex: routeStore.playlistManagementRouteIndex,
             requestID: routeStore.requestID,
             flow: routeStore.flow
+        ))
+    }
+}
+
+private struct PlaylistManagementAddPlaylistRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<PlaylistManagementAddPlaylistRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                NavigationStack {
+                    AddPlaylistView(store: addPlaylistStore)
+                        #if os(tvOS)
+                            .onExitCommand {
+                                routeStore.send(.closeTapped)
+                            }
+                        #endif
+                }
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var playlistManagementState: PlaylistManagementFeature.State? {
+        let parentRouteIndex = routeStore.playlistManagementRouteIndex
+        guard coordinatorStore.routes.indices.contains(parentRouteIndex),
+              case let .playlistManagement(state) = coordinatorStore.routes[parentRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        playlistManagementState?.startupUnlockPlaylistID == nil
+            && playlistManagementState?.addPlaylistPresentationRequestID == routeStore.requestID
+            && playlistManagementState?.addPlaylist != nil
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .playlistManagementAddPlaylist(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private var addPlaylistStore: StoreOf<AddPlaylistFeature> {
+        let parentRouteIndex = routeStore.playlistManagementRouteIndex
+        let requestID = routeStore.requestID
+        let presentationID = routeStore.presentationID
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(parentRouteIndex),
+                      case let .playlistManagement(managementState) = coordinatorState.routes[parentRouteIndex].screen,
+                      managementState.addPlaylistPresentationRequestID == requestID,
+                      let addPlaylistState = managementState.addPlaylist
+                else { return AddPlaylistFeature.State() }
+                return addPlaylistState
+            },
+            action: {
+                .playlistManagementAddPlaylistChildAction(
+                    presentationID: presentationID,
+                    requestID: requestID,
+                    action: $0
+                )
+            }
+        )
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.playlistManagementAddPlaylistRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            playlistManagementRouteIndex: routeStore.playlistManagementRouteIndex,
+            requestID: routeStore.requestID
         ))
     }
 }

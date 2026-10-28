@@ -371,6 +371,50 @@ public struct PlaylistManagementPINRouteFeature {
 }
 
 @Reducer
+public struct PlaylistManagementAddPlaylistRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let playlistManagementRouteIndex: Int
+        public let requestID: UUID
+
+        public init(
+            playlistManagementRouteIndex: Int,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.playlistManagementRouteIndex = playlistManagementRouteIndex
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -391,6 +435,7 @@ public enum AppScreen {
     case playlistQRTransferConfirmation(PlaylistQRTransferConfirmationRouteFeature)
     case playlistManagementSettings(PlaylistManagementSettingsRouteFeature)
     case playlistManagementPIN(PlaylistManagementPINRouteFeature)
+    case playlistManagementAddPlaylist(PlaylistManagementAddPlaylistRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -419,6 +464,7 @@ extension AppScreen.State: Hashable {
         case let (.playlistQRTransferConfirmation(l), .playlistQRTransferConfirmation(r)): l.presentationID == r.presentationID
         case let (.playlistManagementSettings(l), .playlistManagementSettings(r)): l.presentationID == r.presentationID
         case let (.playlistManagementPIN(l), .playlistManagementPIN(r)): l.presentationID == r.presentationID
+        case let (.playlistManagementAddPlaylist(l), .playlistManagementAddPlaylist(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -480,6 +526,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .playlistManagementPIN(state):
             hasher.combine(22)
+            hasher.combine(state.presentationID)
+        case let .playlistManagementAddPlaylist(state):
+            hasher.combine(23)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

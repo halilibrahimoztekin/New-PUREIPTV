@@ -158,18 +158,6 @@ public struct PlaylistManagementView: View {
                     Text("\"\(name)\" çalma listesini silmek istediğinize emin misiniz?")
                 }
             }
-            .sheet(
-                item: $store.scope(state: \.addPlaylist, action: \.addPlaylist)
-            ) { addPlaylistStore in
-                NavigationStack {
-                    AddPlaylistView(store: addPlaylistStore)
-                    #if os(tvOS)
-                        .onExitCommand {
-                            store.send(.closeAddPlaylistTapped)
-                        }
-                    #endif
-                }
-            }
     }
 
     private var playlistStoreStatusTitle: String {
