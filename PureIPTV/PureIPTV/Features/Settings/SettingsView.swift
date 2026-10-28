@@ -9,7 +9,6 @@ public struct SettingsView: View {
     @ObservedObject private var userAgentManager = UserAgentManager.shared
     @Bindable var store: StoreOf<SettingsFeature>
 
-    @State private var isShowingSpeedTest: Bool = false
     @State private var backupExportURL: URL? = nil
     @State private var backupAlertMessage: String? = nil
     @State private var isShowingBackupAlert: Bool = false
@@ -771,7 +770,7 @@ public struct SettingsView: View {
 
             Section(header: Text("Ağ, Hız & Oynatıcı Teşhisi")) {
                 Button(action: {
-                    isShowingSpeedTest = true
+                    store.send(.speedTestTapped)
                 }) {
                     HStack {
                         Image(systemName: "speedometer")
@@ -911,12 +910,6 @@ public struct SettingsView: View {
             PINSetupView(store: store)
             #if os(iOS)
                 .presentationDetents([.height(300)])
-            #endif
-        }
-        .sheet(isPresented: $isShowingSpeedTest) {
-            StreamSpeedTestView()
-            #if os(iOS)
-                .presentationDetents([.medium, .large])
             #endif
         }
         .sheet(isPresented: Binding(

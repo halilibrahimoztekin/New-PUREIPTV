@@ -119,6 +119,11 @@ public struct AppCoordinator {
             playerRouteIndex: Int,
             requestID: UUID
         )
+        case settingsSpeedTestRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -778,6 +783,27 @@ public struct AppCoordinator {
                 action: .player(.closeSubtitleSearch(requestID: requestID))
             )))
 
+        case let .settingsSpeedTestRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let settingsSpeedTestRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsSpeedTest(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let settingsSpeedTestRouteIndex {
+                guard settingsSpeedTestRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
+            )))
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -914,6 +940,27 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.playerRouteIndex,
                 action: .player(.closeSubtitleSearch(requestID: requestID))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsSpeedTest(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsSpeedTest(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
             )))
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
@@ -1072,6 +1119,21 @@ public struct AppCoordinator {
                     homeRouteIndex: homeRouteIndex,
                     homeConfig: homeState.config,
                     presentation: .homeSettings(reloadConfig: config)
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentSpeedTest(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            state.routes.presentSheet(.settingsSpeedTest(
+                SettingsSpeedTestRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
                 )
             ))
             return .none
@@ -2094,6 +2156,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .settingsSpeedTest(screenStore):
+                SettingsSpeedTestRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .playlistManagement(store):
                 PlaylistManagementView(store: store)
             case let .paywall(store):
@@ -2758,6 +2825,66 @@ private struct PlayerSubtitleSearchRouteView: View {
         coordinatorStore.send(.playerSubtitleSearchRouteDidDisappear(
             presentationID: routeStore.presentationID,
             playerRouteIndex: routeStore.playerRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct SettingsSpeedTestRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<SettingsSpeedTestRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                StreamSpeedTestView {
+                    routeStore.send(.closeTapped)
+                }
+                #if os(iOS)
+                    .presentationDetents([.medium, .large])
+                #endif
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        homeState?.selectedTab == .settings
+            && homeState?.settings.speedTestPresentationRequestID == routeStore.requestID
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .settingsSpeedTest(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.settingsSpeedTestRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID
         ))
     }

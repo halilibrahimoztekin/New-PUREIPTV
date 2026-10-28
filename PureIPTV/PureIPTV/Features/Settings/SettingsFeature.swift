@@ -70,6 +70,7 @@ public struct SettingsFeature {
         public var isShowingClearCacheConfirmation: Bool = false
         public var isShowingClearCacheSuccess: Bool = false
         public var isPremium: Bool = false
+        public var speedTestPresentationRequestID: UUID?
 
         // Trakt.tv Integration (Madde #17)
         public var isTraktAuthenticated: Bool = false
@@ -128,11 +129,14 @@ public struct SettingsFeature {
 
     public enum Action: BindableAction {
         case managePlaylistsTapped
+        case speedTestTapped
+        case closeSpeedTest(requestID: UUID)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case openManagePlaylists
             case switchProfile
+            case presentSpeedTest(requestID: UUID)
         }
 
         case onAppear
@@ -382,6 +386,17 @@ public struct SettingsFeature {
 
             case .managePlaylistsTapped:
                 return .send(.delegate(.openManagePlaylists))
+
+            case .speedTestTapped:
+                guard state.speedTestPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.speedTestPresentationRequestID = requestID
+                return .send(.delegate(.presentSpeedTest(requestID: requestID)))
+
+            case let .closeSpeedTest(requestID):
+                guard state.speedTestPresentationRequestID == requestID else { return .none }
+                state.speedTestPresentationRequestID = nil
+                return .none
 
             case .switchProfileTapped:
                 return .send(.delegate(.switchProfile))

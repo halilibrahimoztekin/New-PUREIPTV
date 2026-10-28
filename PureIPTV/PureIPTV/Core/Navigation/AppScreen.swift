@@ -518,6 +518,50 @@ public struct PlayerSubtitleSearchRouteFeature {
 }
 
 @Reducer
+public struct SettingsSpeedTestRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let requestID: UUID
+
+        public init(
+            homeRouteIndex: Int,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -541,6 +585,7 @@ public enum AppScreen {
     case playlistManagementAddPlaylist(PlaylistManagementAddPlaylistRouteFeature)
     case playerSpeedTest(PlayerSpeedTestRouteFeature)
     case playerSubtitleSearch(PlayerSubtitleSearchRouteFeature)
+    case settingsSpeedTest(SettingsSpeedTestRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -572,6 +617,7 @@ extension AppScreen.State: Hashable {
         case let (.playlistManagementAddPlaylist(l), .playlistManagementAddPlaylist(r)): l.presentationID == r.presentationID
         case let (.playerSpeedTest(l), .playerSpeedTest(r)): l.presentationID == r.presentationID
         case let (.playerSubtitleSearch(l), .playerSubtitleSearch(r)): l.presentationID == r.presentationID
+        case let (.settingsSpeedTest(l), .settingsSpeedTest(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -642,6 +688,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .playerSubtitleSearch(state):
             hasher.combine(25)
+            hasher.combine(state.presentationID)
+        case let .settingsSpeedTest(state):
+            hasher.combine(26)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)
