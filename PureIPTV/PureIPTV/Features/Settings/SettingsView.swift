@@ -906,12 +906,6 @@ public struct SettingsView: View {
         } message: {
             Text("Yeni izlemeler For You önerilerine yeniden katkı sağlayabilir.")
         }
-        .sheet(isPresented: $store.isShowingPINSetup) {
-            PINSetupView(store: store)
-            #if os(iOS)
-                .presentationDetents([.height(300)])
-            #endif
-        }
         .sheet(isPresented: Binding(
             get: { store.isTraktAuthSheetPresented },
             set: { store.send(.setTraktAuthSheetPresented($0)) }

@@ -10,6 +10,7 @@ public struct SettingsFeature {
     public struct State: Equatable {
         public var isParentalControlEnabled: Bool = false
         public var isShowingPINSetup: Bool = false
+        public var pinSetupPresentationRequestID: UUID?
         public var pinInput: String = ""
         public var pinConfirm: String = ""
         public var step: PINStep = .enterNew
@@ -133,6 +134,7 @@ public struct SettingsFeature {
         case managePlaylistsTapped
         case speedTestTapped
         case closeSpeedTest(requestID: UUID)
+        case coordinatorDismissPINSetup(requestID: UUID)
         case coordinatorDismissCustomEPGSettings(requestID: UUID)
         case coordinatorDismissCustomEPGSourceAdd(requestID: UUID)
         case delegate(Delegate)
@@ -143,6 +145,7 @@ public struct SettingsFeature {
             case presentSpeedTest(requestID: UUID)
             case presentCustomEPGSettings(requestID: UUID)
             case presentCustomEPGSourceAdd(requestID: UUID)
+            case presentPINSetup(requestID: UUID)
         }
 
         case onAppear
@@ -415,6 +418,9 @@ public struct SettingsFeature {
 
             case let .toggleParentalControl(enabled):
                 if enabled {
+                    guard state.pinSetupPresentationRequestID == nil else { return .none }
+                    let requestID = UUID()
+                    state.pinSetupPresentationRequestID = requestID
                     // Kapatmaktan açmaya geçiyorsa PIN belirleme ekranını aç
                     state.isShowingPINSetup = true
                     state.step = .enterNew
@@ -422,7 +428,7 @@ public struct SettingsFeature {
                     state.pinConfirm = ""
                     state.errorMessage = nil
                     // Toggle'ı UI'da hemen true yapma, PIN belirlenince true yapacağız
-                    return .none
+                    return .send(.delegate(.presentPINSetup(requestID: requestID)))
                 } else {
                     // Kapatılıyorsa direkt kapat
                     state.isParentalControlEnabled = false
@@ -452,6 +458,12 @@ public struct SettingsFeature {
             case .cancelPINSetup:
                 state.isShowingPINSetup = false
                 state.isParentalControlEnabled = false
+                return .none
+
+            case let .coordinatorDismissPINSetup(requestID):
+                guard state.pinSetupPresentationRequestID == requestID else { return .none }
+                state.isShowingPINSetup = false
+                state.pinSetupPresentationRequestID = nil
                 return .none
 
             case .savePIN:
