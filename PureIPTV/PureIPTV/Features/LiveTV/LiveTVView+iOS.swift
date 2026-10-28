@@ -67,9 +67,6 @@
             }
             .onChange(of: store.channelPresentationPlaylistID) { _, _ in editingPresentationTarget = nil }
             .onChange(of: store.channelPresentationProfileScope) { _, _ in editingPresentationTarget = nil }
-            .sheet(item: $store.scope(state: \.categoryManagement, action: \.categoryManagement)) { store in
-                CategoryManagementView(store: store)
-            }
             .sheet(isPresented: $isSmartGroupManagerPresented) {
                 SmartChannelGroupManagementView(store: store)
             }

@@ -121,6 +121,7 @@ public struct HomeFeature {
             case presentEPGTimeline(EPGTimelineFeature.State)
             case presentMultiView(MultiViewFeature.State)
             case restrictMultiViewCategory(String)
+            case presentCategoryManagement(CategoryManagementFeature.State)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
@@ -212,6 +213,9 @@ public struct HomeFeature {
 
             case let .liveTV(.delegate(.restrictMultiViewCategory(categoryID))):
                 return .send(.delegate(.restrictMultiViewCategory(categoryID)))
+
+            case let .liveTV(.delegate(.presentCategoryManagement(categoryState))):
+                return .send(.delegate(.presentCategoryManagement(categoryState)))
 
             case .liveTV:
                 return .none

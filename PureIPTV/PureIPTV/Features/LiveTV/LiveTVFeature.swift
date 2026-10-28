@@ -259,7 +259,6 @@ public struct LiveTVFeature {
 
         public var selectedTabMode: TabMode = .channels
 
-        @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var epgTimeline: EPGTimelineFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
 
@@ -416,9 +415,10 @@ public struct LiveTVFeature {
         case reloadPreferences
         case editCategoriesTapped
         case epgGuideTapped
-        case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
         case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
+        case categoryPreferencesUpdated
+        case liveCategoryMappingsUpdated
         case openMultiViewTapped
         case openEPGTimelineTapped
         case setTabMode(State.TabMode)
@@ -431,6 +431,7 @@ public struct LiveTVFeature {
             case presentEPGTimeline(EPGTimelineFeature.State)
             case presentMultiView(MultiViewFeature.State)
             case restrictMultiViewCategory(String)
+            case presentCategoryManagement(CategoryManagementFeature.State)
         }
     }
 
@@ -2341,27 +2342,22 @@ public struct LiveTVFeature {
 
             case .editCategoriesTapped:
                 if let config = state.config {
-                    state.categoryManagement = CategoryManagementFeature.State(config: config, type: .live)
+                    return .send(.delegate(.presentCategoryManagement(
+                        CategoryManagementFeature.State(config: config, type: .live)
+                    )))
                 }
                 return .none
 
-            case .categoryManagement(.presented(.delegate(.categoriesUpdated))):
+            case .categoryPreferencesUpdated:
                 return .send(.reloadPreferences)
 
-            case .categoryManagement(.presented(.delegate(.m3uMappingsUpdated))):
+            case .liveCategoryMappingsUpdated:
                 guard let config = state.config else { return .none }
                 state.categories = []
                 state.channelsByCategory = [:]
                 state.selectedCategoryID = nil
                 state.selectedChannel = nil
                 return .send(.reloadCategories(config: config))
-
-            case .categoryManagement(.presented(.delegate(.close))):
-                state.categoryManagement = nil
-                return .none
-
-            case .categoryManagement:
-                return .none
 
             case .epgGuideTapped:
                 if let config = state.config, !state.currentChannels.isEmpty {
@@ -2515,9 +2511,6 @@ public struct LiveTVFeature {
             case .delegate:
                 return .none
             }
-        }
-        .ifLet(\.$categoryManagement, action: \.categoryManagement) {
-            CategoryManagementFeature()
         }
         .ifLet(\.$epgTimeline, action: \.epgTimeline) {
             EPGTimelineFeature()

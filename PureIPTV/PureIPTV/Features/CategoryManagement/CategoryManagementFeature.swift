@@ -6,6 +6,7 @@ import SwiftUI
 public struct CategoryManagementFeature {
     @ObservableState
     public struct State: Equatable {
+        public let presentationID: UUID
         public let config: PlaylistConfig
         public var type: CategoryType
         public var isLoading = false
@@ -72,7 +73,8 @@ public struct CategoryManagementFeature {
             }
         }
 
-        public init(config: PlaylistConfig, type: CategoryType) {
+        public init(config: PlaylistConfig, type: CategoryType, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
             self.config = config
             self.type = type
         }
@@ -109,7 +111,6 @@ public struct CategoryManagementFeature {
 
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
-    @Dependency(\.dismiss) var dismiss
 
     public init() {}
 
@@ -369,9 +370,8 @@ public struct CategoryManagementFeature {
             case .saveResponse(.success):
                 state.hasUnsavedChanges = false
                 return .run { send in
-                    @Dependency(\.dismiss) var dismiss
                     await send(.delegate(.categoriesUpdated))
-                    await dismiss()
+                    await send(.delegate(.close))
                 }
 
             case let .saveResponse(.failure(error)):
@@ -379,10 +379,7 @@ public struct CategoryManagementFeature {
                 return .none
 
             case .closeTapped:
-                return .run { _ in
-                    @Dependency(\.dismiss) var dismiss
-                    await dismiss()
-                }
+                return .send(.delegate(.close))
 
             case .delegate:
                 return .none

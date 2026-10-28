@@ -477,6 +477,20 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .categoryManagement(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .categoryManagement = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case .router(.routeAction(_, .categoryManagement(.delegate(.categoriesUpdated)))):
+            return forwardCategoryManagementResult(.categoryPreferencesUpdated, state: state)
+
+        case .router(.routeAction(_, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
+            return forwardCategoryManagementResult(.liveCategoryMappingsUpdated, state: state)
+
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
@@ -504,6 +518,10 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentMultiView(multiViewState))))):
             state.routes.presentCover(.multiView(multiViewState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentCategoryManagement(categoryState))))):
+            state.routes.presentSheet(.categoryManagement(categoryState))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
@@ -967,6 +985,23 @@ public struct AppCoordinator {
         }
     }
 
+    private func forwardCategoryManagementResult(
+        _ action: LiveTVFeature.Action,
+        state: State
+    ) -> Effect<Action> {
+        guard let homeRouteIndex = state.routes.lastIndex(where: { route in
+            if case .home = route.screen {
+                return true
+            }
+            return false
+        }) else { return .none }
+
+        return .send(.router(.routeAction(
+            id: homeRouteIndex,
+            action: .home(.liveTV(action))
+        )))
+    }
+
     private func makeLivePlayerState(
         channel: MediaModels.Item,
         playlist: [MediaModels.Item]?,
@@ -1133,6 +1168,8 @@ public struct AppCoordinatorView: View {
                     }
             case let .multiView(screenStore):
                 MultiView(store: screenStore)
+            case let .categoryManagement(screenStore):
+                CategoryManagementView(store: screenStore)
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):
