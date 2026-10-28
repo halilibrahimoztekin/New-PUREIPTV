@@ -98,6 +98,7 @@ public struct CategoryManagementFeature {
         case resetOrderTapped
         case saveTapped
         case saveResponse(Result<Void, Error>)
+        case m3uCategoryMappingTapped
         case m3uCategoryMappingsUpdated
         case closeTapped
         case delegate(Delegate)
@@ -106,6 +107,7 @@ public struct CategoryManagementFeature {
             case close
             case categoriesUpdated
             case m3uMappingsUpdated
+            case presentM3UCategoryMapping(presentationID: UUID)
         }
     }
 
@@ -360,6 +362,10 @@ public struct CategoryManagementFeature {
                         await send(.saveResponse(.failure(error)))
                     }
                 }
+
+            case .m3uCategoryMappingTapped:
+                guard state.config.type == .m3u, state.type == .live else { return .none }
+                return .send(.delegate(.presentM3UCategoryMapping(presentationID: state.presentationID)))
 
             case .m3uCategoryMappingsUpdated:
                 return .merge(

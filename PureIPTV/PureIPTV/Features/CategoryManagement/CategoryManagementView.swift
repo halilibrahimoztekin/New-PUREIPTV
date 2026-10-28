@@ -6,7 +6,6 @@ public struct CategoryManagementView: View {
 
     @FocusState private var focusedItemID: String?
     @FocusState private var focusedFilterMode: CategoryManagementFeature.State.FilterMode?
-    @State private var isM3UCategoryMappingPresented = false
 
     public init(store: StoreOf<CategoryManagementFeature>) {
         self.store = store
@@ -69,11 +68,6 @@ public struct CategoryManagementView: View {
                 .onAppear {
                     store.send(.onAppear)
                 }
-                .sheet(isPresented: $isM3UCategoryMappingPresented) {
-                    M3UCategoryMappingEditorView(config: store.config) {
-                        store.send(.m3uCategoryMappingsUpdated)
-                    }
-                }
         }
     }
 
@@ -98,7 +92,7 @@ public struct CategoryManagementView: View {
         VStack(spacing: 12) {
             if store.config.type == .m3u, store.type == .live {
                 Button {
-                    isM3UCategoryMappingPresented = true
+                    store.send(.m3uCategoryMappingTapped)
                 } label: {
                     Label(AppStrings.M3UCategoryMapping.title, systemImage: "tag")
                         .frame(maxWidth: .infinity, alignment: .leading)

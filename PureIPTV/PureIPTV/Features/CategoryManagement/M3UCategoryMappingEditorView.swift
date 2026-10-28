@@ -4,18 +4,19 @@ import SwiftUI
 public struct M3UCategoryMappingEditorView: View {
     let config: PlaylistConfig
     let onSave: () -> Void
+    let onClose: () -> Void
 
     @Dependency(\.iptvClient) private var iptvClient
     @Dependency(\.m3uCategoryMappingClient) private var mappingClient
-    @Environment(\.dismiss) private var dismiss
     @State private var tags: [String] = []
     @State private var mappings: [String: String] = [:]
     @State private var isLoading = true
     @State private var isSaving = false
 
-    public init(config: PlaylistConfig, onSave: @escaping () -> Void) {
+    public init(config: PlaylistConfig, onSave: @escaping () -> Void, onClose: @escaping () -> Void) {
         self.config = config
         self.onSave = onSave
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -71,7 +72,7 @@ public struct M3UCategoryMappingEditorView: View {
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.cancel) { dismiss() }
+                        Button(AppStrings.Common.cancel, action: onClose)
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button(AppStrings.Common.save) { save() }
@@ -113,7 +114,6 @@ public struct M3UCategoryMappingEditorView: View {
         Task {
             await mappingClient.save(savedMappings, playlistID)
             onSave()
-            dismiss()
         }
     }
 }

@@ -94,6 +94,13 @@ public struct AppCoordinator {
         case epgReminderMonitorTick([EPGReminder])
         case epgGuideRouteDidDisappear(UUID)
         case epgTimelineRouteDidDisappear(UUID)
+        case m3uCategoryMappingsSaved(
+            presentationID: UUID,
+            categoryRouteIndex: Int,
+            categoryPresentationID: UUID,
+            homeRouteIndex: Int,
+            playlistID: UUID?
+        )
     }
 
     @Injected(\.playlistRepository) var playlistRepository
@@ -486,11 +493,76 @@ public struct AppCoordinator {
             state.routes.dismiss()
             return .none
 
+        case let .router(.routeAction(routeIndex, .m3uCategoryMappingEditor(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .m3uCategoryMappingEditor(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
+            if let editorRouteIndex = state.routes.indices.last(where: { index in
+                if case let .m3uCategoryMappingEditor(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), editorRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard let playlistID = maybePlaylistID,
+                  state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.type == .m3u,
+                  homeState.liveTV.config?.playlistID == playlistID
+            else { return .none }
+
+            if state.routes.indices.contains(categoryRouteIndex),
+               categoryRouteIndex > homeRouteIndex,
+               case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+               categoryState.presentationID == categoryPresentationID,
+               categoryState.type == .live,
+               categoryState.config.type == .m3u,
+               categoryState.config.playlistID == playlistID
+            {
+                return .send(.router(.routeAction(
+                    id: categoryRouteIndex,
+                    action: .categoryManagement(.m3uCategoryMappingsUpdated)
+                )))
+            }
+
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.liveCategoryMappingsUpdated))
+            )))
+
         case .router(.routeAction(_, .categoryManagement(.delegate(.categoriesUpdated)))):
             return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
 
-        case .router(.routeAction(_, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
-            return forwardLiveTVAction(.liveCategoryMappingsUpdated, state: state)
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  categoryRouteIndex == state.routes.count - 1,
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+                  categoryState.type == .live,
+                  categoryState.config.type == .m3u,
+                  let playlistID = categoryState.config.playlistID
+            else { return .none }
+
+            guard let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
+                guard routeIndex < categoryRouteIndex else { return false }
+                if case .home = state.routes[routeIndex].screen { return true }
+                return false
+            }),
+            case let .home(homeState) = state.routes[homeRouteIndex].screen,
+            homeState.liveTV.config?.type == .m3u,
+            homeState.liveTV.config?.playlistID == playlistID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.liveCategoryMappingsUpdated))
+            )))
 
         case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didCancelFromRoute(presentationID))))):
             guard state.routes.indices.contains(routeIndex),
@@ -559,6 +631,33 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(_, .home(.delegate(.presentCategoryManagement(categoryState))))):
             state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.presentM3UCategoryMapping(categoryPresentationID))))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  categoryRouteIndex == state.routes.count - 1,
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+                  categoryState.presentationID == categoryPresentationID,
+                  categoryState.type == .live,
+                  categoryState.config.type == .m3u,
+                  let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
+                      guard routeIndex < categoryRouteIndex else { return false }
+                      if case .home = state.routes[routeIndex].screen { return true }
+                      return false
+                  }),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.type == .m3u,
+                  homeState.liveTV.config?.playlistID == categoryState.config.playlistID
+            else { return .none }
+
+            state.routes.presentSheet(.m3uCategoryMappingEditor(
+                M3UCategoryMappingEditorRouteFeature.State(
+                    categoryRouteIndex: categoryRouteIndex,
+                    categoryPresentationID: categoryPresentationID,
+                    homeRouteIndex: homeRouteIndex,
+                    config: categoryState.config
+                )
+            ))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
@@ -1257,6 +1356,11 @@ public struct AppCoordinatorView: View {
                 MultiView(store: screenStore)
             case let .categoryManagement(screenStore):
                 CategoryManagementView(store: screenStore)
+            case let .m3uCategoryMappingEditor(screenStore):
+                M3UCategoryMappingEditorRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .parentalLock(screenStore):
                 #if os(iOS)
                     ParentalLockView(store: screenStore)
@@ -1405,5 +1509,28 @@ private struct ChannelPresentationEditorRouteView: View {
             id: routeStore.homeRouteIndex,
             action: .home(.liveTV(action))
         )))
+    }
+}
+
+private struct M3UCategoryMappingEditorRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<M3UCategoryMappingEditorRouteFeature>
+
+    var body: some View {
+        M3UCategoryMappingEditorView(
+            config: routeStore.config,
+            onSave: {
+                coordinatorStore.send(.m3uCategoryMappingsSaved(
+                    presentationID: routeStore.presentationID,
+                    categoryRouteIndex: routeStore.categoryRouteIndex,
+                    categoryPresentationID: routeStore.categoryPresentationID,
+                    homeRouteIndex: routeStore.homeRouteIndex,
+                    playlistID: routeStore.config.playlistID
+                ))
+            },
+            onClose: {
+                routeStore.send(.closeTapped)
+            }
+        )
     }
 }
