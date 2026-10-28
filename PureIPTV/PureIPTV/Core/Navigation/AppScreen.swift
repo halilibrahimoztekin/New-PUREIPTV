@@ -562,6 +562,58 @@ public struct SettingsSpeedTestRouteFeature {
 }
 
 @Reducer
+public struct DetailTMDBMatchPickerRouteFeature {
+    public enum Parent: Equatable {
+        case vod(itemID: String)
+        case series(itemID: String)
+    }
+
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let detailRouteIndex: Int
+        public let parent: Parent
+        public let requestID: UUID
+
+        public init(
+            detailRouteIndex: Int,
+            parent: Parent,
+            requestID: UUID,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.detailRouteIndex = detailRouteIndex
+            self.parent = parent
+            self.requestID = requestID
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID, requestID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(
+                    presentationID: state.presentationID,
+                    requestID: state.requestID
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -586,6 +638,7 @@ public enum AppScreen {
     case playerSpeedTest(PlayerSpeedTestRouteFeature)
     case playerSubtitleSearch(PlayerSubtitleSearchRouteFeature)
     case settingsSpeedTest(SettingsSpeedTestRouteFeature)
+    case detailTMDBMatchPicker(DetailTMDBMatchPickerRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -618,6 +671,7 @@ extension AppScreen.State: Hashable {
         case let (.playerSpeedTest(l), .playerSpeedTest(r)): l.presentationID == r.presentationID
         case let (.playerSubtitleSearch(l), .playerSubtitleSearch(r)): l.presentationID == r.presentationID
         case let (.settingsSpeedTest(l), .settingsSpeedTest(r)): l.presentationID == r.presentationID
+        case let (.detailTMDBMatchPicker(l), .detailTMDBMatchPicker(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -691,6 +745,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .settingsSpeedTest(state):
             hasher.combine(26)
+            hasher.combine(state.presentationID)
+        case let .detailTMDBMatchPicker(state):
+            hasher.combine(27)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)

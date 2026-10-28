@@ -91,24 +91,6 @@ public struct VODDetailView: View {
                 .accessibilityHint(AppStrings.TMDBMatchPicker.searchAccessibilityLabel)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { store.isTMDBMatchPickerPresented },
-            set: {
-                if !$0 {
-                    store.send(.dismissTMDBMatchPicker)
-                }
-            }
-        )) {
-            TMDBMatchPickerSheet(
-                results: store.tmdbSearchResults,
-                selectedTMDBID: store.selectedTMDBMatchID,
-                isLoading: store.isTMDBLoading,
-                search: { store.send(.manualTMDBSearch($0)) },
-                select: { store.send(.selectTMDBMatch($0)) },
-                clear: { store.send(.clearTMDBMatchOverride) },
-                dismiss: { store.send(.dismissTMDBMatchPicker) }
-            )
-        }
     }
 }
 

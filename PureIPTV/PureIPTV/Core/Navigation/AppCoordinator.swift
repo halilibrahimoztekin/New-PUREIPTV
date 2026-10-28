@@ -124,6 +124,12 @@ public struct AppCoordinator {
             homeRouteIndex: Int,
             requestID: UUID
         )
+        case detailTMDBMatchPickerRouteDidDisappear(
+            presentationID: UUID,
+            detailRouteIndex: Int,
+            parent: DetailTMDBMatchPickerRouteFeature.Parent,
+            requestID: UUID
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -804,6 +810,38 @@ public struct AppCoordinator {
                 action: .home(.settings(.closeSpeedTest(requestID: requestID)))
             )))
 
+        case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
+            let pickerRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let pickerRouteIndex {
+                guard pickerRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(detailRouteIndex) else { return .none }
+            switch (parent, state.routes[detailRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: detailRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: detailRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -962,6 +1000,38 @@ public struct AppCoordinator {
                 id: routeState.homeRouteIndex,
                 action: .home(.settings(.closeSpeedTest(requestID: requestID)))
             )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailTMDBMatchPicker(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailTMDBMatchPicker(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.detailRouteIndex) else { return .none }
+            switch (routeState.parent, state.routes[routeState.detailRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: routeState.detailRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: routeState.detailRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
             if let editorRouteIndex = state.routes.indices.last(where: { index in
@@ -1315,6 +1385,25 @@ public struct AppCoordinator {
             }
             return .none
 
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .seriesDetail(.delegate(.presentTMDBMatchPicker(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
+                  seriesState.tmdbMatchPresentationRequestID == requestID,
+                  seriesState.isTMDBMatchPickerPresented
+            else { return .none }
+            state.routes.presentSheet(.detailTMDBMatchPicker(
+                DetailTMDBMatchPickerRouteFeature.State(
+                    detailRouteIndex: detailRouteIndex,
+                    parent: .series(itemID: seriesState.series.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
         // ── VOD Detail Delegates ─────────────────────────────────
         case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectPlay(playable))))):
             let playerState = PlayerFeature.State(item: playable)
@@ -1329,6 +1418,25 @@ public struct AppCoordinator {
             }
             guard let config = state.activeConfig else { return .none }
             state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentTMDBMatchPicker(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.tmdbMatchPresentationRequestID == requestID,
+                  vodState.isTMDBMatchPickerPresented
+            else { return .none }
+            state.routes.presentSheet(.detailTMDBMatchPicker(
+                DetailTMDBMatchPickerRouteFeature.State(
+                    detailRouteIndex: detailRouteIndex,
+                    parent: .vod(itemID: vodState.vod.id),
+                    requestID: requestID
+                )
+            ))
             return .none
 
         case .router(.routeAction(_, .vodDetail(.delegate(.close)))):
@@ -2161,6 +2269,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .detailTMDBMatchPicker(screenStore):
+                DetailTMDBMatchPickerRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .playlistManagement(store):
                 PlaylistManagementView(store: store)
             case let .paywall(store):
@@ -2885,6 +2998,162 @@ private struct SettingsSpeedTestRouteView: View {
         coordinatorStore.send(.settingsSpeedTestRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct DetailTMDBMatchPickerRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<DetailTMDBMatchPickerRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                picker
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    @ViewBuilder
+    private var picker: some View {
+        switch routeStore.parent {
+        case .vod:
+            if let state = vodState {
+                TMDBMatchPickerSheet(
+                    results: state.tmdbSearchResults,
+                    selectedTMDBID: state.selectedTMDBMatchID,
+                    isLoading: state.isTMDBLoading,
+                    search: sendSearch,
+                    select: sendSelection,
+                    clear: sendClear,
+                    dismiss: close
+                )
+            }
+        case .series:
+            if let state = seriesState {
+                TMDBMatchPickerSheet(
+                    results: state.tmdbSearchResults,
+                    selectedTMDBID: state.selectedTMDBMatchID,
+                    isLoading: state.isTMDBLoading,
+                    search: sendSearch,
+                    select: sendSelection,
+                    clear: sendClear,
+                    dismiss: close
+                )
+            }
+        }
+    }
+
+    private var vodState: VODDetailFeature.State? {
+        let routeIndex = routeStore.detailRouteIndex
+        guard coordinatorStore.routes.indices.contains(routeIndex),
+              case let .vodDetail(state) = coordinatorStore.routes[routeIndex].screen,
+              case let .vod(itemID) = routeStore.parent,
+              state.vod.id == itemID,
+              state.tmdbMatchPresentationRequestID == routeStore.requestID
+        else { return nil }
+        return state
+    }
+
+    private var seriesState: SeriesDetailFeature.State? {
+        let routeIndex = routeStore.detailRouteIndex
+        guard coordinatorStore.routes.indices.contains(routeIndex),
+              case let .seriesDetail(state) = coordinatorStore.routes[routeIndex].screen,
+              case let .series(itemID) = routeStore.parent,
+              state.series.id == itemID,
+              state.tmdbMatchPresentationRequestID == routeStore.requestID
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        switch routeStore.parent {
+        case .vod:
+            return vodState?.isTMDBMatchPickerPresented == true
+        case .series:
+            return seriesState?.isTMDBMatchPickerPresented == true
+        }
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .detailTMDBMatchPicker(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func sendSearch(_ query: String) {
+        let routeIndex = routeStore.detailRouteIndex
+        switch routeStore.parent {
+        case .vod:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .vodDetail(.manualTMDBSearch(query))
+            )))
+        case .series:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .seriesDetail(.manualTMDBSearch(query))
+            )))
+        }
+    }
+
+    private func sendSelection(_ tmdbID: Int) {
+        let routeIndex = routeStore.detailRouteIndex
+        switch routeStore.parent {
+        case .vod:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .vodDetail(.selectTMDBMatch(tmdbID))
+            )))
+        case .series:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .seriesDetail(.selectTMDBMatch(tmdbID))
+            )))
+        }
+    }
+
+    private func sendClear() {
+        let routeIndex = routeStore.detailRouteIndex
+        switch routeStore.parent {
+        case .vod:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .vodDetail(.clearTMDBMatchOverride)
+            )))
+        case .series:
+            coordinatorStore.send(.router(.routeAction(
+                id: routeIndex,
+                action: .seriesDetail(.clearTMDBMatchOverride)
+            )))
+        }
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            close()
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.detailTMDBMatchPickerRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            detailRouteIndex: routeStore.detailRouteIndex,
+            parent: routeStore.parent,
             requestID: routeStore.requestID
         ))
     }

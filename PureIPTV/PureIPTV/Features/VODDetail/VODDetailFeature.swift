@@ -19,6 +19,7 @@ public struct VODDetailFeature {
         public var hasManualTMDBOverride = false
         public var didUserChangeTMDBMatch = false
         public var manualTMDBSearchRequestID: UUID?
+        public var tmdbMatchPresentationRequestID: UUID?
         public var lastTMDBMatchWriteRevision: Date?
         public var isTMDBMatchPickerPresented = false
 
@@ -101,6 +102,7 @@ public struct VODDetailFeature {
         case manualTMDBSearchResponse(UUID, Result<TMDBSearchResponseDTO, Error>)
         case showTMDBMatchPicker
         case dismissTMDBMatchPicker
+        case coordinatorDismissTMDBMatchPicker(requestID: UUID)
         case selectTMDBMatch(Int)
         case manualTMDBDetailsResponse(Int, Result<TMDBMovieDetailsDTO, Error>)
         case clearTMDBMatchOverride
@@ -136,6 +138,7 @@ public struct VODDetailFeature {
         public enum Delegate: Equatable {
             case didSelectPlay(PlayerFeature.PlayableItem)
             case didSelectVOD(MediaModels.Item)
+            case presentTMDBMatchPicker(requestID: UUID)
             case close
         }
     }
@@ -494,14 +497,25 @@ public struct VODDetailFeature {
                 return .none
 
             case .showTMDBMatchPicker:
+                guard state.tmdbMatchPresentationRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.tmdbMatchPresentationRequestID = requestID
                 state.isTMDBMatchPickerPresented = true
                 state.manualTMDBSearchRequestID = nil
                 state.tmdbSearchResults = []
-                return .none
+                return .send(.delegate(.presentTMDBMatchPicker(requestID: requestID)))
 
             case .dismissTMDBMatchPicker:
                 state.isTMDBMatchPickerPresented = false
                 state.manualTMDBSearchRequestID = nil
+                state.tmdbMatchPresentationRequestID = nil
+                return .none
+
+            case let .coordinatorDismissTMDBMatchPicker(requestID):
+                guard state.tmdbMatchPresentationRequestID == requestID else { return .none }
+                state.isTMDBMatchPickerPresented = false
+                state.manualTMDBSearchRequestID = nil
+                state.tmdbMatchPresentationRequestID = nil
                 return .none
 
             case let .selectTMDBMatch(tmdbID):
