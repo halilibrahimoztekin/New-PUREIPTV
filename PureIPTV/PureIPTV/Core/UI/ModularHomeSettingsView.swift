@@ -2,9 +2,11 @@ import SwiftUI
 
 public struct ModularHomeSettingsView: View {
     @State private var sections: [HomeSectionConfig] = HomeSectionManager.shared.sections
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
 
-    public init() {}
+    public init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+    }
 
     public var body: some View {
         NavigationStack {
@@ -77,7 +79,7 @@ public struct ModularHomeSettingsView: View {
                     }
                 #endif
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Kapat") { dismiss() }
+                    Button("Kapat", action: onClose)
                 }
             }
             #if os(iOS)

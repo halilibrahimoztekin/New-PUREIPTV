@@ -8,10 +8,6 @@
     public struct DashboardView_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
-        @State private var isHomeSettingsPresented = false
-        @State private var isCategoryManagementPresented = false
-        @State private var eventForChannelMapping: DashboardFeature.EPGEvent?
-        @State private var playlistIDForChannelMapping: UUID?
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -62,14 +58,17 @@
                             .disabled(store.activeRefreshID != nil)
                             .accessibilityLabel(AppStrings.Common.retry)
                             Button {
-                                isCategoryManagementPresented = true
+                                store.send(.delegate(.presentHomeCategoryPinManagement(
+                                    playlistID: store.activePlaylistID,
+                                    profileScope: store.activeProfileScope
+                                )))
                             } label: {
                                 Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
                                     .font(.system(size: 20, weight: .semibold))
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                             Button {
-                                isHomeSettingsPresented = true
+                                store.send(.delegate(.presentHomeSettings(config)))
                             } label: {
                                 Label("Ana Ekranı Düzenle", systemImage: "slider.horizontal.3")
                                     .font(.system(size: 20, weight: .semibold))
@@ -135,22 +134,6 @@
             }
             .onDisappear {
                 store.send(.onDisappear)
-            }
-            .sheet(isPresented: $isHomeSettingsPresented, onDismiss: {
-                store.send(.onAppear(config: config))
-            }) {
-                ModularHomeSettingsView()
-            }
-            .sheet(isPresented: $isCategoryManagementPresented) {
-                HomeCategoryPinManagementView(store: store)
-            }
-            .sheet(item: $eventForChannelMapping, onDismiss: {
-                playlistIDForChannelMapping = nil
-            }) { event in
-                DashboardEPGChannelPicker(channels: store.epgCandidateChannels) { channel in
-                    guard let playlistID = playlistIDForChannelMapping else { return }
-                    store.send(.mapEPGEventToChannel(playlistID: playlistID, event: event, channelID: channel.id))
-                }
             }
         }
 
@@ -254,8 +237,7 @@
                                 onSelectChannel: { store.send(.channelSelected($0)) },
                                 onChooseChannel: {
                                     guard let playlistID = store.activePlaylistID else { return }
-                                    playlistIDForChannelMapping = playlistID
-                                    eventForChannelMapping = event
+                                    store.send(.delegate(.presentEPGChannelPicker(playlistID: playlistID, event: event)))
                                 }
                             )
                             .frame(width: 380)

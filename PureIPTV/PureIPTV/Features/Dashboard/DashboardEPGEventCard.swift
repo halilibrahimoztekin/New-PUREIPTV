@@ -85,10 +85,10 @@ struct DashboardEPGEventCard: View {
 }
 
 struct DashboardEPGChannelPicker: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     let channels: [MediaModels.Item]
     let onSelect: (MediaModels.Item) -> Void
+    let onCancel: () -> Void
 
     private var filteredChannels: [MediaModels.Item] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,7 +101,6 @@ struct DashboardEPGChannelPicker: View {
             List(filteredChannels) { channel in
                 Button {
                     onSelect(channel)
-                    dismiss()
                 } label: {
                     Label(channel.title, systemImage: "play.tv")
                 }
@@ -110,7 +109,7 @@ struct DashboardEPGChannelPicker: View {
             .navigationTitle("Spor yayını için kanal seç")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(AppStrings.Common.cancel) { dismiss() }
+                    Button(AppStrings.Common.cancel, action: onCancel)
                 }
             }
         }

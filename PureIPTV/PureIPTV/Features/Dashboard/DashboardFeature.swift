@@ -202,6 +202,9 @@ public struct DashboardFeature {
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
+            case presentHomeSettings(PlaylistConfig)
+            case presentHomeCategoryPinManagement(playlistID: UUID?, profileScope: ProfileContextSnapshot?)
+            case presentEPGChannelPicker(playlistID: UUID, event: EPGEvent)
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)

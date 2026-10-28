@@ -100,6 +100,12 @@ public struct AppCoordinator {
             multiViewPresentationID: UUID,
             slotID: Int
         )
+        case dashboardPresentationRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            homeConfig: PlaylistConfig,
+            reloadConfig: PlaylistConfig?
+        )
         case m3uCategoryMappingsSaved(
             presentationID: UUID,
             categoryRouteIndex: Int,
@@ -509,6 +515,60 @@ public struct AppCoordinator {
                 action: .multiView(.channelSelectionDismissed)
             )))
 
+        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.selectEPGChannel(presentationID, channel))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  case let .epgChannelPicker(playlistID, profileScope, event) = routeState.presentation,
+                  state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.config == routeState.homeConfig,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
+                  profileScope.map({ homeState.dashboard.activeProfileScope == $0 }) ?? true,
+                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id }),
+                  homeState.dashboard.epgCandidateChannels.contains(where: { $0.id == channel.id && $0.type == .live })
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.dashboard(.mapEPGEventToChannel(
+                    playlistID: playlistID,
+                    event: event,
+                    channelID: channel.id
+                )))
+            )))
+
+        case let .dashboardPresentationRouteDidDisappear(presentationID, homeRouteIndex, homeConfig, reloadConfig):
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .dashboardPresentation(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), routeIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard let reloadConfig,
+                  state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.config == homeConfig
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.dashboard(.onAppear(config: reloadConfig)))
+            )))
+
         case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
             if let selectionRouteIndex = state.routes.indices.last(where: { index in
                 if case let .multiViewChannelSelection(routeState) = state.routes[index].screen {
@@ -699,6 +759,64 @@ public struct AppCoordinator {
                     multiViewRouteIndex: multiViewRouteIndex,
                     multiViewPresentationID: presentationID,
                     slotID: slotID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeSettings(config)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.config == config
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .homeSettings(reloadConfig: config)
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeCategoryPinManagement(playlistID, profileScope)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.activeProfileScope == profileScope
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .categoryPinManagement(
+                        playlistID: playlistID,
+                        profileScope: profileScope
+                    )
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentEPGChannelPicker(playlistID, event)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
+                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id })
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .epgChannelPicker(
+                        playlistID: playlistID,
+                        profileScope: homeState.dashboard.activeProfileScope,
+                        event: event
+                    )
                 )
             ))
             return .none
@@ -1433,6 +1551,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .dashboardPresentation(screenStore):
+                DashboardPresentationRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .categoryManagement(screenStore):
                 CategoryManagementView(store: screenStore)
             case let .m3uCategoryMappingEditor(screenStore):
@@ -1675,6 +1798,106 @@ private struct MultiViewChannelSelectionRouteView: View {
         coordinatorStore.send(.router(.routeAction(
             id: routeStore.multiViewRouteIndex,
             action: .multiView(action)
+        )))
+    }
+}
+
+private struct DashboardPresentationRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<DashboardPresentationRouteFeature>
+
+    var body: some View {
+        Group {
+            if let homeState, isCurrentContext(homeState) {
+                switch routeStore.presentation {
+                case .homeSettings:
+                    ModularHomeSettingsView(onClose: close)
+
+                case .categoryPinManagement:
+                    HomeCategoryPinManagementView(
+                        state: homeState.dashboard,
+                        send: sendToDashboard,
+                        onClose: close
+                    )
+
+                case let .epgChannelPicker(_, _, _):
+                    DashboardEPGChannelPicker(
+                        channels: homeState.dashboard.epgCandidateChannels,
+                        onSelect: { routeStore.send(.selectEPGChannel($0)) },
+                        onCancel: close
+                    )
+                }
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear(perform: closeIfContextChanged)
+        .onChange(of: homeState?.config) { _, _ in closeIfContextChanged() }
+        .onChange(of: homeState?.dashboard.activePlaylistID) { _, _ in closeIfContextChanged() }
+        .onChange(of: homeState?.dashboard.activeProfileScope) { _, _ in closeIfContextChanged() }
+        .onChange(of: homeState?.dashboard.epgCandidatePlaylistID) { _, _ in closeIfContextChanged() }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        guard coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
+              case let .home(homeState) = coordinatorStore.routes[routeStore.homeRouteIndex].screen
+        else { return nil }
+        return homeState
+    }
+
+    private func isCurrentContext(_ homeState: HomeFeature.State) -> Bool {
+        guard homeState.config == routeStore.homeConfig else { return false }
+
+        switch routeStore.presentation {
+        case let .homeSettings(reloadConfig):
+            return reloadConfig == routeStore.homeConfig
+
+        case let .categoryPinManagement(playlistID, profileScope):
+            return (playlistID == nil || playlistID == homeState.dashboard.activePlaylistID)
+                && (profileScope == nil || profileScope == homeState.dashboard.activeProfileScope)
+
+        case let .epgChannelPicker(playlistID, profileScope, event):
+            return homeState.dashboard.activePlaylistID == playlistID
+                && homeState.dashboard.epgCandidatePlaylistID == playlistID
+                && (profileScope == nil || profileScope == homeState.dashboard.activeProfileScope)
+                && homeState.dashboard.epgEvents.contains(where: { $0.id == event.id })
+        }
+    }
+
+    private func closeIfContextChanged() {
+        guard let homeState, isCurrentContext(homeState) else {
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func notifyRouteDidDisappear() {
+        let reloadConfig: PlaylistConfig? = if case let .homeSettings(config) = routeStore.presentation {
+            config
+        } else {
+            nil
+        }
+        coordinatorStore.send(.dashboardPresentationRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
+            homeConfig: routeStore.homeConfig,
+            reloadConfig: reloadConfig
+        ))
+    }
+
+    private func sendToDashboard(_ action: DashboardFeature.Action) {
+        guard let homeState, isCurrentContext(homeState) else {
+            routeStore.send(.closeTapped)
+            return
+        }
+        coordinatorStore.send(.router(.routeAction(
+            id: routeStore.homeRouteIndex,
+            action: .home(.dashboard(action))
         )))
     }
 }

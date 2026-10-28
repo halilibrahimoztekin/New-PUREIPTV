@@ -175,6 +175,65 @@ public struct MultiViewChannelSelectionRouteFeature {
 }
 
 @Reducer
+public struct DashboardPresentationRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public enum Presentation: Equatable {
+            case homeSettings(reloadConfig: PlaylistConfig)
+            case categoryPinManagement(playlistID: UUID?, profileScope: ProfileContextSnapshot?)
+            case epgChannelPicker(playlistID: UUID, profileScope: ProfileContextSnapshot?, event: DashboardFeature.EPGEvent)
+        }
+
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let homeConfig: PlaylistConfig
+        public let presentation: Presentation
+
+        public init(
+            homeRouteIndex: Int,
+            homeConfig: PlaylistConfig,
+            presentation: Presentation,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.homeConfig = homeConfig
+            self.presentation = presentation
+        }
+    }
+
+    public enum Action {
+        case closeTapped
+        case selectEPGChannel(MediaModels.Item)
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+            case selectEPGChannel(presentationID: UUID, channel: MediaModels.Item)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case let .selectEPGChannel(channel):
+                guard case .epgChannelPicker = state.presentation else { return .none }
+                return .send(.delegate(.selectEPGChannel(
+                    presentationID: state.presentationID,
+                    channel: channel
+                )))
+
+            case .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -191,6 +250,7 @@ public enum AppScreen {
     case channelPresentationEditor(ChannelPresentationEditorRouteFeature)
     case m3uCategoryMappingEditor(M3UCategoryMappingEditorRouteFeature)
     case multiViewChannelSelection(MultiViewChannelSelectionRouteFeature)
+    case dashboardPresentation(DashboardPresentationRouteFeature)
     case seriesDetail(SeriesDetailFeature)
     case vodDetail(VODDetailFeature)
     case playlistManagement(PlaylistManagementFeature)
@@ -215,6 +275,7 @@ extension AppScreen.State: Hashable {
         case let (.channelPresentationEditor(l), .channelPresentationEditor(r)): l.presentationID == r.presentationID
         case let (.m3uCategoryMappingEditor(l), .m3uCategoryMappingEditor(r)): l.presentationID == r.presentationID
         case let (.multiViewChannelSelection(l), .multiViewChannelSelection(r)): l.presentationID == r.presentationID
+        case let (.dashboardPresentation(l), .dashboardPresentation(r)): l.presentationID == r.presentationID
         case let (.seriesDetail(l), .seriesDetail(r)): l == r
         case let (.vodDetail(l), .vodDetail(r)): l == r
         case let (.playlistManagement(l), .playlistManagement(r)): l == r
@@ -264,6 +325,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case let .multiViewChannelSelection(state):
             hasher.combine(18)
+            hasher.combine(state.presentationID)
+        case let .dashboardPresentation(state):
+            hasher.combine(19)
             hasher.combine(state.presentationID)
         case let .seriesDetail(state):
             hasher.combine(6)
