@@ -3,11 +3,12 @@ import SwiftUI
 
 public struct OpenSubtitlesSearchView: View {
     @Dependency(\.openSubtitlesClient) private var openSubtitlesClient
-    @Dependency(\.playerClient) private var playerClient
-    @Environment(\.dismiss) private var dismiss
-
     public let itemTitle: String
-    public let onTrackAdded: () -> Void
+    public let onSubtitleDownloaded: (URL) -> Void
+    public let onClose: () -> Void
+    public let isActive: () -> Bool
+    public let isInstallingTrack: Bool
+    public let installationErrorMessage: String?
 
     @State private var apiKey = ""
     @State private var query = ""
@@ -15,10 +16,23 @@ public struct OpenSubtitlesSearchView: View {
     @State private var isSearching = false
     @State private var downloadingResultID: String?
     @State private var errorMessage: String?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var downloadTask: Task<Void, Never>?
 
-    public init(itemTitle: String, onTrackAdded: @escaping () -> Void) {
+    public init(
+        itemTitle: String,
+        onSubtitleDownloaded: @escaping (URL) -> Void,
+        onClose: @escaping () -> Void,
+        isActive: @escaping () -> Bool,
+        isInstallingTrack: Bool,
+        installationErrorMessage: String?
+    ) {
         self.itemTitle = itemTitle
-        self.onTrackAdded = onTrackAdded
+        self.onSubtitleDownloaded = onSubtitleDownloaded
+        self.onClose = onClose
+        self.isActive = isActive
+        self.isInstallingTrack = isInstallingTrack
+        self.installationErrorMessage = installationErrorMessage
     }
 
     public var body: some View {
@@ -61,10 +75,18 @@ public struct OpenSubtitlesSearchView: View {
                         Text(errorMessage)
                             .foregroundStyle(.red)
                     }
+                } else if let installationErrorMessage {
+                    Section {
+                        Text(installationErrorMessage)
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 if !results.isEmpty {
                     Section(AppStrings.Player.subtitleSearchResults) {
+                        if isInstallingTrack {
+                            ProgressView()
+                        }
                         ForEach(results) { result in
                             Button {
                                 add(result)
@@ -89,7 +111,7 @@ public struct OpenSubtitlesSearchView: View {
                                     }
                                 }
                             }
-                            .disabled(downloadingResultID != nil)
+                            .disabled(downloadingResultID != nil || isInstallingTrack)
                         }
                     }
                 } else if !isSearching, errorMessage == nil {
@@ -105,12 +127,21 @@ public struct OpenSubtitlesSearchView: View {
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.close) { dismiss() }
+                        Button(AppStrings.Common.close, action: onClose)
                     }
                 }
                 .task {
                     apiKey = openSubtitlesClient.savedAPIKey() ?? ""
                     query = itemTitle
+                }
+                .onDisappear {
+                    searchTask?.cancel()
+                    downloadTask?.cancel()
+                }
+                .onChange(of: installationErrorMessage) { _, message in
+                    if message != nil {
+                        downloadingResultID = nil
+                    }
                 }
         }
     }
@@ -121,14 +152,25 @@ public struct OpenSubtitlesSearchView: View {
         isSearching = true
         errorMessage = nil
         results = []
-        Task {
+        searchTask?.cancel()
+        searchTask = Task {
             do {
                 try await openSubtitlesClient.saveAPIKey(key)
-                results = try await openSubtitlesClient.search(searchQuery, key)
+                try Task.checkCancellation()
+                guard isActive() else { return }
+                let searchResults = try await openSubtitlesClient.search(searchQuery, key)
+                try Task.checkCancellation()
+                guard isActive() else { return }
+                results = searchResults
+            } catch is CancellationError {
+                return
             } catch {
+                guard isActive() else { return }
                 errorMessage = error.localizedDescription
             }
-            isSearching = false
+            if isActive() {
+                isSearching = false
+            }
         }
     }
 
@@ -136,17 +178,17 @@ public struct OpenSubtitlesSearchView: View {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         downloadingResultID = result.id
         errorMessage = nil
-        Task {
+        downloadTask?.cancel()
+        downloadTask = Task {
             do {
                 let url = try await openSubtitlesClient.downloadURL(result.fileID, key)
-                guard await playerClient.addExternalSubtitleTrack(url) else {
-                    errorMessage = AppStrings.Player.externalSubtitleAddFailed
-                    downloadingResultID = nil
-                    return
-                }
-                onTrackAdded()
-                dismiss()
+                try Task.checkCancellation()
+                guard isActive() else { return }
+                onSubtitleDownloaded(url)
+            } catch is CancellationError {
+                return
             } catch {
+                guard isActive() else { return }
                 errorMessage = error.localizedDescription
                 downloadingResultID = nil
             }

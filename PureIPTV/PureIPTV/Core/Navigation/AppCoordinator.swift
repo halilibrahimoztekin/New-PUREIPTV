@@ -114,6 +114,11 @@ public struct AppCoordinator {
             playerRouteIndex: Int,
             requestID: UUID
         )
+        case playerSubtitleSearchRouteDidDisappear(
+            presentationID: UUID,
+            playerRouteIndex: Int,
+            requestID: UUID
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -752,6 +757,27 @@ public struct AppCoordinator {
                 action: .player(.closeSpeedTest(requestID: requestID))
             )))
 
+        case let .playerSubtitleSearchRouteDidDisappear(presentationID, playerRouteIndex, requestID):
+            let subtitleSearchRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playerSubtitleSearch(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let subtitleSearchRouteIndex {
+                guard subtitleSearchRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playerRouteIndex),
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.subtitleSearchPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playerRouteIndex,
+                action: .player(.closeSubtitleSearch(requestID: requestID))
+            )))
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -867,6 +893,27 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.playerRouteIndex,
                 action: .player(.closeSpeedTest(requestID: requestID))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .playerSubtitleSearch(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playerSubtitleSearch(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.playerRouteIndex),
+                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
+                  playerState.subtitleSearchPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.playerRouteIndex,
+                action: .player(.closeSubtitleSearch(requestID: requestID))
             )))
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
@@ -1420,6 +1467,30 @@ public struct AppCoordinator {
             ))
             return .none
 
+        case let .router(.routeAction(playerRouteIndex, .player(.delegate(.presentSubtitleSearch(requestID))))):
+            guard state.routes.indices.contains(playerRouteIndex),
+                  playerRouteIndex == state.routes.count - 1,
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.subtitleSearchPresentationRequestID == requestID,
+                  playerState.item.isLive == false,
+                  playerState.playbackEngine == .vlc,
+                  !playerState.isMinimized,
+                  !playerState.isClosing
+            else { return .none }
+            state.routes.presentSheet(.playerSubtitleSearch(
+                PlayerSubtitleSearchRouteFeature.State(
+                    playerRouteIndex: playerRouteIndex,
+                    requestID: requestID,
+                    itemID: playerState.item.id,
+                    playbackRequestID: playerState.playbackRequestID,
+                    itemTitle: [playerState.item.seriesTitle, playerState.item.title]
+                        .compactMap(\.self)
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " ")
+                )
+            ))
+            return .none
+
         case let .router(.routeAction(_, .player(.delegate(.didSelectXtreamLiveOutputFormat(config))))):
             guard config.type == .xtream, let playlistID = config.playlistID else { return .none }
 
@@ -1485,8 +1556,16 @@ public struct AppCoordinator {
         case let .router(.routeAction(playerRouteIndex, .player(.delegate(.didClose)))):
             state.miniPlayer = nil
             state.isPlayerMini = false
-            if case let .playerSpeedTest(speedTestState) = state.routes.last?.screen,
-               speedTestState.playerRouteIndex == playerRouteIndex,
+            let playerOverlayRouteIndex: Int?
+            switch state.routes.last?.screen {
+            case let .some(.playerSpeedTest(routeState)):
+                playerOverlayRouteIndex = routeState.playerRouteIndex
+            case let .some(.playerSubtitleSearch(routeState)):
+                playerOverlayRouteIndex = routeState.playerRouteIndex
+            default:
+                playerOverlayRouteIndex = nil
+            }
+            if playerOverlayRouteIndex == playerRouteIndex,
                state.routes.indices.contains(playerRouteIndex),
                case .player = state.routes[playerRouteIndex].screen
             {
@@ -1508,11 +1587,19 @@ public struct AppCoordinator {
             else { return .none }
             var miniPlayerState = playerState
             miniPlayerState.speedTestPresentationRequestID = nil
+            miniPlayerState.subtitleSearchPresentationRequestID = nil
             state.miniPlayer = miniPlayerState
             state.isPlayerMini = true
-            if case let .playerSpeedTest(speedTestState) = state.routes.last?.screen,
-               speedTestState.playerRouteIndex == playerRouteIndex
-            {
+            let playerOverlayRouteIndex: Int?
+            switch state.routes.last?.screen {
+            case let .some(.playerSpeedTest(routeState)):
+                playerOverlayRouteIndex = routeState.playerRouteIndex
+            case let .some(.playerSubtitleSearch(routeState)):
+                playerOverlayRouteIndex = routeState.playerRouteIndex
+            default:
+                playerOverlayRouteIndex = nil
+            }
+            if playerOverlayRouteIndex == playerRouteIndex {
                 state.routes.dismiss()
             }
             guard playerRouteIndex == state.routes.count - 1,
@@ -1999,6 +2086,11 @@ public struct AppCoordinatorView: View {
                 )
             case let .playerSpeedTest(screenStore):
                 PlayerSpeedTestRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
+            case let .playerSubtitleSearch(screenStore):
+                PlayerSubtitleSearchRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -2585,6 +2677,85 @@ private struct PlayerSpeedTestRouteView: View {
 
     private func notifyRouteDidDisappear() {
         coordinatorStore.send(.playerSpeedTestRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            playerRouteIndex: routeStore.playerRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct PlayerSubtitleSearchRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<PlayerSubtitleSearchRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                OpenSubtitlesSearchView(
+                    itemTitle: routeStore.itemTitle,
+                    onSubtitleDownloaded: { url in
+                        guard isCurrentPresentation, isRouteActive else { return }
+                        coordinatorStore.send(.router(.routeAction(
+                            id: routeStore.playerRouteIndex,
+                            action: .player(.installSubtitleSearchTrack(
+                                url: url,
+                                requestID: routeStore.requestID,
+                                playbackRequestID: routeStore.playbackRequestID
+                            ))
+                        )))
+                    },
+                    onClose: {
+                        routeStore.send(.closeTapped)
+                    },
+                    isActive: { isCurrentPresentation && isRouteActive },
+                    isInstallingTrack: playerState?.subtitleSearchTrackInstallRequestID == routeStore.requestID,
+                    installationErrorMessage: playerState?.subtitleSearchTrackInstallErrorMessage
+                )
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var playerState: PlayerFeature.State? {
+        let playerRouteIndex = routeStore.playerRouteIndex
+        guard coordinatorStore.routes.indices.contains(playerRouteIndex),
+              case let .player(state) = coordinatorStore.routes[playerRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        playerState?.subtitleSearchPresentationRequestID == routeStore.requestID
+            && playerState?.item.id == routeStore.itemID
+            && playerState?.playbackRequestID == routeStore.playbackRequestID
+            && playerState?.item.isLive == false
+            && playerState?.playbackEngine == .vlc
+            && playerState?.isMinimized == false
+            && playerState?.isClosing == false
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .playerSubtitleSearch(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.playerSubtitleSearchRouteDidDisappear(
             presentationID: routeStore.presentationID,
             playerRouteIndex: routeStore.playerRouteIndex,
             requestID: routeStore.requestID

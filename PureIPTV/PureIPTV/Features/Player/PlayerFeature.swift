@@ -42,6 +42,7 @@ public struct PlayerFeature {
         public static let vodSeekFeedback = "PlayerFeature.vodSeekFeedback"
         public static let xtreamLiveOutputFormats = "PlayerFeature.xtreamLiveOutputFormats"
         public static let highFPSFeedback = "PlayerFeature.highFPSFeedback"
+        public static let subtitleSearchTrackInstall = "PlayerFeature.subtitleSearchTrackInstall"
         public static let recordingMonitor = "PlayerFeature.recordingMonitor"
         public static let recordingStatus = "PlayerFeature.recordingStatus"
         public static let recordingStopTimeout = "PlayerFeature.recordingStopTimeout"
@@ -218,6 +219,9 @@ public struct PlayerFeature {
         public var mediaInfoRequestID: UUID?
         public var playbackRequestID = UUID()
         public var speedTestPresentationRequestID: UUID?
+        public var subtitleSearchPresentationRequestID: UUID?
+        public var subtitleSearchTrackInstallRequestID: UUID?
+        public var subtitleSearchTrackInstallErrorMessage: String?
         public var firstPresentedFrameLatency: Duration?
         public var firstPresentedFrameFeedbackRequestID: UUID?
         public var activeVODSeekRequestID: UUID?
@@ -798,6 +802,10 @@ public struct PlayerFeature {
         case minimizeTapped
         case speedTestTapped
         case closeSpeedTest(requestID: UUID)
+        case subtitleSearchTapped
+        case closeSubtitleSearch(requestID: UUID)
+        case installSubtitleSearchTrack(url: URL, requestID: UUID, playbackRequestID: UUID)
+        case subtitleSearchTrackInstallResponse(requestID: UUID, playbackRequestID: UUID, didAdd: Bool)
 
         // Up Next Episode Auto-Play (Madde #48)
         case showUpNext
@@ -869,6 +877,7 @@ public struct PlayerFeature {
             case didClose
             case didRequestMinimize
             case presentSpeedTest(requestID: UUID)
+            case presentSubtitleSearch(requestID: UUID)
             case didSelectXtreamLiveOutputFormat(PlaylistConfig)
         }
     }
@@ -5046,6 +5055,9 @@ public struct PlayerFeature {
             state.isClosing = true
             state.playbackRequestID = UUID()
             state.speedTestPresentationRequestID = nil
+            state.subtitleSearchPresentationRequestID = nil
+            state.subtitleSearchTrackInstallRequestID = nil
+            state.subtitleSearchTrackInstallErrorMessage = nil
             state.playbackRecoveryErrorMessage = nil
             state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
@@ -5094,6 +5106,7 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.audioRoute),
                 .cancel(id: CancelID.audioRouteHUD),
                 .cancel(id: CancelID.upNextCountdown),
+                .cancel(id: CancelID.subtitleSearchTrackInstall),
                 .cancel(id: CancelID.channelOSD),
                 .cancel(id: CancelID.statsTimer),
                 .cancel(id: CancelID.liveVideoStallMonitor),
@@ -5166,8 +5179,12 @@ public struct PlayerFeature {
             guard !state.isMinimized else { return .none }
             state.isMinimized = true
             state.speedTestPresentationRequestID = nil
+            state.subtitleSearchPresentationRequestID = nil
+            state.subtitleSearchTrackInstallRequestID = nil
+            state.subtitleSearchTrackInstallErrorMessage = nil
             return .merge(
                 Self.stopLiveVideoStallMonitoring(state: &state),
+                .cancel(id: CancelID.subtitleSearchTrackInstall),
                 .run { send in
                     await send(.delegate(.didRequestMinimize))
                     await MainActor.run {
@@ -5191,6 +5208,65 @@ public struct PlayerFeature {
             guard state.speedTestPresentationRequestID == requestID else { return .none }
             state.speedTestPresentationRequestID = nil
             return .none
+
+        case .subtitleSearchTapped:
+            guard !state.item.isLive,
+                  state.playbackEngine == .vlc,
+                  !state.isMinimized,
+                  !state.isClosing,
+                  state.subtitleSearchPresentationRequestID == nil
+            else { return .none }
+            let requestID = UUID()
+            state.subtitleSearchPresentationRequestID = requestID
+            state.subtitleSearchTrackInstallRequestID = nil
+            state.subtitleSearchTrackInstallErrorMessage = nil
+            return .send(.delegate(.presentSubtitleSearch(requestID: requestID)))
+
+        case let .closeSubtitleSearch(requestID):
+            guard state.subtitleSearchPresentationRequestID == requestID else { return .none }
+            state.subtitleSearchPresentationRequestID = nil
+            state.subtitleSearchTrackInstallRequestID = nil
+            state.subtitleSearchTrackInstallErrorMessage = nil
+            return .cancel(id: CancelID.subtitleSearchTrackInstall)
+
+        case let .installSubtitleSearchTrack(url, requestID, playbackRequestID):
+            guard state.subtitleSearchPresentationRequestID == requestID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.item.isLive == false,
+                  state.playbackEngine == .vlc,
+                  !state.isMinimized,
+                  !state.isClosing,
+                  state.subtitleSearchTrackInstallRequestID == nil
+            else { return .none }
+            state.subtitleSearchTrackInstallRequestID = requestID
+            state.subtitleSearchTrackInstallErrorMessage = nil
+            return .run { send in
+                let didAdd = await playerClient.addExternalSubtitleTrack(url)
+                await send(.subtitleSearchTrackInstallResponse(
+                    requestID: requestID,
+                    playbackRequestID: playbackRequestID,
+                    didAdd: didAdd
+                ))
+            }
+            .cancellable(id: CancelID.subtitleSearchTrackInstall, cancelInFlight: true)
+
+        case let .subtitleSearchTrackInstallResponse(requestID, playbackRequestID, didAdd):
+            guard state.subtitleSearchPresentationRequestID == requestID,
+                  state.playbackRequestID == playbackRequestID,
+                  state.subtitleSearchTrackInstallRequestID == requestID,
+                  !state.isMinimized,
+                  !state.isClosing
+            else { return .none }
+            state.subtitleSearchTrackInstallRequestID = nil
+            guard didAdd else {
+                state.subtitleSearchTrackInstallErrorMessage = AppStrings.Player.externalSubtitleAddFailed
+                return .none
+            }
+            state.subtitleSearchTrackInstallErrorMessage = nil
+            return .merge(
+                .send(.fetchTracks),
+                .send(.closeSubtitleSearch(requestID: requestID))
+            )
 
         case .sharePlayTapped:
             guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }

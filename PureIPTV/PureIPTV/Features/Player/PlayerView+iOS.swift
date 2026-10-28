@@ -31,7 +31,6 @@
         @State private var dragInitialScrubPosition: Double = 0.0
         @State private var lastScrubHapticInterval: Int = -1
         @State private var lastScrubThumbnailBucket: Int?
-        @State private var isSubtitleSearchPresented = false
 
         // Aspect Ratio & Zoom State (Madde #14)
         @State private var pinchStartScale: CGFloat? = nil
@@ -1346,15 +1345,6 @@
                 .allowsHitTesting(false)
             }
             .allowsHitTesting(!store.isMinimized)
-            .sheet(isPresented: $isSubtitleSearchPresented) {
-                OpenSubtitlesSearchView(
-                    itemTitle: [store.item.seriesTitle, store.item.title]
-                        .compactMap(\.self)
-                        .filter { !$0.isEmpty }
-                        .joined(separator: " "),
-                    onTrackAdded: { store.send(.fetchTracks) }
-                )
-            }
             .onDisappear {
                 cancelAllPendingWorkItems()
             }
@@ -1637,7 +1627,7 @@
 
                                 if !store.item.isLive, store.playbackEngine == .vlc {
                                     Button {
-                                        isSubtitleSearchPresented = true
+                                        store.send(.subtitleSearchTapped)
                                     } label: {
                                         Label(AppStrings.Player.subtitleOnlineSearch, systemImage: "magnifyingglass")
                                             .font(.subheadline.weight(.semibold))

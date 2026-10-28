@@ -41,7 +41,6 @@
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
         @State private var focusBeforeEPG: FocusableField?
-        @State private var isSubtitleSearchPresented = false
 
         fileprivate enum FocusableField: Hashable {
             case play
@@ -609,15 +608,6 @@
             .onDisappear {
                 idleTimer?.invalidate()
             }
-            .sheet(isPresented: $isSubtitleSearchPresented) {
-                OpenSubtitlesSearchView(
-                    itemTitle: [store.item.seriesTitle, store.item.title]
-                        .compactMap(\.self)
-                        .filter { !$0.isEmpty }
-                        .joined(separator: " "),
-                    onTrackAdded: { store.send(.fetchTracks) }
-                )
-            }
         }
 
         // MARK: - Play View (Captures Remote Navigation & Clicks when controls are hidden)
@@ -685,7 +675,7 @@
                 VideoControllerView(
                     store: store,
                     onInteraction: { resetIdleTimer() },
-                    onSubtitleSearch: { isSubtitleSearchPresented = true }
+                    onSubtitleSearch: { store.send(.subtitleSearchTapped) }
                 )
 
                 // Bottom part of controls: Interactive Fluid Scrubber + Time Display
