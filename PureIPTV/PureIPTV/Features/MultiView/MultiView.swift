@@ -754,6 +754,11 @@ private struct MultiViewPlayer: View {
                 }
             #endif
         }
+        #if os(iOS)
+            .onDisappear {
+                pipController?.stop()
+            }
+        #endif
     }
 
     private var videoScaleX: CGFloat {

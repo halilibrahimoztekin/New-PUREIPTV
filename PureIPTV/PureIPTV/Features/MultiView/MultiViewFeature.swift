@@ -65,6 +65,7 @@ public struct MultiViewFeature {
 
     @ObservableState
     public struct State: Equatable {
+        public var presentationID: UUID
         public var layoutMode: MultiViewLayoutMode = .showcase1Plus3
         public var layoutSize: Int = 4 // 2 or 4 simultaneous streams
         public var primarySlotID: Int = 0
@@ -95,8 +96,14 @@ public struct MultiViewFeature {
         public var sourceRequestID: UUID?
         public var episodeRequestID: UUID?
         public var loadedSourceProfileScope: ProfileContextSnapshot?
+        public var restrictedLiveCategoryIDs: Set<String> = []
 
-        public init(channels: [MediaModels.Item] = [], config: PlaylistConfig? = nil) {
+        public init(
+            channels: [MediaModels.Item] = [],
+            config: PlaylistConfig? = nil,
+            presentationID: UUID = UUID()
+        ) {
+            self.presentationID = presentationID
             self.channels = channels
             self.config = config
         }
@@ -122,6 +129,7 @@ public struct MultiViewFeature {
         case changeLayout(Int)
         case toggleFullscreen(slotID: Int)
         case togglePiP
+        case restrictCategory(String)
 
         case delegate(Delegate)
         public enum Delegate: Equatable {
@@ -249,6 +257,7 @@ public struct MultiViewFeature {
                 state.episodeRequestID = nil
                 state.isLoadingSources = false
                 state.isLoadingEpisodes = false
+                state.isPiPActive = false
                 return .merge(
                     .cancel(id: CancelID.sources),
                     .cancel(id: CancelID.episodes)
@@ -392,6 +401,14 @@ public struct MultiViewFeature {
 
             case let .channelSelected(item):
                 guard let slotID = state.isSelectingChannelForSlotID else { return .none }
+                guard item.type != .live || !state.restrictedLiveCategoryIDs.contains(item.categoryID) else {
+                    state.isSelectingChannelForSlotID = nil
+                    state.selectedSeriesID = nil
+                    state.episodeItems = []
+                    state.episodeRequestID = nil
+                    state.isLoadingEpisodes = false
+                    return .cancel(id: CancelID.episodes)
+                }
                 if item.type != .live,
                    state.loadedSourceProfileScope != profileContextClient.snapshot()
                 {
@@ -488,6 +505,28 @@ public struct MultiViewFeature {
 
             case .togglePiP:
                 state.isPiPActive.toggle()
+                return .none
+
+            case let .restrictCategory(categoryID):
+                state.restrictedLiveCategoryIDs.insert(categoryID)
+                state.channels.removeAll { $0.categoryID == categoryID }
+                var removedSlotIDs = Set<Int>()
+                for index in state.slots.indices
+                    where state.slots[index].item?.type == .live && state.slots[index].item?.categoryID == categoryID
+                {
+                    removedSlotIDs.insert(state.slots[index].id)
+                    state.slots[index].item = nil
+                    state.slots[index].isLoading = false
+                    state.slots[index].errorMessage = nil
+                    state.slots[index].instanceID = UUID()
+                }
+                if let focusedSlotID = state.focusedSlotID, removedSlotIDs.contains(focusedSlotID) {
+                    state.focusedSlotID = nil
+                }
+                if let activeAudioSlotID = state.activeAudioSlotID, removedSlotIDs.contains(activeAudioSlotID) {
+                    state.activeAudioSlotID = state.slots.first(where: { $0.item != nil })?.id
+                    state.isPiPActive = false
+                }
                 return .none
 
             case .delegate:

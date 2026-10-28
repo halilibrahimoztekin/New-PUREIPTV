@@ -89,9 +89,6 @@
                                                                 playlistID: target.playlistID, profileScope: target.profileScope))
                 }
             }
-            .fullScreenCover(item: $store.scope(state: \.multiView, action: \.multiView)) { store in
-                MultiView(store: store)
-            }
         }
 
         private var phoneLayout: some View {

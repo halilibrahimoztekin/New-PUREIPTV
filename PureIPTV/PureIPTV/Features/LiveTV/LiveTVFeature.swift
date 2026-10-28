@@ -262,7 +262,6 @@ public struct LiveTVFeature {
         @Presents public var categoryManagement: CategoryManagementFeature.State?
         @Presents public var epgTimeline: EPGTimelineFeature.State?
         @Presents public var parentalLock: ParentalLockFeature.State?
-        @Presents public var multiView: MultiViewFeature.State?
 
         // Computed: channels for the currently selected category
         public var currentChannels: [MediaModels.Item] {
@@ -420,7 +419,6 @@ public struct LiveTVFeature {
         case categoryManagement(PresentationAction<CategoryManagementFeature.Action>)
         case epgTimeline(PresentationAction<EPGTimelineFeature.Action>)
         case parentalLock(PresentationAction<ParentalLockFeature.Action>)
-        case multiView(PresentationAction<MultiViewFeature.Action>)
         case openMultiViewTapped
         case openEPGTimelineTapped
         case setTabMode(State.TabMode)
@@ -431,6 +429,8 @@ public struct LiveTVFeature {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case presentEPGGuide(EPGGuideFeature.State)
             case presentEPGTimeline(EPGTimelineFeature.State)
+            case presentMultiView(MultiViewFeature.State)
+            case restrictMultiViewCategory(String)
         }
     }
 
@@ -2299,10 +2299,10 @@ public struct LiveTVFeature {
                 if !mvState.slots.isEmpty {
                     mvState.slots[0].item = channel
                 }
-                state.multiView = mvState
-                return .run { _ in
-                    await hapticClient.notification(.success)
-                }
+                return .merge(
+                    .send(.delegate(.presentMultiView(mvState))),
+                    .run { _ in await hapticClient.notification(.success) }
+                )
 
             case let .openChannelEPG(channel):
                 guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
@@ -2498,15 +2498,7 @@ public struct LiveTVFeature {
                     timeline.selectedCategoryID = nil
                     state.epgTimeline = timeline
                 }
-                if var multiView = state.multiView {
-                    multiView.channels.removeAll { $0.categoryID == categoryID }
-                    for index in multiView.slots.indices where multiView.slots[index].item?.categoryID == categoryID {
-                        multiView.slots[index].item = nil
-                        multiView.slots[index].instanceID = UUID()
-                    }
-                    state.multiView = multiView
-                }
-                return .none
+                return .send(.delegate(.restrictMultiViewCategory(categoryID)))
 
             case .parentalLock(.presented(.delegate(.didCancel))):
                 state.parentalLock = nil
@@ -2516,15 +2508,9 @@ public struct LiveTVFeature {
                 return .none
 
             case .openMultiViewTapped:
-                state.multiView = MultiViewFeature.State(channels: state.currentChannels, config: state.config)
-                return .none
-
-            case .multiView(.presented(.delegate(.close))):
-                state.multiView = nil
-                return .none
-
-            case .multiView:
-                return .none
+                return .send(.delegate(.presentMultiView(
+                    MultiViewFeature.State(channels: state.currentChannels, config: state.config)
+                )))
 
             case .delegate:
                 return .none
@@ -2538,9 +2524,6 @@ public struct LiveTVFeature {
         }
         .ifLet(\.$parentalLock, action: \.parentalLock) {
             ParentalLockFeature()
-        }
-        .ifLet(\.$multiView, action: \.multiView) {
-            MultiViewFeature()
         }
     }
 }

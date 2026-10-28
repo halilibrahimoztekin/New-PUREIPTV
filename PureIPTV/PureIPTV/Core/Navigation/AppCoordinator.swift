@@ -469,6 +469,14 @@ public struct AppCoordinator {
                 action: .home(.liveTV(.channelLogoOverrideUpdated(channelID: channelID, playlistID: playlistID, url: url)))
             )))
 
+        case let .router(.routeAction(routeIndex, .multiView(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .multiView = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         // ── Home Delegates ───────────────────────────────────────
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
@@ -493,6 +501,20 @@ public struct AppCoordinator {
                 state.routes.presentSheet(.epgTimeline(timelineState))
             #endif
             return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentMultiView(multiViewState))))):
+            state.routes.presentCover(.multiView(multiViewState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
+            let effects = state.routes.indices.compactMap { routeIndex -> Effect<Action>? in
+                guard case .multiView = state.routes[routeIndex].screen else { return nil }
+                return .send(.router(.routeAction(
+                    id: routeIndex,
+                    action: .multiView(.restrictCategory(categoryID))
+                )))
+            }
+            return .merge(effects)
 
         case let .router(.routeAction(_, .home(.delegate(.didSelectVOD(vod))))):
             if !state.isPremium {
@@ -1109,6 +1131,8 @@ public struct AppCoordinatorView: View {
                     .onDisappear {
                         store.send(.epgTimelineRouteDidDisappear(presentationID))
                     }
+            case let .multiView(screenStore):
+                MultiView(store: screenStore)
             case let .seriesDetail(store):
                 SeriesDetailView(store: store)
             case let .vodDetail(store):
