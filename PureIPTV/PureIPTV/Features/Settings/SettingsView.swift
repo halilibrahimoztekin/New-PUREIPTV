@@ -13,11 +13,6 @@ public struct SettingsView: View {
     @State private var backupAlertMessage: String? = nil
     @State private var isShowingBackupAlert: Bool = false
     @State private var isImportingBackup = false
-    @State private var isShowingBackupPreview = false
-    @State private var backupPreview: PureIPTVBackupPreview?
-    @State private var pendingBackupURL: URL?
-    @State private var backupPreviewMessage: String?
-    @State private var backupRestoreCompleted = false
     @State private var isGeneratingDiagnosticReport = false
     #if os(tvOS)
         @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
@@ -917,54 +912,6 @@ public struct SettingsView: View {
             onCompletion: handleBackupImport
         )
         #endif
-        .sheet(isPresented: $isShowingBackupPreview, onDismiss: removePendingBackup) {
-            if let backupPreview {
-                NavigationStack {
-                    List {
-                        Section("Dosya bilgisi") {
-                            LabeledContent("Uygulama sürümü", value: backupPreview.appVersion)
-                            LabeledContent("Yedek tarihi", value: backupPreview.backupDate.formatted(date: .long, time: .shortened))
-                            LabeledContent("Dosya boyutu", value: ByteCountFormatter.string(fromByteCount: Int64(backupPreview.fileSizeBytes), countStyle: .file))
-                        }
-                        Section("Dahil edilen ayarlar") {
-                            if backupPreview.includedSettings.isEmpty {
-                                Text("Bu yedekte geri yüklenecek ayar bulunamadı.")
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                ForEach(backupPreview.includedSettings, id: \.self) { setting in
-                                    Text(setting)
-                                }
-                            }
-                        }
-                        Section("Üzerine yazılacaklar") {
-                            Text("\(backupPreview.existingSettingsToOverwrite) mevcut tercih değiştirilecek.")
-                            Text("Yedekte bulunmayan ayarlar korunacak.")
-                                .foregroundStyle(.secondary)
-                        }
-                        Section("Bütünlük kontrolü") {
-                            Text(backupPreviewMessage ?? "JSON yapısı ve desteklenen ayar değerleri doğrulandı.")
-                                .foregroundStyle(backupRestoreCompleted ? .green : .secondary)
-                        }
-                    }
-                    .navigationTitle("Yedek Önizlemesi")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(AppStrings.Common.cancel) {
-                                isShowingBackupPreview = false
-                            }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            if backupRestoreCompleted {
-                                Button("Bitti") { isShowingBackupPreview = false }
-                            } else {
-                                Button("Ayarları Geri Yükle", role: .destructive, action: restorePendingBackup)
-                                    .disabled(backupPreview.includedSettings.isEmpty)
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private func handleBackupImport(_ result: Result<[URL], Error>) {
@@ -995,11 +942,7 @@ public struct SettingsView: View {
                 stagedURL = destinationURL
                 try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
                 let preview = try BackupManager.shared.previewBackup(from: destinationURL)
-                pendingBackupURL = destinationURL
-                backupPreview = preview
-                backupPreviewMessage = nil
-                backupRestoreCompleted = false
-                isShowingBackupPreview = true
+                store.send(.presentBackupPreview(url: destinationURL, preview: preview))
             } catch {
                 if let stagedURL {
                     try? FileManager.default.removeItem(at: stagedURL)
@@ -1008,28 +951,6 @@ public struct SettingsView: View {
                 isShowingBackupAlert = true
             }
         }
-    }
-
-    private func restorePendingBackup() {
-        guard let pendingBackupURL else { return }
-        do {
-            _ = try BackupManager.shared.restoreBackup(from: pendingBackupURL)
-            store.send(.onAppear)
-            backupRestoreCompleted = true
-            backupPreviewMessage = "Ayarlar geri yüklendi."
-        } catch {
-            backupPreviewMessage = "Geri yükleme başarısız; ayarlar değiştirilmedi. \(error.localizedDescription)"
-        }
-    }
-
-    private func removePendingBackup() {
-        if let pendingBackupURL {
-            try? FileManager.default.removeItem(at: pendingBackupURL)
-        }
-        pendingBackupURL = nil
-        backupPreview = nil
-        backupPreviewMessage = nil
-        backupRestoreCompleted = false
     }
 
 }

@@ -74,6 +74,13 @@ public struct SettingsFeature {
         public var speedTestPresentationRequestID: UUID?
         public var diagnosticReportURL: URL?
         public var diagnosticReportPresentationRequestID: UUID?
+        public var backupPreview: PureIPTVBackupPreview?
+        public var pendingBackupURL: URL?
+        public var backupPreviewMessage: String?
+        public var backupRestoreCompleted = false
+        public var isBackupRestoreInProgress = false
+        public var backupPreviewDismissedWhileRestoring = false
+        public var backupPreviewPresentationRequestID: UUID?
 
         // Trakt.tv Integration (Madde #17)
         public var isTraktAuthenticated: Bool = false
@@ -143,6 +150,7 @@ public struct SettingsFeature {
         case coordinatorDismissPINSetup(requestID: UUID)
         case coordinatorDismissCustomEPGSettings(requestID: UUID)
         case coordinatorDismissCustomEPGSourceAdd(requestID: UUID)
+        case coordinatorDismissBackupPreview(requestID: UUID)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -156,6 +164,7 @@ public struct SettingsFeature {
             case presentTraktWatchlist(requestID: UUID)
             case presentHiddenContentManagement(requestID: UUID)
             case presentDiagnosticReport(requestID: UUID)
+            case presentBackupPreview(requestID: UUID)
         }
 
         case onAppear
@@ -226,6 +235,9 @@ public struct SettingsFeature {
         case coordinatorDismissTraktWatchlist(requestID: UUID)
         case presentDiagnosticReport(URL)
         case coordinatorDismissDiagnosticReport(requestID: UUID)
+        case presentBackupPreview(url: URL, preview: PureIPTVBackupPreview)
+        case restorePendingBackup(requestID: UUID)
+        case backupRestoreResponse(requestID: UUID, errorMessage: String?)
         case traktAction(TraktFeature.Action)
         case toggleTraktAutoScrobble(Bool)
         case traktLogout
@@ -891,6 +903,89 @@ public struct SettingsFeature {
                 state.diagnosticReportPresentationRequestID = nil
                 guard let reportURL else { return .none }
                 return .run { _ in try? FileManager.default.removeItem(at: reportURL) }
+
+            case let .presentBackupPreview(url, preview):
+                guard state.backupPreviewPresentationRequestID == nil else {
+                    guard state.pendingBackupURL != url else { return .none }
+                    return .run { _ in try? FileManager.default.removeItem(at: url) }
+                }
+                let requestID = UUID()
+                state.pendingBackupURL = url
+                state.backupPreview = preview
+                state.backupPreviewMessage = nil
+                state.backupRestoreCompleted = false
+                state.isBackupRestoreInProgress = false
+                state.backupPreviewDismissedWhileRestoring = false
+                state.backupPreviewPresentationRequestID = requestID
+                return .send(.delegate(.presentBackupPreview(requestID: requestID)))
+
+            case let .restorePendingBackup(requestID):
+                guard state.backupPreviewPresentationRequestID == requestID,
+                      let preview = state.backupPreview,
+                      let backupURL = state.pendingBackupURL,
+                      !preview.includedSettings.isEmpty,
+                      !state.isBackupRestoreInProgress,
+                      !state.backupRestoreCompleted
+                else { return .none }
+                state.isBackupRestoreInProgress = true
+                return .run { send in
+                    do {
+                        _ = try await MainActor.run {
+                            try BackupManager.shared.restoreBackup(from: backupURL)
+                        }
+                        await send(.backupRestoreResponse(requestID: requestID, errorMessage: nil))
+                    } catch {
+                        await send(.backupRestoreResponse(
+                            requestID: requestID,
+                            errorMessage: error.localizedDescription
+                        ))
+                    }
+                }
+
+            case let .backupRestoreResponse(requestID, errorMessage):
+                guard state.backupPreviewPresentationRequestID == requestID else {
+                    return errorMessage == nil ? .send(.onAppear) : .none
+                }
+                state.isBackupRestoreInProgress = false
+                if state.backupPreviewDismissedWhileRestoring {
+                    let backupURL = state.pendingBackupURL
+                    state.backupPreview = nil
+                    state.pendingBackupURL = nil
+                    state.backupPreviewMessage = nil
+                    state.backupRestoreCompleted = false
+                    state.backupPreviewDismissedWhileRestoring = false
+                    state.backupPreviewPresentationRequestID = nil
+                    let cleanup: Effect<Action> = backupURL.map { url in
+                        .run { _ in try? FileManager.default.removeItem(at: url) }
+                    } ?? .none
+                    if errorMessage == nil {
+                        return .merge(.send(.onAppear), cleanup)
+                    }
+                    return cleanup
+                }
+                if let errorMessage {
+                    state.backupPreviewMessage = "Geri yükleme başarısız; ayarlar değiştirilmedi. \(errorMessage)"
+                    return .none
+                }
+                state.backupRestoreCompleted = true
+                state.backupPreviewMessage = "Ayarlar geri yüklendi."
+                return .send(.onAppear)
+
+            case let .coordinatorDismissBackupPreview(requestID):
+                guard state.backupPreviewPresentationRequestID == requestID else { return .none }
+                if state.isBackupRestoreInProgress {
+                    state.backupPreviewDismissedWhileRestoring = true
+                    return .none
+                }
+                let backupURL = state.pendingBackupURL
+                state.backupPreview = nil
+                state.pendingBackupURL = nil
+                state.backupPreviewMessage = nil
+                state.backupRestoreCompleted = false
+                state.backupPreviewDismissedWhileRestoring = false
+                state.backupPreviewPresentationRequestID = nil
+                guard let backupURL else { return .none }
+                return .run { _ in try? FileManager.default.removeItem(at: backupURL) }
 
             case let .toggleTraktAutoScrobble(enabled):
                 state.isTraktAutoScrobbleEnabled = enabled

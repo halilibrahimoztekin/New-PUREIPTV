@@ -149,6 +149,11 @@ public struct AppCoordinator {
             homeRouteIndex: Int,
             requestID: UUID
         )
+        case settingsBackupPreviewRouteDidDisappear(
+            presentationID: UUID,
+            homeRouteIndex: Int,
+            requestID: UUID
+        )
         case detailTMDBMatchPickerRouteDidDisappear(
             presentationID: UUID,
             detailRouteIndex: Int,
@@ -951,6 +956,27 @@ public struct AppCoordinator {
                 action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
             )))
 
+        case let .settingsBackupPreviewRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let backupPreviewRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsBackupPreview(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let backupPreviewRouteIndex {
+                guard backupPreviewRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+            )))
+
         case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
             let pickerRouteIndex = state.routes.indices.last(where: { index in
                 if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
@@ -1295,6 +1321,27 @@ public struct AppCoordinator {
 
         case let .router(.routeAction(
             routeIndex,
+            .settingsBackupPreview(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsBackupPreview(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
             .customEPGSettings(.delegate(.close(presentationID, requestID)))
         )):
             guard state.routes.indices.contains(routeIndex),
@@ -1629,6 +1676,29 @@ public struct AppCoordinator {
                     homeRouteIndex: homeRouteIndex,
                     requestID: requestID,
                     url: url
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentBackupPreview(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID,
+                  homeState.settings.backupPreview != nil,
+                  homeState.settings.pendingBackupURL != nil
+            else { return .none }
+            guard homeRouteIndex == state.routes.count - 1,
+                  homeState.selectedTab == .settings
+            else {
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+                )))
+            }
+            state.routes.presentSheet(.settingsBackupPreview(
+                SettingsBackupPreviewRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
                 )
             ))
             return .none
@@ -2754,6 +2824,11 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
+            case let .settingsBackupPreview(screenStore):
+                SettingsBackupPreviewRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
             case let .detailTMDBMatchPicker(screenStore):
                 DetailTMDBMatchPickerRouteView(
                     coordinatorStore: store,
@@ -3852,6 +3927,128 @@ private struct SettingsDiagnosticReportRouteView: View {
 
     private func notifyRouteDidDisappear() {
         coordinatorStore.send(.settingsDiagnosticReportRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            homeRouteIndex: routeStore.homeRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct SettingsBackupPreviewRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<SettingsBackupPreviewRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation, let preview = homeState?.settings.backupPreview {
+                NavigationStack {
+                    List {
+                        Section("Dosya bilgisi") {
+                            LabeledContent("Uygulama sürümü", value: preview.appVersion)
+                            LabeledContent("Yedek tarihi", value: preview.backupDate.formatted(date: .long, time: .shortened))
+                            LabeledContent("Dosya boyutu", value: ByteCountFormatter.string(fromByteCount: Int64(preview.fileSizeBytes), countStyle: .file))
+                        }
+                        Section("Dahil edilen ayarlar") {
+                            if preview.includedSettings.isEmpty {
+                                Text("Bu yedekte geri yüklenecek ayar bulunamadı.")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(preview.includedSettings, id: \.self) { setting in
+                                    Text(setting)
+                                }
+                            }
+                        }
+                        Section("Üzerine yazılacaklar") {
+                            Text("\(preview.existingSettingsToOverwrite) mevcut tercih değiştirilecek.")
+                            Text("Yedekte bulunmayan ayarlar korunacak.")
+                                .foregroundStyle(.secondary)
+                        }
+                        Section("Bütünlük kontrolü") {
+                            Text(homeState?.settings.backupPreviewMessage ?? "JSON yapısı ve desteklenen ayar değerleri doğrulandı.")
+                                .foregroundStyle(homeState?.settings.backupRestoreCompleted == true ? .green : .secondary)
+                        }
+                    }
+                    .navigationTitle("Yedek Önizlemesi")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(AppStrings.Common.cancel, action: close)
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            if homeState?.settings.backupRestoreCompleted == true {
+                                Button("Bitti", action: close)
+                            } else {
+                                Button("Ayarları Geri Yükle", role: .destructive) {
+                                    settingsStore.send(.restorePendingBackup(requestID: routeStore.requestID))
+                                }
+                                .disabled(
+                                    preview.includedSettings.isEmpty
+                                        || homeState?.settings.isBackupRestoreInProgress == true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var homeState: HomeFeature.State? {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
+              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var settingsStore: StoreOf<SettingsFeature> {
+        let homeRouteIndex = routeStore.homeRouteIndex
+        return coordinatorStore.scope(
+            state: { coordinatorState in
+                guard coordinatorState.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen
+                else { return SettingsFeature.State() }
+                return homeState.settings
+            },
+            action: { action in
+                .router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(action))
+                ))
+            }
+        )
+    }
+
+    private var isCurrentPresentation: Bool {
+        homeState?.selectedTab == .settings
+            && homeState?.settings.backupPreviewPresentationRequestID == routeStore.requestID
+            && homeState?.settings.backupPreview != nil
+            && homeState?.settings.pendingBackupURL != nil
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .settingsBackupPreview(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentPresentation, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.settingsBackupPreviewRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID
