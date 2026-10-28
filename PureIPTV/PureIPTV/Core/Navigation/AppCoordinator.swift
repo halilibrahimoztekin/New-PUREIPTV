@@ -6,6 +6,7 @@ import RevenueCat
 import SwiftUI
 import SwiftVLC
 import TCACoordinators
+import UniformTypeIdentifiers
 
 // MARK: - App Coordinator Reducer
 
@@ -3856,6 +3857,17 @@ public struct AppCoordinatorView: View {
                 EmptyView()
             }
         }
+        #if os(iOS)
+        .fileImporter(
+            isPresented: backupImportFileImporterIsPresented,
+            allowedContentTypes: [UTType(filenameExtension: "iptvbackup") ?? .data],
+            allowsMultipleSelection: false,
+            onCompletion: { [presentedContext = backupImportPickerContext] result in
+                guard let presentedContext else { return }
+                handleBackupImport(result, context: presentedContext)
+            }
+        )
+        #endif
         .confirmationDialog(
             confirmationDialogContext?.title ?? "",
             isPresented: confirmationDialogIsPresented,
@@ -4010,6 +4022,56 @@ public struct AppCoordinatorView: View {
         }
         return nil
     }
+
+    #if os(iOS)
+    private var backupImportPickerContext: (routeIndex: Int, requestID: UUID)? {
+        guard let routeIndex = store.routes.indices.last,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .settings,
+              let requestID = state.settings.backupImportPickerRequestID
+        else { return nil }
+        return (routeIndex, requestID)
+    }
+
+    private var backupImportFileImporterIsPresented: Binding<Bool> {
+        Binding(
+            get: {
+                guard let context = backupImportPickerContext,
+                      case let .home(state) = store.routes[context.routeIndex].screen
+                else { return false }
+                return state.settings.isImportingBackup
+            },
+            set: { isPresented in
+                guard !isPresented, let context = backupImportPickerContext else { return }
+                sendSettingsAlertAction(
+                    .backupImportPickerDismissed(requestID: context.requestID),
+                    routeIndex: context.routeIndex
+                )
+            }
+        )
+    }
+
+    private func handleBackupImport(
+        _ result: Result<[URL], Error>,
+        context: (routeIndex: Int, requestID: UUID)
+    ) {
+        switch result {
+        case let .failure(error):
+            sendSettingsAlertAction(
+                .backupImportPickerFailed(
+                    requestID: context.requestID,
+                    message: "Yedek dosyası açılamadı: \(error.localizedDescription)"
+                ),
+                routeIndex: context.routeIndex
+            )
+        case let .success(urls):
+            sendSettingsAlertAction(
+                .backupImportFilesSelected(requestID: context.requestID, urls: urls),
+                routeIndex: context.routeIndex
+            )
+        }
+    }
+    #endif
 
     private var rootAlertIsPresented: Binding<Bool> {
         Binding(

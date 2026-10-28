@@ -70,6 +70,8 @@ public struct SettingsFeature {
         public var cacheSize: String = AppStrings.Settings.calculating
         public var isShowingClearCacheConfirmation: Bool = false
         public var isShowingClearCacheSuccess: Bool = false
+        public var isImportingBackup = false
+        public var backupImportPickerRequestID: UUID?
         public var backupImportAlertMessage: String?
         public var backupExportAlertMessage: String?
         public var isPremium: Bool = false
@@ -238,8 +240,11 @@ public struct SettingsFeature {
         case presentDiagnosticReport(URL)
         case coordinatorDismissDiagnosticReport(requestID: UUID)
         case presentBackupPreview(url: URL, preview: PureIPTVBackupPreview)
-        case backupImportFailed(String)
         case backupImportAlertDismissed
+        case backupImportPickerRequested
+        case backupImportPickerDismissed(requestID: UUID)
+        case backupImportPickerFailed(requestID: UUID, message: String)
+        case backupImportFilesSelected(requestID: UUID, urls: [URL])
         case backupExportAlertPresented(String)
         case backupExportAlertDismissed
         case restorePendingBackup(requestID: UUID)
@@ -831,13 +836,61 @@ public struct SettingsFeature {
                 state.isShowingClearCacheSuccess = false
                 return .none
 
-            case let .backupImportFailed(message):
-                state.backupImportAlertMessage = message
-                return .none
-
             case .backupImportAlertDismissed:
                 state.backupImportAlertMessage = nil
                 return .none
+
+            case .backupImportPickerRequested:
+                state.isImportingBackup = true
+                state.backupImportPickerRequestID = UUID()
+                return .none
+
+            case let .backupImportPickerDismissed(requestID):
+                guard state.backupImportPickerRequestID == requestID else { return .none }
+                state.isImportingBackup = false
+                return .none
+
+            case let .backupImportPickerFailed(requestID, message):
+                guard state.backupImportPickerRequestID == requestID else { return .none }
+                state.isImportingBackup = false
+                state.backupImportPickerRequestID = nil
+                state.backupImportAlertMessage = message
+                return .none
+
+            case let .backupImportFilesSelected(requestID, urls):
+                guard state.backupImportPickerRequestID == requestID else { return .none }
+                state.isImportingBackup = false
+                state.backupImportPickerRequestID = nil
+                guard let sourceURL = urls.first else { return .none }
+                let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
+                defer {
+                    if didStartAccess {
+                        sourceURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+                var stagedURL: URL?
+                do {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+                    guard attributes[.type] as? FileAttributeType == .typeRegular,
+                          let fileSize = attributes[.size] as? NSNumber,
+                          fileSize.intValue > 0,
+                          fileSize.intValue <= BackupManager.maximumBackupFileSize
+                    else {
+                        throw NSError(domain: "PureIPTVBackup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Yedek dosyası boş, erişilemiyor veya 1 MB sınırını aşıyor."])
+                    }
+                    let destinationURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("PureIPTVRestore-\(UUID().uuidString).iptvbackup")
+                    stagedURL = destinationURL
+                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                    let preview = try BackupManager.shared.previewBackup(from: destinationURL)
+                    return .send(.presentBackupPreview(url: destinationURL, preview: preview))
+                } catch {
+                    if let stagedURL {
+                        try? FileManager.default.removeItem(at: stagedURL)
+                    }
+                    state.backupImportAlertMessage = "Yedek doğrulanamadı; hiçbir ayar değiştirilmedi. \(error.localizedDescription)"
+                    return .none
+                }
 
             case let .backupExportAlertPresented(message):
                 state.backupExportAlertMessage = message

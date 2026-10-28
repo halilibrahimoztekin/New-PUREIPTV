@@ -10,7 +10,6 @@ public struct SettingsView: View {
     @Bindable var store: StoreOf<SettingsFeature>
 
     @State private var backupExportURL: URL? = nil
-    @State private var isImportingBackup = false
     @State private var isGeneratingDiagnosticReport = false
     #if os(tvOS)
         @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
@@ -48,7 +47,7 @@ public struct SettingsView: View {
 
                 #if os(iOS)
                     Button {
-                        isImportingBackup = true
+                        store.send(.backupImportPickerRequested)
                     } label: {
                         HStack {
                             Image(systemName: "arrow.up.doc.fill")
@@ -846,53 +845,7 @@ public struct SettingsView: View {
         .onAppear {
             store.send(.onAppear)
         }
-        #if os(iOS)
-        .fileImporter(
-            isPresented: $isImportingBackup,
-            allowedContentTypes: [UTType(filenameExtension: "iptvbackup") ?? .data],
-            allowsMultipleSelection: false,
-            onCompletion: handleBackupImport
-        )
-        #endif
     }
-
-    private func handleBackupImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case let .failure(error):
-            store.send(.backupImportFailed("Yedek dosyası açılamadı: \(error.localizedDescription)"))
-        case let .success(urls):
-            guard let sourceURL = urls.first else { return }
-            let didStartAccess = sourceURL.startAccessingSecurityScopedResource()
-            defer {
-                if didStartAccess {
-                    sourceURL.stopAccessingSecurityScopedResource()
-                }
-            }
-            var stagedURL: URL?
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
-                guard attributes[.type] as? FileAttributeType == .typeRegular,
-                      let fileSize = attributes[.size] as? NSNumber,
-                      fileSize.intValue > 0,
-                      fileSize.intValue <= BackupManager.maximumBackupFileSize
-                else {
-                    throw NSError(domain: "PureIPTVBackup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Yedek dosyası boş, erişilemiyor veya 1 MB sınırını aşıyor."])
-                }
-                let destinationURL = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("PureIPTVRestore-\(UUID().uuidString).iptvbackup")
-                stagedURL = destinationURL
-                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-                let preview = try BackupManager.shared.previewBackup(from: destinationURL)
-                store.send(.presentBackupPreview(url: destinationURL, preview: preview))
-            } catch {
-                if let stagedURL {
-                    try? FileManager.default.removeItem(at: stagedURL)
-                }
-                store.send(.backupImportFailed("Yedek doğrulanamadı; hiçbir ayar değiştirilmedi. \(error.localizedDescription)"))
-            }
-        }
-    }
-
 }
 
 struct DiagnosticReportPreviewView: View {
