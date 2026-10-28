@@ -385,6 +385,217 @@ struct DetailTrailerRouteContent: View {
     #endif
 }
 
+struct VODUnmatchedMovieRouteContent: View {
+    let item: TMDBSimilarItemDTO
+    let close: () -> Void
+
+    var body: some View {
+        #if os(tvOS)
+            tvOSContent
+        #else
+            iOSContent
+        #endif
+    }
+
+    #if !os(tvOS)
+    private var iOSContent: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: "#0F0F13").ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        let backdropURL = item.backdropPath.map { "https://image.tmdb.org/t/p/w780\($0)" }
+                            ?? item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
+                        if let urlString = backdropURL, let url = URL(string: urlString) {
+                            AsyncImage(url: url) { phase in
+                                if case let .success(image) = phase {
+                                    image.resizable().scaledToFill()
+                                } else {
+                                    Rectangle().fill(Color(hex: "#1E1E24"))
+                                }
+                            }
+                            .frame(height: 180)
+                            .clipped()
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color.clear, Color(hex: "#0F0F13")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        }
+
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(item.title ?? item.name ?? "")
+                                .font(.title2.bold())
+                                .foregroundStyle(.white)
+
+                            HStack(spacing: 12) {
+                                if let vote = item.voteAverage, vote > 0 {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.yellow)
+                                        Text(String(format: "%.1f", vote))
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(.white)
+                                        Text(AppStrings.VODDetail.imdbRating)
+                                            .font(.system(size: 8, weight: .heavy))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1.5)
+                                            .background(Color.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+                                            .foregroundStyle(.yellow)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                }
+
+                                if let date = item.releaseDate ?? item.firstAirDate, !date.isEmpty {
+                                    Text(String(date.prefix(4)))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                }
+                            }
+
+                            HStack(spacing: 10) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(AppStrings.VODDetail.notInLibrary)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(.orange)
+                                    Text(AppStrings.VODDetail.notInLibraryDesc)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+                            )
+
+                            if let plot = item.overview, !plot.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(AppStrings.VODDetail.overview)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(.white)
+
+                                    Text(plot)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .lineSpacing(4)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+
+                        Spacer().frame(height: 24)
+                    }
+                }
+            }
+            .navigationTitle(item.title ?? item.name ?? "")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppStrings.Common.close) {
+                        HapticManager.shared.trigger(.light)
+                        close()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        #endif
+    }
+    #endif
+
+    #if os(tvOS)
+    private var tvOSContent: some View {
+        ZStack {
+            Color(hex: "#0F0F13").ignoresSafeArea()
+
+            HStack(spacing: 40) {
+                let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
+                if let urlString = cover, let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        if case let .success(image) = phase {
+                            image.resizable().scaledToFill()
+                        } else {
+                            Rectangle().fill(Color(hex: "#1E293B"))
+                        }
+                    }
+                    .frame(width: 240, height: 360)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
+                }
+
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(item.title ?? item.name ?? "")
+                        .font(.largeTitle.bold())
+                        .foregroundColor(.white)
+
+                    HStack(spacing: 16) {
+                        if let vote = item.voteAverage, vote > 0 {
+                            HStack(spacing: 6) {
+                                Image(systemName: "star.fill").foregroundColor(.yellow)
+                                Text(String(format: "%.1f", vote))
+                                    .font(.title3.bold())
+                                    .foregroundColor(.white)
+                            }
+                        }
+
+                        if let date = item.releaseDate ?? item.firstAirDate, !date.isEmpty {
+                            Text(String(date.prefix(4)))
+                                .font(.title3)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(AppStrings.VODDetail.notInLibrary)
+                                .font(.headline.bold())
+                                .foregroundColor(.orange)
+                            Text(AppStrings.VODDetail.notInLibraryDesc)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.75))
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+
+                    if let plot = item.overview, !plot.isEmpty {
+                        Text(plot)
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(6)
+                    }
+
+                    Button(AppStrings.Common.close, action: close)
+                        .buttonStyle(.card)
+                        .padding(.top, 16)
+                }
+                .frame(maxWidth: 600, alignment: .leading)
+            }
+            .padding(60)
+        }
+    }
+    #endif
+}
+
 struct ExpandableSynopsisView: View {
     let text: String
     let font: Font
@@ -494,18 +705,6 @@ public struct VODDetailView: View {
                     }
                 }
                 .id(store.vod.id)
-                .sheet(isPresented: Binding(
-                    get: { store.selectedUnmatchedMovie != nil },
-                    set: {
-                        if !$0 {
-                            store.send(.dismissUnmatchedMovie)
-                        }
-                    }
-                )) {
-                    if let item = store.selectedUnmatchedMovie {
-                        unmatchedMovieSheet(item: item)
-                    }
-                }
             }
             .onAppear {
                 store.send(.onAppear)
@@ -1212,130 +1411,7 @@ public struct VODDetailView: View {
             }
         }
 
-        // MARK: - Unmatched Similar Movie Synopsis Sheet
 
-        private func unmatchedMovieSheet(item: TMDBSimilarItemDTO) -> some View {
-            NavigationStack {
-                ZStack {
-                    Color(hex: "#0F0F13").ignoresSafeArea()
-
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            // Backdrop Header
-                            let backdropURL = item.backdropPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
-                                item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
-                            if let urlString = backdropURL, let url = URL(string: urlString) {
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case let .success(img):
-                                        img.resizable().scaledToFill()
-                                    default:
-                                        Rectangle().fill(Color(hex: "#1E1E24"))
-                                    }
-                                }
-                                .frame(height: 180)
-                                .clipped()
-                                .overlay(
-                                    LinearGradient(
-                                        colors: [Color.clear, Color(hex: "#0F0F13")],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                            }
-
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text(item.title ?? item.name ?? "")
-                                    .font(.title2.bold())
-                                    .foregroundStyle(.white)
-
-                                HStack(spacing: 12) {
-                                    if let vote = item.voteAverage, vote > 0 {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "star.fill")
-                                                .font(.system(size: 11))
-                                                .foregroundStyle(.yellow)
-                                            Text(String(format: "%.1f", vote))
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(.white)
-                                            Text(AppStrings.VODDetail.imdbRating)
-                                                .font(.system(size: 8, weight: .heavy))
-                                                .padding(.horizontal, 4)
-                                                .padding(.vertical, 1.5)
-                                                .background(Color.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
-                                                .foregroundStyle(.yellow)
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(.ultraThinMaterial, in: Capsule())
-                                    }
-
-                                    if let date = item.releaseDate ?? item.firstAirDate, !date.isEmpty {
-                                        Text(String(date.prefix(4)))
-                                            .font(.subheadline)
-                                            .foregroundStyle(.white.opacity(0.7))
-                                    }
-                                }
-
-                                // Not in Library Alert Capsule
-                                HStack(spacing: 10) {
-                                    Image(systemName: "info.circle.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundStyle(.orange)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(AppStrings.VODDetail.notInLibrary)
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(.orange)
-                                        Text(AppStrings.VODDetail.notInLibraryDesc)
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                    }
-                                }
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.orange.opacity(0.25), lineWidth: 1)
-                                )
-
-                                if let plot = item.overview, !plot.isEmpty {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(AppStrings.VODDetail.overview)
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundStyle(.white)
-
-                                        Text(plot)
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                            .lineSpacing(4)
-                                    }
-                                    .padding(.top, 4)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-
-                            Spacer().frame(height: 24)
-                        }
-                    }
-                }
-                .navigationTitle(item.title ?? item.name ?? "")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(AppStrings.Common.close) {
-                            HapticManager.shared.trigger(.light)
-                            store.send(.dismissUnmatchedMovie)
-                        }
-                        .foregroundColor(.white)
-                    }
-                }
-            }
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            #endif
-        }
     }
 #endif
 
@@ -1731,99 +1807,11 @@ public struct VODDetailView: View {
                     isPlayButtonFocused = true
                 }
             }
-            .sheet(isPresented: Binding(
-                get: { store.selectedUnmatchedMovie != nil },
-                set: {
-                    if !$0 {
-                        store.send(.dismissUnmatchedMovie)
-                    }
-                }
-            )) {
-                if let item = store.selectedUnmatchedMovie {
-                    tvOSUnmatchedMovieSheet(item: item)
-                }
-            }
             .onExitCommand {
                 store.send(.closeTapped)
             }
         }
 
-        private func tvOSUnmatchedMovieSheet(item: TMDBSimilarItemDTO) -> some View {
-            ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
 
-                HStack(spacing: 40) {
-                    let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
-                    if let urlString = cover, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case let .success(img):
-                                img.resizable().scaledToFill()
-                            default:
-                                Rectangle().fill(Color(hex: "#1E293B"))
-                            }
-                        }
-                        .frame(width: 240, height: 360)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1.5))
-                    }
-
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text(item.title ?? item.name ?? "")
-                            .font(.largeTitle.bold())
-                            .foregroundColor(.white)
-
-                        HStack(spacing: 16) {
-                            if let vote = item.voteAverage, vote > 0 {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "star.fill")
-                                        .foregroundColor(.yellow)
-                                    Text(String(format: "%.1f", vote))
-                                        .font(.title3.bold())
-                                        .foregroundColor(.white)
-                                }
-                            }
-
-                            if let date = item.releaseDate ?? item.firstAirDate, !date.isEmpty {
-                                Text(String(date.prefix(4)))
-                                    .font(.title3)
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                        }
-
-                        HStack(spacing: 10) {
-                            Image(systemName: "info.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(.orange)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(AppStrings.VODDetail.notInLibrary)
-                                    .font(.headline.bold())
-                                    .foregroundColor(.orange)
-                                Text(AppStrings.VODDetail.notInLibraryDesc)
-                                    .font(.subheadline)
-                                    .foregroundColor(.white.opacity(0.75))
-                            }
-                        }
-                        .padding(16)
-                        .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
-
-                        if let plot = item.overview, !plot.isEmpty {
-                            Text(plot)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineLimit(6)
-                        }
-
-                        Button(AppStrings.Common.close) {
-                            store.send(.dismissUnmatchedMovie)
-                        }
-                        .buttonStyle(.card)
-                        .padding(.top, 16)
-                    }
-                    .frame(maxWidth: 600, alignment: .leading)
-                }
-                .padding(60)
-            }
-        }
     }
 #endif

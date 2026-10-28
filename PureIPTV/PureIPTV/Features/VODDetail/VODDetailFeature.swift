@@ -57,6 +57,7 @@ public struct VODDetailFeature {
         public var catalogVODs: [MediaModels.Item] = []
         public var matchedVODsByTMDBId: [Int: MediaModels.Item] = [:]
         public var selectedUnmatchedMovie: TMDBSimilarItemDTO?
+        public var unmatchedMoviePresentationRequestID: UUID?
 
         public var resolvedTrailerKey: String? {
             if let videos = tmdbMovie?.videos?.results {
@@ -131,7 +132,7 @@ public struct VODDetailFeature {
         case expandTrailer
         case selectVersion(MovieVersionEdition)
         case similarMovieTapped(TMDBSimilarItemDTO)
-        case dismissUnmatchedMovie
+        case coordinatorDismissUnmatchedMovie(requestID: UUID)
         case backgroundMatchingCompleted(versions: [MovieVersionEdition], matched: [Int: MediaModels.Item])
         case delegate(Delegate)
         case closeTapped
@@ -143,6 +144,7 @@ public struct VODDetailFeature {
             case presentTMDBMatchPicker(requestID: UUID)
             case presentActorBiography(requestID: UUID)
             case presentTrailer(requestID: UUID)
+            case presentUnmatchedMovie(requestID: UUID)
             case close
         }
     }
@@ -694,11 +696,16 @@ public struct VODDetailFeature {
                 if let matched = state.matchedVODsByTMDBId[movie.id] {
                     return .send(.delegate(.didSelectVOD(matched)))
                 } else {
+                    guard state.unmatchedMoviePresentationRequestID == nil else { return .none }
+                    let requestID = UUID()
+                    state.unmatchedMoviePresentationRequestID = requestID
                     state.selectedUnmatchedMovie = movie
-                    return .none
+                    return .send(.delegate(.presentUnmatchedMovie(requestID: requestID)))
                 }
 
-            case .dismissUnmatchedMovie:
+            case let .coordinatorDismissUnmatchedMovie(requestID):
+                guard state.unmatchedMoviePresentationRequestID == requestID else { return .none }
+                state.unmatchedMoviePresentationRequestID = nil
                 state.selectedUnmatchedMovie = nil
                 return .none
 

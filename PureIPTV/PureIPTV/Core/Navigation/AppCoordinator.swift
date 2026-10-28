@@ -178,6 +178,12 @@ public struct AppCoordinator {
             parent: DetailTrailerRouteFeature.Parent,
             requestID: UUID
         )
+        case detailUnmatchedMovieRouteDidDisappear(
+            presentationID: UUID,
+            parentRouteIndex: Int,
+            itemID: String,
+            requestID: UUID
+        )
         case presentDetailSynopsis(parent: DetailSynopsisRouteFeature.Parent, text: String)
         case customEPGSettingsRouteDidDisappear(
             presentationID: UUID,
@@ -1104,6 +1110,31 @@ public struct AppCoordinator {
                 return .none
             }
 
+        case let .detailUnmatchedMovieRouteDidDisappear(presentationID, parentRouteIndex, itemID, requestID):
+            let unmatchedMovieRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailUnmatchedMovie(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.itemID == itemID
+                        && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let unmatchedMovieRouteIndex {
+                guard unmatchedMovieRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(parentRouteIndex),
+                  case let .vodDetail(vodState) = state.routes[parentRouteIndex].screen,
+                  vodState.vod.id == itemID,
+                  vodState.unmatchedMoviePresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: parentRouteIndex,
+                action: .vodDetail(.coordinatorDismissUnmatchedMovie(requestID: requestID))
+            )))
+
         case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
             let customEPGRouteIndex = state.routes.indices.last(where: { index in
                 if case let .customEPGSettings(routeState) = state.routes[index].screen {
@@ -1557,6 +1588,23 @@ public struct AppCoordinator {
                 presentationID: presentationID,
                 parentRouteIndex: routeState.parentRouteIndex,
                 parent: routeState.parent,
+                requestID: requestID
+            ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailUnmatchedMovie(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailUnmatchedMovie(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            return .send(.detailUnmatchedMovieRouteDidDisappear(
+                presentationID: presentationID,
+                parentRouteIndex: routeState.parentRouteIndex,
+                itemID: routeState.itemID,
                 requestID: requestID
             ))
 
@@ -2233,6 +2281,31 @@ public struct AppCoordinator {
                 DetailTrailerRouteFeature.State(
                     parentRouteIndex: detailRouteIndex,
                     parent: .vod(itemID: vodState.vod.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentUnmatchedMovie(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.unmatchedMoviePresentationRequestID == requestID,
+                  vodState.selectedUnmatchedMovie != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailUnmatchedMovie(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailUnmatchedMovie(
+                DetailUnmatchedMovieRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    itemID: vodState.vod.id,
                     requestID: requestID
                 )
             ))
@@ -3120,6 +3193,11 @@ public struct AppCoordinatorView: View {
                 )
             case let .detailTrailer(screenStore):
                 DetailTrailerRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
+            case let .detailUnmatchedMovie(screenStore):
+                DetailUnmatchedMovieRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -4588,6 +4666,65 @@ private struct DetailTrailerRouteView: View {
             presentationID: routeStore.presentationID,
             parentRouteIndex: routeStore.parentRouteIndex,
             parent: routeStore.parent,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct DetailUnmatchedMovieRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<DetailUnmatchedMovieRouteFeature>
+
+    var body: some View {
+        Group {
+            if let state = vodState, let item = state.selectedUnmatchedMovie {
+                VODUnmatchedMovieRouteContent(item: item, close: close)
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentParent) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var vodState: VODDetailFeature.State? {
+        let parentRouteIndex = routeStore.parentRouteIndex
+        guard coordinatorStore.routes.indices.contains(parentRouteIndex),
+              case let .vodDetail(state) = coordinatorStore.routes[parentRouteIndex].screen,
+              state.vod.id == routeStore.itemID,
+              state.unmatchedMoviePresentationRequestID == routeStore.requestID,
+              state.selectedUnmatchedMovie != nil
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentParent: Bool {
+        vodState?.selectedUnmatchedMovie != nil
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .detailUnmatchedMovie(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentParent, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.detailUnmatchedMovieRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            parentRouteIndex: routeStore.parentRouteIndex,
+            itemID: routeStore.itemID,
             requestID: routeStore.requestID
         ))
     }
