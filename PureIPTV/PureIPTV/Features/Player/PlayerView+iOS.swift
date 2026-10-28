@@ -36,8 +36,6 @@
         // Aspect Ratio & Zoom State (Madde #14)
         @State private var pinchStartScale: CGFloat? = nil
         @State private var aspectDismissWorkItem: DispatchWorkItem? = nil
-        @State private var isShowingSpeedTest: Bool = false
-
         // Channel Zapping State (Madde #16 & #10)
         @State private var interactiveZappingDirection: ZappingDirection? = nil
         @State private var hasTriggeredZappingThresholdHaptic: Bool = false
@@ -859,7 +857,7 @@
                             : nil,
                         positionRecoveryHint: positionRecoveryHint,
                         onOpenSpeedTest: {
-                            isShowingSpeedTest = true
+                            store.send(.speedTestTapped)
                         },
                         onRequestXtreamLiveOutputFormats: canRequestXtreamOutputFormats ? {
                             store.send(.requestXtreamLiveOutputFormats)
@@ -1348,9 +1346,6 @@
                 .allowsHitTesting(false)
             }
             .allowsHitTesting(!store.isMinimized)
-            .sheet(isPresented: $isShowingSpeedTest) {
-                StreamSpeedTestView()
-            }
             .sheet(isPresented: $isSubtitleSearchPresented) {
                 OpenSubtitlesSearchView(
                     itemTitle: [store.item.seriesTitle, store.item.title]

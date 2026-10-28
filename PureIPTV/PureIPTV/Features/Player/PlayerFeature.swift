@@ -217,6 +217,7 @@ public struct PlayerFeature {
         public var mediaInfo: MediaInfo?
         public var mediaInfoRequestID: UUID?
         public var playbackRequestID = UUID()
+        public var speedTestPresentationRequestID: UUID?
         public var firstPresentedFrameLatency: Duration?
         public var firstPresentedFrameFeedbackRequestID: UUID?
         public var activeVODSeekRequestID: UUID?
@@ -795,6 +796,8 @@ public struct PlayerFeature {
         case pipStopped
         case pipRestoreUI
         case minimizeTapped
+        case speedTestTapped
+        case closeSpeedTest(requestID: UUID)
 
         // Up Next Episode Auto-Play (Madde #48)
         case showUpNext
@@ -865,6 +868,7 @@ public struct PlayerFeature {
         public enum Delegate: Equatable {
             case didClose
             case didRequestMinimize
+            case presentSpeedTest(requestID: UUID)
             case didSelectXtreamLiveOutputFormat(PlaylistConfig)
         }
     }
@@ -5041,6 +5045,7 @@ public struct PlayerFeature {
             guard !state.isClosing else { return .none }
             state.isClosing = true
             state.playbackRequestID = UUID()
+            state.speedTestPresentationRequestID = nil
             state.playbackRecoveryErrorMessage = nil
             state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
@@ -5160,6 +5165,7 @@ public struct PlayerFeature {
             guard state.playbackEngine == .vlc else { return .none }
             guard !state.isMinimized else { return .none }
             state.isMinimized = true
+            state.speedTestPresentationRequestID = nil
             return .merge(
                 Self.stopLiveVideoStallMonitoring(state: &state),
                 .run { send in
@@ -5171,6 +5177,20 @@ public struct PlayerFeature {
                     }
                 }
             )
+
+        case .speedTestTapped:
+            guard !state.isMinimized,
+                  !state.isClosing,
+                  state.speedTestPresentationRequestID == nil
+            else { return .none }
+            let requestID = UUID()
+            state.speedTestPresentationRequestID = requestID
+            return .send(.delegate(.presentSpeedTest(requestID: requestID)))
+
+        case let .closeSpeedTest(requestID):
+            guard state.speedTestPresentationRequestID == requestID else { return .none }
+            state.speedTestPresentationRequestID = nil
+            return .none
 
         case .sharePlayTapped:
             guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }

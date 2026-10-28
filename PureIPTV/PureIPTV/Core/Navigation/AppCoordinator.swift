@@ -109,6 +109,11 @@ public struct AppCoordinator {
             requestID: UUID,
             action: AddPlaylistFeature.Action
         )
+        case playerSpeedTestRouteDidDisappear(
+            presentationID: UUID,
+            playerRouteIndex: Int,
+            requestID: UUID
+        )
         case receiveStreamHandoff(StreamHandoffRequest)
         case streamHandoffResolved(requestID: UUID, playable: PlayerFeature.PlayableItem?)
         case dismissStreamHandoffError
@@ -726,6 +731,27 @@ public struct AppCoordinator {
                 action: .playlistManagement(.addPlaylist(.presented(childAction)))
             )))
 
+        case let .playerSpeedTestRouteDidDisappear(presentationID, playerRouteIndex, requestID):
+            let speedTestRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playerSpeedTest(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let speedTestRouteIndex {
+                guard speedTestRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playerRouteIndex),
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playerRouteIndex,
+                action: .player(.closeSpeedTest(requestID: requestID))
+            )))
+
         case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
             guard state.routes.indices.contains(multiViewRouteIndex),
                   case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
@@ -820,6 +846,27 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.playlistManagementRouteIndex,
                 action: .playlistManagement(.closeAddPlaylistTapped(requestID: requestID))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .playerSpeedTest(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playerSpeedTest(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.playerRouteIndex),
+                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
+                  playerState.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.playerRouteIndex,
+                action: .player(.closeSpeedTest(requestID: requestID))
             )))
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
@@ -1355,6 +1402,24 @@ public struct AppCoordinator {
             return .none
 
         // ── Player Delegates ─────────────────────────────────────
+        case let .router(.routeAction(playerRouteIndex, .player(.delegate(.presentSpeedTest(requestID))))):
+            guard state.routes.indices.contains(playerRouteIndex),
+                  playerRouteIndex == state.routes.count - 1,
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.speedTestPresentationRequestID == requestID,
+                  !playerState.isMinimized,
+                  !playerState.isClosing
+            else { return .none }
+            state.routes.presentSheet(.playerSpeedTest(
+                PlayerSpeedTestRouteFeature.State(
+                    playerRouteIndex: playerRouteIndex,
+                    requestID: requestID,
+                    itemID: playerState.item.id,
+                    playbackRequestID: playerState.playbackRequestID
+                )
+            ))
+            return .none
+
         case let .router(.routeAction(_, .player(.delegate(.didSelectXtreamLiveOutputFormat(config))))):
             guard config.type == .xtream, let playlistID = config.playlistID else { return .none }
 
@@ -1417,19 +1482,42 @@ public struct AppCoordinator {
             }
             return .none
 
-        case .router(.routeAction(_, .player(.delegate(.didClose)))):
+        case let .router(.routeAction(playerRouteIndex, .player(.delegate(.didClose)))):
             state.miniPlayer = nil
             state.isPlayerMini = false
-            if case .player = state.routes.last?.screen {
+            if case let .playerSpeedTest(speedTestState) = state.routes.last?.screen,
+               speedTestState.playerRouteIndex == playerRouteIndex,
+               state.routes.indices.contains(playerRouteIndex),
+               case .player = state.routes[playerRouteIndex].screen
+            {
+                state.routes.dismiss()
+                if case .player = state.routes.last?.screen {
+                    state.routes.dismiss()
+                }
+            } else if playerRouteIndex == state.routes.count - 1,
+                      state.routes.indices.contains(playerRouteIndex),
+                      case .player = state.routes[playerRouteIndex].screen
+            {
                 state.routes.dismiss()
             }
             return .none
 
-        case .router(.routeAction(_, .player(.delegate(.didRequestMinimize)))):
-            if case let .player(playerState) = state.routes.last?.screen {
-                state.miniPlayer = playerState
-                state.isPlayerMini = true
+        case let .router(.routeAction(playerRouteIndex, .player(.delegate(.didRequestMinimize)))):
+            guard state.routes.indices.contains(playerRouteIndex),
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen
+            else { return .none }
+            var miniPlayerState = playerState
+            miniPlayerState.speedTestPresentationRequestID = nil
+            state.miniPlayer = miniPlayerState
+            state.isPlayerMini = true
+            if case let .playerSpeedTest(speedTestState) = state.routes.last?.screen,
+               speedTestState.playerRouteIndex == playerRouteIndex
+            {
+                state.routes.dismiss()
             }
+            guard playerRouteIndex == state.routes.count - 1,
+                  case .player = state.routes[playerRouteIndex].screen
+            else { return .none }
             state.routes.dismiss()
             return .run { _ in
                 #if os(iOS)
@@ -1906,6 +1994,11 @@ public struct AppCoordinatorView: View {
                 )
             case let .playlistManagementAddPlaylist(screenStore):
                 PlaylistManagementAddPlaylistRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
+            case let .playerSpeedTest(screenStore):
+                PlayerSpeedTestRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -2434,6 +2527,66 @@ private struct PlaylistManagementAddPlaylistRouteView: View {
         coordinatorStore.send(.playlistManagementAddPlaylistRouteDidDisappear(
             presentationID: routeStore.presentationID,
             playlistManagementRouteIndex: routeStore.playlistManagementRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct PlayerSpeedTestRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<PlayerSpeedTestRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentPresentation {
+                StreamSpeedTestView {
+                    routeStore.send(.closeTapped)
+                }
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentPresentation) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var playerState: PlayerFeature.State? {
+        let playerRouteIndex = routeStore.playerRouteIndex
+        guard coordinatorStore.routes.indices.contains(playerRouteIndex),
+              case let .player(state) = coordinatorStore.routes[playerRouteIndex].screen
+        else { return nil }
+        return state
+    }
+
+    private var isCurrentPresentation: Bool {
+        playerState?.speedTestPresentationRequestID == routeStore.requestID
+            && playerState?.item.id == routeStore.itemID
+            && playerState?.playbackRequestID == routeStore.playbackRequestID
+            && playerState?.isMinimized == false
+            && playerState?.isClosing == false
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .playerSpeedTest(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func closeIfStale() {
+        guard isCurrentPresentation else {
+            guard isRouteActive else { return }
+            routeStore.send(.closeTapped)
+            return
+        }
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.playerSpeedTestRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            playerRouteIndex: routeStore.playerRouteIndex,
             requestID: routeStore.requestID
         ))
     }

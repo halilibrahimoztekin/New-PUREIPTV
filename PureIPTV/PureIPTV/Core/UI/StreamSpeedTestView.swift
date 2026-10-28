@@ -3,10 +3,13 @@ import SwiftUI
 public struct StreamSpeedTestView: View {
     @StateObject private var speedTest = StreamSpeedTestManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     public var targetURL: URL?
+    public var onClose: (() -> Void)?
 
-    public init(targetURL: URL? = nil) {
+    public init(targetURL: URL? = nil, onClose: (() -> Void)? = nil) {
         self.targetURL = targetURL
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -28,7 +31,11 @@ public struct StreamSpeedTestView: View {
 
                 Button {
                     speedTest.cancelTest()
-                    dismiss()
+                    if let onClose {
+                        onClose()
+                    } else {
+                        dismiss()
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3)
@@ -150,6 +157,14 @@ public struct StreamSpeedTestView: View {
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
         .frame(maxWidth: 420)
+        .onDisappear {
+            speedTest.cancelTest()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                speedTest.cancelTest()
+            }
+        }
     }
 }
 
