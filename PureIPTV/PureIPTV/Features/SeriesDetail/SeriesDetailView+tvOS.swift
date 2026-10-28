@@ -7,10 +7,15 @@
 
     public struct SeriesDetailView_tvOS: View {
         @Bindable var store: StoreOf<SeriesDetailFeature>
+        let onPresentSynopsis: (String) -> Void
         @FocusState private var focusedEpisodeID: String?
 
-        public init(store: StoreOf<SeriesDetailFeature>) {
+        public init(
+            store: StoreOf<SeriesDetailFeature>,
+            onPresentSynopsis: @escaping (String) -> Void = { _ in }
+        ) {
             self.store = store
+            self.onPresentSynopsis = onPresentSynopsis
         }
 
         public var body: some View {
@@ -254,7 +259,12 @@
                 // Description
                 let plot = store.tmdbTV?.overview ?? store.info?.plot
                 if let plotText = plot, !plotText.isEmpty {
-                    ExpandableSynopsisView(text: plotText, font: .system(size: 22), lineLimit: 4)
+                    ExpandableSynopsisView(
+                        text: plotText,
+                        font: .system(size: 22),
+                        lineLimit: 4,
+                        onPresent: { onPresentSynopsis(plotText) }
+                    )
                         .padding(.horizontal, 80)
                 } else if store.isLoading || store.isTMDBLoading {
                     VStack(alignment: .leading, spacing: 10) {

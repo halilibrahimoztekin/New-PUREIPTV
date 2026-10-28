@@ -46,15 +46,20 @@ struct AwardRecognitionMetadataView: View {
 
 public struct SeriesDetailView: View {
     let store: StoreOf<SeriesDetailFeature>
+    let onPresentSynopsis: (String) -> Void
     @State private var hasDisappeared = false
 
-    public init(store: StoreOf<SeriesDetailFeature>) {
+    public init(
+        store: StoreOf<SeriesDetailFeature>,
+        onPresentSynopsis: @escaping (String) -> Void = { _ in }
+    ) {
         self.store = store
+        self.onPresentSynopsis = onPresentSynopsis
     }
 
     public var body: some View {
         #if os(tvOS)
-            SeriesDetailView_tvOS(store: store)
+            SeriesDetailView_tvOS(store: store, onPresentSynopsis: onPresentSynopsis)
                 .onAppear { hasDisappeared = false }
                 .onDisappear {
                     guard !hasDisappeared else { return }

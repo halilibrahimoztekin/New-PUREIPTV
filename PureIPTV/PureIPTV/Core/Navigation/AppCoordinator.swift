@@ -160,6 +160,13 @@ public struct AppCoordinator {
             parent: DetailTMDBMatchPickerRouteFeature.Parent,
             requestID: UUID
         )
+        case detailSynopsisRouteDidDisappear(
+            presentationID: UUID,
+            parentRouteIndex: Int,
+            parent: DetailSynopsisRouteFeature.Parent,
+            requestID: UUID
+        )
+        case presentDetailSynopsis(parent: DetailSynopsisRouteFeature.Parent, text: String)
         case customEPGSettingsRouteDidDisappear(
             presentationID: UUID,
             homeRouteIndex: Int,
@@ -1009,6 +1016,22 @@ public struct AppCoordinator {
                 return .none
             }
 
+        case let .detailSynopsisRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
+            let synopsisRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailSynopsis(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.requestID == requestID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.parent == parent
+                }
+                return false
+            })
+            if let synopsisRouteIndex {
+                guard synopsisRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+            return .none
+
         case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
             let customEPGRouteIndex = state.routes.indices.last(where: { index in
                 if case let .customEPGSettings(routeState) = state.routes[index].screen {
@@ -1417,6 +1440,19 @@ public struct AppCoordinator {
             default:
                 return .none
             }
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailSynopsis(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailSynopsis(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
 
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
             if let editorRouteIndex = state.routes.indices.last(where: { index in
@@ -1859,6 +1895,27 @@ public struct AppCoordinator {
 
         case let .presentParentalLock(parentalLockState):
             state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
+
+        case let .presentDetailSynopsis(parent, text):
+            let parentRouteIndex = state.routes.indices.last(where: { index in
+                switch (parent, state.routes[index].screen) {
+                case let (.vod(itemID), .vodDetail(vodState)):
+                    return vodState.vod.id == itemID
+                case let (.series(itemID), .seriesDetail(seriesState)):
+                    return seriesState.series.id == itemID
+                default:
+                    return false
+                }
+            })
+            guard let parentRouteIndex, parentRouteIndex == state.routes.count - 1 else { return .none }
+            state.routes.presentSheet(.detailSynopsis(
+                DetailSynopsisRouteFeature.State(
+                    parentRouteIndex: parentRouteIndex,
+                    parent: parent,
+                    text: text
+                )
+            ))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
@@ -2765,10 +2822,20 @@ public struct AppCoordinatorView: View {
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
-            case let .seriesDetail(store):
-                SeriesDetailView(store: store)
-            case let .vodDetail(store):
-                VODDetailView(store: store)
+            case let .seriesDetail(detailStore):
+                SeriesDetailView(store: detailStore) { text in
+                    store.send(.presentDetailSynopsis(
+                        parent: .series(itemID: detailStore.series.id),
+                        text: text
+                    ))
+                }
+            case let .vodDetail(detailStore):
+                VODDetailView(store: detailStore) { text in
+                    store.send(.presentDetailSynopsis(
+                        parent: .vod(itemID: detailStore.vod.id),
+                        text: text
+                    ))
+                }
             case let .playlistManagementSettings(screenStore):
                 PlaylistManagementSettingsRouteView(
                     coordinatorStore: store,
@@ -2826,6 +2893,11 @@ public struct AppCoordinatorView: View {
                 )
             case let .settingsBackupPreview(screenStore):
                 SettingsBackupPreviewRouteView(
+                    coordinatorStore: store,
+                    routeStore: screenStore
+                )
+            case let .detailSynopsis(screenStore):
+                DetailSynopsisRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -4051,6 +4123,79 @@ private struct SettingsBackupPreviewRouteView: View {
         coordinatorStore.send(.settingsBackupPreviewRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
+            requestID: routeStore.requestID
+        ))
+    }
+}
+
+private struct DetailSynopsisRouteView: View {
+    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
+    let routeStore: StoreOf<DetailSynopsisRouteFeature>
+
+    var body: some View {
+        Group {
+            if isCurrentParent {
+                NavigationStack {
+                    ScrollView {
+                        Text(routeStore.text)
+                            .font(.body)
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineSpacing(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(32)
+                    }
+                    .background(Color.black.ignoresSafeArea())
+                    .navigationTitle(AppStrings.VODDetail.overview)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(AppStrings.Common.done, action: close)
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear(perform: closeIfStale)
+        .onChange(of: isCurrentParent) { _, isCurrent in
+            if !isCurrent {
+                closeIfStale()
+            }
+        }
+        .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var isCurrentParent: Bool {
+        let parentRouteIndex = routeStore.parentRouteIndex
+        guard coordinatorStore.routes.indices.contains(parentRouteIndex) else { return false }
+        switch (routeStore.parent, coordinatorStore.routes[parentRouteIndex].screen) {
+        case let (.vod(itemID), .vodDetail(vodState)):
+            return vodState.vod.id == itemID
+        case let (.series(itemID), .seriesDetail(seriesState)):
+            return seriesState.series.id == itemID
+        default:
+            return false
+        }
+    }
+
+    private var isRouteActive: Bool {
+        guard case let .detailSynopsis(state) = coordinatorStore.routes.last?.screen
+        else { return false }
+        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
+    }
+
+    private func close() {
+        routeStore.send(.closeTapped)
+    }
+
+    private func closeIfStale() {
+        guard !isCurrentParent, isRouteActive else { return }
+        close()
+    }
+
+    private func notifyRouteDidDisappear() {
+        coordinatorStore.send(.detailSynopsisRouteDidDisappear(
+            presentationID: routeStore.presentationID,
+            parentRouteIndex: routeStore.parentRouteIndex,
+            parent: routeStore.parent,
             requestID: routeStore.requestID
         ))
     }

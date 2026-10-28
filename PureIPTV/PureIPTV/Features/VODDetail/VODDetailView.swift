@@ -8,11 +8,11 @@ struct ExpandableSynopsisView: View {
     let text: String
     let font: Font
     let lineLimit: Int
-    @State private var isPresented = false
+    let onPresent: () -> Void
 
     var body: some View {
         Button {
-            isPresented = true
+            onPresent()
         } label: {
             Text(text)
                 .font(font)
@@ -25,40 +25,26 @@ struct ExpandableSynopsisView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(AppStrings.VODDetail.overview)
-        .sheet(isPresented: $isPresented) {
-            NavigationStack {
-                ScrollView {
-                    Text(text)
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineSpacing(6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(32)
-                }
-                .background(Color.black.ignoresSafeArea())
-                .navigationTitle(AppStrings.VODDetail.overview)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(AppStrings.Common.done) { isPresented = false }
-                    }
-                }
-            }
-        }
     }
 }
 
 public struct VODDetailView: View {
     let store: StoreOf<VODDetailFeature>
+    let onPresentSynopsis: (String) -> Void
     @State private var hasDisappeared = false
 
-    public init(store: StoreOf<VODDetailFeature>) {
+    public init(
+        store: StoreOf<VODDetailFeature>,
+        onPresentSynopsis: @escaping (String) -> Void = { _ in }
+    ) {
         self.store = store
+        self.onPresentSynopsis = onPresentSynopsis
     }
 
     public var body: some View {
         Group {
             #if os(tvOS)
-                VODDetailView_tvOS(store: store)
+                VODDetailView_tvOS(store: store, onPresentSynopsis: onPresentSynopsis)
                     .onAppear { hasDisappeared = false }
                     .onDisappear {
                         guard !hasDisappeared else { return }
@@ -1212,10 +1198,15 @@ public struct VODDetailView: View {
 #if os(tvOS)
     public struct VODDetailView_tvOS: View {
         @Bindable var store: StoreOf<VODDetailFeature>
+        let onPresentSynopsis: (String) -> Void
         @FocusState private var isPlayButtonFocused: Bool
 
-        public init(store: StoreOf<VODDetailFeature>) {
+        public init(
+            store: StoreOf<VODDetailFeature>,
+            onPresentSynopsis: @escaping (String) -> Void = { _ in }
+        ) {
             self.store = store
+            self.onPresentSynopsis = onPresentSynopsis
         }
 
         public var body: some View {
@@ -1310,7 +1301,12 @@ public struct VODDetailView: View {
 
                             // Plot
                             if let plot = store.tmdbMovie?.overview ?? store.info?.plot, !plot.isEmpty {
-                                ExpandableSynopsisView(text: plot, font: .system(size: 22), lineLimit: 4)
+                                ExpandableSynopsisView(
+                                    text: plot,
+                                    font: .system(size: 22),
+                                    lineLimit: 4,
+                                    onPresent: { onPresentSynopsis(plot) }
+                                )
                             } else if store.isTMDBLoading || store.isLoading {
                                 VStack(alignment: .leading, spacing: 10) {
                                     RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)).frame(height: 22)
