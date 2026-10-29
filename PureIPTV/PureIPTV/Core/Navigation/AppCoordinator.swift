@@ -5956,18 +5956,43 @@ private struct SettingsBackupPreviewRouteView: View {
 private struct DetailSynopsisRouteView: View {
     @Bindable var coordinatorStore: StoreOf<AppCoordinator>
     let routeStore: StoreOf<DetailSynopsisRouteFeature>
+#if os(tvOS)
+    @FocusState private var isSynopsisTextFocused: Bool
+#endif
 
     var body: some View {
         Group {
             if isCurrentParent {
                 NavigationStack {
                     ScrollView {
-                        Text(routeStore.text)
-                            .font(.body)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineSpacing(6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(32)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let firstSegment = synopsisSegments.first {
+                                #if os(tvOS)
+                                    synopsisSegmentView(firstSegment)
+                                        .focusable()
+                                        .focused($isSynopsisTextFocused)
+                                        .defaultFocus(
+                                            $isSynopsisTextFocused,
+                                            true,
+                                            priority: .userInitiated
+                                        )
+                                        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 8))
+                                #else
+                                    synopsisSegmentView(firstSegment)
+                                #endif
+
+                                ForEach(synopsisSegments.indices.dropFirst(), id: \.self) { index in
+                                    #if os(tvOS)
+                                        synopsisSegmentView(synopsisSegments[index])
+                                            .focusable()
+                                            .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 8))
+                                    #else
+                                        synopsisSegmentView(synopsisSegments[index])
+                                    #endif
+                                }
+                            }
+                        }
+                        .padding(32)
                     }
                     .background(Color.black.ignoresSafeArea())
                     .navigationTitle(AppStrings.VODDetail.overview)
@@ -5986,6 +6011,40 @@ private struct DetailSynopsisRouteView: View {
             }
         }
         .onDisappear(perform: notifyRouteDidDisappear)
+    }
+
+    private var synopsisSegments: [String] {
+        let text = routeStore.text
+        let maximumSegmentLength = 320
+        var segments: [String] = []
+        var segmentStart = text.startIndex
+
+        while segmentStart < text.endIndex {
+            let limit = text.index(segmentStart, offsetBy: maximumSegmentLength, limitedBy: text.endIndex)
+                ?? text.endIndex
+            guard limit < text.endIndex else {
+                segments.append(String(text[segmentStart..<text.endIndex]))
+                break
+            }
+
+            let candidate = text[segmentStart..<limit]
+            let segmentEnd = candidate.lastIndex(where: \.isWhitespace)
+                .map { text.index(after: $0) }
+                ?? limit
+            segments.append(String(text[segmentStart..<segmentEnd]))
+            segmentStart = segmentEnd
+        }
+
+        return segments
+    }
+
+    private func synopsisSegmentView(_ text: String) -> some View {
+        Text(text)
+            .font(.body)
+            .foregroundStyle(.white.opacity(0.9))
+            .lineSpacing(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
     }
 
     private var isCurrentParent: Bool {

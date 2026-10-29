@@ -67,7 +67,7 @@ public struct SeriesDetailView: View {
                     store.send(.viewDidDisappear)
                 }
         #else
-            SeriesDetailView_iOS(store: store)
+            SeriesDetailView_iOS(store: store, onPresentSynopsis: onPresentSynopsis)
                 .onAppear { hasDisappeared = false }
                 .onDisappear {
                     guard !hasDisappeared else { return }

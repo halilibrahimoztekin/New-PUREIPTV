@@ -4,9 +4,14 @@
 
     public struct SeriesDetailView_iOS: View {
         let store: StoreOf<SeriesDetailFeature>
+        let onPresentSynopsis: (String) -> Void
 
-        public init(store: StoreOf<SeriesDetailFeature>) {
+        public init(
+            store: StoreOf<SeriesDetailFeature>,
+            onPresentSynopsis: @escaping (String) -> Void = { _ in }
+        ) {
             self.store = store
+            self.onPresentSynopsis = onPresentSynopsis
         }
 
         public var body: some View {
@@ -365,10 +370,12 @@
                 // Description
                 let plot = store.tmdbTV?.overview ?? store.info?.plot
                 if let plotText = plot, !plotText.isEmpty {
-                    Text(plotText)
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.white.opacity(0.8))
-                        .lineSpacing(4)
+                    ExpandableSynopsisView(
+                        text: plotText,
+                        font: .system(size: 15),
+                        lineLimit: 5,
+                        onPresent: { onPresentSynopsis(plotText) }
+                    )
                         .padding(.horizontal, 24)
                 } else if store.isTMDBLoading || store.isLoading {
                     VStack(alignment: .leading, spacing: 6) {

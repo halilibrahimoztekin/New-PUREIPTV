@@ -2487,9 +2487,12 @@ IPTVX’in güncel Apple TV sürüm notları playlist yükleme/arama iyileştirm
 - **Review/derleme:** Bağımsız reviewer `[APPROVED]`; değişen Swift dosyalarında `swiftc -frontend -parse` ve `git diff --check` başarılı. iOS ve tvOS Release Simulator compile-only Xcode build’leri exit 0. Uygulama akışı veya test çalıştırılmadı.
 - **2026-10-29 temizlik:** `/private/tmp/PureIPTV-235-build` içindeki 10,276,568 KiB (~9.8 GiB) task DerivedData ve paket kopyası tamamen silindi; ayrıca bu task’ın `xcodebuild -list` `.xcresult` çıktısı kaldırıldı. Normal `PureIPTV-fsjgssvioqifskcwhsknjdbnvdae` DerivedData 2.3 GB; bu task’a ait Build/Index/Logs/ModuleCache çıktısı yoktu. Var olan SourcePackages, SDK önbellekleri ve indeksler korundu. ContactCleaner’a erişilmedi.
 
-### 236. [PENDING] Uzun Film ve Dizi Özetlerini Tam Okuma
+### 236. [DONE] Uzun Film ve Dizi Özetlerini Tam Okuma
 - **Sinyal:** Opus, Apple TV’de film/dizi açıklamasını seçerek kaydırılabilir tam metin görünümüne geçmeyi ekledi: https://apps.apple.com/us/app/iptv-player-opus/id1592313576?platform=tv.
 - **Kapsam:** Kırpılmış özeti ayrıntı sayfasından erişilebilir, Dynamic Type ve VoiceOver destekli bir okuyucuya aç; mevcut poster/oynatım odağını geri yükle.
+- **Uygulama:** iOS film ve dizi özetleri ortak tam metin okuyucuyu açıyor. tvOS okuyucusu metni boşlukları koruyarak 320 karakterlik odak hedeflerine böler; ilk parça varsayılan odak olur ve yön tuşlarıyla ilerlemek ScrollView’ı parça görünür kalacak şekilde kaydırır. Dynamic Type ve VoiceOver metin akışını destekler.
+- **Review/derleme:** Bağımsız reviewer `[APPROVED]`; değişen Swift kaynaklarında `swiftc -frontend -parse` ve `git diff --check` başarılı. iOS ve tvOS Release Simulator compile-only build’leri exit 0; uygulama akışı veya test çalıştırılmadı. Build’de mevcut Swift 6 concurrency uyarıları görüldü.
+- **2026-10-29 temizlik:** Build’ler yalnızca `/private/tmp/PureIPTV-236-build` altında çıktı üretti; bu task’ın DerivedData ve xcresult dosyaları temizlendi. Önceki build’in paylaşılan Swift Package checkout/artifact cache’i korundu. Normal Xcode DerivedData’da bu task’a ait çıktı oluşmadı.
 
 ### 237. [PENDING] Dizi Bölümlerini Karışık Sırayla Oynatma
 - **Sinyal:** Apple TV kullanıcıları kütüphanedeki bir dizinin bölümlerini rastgele sırada izleme listesi istedi: https://www.reddit.com/r/appletv/comments/1qxlegy/whats_one_feature_youd_like_to_see_on_apple_tv_app/.

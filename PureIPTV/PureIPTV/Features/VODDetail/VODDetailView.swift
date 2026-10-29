@@ -506,7 +506,11 @@ struct ExpandableSynopsisView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        #if os(tvOS)
+            .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 8))
+        #endif
         .accessibilityLabel(AppStrings.VODDetail.overview)
+        .accessibilityHint(AppStrings.Common.more)
     }
 }
 
@@ -534,7 +538,7 @@ public struct VODDetailView: View {
                         store.send(.viewDidDisappear)
                     }
             #else
-                VODDetailView_iOS(store: store)
+                VODDetailView_iOS(store: store, onPresentSynopsis: onPresentSynopsis)
                     .onAppear { hasDisappeared = false }
                     .onDisappear {
                         guard !hasDisappeared else { return }
@@ -567,9 +571,14 @@ public struct VODDetailView: View {
 #if !os(tvOS)
     public struct VODDetailView_iOS: View {
         let store: StoreOf<VODDetailFeature>
+        let onPresentSynopsis: (String) -> Void
 
-        public init(store: StoreOf<VODDetailFeature>) {
+        public init(
+            store: StoreOf<VODDetailFeature>,
+            onPresentSynopsis: @escaping (String) -> Void = { _ in }
+        ) {
             self.store = store
+            self.onPresentSynopsis = onPresentSynopsis
         }
 
         public var body: some View {
@@ -961,10 +970,12 @@ public struct VODDetailView: View {
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(.white)
 
-                        Text(plotText)
-                            .font(.system(size: 14.5))
-                            .foregroundStyle(Color.white.opacity(0.8))
-                            .lineSpacing(4)
+                        ExpandableSynopsisView(
+                            text: plotText,
+                            font: .system(size: 14.5),
+                            lineLimit: 5,
+                            onPresent: { onPresentSynopsis(plotText) }
+                        )
                     }
                     .padding(.horizontal, 24)
                 } else if store.isTMDBLoading || store.isLoading {
