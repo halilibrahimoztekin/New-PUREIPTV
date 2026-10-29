@@ -299,6 +299,35 @@
 
                                     // Consolidated Player Settings Menu
                                     Menu {
+                                        let castCoordinator = GoogleCastPlaybackCoordinator.shared
+                                        if castCoordinator.canCast(item: store.item, streamURL: store.activePlaybackURL) {
+                                            Button {
+                                                let castStore = store
+                                                let castItem = store.item
+                                                let canResumeLocally = store.playerState == .playing
+                                                let time = store.currentTime.components
+                                                let startingPosition = Double(time.seconds) + Double(time.attoseconds) / 1_000_000_000_000_000_000
+                                                castCoordinator.cast(
+                                                    item: castItem,
+                                                    streamURL: store.activePlaybackURL,
+                                                    startingPosition: startingPosition,
+                                                    onRemotePlaybackStarted: { [weak castStore] in
+                                                        guard castStore?.item.id == castItem.id else { return }
+                                                        castStore?.send(.pause)
+                                                    },
+                                                    onSessionEnded: { [weak castStore] in
+                                                        guard canResumeLocally,
+                                                              castStore?.item.id == castItem.id,
+                                                              castStore?.playerState == .paused
+                                                        else { return }
+                                                        castStore?.send(.play)
+                                                    }
+                                                )
+                                            } label: {
+                                                Label(AppStrings.VODDetail.cast, systemImage: "airplayvideo")
+                                            }
+                                        }
+
                                         if store.canSwitchPlaybackEngine {
                                             Menu {
                                                 ForEach(PlaybackEngine.allCases, id: \.self) { engine in

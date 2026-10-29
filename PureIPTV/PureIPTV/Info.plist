@@ -4,6 +4,15 @@
 <dict>
 	<key>AVInitialRouteSharingPolicy</key>
 	<string>LongFormVideo</string>
+	<key>GoogleCastReceiverApplicationID</key>
+	<string>$(GOOGLE_CAST_RECEIVER_APPLICATION_ID)</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>PureIPTV uses your local network to find Google Cast receivers and play the selected stream on your TV.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+		<string>_$(GOOGLE_CAST_RECEIVER_APPLICATION_ID)._googlecast._tcp</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

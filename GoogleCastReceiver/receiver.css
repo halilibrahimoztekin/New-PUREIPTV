@@ -1,0 +1,16 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #090b10;
+}
+
+cast-media-player {
+  --background-color: #090b10;
+  --font-family: system-ui, sans-serif;
+  --splash-image: none;
+  --logo-image: none;
+  --buffering-image: none;
+}

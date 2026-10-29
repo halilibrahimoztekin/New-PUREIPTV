@@ -4,6 +4,7 @@ import SwiftUI
 #if os(iOS)
     class AppDelegate: NSObject, UIApplicationDelegate {
         func application(_: UIApplication, didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+            GoogleCastPlaybackCoordinator.shared.configureIfNeeded()
             BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.pureiptv.refresh", using: nil) { task in
                 guard let refreshTask = task as? BGAppRefreshTask else {
                     task.setTaskCompleted(success: false)
