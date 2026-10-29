@@ -78,55 +78,6 @@ import SwiftUI
                 .padding(48)
                 .focusSection()
             }
-            .alert(
-                AppStrings.Downloads.title,
-                isPresented: Binding(
-                    get: { store.errorMessage != nil },
-                    set: { if !$0 { store.send(.dismissError) } }
-                )
-            ) {
-                Button(AppStrings.Common.ok, role: .cancel) {
-                    store.send(.dismissError)
-                }
-            } message: {
-                Text(store.errorMessage ?? "")
-            }
-            .confirmationDialog(
-                AppStrings.Downloads.clearCompletedTitle,
-                isPresented: Binding(
-                    get: { store.isConfirmingClearCompleted },
-                    set: { if !$0 { store.send(.clearCompletedCancelled) } }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button(AppStrings.Downloads.clearCompleted, role: .destructive) {
-                    guard !isDeletionInProgress else { return }
-                    store.send(.clearCompletedConfirmed)
-                }
-                Button(AppStrings.Common.cancel, role: .cancel) {
-                    store.send(.clearCompletedCancelled)
-                }
-            } message: {
-                Text(AppStrings.Downloads.clearCompletedMessage)
-            }
-            .confirmationDialog(
-                AppStrings.Downloads.deleteDownloadTitle,
-                isPresented: Binding(
-                    get: { store.pendingDeleteItem != nil },
-                    set: { if !$0 { store.send(.deleteDownloadCancelled) } }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button(AppStrings.Common.delete, role: .destructive) {
-                    guard !isDeletionInProgress else { return }
-                    store.send(.deleteDownloadConfirmed)
-                }
-                Button(AppStrings.Common.cancel, role: .cancel) {
-                    store.send(.deleteDownloadCancelled)
-                }
-            } message: {
-                Text(AppStrings.Downloads.deleteDownloadMessage(store.pendingDeleteItem?.title ?? ""))
-            }
         }
 
         private var storageSummarySection: some View {

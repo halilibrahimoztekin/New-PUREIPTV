@@ -3485,6 +3485,7 @@ public struct AppCoordinatorView: View {
     let store: StoreOf<AppCoordinator>
     // Alert buttons act on the context currently presented before SwiftUI clears the binding.
     @State private var rootAlertButtonActionContext: RootAlertContext?
+    @State private var confirmationDialogButtonActionPending = false
 
     public init(store: StoreOf<AppCoordinator>) {
         self.store = store
@@ -3832,6 +3833,12 @@ public struct AppCoordinatorView: View {
                         sendSettingsAlertAction(.backupExportAlertDismissed, routeIndex: routeIndex)
                     }
                 }
+            case let .downloadsError(routeIndex, message):
+                Button(AppStrings.Common.ok, role: .cancel) {
+                    performRootAlertButtonAction(for: .downloadsError(routeIndex: routeIndex, message: message)) {
+                        sendDownloadsAction(.dismissError, routeIndex: routeIndex)
+                    }
+                }
             case nil:
                 EmptyView()
             }
@@ -3852,6 +3859,8 @@ public struct AppCoordinatorView: View {
             case let .backupImportError(_, message):
                 Text(message)
             case let .backupExportNotice(_, message):
+                Text(message)
+            case let .downloadsError(_, message):
                 Text(message)
             case nil:
                 EmptyView()
@@ -3876,17 +3885,55 @@ public struct AppCoordinatorView: View {
             switch confirmationDialogContext {
             case .playlistDeletion:
                 Button(AppStrings.Common.delete, role: .destructive) {
-                    confirmActiveConfirmation()
+                    performConfirmationDialogButtonAction {
+                        confirmActiveConfirmation()
+                    }
                 }
                 Button(AppStrings.Common.cancel, role: .cancel) {
-                    cancelActiveConfirmation()
+                    performConfirmationDialogButtonAction {
+                        cancelActiveConfirmation()
+                    }
                 }
             case let .hideSelectedChannels(_, selectedCount):
                 Button("\(selectedCount) Kanalı Gizle", role: .destructive) {
-                    confirmActiveConfirmation()
+                    performConfirmationDialogButtonAction {
+                        confirmActiveConfirmation()
+                    }
                 }
                 Button("İptal", role: .cancel) {
-                    cancelActiveConfirmation()
+                    performConfirmationDialogButtonAction {
+                        cancelActiveConfirmation()
+                    }
+                }
+            case let .downloadsClearCompleted(_, isDeletionInProgress):
+                Button(AppStrings.Downloads.clearCompleted, role: .destructive) {
+                    performConfirmationDialogButtonAction {
+                        confirmActiveConfirmation()
+                    }
+                }
+                .disabled(isDeletionInProgress)
+                #if os(iOS)
+                .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
+                #endif
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    performConfirmationDialogButtonAction {
+                        cancelActiveConfirmation()
+                    }
+                }
+            case let .downloadsDelete(_, _, isDeletionInProgress):
+                Button(AppStrings.Common.delete, role: .destructive) {
+                    performConfirmationDialogButtonAction {
+                        confirmActiveConfirmation()
+                    }
+                }
+                .disabled(isDeletionInProgress)
+                #if os(iOS)
+                .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
+                #endif
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    performConfirmationDialogButtonAction {
+                        cancelActiveConfirmation()
+                    }
                 }
             case nil:
                 EmptyView()
@@ -3898,6 +3945,10 @@ public struct AppCoordinatorView: View {
                 Text("\"\(name)\" çalma listesini silmek istediğinize emin misiniz?")
             case .hideSelectedChannels:
                 Text("Seçili kanallar görünür listelerden kaldırılacak. Ayarlar > Gizlenen İçerikler bölümünden kanalları geri alabilirsiniz.")
+            case .downloadsClearCompleted:
+                Text(AppStrings.Downloads.clearCompletedMessage)
+            case let .downloadsDelete(_, item, _):
+                Text(AppStrings.Downloads.deleteDownloadMessage(item.title))
             case nil:
                 EmptyView()
             }
@@ -3907,6 +3958,8 @@ public struct AppCoordinatorView: View {
     private enum ConfirmationDialogContext {
         case playlistDeletion(routeIndex: Int, playlist: SavedPlaylist)
         case hideSelectedChannels(routeIndex: Int, selectedCount: Int)
+        case downloadsClearCompleted(routeIndex: Int, isDeletionInProgress: Bool)
+        case downloadsDelete(routeIndex: Int, item: OfflineMediaSnapshot, isDeletionInProgress: Bool)
 
         var title: String {
             switch self {
@@ -3914,6 +3967,10 @@ public struct AppCoordinatorView: View {
                 AppStrings.Common.delete
             case .hideSelectedChannels:
                 "Seçili Kanalları Gizle"
+            case .downloadsClearCompleted:
+                AppStrings.Downloads.clearCompletedTitle
+            case .downloadsDelete:
+                AppStrings.Downloads.deleteDownloadTitle
             }
         }
     }
@@ -3927,6 +3984,7 @@ public struct AppCoordinatorView: View {
         case recommendationHistoryResetSuccess(routeIndex: Int)
         case backupImportError(routeIndex: Int, message: String)
         case backupExportNotice(routeIndex: Int, message: String)
+        case downloadsError(routeIndex: Int, message: String)
 
         var title: String {
             switch self {
@@ -3942,6 +4000,8 @@ public struct AppCoordinatorView: View {
                 "Öneri geçmişi sıfırlandı"
             case .backupImportError, .backupExportNotice:
                 "PureIPTV Bildirimi"
+            case .downloadsError:
+                AppStrings.Downloads.title
             }
         }
     }
@@ -3991,6 +4051,13 @@ public struct AppCoordinatorView: View {
            let message = state.settings.backupExportAlertMessage
         {
             return .backupExportNotice(routeIndex: routeIndex, message: message)
+        }
+        if let routeIndex = store.routes.indices.last,
+           case let .home(state) = store.routes[routeIndex].screen,
+           state.selectedTab == .downloads,
+           let message = state.downloads.errorMessage
+        {
+            return .downloadsError(routeIndex: routeIndex, message: message)
         }
         return nil
     }
@@ -4100,6 +4167,8 @@ public struct AppCoordinatorView: View {
                     sendSettingsAlertAction(.backupImportAlertDismissed, routeIndex: routeIndex)
                 case let .backupExportNotice(routeIndex, _):
                     sendSettingsAlertAction(.backupExportAlertDismissed, routeIndex: routeIndex)
+                case let .downloadsError(routeIndex, _):
+                    sendDownloadsAction(.dismissError, routeIndex: routeIndex)
                 }
             }
         )
@@ -4141,6 +4210,32 @@ public struct AppCoordinatorView: View {
         if let context = hideSelectedChannelsContext {
             return .hideSelectedChannels(routeIndex: context.routeIndex, selectedCount: context.selectedCount)
         }
+        if let context = downloadsConfirmationContext {
+            return context
+        }
+        return nil
+    }
+
+    private var downloadsConfirmationContext: ConfirmationDialogContext? {
+        guard let routeIndex = store.routes.indices.last,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .downloads
+        else { return nil }
+        let downloads = state.downloads
+        let isDeletionInProgress = downloads.isClearingCompleted || !downloads.deletingDownloadIDs.isEmpty
+        if downloads.isConfirmingClearCompleted {
+            return .downloadsClearCompleted(
+                routeIndex: routeIndex,
+                isDeletionInProgress: isDeletionInProgress
+            )
+        }
+        if let item = downloads.pendingDeleteItem {
+            return .downloadsDelete(
+                routeIndex: routeIndex,
+                item: item,
+                isDeletionInProgress: isDeletionInProgress
+            )
+        }
         return nil
     }
 
@@ -4149,10 +4244,19 @@ public struct AppCoordinatorView: View {
             get: { confirmationDialogContext != nil },
             set: { isPresented in
                 if !isPresented {
+                    if confirmationDialogButtonActionPending {
+                        confirmationDialogButtonActionPending = false
+                        return
+                    }
                     cancelActiveConfirmation()
                 }
             }
         )
+    }
+
+    private func performConfirmationDialogButtonAction(_ action: () -> Void) {
+        confirmationDialogButtonActionPending = true
+        action()
     }
 
     private func sendRememberedPlaybackChoiceAction(
@@ -4182,12 +4286,28 @@ public struct AppCoordinatorView: View {
         )))
     }
 
+    private func sendDownloadsAction(_ action: DownloadsFeature.Action, routeIndex: Int) {
+        guard store.routes.indices.contains(routeIndex),
+              routeIndex == store.routes.count - 1,
+              case let .home(state) = store.routes[routeIndex].screen,
+              state.selectedTab == .downloads
+        else { return }
+        store.send(.router(.routeAction(
+            id: routeIndex,
+            action: .home(.downloads(action))
+        )))
+    }
+
     private func confirmActiveConfirmation() {
         switch confirmationDialogContext {
         case .playlistDeletion:
             sendPlaylistDeletionAction(.deletePlaylistConfirmed)
         case let .hideSelectedChannels(routeIndex, _):
             sendHideSelectedChannelsAction(.hideSelectedChannels, routeIndex: routeIndex)
+        case let .downloadsClearCompleted(routeIndex, _):
+            sendDownloadsAction(.clearCompletedConfirmed, routeIndex: routeIndex)
+        case let .downloadsDelete(routeIndex, _, _):
+            sendDownloadsAction(.deleteDownloadConfirmed, routeIndex: routeIndex)
         case nil:
             return
         }
@@ -4199,6 +4319,10 @@ public struct AppCoordinatorView: View {
             sendPlaylistDeletionAction(.cancelDeletePlaylist)
         case let .hideSelectedChannels(routeIndex, _):
             sendHideSelectedChannelsAction(.cancelHideSelectedChannelsConfirmation, routeIndex: routeIndex)
+        case let .downloadsClearCompleted(routeIndex, _):
+            sendDownloadsAction(.clearCompletedCancelled, routeIndex: routeIndex)
+        case let .downloadsDelete(routeIndex, _, _):
+            sendDownloadsAction(.deleteDownloadCancelled, routeIndex: routeIndex)
         case nil:
             return
         }
