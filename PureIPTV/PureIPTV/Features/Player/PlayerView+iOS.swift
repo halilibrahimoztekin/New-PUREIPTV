@@ -370,19 +370,9 @@
                                             Label(store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer, systemImage: "moon.stars")
                                         }
 
-                                        // 5. External Player Launcher & Share
+                                        // 5. Share stream link
                                         if store.item.config?.type != .plex, store.item.config?.type != .emby {
                                             Menu {
-                                                ForEach(ExternalPlayer.allCases) { player in
-                                                    Button {
-                                                        store.send(.openInExternalPlayer(player))
-                                                    } label: {
-                                                        Label(player.rawValue, systemImage: player.iconName)
-                                                    }
-                                                }
-
-                                                Divider()
-
                                                 ShareLink(
                                                     item: store.item.streamURL,
                                                     subject: Text(store.item.title),
@@ -398,7 +388,7 @@
                                                     Label("Bağlantıyı Kopyala", systemImage: "doc.on.doc")
                                                 }
                                             } label: {
-                                                Label(AppStrings.Player.openInExternalPlayer, systemImage: "arrow.up.right.video")
+                                                Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
                                             }
                                         }
 

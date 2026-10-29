@@ -1953,6 +1953,10 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 - **Denetim kaydı:** `TVOS_FOCUS_AUDIT.md` ana ekranların ilk statik incelemesini, doğrulanmış davranış hatalarını, geometri risklerini ve devam sırasını içeriyor. Backlog’da 5’ten fazla pending madde bulunduğundan workflow’un yeni pazar keşfi koşulu tetiklenmedi. EPG’nin yerel cover’ı ile koordinatör oynatıcısının farklı sunum sahipliği ayrıca araştırılacak; kullanıcının bildirdiği kapanıp açılmanın cihazda giderildiği henüz iddia edilmiyor.
 - **Durum:** `[DONE]` — Bu EPG düzeltme grubu onaylandı, derlendi ve temizlendi. Genel UI/UX/focus hedefi açık; rapordaki kalan bulgular sırayla ele alınacak.
 
+### 202. [DONE] Harici Medya Oynatıcı (External Player) Yönlendirmelerinin Kaldırılması
+
+* Player’daki VLC/Infuse/Outplayer açma akışları, URL-scheme yönlendiricisi ve uygulama sorgu izinleri kaldırıldı. Genel ShareLink/bağlantı kopyalama araçları ve uygulama içi VLC/AVPlayer engine preference davranışı korundu; legacy `external:` tercih değerleri temizleniyor. Reviewer `[APPROVED]`; Swift parse, Info.plist ve string catalog doğrulamaları başarılı.
+
 ### 212. [IN_PROGRESS] Her Görev Sonrası Türetilmiş Verilerin Güvenli Temizliği
 
 * **Kullanıcı talimatı:** Her görev sonunda yalnız o görevde üretildiği doğrulanabilen geçici ve normal Xcode DerivedData/build çıktıları, wrapper’lar ve loglar temizlenecek. Silmeden önce kesin yolların açık handle durumu kontrol edilecek; boyut kaydedilecek, silme sonrası yokluk doğrulanacak.
@@ -2043,3 +2047,4 @@ Bu dosya, tam otonom iOS & tvOS IPTV mühendislik ekibinin (Analyst, Principal D
 * **2026-10-29 Settings backup importer commit helper temizliği:** `/private/tmp/PureIPTV-SettingsBackupImporterRouteCommit-20261029` **556 KiB** ölçüldü; `lsof +D` açık handle bulmadıktan sonra silindi ve yokluğu doğrulandı.
 * **2026-10-29 Downloads root presentations temizliği:** Xcode build/test çalıştırılmadığından görev yeni DerivedData, ModuleCache, `.xcresult` veya build logu üretmedi. Case-insensitive prune kullanan `/private/tmp` taramasında DerivedData/ModuleCache/SourcePackages/Logs/Build adayı yoktu; normal PureIPTV DerivedData’da da bu görev kaynaklı build çıktısı oluşmadı. Paylaşılan cache’ler korundu.
 * **2026-10-29 Eski Xcode sonuç paketleri temizliği:** `/private/var/folders/69/bv3tn2mn09x512r248h8clb80000gn/T` içindeki 25–28 Ekim tarihli 76 eski `ResultBundle_*.xcresult` paketi toplam **2,260 KiB** idi. Her paket için açık handle kontrolü yapıldı; hiçbiri kullanımda değildi. Paketler silindi ve son case-insensitive prune taramasında sonuç paketi kalmadığı doğrulandı.
+* **2026-10-29 External Player yönlendirmeleri temizliği:** Kod değişikliği yalnız Swift parser ile doğrulandığından yeni DerivedData, ModuleCache, `.xcresult` veya build logu oluşmadı. Case-insensitive prune kullanan `/private/tmp` ve Xcode temp taramalarında DerivedData/Build/ModuleCache/`.xcresult` adayı kalmadı; normal PureIPTV DerivedData ve ortak cache’lere dokunulmadı.

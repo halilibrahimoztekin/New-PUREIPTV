@@ -813,8 +813,6 @@ public struct PlayerFeature {
         case playNextEpisode
         case upNextCountdownTick
 
-        /// External Player (Madde #86)
-        case openInExternalPlayer(ExternalPlayer)
         case applyRememberedPlaybackChoice
         case dismissRememberedPlaybackChoice
         case forgetRememberedPlaybackChoice
@@ -1157,22 +1155,10 @@ public struct PlayerFeature {
             return
         }
 
-        if let engine = reminder.choice.playbackEngine {
-            guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
-                state.rememberedPlaybackChoice = nil
-                return
-            }
-        } else {
-            #if os(iOS)
-                guard state.item.config?.type != .plex,
-                      state.item.config?.type != .emby else {
-                    state.rememberedPlaybackChoice = nil
-                    return
-                }
-            #else
-                state.rememberedPlaybackChoice = nil
-                return
-            #endif
+        let engine = reminder.choice.playbackEngine
+        guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
+            state.rememberedPlaybackChoice = nil
+            return
         }
 
         state.rememberedPlaybackChoice = reminder
@@ -5422,32 +5408,6 @@ public struct PlayerFeature {
         case .upNextCountdownTick:
             return .none
 
-        case let .openInExternalPlayer(player):
-            guard state.item.config?.type != .plex, state.item.config?.type != .emby else { return .none }
-            #if canImport(UIKit)
-                let manager = ExternalPlayerManager.shared
-                let isInstalled = manager.isInstalled(player)
-                let result = manager.openStream(state.activePlaybackURL, in: player)
-                let profileID = profileContextClient.snapshot().profileID
-                if let scopeKey = PlaybackChoicePreferenceStore.scopeKey(
-                    item: state.item,
-                    playbackURL: state.activePlaybackURL,
-                    profileID: profileID
-                ) {
-                    state.dismissedRememberedPlaybackChoiceScopeKeys.insert(scopeKey)
-                }
-                if isInstalled, case .opened = result {
-                    PlaybackChoicePreferenceStore.save(
-                        .external(player),
-                        item: state.item,
-                        playbackURL: state.activePlaybackURL,
-                        profileID: profileID
-                    )
-                }
-                state.rememberedPlaybackChoice = nil
-            #endif
-            return .none
-
         case .applyRememberedPlaybackChoice:
             guard let reminder = state.rememberedPlaybackChoice,
                   PlaybackChoicePreferenceStore.scopeKey(
@@ -5459,33 +5419,12 @@ public struct PlayerFeature {
                 return .none
             }
 
-            if let engine = reminder.choice.playbackEngine {
-                guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
-                    state.rememberedPlaybackChoice = nil
-                    return .none
-                }
-                return .send(.switchPlaybackEngine(engine))
+            let engine = reminder.choice.playbackEngine
+            guard state.canSwitchPlaybackEngine, engine != state.playbackEngine else {
+                state.rememberedPlaybackChoice = nil
+                return .none
             }
-
-            #if os(iOS)
-                guard state.item.config?.type != .plex,
-                      state.item.config?.type != .emby,
-                      let player = reminder.choice.externalPlayer
-                else {
-                    state.rememberedPlaybackChoice = nil
-                    return .none
-                }
-                let manager = ExternalPlayerManager.shared
-                let isInstalled = manager.isInstalled(player)
-                let result = manager.openStream(state.activePlaybackURL, in: player)
-                guard isInstalled, case .opened = result else { return .none }
-                state.dismissedRememberedPlaybackChoiceScopeKeys.insert(reminder.scopeKey)
-                state.rememberedPlaybackChoice = nil
-                return .none
-            #else
-                state.rememberedPlaybackChoice = nil
-                return .none
-            #endif
+            return .send(.switchPlaybackEngine(engine))
 
         case .dismissRememberedPlaybackChoice:
             if let reminder = state.rememberedPlaybackChoice {

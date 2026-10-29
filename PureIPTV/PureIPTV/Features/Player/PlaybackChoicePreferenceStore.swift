@@ -3,25 +3,18 @@ import Foundation
 enum RememberedPlaybackChoice: String, Equatable, Sendable {
     case inAppVLC = "in-app:vlc"
     case inAppAVPlayer = "in-app:avplayer"
-    case externalVLC = "external:vlc"
-    case externalInfuse = "external:infuse"
-    case externalOutplayer = "external:outplayer"
 
     var title: String {
         switch self {
         case .inAppVLC: "VLC"
         case .inAppAVPlayer: "AVPlayer"
-        case .externalVLC: "VLC Media Player"
-        case .externalInfuse: "Infuse"
-        case .externalOutplayer: "Outplayer"
         }
     }
 
-    var playbackEngine: PlaybackEngine? {
+    var playbackEngine: PlaybackEngine {
         switch self {
         case .inAppVLC: .vlc
         case .inAppAVPlayer: .avPlayer
-        case .externalVLC, .externalInfuse, .externalOutplayer: nil
         }
     }
 
@@ -32,24 +25,6 @@ enum RememberedPlaybackChoice: String, Equatable, Sendable {
         }
     }
 
-    #if canImport(UIKit)
-        var externalPlayer: ExternalPlayer? {
-            switch self {
-            case .externalVLC: .vlc
-            case .externalInfuse: .infuse
-            case .externalOutplayer: .outplayer
-            case .inAppVLC, .inAppAVPlayer: nil
-            }
-        }
-
-        static func external(_ player: ExternalPlayer) -> Self {
-            switch player {
-            case .vlc: .externalVLC
-            case .infuse: .externalInfuse
-            case .outplayer: .externalOutplayer
-            }
-        }
-    #endif
 }
 
 struct PlaybackChoiceReminder: Equatable, Sendable {
@@ -59,22 +34,28 @@ struct PlaybackChoiceReminder: Equatable, Sendable {
 
 enum PlaybackChoicePreferenceStore {
     private static let keyPrefix = "com.pureiptv.playbackChoice.v1"
+    private static let legacyExternalChoicesCleanup: Void = {
+        let defaults = UserDefaults.standard
+        let scopedPrefix = "\(keyPrefix)."
+        for (key, value) in defaults.dictionaryRepresentation()
+        where key.hasPrefix(scopedPrefix) && (value as? String)?.hasPrefix("external:") == true {
+            defaults.removeObject(forKey: key)
+        }
+    }()
 
     static func load(
         item: PlayerFeature.PlayableItem,
         playbackURL: URL,
         profileID: UUID?
     ) -> PlaybackChoiceReminder? {
+        _ = legacyExternalChoicesCleanup
         guard let scopeKey = scopeKey(
             item: item,
             playbackURL: playbackURL,
             profileID: profileID
-        ),
-            let rawValue = UserDefaults.standard.string(forKey: scopeKey),
-            let choice = RememberedPlaybackChoice(rawValue: rawValue)
-        else {
-            return nil
-        }
+        ), let rawValue = UserDefaults.standard.string(forKey: scopeKey) else { return nil }
+
+        guard let choice = RememberedPlaybackChoice(rawValue: rawValue) else { return nil }
 
         return PlaybackChoiceReminder(choice: choice, scopeKey: scopeKey)
     }

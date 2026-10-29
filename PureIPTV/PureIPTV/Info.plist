@@ -15,14 +15,6 @@
 	<array>
 		<string>com.pureiptv.stream-handoff</string>
 	</array>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>vlc</string>
-		<string>vlc-x-callback</string>
-		<string>infuse</string>
-		<string>outplayer</string>
-		<string>iina</string>
-	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
