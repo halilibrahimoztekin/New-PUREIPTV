@@ -147,7 +147,7 @@ public struct PlayerEPGTimelineView: View {
                                 PlayerEPGTimelineCard(program: program, currentTime: currentTime, hasArchive: hasArchive)
                             }
                             #if os(tvOS)
-                            .buttonStyle(.card)
+                            .tvFocusEffect()
                             #else
                             .buttonStyle(.plain)
                             #endif
@@ -204,7 +204,7 @@ public struct PlayerEPGTimelineView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.accentColor : Color.white.opacity(0.12), lineWidth: 1))
                     }
                     #if os(tvOS)
-                    .buttonStyle(.card)
+                    .tvFocusEffect()
                     .focused($focusedTarget, equals: .channel(channel.id))
                     #else
                     .buttonStyle(.plain)

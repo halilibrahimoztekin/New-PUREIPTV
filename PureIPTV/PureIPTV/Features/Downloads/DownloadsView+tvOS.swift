@@ -401,7 +401,7 @@ import SwiftUI
                     } label: {
                         completedCardContent(item)
                     }
-                    .buttonStyle(.card)
+                    .tvFocusEffect()
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(item.title)
                     .accessibilityValue(

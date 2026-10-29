@@ -498,7 +498,7 @@
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                     }
-                                    .buttonStyle(.card)
+                                    .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
                                     .id(credit.id)
                                     .focused($focusedTarget, equals: .result(credit.id))
                                     .accessibilityFocused($accessibilityFocusedTarget, equals: .result(credit.id))

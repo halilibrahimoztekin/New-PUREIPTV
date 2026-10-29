@@ -237,7 +237,7 @@ public struct EpisodeCardView: View {
             )
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect()
         #else
         .buttonStyle(.fluidScale)
         #endif
@@ -359,7 +359,7 @@ public struct EpisodeCardView: View {
             }
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect()
         #else
         .buttonStyle(.fluidScale)
         #endif

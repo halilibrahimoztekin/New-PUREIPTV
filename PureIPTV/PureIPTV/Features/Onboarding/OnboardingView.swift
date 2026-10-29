@@ -98,7 +98,7 @@ public struct OnboardingView: View {
                             .buttonStyle(FluidScaleButtonStyle())
                             .padding(.horizontal, 40)
                             #else
-                            .buttonStyle(.card)
+                            .tvFocusEffect()
                             .frame(width: 400)
                             #endif
                         }
@@ -144,7 +144,7 @@ public struct OnboardingView: View {
                     #endif
                 }
                 #if os(tvOS)
-                .buttonStyle(.card)
+                .tvFocusEffect()
                 #endif
                 .padding(.top, 32)
             }

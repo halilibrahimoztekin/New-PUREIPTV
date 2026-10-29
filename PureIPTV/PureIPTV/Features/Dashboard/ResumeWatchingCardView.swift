@@ -215,7 +215,7 @@ public struct ResumeWatchingCardView: View {
             }
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect()
         #else
         .buttonStyle(.fluidScale)
         #endif

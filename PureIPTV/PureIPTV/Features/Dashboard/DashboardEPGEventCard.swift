@@ -61,7 +61,7 @@ struct DashboardEPGEventCard: View {
             }
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
         #else
         .buttonStyle(.plain)
         #endif

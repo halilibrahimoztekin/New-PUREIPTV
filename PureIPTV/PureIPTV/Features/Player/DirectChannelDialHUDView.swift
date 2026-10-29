@@ -226,7 +226,7 @@ public struct DirectChannelDialHUDView: View {
                         )
                     }
                     #if os(tvOS)
-                    .buttonStyle(.card)
+                    .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 10))
                     #else
                     .buttonStyle(.plain)
                     #endif

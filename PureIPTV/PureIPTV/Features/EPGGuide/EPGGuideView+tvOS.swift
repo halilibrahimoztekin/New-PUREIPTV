@@ -420,7 +420,7 @@ import SwiftVLC
                         .padding(.vertical, 12)
                         .background(Color(hex: "#0A84FF"), in: Capsule())
                     }
-                    .buttonStyle(.card)
+                    .tvFocusEffect(shape: .capsule)
                     .focused($isScheduleWatchButtonFocused)
 
                     // Close Button

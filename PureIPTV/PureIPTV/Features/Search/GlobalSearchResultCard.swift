@@ -399,7 +399,7 @@ public struct ProgramSearchResultCard: View {
             }
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect()
         #else
         .buttonStyle(.plain)
         #endif

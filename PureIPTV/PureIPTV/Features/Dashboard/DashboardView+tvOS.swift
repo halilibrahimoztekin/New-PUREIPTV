@@ -363,7 +363,7 @@
                                 }
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.card)
+                            .tvFocusEffect()
                             .accessibilityLabel(Text(actor.name))
                         }
                     }
@@ -668,7 +668,7 @@
                     .padding(60)
                 }
             }
-            .buttonStyle(.card)
+            .tvFocusEffect()
         }
     }
 
@@ -761,7 +761,7 @@
                     }
                 }
             }
-            .buttonStyle(.card)
+            .tvFocusEffect()
         }
     }
 

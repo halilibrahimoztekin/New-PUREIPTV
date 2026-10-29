@@ -1775,7 +1775,7 @@ public struct EPGTimelineView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
-                    .buttonStyle(.card)
+                    .tvFocusEffect(shape: .capsule)
                 #endif
             }
         }

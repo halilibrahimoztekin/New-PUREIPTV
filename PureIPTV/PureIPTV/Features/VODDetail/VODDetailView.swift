@@ -189,7 +189,7 @@ struct VODActorBiographyContent: View {
                     }
 
                     Button(AppStrings.Common.close, action: close)
-                        .buttonStyle(.card)
+                        .tvFocusEffect(shape: .capsule)
                         .padding(.top, 16)
                 }
                 .frame(maxWidth: 600, alignment: .leading)
@@ -475,7 +475,7 @@ struct VODUnmatchedMovieRouteContent: View {
                     }
 
                     Button(AppStrings.Common.close, action: close)
-                        .buttonStyle(.card)
+                        .tvFocusEffect(shape: .capsule)
                         .padding(.top, 16)
                 }
                 .frame(maxWidth: 600, alignment: .leading)
@@ -1565,7 +1565,7 @@ public struct VODDetailView: View {
                                                     }
                                                     .padding(6)
                                                 }
-                                                .buttonStyle(.card)
+                                                .tvFocusEffect()
                                             }
                                         }
                                     }
@@ -1652,7 +1652,7 @@ public struct VODDetailView: View {
                                                     }
                                                     .padding(6)
                                                 }
-                                                .buttonStyle(.card)
+                                                .tvFocusEffect()
                                             }
                                         }
                                     }

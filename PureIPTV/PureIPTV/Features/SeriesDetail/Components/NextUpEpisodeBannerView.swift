@@ -204,7 +204,7 @@ public struct NextUpEpisodeBannerView: View {
             .shadow(color: Color.black.opacity(0.45), radius: 10, y: 4)
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
         #else
         .buttonStyle(.fluidScale)
         #endif

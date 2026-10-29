@@ -1,6 +1,64 @@
 #if os(tvOS)
     import SwiftUI
 
+    enum TVFocusShape {
+        case roundedRectangle(cornerRadius: CGFloat)
+        case capsule
+        case circle
+    }
+
+    extension View {
+        func tvFocusEffect(
+            shape: TVFocusShape = .roundedRectangle(cornerRadius: 14),
+            accentColor: Color = Color(hex: "#0A84FF")
+        ) -> some View {
+            buttonStyle(.plain)
+                .focusEffectDisabled()
+                .modifier(TVFocusEffectModifier(shape: shape, accentColor: accentColor))
+        }
+    }
+
+    private struct TVFocusEffectModifier: ViewModifier {
+        let shape: TVFocusShape
+        let accentColor: Color
+
+        @Environment(\.isFocused) private var isFocused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        func body(content: Content) -> some View {
+            content
+                .scaleEffect(isFocused ? 1.035 : 1)
+                .overlay {
+                    focusOutline
+                }
+                .shadow(
+                    color: accentColor.opacity(isFocused ? 0.32 : 0),
+                    radius: isFocused ? 12 : 0,
+                    x: 0,
+                    y: isFocused ? 4 : 0
+                )
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
+                    value: isFocused
+                )
+        }
+
+        @ViewBuilder
+        private var focusOutline: some View {
+            let color = isFocused ? accentColor.opacity(0.9) : Color.clear
+
+            switch shape {
+            case let .roundedRectangle(cornerRadius):
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(color, lineWidth: 2)
+            case .capsule:
+                Capsule().stroke(color, lineWidth: 2)
+            case .circle:
+                Circle().stroke(color, lineWidth: 2)
+            }
+        }
+    }
+
     // MARK: - TV Grid Card Button Style (For Media Posters, Channels, VODs, Series)
 
     public struct TVGridCardButtonStyle: ButtonStyle {

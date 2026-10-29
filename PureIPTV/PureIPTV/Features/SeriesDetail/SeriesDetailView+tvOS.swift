@@ -706,7 +706,7 @@
                 }
                 .padding(12)
             }
-            .buttonStyle(.card)
+            .tvFocusEffect()
             .focused($focusedEpisodeID, equals: episode.id)
             .contextMenu {
                 if isWatched {

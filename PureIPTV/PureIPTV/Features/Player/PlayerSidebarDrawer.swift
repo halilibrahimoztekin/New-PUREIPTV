@@ -489,7 +489,7 @@ public struct PlayerSidebarDrawer: View {
                 .foregroundStyle(.white)
             }
             #if os(tvOS)
-            .buttonStyle(.card)
+            .tvFocusEffect()
             #else
             .buttonStyle(.plain)
             #endif
@@ -698,7 +698,7 @@ public struct PlayerSidebarDrawer: View {
             )
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .tvFocusEffect()
         #else
         .buttonStyle(.plain)
         #endif

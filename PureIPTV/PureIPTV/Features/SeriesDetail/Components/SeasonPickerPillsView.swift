@@ -64,7 +64,7 @@ public struct SeasonPickerPillsView: View {
                             .shadow(color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear, radius: 4, y: 2)
                         }
                         #if os(tvOS)
-                        .buttonStyle(.card)
+                        .tvFocusEffect(shape: .capsule)
                         #else
                         .buttonStyle(.plain)
                         #endif

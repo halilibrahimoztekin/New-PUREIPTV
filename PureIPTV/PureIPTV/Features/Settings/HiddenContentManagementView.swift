@@ -205,7 +205,7 @@ public struct HiddenContentManagementView: View {
                 )
             }
             #if os(tvOS)
-            .buttonStyle(.card)
+            .tvFocusEffect(shape: .capsule)
             #else
             .buttonStyle(.plain)
             #endif
