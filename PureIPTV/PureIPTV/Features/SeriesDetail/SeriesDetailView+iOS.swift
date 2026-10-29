@@ -90,7 +90,7 @@
             ZStack(alignment: .bottom) {
                 // Background Blur
                 GeometryReader { proxy in
-                    let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
+                    let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
                         store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
                         store.series.coverURL?.absoluteString
 

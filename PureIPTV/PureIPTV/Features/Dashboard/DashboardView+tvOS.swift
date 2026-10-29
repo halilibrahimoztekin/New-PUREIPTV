@@ -611,20 +611,7 @@
         var body: some View {
             Button(action: onTap) {
                 ZStack(alignment: .bottomLeading) {
-                    if let url = vod.coverURL {
-                        KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
-                            .requestModifier { request in
-                                PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
-                            }
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 600)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(Color(hex: "#1F1F23"))
-                            .frame(height: 600)
-                    }
+                    DashboardHeroArtworkView(vod: vod, height: 600)
 
                     // Premium Gradient
                     LinearGradient(

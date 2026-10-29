@@ -630,20 +630,7 @@
         var body: some View {
             Button(action: onTap) {
                 ZStack(alignment: .bottomLeading) {
-                    // Poster/Backdrop
-                    if let url = vod.coverURL {
-                        PlaylistAsyncImage(url: url, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID) { phase in
-                            if let image = phase.image {
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            } else {
-                                Color(hex: "#0F0F13").shimmeringPlaceholder(isLoading: true)
-                            }
-                        }
-                        .frame(height: 520)
-                        .clipped()
-                    } else {
-                        Color(hex: "#0F0F13").frame(height: 520)
-                    }
+                    DashboardHeroArtworkView(vod: vod, height: 520)
 
                     // Premium Gradients for readability and fade
                     LinearGradient(
