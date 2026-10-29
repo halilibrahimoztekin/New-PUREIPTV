@@ -217,7 +217,7 @@
                                 // Primary Quick Actions + Consolidated Settings Menu
                                 HStack(spacing: 10) {
                                     // Live Channels Drawer Button (Zapping)
-                                    if store.playlist != nil {
+                                    if store.item.isLive, store.playlist != nil {
                                         Button(action: {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleChannelList, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -232,7 +232,7 @@
                                     }
 
                                     // EPG Quick Button (if program data is present)
-                                    if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
+                                    if store.item.isLive, store.item.epgChannelID != nil, !store.epgListings.isEmpty {
                                         Button(action: {
                                             HapticManager.shared.trigger(.light)
                                             store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -244,6 +244,22 @@
                                                 .background(store.isEPGVisible ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
                                                 .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                         }
+                                    }
+
+                                    // Audio and subtitle tracks are a primary playback control.
+                                    if !store.audioTracks.isEmpty || !store.subtitleTracks.isEmpty {
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                        } label: {
+                                            Image(systemName: "captions.bubble")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .frame(width: 38, height: 38)
+                                                .background(.ultraThinMaterial, in: Circle())
+                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                                        }
+                                        .accessibilityLabel(AppStrings.Player.tracks)
                                     }
 
                                     // PiP Button
@@ -281,38 +297,25 @@
                                     // AirPlay Route Picker (Native Video Route Picker)
                                     AirPlayButton(size: 38)
 
-                                    if store.canSwitchPlaybackEngine {
-                                        Menu {
-                                            ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                                Button {
-                                                    store.send(.switchPlaybackEngine(engine))
-                                                } label: {
-                                                    if engine == store.playbackEngine {
-                                                        Label(engine.title, systemImage: "checkmark")
-                                                    } else {
-                                                        Text(engine.title)
-                                                    }
-                                                }
-                                                .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
-                                            }
-                                        } label: {
-                                            Image(systemName: "cpu")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .frame(width: 38, height: 38)
-                                                .background(.ultraThinMaterial, in: Circle())
-                                        }
-                                        .accessibilityLabel("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)")
-                                    }
-
                                     // Consolidated Player Settings Menu
                                     Menu {
-                                        // 1. Tracks (Audio & Subtitles)
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        } label: {
-                                            Label(AppStrings.Player.tracks, systemImage: "captions.bubble")
+                                        if store.canSwitchPlaybackEngine {
+                                            Menu {
+                                                ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                                                    Button {
+                                                        store.send(.switchPlaybackEngine(engine))
+                                                    } label: {
+                                                        if engine == store.playbackEngine {
+                                                            Label(engine.title, systemImage: "checkmark")
+                                                        } else {
+                                                            Text(engine.title)
+                                                        }
+                                                    }
+                                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                                }
+                                            } label: {
+                                                Label("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)", systemImage: "cpu")
+                                            }
                                         }
 
                                         // 2. Playback Speed (VOD & Series)
@@ -440,6 +443,32 @@
                                         }
 
                                         if store.playbackEngine == .vlc {
+                                            Section(AppStrings.Player.audioSettings) {
+                                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
+                                                    Button {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setAudioDelay(adjustment == 0 ? 0 : store.audioDelay + adjustment))
+                                                    } label: {
+                                                        Text(adjustment == 0 ? AppStrings.Player.resetAudioDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if store.selectedSubtitleTrack != nil {
+                                            Section(AppStrings.Player.subtitleSync) {
+                                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
+                                                    Button {
+                                                        HapticManager.shared.trigger(.light)
+                                                        store.send(.setSubtitleDelay(adjustment == 0 ? 0 : store.subtitleDelay + adjustment))
+                                                    } label: {
+                                                        Text(adjustment == 0 ? AppStrings.Player.resetSubtitleDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if store.playbackEngine == .vlc {
                                             Menu {
                                                 ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
                                                     Button {
@@ -494,6 +523,7 @@
                                             .background(.ultraThinMaterial, in: Circle())
                                             .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                                     }
+                                    .accessibilityLabel(AppStrings.Common.more)
                                 }
                             }
 
@@ -1257,7 +1287,7 @@
                 }
 
                 // Up Next Episode Countdown Overlay (Madde #42 / #48)
-                if store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
+                if !store.item.isLive, store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
                     VStack {
                         Spacer()
                         HStack {

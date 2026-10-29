@@ -16,6 +16,7 @@ public enum AppStrings {
         public static let done = "Bitti".localized
         public static let edit = "Düzenle".localized
         public static let close = "Kapat".localized
+        public static let more = "Daha Fazla".localized
         public static let add = "Ekle".localized
         public static let create = "Oluştur".localized
         public static let watchNow = "Hemen İzle".localized
@@ -203,6 +204,8 @@ public enum AppStrings {
 
     public enum Player {
         public static let playbackEngine = "Oynatma Motoru".localized
+        public static let pausePlayback = "Duraklat".localized
+        public static let pictureInPicture = "Resim İçinde Resim".localized
         public static let rememberedPlaybackChoiceTitle = "Önceki Oynatıcı Seçimin".localized
         public static let forgetRememberedPlaybackChoice = "Bu Seçimi Unut".localized
         public static func rememberedPlaybackChoiceMessage(_ choice: String) -> String {
@@ -440,6 +443,7 @@ public enum AppStrings {
         }
 
         public static let audioSync = "Ses Senkronizasyonu".localized
+        public static let audioSettings = "Ses Ayarları".localized
         public static let resetAudioDelay = "Sesi Sıfırla".localized
         public static let lipSyncAdjustment = "Hassas Lip-Sync Ayarı".localized
         public static let audioSyncSubtitle = "Ses ve görüntü kaymasını 50ms adımlarla düzeltin".localized

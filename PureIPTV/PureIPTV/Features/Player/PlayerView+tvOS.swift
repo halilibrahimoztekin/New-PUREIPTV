@@ -414,7 +414,7 @@
                     }
 
                     // Up Next Episode Countdown Overlay (Madde #42 / #48)
-                    if store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
+                    if !store.item.isLive, store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
                         VStack {
                             Spacer()
                             HStack {
@@ -775,7 +775,7 @@
                             .clipShape(Capsule())
                         }
                         .buttonStyle(PlayerCapsuleButtonStyle())
-                    } else if store.item.epgChannelID != nil {
+                    } else if store.item.isLive {
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(Color.red)
@@ -806,46 +806,9 @@
                 Spacer()
                     .layoutPriority(2)
 
-                // Buttons Group (KSPlayer Style with Custom Smooth Glass Highlight)
+                // Compact transport controls, track selection, and contextual menus.
                 HStack(spacing: 18) {
-                    if store.item.isLive {
-                        Button {
-                            guard store.playerState == .playing,
-                                  !store.isRecordingStartPending,
-                                  !store.isRecordingStopPending
-                            else { return }
-                            onInteraction()
-                            store.send(.toggleRecordingTapped)
-                        } label: {
-                            Image(systemName: store.isRecording ? "stop.circle.fill" : "record.circle")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .accessibilityLabel(store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording)
-                    }
-
-                    // Last Channel Recall (Önceki Kanal)
-                    if let prev = store.previousChannel {
-                        Button {
-                            onInteraction()
-                            store.send(.recallLastChannel)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                    .font(.system(size: 22, weight: .semibold))
-                                Text(prev.title)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                        }
-                        .buttonStyle(PlayerCapsuleButtonStyle())
-                    }
-
-                    // Restart (Baştan Başlat)
-                    if store.totalTime > .zero || store.position > 0 || store.item.epgChannelID == nil {
+                    if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
                         Button {
                             onInteraction()
                             store.send(.restartPlayback)
@@ -856,17 +819,17 @@
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
-                    // Jump Backward
-                    Button {
-                        onInteraction()
-                        store.send(.jumpBackward)
-                    } label: {
-                        Image(systemName: "gobackward.15")
-                            .font(.system(size: 24, weight: .semibold))
+                    if !store.item.isLive || store.item.tvArchive == 1 {
+                        Button {
+                            onInteraction()
+                            store.send(.jumpBackward)
+                        } label: {
+                            Image(systemName: "gobackward.15")
+                                .font(.system(size: 24, weight: .semibold))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
-                    // Play / Pause
                     Button {
                         onInteraction()
                         if store.playerState == .playing {
@@ -879,140 +842,145 @@
                             .font(.system(size: 28, weight: .bold))
                     }
                     .buttonStyle(PlayerCircleButtonStyle(size: 64))
+                    .accessibilityLabel(store.playerState == .playing ? AppStrings.Player.pausePlayback : AppStrings.Common.play)
 
-                    // Jump Forward
-                    Button {
-                        onInteraction()
-                        store.send(.jumpForward)
-                    } label: {
-                        Image(systemName: "goforward.15")
-                            .font(.system(size: 24, weight: .semibold))
-                    }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
-
-                    // Audio Tracks
-                    if !store.audioTracks.isEmpty {
-                        Menu {
-                            ForEach(store.audioTracks) { track in
-                                let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
-                                Button {
-                                    onInteraction()
-                                    store.send(.selectAudioTrack(track))
-                                } label: {
-                                    HStack {
-                                        Text(formatted.titleWithFlag)
-                                        if store.selectedAudioTrack?.id == track.id {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-
-                            if store.playbackEngine == .vlc {
-                                Section("Ses İyileştirme & Ekolayzer") {
-                                    Button {
-                                        onInteraction()
-                                        store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                    } label: {
-                                        Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
-                                    }
-                                }
-
-                                Section(AppStrings.Player.audioSync) {
-                                    Button {
-                                        onInteraction()
-                                        store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                    } label: {
-                                        Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
-                                    }
-
-                                    Button("+500 ms") {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(store.audioDelay + 500))
-                                    }
-                                    Button("+250 ms") {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(store.audioDelay + 250))
-                                    }
-                                    Button(AppStrings.Player.resetAudioDelay) {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(0))
-                                    }
-                                    Button("-250 ms") {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(store.audioDelay - 250))
-                                    }
-                                    Button("-500 ms") {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(store.audioDelay - 500))
-                                    }
-                                }
-                            }
+                    if !store.item.isLive || store.item.tvArchive == 1 {
+                        Button {
+                            onInteraction()
+                            store.send(.jumpForward)
                         } label: {
-                            Image(systemName: "waveform.circle.fill")
-                                .font(.system(size: 26))
+                            Image(systemName: "goforward.15")
+                                .font(.system(size: 24, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
-                    // Subtitle Tracks
-                    if !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
+                    if !store.item.isLive {
+                        PlayerSkipMarkersControls(store: store, onInteraction: onInteraction)
+                    }
+
+                    if store.item.isLive {
                         Menu {
-                            Button {
-                                onInteraction()
-                                store.send(.selectSubtitleTrack(nil))
-                            } label: {
-                                HStack {
-                                    Text(AppStrings.Player.off)
-                                    if store.selectedSubtitleTrack == nil {
-                                        Image(systemName: "checkmark")
-                                    }
+                            if store.playerState == .playing {
+                                Button {
+                                    guard !store.isRecordingStartPending,
+                                          !store.isRecordingStopPending
+                                    else { return }
+                                    onInteraction()
+                                    store.send(.toggleRecordingTapped)
+                                } label: {
+                                    Label(
+                                        store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording,
+                                        systemImage: store.isRecording ? "stop.circle.fill" : "record.circle"
+                                    )
                                 }
                             }
 
-                            ForEach(store.subtitleTracks) { track in
-                                let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
+                            if let previousChannel = store.previousChannel {
                                 Button {
                                     onInteraction()
-                                    store.send(.selectSubtitleTrack(track))
+                                    store.send(.recallLastChannel)
                                 } label: {
-                                    HStack {
-                                        Text(formatted.titleWithFlag)
-                                        if store.selectedSubtitleTrack?.id == track.id {
-                                            Image(systemName: "checkmark")
+                                    Label(previousChannel.title, systemImage: "arrow.uturn.backward.circle")
+                                }
+                            }
+
+                            if store.playlist != nil {
+                                Button {
+                                    onInteraction()
+                                    store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                                } label: {
+                                    Label(AppStrings.LiveTV.channelsTitle, systemImage: "sidebar.leading")
+                                }
+                            }
+
+                            if store.item.epgChannelID != nil, !store.epgListings.isEmpty {
+                                Button {
+                                    onInteraction()
+                                    store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
+                                } label: {
+                                    Label(AppStrings.LiveTV.channelGuide, systemImage: "list.bullet.rectangle")
+                                }
+                            }
+
+                            Button {
+                                onInteraction()
+                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            } label: {
+                                Label(AppStrings.LiveTV.recentChannels, systemImage: "clock.arrow.circlepath")
+                            }
+
+                            if store.playlist != nil {
+                                Button {
+                                    onInteraction()
+                                    store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                } label: {
+                                    Label(AppStrings.Player.channelDialerTitle, systemImage: "number.square.fill")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .font(.system(size: 24))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(AppStrings.LiveTV.title)
+                    }
+
+                    if !store.audioTracks.isEmpty || !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
+                        Menu {
+                            if !store.audioTracks.isEmpty {
+                                Section(AppStrings.Player.audioTracks) {
+                                    ForEach(store.audioTracks) { track in
+                                        let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
+                                        Button {
+                                            onInteraction()
+                                            store.send(.selectAudioTrack(track))
+                                        } label: {
+                                            HStack {
+                                                Text(formatted.titleWithFlag)
+                                                if store.selectedAudioTrack?.id == track.id {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            if !store.item.isLive, store.playbackEngine == .vlc {
-                                Button(AppStrings.Player.subtitleOnlineSearch) {
-                                    onInteraction()
-                                    onSubtitleSearch()
-                                }
-                            }
+                            if !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
+                                Section(AppStrings.Player.subtitles) {
+                                    Button {
+                                        onInteraction()
+                                        store.send(.selectSubtitleTrack(nil))
+                                    } label: {
+                                        HStack {
+                                            Text(AppStrings.Player.off)
+                                            if store.selectedSubtitleTrack == nil {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
 
-                            if store.selectedSubtitleTrack != nil {
-                                Section(AppStrings.Player.subtitleSync) {
-                                    Button("+500 ms") {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay + 500))
+                                    ForEach(store.subtitleTracks) { track in
+                                        let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
+                                        Button {
+                                            onInteraction()
+                                            store.send(.selectSubtitleTrack(track))
+                                        } label: {
+                                            HStack {
+                                                Text(formatted.titleWithFlag)
+                                                if store.selectedSubtitleTrack?.id == track.id {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
+                                        }
                                     }
-                                    Button("+250 ms") {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay + 250))
-                                    }
-                                    Button(AppStrings.Player.resetSubtitleDelay) {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(0))
-                                    }
-                                    Button("-250 ms") {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay - 250))
-                                    }
-                                    Button("-500 ms") {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(store.subtitleDelay - 500))
+
+                                    if !store.item.isLive, store.playbackEngine == .vlc {
+                                        Button(AppStrings.Player.subtitleOnlineSearch) {
+                                            onInteraction()
+                                            onSubtitleSearch()
+                                        }
                                     }
                                 }
                             }
@@ -1021,239 +989,171 @@
                                 .font(.system(size: 26))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(AppStrings.Player.tracks)
                     }
 
-                    PlayerSkipMarkersControls(store: store, onInteraction: onInteraction)
+                    Menu {
+                        if !store.item.isLive {
+                            Section(AppStrings.Player.playbackSpeed) {
+                                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                                    Button {
+                                        onInteraction()
+                                        store.send(.setPlaybackRate(Float(speed)))
+                                    } label: {
+                                        HStack {
+                                            Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
+                                            if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                    // Playback Speed Menu (Madde #43 - VOD & Series)
-                    if store.item.epgChannelID == nil {
-                        Menu {
-                            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                        Section(AppStrings.Player.aspectRatioControl) {
+                            ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
                                 Button {
                                     onInteraction()
-                                    store.send(.setPlaybackRate(Float(speed)))
+                                    store.send(.setVideoAspectRatioMode(mode))
                                 } label: {
                                     HStack {
-                                        Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
-                                        if abs(Double(store.playbackRate) - speed) < 0.01 {
+                                        Text(mode.title)
+                                        if store.videoAspectRatioMode == mode {
                                             Image(systemName: "checkmark")
                                         }
                                     }
                                 }
                             }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "gauge.with.dots.needle.50percent")
-                                    .font(.system(size: 20))
-                                Text(String(format: "%.2gx", store.playbackRate))
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
                         }
-                        .buttonStyle(PlayerCapsuleButtonStyle())
-                    }
 
-                    // Aspect Ratio Menu (Madde #49 - Fit, Fill, Stretch, Zoom)
-                    Menu {
-                        ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
-                            Button {
-                                onInteraction()
-                                store.send(.setVideoAspectRatioMode(mode))
-                            } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    if store.videoAspectRatioMode == mode {
-                                        Image(systemName: "checkmark")
+                        if store.canSwitchPlaybackEngine {
+                            Section(AppStrings.Player.playbackEngine) {
+                                ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                                    Button {
+                                        guard !store.isSwitchingPlaybackEngine, engine != store.playbackEngine else { return }
+                                        onInteraction()
+                                        store.send(.switchPlaybackEngine(engine))
+                                    } label: {
+                                        if engine == store.playbackEngine {
+                                            Label(engine.title, systemImage: "checkmark")
+                                        } else {
+                                            Text(engine.title)
+                                        }
+                                    }
+                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                }
+                            }
+                        }
+
+                        if store.playbackEngine == .vlc {
+                            Section(AppStrings.Player.deinterlace) {
+                                ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                                    Button {
+                                        onInteraction()
+                                        store.send(.setDeinterlaceMode(mode))
+                                    } label: {
+                                        if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
+                                            Label(mode.title, systemImage: "checkmark")
+                                        } else {
+                                            Text(mode.title)
+                                        }
                                     }
                                 }
                             }
-                        }
-                    } label: {
-                        Image(systemName: store.videoAspectRatioMode.systemIcon)
-                            .font(.system(size: 24))
-                    }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
 
-                    // EPG Button (Live TV)
-                    if let _ = store.item.epgChannelID, !store.epgListings.isEmpty {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                        } label: {
-                            Image(systemName: "list.bullet.rectangle")
-                                .font(.system(size: 24))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Channels Sidebar Button (Live TV)
-                    if store.playlist != nil {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "sidebar.leading")
-                                .font(.system(size: 24))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Direct Channel Dialer Button (Madde #11 - Live TV)
-                    if store.item.isLive, store.playlist != nil {
-                        Button {
-                            onInteraction()
-                            store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "number.square.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isChannelDialerVisible ? Color(hex: "#FFD60A") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Recent Channels Carousel Dock Button (Live TV)
-                    if store.item.isLive {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    if store.canSwitchPlaybackEngine {
-                        Menu {
-                            ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                Button(engine.title) {
-                                    guard !store.isSwitchingPlaybackEngine, engine != store.playbackEngine else { return }
-                                    store.send(.switchPlaybackEngine(engine))
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "cpu")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .accessibilityLabel("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)")
-                    }
-
-                    if store.playbackEngine == .vlc {
-                        Menu {
-                            ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                            Section("Ses") {
                                 Button {
                                     onInteraction()
-                                    store.send(.setDeinterlaceMode(mode))
+                                    store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
                                 } label: {
-                                    if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
-                                        Label(mode.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(mode.title)
+                                    Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
+                                }
+
+                                Button {
+                                    onInteraction()
+                                    store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                } label: {
+                                    Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
+                                }
+
+                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
+                                    Button {
+                                        onInteraction()
+                                        store.send(.setAudioDelay(adjustment == 0 ? 0 : store.audioDelay + adjustment))
+                                    } label: {
+                                        Text(adjustment == 0 ? AppStrings.Player.resetAudioDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
                                     }
                                 }
                             }
-                        } label: {
-                            Image(systemName: "film.stack")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .accessibilityLabel("\(AppStrings.Player.deinterlace): \(store.isDeinterlaceModeKnown ? store.deinterlaceMode.title : AppStrings.Player.deinterlaceUnknownShort)")
-                    }
 
-                    // Audio Equalizer & Dialogue Enhancer Quick Button (Madde #14)
-                    if store.playbackEngine == .vlc {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "waveform.badge.magnifyingglass")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isAudioEQHUDVisible ? store.audioEQPreset.accentColor : (store.audioEQPreset == .flat ? .white : store.audioEQPreset.accentColor))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Catchup / Archive Timeline Scrubber (Feature #4)
-                    if store.playbackEngine == .vlc, store.item.tvArchive == 1 {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "calendar.badge.clock")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isCatchupTimelineVisible ? Color(hex: "#BF5AF2") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Stream Health & Buffer Gauge Button (Feature #3)
-                    if store.playbackEngine == .vlc {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "waveform.path.ecg")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isStreamHealthHUDVisible ? Color(hex: "#00F5D4") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Picture-in-Picture / Mini-Player Toggle (Madde #18)
-                    if store.playbackEngine == .vlc {
-                        Button {
-                            onInteraction()
-                            store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isPiPActive || store.isMinimized ? Color(hex: "#00D2FF") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Nerd Stats Technical Diagnostics Button (Madde #33)
-                    if store.playbackEngine == .vlc {
-                        Button {
-                            onInteraction()
-                            store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                        } label: {
-                            Image(systemName: "chart.xyaxis.line")
-                                .font(.system(size: 24))
-                                .foregroundStyle(store.isShowingStats ? Color(hex: "#00F5D4") : .white)
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    }
-
-                    // Sleep Timer Menu (Feature #6)
-                    Menu {
-                        Button(AppStrings.Player.sleepTimerDisabled) {
-                            onInteraction()
-                            store.send(.setSleepTimer(nil))
-                        }
-                        ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
-                            Button("\(mins) \(AppStrings.Common.minAbbr)") {
+                            Button {
                                 onInteraction()
-                                store.send(.setSleepTimer(mins))
+                                store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                            } label: {
+                                Label(AppStrings.Player.streamHealthTitle, systemImage: "waveform.path.ecg")
                             }
+
+                            Button {
+                                onInteraction()
+                                store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                            } label: {
+                                Label(AppStrings.Player.technicalDetails, systemImage: "chart.xyaxis.line")
+                            }
+
+                            Button {
+                                onInteraction()
+                                store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            } label: {
+                                Label(AppStrings.Player.pictureInPicture, systemImage: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
+                            }
+                        }
+
+                        if store.selectedSubtitleTrack != nil {
+                            Section(AppStrings.Player.subtitleSync) {
+                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
+                                    Button {
+                                        onInteraction()
+                                        store.send(.setSubtitleDelay(adjustment == 0 ? 0 : store.subtitleDelay + adjustment))
+                                    } label: {
+                                        Text(adjustment == 0 ? AppStrings.Player.resetSubtitleDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
+                                    }
+                                }
+                            }
+                        }
+
+                        if store.playbackEngine == .vlc, store.item.tvArchive == 1 {
+                            Button {
+                                onInteraction()
+                                store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            } label: {
+                                Label(AppStrings.Player.catchupTimelineTitle, systemImage: "calendar.badge.clock")
+                            }
+                        }
+
+                        Menu {
+                            Button(AppStrings.Player.sleepTimerDisabled) {
+                                onInteraction()
+                                store.send(.setSleepTimer(nil))
+                            }
+                            ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
+                                Button("\(mins) \(AppStrings.Common.minAbbr)") {
+                                    onInteraction()
+                                    store.send(.setSleepTimer(mins))
+                                }
+                            }
+                        } label: {
+                            Label(
+                                store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer,
+                                systemImage: "moon.stars"
+                            )
                         }
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: store.sleepTimerSeconds != nil ? "moon.stars.fill" : "moon.stars")
-                                .font(.system(size: 24))
-                            if let seconds = store.sleepTimerSeconds {
-                                Text("\(seconds / 60) \(AppStrings.Common.minAbbr)")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                        }
-                        .foregroundStyle(store.sleepTimerSeconds != nil ? Color(hex: "#BF5AF2") : .white)
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 24, weight: .semibold))
                     }
-                    .buttonStyle(PlayerCapsuleButtonStyle())
+                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    .accessibilityLabel(AppStrings.Common.more)
                 }
                 .modifier(HorizontalActionsScrollModifier())
             }
