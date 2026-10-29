@@ -20,9 +20,9 @@ enum PlaybackAudioSession {
                         // block on system audio work.
                         if session.category != .playback
                             || session.mode != .moviePlayback
-                            || session.routeSharingPolicy != .longFormAudio
+                            || session.routeSharingPolicy != .longFormVideo
                         {
-                            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
+                            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo)
                         }
                     }
                     try session.setActive(active)

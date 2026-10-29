@@ -6,6 +6,11 @@ import SwiftVLC
 final class AVPlayerPlaybackSession {
     let player = AVPlayer()
 
+    init() {
+        player.allowsExternalPlayback = true
+        player.usesExternalPlaybackWhileExternalScreenIsActive = true
+    }
+
     private var timeObserver: Any?
     private var playerObservation: NSKeyValueObservation?
     private var itemObservation: NSKeyValueObservation?
