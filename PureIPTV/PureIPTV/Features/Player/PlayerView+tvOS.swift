@@ -427,7 +427,7 @@
                                         store.send(.playNextEpisode)
                                     },
                                     onDismiss: {
-                                        store.send(.dismissUpNext)
+                                        dismissUpNextAndRestoreFocus()
                                     }
                                 )
                                 .padding(.trailing, 60)
@@ -564,7 +564,9 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isChannelDialerVisible {
+                if store.isUpNextVisible {
+                    dismissUpNextAndRestoreFocus()
+                } else if store.isChannelDialerVisible {
                     store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
                 } else if store.isAudioEQHUDVisible {
                     store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
@@ -663,6 +665,11 @@
             case .showControls:
                 showMask()
             }
+        }
+
+        private func dismissUpNextAndRestoreFocus() {
+            store.send(.dismissUpNext)
+            focusableField = isMaskShow ? .controller : .play
         }
 
         // MARK: - Controller View (KSPlayer Layout)
@@ -1415,6 +1422,19 @@
         private func handleMove(direction: MoveCommandDirection, duration: Double) {
             guard duration > 0 else { return }
 
+            let directionMultiplier: Double
+            switch direction {
+            case .left:
+                directionMultiplier = -1
+            case .right:
+                directionMultiplier = 1
+            case .up, .down:
+                // Vertical movement belongs to focus navigation, not the scrubber.
+                return
+            @unknown default:
+                return
+            }
+
             let now = Date()
             if now.timeIntervalSince(lastMoveTime) < 0.35 {
                 consecutiveMoveCount += 1
@@ -1434,14 +1454,7 @@
                 scrubValue = store.position
             }
 
-            switch direction {
-            case .left:
-                scrubValue = max(0.0, scrubValue - stepFraction)
-            case .right:
-                scrubValue = min(1.0, scrubValue + stepFraction)
-            default:
-                break
-            }
+            scrubValue = min(1.0, max(0.0, scrubValue + (stepFraction * directionMultiplier)))
             store.send(.requestScrubThumbnail(.seconds(duration * scrubValue)))
 
             // Debounce automatic seek after user pauses movement

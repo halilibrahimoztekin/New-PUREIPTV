@@ -36,17 +36,13 @@ Aktif indirme var ve tamamlanmış indirme yoksa boş ekran koşulu atlanıyor, 
 
 #198’in ek analizinde yeni indirme düğmelerinin iOS/iPadOS’a ait olduğu ve OfflineMedia’nın CloudKit dışında tutulduğu doğrulandı. tvOS’ta bu dal eski bir sürümden kalan URLSession görevinin geri yüklenmesiyle oluşabilir; yeni tvOS indirme başlatma özelliği bu düzeltmenin parçası değil.
 
-### PlayerView+tvOS.swift:1506, 1542, 1557 — scrubber dikey komutları (P1, açık)
+### PlayerView+tvOS.swift:1415 — scrubber dikey komutları (P1, düzeltildi)
 
-Her yön `handleMove` içine giriyor; up/down da scrubbing/thumbnail durumunu açıp 400 ms sonra mevcut konuma seek oluşturuyor. Kural: yön komutunu yalnız o kontrolün gerçekten işlediği yönde tüket.
+Önce: up/down hareketi `isScrubbing` durumunu başlatıyor, thumbnail isteği ve debounce sonrası seek üretiyordu. `handleMove` artık yalnız left/right için konum değiştiriyor; up/down hiçbir scrub durumu oluşturmadan dönüyor. `onMoveCommand` focus hedeflerini yeniden atamıyor. Bağımsız reviewer `[APPROVED]`; tvOS hedefli Swift parse ve `git diff --check` başarılı. Build ve Apple TV cihaz focus doğrulaması yapılmadı.
 
-Önce: `handleMove(direction)` tüm yönlerde → Öneri: yalnız left/right için scrub; up/down için komşu odak hedefini belirle ve seek üretme.
+### PlayerView+tvOS.swift:565 / UpNextCountdownOverlayView.swift — Up Next Geri işlemi (P1, düzeltildi)
 
-### PlayerView+tvOS.swift:566 / UpNextCountdownOverlayView.swift:123 — Up Next Geri işlemi (P1, açık)
-
-Kök `onExitCommand` zinciri `isUpNextVisible` durumunu ele almıyor; overlay’in de kendi çıkış handler’ı yok. Geri, overlay yerine kontrolleri veya oynatıcıyı kapatabiliyor. Kural: üstteki etkileşim katmanının Geri eylemi önce o katmanı kapatmalı.
-
-Önce: Up Next durumunu atlayan exit zinciri → Öneri: zincirde diğer oynatıcı/maske çıkışından önce `.dismissUpNext`.
+Önce: kök exit zinciri `isUpNextVisible` durumunu ele almıyor, kartta yerel Geri handler’ı yoktu. Overlay artık kendi `onExitCommand` yoluyla kapatılıyor; Cancel ve kök exit de aynı dismiss/focus-restore yolunu kullanıyor. Odağın görünür player kontrollerine (`controller` veya `play`) dönmesi sağlandı. Bağımsız reviewer `[APPROVED]`; tvOS/iOS Swift parse ve `git diff --check` başarılı. Build ve Apple TV cihaz focus doğrulaması yapılmadı.
 
 ### ProfileSelectionView+tvOS.swift:203, 231 — iç içe profil düğmeleri (P2, açık)
 

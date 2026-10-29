@@ -206,6 +206,9 @@ public struct UpNextCountdownOverlayView: View {
                 isPlayButtonFocused = true
             #endif
         }
+        #if os(tvOS)
+        .onExitCommand(perform: onDismiss)
+        #endif
     }
 
     private var fallbackThumbnail: some View {
