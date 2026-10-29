@@ -1870,33 +1870,6 @@ public struct AppCoordinator {
                 requestID: requestID
             ))
 
-        case let .router(.routeAction(
-            routeIndex,
-            .detailTrailer(.delegate(.startPlayback(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailTrailer(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID,
-                  case let .vod(itemID) = routeState.parent,
-                  state.routes.indices.contains(routeState.parentRouteIndex),
-                  case let .vodDetail(vodState) = state.routes[routeState.parentRouteIndex].screen,
-                  vodState.vod.id == itemID,
-                  vodState.trailerPresentationRequestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-            return .run { send in
-                await send(.router(.routeAction(
-                    id: routeState.parentRouteIndex,
-                    action: .vodDetail(.coordinatorDismissTrailer(requestID: requestID))
-                )))
-                await send(.router(.routeAction(
-                    id: routeState.parentRouteIndex,
-                    action: .vodDetail(.playTapped)
-                )))
-            }
-
         case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
             if let editorRouteIndex = state.routes.indices.last(where: { index in
                 if case let .m3uCategoryMappingEditor(routeState) = state.routes[index].screen {
@@ -2639,7 +2612,6 @@ public struct AppCoordinator {
                   seriesState.trailerPresentationRequestID == requestID,
                   seriesState.isTrailerPresented,
                   seriesState.trailerVideoKey != nil,
-                  seriesState.trailerTitle != nil,
                   !state.routes.contains(where: { route in
                       if case let .detailTrailer(routeState) = route.screen {
                           return routeState.requestID == requestID
@@ -2726,7 +2698,6 @@ public struct AppCoordinator {
                   vodState.trailerPresentationRequestID == requestID,
                   vodState.isTrailerPresented,
                   vodState.trailerVideoKey != nil,
-                  vodState.trailerTitle != nil,
                   !state.routes.contains(where: { route in
                       if case let .detailTrailer(routeState) = route.screen {
                           return routeState.requestID == requestID
@@ -6080,23 +6051,17 @@ private struct DetailTrailerRouteView: View {
     private var trailerContent: some View {
         switch routeStore.parent {
         case .vod:
-            if let vodState, let videoKey = vodState.trailerVideoKey, let title = vodState.trailerTitle {
+            if let vodState, let videoKey = vodState.trailerVideoKey {
                 DetailTrailerRouteContent(
-                    kind: .vod,
                     videoKey: videoKey,
-                    title: title,
-                    close: close,
-                    startPlayback: startPlayback
+                    close: close
                 )
             }
         case .series:
-            if let seriesState, let videoKey = seriesState.trailerVideoKey, let title = seriesState.trailerTitle {
+            if let seriesState, let videoKey = seriesState.trailerVideoKey {
                 DetailTrailerRouteContent(
-                    kind: .series,
                     videoKey: videoKey,
-                    title: title,
-                    close: close,
-                    startPlayback: startPlayback
+                    close: close
                 )
             }
         }
@@ -6129,9 +6094,9 @@ private struct DetailTrailerRouteView: View {
     private var isCurrentParent: Bool {
         switch routeStore.parent {
         case .vod:
-            return vodState?.trailerVideoKey != nil && vodState?.trailerTitle != nil
+            return vodState?.trailerVideoKey != nil
         case .series:
-            return seriesState?.trailerVideoKey != nil && seriesState?.trailerTitle != nil
+            return seriesState?.trailerVideoKey != nil
         }
     }
 
@@ -6143,10 +6108,6 @@ private struct DetailTrailerRouteView: View {
 
     private func close() {
         routeStore.send(.closeTapped)
-    }
-
-    private func startPlayback() {
-        routeStore.send(.startPlaybackTapped)
     }
 
     private func closeIfStale() {

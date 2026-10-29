@@ -1132,12 +1132,10 @@ public struct DetailTrailerRouteFeature {
 
     public enum Action {
         case closeTapped
-        case startPlaybackTapped
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
             case close(presentationID: UUID, requestID: UUID)
-            case startPlayback(presentationID: UUID, requestID: UUID)
         }
     }
 
@@ -1146,12 +1144,6 @@ public struct DetailTrailerRouteFeature {
             switch action {
             case .closeTapped:
                 return .send(.delegate(.close(
-                    presentationID: state.presentationID,
-                    requestID: state.requestID
-                )))
-
-            case .startPlaybackTapped:
-                return .send(.delegate(.startPlayback(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))

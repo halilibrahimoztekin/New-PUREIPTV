@@ -226,11 +226,6 @@
                                 store.send(.toggleFavorite)
                             }
 
-                            if store.resolvedTrailerKey != nil {
-                                TVHeaderActionButton(title: AppStrings.VODDetail.trailer, icon: "play.rectangle.fill", isPrimary: false) {
-                                    store.send(.trailerTapped)
-                                }
-                            }
                         }
                     }
                 }
@@ -253,7 +248,7 @@
                         lineLimit: 4,
                         onPresent: { onPresentSynopsis(plotText) }
                     )
-                        .padding(.horizontal, 80)
+                    .padding(.horizontal, 80)
                 } else if store.isLoading || store.isTMDBLoading {
                     VStack(alignment: .leading, spacing: 10) {
                         RoundedRectangle(cornerRadius: 6)

@@ -1,8 +1,5 @@
 import ComposableArchitecture
 import SwiftUI
-#if os(iOS)
-    import WebKit
-#endif
 
 struct VODActorBiographyContent: View {
     let actor: TMDBCastMemberDTO
@@ -237,151 +234,44 @@ struct VODActorBiographyContent: View {
     #endif
 }
 
-enum DetailTrailerPresentationKind: Equatable {
-    case vod
-    case series
-}
-
 struct DetailTrailerRouteContent: View {
-    let kind: DetailTrailerPresentationKind
     let videoKey: String
-    let title: String
     let close: () -> Void
-    let startPlayback: () -> Void
-
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         #if os(tvOS)
-            tvOSContent
+            Button(AppStrings.Common.close, action: close)
         #else
             iOSContent
         #endif
     }
 
     #if !os(tvOS)
-    private var iOSContent: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                VStack(spacing: kind == .vod ? 20 : 0) {
-                    if kind == .vod {
-                        TrailerPlaybackView(videoKey: videoKey)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.8), radius: 16, y: 8)
-                            .padding(.horizontal, 16)
-                    } else {
-                        TrailerPlaybackView(videoKey: videoKey)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                            .shadow(color: .black.opacity(0.8), radius: 10, y: 5)
-                    }
-
-                    if kind == .vod {
-                        Button {
-                            HapticManager.shared.trigger(.medium)
-                            startPlayback()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "play.fill")
-                                Text(AppStrings.VODDetail.startMovieNow)
-                                    .fontWeight(.bold)
-                            }
-                            .font(.system(size: 16))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+        private var iOSContent: some View {
+            Group {
+                if let trailerURL {
+                    SafariModalPresenter(url: trailerURL, onDismiss: close)
+                        .ignoresSafeArea()
+                } else {
+                    VStack(spacing: 16) {
+                        Text(AppStrings.VODDetail.trailerNotAvailable)
                             .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 8, y: 3)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 12)
+                        Button(AppStrings.Common.close, action: close)
                     }
-
-                    Spacer()
-                }
-                .padding(.top, kind == .vod ? 20 : 16)
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: kind == .vod ? .cancellationAction : .confirmationAction) {
-                    Button(AppStrings.Common.close) {
-                        if kind == .vod {
-                            HapticManager.shared.trigger(.light)
-                        }
-                        close()
-                    }
-                    .foregroundColor(.white)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.ignoresSafeArea())
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-    #endif
 
-    #if os(tvOS)
-    private var tvOSContent: some View {
-        ZStack {
-            Color(hex: "#0F0F13").ignoresSafeArea()
-
-            VStack(spacing: 30) {
-                Text(title)
-                    .font(.largeTitle.bold())
-                    .foregroundColor(.white)
-
-                Text(AppStrings.VODDetail.watchTrailer)
-                    .font(.title2)
-                    .foregroundColor(.white.opacity(0.7))
-
-                if kind == .vod {
-                    Button(action: startPlayback) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
-                            Text(AppStrings.VODDetail.startMovieNow)
-                                .fontWeight(.bold)
-                        }
-                        .padding(.horizontal, 36)
-                        .padding(.vertical, 18)
-                    }
-                    .buttonStyle(.card)
-                } else if let youtubeURL = URL(string: "https://www.youtube.com/watch?v=\(videoKey)") {
-                    Button {
-                        openURL(youtubeURL)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.rectangle.fill")
-                            Text(AppStrings.VODDetail.watchTrailer)
-                                .fontWeight(.bold)
-                        }
-                        .padding(.horizontal, 36)
-                        .padding(.vertical, 18)
-                    }
-                    .buttonStyle(.card)
-                }
-
-                Button(AppStrings.Common.close, action: close)
-                    .buttonStyle(.card)
-            }
-            .padding(60)
+        private var trailerURL: URL? {
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = "www.youtube.com"
+            components.path = "/watch"
+            components.queryItems = [URLQueryItem(name: "v", value: videoKey)]
+            return components.url
         }
-    }
     #endif
 }
 
@@ -731,7 +621,7 @@ public struct VODDetailView: View {
 
         private var headerView: some View {
             VStack(spacing: 0) {
-                // Edge-to-edge Cinematic Backdrop / Auto-Play Trailer (Madde #46)
+                // Edge-to-edge cinematic backdrop with an explicit trailer action.
                 let backdropURLString = store.tmdbMovie?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
                     store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
                     store.vod.coverURL?.absoluteString
@@ -742,14 +632,6 @@ public struct VODDetailView: View {
                         backdropURL: backdropURL,
                         userAgentOverride: store.config.userAgentOverride,
                         trailerKey: store.resolvedTrailerKey,
-                        isAutoPlayActive: store.isAutoPlayTrailerActive,
-                        isMuted: store.isTrailerMuted,
-                        onToggleMute: {
-                            store.send(.toggleTrailerMute)
-                        },
-                        onExpandTrailer: {
-                            store.send(.expandTrailer)
-                        },
                         onOpenTrailerSheet: {
                             store.send(.trailerTapped)
                         }
@@ -1621,21 +1503,6 @@ public struct VODDetailView: View {
                                         .padding(.vertical, 16)
                                     }
                                     .focused($isPlayButtonFocused)
-                                }
-
-                                // Fragman on tvOS
-                                if store.resolvedTrailerKey != nil {
-                                    Button {
-                                        store.send(.trailerTapped)
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "film.fill")
-                                            Text(AppStrings.VODDetail.trailer)
-                                                .fontWeight(.bold)
-                                        }
-                                        .padding(.horizontal, 28)
-                                        .padding(.vertical, 16)
-                                    }
                                 }
 
                                 Button {

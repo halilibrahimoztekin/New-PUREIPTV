@@ -47,7 +47,6 @@ public struct SeriesDetailFeature {
 
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
-        public var trailerTitle: String?
         public var trailerPresentationRequestID: UUID?
 
         public var resolvedTrailerKey: String? {
@@ -710,20 +709,22 @@ public struct SeriesDetailFeature {
                 return .none
 
             case .trailerTapped:
+                #if os(tvOS)
+                    return .none
+                #else
                 guard state.trailerPresentationRequestID == nil else { return .none }
                 guard let key = state.resolvedTrailerKey else { return .none }
                 let requestID = UUID()
                 state.trailerPresentationRequestID = requestID
                 state.trailerVideoKey = key
-                state.trailerTitle = "\(state.tmdbTV?.name ?? state.series.title) - \(AppStrings.VODDetail.trailer)"
                 state.isTrailerPresented = true
                 return .send(.delegate(.presentTrailer(requestID: requestID)))
+                #endif
 
             case let .coordinatorDismissTrailer(requestID):
                 guard state.trailerPresentationRequestID == requestID else { return .none }
                 state.isTrailerPresented = false
                 state.trailerVideoKey = nil
-                state.trailerTitle = nil
                 state.trailerPresentationRequestID = nil
                 return .none
 

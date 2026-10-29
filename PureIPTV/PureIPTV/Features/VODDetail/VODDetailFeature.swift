@@ -43,11 +43,7 @@ public struct VODDetailFeature {
         public var actorBiographyPresentationRequestID: UUID?
         public var isTrailerPresented: Bool = false
         public var trailerVideoKey: String?
-        public var trailerTitle: String?
         public var trailerPresentationRequestID: UUID?
-        public var isAutoPlayTrailerActive: Bool = false
-        public var isTrailerMuted: Bool = true
-        public var isAutoPlayTrailerEnabled: Bool = false
 
         // Multi-Version & Quality Grouping (Madde #47)
         public var availableVersions: [MovieVersionEdition] = []
@@ -126,10 +122,6 @@ public struct VODDetailFeature {
         case coordinatorDismissActorBiography(requestID: UUID)
         case trailerTapped
         case coordinatorDismissTrailer(requestID: UUID)
-        case startInlineTrailer
-        case toggleTrailerMute
-        case stopInlineTrailer
-        case expandTrailer
         case selectVersion(MovieVersionEdition)
         case similarMovieTapped(TMDBSimilarItemDTO)
         case coordinatorDismissUnmatchedMovie(requestID: UUID)
@@ -150,7 +142,6 @@ public struct VODDetailFeature {
     }
 
     private nonisolated enum CancelID: Hashable, Sendable {
-        case autoPlayTrailer
         case versionHistory
         case awardRecognitions
     }
@@ -426,17 +417,7 @@ public struct VODDetailFeature {
                     let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
                     await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
                 }
-                var effects: [Effect<Action>] = [matchingEffect, awardEffect]
-                if state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled {
-                    effects.append(.run { send in
-                        try? await Task.sleep(nanoseconds: 1_500_000_000)
-                        if !Task.isCancelled {
-                            await send(.startInlineTrailer)
-                        }
-                    }
-                    .cancellable(id: CancelID.autoPlayTrailer, cancelInFlight: true))
-                }
-                return .merge(effects)
+                return .merge(matchingEffect, awardEffect)
 
             case let .tmdbSearchResponse(.failure(error)):
                 guard !state.hasManualTMDBOverride else { return .none }
@@ -636,46 +617,24 @@ public struct VODDetailFeature {
                 return .none
 
             case .trailerTapped:
-                state.isAutoPlayTrailerActive = false
+                #if os(tvOS)
+                    return .none
+                #else
                 guard state.trailerPresentationRequestID == nil else { return .none }
                 guard let key = state.resolvedTrailerKey else { return .none }
                 let requestID = UUID()
                 state.trailerPresentationRequestID = requestID
                 state.trailerVideoKey = key
-                state.trailerTitle = "\(state.tmdbMovie?.title ?? state.vod.title) - \(AppStrings.VODDetail.trailer)"
                 state.isTrailerPresented = true
-                return .merge(
-                    .cancel(id: CancelID.autoPlayTrailer),
-                    .send(.delegate(.presentTrailer(requestID: requestID)))
-                )
+                return .send(.delegate(.presentTrailer(requestID: requestID)))
+                #endif
 
             case let .coordinatorDismissTrailer(requestID):
                 guard state.trailerPresentationRequestID == requestID else { return .none }
                 state.isTrailerPresented = false
                 state.trailerVideoKey = nil
-                state.trailerTitle = nil
                 state.trailerPresentationRequestID = nil
                 return .none
-
-            case .startInlineTrailer:
-                guard state.resolvedTrailerKey != nil, state.isAutoPlayTrailerEnabled else { return .none }
-                state.isAutoPlayTrailerActive = true
-                return .none
-
-            case .toggleTrailerMute:
-                state.isTrailerMuted.toggle()
-                return .none
-
-            case .stopInlineTrailer:
-                state.isAutoPlayTrailerActive = false
-                return .cancel(id: CancelID.autoPlayTrailer)
-
-            case .expandTrailer:
-                state.isAutoPlayTrailerActive = false
-                return .merge(
-                    .cancel(id: CancelID.autoPlayTrailer),
-                    .send(.trailerTapped)
-                )
 
             case let .selectVersion(version):
                 state.selectedVersionId = version.id
@@ -710,7 +669,6 @@ public struct VODDetailFeature {
                 return .none
 
             case .playTapped:
-                state.isAutoPlayTrailerActive = false
                 let streamURL: URL? = {
                     if let url = state.vod.streamURL {
                         return url
@@ -729,10 +687,7 @@ public struct VODDetailFeature {
                     startPosition: 0.0,
                     config: state.config
                 )
-                return .merge(
-                    .cancel(id: CancelID.autoPlayTrailer),
-                    .send(.delegate(.didSelectPlay(playable)))
-                )
+                return .send(.delegate(.didSelectPlay(playable)))
 
             case .restartTapped:
                 return .send(.playTapped)
@@ -851,18 +806,14 @@ public struct VODDetailFeature {
                 }
 
             case .closeTapped:
-                state.isAutoPlayTrailerActive = false
                 return .merge(
-                    .cancel(id: CancelID.autoPlayTrailer),
                     .cancel(id: CancelID.versionHistory),
                     .cancel(id: CancelID.awardRecognitions),
                     .send(.delegate(.close))
                 )
 
             case .viewDidDisappear:
-                state.isAutoPlayTrailerActive = false
                 return .merge(
-                    .cancel(id: CancelID.autoPlayTrailer),
                     .cancel(id: CancelID.versionHistory),
                     .cancel(id: CancelID.awardRecognitions)
                 )

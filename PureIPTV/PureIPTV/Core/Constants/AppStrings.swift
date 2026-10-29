@@ -826,26 +826,10 @@ public enum AppStrings {
         public static let audio51Badge = "5.1 Surround".localized
         public static let imdbRating = "IMDb".localized
         public static let watchTrailer = "Fragmanı İzle".localized
-        public static let startMovieNow = "Filmi Şimdi Başlat".localized
         public static let trailerNotAvailable = "Bu film için fragman bulunamadı.".localized
-        public static let trailerPlaybackFailed = "Fragman oynatılamadı".localized
-        public static let trailerPlaybackTimedOut = "YouTube zamanında yanıt vermedi. Bağlantınızı kontrol edip tekrar deneyin.".localized
-        public static let trailerPlaybackAutoplayBlocked = "YouTube otomatik oynatmayı engelledi. Yeniden deneyin.".localized
-        public static let trailerPlaybackInvalidRequest = "YouTube fragman bağlantısını kabul etmedi.".localized
-        public static let trailerPlaybackPlayerError = "YouTube video oynatıcısı içeriği işleyemedi.".localized
-        public static let trailerPlaybackUnavailable = "Video kaldırılmış, gizli veya erişime kapalı.".localized
-        public static let trailerPlaybackEmbeddingDisabled = "Video sahibi uygulama içi oynatmaya izin vermiyor.".localized
-        public static let trailerPlaybackClientIdentityRequired = "YouTube oynatma için gerekli kaynak bilgisini alamadı.".localized
-        public static func trailerPlaybackUnknown(_ code: Int) -> String {
-            "YouTube hata kodu: %d. Yeniden deneyin.".localized(code)
-        }
         public static let inLibrary = "Kütüphanenizde".localized
         public static let notInLibrary = "Listenizde Bulunamadı".localized
         public static let notInLibraryDesc = "Bu içerik mevcut IPTV çalma listenizde bulunamadı. TMDB özet bilgisi aşağıdadır.".localized
-        public static let unmuteTrailer = "Sesi Aç".localized
-        public static let muteTrailer = "Sesi Kapat".localized
-        public static let expandTrailer = "Tam Ekran Fragman".localized
-        public static let autoPlayTrailer = "Fragmanı Otomatik Oynat".localized
         public static let versionsAndQuality = "Sürüm & Kalite Seçenekleri".localized
         public static let currentVersion = "Mevcut Sürüm".localized
     }
