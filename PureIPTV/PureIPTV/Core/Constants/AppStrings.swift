@@ -877,6 +877,9 @@ public enum AppStrings {
 
         public static func seasonEpisodeCount(_ num: Int, _ count: Int) -> String {
             "%lld. Sezon (%lld Bölüm)".localized(Int64(num), Int64(count))
+        public static let shuffleEpisodes = "Bölümleri Karıştır".localized
+        public static let shuffleSeason = "Sezonu Karıştır".localized
+        public static let shuffleSeries = "Diziyi Karıştır".localized
         }
     }
 

@@ -7,6 +7,11 @@ import OSLog
 
 @Reducer
 public struct SeriesDetailFeature {
+    public enum EpisodeShuffleScope: Equatable, Sendable {
+        case selectedSeason
+        case series
+    }
+
     @ObservableState
     public struct State: Equatable {
         public let series: MediaModels.Item
@@ -97,6 +102,18 @@ public struct SeriesDetailFeature {
                     return $0.season < $1.season
                 }
                 return $0.episodeNum < $1.episodeNum
+        public var canShuffleSelectedSeason: Bool {
+            currentEpisodes.count > 1
+        }
+
+        public var canShuffleSeries: Bool {
+            sequentialPlaylistEpisodes.count > 1
+        }
+
+        public var canShuffleEpisodes: Bool {
+            canShuffleSelectedSeason || canShuffleSeries
+        }
+
             }
             guard let index = episodes.firstIndex(where: { $0.id == history.id }) else { return nil }
             let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
@@ -175,6 +192,7 @@ public struct SeriesDetailFeature {
         case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
         case downloadedEpisodesLoaded([String: Bool])
         case episodeProgressLoaded([WatchHistoryItem], ProfileContextSnapshot)
+        case shuffleEpisodesTapped(EpisodeShuffleScope)
         case markEpisodeUnwatched(String)
         case downloadEpisode(DetailModels.Episode)
         case historyStatusLoaded(WatchHistoryItem?, ProfileContextSnapshot)
@@ -569,6 +587,19 @@ public struct SeriesDetailFeature {
                 else { return .none }
                 state.episodeProgressMap.removeValue(forKey: id)
                 if state.historyItem?.id == id {
+            case let .shuffleEpisodesTapped(scope):
+                let episodes: [DetailModels.Episode]
+                switch scope {
+                case .selectedSeason:
+                    episodes = state.currentEpisodes
+                case .series:
+                    episodes = state.sequentialPlaylistEpisodes
+                }
+                guard episodes.count > 1 else { return .none }
+                let playbackOrder = episodes.shuffled()
+                guard let firstEpisode = playbackOrder.first else { return .none }
+                return playEpisode(firstEpisode, playbackOrder: playbackOrder, state: &state)
+
                     state.historyItem = nil
                 }
                 state.updateNextUpEpisode()
@@ -579,51 +610,7 @@ public struct SeriesDetailFeature {
                 }
 
             case let .episodeSelected(episode):
-                // Ensure selectedSeasonNumber matches the played episode's season
-                if state.selectedSeasonNumber != episode.season {
-                    state.selectedSeasonNumber = episode.season
-                }
-                state.hasUserSelectedSeason = true
-                state.pendingEpisodeReveal = nil
-
-                let streamURL = episode.streamURL
-                let history = state.episodeProgressMap[episode.id]
-                let startPosition: Double? = if let h = history, h.duration > 0 {
-                    (h.progress / h.duration) < 0.92 ? (h.progress / h.duration) : 0.0
-                } else {
-                    nil
-                }
-                let initialProgress: Double? = if let h = history, h.duration > 0, (h.progress / h.duration) < 0.92 {
-                    h.progress
-                } else {
-                    nil
-                }
-
-                let playable = PlayerFeature.PlayableItem(
-                    id: episode.id,
-                    title: "\(state.series.title) - S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))",
-                    seriesTitle: state.series.title,
-                    streamURL: streamURL,
-                    coverURL: episode.coverURL ?? state.series.coverURL,
-                    seriesID: state.series.id,
-                    startPosition: startPosition,
-                    initialDuration: history?.duration,
-                    initialProgress: initialProgress,
-                    config: state.config
-                )
-                let playlistEpisodes = state.sequentialPlaylistEpisodes
-                let playlist = playlistEpisodes.isEmpty ? nil : playlistEpisodes.map { ep in
-                    PlayerFeature.PlayableItem(
-                        id: ep.id,
-                        title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
-                        seriesTitle: state.series.title,
-                        streamURL: ep.streamURL,
-                        coverURL: ep.coverURL ?? state.series.coverURL,
-                        seriesID: state.series.id,
-                        config: state.config
-                    )
-                }
-                return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
+                return playEpisode(episode, playbackOrder: nil, state: &state)
 
             case .resumeTapped:
                 guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) else {
@@ -814,3 +801,53 @@ public struct SeriesDetailFeature {
         }
     }
 }
+
+    private func playEpisode(
+        _ episode: DetailModels.Episode,
+        playbackOrder: [DetailModels.Episode]?,
+        state: inout State
+    ) -> Effect<Action> {
+        if state.selectedSeasonNumber != episode.season {
+            state.selectedSeasonNumber = episode.season
+        }
+        state.hasUserSelectedSeason = true
+        state.pendingEpisodeReveal = nil
+
+        let history = state.episodeProgressMap[episode.id]
+        let startPosition: Double? = if let history, history.duration > 0 {
+            (history.progress / history.duration) < 0.92 ? (history.progress / history.duration) : 0.0
+        } else {
+            nil
+        }
+        let initialProgress: Double? = if let history, history.duration > 0, (history.progress / history.duration) < 0.92 {
+            history.progress
+        } else {
+            nil
+        }
+
+        let playable = PlayerFeature.PlayableItem(
+            id: episode.id,
+            title: "\(state.series.title) - S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))",
+            seriesTitle: state.series.title,
+            streamURL: episode.streamURL,
+            coverURL: episode.coverURL ?? state.series.coverURL,
+            seriesID: state.series.id,
+            startPosition: startPosition,
+            initialDuration: history?.duration,
+            initialProgress: initialProgress,
+            config: state.config
+        )
+        let playlistEpisodes = playbackOrder ?? state.sequentialPlaylistEpisodes
+        let playlist = playlistEpisodes.isEmpty ? nil : playlistEpisodes.map { item in
+            PlayerFeature.PlayableItem(
+                id: item.id,
+                title: "\(state.series.title) - S\(String(format: "%02d", item.season))E\(String(format: "%02d", item.episodeNum))",
+                seriesTitle: state.series.title,
+                streamURL: item.streamURL,
+                coverURL: item.coverURL ?? state.series.coverURL,
+                seriesID: state.series.id,
+                config: state.config
+            )
+        }
+        return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
+    }

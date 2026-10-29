@@ -447,7 +447,7 @@
                 }
 
                 // Episodes List & Grid Toggle
-                if !store.currentEpisodes.isEmpty {
+                if !store.currentEpisodes.isEmpty || store.canShuffleSeries {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text(AppStrings.SeriesDetail.episodes)
@@ -456,21 +456,53 @@
 
                             Spacer()
 
-                            Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
-                                .font(.system(size: 13.5))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                            if !store.currentEpisodes.isEmpty {
+                                Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
+                                    .font(.system(size: 13.5))
+                                    .foregroundStyle(Color.white.opacity(0.6))
+                            }
 
-                            // Layout Toggle Button (List vs Grid)
-                            Button {
-                                HapticManager.shared.trigger(.light)
-                                store.send(.toggleLayoutMode)
-                            } label: {
-                                Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "rectangle.grid.1x2")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(8)
-                                    .background(Color(hex: "#1A1A24"), in: Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                            if store.canShuffleEpisodes {
+                                Menu {
+                                    if store.canShuffleSelectedSeason {
+                                        Button {
+                                            store.send(.shuffleEpisodesTapped(.selectedSeason))
+                                        } label: {
+                                            Label(AppStrings.SeriesDetail.shuffleSeason, systemImage: "shuffle")
+                                        }
+                                    }
+
+                                    if store.canShuffleSeries {
+                                        Button {
+                                            store.send(.shuffleEpisodesTapped(.series))
+                                        } label: {
+                                            Label(AppStrings.SeriesDetail.shuffleSeries, systemImage: "shuffle")
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "shuffle")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(Color(hex: "#1A1A24"), in: Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                }
+                                .accessibilityLabel(AppStrings.SeriesDetail.shuffleEpisodes)
+                            }
+
+                            if !store.currentEpisodes.isEmpty {
+                                // Layout Toggle Button (List vs Grid)
+                                Button {
+                                    HapticManager.shared.trigger(.light)
+                                    store.send(.toggleLayoutMode)
+                                } label: {
+                                    Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "rectangle.grid.1x2")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(Color(hex: "#1A1A24"), in: Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                }
                             }
                         }
                         .padding(.horizontal, 24)

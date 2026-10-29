@@ -2495,9 +2495,12 @@ IPTVX’in güncel Apple TV sürüm notları playlist yükleme/arama iyileştirm
 - **Review/derleme:** Bağımsız reviewer `[APPROVED]`; değişen Swift kaynaklarında `swiftc -frontend -parse` ve `git diff --check` başarılı. iOS ve tvOS Release Simulator compile-only build’leri exit 0; uygulama akışı veya test çalıştırılmadı. Build’de mevcut Swift 6 concurrency uyarıları görüldü.
 - **2026-10-29 temizlik:** Build’ler yalnızca `/private/tmp/PureIPTV-236-build` altında çıktı üretti; bu task’ın DerivedData ve xcresult dosyaları temizlendi. Önceki build’in paylaşılan Swift Package checkout/artifact cache’i korundu. Normal Xcode DerivedData’da bu task’a ait çıktı oluşmadı.
 
-### 237. [PENDING] Dizi Bölümlerini Karışık Sırayla Oynatma
+### 237. [DONE] Dizi Bölümlerini Karışık Sırayla Oynatma
 - **Sinyal:** Apple TV kullanıcıları kütüphanedeki bir dizinin bölümlerini rastgele sırada izleme listesi istedi: https://www.reddit.com/r/appletv/comments/1qxlegy/whats_one_feature_youd_like_to_see_on_apple_tv_app/.
 - **Kapsam:** Kullanıcının seçtiği dizi veya sezondaki mevcut bölümleri karıştır; oynatma geçmişi, bölüm sırası ve “sonraki bölüm” akışı tutarlı kalsın. Sağlayıcı katalog sırasını değiştirme.
+- **Uygulama:** iOS ve tvOS dizi ekranlarına sezon/dizi karıştırma menüsü eklendi. Oynatıcıya ayrı bir karışık sıra veriliyor; katalog sırası ve kronolojik Sonraki göstergesi değişmiyor. Seçilen bölümün devam geçmişi korunuyor.
+- **Review/derleme:** Reviewer `[APPROVED]`; `swiftc -frontend -parse`, localization JSON ve `git diff --check` başarılı. iOS ve tvOS Release Simulator compile-only build’leri exit 0. Test veya uygulama akışı çalıştırılmadı.
+- **2026-10-29 temizlik:** Task’a özel `/private/tmp/PureIPTV-237-build` DerivedData ve logları silindi; yeniden kullanılabilir paylaşılan SwiftPM `SourcePackages` cache’i korundu. Normal PureIPTV DerivedData’da bu task’a ait çıktı oluşmadı.
 
 ### 238. [PENDING] iOS Kilit Ekranı ve Denetim Merkezi Oynatım Denetimleri
 - **Sinyal:** Bir IPTV geliştiricisinin Apple TV topluluğundaki güncellemesi VLC içeriğini Control Center ve lock screen’den kontrol etmeyi duyurdu: https://www.reddit.com/r/appletv/comments/1rmplz6/i_built_an_iptv_player_for_apple_tv_yes_iptv/.

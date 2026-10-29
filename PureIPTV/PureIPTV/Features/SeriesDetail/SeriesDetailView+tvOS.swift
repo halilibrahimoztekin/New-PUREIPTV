@@ -336,7 +336,7 @@
                 }
 
                 // Episodes
-                if !store.currentEpisodes.isEmpty {
+                if !store.currentEpisodes.isEmpty || store.canShuffleSeries {
                     VStack(alignment: .leading, spacing: 24) {
                         HStack {
                             Text(AppStrings.SeriesDetail.episodes)
@@ -344,30 +344,62 @@
                                 .foregroundStyle(.white)
                             Spacer()
                             HStack(spacing: 20) {
-                                HStack(spacing: 4) {
-                                    Text("\(store.currentEpisodes.count)")
-                                    Text(AppStrings.SeriesDetail.episodeCount)
-                                }
-                                .font(.system(size: 20))
-                                .foregroundStyle(Color.white.opacity(0.6))
-
-                                Button {
-                                    store.send(.toggleLayoutMode)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "list.bullet")
-                                        Text(store.episodeLayoutMode == .list ? AppStrings.SeriesDetail.gridView : AppStrings.SeriesDetail.listView)
+                                if !store.currentEpisodes.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Text("\(store.currentEpisodes.count)")
+                                        Text(AppStrings.SeriesDetail.episodeCount)
                                     }
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .padding(.horizontal, 18)
-                                    .padding(.vertical, 10)
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(Color.white.opacity(0.6))
                                 }
-                                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+
+                                if store.canShuffleEpisodes {
+                                    Menu {
+                                        if store.canShuffleSelectedSeason {
+                                            Button {
+                                                store.send(.shuffleEpisodesTapped(.selectedSeason))
+                                            } label: {
+                                                Label(AppStrings.SeriesDetail.shuffleSeason, systemImage: "shuffle")
+                                            }
+                                        }
+
+                                        if store.canShuffleSeries {
+                                            Button {
+                                                store.send(.shuffleEpisodesTapped(.series))
+                                            } label: {
+                                                Label(AppStrings.SeriesDetail.shuffleSeries, systemImage: "shuffle")
+                                            }
+                                        }
+                                    } label: {
+                                        Label(AppStrings.SeriesDetail.shuffleEpisodes, systemImage: "shuffle")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .padding(.horizontal, 18)
+                                            .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                                }
+
+                                if !store.currentEpisodes.isEmpty {
+                                    Button {
+                                        store.send(.toggleLayoutMode)
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "list.bullet")
+                                            Text(store.episodeLayoutMode == .list ? AppStrings.SeriesDetail.gridView : AppStrings.SeriesDetail.listView)
+                                        }
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .padding(.horizontal, 18)
+                                        .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                                }
                             }
                         }
                         .padding(.horizontal, 80)
 
-                        if store.episodeLayoutMode == .list {
+                        if store.currentEpisodes.isEmpty {
+                            EmptyView()
+                        } else if store.episodeLayoutMode == .list {
                             LazyVStack(spacing: 20) {
                                 ForEach(store.currentEpisodes) { episode in
                                     TVEpisodeRow(
