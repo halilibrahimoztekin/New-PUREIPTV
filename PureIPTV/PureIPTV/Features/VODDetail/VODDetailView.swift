@@ -1469,6 +1469,7 @@ public struct VODDetailView: View {
                                         .padding(.vertical, 16)
                                     }
                                     .focused($isPlayButtonFocused)
+                                    .defaultFocus($isPlayButtonFocused, true, priority: .userInitiated)
 
                                     Button {
                                         store.send(.restartTapped)
@@ -1503,6 +1504,7 @@ public struct VODDetailView: View {
                                         .padding(.vertical, 16)
                                     }
                                     .focused($isPlayButtonFocused)
+                                    .defaultFocus($isPlayButtonFocused, true, priority: .userInitiated)
                                 }
 
                                 Button {
@@ -1567,6 +1569,7 @@ public struct VODDetailView: View {
                                             }
                                         }
                                     }
+                                    .focusSection()
                                 }
                                 .padding(.top, 12)
                             }
@@ -1653,6 +1656,7 @@ public struct VODDetailView: View {
                                             }
                                         }
                                     }
+                                    .focusSection()
                                 }
                                 .padding(.top, 16)
                             }
@@ -1670,9 +1674,6 @@ public struct VODDetailView: View {
             }
             .onAppear {
                 store.send(.onAppear)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isPlayButtonFocused = true
-                }
             }
             .onExitCommand {
                 store.send(.closeTapped)

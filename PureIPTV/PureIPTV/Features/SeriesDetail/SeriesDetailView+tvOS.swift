@@ -384,6 +384,7 @@
                                 }
                             }
                             .padding(.horizontal, 80)
+                            .focusSection()
                         } else {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 32), GridItem(.flexible(), spacing: 32)], spacing: 32) {
                                 ForEach(store.currentEpisodes) { episode in
@@ -401,6 +402,7 @@
                                 }
                             }
                             .padding(.horizontal, 80)
+                            .focusSection()
                         }
                     }
                 } else if store.isLoading {
@@ -704,7 +706,7 @@
                 }
                 .padding(12)
             }
-            .buttonStyle(TVEpisodeCardButtonStyle())
+            .buttonStyle(.card)
             .focused($focusedEpisodeID, equals: episode.id)
             .contextMenu {
                 if isWatched {
