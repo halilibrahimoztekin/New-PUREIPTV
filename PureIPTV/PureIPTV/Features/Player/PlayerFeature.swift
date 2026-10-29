@@ -11,6 +11,8 @@ import SwiftVLC
 public struct PlayerFeature {
     public enum CancelID {
         public static let playerEvents = "PlayerFeature.playerEvents"
+        public static let nowPlayingCommands = "PlayerFeature.nowPlayingCommands"
+        public static let nowPlayingMetadata = "PlayerFeature.nowPlayingMetadata"
         public static let mediaServerPlaybackStatus = "PlayerFeature.mediaServerPlaybackStatus"
         public static let playbackEngineSwitch = "PlayerFeature.playbackEngineSwitch"
         public static let statsTimer = "PlayerFeature.statsTimer"
@@ -182,6 +184,8 @@ public struct PlayerFeature {
         public var isDeinterlaceModeKnown = true
         public var isSwitchingPlaybackEngine = false
         public var playbackEngineSwitchID: UUID?
+        public var isNowPlayingSuppressed = false
+        public var nowPlayingGeneration: UInt64 = 0
         var playbackEngineSwitchProfileID: UUID?
         public var playbackEngineError: String?
         var rememberedPlaybackChoice: PlaybackChoiceReminder?
@@ -586,6 +590,8 @@ public struct PlayerFeature {
         case xtreamLiveOutputFormatsResponse(
             requestID: UUID,
             itemID: String,
+        case nowPlayingSessionActivated(playbackRequestID: UUID, generation: UInt64)
+        case nowPlayingRemoteCommand(NowPlayingRemoteCommand)
             playlistID: UUID,
             configuration: PlaylistConfig,
             result: Result<[XtreamLiveOutputFormat], Error>
@@ -903,6 +909,7 @@ public struct PlayerFeature {
         itemID: String,
         command: CatchupSeekCommand,
         client: PlayerClient
+    @Dependency(\.nowPlayingClient) var nowPlayingClient
     ) -> Effect<Action> {
         .merge(
             .cancel(id: CancelID.catchupSeekFeedback),
@@ -945,6 +952,95 @@ public struct PlayerFeature {
         let recentChannelsClient = recentChannelsClient
         let streamHealthClient = streamHealthClient
         let traktClient = traktClient
+    private static func nowPlayingMetadata(for state: State) -> NowPlayingMetadata {
+        func seconds(_ duration: Duration) -> Double {
+            let components = duration.components
+            return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+        }
+
+        let isLive = state.item.isLive && !state.isPlayingCatchup
+        let isPlaying = state.playerState == .playing && !state.isUserPaused && !state.isSwitchingPlaybackEngine
+        let duration = seconds(state.totalTime)
+        return NowPlayingMetadata(
+            itemID: state.item.id,
+            playbackRequestID: state.playbackRequestID,
+            title: state.item.title,
+            seriesTitle: state.item.seriesTitle,
+            artworkURL: state.item.coverURL ?? state.item.fallbackCoverURL,
+            artworkUserAgent: state.item.userAgentOverride,
+            duration: !isLive && duration.isFinite && duration > 0 ? duration : nil,
+            elapsedTime: isLive ? 0 : max(0, seconds(state.currentTime)),
+            playbackRate: isPlaying ? Double(state.playbackRate) : 0,
+            isLive: isLive,
+            canSeek: !isLive
+        )
+    }
+
+    private static func updateNowPlaying(
+        state: State,
+        client: NowPlayingClient,
+        force: Bool = true
+    ) -> Effect<Action> {
+        #if os(iOS)
+            guard !state.isSwitchingPlaybackEngine,
+                  !state.isNowPlayingSuppressed,
+                  state.playerState != .stopped
+            else { return .none }
+            let metadata = nowPlayingMetadata(for: state)
+            let generation = state.nowPlayingGeneration
+            return .run { _ in
+                guard !Task.isCancelled else { return }
+                await client.update(metadata, force, generation)
+            }
+            .cancellable(id: CancelID.nowPlayingMetadata, cancelInFlight: true)
+        #else
+            return .none
+        #endif
+    }
+
+    private static func clearNowPlaying(state: inout State, client: NowPlayingClient) -> Effect<Action> {
+        state.nowPlayingGeneration += 1
+        let generation = state.nowPlayingGeneration
+        return .concatenate(
+            .cancel(id: CancelID.nowPlayingMetadata),
+            .run { _ in await client.clear(generation) }
+        )
+    }
+
+    private static func deactivateNowPlaying(state: inout State, client: NowPlayingClient) -> Effect<Action> {
+        state.nowPlayingGeneration += 1
+        let generation = state.nowPlayingGeneration
+        return .concatenate(
+            .cancel(id: CancelID.nowPlayingMetadata),
+            .cancel(id: CancelID.nowPlayingCommands),
+            .run { _ in await client.deactivate(generation) }
+        )
+    }
+
+    private static func listenForNowPlayingCommands(
+        playbackRequestID: UUID,
+        generation: UInt64,
+        client: NowPlayingClient
+    ) -> Effect<Action> {
+        #if os(iOS)
+            return .run { send in
+                let commands = await client.activate(generation)
+                guard !Task.isCancelled else {
+                    await client.deactivate(generation)
+                    return
+                }
+                await send(.nowPlayingSessionActivated(playbackRequestID: playbackRequestID, generation: generation))
+                for await command in commands {
+                    guard !Task.isCancelled else { return }
+                    await send(.nowPlayingRemoteCommand(command))
+                }
+            }
+            .cancellable(id: CancelID.nowPlayingCommands, cancelInFlight: true)
+        #else
+            return .none
+        #endif
+    }
+
         let pipClient = pipClient
         let parentalControlClient = parentalControlClient
         let displayModeClient = displayModeClient
@@ -953,13 +1049,14 @@ public struct PlayerFeature {
         let playlistRepository = playlistRepository
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, playlistRepository: playlistRepository, profileContextClient: profileContextClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, playlistRepository: playlistRepository, profileContextClient: profileContextClient, nowPlayingClient: nowPlayingClient)
         }
     }
 
     private static let liveVideoStallThresholdNanoseconds: UInt64 = 3_500_000_000
     private static let liveVideoClockStaleToleranceNanoseconds: UInt64 = 2_500_000_000
 
+        let nowPlayingClient = nowPlayingClient
     private static func canMonitorLiveVideoStall(state: State) -> Bool {
         guard state.item.isLive,
               state.activeCatchupProgram == nil,
@@ -1207,7 +1304,7 @@ public struct PlayerFeature {
                 : nil)
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient, nowPlayingClient: NowPlayingClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             Self.resetLiveVideoStallTracking(state: &state)
@@ -1235,6 +1332,8 @@ public struct PlayerFeature {
                 state.playbackEngine = playerClient.activeEngine()
             } else {
                 state.playbackEngine = Self.resolvedPlaybackEngine(
+            state.isNowPlayingSuppressed = false
+            state.nowPlayingGeneration += 1
                     item: state.item,
                     kind: playbackKind,
                     defaults: playbackDefaults,
@@ -1459,7 +1558,12 @@ public struct PlayerFeature {
                         }
                     }
                 }
-                .cancellable(id: CancelID.playerEvents, cancelInFlight: true)
+                .cancellable(id: CancelID.playerEvents, cancelInFlight: true),
+                Self.listenForNowPlayingCommands(
+                    playbackRequestID: state.playbackRequestID,
+                    generation: state.nowPlayingGeneration,
+                    client: nowPlayingClient
+                )
             )
 
         case let .startSelectedChannel(id):
@@ -1481,7 +1585,8 @@ public struct PlayerFeature {
                 customEPGMappingClient: customEPGMappingClient,
                 playbackSkipMarkerClient: playbackSkipMarkerClient,
                 playlistRepository: playlistRepository,
-                profileContextClient: profileContextClient
+                profileContextClient: profileContextClient,
+                nowPlayingClient: nowPlayingClient
             )
             return .merge(appearanceEffect, .send(.fetchEPG))
 
@@ -1554,6 +1659,7 @@ public struct PlayerFeature {
                     #if os(iOS)
                         await MainActor.run {
                             OrientationManager.shared.unlockPortrait()
+                Self.deactivateNowPlaying(state: &state, client: nowPlayingClient),
                         }
                     #endif
                     if currentSecs > 10 {
@@ -1830,8 +1936,43 @@ public struct PlayerFeature {
                 state.isTraktScrobbleStarted ? .send(.traktScrobbleStart) : .none
             )
 
+        case let .nowPlayingSessionActivated(playbackRequestID, generation):
+            guard state.playbackRequestID == playbackRequestID,
+                  state.nowPlayingGeneration == generation,
+                  !state.isClosing
+            else { return .none }
+            return Self.updateNowPlaying(state: state, client: nowPlayingClient)
+
+        case let .nowPlayingRemoteCommand(command):
+            guard !state.isClosing || state.isPiPActive,
+                  !state.isSwitchingPlaybackEngine,
+                  !state.isNowPlayingSuppressed,
+                  command.playbackRequestID == state.playbackRequestID
+            else { return .none }
+            let isPlaying = state.playerState == .playing || state.playerState == .buffering
+            switch command {
+            case .play:
+                return isPlaying && !state.isUserPaused ? .none : .send(.play)
+            case .pause:
+                return isPlaying && !state.isUserPaused ? .send(.pause) : .none
+            case .togglePlayback:
+                return isPlaying && !state.isUserPaused ? .send(.pause) : .send(.play)
+            case let .skipForward(seconds, _):
+                guard !state.item.isLive || state.isPlayingCatchup else { return .none }
+                return .send(.jumpBySeconds(max(1, seconds)))
+            case let .skipBackward(seconds, _):
+                guard !state.item.isLive || state.isPlayingCatchup else { return .none }
+                return .send(.jumpBySeconds(-max(1, seconds)))
+            case let .seek(seconds, _):
+                guard !state.item.isLive || state.isPlayingCatchup, seconds.isFinite else { return .none }
+                let totalSeconds = Self.nowPlayingMetadata(for: state).duration
+                let targetSeconds = max(0, totalSeconds.map { min($0, seconds) } ?? seconds)
+                return .send(.seekToTime(.seconds(targetSeconds)))
+            }
+
         case .pause:
             guard !state.isSwitchingPlaybackEngine else { return .none }
+            state.isNowPlayingSuppressed = false
             state.isUserPaused = true
             state.oledInactivitySeconds = 0
             return .merge(
@@ -1840,6 +1981,7 @@ public struct PlayerFeature {
                 .run { _ in
                     try await playerClient.pause()
                 },
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
                 .send(.traktScrobblePause)
             )
 
@@ -1853,10 +1995,12 @@ public struct PlayerFeature {
             state.playbackRequestID = UUID()
             state.playbackRecoveryErrorMessage = nil
             state.playbackPositionRecoveryRequestID = nil
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
             state.firstPresentedFrameFeedbackRequestID = nil
             state.activeVODSeekRequestID = nil
+            state.isNowPlayingSuppressed = true
             state.vodSeekPreviousPosition = nil
             state.vodSeekPreviousTime = nil
             state.vodSeekFailureRequestID = nil
@@ -1886,6 +2030,7 @@ public struct PlayerFeature {
 
         case .requestXtreamLiveOutputFormats:
             guard state.errorMessage != nil,
+                Self.clearNowPlaying(state: &state, client: nowPlayingClient),
                   !state.isReconnecting,
                   !state.isSwitchingPlaybackEngine,
                   !state.isLoadingXtreamLiveOutputFormats,
@@ -2825,7 +2970,8 @@ public struct PlayerFeature {
                         command: .relative(seconds: offset),
                         client: playerClient
                     ),
-                    upNextEffect
+                    upNextEffect,
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient)
                 )
             }
             let targetSecs = currentSecs + Double(offset)
@@ -2836,7 +2982,10 @@ public struct PlayerFeature {
             } else {
                 state.currentTime = Duration.seconds(max(0, targetSecs))
             }
-            return .run { _ in try await playerClient.jump(offset) }
+            return .merge(
+                .run { _ in try await playerClient.jump(offset) },
+                Self.updateNowPlaying(state: state, client: nowPlayingClient)
+            )
 
         case .jumpForward:
             return .send(.jumpBySeconds(10))
@@ -2999,7 +3148,8 @@ public struct PlayerFeature {
                         command: .time(time),
                         client: playerClient
                     ),
-                    upNextEffect
+                    upNextEffect,
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient)
                 )
             }
             state.currentTime = time
@@ -3010,7 +3160,8 @@ public struct PlayerFeature {
             return .merge(
                 .cancel(id: CancelID.scrubThumbnail),
                 .run { _ in try await playerClient.seekToTime(time) },
-                upNextEffect
+                upNextEffect,
+                Self.updateNowPlaying(state: state, client: nowPlayingClient)
             )
 
         case let .vodSeekCompleted(requestID, itemID, playbackRequestID, result):
@@ -3039,7 +3190,11 @@ public struct PlayerFeature {
             state.vodSeekFailureRequestID = shouldShowFailure ? requestID : nil
             let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
             guard shouldShowFailure else {
-                return .merge(.cancel(id: CancelID.vodSeekFeedback), upNextEffect)
+                return .merge(
+                    .cancel(id: CancelID.vodSeekFeedback),
+                    upNextEffect,
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient)
+                )
             }
             let failureFeedback: Effect<Action> = .run { send in
                 try? await Task.sleep(for: .seconds(3))
@@ -3047,7 +3202,11 @@ public struct PlayerFeature {
                 await send(.clearVODSeekFailure(requestID: requestID, itemID: itemID, playbackRequestID: playbackRequestID))
             }
             .cancellable(id: CancelID.vodSeekFeedback, cancelInFlight: true)
-            return .merge(failureFeedback, upNextEffect)
+            return .merge(
+                failureFeedback,
+                upNextEffect,
+                Self.updateNowPlaying(state: state, client: nowPlayingClient)
+            )
 
         case let .clearVODSeekFailure(requestID, itemID, playbackRequestID):
             guard state.item.id == itemID,
@@ -3072,7 +3231,11 @@ public struct PlayerFeature {
             state.catchupSeekFailureRequestID = result.didSucceed ? nil : requestID
             let upNextEffect = updateUpNextState(state: &state, settingsClient: settingsClient)
             if state.catchupSeekFailureMessage == nil {
-                return .merge(upNextEffect, .cancel(id: CancelID.catchupSeekFeedback))
+                return .merge(
+                    upNextEffect,
+                    .cancel(id: CancelID.catchupSeekFeedback),
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient)
+                )
             }
             return .merge(
                 upNextEffect,
@@ -3091,6 +3254,7 @@ public struct PlayerFeature {
             return .none
 
         case .loadSkipMarkers:
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
             let profileScope = profileContextClient.snapshot()
             guard
                 !state.item.isLive,
@@ -3205,11 +3369,14 @@ public struct PlayerFeature {
             guard !state.isSwitchingPlaybackEngine else { return .none }
             let clamped = max(0.25, min(4.0, rate))
             state.playbackRate = clamped
-            return .run { _ in
-                try await playerClient.setPlaybackRate(clamped)
-            } catch: { error, _ in
-                print("Failed to set playback rate: \(error)")
-            }
+            return .merge(
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
+                .run { _ in
+                    try await playerClient.setPlaybackRate(clamped)
+                } catch: { error, _ in
+                    print("Failed to set playback rate: \(error)")
+                }
+            )
 
         case let .setDeinterlaceMode(mode):
             guard state.playbackEngine == .vlc, !state.isSwitchingPlaybackEngine else { return .none }
@@ -3296,19 +3463,38 @@ public struct PlayerFeature {
                 state.selectedSubtitleTrack = nil
                 state.deinterlaceMode = requested
                 state.isDeinterlaceModeKnown = false
-                return .none
+                return .concatenate(
+                    nowPlayingEngineUpdate,
+                    .send(.loadAFRPreferences),
+                    .send(.matchDisplayMode)
+                )
             }
             guard let applied else {
                 state.isDeinterlaceModeKnown = false
                 state.playbackEngineError = AppStrings.Player.deinterlaceUnknown
-                return didFallbackToVLC ? .send(.fetchTracks) : .none
+                return .merge(
+                    nowPlayingEngineUpdate,
+                    didFallbackToVLC ? .send(.fetchTracks) : .none
+                )
             }
             state.deinterlaceMode = applied
             state.isDeinterlaceModeKnown = true
+            let nowPlayingClear = didChangeEngine
+                ? Self.clearNowPlaying(state: &state, client: nowPlayingClient)
+                : .none
+            let nowPlayingUpdate = Self.updateNowPlaying(state: state, client: nowPlayingClient)
+            let nowPlayingEngineUpdate = didChangeEngine
+                ? .concatenate(nowPlayingClear, nowPlayingUpdate)
+                : nowPlayingUpdate
             if applied != requested {
                 state.playbackEngineError = AppStrings.Player.deinterlaceFallback
             }
-            return didFallbackToVLC ? .send(.fetchTracks) : .none
+            return .concatenate(
+                nowPlayingEngineUpdate,
+                didFallbackToVLC ? .send(.fetchTracks) : .none,
+                .send(.loadAFRPreferences),
+                .send(.matchDisplayMode)
+            )
 
         case let .playbackEngineStartFailed(engine, itemID, streamURL, playbackRequestID):
             guard state.playbackRequestID == playbackRequestID,
@@ -3335,7 +3521,13 @@ public struct PlayerFeature {
                 state.isEPGVisible = false
                 return .send(.loadRecentChannels)
             }
-            return .none
+            let nowPlayingClear = didChangeEngine
+                ? Self.clearNowPlaying(state: &state, client: nowPlayingClient)
+                : .none
+            let nowPlayingUpdate = Self.updateNowPlaying(state: state, client: nowPlayingClient)
+            return didChangeEngine
+                ? .concatenate(nowPlayingClear, nowPlayingUpdate)
+                : nowPlayingUpdate
 
         case let .setRecentChannelsHUDVisible(isVisible):
             state.isRecentChannelsHUDVisible = isVisible
@@ -3509,6 +3701,7 @@ public struct PlayerFeature {
             state.playbackPositionRecoveryRequestID = nil
             state.mediaInfoRequestID = nil
             state.firstPresentedFrameLatency = nil
+                state.isNowPlayingSuppressed = true
             state.firstPresentedFrameFeedbackRequestID = nil
             state.playbackRecoveryErrorMessage = nil
             state.activeCatchupProgram = nil
@@ -3615,6 +3808,7 @@ public struct PlayerFeature {
                     await send(.startSelectedChannel(id: newItem.id))
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                     await send(.hideZappingHUD)
+                didChangeItem ? Self.clearNowPlaying(state: &state, client: nowPlayingClient) : .none,
                 }
                 .cancellable(id: CancelID.channelSwitch, cancelInFlight: true)
             )
@@ -4551,6 +4745,12 @@ public struct PlayerFeature {
                         .cancel(id: CancelID.reconnectTimer),
                     ]
 
+                if newState == .playing {
+                    state.isNowPlayingSuppressed = false
+                } else if newState == .stopped {
+                    state.isNowPlayingSuppressed = true
+                }
+                let nowPlayingUpdate = Self.updateNowPlaying(state: state, client: nowPlayingClient)
                     if let config = state.item.config,
                        config.type == .plex || config.type == .emby,
                        !state.hasAttemptedMediaServerPlaybackStatus
@@ -4566,6 +4766,7 @@ public struct PlayerFeature {
                                     if attempt > 0 {
                                         try await Task.sleep(for: .seconds(1))
                                     }
+                        nowPlayingUpdate,
                                     if let status = try? await mediaServerClient.fetchPlaybackStatus(config, itemID) {
                                         await send(.mediaServerPlaybackStatusLoaded(
                                             requestID: statusRequestID,
@@ -4671,16 +4872,17 @@ public struct PlayerFeature {
                             .cancellable(id: CancelID.stallWatchdog, cancelInFlight: true)
                         )
                     }
-                    return liveVideoMonitorCancellation
+                    return .merge(liveVideoMonitorCancellation, nowPlayingUpdate)
                 } else if newState == .stopped {
                     if state.item.isLive, !state.isUserPaused, !state.isMinimized {
                         return .merge(liveVideoMonitorCancellation, .send(.initiateAutoReconnect))
                     }
                 } else if newState == .error {
                     state.isTransitioningEpisode = false
-                    return .merge(liveVideoMonitorCancellation, .send(.initiateAutoReconnect))
+                    return .merge(liveVideoMonitorCancellation, nowPlayingUpdate, .send(.initiateAutoReconnect))
                 }
-                return liveVideoMonitorCancellation
+                return .merge(liveVideoMonitorCancellation, nowPlayingUpdate)
+                            nowPlayingUpdate,
             case .endReached:
                 if state.item.isLive, !state.isUserPaused, !state.isMinimized {
                     return .send(.initiateAutoReconnect)
@@ -4695,17 +4897,26 @@ public struct PlayerFeature {
             case let .timeChanged(time):
                 state.currentTime = time
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
+                    return .concatenate(
+                        liveVideoMonitorCancellation,
+                        Self.clearNowPlaying(state: &state, client: nowPlayingClient),
+                        reconnectEffect
+                    )
                     let totalSecs = Double(time.components.seconds) / state.position
                     state.totalTime = Duration.seconds(totalSecs)
                 }
                 return .merge(
                     updateUpNextState(state: &state, settingsClient: settingsClient),
                     reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient),
-                    reloadRememberedPlaybackChoiceAfterProfileChange(state: &state, profileContextClient: profileContextClient)
+                    reloadRememberedPlaybackChoiceAfterProfileChange(state: &state, profileContextClient: profileContextClient),
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient, force: false)
                 )
             case let .lengthChanged(length):
                 state.totalTime = length
-                return updateUpNextState(state: &state, settingsClient: settingsClient)
+                return .merge(
+                    updateUpNextState(state: &state, settingsClient: settingsClient),
+                    Self.updateNowPlaying(state: state, client: nowPlayingClient)
+                )
             case let .positionChanged(pos):
                 state.position = pos
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, pos > 0.001, state.currentTime.components.seconds > 0 {
@@ -4935,6 +5146,7 @@ public struct PlayerFeature {
             let profileID = state.playbackEngineSwitchProfileID
             if let scopeKey = PlaybackChoicePreferenceStore.scopeKey(
                 item: state.item,
+                Self.clearNowPlaying(state: &state, client: nowPlayingClient),
                 playbackURL: state.activePlaybackURL,
                 profileID: profileID
             ) {
@@ -5005,6 +5217,7 @@ public struct PlayerFeature {
 
         case .listenForPlayerEvents:
             let itemID = state.item.id
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
             let playbackRequestID = state.playbackRequestID
             return .run { send in
                 let stream = await playerClient.events()
@@ -5034,7 +5247,7 @@ public struct PlayerFeature {
             }.cancellable(id: CancelID.playerEvents, cancelInFlight: true)
 
         case .playerEvent:
-            return .none
+            return Self.updateNowPlaying(state: state, client: nowPlayingClient)
 
         case .closeTapped:
             guard !state.isClosing else { return .none }
@@ -5087,6 +5300,11 @@ public struct PlayerFeature {
                 .cancel(id: CancelID.vodSeek),
                 .cancel(id: CancelID.vodSeekFeedback),
                 .cancel(id: CancelID.highFPSFeedback),
+            let nowPlayingCleanup: Effect<Action> = if isPiPActive {
+                .none
+            } else {
+                Self.deactivateNowPlaying(state: &state, client: nowPlayingClient)
+            }
                 .cancel(id: CancelID.seriesPlaylist),
                 .cancel(id: CancelID.oledDimTimer),
                 .cancel(id: CancelID.audioRoute),
@@ -5115,6 +5333,7 @@ public struct PlayerFeature {
                         let type = item.seriesTitle == nil ? "vod" : "episode"
                         let historyItem = WatchHistoryItem(
                             id: item.id,
+                nowPlayingCleanup,
                             type: type,
                             title: item.title,
                             seriesTitle: item.seriesTitle,
@@ -5309,15 +5528,17 @@ public struct PlayerFeature {
                 if state.isAutoPiPEnabled, state.isPiPSupported, state.playerState == .playing {
                     state.shouldTriggerPiP = true
                 }
-                return Self.stopLiveVideoStallMonitoring(state: &state)
+                return .merge(stopLiveVideoStallMonitoring(state: &state), nowPlayingUpdate)
             case .audioOnly:
                 if state.playerState == .playing {
                     state.isBackgroundAudioActive = true
+            let nowPlayingUpdate = Self.updateNowPlaying(state: state, client: nowPlayingClient)
                 }
-                return Self.stopLiveVideoStallMonitoring(state: &state)
+                return .merge(stopLiveVideoStallMonitoring(state: &state), nowPlayingUpdate)
             case .disabled:
                 return .merge(
-                    Self.stopLiveVideoStallMonitoring(state: &state),
+                    stopLiveVideoStallMonitoring(state: &state),
+                    nowPlayingUpdate,
                     .run { send in
                         await send(.pause)
                     }
@@ -5327,7 +5548,10 @@ public struct PlayerFeature {
         case .appMovedToForeground:
             state.isAppInBackground = false
             state.isBackgroundAudioActive = false
-            return .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
+            return .merge(
+                Self.updateNowPlaying(state: state, client: nowPlayingClient),
+                .send(.startLiveVideoStallMonitoring(itemID: state.item.id, playbackRequestID: state.playbackRequestID))
+            )
 
         case .pipStarted:
             state.isPiPActive = true
