@@ -72,8 +72,9 @@ public struct HomeFeature {
             if liveTVOnlyNavigation {
                 return [.liveTV, .settings]
             }
-            guard settings.hideEmptyContentTabs else { return HomeTab.allCases }
-            return HomeTab.allCases.filter { tab in
+            let navigationTabs = HomeTab.allCases.filter { $0 != .search }
+            guard settings.hideEmptyContentTabs else { return navigationTabs }
+            return navigationTabs.filter { tab in
                 switch tab {
                 case .liveTV:
                     !dashboard.hasResolvedLiveCatalog || dashboard.hasLiveContent
@@ -96,6 +97,9 @@ public struct HomeFeature {
             liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
             if let tab = HomeTab(rawValue: tabString) {
                 selectedTab = tab
+            }
+            if selectedTab == .search {
+                selectedTab = .dashboard
             }
             if liveTVOnlyNavigation, selectedTab != .settings {
                 selectedTab = .liveTV
@@ -137,6 +141,7 @@ public struct HomeFeature {
             case restartHistoryItem(WatchHistoryItem)
             case openManagePlaylists
             case switchProfile
+            case presentSearch
         }
     }
 

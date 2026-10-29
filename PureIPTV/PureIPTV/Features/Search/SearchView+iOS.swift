@@ -4,7 +4,9 @@
 
     public struct SearchView_iOS: View {
         @Bindable var store: StoreOf<SearchFeature>
+        @FocusState private var isSearchFieldFocused: Bool
         let config: PlaylistConfig
+        let onClose: (() -> Void)?
 
         /// Columns for grids
         private let channelColumns: [GridItem] = [
@@ -17,9 +19,10 @@
             GridItem(.adaptive(minimum: 190, maximum: 300), spacing: 12),
         ]
 
-        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
+        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig, onClose: (() -> Void)? = nil) {
             self.store = store
             self.config = config
+            self.onClose = onClose
         }
 
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
@@ -29,6 +32,7 @@
             } else {
                 config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
             }
+            onClose = nil
         }
 
         public var body: some View {
@@ -82,6 +86,7 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .defaultFocus($isSearchFieldFocused, true)
             // Dismiss keyboard when scrolling or tapping outside
             .onTapGesture {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -99,6 +104,7 @@
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused($isSearchFieldFocused)
 
                 if store.isSearching || store.isCurrentScopeSearching {
                     PureLoadingView(size: .small)
@@ -113,6 +119,16 @@
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
                     }
+                }
+
+                if let onClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppStrings.Common.close)
                 }
             }
             .padding(12)

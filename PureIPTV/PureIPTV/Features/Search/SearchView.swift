@@ -4,10 +4,12 @@ import SwiftUI
 public struct SearchView: View {
     let store: StoreOf<SearchFeature>
     let config: PlaylistConfig
+    let onClose: (() -> Void)?
 
-    public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
+    public init(store: StoreOf<SearchFeature>, config: PlaylistConfig, onClose: (() -> Void)? = nil) {
         self.store = store
         self.config = config
+        self.onClose = onClose
     }
 
     public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
@@ -17,13 +19,14 @@ public struct SearchView: View {
         } else {
             config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
         }
+        onClose = nil
     }
 
     public var body: some View {
         #if os(tvOS)
-            SearchView_tvOS(store: store, config: config)
+            SearchView_tvOS(store: store, config: config, onClose: onClose)
         #else
-            SearchView_iOS(store: store, config: config)
+            SearchView_iOS(store: store, config: config, onClose: onClose)
         #endif
     }
 }

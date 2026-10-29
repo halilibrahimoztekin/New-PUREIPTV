@@ -1387,6 +1387,61 @@ public struct ProfileAddProfileRouteFeature {
 }
 
 @Reducer
+public struct GlobalSearchRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public let homeRouteIndex: Int
+        public let config: PlaylistConfig
+        public var search = SearchFeature.State()
+
+        public init(homeRouteIndex: Int, config: PlaylistConfig, presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+            self.homeRouteIndex = homeRouteIndex
+            self.config = config
+        }
+    }
+
+    public enum Action {
+        case search(SearchFeature.Action)
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+            case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
+            case didSelectVOD(MediaModels.Item)
+            case didSelectSeries(MediaModels.Item)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Scope(state: \.search, action: \.search) {
+            SearchFeature()
+        }
+
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                return .send(.delegate(.close(presentationID: state.presentationID)))
+
+            case let .search(.delegate(.didSelectChannel(channel, playlist))):
+                return .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
+
+            case let .search(.delegate(.didSelectVOD(vod))):
+                return .send(.delegate(.didSelectVOD(vod)))
+
+            case let .search(.delegate(.didSelectSeries(series))):
+                return .send(.delegate(.didSelectSeries(series)))
+
+            case .search, .delegate:
+                return .none
+            }
+        }
+    }
+}
+
+@Reducer
 public enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
@@ -1394,6 +1449,7 @@ public enum AppScreen {
     case profileSelection(ProfileSelectionFeature)
     case profileAddProfile(ProfileAddProfileRouteFeature)
     case home(HomeFeature)
+    case globalSearch(GlobalSearchRouteFeature)
     case player(PlayerFeature)
     case epgGuide(EPGGuideFeature)
     case epgTimeline(EPGTimelineFeature)
@@ -1444,6 +1500,7 @@ extension AppScreen.State: Hashable {
         case let (.profileSelection(l), .profileSelection(r)): l == r
         case let (.profileAddProfile(l), .profileAddProfile(r)): l.presentationID == r.presentationID
         case let (.home(l), .home(r)): l == r
+        case let (.globalSearch(l), .globalSearch(r)): l.presentationID == r.presentationID
         case let (.player(l), .player(r)): l == r
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
@@ -1502,6 +1559,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(state.presentationID)
         case .home:
             hasher.combine(4)
+        case let .globalSearch(state):
+            hasher.combine(45)
+            hasher.combine(state.presentationID)
         case let .player(state):
             hasher.combine(5)
             hasher.combine(state.item.id)

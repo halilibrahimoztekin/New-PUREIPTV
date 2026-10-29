@@ -5,6 +5,7 @@
     public struct SearchView_tvOS: View {
         @Bindable var store: StoreOf<SearchFeature>
         let config: PlaylistConfig
+        let onClose: (() -> Void)?
         @FocusState private var focusedTarget: SearchFocusTarget?
         @AccessibilityFocusState private var accessibilityFocusedTarget: SearchFocusTarget?
         @State private var shouldFocusResultsWhenAvailable = false
@@ -34,9 +35,10 @@
             GridItem(.adaptive(minimum: 360, maximum: 480), spacing: 40),
         ]
 
-        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig) {
+        public init(store: StoreOf<SearchFeature>, config: PlaylistConfig, onClose: (() -> Void)? = nil) {
             self.store = store
             self.config = config
+            self.onClose = onClose
         }
 
         public init(store: StoreOf<SearchFeature>, serverURL: String, username: String, password: String) {
@@ -46,6 +48,7 @@
             } else {
                 config = PlaylistConfig(type: .xtream, serverURL: URL(string: serverURL), username: username, password: password)
             }
+            onClose = nil
         }
 
         public var body: some View {
@@ -98,6 +101,10 @@
             .onAppear {
                 isViewVisible = true
                 store.send(.onAppear(config: config))
+            }
+            .defaultFocus($focusedTarget, .search)
+            .onExitCommand {
+                onClose?()
             }
             .onDisappear {
                 isViewVisible = false
@@ -180,6 +187,17 @@
                     .buttonStyle(TVCircleButtonStyle())
                     .focused($focusedTarget, equals: .clearQuery)
                     .accessibilityFocused($accessibilityFocusedTarget, equals: .clearQuery)
+                }
+
+                if let onClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                            .font(.system(size: 28))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(TVCircleButtonStyle())
+                    .accessibilityLabel(AppStrings.Common.close)
                 }
             }
             .padding(20)

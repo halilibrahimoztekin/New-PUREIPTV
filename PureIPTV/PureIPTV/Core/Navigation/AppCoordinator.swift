@@ -2037,6 +2037,65 @@ public struct AppCoordinator {
             return .none
 
         // ── Home Delegates ───────────────────────────────────────
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSearch)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen
+            else { return .none }
+            state.routes.presentCover(.globalSearch(GlobalSearchRouteFeature.State(
+                homeRouteIndex: homeRouteIndex,
+                config: homeState.config
+            )))
+            return .none
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  searchState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectChannel(channel, playlist))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                searchState.homeRouteIndex,
+                .home(.delegate(.didSelectChannel(channel, playlist: playlist)))
+            )))
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectVOD(vod))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                searchState.homeRouteIndex,
+                .home(.delegate(.didSelectVOD(vod)))
+            )))
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectSeries(series))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                searchState.homeRouteIndex,
+                .home(.delegate(.didSelectSeries(series)))
+            )))
+
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
             guard let config = state.activeConfig else { return .none }
             guard let playerState = makeLivePlayerState(channel: channel, playlist: playlist, config: config) else { return .none }
@@ -3507,6 +3566,8 @@ public struct AppCoordinatorView: View {
                 ProfileAddProfileRouteView(coordinatorStore: store, routeStore: screenStore)
             case let .home(store):
                 HomeView(store: store)
+            case let .globalSearch(screenStore):
+                GlobalSearchRouteView(routeStore: screenStore)
             case let .player(store):
                 PlayerView(store: store)
             case let .epgGuide(screenStore):
