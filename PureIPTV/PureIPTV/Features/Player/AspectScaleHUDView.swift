@@ -47,7 +47,7 @@ public struct AspectScaleHUDView: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
 
-                if mode == .zoom || scale > 1.05 {
+                if mode == .zoom, scale > 1.05 {
                     Text(String(format: "%.1fx Yakınlaştırıldı", scale))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
