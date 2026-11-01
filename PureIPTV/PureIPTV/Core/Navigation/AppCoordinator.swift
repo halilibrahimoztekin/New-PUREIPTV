@@ -273,12 +273,121 @@ public struct AppCoordinator {
     }
 
     private func core(state: inout State, action: Action) -> Effect<Action> {
+        switch action {
+        case let .router(.routeAction(routeIndex, screenAction)):
+            reduceRouteAction(state: &state, routeIndex: routeIndex, screenAction: screenAction, action: action)
+
+        case .proceedToApp,
+             .checkSubscriptionStatus,
+             .subscriptionStatusResponse,
+             .presentPaywall,
+             .receiveStreamHandoff,
+             .streamHandoffResolved,
+             .dismissStreamHandoffError,
+             .appEnteredForeground,
+             .appEnteredBackground,
+             .epgReminderMonitorTick:
+            reduceLifecycleAndHandoff(state: &state, action: action)
+
+        case .expandPlayer,
+             .closeMiniPlayer,
+             .toggleMiniPlayer,
+             .miniPlayer:
+            reducePlayerAndMiniPlayer(state: &state, action: action)
+
+        case .handleDeepLink,
+             .topShelfItemResolved,
+             .selectPlaylistForTransfer,
+             .playlistTransferPlaylistsLoaded,
+             .confirmPlaylistTransfer,
+             .playlistTransferSubmissionResponse,
+             .cancelPlaylistTransfer:
+            reduceDeepLinkingAndTransfer(state: &state, action: action)
+
+        default:
+            reduceRouteDisappearances(state: &state, action: action)
+        }
+    }
+
+    @inline(never)
+    private func reduceRouteAction(state: inout State, routeIndex _: Int, screenAction: AppScreen.Action, action: Action) -> Effect<Action> {
+        switch screenAction {
+        case .splash:
+            reduceSplash(state: &state, action: action)
+        case .onboarding:
+            reduceOnboarding(state: &state, action: action)
+        case .profileSelection, .profileAddProfile:
+            reduceProfile(state: &state, action: action)
+        case .addPlaylist, .addPlaylistQRTransfer, .playlistQRTransferConfirmation:
+            reduceAddPlaylist(state: &state, action: action)
+        case .playlistManagement, .playlistManagementSettings, .playlistManagementPIN, .playlistManagementAddPlaylist:
+            reducePlaylistManagement(state: &state, action: action)
+        case .paywall, .parentalLock:
+            reducePaywallAndSecurity(state: &state, action: action)
+        case .epgGuide, .epgTimeline, .epgTimelineProgramDetail, .epgTimelineChannelLogoEditor, .customEPGSettings, .customEPGSourceAdd:
+            reduceEPG(state: &state, action: action)
+        case .multiView, .multiViewChannelSelection:
+            reduceMultiView(state: &state, action: action)
+        case .categoryManagement, .smartChannelGroupManagement, .favoriteChannelListManagement, .channelPresentationEditor, .m3uCategoryMappingEditor:
+            reduceChannelAndCategoryManagement(state: &state, action: action)
+        case .dashboardPresentation:
+            reduceDashboardPresentation(state: &state, action: action)
+        case .seriesDetail:
+            reduceSeriesDetail(state: &state, action: action)
+        case .vodDetail:
+            reduceVODDetail(state: &state, action: action)
+        case .detailSynopsis, .detailActorBiography, .detailTrailer, .detailUnmatchedMovie, .detailTMDBMatchPicker:
+            reduceDetailModals(state: &state, action: action)
+        case .player, .playerSpeedTest, .playerSubtitleSearch:
+            reducePlayerRoute(state: &state, action: action)
+        case .home:
+            reduceHome(state: &state, action: action)
+        case .settingsSpeedTest, .settingsPINSetup, .settingsTraktAuth, .settingsTraktWatchlist, .settingsHiddenContent, .settingsDiagnosticReport, .settingsBackupPreview:
+            reduceSettingsModals(state: &state, action: action)
+        case .globalSearch:
+            reduceGlobalSearch(state: &state, action: action)
+        case .hiddenMediaManagement:
+            reduceHiddenMediaManagement(state: &state, action: action)
+        default:
+            .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHome(state: inout State, action: Action) -> Effect<Action> {
+        guard case let .router(.routeAction(_, .home(homeAction))) = action else { return .none }
+        switch homeAction {
+        case .settings:
+            return reduceHomeSettings(state: &state, action: action)
+        case .dashboard:
+            return reduceHomeDashboard(state: &state, action: action)
+        default:
+            var handled = false
+            let e1 = reduceHomeChannelDelegates(state: &state, action: action, handled: &handled)
+            if handled {
+                return e1
+            }
+            return reduceHomeMediaDelegates(state: &state, action: action, handled: &handled)
+        }
+    }
+
+    @inline(never)
+    private func reduceRouteDisappearances(state: inout State, action: Action) -> Effect<Action> {
+        var handled = false
+        let e1 = reduceDisappearancesMedia(state: &state, action: action, handled: &handled)
+        if handled {
+            return e1
+        }
+        return reduceDisappearancesSettings(state: &state, action: action, handled: &handled)
+    }
+
+    @inline(never)
+    private func reduceSplash(state: inout State, action: Action) -> Effect<Action> {
         let playlistRepository = playlistRepository
         let iptvClient = iptvClient
         let previewPlayerClient = previewPlayerClient
 
         switch action {
-        // ── Splash ───────────────────────────────────────────────
         case .router(.routeAction(_, .splash(.splashDidFinish))):
             let isWelcomeCompleted = UserDefaults.standard.bool(forKey: "isOnboardingCompleted")
             if !isWelcomeCompleted {
@@ -290,42 +399,34 @@ public struct AppCoordinator {
             return .send(.proceedToApp)
 
         // ── Onboarding ───────────────────────────────────────────
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceOnboarding(state _: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
         case .router(.routeAction(_, .onboarding(.delegate(.didCompleteOnboarding)))):
             return .send(.proceedToApp)
 
         // ── Proceed To App ───────────────────────────────────────
-        case .proceedToApp:
-            let activePlaylist: SavedPlaylist?
-            switch playlistRepository.readStartupPlaylist() {
-            case let .loaded(playlist):
-                activePlaylist = playlist
-                state.isStartupPlaylistReadFailed = false
-            case .failed:
-                state.isStartupPlaylistReadFailed = true
-                return .none
-            }
-            if let activePlaylist,
-               parentalControlClient.isPlaylistLocked(activePlaylist.id),
-               !state.unlockedPlaylistIDs.contains(activePlaylist.id)
-            {
-                state.routes = [.root(
-                    .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: activePlaylist.id)),
-                    withNavigation: true
-                )]
-                return .none
-            }
-            let hasValidPlaylist = activePlaylist?.toPlaylistConfig() != nil
-
-            withAnimation(.easeInOut(duration: 0.35)) {
-                if hasValidPlaylist {
-                    state.routes = [.root(.profileSelection(ProfileSelectionFeature.State()), withNavigation: true)]
-                } else {
-                    state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
-                }
-            }
+        default:
             return .none
+        }
+    }
 
-        // ── Profile Selection ────────────────────────────────────
+    @inline(never)
+    private func reduceProfile(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
         case let .router(.routeAction(routeIndex, .profileSelection(.addProfileTapped))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
@@ -361,22 +462,6 @@ public struct AppCoordinator {
                 action: .profileSelection(.binding(.set(\.showingAddProfile, false)))
             )))
 
-        case let .profileAddProfileRouteDidDisappear(presentationID, profileSelectionRouteIndex):
-            guard !state.routes.contains(where: { route in
-                guard case let .profileAddProfile(routeState) = route.screen else { return false }
-                return routeState.presentationID == presentationID
-                    || routeState.profileSelectionRouteIndex == profileSelectionRouteIndex
-            }),
-                state.routes.indices.contains(profileSelectionRouteIndex),
-                case let .profileSelection(profileState) = state.routes[profileSelectionRouteIndex].screen,
-                profileState.showingAddProfile
-            else { return .none }
-
-            return .send(.router(.routeAction(
-                id: profileSelectionRouteIndex,
-                action: .profileSelection(.binding(.set(\.showingAddProfile, false)))
-            )))
-
         case .router(.routeAction(_, .profileSelection(.delegate(.didSelectProfile)))):
             ThemeManager.shared.activateProfileTheme(profileID: profileContextClient.snapshot().profileID)
             guard case let .loaded(activePlaylist) = playlistRepository.readActivePlaylist() else {
@@ -390,6 +475,88 @@ public struct AppCoordinator {
             }
             return .send(.checkSubscriptionStatus)
 
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceAddPlaylist(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .addPlaylist(.delegate(.presentQRTransfer)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .addPlaylist = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.presentSheet(.addPlaylistQRTransfer(
+                AddPlaylistQRTransferRouteFeature.State(
+                    parent: .addPlaylistRoute(routeIndex: routeIndex)
+                )
+            ))
+            return .none
+
+        case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))),
+             .router(.routeAction(_, .addPlaylist(.delegate(.didReceiveTransferredPlaylist)))):
+            withAnimation(.easeInOut(duration: 0.35)) {
+                state.routes = [.root(.splash(SplashFeature.State()), withNavigation: true)]
+            }
+            return .none
+
+        // ── Subscription Check ───────────────────────────────────
+        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            return .send(.addPlaylistQRTransferRouteDidDisappear(
+                presentationID: presentationID,
+                parent: routeState.parent,
+                wasPaired: routeState.isPaired
+            ))
+
+        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.complete(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.isPaired
+            else { return .none }
+            return .send(.addPlaylistQRTransferRouteDidDisappear(
+                presentationID: presentationID,
+                parent: routeState.parent,
+                wasPaired: true
+            ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .playlistQRTransferConfirmation(.delegate(.cancel(presentationID, sessionID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playlistQRTransferConfirmation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.sessionID == sessionID
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reducePlaylistManagement(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
         case let .router(.routeAction(_, .playlistManagement(.delegate(.didUnlockPlaylist(id))))):
             state.unlockedPlaylistIDs.insert(id)
             state.miniPlayer = nil
@@ -424,1103 +591,6 @@ public struct AppCoordinator {
             return .none
 
         // ── Add Playlist ─────────────────────────────────────────
-        case let .router(.routeAction(routeIndex, .addPlaylist(.delegate(.presentQRTransfer)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case .addPlaylist = state.routes[routeIndex].screen
-            else { return .none }
-            state.routes.presentSheet(.addPlaylistQRTransfer(
-                AddPlaylistQRTransferRouteFeature.State(
-                    parent: .addPlaylistRoute(routeIndex: routeIndex)
-                )
-            ))
-            return .none
-
-        case .router(.routeAction(_, .addPlaylist(.delegate(.didConnect)))),
-             .router(.routeAction(_, .addPlaylist(.delegate(.didReceiveTransferredPlaylist)))):
-            withAnimation(.easeInOut(duration: 0.35)) {
-                state.routes = [.root(.splash(SplashFeature.State()), withNavigation: true)]
-            }
-            return .none
-
-        // ── Subscription Check ───────────────────────────────────
-        case .checkSubscriptionStatus:
-            return .run { send in
-                await send(.subscriptionStatusResponse(TaskResult {
-                    try await purchases.customerInfo()
-                }))
-            }
-
-        case let .subscriptionStatusResponse(.success(info)):
-            state.isPremium = !info.entitlements.active.isEmpty
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
-            return .none
-
-        case .subscriptionStatusResponse(.failure):
-            state.isPremium = false
-            return .send(.presentPaywall)
-
-        case .presentPaywall:
-            state.routes.presentSheet(.paywall(PaywallFeature.State()))
-            return .none
-
-        case let .receiveStreamHandoff(request):
-            if parentalControlClient.isPlaylistLocked(request.playlistID),
-               !state.unlockedPlaylistIDs.contains(request.playlistID)
-            {
-                state.isStreamHandoffErrorPresented = true
-                return .none
-            }
-            let requestID = UUID()
-            state.activeStreamHandoffRequestID = requestID
-            state.isStreamHandoffErrorPresented = false
-            return .run { send in
-                let playlist = playlistRepository.getPlaylists().first { $0.id == request.playlistID }
-                guard let playlist, let config = playlist.toPlaylistConfig() else {
-                    await send(.streamHandoffResolved(requestID: requestID, playable: nil))
-                    return
-                }
-
-                let playable: PlayerFeature.PlayableItem?
-                switch request.mediaKind {
-                case .live:
-                    let item = try? await iptvClient.resolveLiveItem(config, request.itemID, request.categoryID)
-                    playable = item.flatMap { item in
-                        guard let url = item.streamURL else { return nil }
-                        return PlayerFeature.PlayableItem(
-                            id: item.id,
-                            title: request.title,
-                            streamURL: url,
-                            coverURL: item.displayLogoURL,
-                            fallbackCoverURL: item.coverURL,
-                            isLive: true,
-                            config: config,
-                            epgChannelID: item.epgChannelID,
-                            tvArchive: item.tvArchive,
-                            categoryID: item.categoryID
-                        )
-                    }
-                case .vod:
-                    let item = try? await iptvClient.resolveVODItem(config, request.itemID, request.categoryID, nil)
-                    playable = item.flatMap { item in
-                        guard let url = item.streamURL else { return nil }
-                        return PlayerFeature.PlayableItem(
-                            id: item.id,
-                            title: item.title,
-                            streamURL: url,
-                            coverURL: item.displayLogoURL,
-                            startPosition: request.playbackPosition,
-                            config: config,
-                            categoryID: item.categoryID
-                        )
-                    }
-                case .episode:
-                    guard let seriesID = request.seriesID else {
-                        await send(.streamHandoffResolved(requestID: requestID, playable: nil))
-                        return
-                    }
-                    let details = try? await iptvClient.fetchSeriesInfo(config, seriesID)
-                    playable = details?.episodes.first(where: { $0.id == request.itemID }).map { episode in
-                        PlayerFeature.PlayableItem(
-                            id: episode.id,
-                            title: request.title,
-                            seriesTitle: request.seriesTitle,
-                            streamURL: episode.streamURL,
-                            coverURL: episode.coverURL,
-                            seriesID: seriesID,
-                            startPosition: request.playbackPosition,
-                            config: config
-                        )
-                    }
-                }
-                await send(.streamHandoffResolved(requestID: requestID, playable: playable))
-            }
-            .cancellable(id: CancelID.streamHandoffResolution, cancelInFlight: true)
-
-        case let .streamHandoffResolved(requestID, playable):
-            guard state.activeStreamHandoffRequestID == requestID else { return .none }
-            state.activeStreamHandoffRequestID = nil
-            guard let playable else {
-                state.isStreamHandoffErrorPresented = true
-                return .none
-            }
-            let playerState = PlayerFeature.State(item: playable)
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            return .none
-
-        case .dismissStreamHandoffError:
-            state.isStreamHandoffErrorPresented = false
-            return .none
-
-        case .appEnteredForeground:
-            state.isForeground = true
-            let reminderClient = reminderClient
-            return .run { send in
-                while !Task.isCancelled {
-                    let due = await reminderClient.reconcileScheduledReminders()
-                    await send(.epgReminderMonitorTick(due))
-                    do {
-                        try await Task.sleep(for: .seconds(15))
-                    } catch {
-                        return
-                    }
-                }
-            }.cancellable(id: CancelID.epgReminderMonitor, cancelInFlight: true)
-
-        case .appEnteredBackground:
-            state.isForeground = false
-            var effects: [Effect<Action>] = [.cancel(id: CancelID.epgReminderMonitor)]
-            for routeIndex in state.routes.indices {
-                guard case .epgTimeline = state.routes[routeIndex].screen else { continue }
-                effects.append(.send(.router(.routeAction(id: routeIndex, action: .epgTimeline(.cancelEPGSync)))))
-            }
-            return .merge(effects)
-
-        case let .epgReminderMonitorTick(reminders):
-            guard state.isForeground,
-                  settingsClient.autoSwitchOnEPGReminder(),
-                  state.routes.count == 1,
-                  !state.isPlayerMini,
-                  state.miniPlayer == nil,
-                  case let .home(home) = state.routes[0].screen,
-                  home.liveTV.epgTimeline?.activePreviewChannel == nil,
-                  home.liveTV.epgTimeline?.isPiPActive != true,
-                  let activeConfig = state.activeConfig
-            else { return .none }
-            let activeIdentity = EPGReminderIdentifier.playlistIdentity(for: activeConfig)
-            guard let reminder = reminders.first(where: {
-                !$0.autoSwitchHandled && !state.handledEPGReminderIDs.contains($0.id)
-                    && $0.playlistIdentity == activeIdentity
-                    && $0.startTime <= Date() && Date() < $0.endTime
-            }) else { return .none }
-            let channels = home.liveTV.channelsByCategory.values.flatMap(\.self)
-                + home.liveTV.smartGroupChannels
-                + home.liveTV.favoriteListResolvedChannels
-            guard let channel = channels.first(where: { $0.id == reminder.channelID }),
-                  let streamURL = channel.streamURL
-            else {
-                return .none
-            }
-            state.handledEPGReminderIDs.insert(reminder.id)
-            let playable = PlayerFeature.PlayableItem(
-                id: channel.id, title: channel.title, streamURL: streamURL,
-                coverURL: channel.displayLogoURL, fallbackCoverURL: channel.coverURL,
-                isLive: true, config: activeConfig,
-                epgChannelID: channel.epgChannelID, tvArchive: channel.tvArchive,
-                categoryID: channel.categoryID
-            )
-            state.routes.presentCover(.player(PlayerFeature.State(item: playable)))
-            let reminderClient = reminderClient
-            return .run { _ in
-                await reminderClient.markAutoSwitchHandled(reminder.id)
-            }
-
-        case .router(.routeAction(_, .paywall(.dismiss))),
-             .router(.routeAction(_, .paywall(.closeButtonTapped))):
-            if case .paywall = state.routes.last?.screen {
-                state.routes.dismiss()
-            }
-            return .send(.checkSubscriptionStatus)
-
-        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.close)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgGuide(guideState) = state.routes[routeIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .run { [previewPlayerClient, ownerID = guideState.presentationID] _ in
-                await previewPlayerClient.stopPreviewOwned(ownerID)
-            }
-
-        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.playChannel(
-            channel,
-            focusChannelID: focusChannelID,
-            presentationID: presentationID
-        ))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgGuide(guideState) = state.routes[routeIndex].screen,
-                  guideState.presentationID == presentationID,
-                  let playerState = makeLivePlayerState(
-                      channel: channel,
-                      playlist: guideState.channels,
-                      config: guideState.config
-                  )
-            else {
-                return .run { [playerClient, presentationID] _ in
-                    await MainActor.run {
-                        playerClient.discardPreviewPromotionOwned(presentationID)
-                    }
-                }
-            }
-            state.routes.dismiss()
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            guard let homeRouteIndex = state.routes.lastIndex(where: { route in
-                if case .home = route.screen {
-                    return true
-                }
-                return false
-            }) else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.liveTV(.restoreChannelFocus(channelID: focusChannelID)))
-            )))
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentProgramDetails(
-            timelinePresentationID: timelinePresentationID,
-            detailRequestID: detailRequestID,
-            program: program,
-            channel: channel
-        ))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
-                  timelineState.presentationID == timelinePresentationID,
-                  timelineState.selectedProgramDetailRequestID == detailRequestID,
-                  timelineState.selectedProgramDetail == program,
-                  timelineState.selectedProgramChannel == channel
-            else { return .none }
-
-            state.routes.presentSheet(.epgTimelineProgramDetail(
-                EPGTimelineProgramDetailRouteFeature.State(
-                    timelineRouteIndex: routeIndex,
-                    timelinePresentationID: timelinePresentationID,
-                    detailRequestID: detailRequestID,
-                    config: timelineState.config,
-                    program: program,
-                    channel: channel
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentChannelLogoEditor(
-            timelinePresentationID: timelinePresentationID,
-            channelID: channelID
-        ))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
-                  timelineState.presentationID == timelinePresentationID,
-                  let playlistID = timelineState.config.playlistID,
-                  let channel = timelineState.channels.first(where: { $0.id == channelID && $0.type == .live })
-            else { return .none }
-
-            state.routes.presentSheet(.epgTimelineChannelLogoEditor(
-                EPGTimelineChannelLogoEditorRouteFeature.State(
-                    timelineRouteIndex: routeIndex,
-                    timelinePresentationID: timelinePresentationID,
-                    playlistID: playlistID,
-                    channel: channel
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.dismissProgramDetails))):
-            guard state.routes.indices.contains(routeIndex),
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
-                  let detailRequestID = timelineState.selectedProgramDetailRequestID
-            else { return .none }
-
-            if let detailRouteIndex = state.routes.indices.last(where: { index in
-                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
-                return detailState.timelineRouteIndex == routeIndex
-                    && detailState.timelinePresentationID == timelineState.presentationID
-                    && detailState.detailRequestID == detailRequestID
-            }), detailRouteIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
-            return .none
-
-        case let .router(.routeAction(routeIndex, .epgTimelineProgramDetail(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimelineProgramDetail(detailState) = state.routes[routeIndex].screen,
-                  detailState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.router(.routeAction(
-                id: detailState.timelineRouteIndex,
-                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailState.detailRequestID))
-            )))
-
-        case let .router(.routeAction(routeIndex, .epgTimelineChannelLogoEditor(.closeTapped(presentationID)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimelineChannelLogoEditor(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.close)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
-                await previewPlayerClient.stopPreviewOwned(ownerID)
-            }
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.playChannel(channel, presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
-                  timelineState.presentationID == presentationID,
-                  let playerState = makeLivePlayerState(
-                      channel: channel,
-                      playlist: timelineState.channels,
-                      config: timelineState.config
-                  )
-            else {
-                return .run { [playerClient, presentationID] _ in
-                    await MainActor.run {
-                        playerClient.discardPreviewPromotionOwned(presentationID)
-                    }
-                }
-            }
-            state.routes.dismiss()
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
-                await previewPlayerClient.stopPreviewOwned(ownerID)
-            }
-
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
-                  timelineState.config.playlistID == playlistID,
-                  let homeRouteIndex = state.routes.lastIndex(where: { route in
-                      if case .home = route.screen {
-                          return true
-                      }
-                      return false
-                  })
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.liveTV(.channelLogoOverrideUpdated(channelID: channelID, playlistID: playlistID, url: url)))
-            )))
-
-        case let .router(.routeAction(routeIndex, .multiView(.delegate(.close)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case .multiView = state.routes[routeIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .multiViewChannelSelection(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .multiViewChannelSelection(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.multiViewRouteIndex),
-                  case let .multiView(multiViewState) = state.routes[routeState.multiViewRouteIndex].screen,
-                  multiViewState.presentationID == routeState.multiViewPresentationID,
-                  multiViewState.isSelectingChannelForSlotID == routeState.slotID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.multiViewRouteIndex,
-                action: .multiView(.channelSelectionDismissed)
-            )))
-
-        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .favoriteChannelListManagement(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .favoriteChannelListManagement(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            return .send(.addPlaylistQRTransferRouteDidDisappear(
-                presentationID: presentationID,
-                parent: routeState.parent,
-                wasPaired: routeState.isPaired
-            ))
-
-        case let .router(.routeAction(routeIndex, .addPlaylistQRTransfer(.delegate(.complete(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.isPaired
-            else { return .none }
-            return .send(.addPlaylistQRTransferRouteDidDisappear(
-                presentationID: presentationID,
-                parent: routeState.parent,
-                wasPaired: true
-            ))
-
-        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.selectEPGChannel(presentationID, channel))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  case let .epgChannelPicker(playlistID, profileScope, event) = routeState.presentation,
-                  state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.config == routeState.homeConfig,
-                  homeState.dashboard.activePlaylistID == playlistID,
-                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
-                  profileScope.map({ homeState.dashboard.activeProfileScope == $0 }) ?? true,
-                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id }),
-                  homeState.dashboard.epgCandidateChannels.contains(where: { $0.id == channel.id && $0.type == .live })
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.dashboard(.mapEPGEventToChannel(
-                    playlistID: playlistID,
-                    event: event,
-                    channelID: channel.id
-                )))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .playlistQRTransferConfirmation(.delegate(.cancel(presentationID, sessionID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .playlistQRTransferConfirmation(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.sessionID == sessionID
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
-
-        case let .dashboardPresentationRouteDidDisappear(presentationID, homeRouteIndex, homeConfig, reloadConfig):
-            if let routeIndex = state.routes.indices.last(where: { index in
-                if case let .dashboardPresentation(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                }
-                return false
-            }), routeIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
-
-            guard let reloadConfig,
-                  state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.config == homeConfig
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.dashboard(.onAppear(config: reloadConfig)))
-            )))
-
-        case let .favoriteChannelListManagementRouteDidDisappear(presentationID):
-            if let routeIndex = state.routes.indices.last(where: { index in
-                if case let .favoriteChannelListManagement(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                }
-                return false
-            }), routeIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
-            return .none
-
-        case let .addPlaylistQRTransferRouteDidDisappear(presentationID, parent, wasPaired):
-            var didPair = wasPaired
-            if let routeIndex = state.routes.indices.last(where: { index in
-                if case let .addPlaylistQRTransfer(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                }
-                return false
-            }) {
-                guard routeIndex == state.routes.count - 1,
-                      case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen
-                else { return .none }
-                didPair = didPair || routeState.isPaired
-                state.routes.dismiss()
-            }
-
-            switch parent {
-            case let .addPlaylistRoute(routeIndex):
-                guard state.routes.indices.contains(routeIndex),
-                      routeIndex == state.routes.count - 1,
-                      case .addPlaylist = state.routes[routeIndex].screen
-                else { return .none }
-                let childAction: AddPlaylistFeature.Action = didPair
-                    ? .delegate(.didReceiveTransferredPlaylist)
-                    : .qrTransferRouteDidDismiss(presentationID)
-                return .send(.router(.routeAction(
-                    id: routeIndex,
-                    action: .addPlaylist(childAction)
-                )))
-
-            case let .playlistManagementAddPlaylistRoute(routeIndex, parentPresentationID, requestID):
-                guard state.routes.indices.contains(routeIndex),
-                      routeIndex == state.routes.count - 1,
-                      case let .playlistManagementAddPlaylist(addPlaylistState) = state.routes[routeIndex].screen,
-                      addPlaylistState.presentationID == parentPresentationID,
-                      addPlaylistState.requestID == requestID,
-                      state.routes.indices.contains(addPlaylistState.playlistManagementRouteIndex),
-                      case let .playlistManagement(managementState) = state.routes[addPlaylistState.playlistManagementRouteIndex].screen,
-                      managementState.addPlaylistPresentationRequestID == requestID,
-                      managementState.addPlaylist != nil,
-                      managementState.startupUnlockPlaylistID == nil
-                else { return .none }
-                let childAction: AddPlaylistFeature.Action = didPair
-                    ? .delegate(.didReceiveTransferredPlaylist)
-                    : .qrTransferRouteDidDismiss(presentationID)
-                return .send(.playlistManagementAddPlaylistChildAction(
-                    presentationID: parentPresentationID,
-                    requestID: requestID,
-                    action: childAction
-                ))
-            }
-
-        case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
-            if let selectionRouteIndex = state.routes.indices.last(where: { index in
-                if case let .multiViewChannelSelection(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                }
-                return false
-            }), selectionRouteIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(multiViewRouteIndex),
-                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
-                  multiViewState.presentationID == multiViewPresentationID,
-                  multiViewState.isSelectingChannelForSlotID == slotID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: multiViewRouteIndex,
-                action: .multiView(.channelSelectionDismissed)
-            )))
-
-        case let .playlistTransferRouteDidDisappear(presentationID, sessionID):
-            let routeIndex = state.routes.indices.last(where: { index in
-                if case let .playlistQRTransferConfirmation(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.sessionID == sessionID
-                }
-                return false
-            })
-            if let routeIndex {
-                guard routeIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.playlistTransferPresentationID == presentationID,
-                  state.playlistTransferPairing?.sessionID == sessionID
-            else { return .none }
-            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
-
-        case let .playlistManagementSettingsRouteDidDisappear(presentationID, playlistManagementRouteIndex, editRequestID):
-            let settingsRouteIndex = state.routes.indices.last(where: { index in
-                if case let .playlistManagementSettings(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.editRequestID == editRequestID
-                }
-                return false
-            })
-            if let settingsRouteIndex {
-                guard settingsRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(playlistManagementRouteIndex),
-                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
-                  managementState.playlistSettingsEditRequestID == editRequestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: playlistManagementRouteIndex,
-                action: .playlistManagement(.cancelPlaylistSettings)
-            )))
-
-        case let .playlistManagementPINRouteDidDisappear(presentationID, playlistManagementRouteIndex, requestID, flow):
-            let pinRouteIndex = state.routes.indices.last(where: { index in
-                if case let .playlistManagementPIN(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let pinRouteIndex {
-                guard pinRouteIndex == state.routes.count - 1,
-                      case let .playlistManagementPIN(routeState) = state.routes[pinRouteIndex].screen,
-                      !routeState.isStartupUnlock
-                else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(playlistManagementRouteIndex),
-                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
-                  managementState.pinPresentationRequestID == requestID,
-                  managementState.pinFlow == flow
-            else { return .none }
-            if case .startup = flow {
-                return .none
-            }
-            return .send(.router(.routeAction(
-                id: playlistManagementRouteIndex,
-                action: .playlistManagement(.cancelPlaylistPIN)
-            )))
-
-        case let .playlistManagementAddPlaylistRouteDidDisappear(presentationID, playlistManagementRouteIndex, requestID):
-            let addPlaylistRouteIndex = state.routes.indices.last(where: { index in
-                if case let .playlistManagementAddPlaylist(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let addPlaylistRouteIndex {
-                guard addPlaylistRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(playlistManagementRouteIndex),
-                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
-                  managementState.addPlaylistPresentationRequestID == requestID,
-                  managementState.addPlaylist != nil
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: playlistManagementRouteIndex,
-                action: .playlistManagement(.closeAddPlaylistTapped(requestID: requestID))
-            )))
-
-        case let .playlistManagementAddPlaylistChildAction(presentationID, requestID, childAction):
-            guard case let .playlistManagementAddPlaylist(addPlaylistRouteState) = state.routes.last?.screen,
-                  addPlaylistRouteState.presentationID == presentationID,
-                  addPlaylistRouteState.requestID == requestID,
-                  state.routes.indices.contains(addPlaylistRouteState.playlistManagementRouteIndex),
-                  case let .playlistManagement(managementState) = state.routes[addPlaylistRouteState.playlistManagementRouteIndex].screen,
-                  managementState.addPlaylistPresentationRequestID == requestID,
-                  managementState.addPlaylist != nil,
-                  managementState.startupUnlockPlaylistID == nil
-            else { return .none }
-
-            return .send(.router(.routeAction(
-                id: addPlaylistRouteState.playlistManagementRouteIndex,
-                action: .playlistManagement(.addPlaylist(.presented(childAction)))
-            )))
-
-        case let .playerSpeedTestRouteDidDisappear(presentationID, playerRouteIndex, requestID):
-            let speedTestRouteIndex = state.routes.indices.last(where: { index in
-                if case let .playerSpeedTest(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let speedTestRouteIndex {
-                guard speedTestRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(playerRouteIndex),
-                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
-                  playerState.speedTestPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: playerRouteIndex,
-                action: .player(.closeSpeedTest(requestID: requestID))
-            )))
-
-        case let .playerSubtitleSearchRouteDidDisappear(presentationID, playerRouteIndex, requestID):
-            let subtitleSearchRouteIndex = state.routes.indices.last(where: { index in
-                if case let .playerSubtitleSearch(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let subtitleSearchRouteIndex {
-                guard subtitleSearchRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(playerRouteIndex),
-                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
-                  playerState.subtitleSearchPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: playerRouteIndex,
-                action: .player(.closeSubtitleSearch(requestID: requestID))
-            )))
-
-        case let .settingsSpeedTestRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let settingsSpeedTestRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsSpeedTest(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let settingsSpeedTestRouteIndex {
-                guard settingsSpeedTestRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.speedTestPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
-            )))
-
-        case let .settingsPINSetupRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let pinSetupRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsPINSetup(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let pinSetupRouteIndex {
-                guard pinSetupRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.pinSetupPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
-            )))
-
-        case let .settingsTraktAuthRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let traktAuthRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsTraktAuth(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let traktAuthRouteIndex {
-                guard traktAuthRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.traktAuthPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
-            )))
-
-        case let .settingsTraktWatchlistRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let traktWatchlistRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsTraktWatchlist(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let traktWatchlistRouteIndex {
-                guard traktWatchlistRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
-            )))
-
-        case let .settingsHiddenContentRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let hiddenContentRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsHiddenContent(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let hiddenContentRouteIndex {
-                guard hiddenContentRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.hiddenContentPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissHiddenContentManagement(requestID: requestID)))
-            )))
-
-        case let .settingsDiagnosticReportRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let diagnosticReportRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsDiagnosticReport(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let diagnosticReportRouteIndex {
-                guard diagnosticReportRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.diagnosticReportPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
-            )))
-
-        case let .settingsBackupPreviewRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let backupPreviewRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsBackupPreview(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let backupPreviewRouteIndex {
-                guard backupPreviewRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.backupPreviewPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
-            )))
-
-        case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
-            let pickerRouteIndex = state.routes.indices.last(where: { index in
-                if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let pickerRouteIndex {
-                guard pickerRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(detailRouteIndex) else { return .none }
-            switch (parent, state.routes[detailRouteIndex].screen) {
-            case let (.vod(itemID), .vodDetail(vodState))
-                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: detailRouteIndex,
-                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
-                )))
-
-            case let (.series(itemID), .seriesDetail(seriesState))
-                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: detailRouteIndex,
-                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
-                )))
-
-            default:
-                return .none
-            }
-
-        case let .detailSynopsisRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
-            let synopsisRouteIndex = state.routes.indices.last(where: { index in
-                if case let .detailSynopsis(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                        && routeState.requestID == requestID
-                        && routeState.parentRouteIndex == parentRouteIndex
-                        && routeState.parent == parent
-                }
-                return false
-            })
-            if let synopsisRouteIndex {
-                guard synopsisRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-            return .none
-
-        case let .detailActorBiographyRouteDidDisappear(presentationID, parentRouteIndex, itemID, requestID):
-            let actorRouteIndex = state.routes.indices.last(where: { index in
-                if case let .detailActorBiography(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                        && routeState.parentRouteIndex == parentRouteIndex
-                        && routeState.itemID == itemID
-                        && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let actorRouteIndex {
-                guard actorRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(parentRouteIndex),
-                  case let .vodDetail(vodState) = state.routes[parentRouteIndex].screen,
-                  vodState.vod.id == itemID,
-                  vodState.actorBiographyPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: parentRouteIndex,
-                action: .vodDetail(.coordinatorDismissActorBiography(requestID: requestID))
-            )))
-
-        case let .detailTrailerRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
-            let trailerRouteIndex = state.routes.indices.last(where: { index in
-                if case let .detailTrailer(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                        && routeState.parentRouteIndex == parentRouteIndex
-                        && routeState.parent == parent
-                        && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let trailerRouteIndex {
-                guard trailerRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(parentRouteIndex) else { return .none }
-            switch (parent, state.routes[parentRouteIndex].screen) {
-            case let (.vod(itemID), .vodDetail(vodState))
-                where vodState.vod.id == itemID && vodState.trailerPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: parentRouteIndex,
-                    action: .vodDetail(.coordinatorDismissTrailer(requestID: requestID))
-                )))
-
-            case let (.series(itemID), .seriesDetail(seriesState))
-                where seriesState.series.id == itemID && seriesState.trailerPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: parentRouteIndex,
-                    action: .seriesDetail(.coordinatorDismissTrailer(requestID: requestID))
-                )))
-
-            default:
-                return .none
-            }
-
-        case let .detailUnmatchedMovieRouteDidDisappear(presentationID, parentRouteIndex, itemID, requestID):
-            let unmatchedMovieRouteIndex = state.routes.indices.last(where: { index in
-                if case let .detailUnmatchedMovie(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                        && routeState.parentRouteIndex == parentRouteIndex
-                        && routeState.itemID == itemID
-                        && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let unmatchedMovieRouteIndex {
-                guard unmatchedMovieRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(parentRouteIndex),
-                  case let .vodDetail(vodState) = state.routes[parentRouteIndex].screen,
-                  vodState.vod.id == itemID,
-                  vodState.unmatchedMoviePresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: parentRouteIndex,
-                action: .vodDetail(.coordinatorDismissUnmatchedMovie(requestID: requestID))
-            )))
-
-        case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let customEPGRouteIndex = state.routes.indices.last(where: { index in
-                if case let .customEPGSettings(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let customEPGRouteIndex {
-                guard customEPGRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.customEPGPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
-            )))
-
-        case let .customEPGSourceAddRouteDidDisappear(presentationID, customEPGSettingsPresentationID, homeRouteIndex, requestID):
-            let sourceAddRouteIndex = state.routes.indices.last(where: { index in
-                if case let .customEPGSourceAdd(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let sourceAddRouteIndex {
-                guard sourceAddRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
-                  customEPGState.presentationID == customEPGSettingsPresentationID,
-                  customEPGState.homeRouteIndex == homeRouteIndex,
-                  state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
-                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissCustomEPGSourceAdd(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
-            guard state.routes.indices.contains(multiViewRouteIndex),
-                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
-                  multiViewState.presentationID == presentationID,
-                  multiViewState.isSelectingChannelForSlotID == nil,
-                  case let .multiViewChannelSelection(selectionState) = state.routes.last?.screen,
-                  selectionState.multiViewRouteIndex == multiViewRouteIndex,
-                  selectionState.multiViewPresentationID == presentationID,
-                  selectionState.slotID == slotID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .categoryManagement(.delegate(.close)))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case .categoryManagement = state.routes[routeIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .m3uCategoryMappingEditor(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .m3uCategoryMappingEditor(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
         case let .router(.routeAction(
             routeIndex,
             .playlistManagementSettings(.delegate(.close(presentationID, editRequestID)))
@@ -1588,1068 +658,6 @@ public struct AppCoordinator {
             )))
 
         case let .router(.routeAction(
-            routeIndex,
-            .playerSpeedTest(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .playerSpeedTest(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.playerRouteIndex),
-                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
-                  playerState.speedTestPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.playerRouteIndex,
-                action: .player(.closeSpeedTest(requestID: requestID))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .playerSubtitleSearch(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .playerSubtitleSearch(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.playerRouteIndex),
-                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
-                  playerState.subtitleSearchPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.playerRouteIndex,
-                action: .player(.closeSubtitleSearch(requestID: requestID))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsSpeedTest(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsSpeedTest(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.speedTestPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsPINSetup(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsPINSetup(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.pinSetupPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsTraktAuth(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsTraktAuth(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.traktAuthPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsTraktWatchlist(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsTraktWatchlist(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsHiddenContent(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsHiddenContent(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.hiddenContentPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissHiddenContentManagement(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsDiagnosticReport(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsDiagnosticReport(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.diagnosticReportPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsBackupPreview(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsBackupPreview(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.backupPreviewPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .customEPGSettings(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .customEPGSettings(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.customEPGPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .customEPGSourceAdd(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .customEPGSourceAdd(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
-                  customEPGState.presentationID == routeState.customEPGSettingsPresentationID,
-                  customEPGState.homeRouteIndex == routeState.homeRouteIndex,
-                  state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
-                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissCustomEPGSourceAdd(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .detailTMDBMatchPicker(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailTMDBMatchPicker(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.detailRouteIndex) else { return .none }
-            switch (routeState.parent, state.routes[routeState.detailRouteIndex].screen) {
-            case let (.vod(itemID), .vodDetail(vodState))
-                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: routeState.detailRouteIndex,
-                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
-                )))
-
-            case let (.series(itemID), .seriesDetail(seriesState))
-                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
-                return .send(.router(.routeAction(
-                    id: routeState.detailRouteIndex,
-                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
-                )))
-
-            default:
-                return .none
-            }
-
-        case let .router(.routeAction(
-            routeIndex,
-            .detailSynopsis(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailSynopsis(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(
-            routeIndex,
-            .detailActorBiography(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailActorBiography(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            return .send(.detailActorBiographyRouteDidDisappear(
-                presentationID: presentationID,
-                parentRouteIndex: routeState.parentRouteIndex,
-                itemID: routeState.itemID,
-                requestID: requestID
-            ))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .detailTrailer(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailTrailer(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            return .send(.detailTrailerRouteDidDisappear(
-                presentationID: presentationID,
-                parentRouteIndex: routeState.parentRouteIndex,
-                parent: routeState.parent,
-                requestID: requestID
-            ))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .detailUnmatchedMovie(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .detailUnmatchedMovie(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            return .send(.detailUnmatchedMovieRouteDidDisappear(
-                presentationID: presentationID,
-                parentRouteIndex: routeState.parentRouteIndex,
-                itemID: routeState.itemID,
-                requestID: requestID
-            ))
-
-        case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
-            if let editorRouteIndex = state.routes.indices.last(where: { index in
-                if case let .m3uCategoryMappingEditor(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID
-                }
-                return false
-            }), editorRouteIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
-
-            guard let playlistID = maybePlaylistID,
-                  state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.liveTV.config?.type == .m3u,
-                  homeState.liveTV.config?.playlistID == playlistID
-            else { return .none }
-
-            if state.routes.indices.contains(categoryRouteIndex),
-               categoryRouteIndex > homeRouteIndex,
-               case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
-               categoryState.presentationID == categoryPresentationID,
-               categoryState.type == .live,
-               categoryState.config.type == .m3u,
-               categoryState.config.playlistID == playlistID
-            {
-                return .send(.router(.routeAction(
-                    id: categoryRouteIndex,
-                    action: .categoryManagement(.m3uCategoryMappingsUpdated)
-                )))
-            }
-
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.liveTV(.liveCategoryMappingsUpdated))
-            )))
-
-        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoriesUpdated)))):
-            guard state.routes.indices.contains(categoryRouteIndex),
-                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
-            else { return .none }
-
-            switch categoryState.parent {
-            case let .liveTV(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .liveTV,
-                      homeState.liveTV.config == categoryState.config,
-                      categoryState.type == .live
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.liveTV(.categoryPreferencesUpdated))
-                )))
-
-            case let .vod(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.vod.config == categoryState.config,
-                      categoryState.type == .vod
-                else { return .none }
-                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
-                )))
-                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
-                    ? .send(.router(.routeAction(
-                        id: homeRouteIndex,
-                        action: .home(.vod(.reloadPreferences))
-                    )))
-                    : .none
-                return .merge(dashboardRefresh, vodRefresh)
-
-            case let .series(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .series,
-                      homeState.series.config == categoryState.config,
-                      categoryState.type == .series
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.series(.reloadPreferences))
-                )))
-
-            case nil:
-                return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
-            }
-
-        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoryNameRulesUpdated)))):
-            guard state.routes.indices.contains(categoryRouteIndex),
-                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
-            else { return .none }
-
-            switch categoryState.parent {
-            case let .liveTV(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .liveTV,
-                      homeState.liveTV.config == categoryState.config,
-                      categoryState.type == .live
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.liveTV(.reloadCategories(config: categoryState.config)))
-                )))
-
-            case let .vod(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.vod.config == categoryState.config,
-                      categoryState.type == .vod
-                else { return .none }
-                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
-                )))
-                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
-                    ? .send(.router(.routeAction(
-                        id: homeRouteIndex,
-                        action: .home(.vod(.reloadCategories(config: categoryState.config)))
-                    )))
-                    : .none
-                return .merge(dashboardRefresh, vodRefresh)
-
-            case let .series(homeRouteIndex):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .series,
-                      homeState.series.config == categoryState.config,
-                      categoryState.type == .series
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.series(.reloadCategories(config: categoryState.config)))
-                )))
-
-            case nil:
-                return .none
-            }
-
-        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
-            guard state.routes.indices.contains(categoryRouteIndex),
-                  categoryRouteIndex == state.routes.count - 1,
-                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
-                  categoryState.type == .live,
-                  categoryState.config.type == .m3u,
-                  let playlistID = categoryState.config.playlistID
-            else { return .none }
-
-            guard let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
-                guard routeIndex < categoryRouteIndex else { return false }
-                if case .home = state.routes[routeIndex].screen {
-                    return true
-                }
-                return false
-            }),
-                case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                homeState.liveTV.config?.type == .m3u,
-                homeState.liveTV.config?.playlistID == playlistID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.liveTV(.liveCategoryMappingsUpdated))
-            )))
-
-        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didCancelFromRoute(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
-                  parentalLockState.presentationID == presentationID
-            else { return .none }
-            let pendingCategoryID = parentalLockState.parent == nil
-                ? parentalLockState.pendingCategory?.id
-                : nil
-            state.routes.dismiss()
-            if let pendingCategoryID {
-                return forwardLiveTVAction(.cancelPendingEPGGuide(categoryID: pendingCategoryID), state: state)
-            }
-            return .none
-
-        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didUnlockFromRoute(presentationID, category, item))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
-                  parentalLockState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            switch parentalLockState.parent {
-            case let .vod(homeRouteIndex, config):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .movies,
-                      homeState.vod.config == config
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.vod(.coordinatorParentalLockUnlocked(category: category, item: item)))
-                )))
-
-            case let .series(homeRouteIndex, config):
-                guard state.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .series,
-                      homeState.series.config == config
-                else { return .none }
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.series(.coordinatorParentalLockUnlocked(category: category, item: item)))
-                )))
-
-            case nil:
-                return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
-            }
-
-        case let .router(.routeAction(routeIndex, .smartChannelGroupManagement(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .smartChannelGroupManagement(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(routeIndex, .channelPresentationEditor(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .channelPresentationEditor(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        // ── Home Delegates ───────────────────────────────────────
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSearch)))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen
-            else { return .none }
-            state.routes.presentCover(.globalSearch(GlobalSearchRouteFeature.State(
-                homeRouteIndex: homeRouteIndex,
-                config: homeState.config
-            )))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentHiddenMediaManagement)))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings
-            else { return .none }
-            state.routes.presentCover(.hiddenMediaManagement(HiddenMediaManagementRouteFeature.State()))
-            return .none
-
-        case let .router(.routeAction(routeIndex, .hiddenMediaManagement(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .hiddenMediaManagement(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.close(presentationID))))):
-            guard state.routes.indices.contains(searchRouteIndex),
-                  searchRouteIndex == state.routes.count - 1,
-                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
-                  searchState.presentationID == presentationID
-            else { return .none }
-            state.routes.dismiss()
-            return .none
-
-        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectChannel(channel, playlist))))):
-            guard state.routes.indices.contains(searchRouteIndex),
-                  searchRouteIndex == state.routes.count - 1,
-                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
-                  state.routes.indices.contains(searchState.homeRouteIndex),
-                  case .home = state.routes[searchState.homeRouteIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.router(.routeAction(
-                id: searchState.homeRouteIndex,
-                action: .home(.delegate(.didSelectChannel(channel, playlist: playlist)))
-            )))
-
-        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectVOD(vod))))):
-            guard state.routes.indices.contains(searchRouteIndex),
-                  searchRouteIndex == state.routes.count - 1,
-                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
-                  state.routes.indices.contains(searchState.homeRouteIndex),
-                  case .home = state.routes[searchState.homeRouteIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.router(.routeAction(
-                id: searchState.homeRouteIndex,
-                action: .home(.delegate(.didSelectVOD(vod)))
-            )))
-
-        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectSeries(series))))):
-            guard state.routes.indices.contains(searchRouteIndex),
-                  searchRouteIndex == state.routes.count - 1,
-                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
-                  state.routes.indices.contains(searchState.homeRouteIndex),
-                  case .home = state.routes[searchState.homeRouteIndex].screen
-            else { return .none }
-            state.routes.dismiss()
-            return .send(.router(.routeAction(
-                id: searchState.homeRouteIndex,
-                action: .home(.delegate(.didSelectSeries(series)))
-            )))
-
-        case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
-            let config: PlaylistConfig
-            if let sourcePlaylistID = channel.playlistID,
-               state.activeConfig?.playlistID != sourcePlaylistID
-            {
-                guard let savedPlaylist = playlistRepository.getPlaylists().first(where: { $0.id == sourcePlaylistID }),
-                      let savedConfig = savedPlaylist.toPlaylistConfig()
-                else { return .none }
-                config = savedConfig
-            } else {
-                guard let activeConfig = state.activeConfig else { return .none }
-                config = activeConfig
-            }
-            let belongsToSelectedPlaylist = channel.playlistID == nil || channel.playlistID == config.playlistID
-            guard let playerState = makeLivePlayerState(
-                channel: channel,
-                playlist: belongsToSelectedPlaylist ? playlist : nil,
-                config: config
-            ) else { return .none }
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.presentEPGGuide(guideState))))):
-            #if os(tvOS)
-                state.routes.presentCover(.epgGuide(guideState))
-            #else
-                state.routes.presentSheet(.epgGuide(guideState))
-            #endif
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.presentEPGTimeline(timelineState))))):
-            #if os(tvOS)
-                state.routes.presentCover(.epgTimeline(timelineState))
-            #else
-                state.routes.presentSheet(.epgTimeline(timelineState))
-            #endif
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.presentMultiView(multiViewState))))):
-            state.routes.presentCover(.multiView(multiViewState))
-            return .none
-
-        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.presentChannelSelection(slotID, presentationID))))):
-            guard state.routes.indices.contains(multiViewRouteIndex),
-                  multiViewRouteIndex == state.routes.count - 1,
-                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
-                  multiViewState.presentationID == presentationID,
-                  multiViewState.isSelectingChannelForSlotID == slotID,
-                  multiViewState.slots.contains(where: { $0.id == slotID && $0.item == nil })
-            else { return .none }
-            state.routes.presentSheet(.multiViewChannelSelection(
-                MultiViewChannelSelectionRouteFeature.State(
-                    multiViewRouteIndex: multiViewRouteIndex,
-                    multiViewPresentationID: presentationID,
-                    slotID: slotID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeSettings(config)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .dashboard,
-                  homeState.config == config
-            else { return .none }
-            state.routes.presentSheet(.dashboardPresentation(
-                DashboardPresentationRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    homeConfig: homeState.config,
-                    presentation: .homeSettings(reloadConfig: config)
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentSpeedTest(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.speedTestPresentationRequestID == requestID
-            else { return .none }
-            state.routes.presentSheet(.settingsSpeedTest(
-                SettingsSpeedTestRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentPINSetup(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.pinSetupPresentationRequestID == requestID,
-                  homeState.settings.isShowingPINSetup
-            else { return .none }
-            state.routes.presentSheet(.settingsPINSetup(
-                SettingsPINSetupRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktAuth(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.traktAuthPresentationRequestID == requestID,
-                  homeState.settings.isTraktAuthSheetPresented
-            else { return .none }
-            state.routes.presentSheet(.settingsTraktAuth(
-                SettingsTraktAuthRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktWatchlist(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID,
-                  homeState.settings.isTraktWatchlistPresented
-            else { return .none }
-            state.routes.presentSheet(.settingsTraktWatchlist(
-                SettingsTraktWatchlistRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentHiddenContentManagement(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.hiddenContentPresentationRequestID == requestID,
-                  homeState.settings.isShowingHiddenContentSheet
-            else { return .none }
-            state.routes.presentSheet(.settingsHiddenContent(
-                SettingsHiddenContentRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentDiagnosticReport(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.diagnosticReportPresentationRequestID == requestID,
-                  let url = homeState.settings.diagnosticReportURL
-            else { return .none }
-            guard homeRouteIndex == state.routes.count - 1,
-                  homeState.selectedTab == .settings
-            else {
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
-                )))
-            }
-            state.routes.presentSheet(.settingsDiagnosticReport(
-                SettingsDiagnosticReportRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID,
-                    url: url
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentBackupPreview(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.backupPreviewPresentationRequestID == requestID,
-                  homeState.settings.backupPreview != nil,
-                  homeState.settings.pendingBackupURL != nil
-            else { return .none }
-            guard homeRouteIndex == state.routes.count - 1,
-                  homeState.selectedTab == .settings
-            else {
-                return .send(.router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
-                )))
-            }
-            state.routes.presentSheet(.settingsBackupPreview(
-                SettingsBackupPreviewRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentCustomEPGSettings(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.customEPGPresentationRequestID == requestID,
-                  homeState.settings.isCustomEPGSheetPresented
-            else { return .none }
-            state.routes.presentSheet(.customEPGSettings(
-                CustomEPGSettingsRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentCustomEPGSourceAdd(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
-                  customEPGState.homeRouteIndex == homeRouteIndex,
-                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
-                  homeState.settings.isCustomEPGSheetPresented,
-                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID,
-                  homeState.settings.isAddCustomEPGSourceSheetPresented
-            else { return .none }
-            state.routes.presentSheet(.customEPGSourceAdd(
-                CustomEPGSourceAddRouteFeature.State(
-                    customEPGSettingsPresentationID: customEPGState.presentationID,
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeCategoryPinManagement(playlistID, profileScope)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .dashboard,
-                  homeState.dashboard.activePlaylistID == playlistID,
-                  homeState.dashboard.activeProfileScope == profileScope
-            else { return .none }
-            state.routes.presentSheet(.dashboardPresentation(
-                DashboardPresentationRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    homeConfig: homeState.config,
-                    presentation: .categoryPinManagement(
-                        playlistID: playlistID,
-                        profileScope: profileScope
-                    )
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentEPGChannelPicker(playlistID, event)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .dashboard,
-                  homeState.dashboard.activePlaylistID == playlistID,
-                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
-                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id })
-            else { return .none }
-            state.routes.presentSheet(.dashboardPresentation(
-                DashboardPresentationRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    homeConfig: homeState.config,
-                    presentation: .epgChannelPicker(
-                        playlistID: playlistID,
-                        profileScope: homeState.dashboard.activeProfileScope,
-                        event: event
-                    )
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentCategoryManagement(categoryState))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .liveTV,
-                  homeState.liveTV.config == categoryState.config,
-                  categoryState.type == .live
-            else { return .none }
-            var categoryState = categoryState
-            categoryState.parent = .liveTV(routeIndex: homeRouteIndex)
-            state.routes.presentSheet(.categoryManagement(categoryState))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentVODCategoryManagement(categoryState))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .movies,
-                  homeState.vod.config == categoryState.config,
-                  categoryState.type == .vod
-            else { return .none }
-            var categoryState = categoryState
-            categoryState.parent = .vod(routeIndex: homeRouteIndex)
-            state.routes.presentSheet(.categoryManagement(categoryState))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesCategoryManagement(categoryState))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .series,
-                  homeState.series.config == categoryState.config,
-                  categoryState.type == .series
-            else { return .none }
-            var categoryState = categoryState
-            categoryState.parent = .series(routeIndex: homeRouteIndex)
-            state.routes.presentSheet(.categoryManagement(categoryState))
-            return .none
-
-        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.presentM3UCategoryMapping(categoryPresentationID))))):
-            guard state.routes.indices.contains(categoryRouteIndex),
-                  categoryRouteIndex == state.routes.count - 1,
-                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
-                  categoryState.presentationID == categoryPresentationID,
-                  categoryState.type == .live,
-                  categoryState.config.type == .m3u,
-                  let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
-                      guard routeIndex < categoryRouteIndex else { return false }
-                      if case .home = state.routes[routeIndex].screen {
-                          return true
-                      }
-                      return false
-                  }),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.liveTV.config?.type == .m3u,
-                  homeState.liveTV.config?.playlistID == categoryState.config.playlistID
-            else { return .none }
-
-            state.routes.presentSheet(.m3uCategoryMappingEditor(
-                M3UCategoryMappingEditorRouteFeature.State(
-                    categoryRouteIndex: categoryRouteIndex,
-                    categoryPresentationID: categoryPresentationID,
-                    homeRouteIndex: homeRouteIndex,
-                    config: categoryState.config
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
-            return .send(.presentParentalLock(parentalLockState))
-
-        case let .router(.routeAction(
-            homeRouteIndex,
-            .home(.delegate(.presentVODParentalLock(parentalLockState, closeVODDetailsOnExpiry)))
-        )):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .movies,
-                  let config = homeState.vod.config,
-                  parentalLockState.pendingCategory != nil,
-                  parentalLockState.isCoordinatorRoute
-            else { return .none }
-
-            let categoryID = parentalLockState.pendingCategory?.id
-            let hasMatchingVODDetail = state.routes.indices.contains { routeIndex in
-                guard routeIndex > homeRouteIndex,
-                      case let .vodDetail(detailState) = state.routes[routeIndex].screen
-                else { return false }
-                return detailState.config == config && detailState.vod.categoryID == categoryID
-            }
-            let homeIsTopRoute = homeRouteIndex == state.routes.count - 1
-            guard homeIsTopRoute || (closeVODDetailsOnExpiry && hasMatchingVODDetail) else { return .none }
-
-            if closeVODDetailsOnExpiry, hasMatchingVODDetail {
-                while state.routes.count - 1 > homeRouteIndex {
-                    state.routes.dismiss()
-                }
-            }
-
-            var parentalLockState = parentalLockState
-            parentalLockState.parent = .vod(routeIndex: homeRouteIndex, config: config)
-            state.routes.presentSheet(.parentalLock(parentalLockState))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesParentalLock(parentalLockState))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .series,
-                  let config = homeState.series.config,
-                  parentalLockState.pendingCategory != nil,
-                  parentalLockState.isCoordinatorRoute
-            else { return .none }
-            var parentalLockState = parentalLockState
-            parentalLockState.parent = .series(routeIndex: homeRouteIndex, config: config)
-            state.routes.presentSheet(.parentalLock(parentalLockState))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSmartGroupManager)))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case .home = state.routes[homeRouteIndex].screen
-            else { return .none }
-            state.routes.presentSheet(.smartChannelGroupManagement(
-                SmartChannelGroupManagementRouteFeature.State(homeRouteIndex: homeRouteIndex)
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentFavoriteListManagement)))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .liveTV,
-                  homeState.liveTV.config == homeState.config
-            else { return .none }
-            state.routes.presentSheet(.favoriteChannelListManagement(
-                FavoriteChannelListManagementRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    homeConfig: homeState.config
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(
             playlistManagementRouteIndex,
             .playlistManagement(.delegate(.presentAddPlaylistQRTransfer(requestID)))
         )):
@@ -2679,290 +687,6 @@ public struct AppCoordinator {
             ))
             return .none
 
-        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.liveTV.config?.playlistID == playlistID,
-                  homeState.liveTV.channelPresentationPlaylistID == playlistID,
-                  homeState.liveTV.channelPresentationProfileScope == profileScope
-            else { return .none }
-            state.routes.presentSheet(.channelPresentationEditor(
-                ChannelPresentationEditorRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    channel: channel,
-                    playlistID: playlistID,
-                    profileScope: profileScope
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(categoryID, parentalLockState))))):
-            let multiViewRouteIndices = state.routes.indices.filter { routeIndex in
-                if case .multiView = state.routes[routeIndex].screen {
-                    return true
-                }
-                return false
-            }
-            return .run { send in
-                for routeIndex in multiViewRouteIndices {
-                    await send(.router(.routeAction(
-                        id: routeIndex,
-                        action: .multiView(.restrictCategory(categoryID))
-                    )))
-                }
-                await send(.presentParentalLock(parentalLockState))
-            }
-
-        case let .presentParentalLock(parentalLockState):
-            state.routes.presentSheet(.parentalLock(parentalLockState))
-            return .none
-
-        case let .presentDetailSynopsis(parent, text):
-            let parentRouteIndex = state.routes.indices.last(where: { index in
-                switch (parent, state.routes[index].screen) {
-                case let (.vod(itemID), .vodDetail(vodState)):
-                    vodState.vod.id == itemID
-                case let (.series(itemID), .seriesDetail(seriesState)):
-                    seriesState.series.id == itemID
-                default:
-                    false
-                }
-            })
-            guard let parentRouteIndex, parentRouteIndex == state.routes.count - 1 else { return .none }
-            state.routes.presentSheet(.detailSynopsis(
-                DetailSynopsisRouteFeature.State(
-                    parentRouteIndex: parentRouteIndex,
-                    parent: parent,
-                    text: text
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
-            let effects = state.routes.indices.compactMap { routeIndex -> Effect<Action>? in
-                guard case .multiView = state.routes[routeIndex].screen else { return nil }
-                return .send(.router(.routeAction(
-                    id: routeIndex,
-                    action: .multiView(.restrictCategory(categoryID))
-                )))
-            }
-            return .merge(effects)
-
-        case let .router(.routeAction(_, .home(.delegate(.didSelectVOD(vod))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
-            guard let config = detailConfig(for: vod, activeConfig: state.activeConfig) else { return .none }
-            state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.didSelectSeries(series))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
-            guard let config = detailConfig(for: series, activeConfig: state.activeConfig) else { return .none }
-            state.routes.push(.seriesDetail(SeriesDetailFeature.State(series: series, config: config)))
-            return .none
-
-        case let .router(.routeAction(_, .home(.delegate(.playHistoryItem(item))))):
-            return playHistoryItem(item, state: &state, forceRestart: false)
-
-        case let .router(.routeAction(_, .home(.delegate(.playOfflineMedia(item, episodeQueue))))):
-            return playOfflineMedia(item, episodeQueue: episodeQueue, state: &state)
-
-        case let .router(.routeAction(_, .home(.delegate(.restartHistoryItem(item))))):
-            return playHistoryItem(item, state: &state, forceRestart: true)
-
-        case .router(.routeAction(_, .home(.delegate(.openManagePlaylists)))):
-            state.routes.push(.playlistManagement(PlaylistManagementFeature.State(
-                unlockedPlaylistIDs: state.unlockedPlaylistIDs
-            )))
-            return .none
-
-        case .router(.routeAction(_, .home(.delegate(.switchProfile)))):
-            state.routes = [.root(.profileSelection(ProfileSelectionFeature.State()), withNavigation: true)]
-            return .none
-
-        // ── Series Detail Delegates ──────────────────────────────
-        case let .router(.routeAction(_, .seriesDetail(.delegate(.didSelectEpisode(playable, playlist))))):
-            let playerState = PlayerFeature.State(item: playable, playlist: playlist)
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            return .none
-
-        case .router(.routeAction(_, .seriesDetail(.delegate(.close)))):
-            if case .seriesDetail = state.routes.last?.screen {
-                state.routes.goBack()
-            }
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .seriesDetail(.delegate(.presentTMDBMatchPicker(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
-                  seriesState.tmdbMatchPresentationRequestID == requestID,
-                  seriesState.isTMDBMatchPickerPresented
-            else { return .none }
-            state.routes.presentSheet(.detailTMDBMatchPicker(
-                DetailTMDBMatchPickerRouteFeature.State(
-                    detailRouteIndex: detailRouteIndex,
-                    parent: .series(itemID: seriesState.series.id),
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .seriesDetail(.delegate(.presentTrailer(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
-                  seriesState.trailerPresentationRequestID == requestID,
-                  seriesState.isTrailerPresented,
-                  seriesState.trailerVideoKey != nil,
-                  !state.routes.contains(where: { route in
-                      if case let .detailTrailer(routeState) = route.screen {
-                          return routeState.requestID == requestID
-                      }
-                      return false
-                  })
-            else { return .none }
-            state.routes.presentSheet(.detailTrailer(
-                DetailTrailerRouteFeature.State(
-                    parentRouteIndex: detailRouteIndex,
-                    parent: .series(itemID: seriesState.series.id),
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        // ── VOD Detail Delegates ─────────────────────────────────
-        case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectPlay(playable))))):
-            let playerState = PlayerFeature.State(item: playable)
-            state.isPlayerMini = false
-            state.miniPlayer = nil
-            state.routes.presentCover(.player(playerState))
-            return .none
-
-        case let .router(.routeAction(detailRouteIndex, .vodDetail(.delegate(.didSelectVOD(vod))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
-            guard state.routes.indices.contains(detailRouteIndex),
-                  case let .vodDetail(detailState) = state.routes[detailRouteIndex].screen
-            else { return .none }
-            let config = detailState.config
-            state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .vodDetail(.delegate(.presentTMDBMatchPicker(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
-                  vodState.tmdbMatchPresentationRequestID == requestID,
-                  vodState.isTMDBMatchPickerPresented
-            else { return .none }
-            state.routes.presentSheet(.detailTMDBMatchPicker(
-                DetailTMDBMatchPickerRouteFeature.State(
-                    detailRouteIndex: detailRouteIndex,
-                    parent: .vod(itemID: vodState.vod.id),
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .vodDetail(.delegate(.presentActorBiography(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
-                  vodState.actorBiographyPresentationRequestID == requestID,
-                  vodState.selectedActor != nil,
-                  !state.routes.contains(where: { route in
-                      if case let .detailActorBiography(routeState) = route.screen {
-                          return routeState.requestID == requestID
-                      }
-                      return false
-                  })
-            else { return .none }
-            state.routes.presentSheet(.detailActorBiography(
-                DetailActorBiographyRouteFeature.State(
-                    parentRouteIndex: detailRouteIndex,
-                    itemID: vodState.vod.id,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .vodDetail(.delegate(.presentTrailer(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
-                  vodState.trailerPresentationRequestID == requestID,
-                  vodState.isTrailerPresented,
-                  vodState.trailerVideoKey != nil,
-                  !state.routes.contains(where: { route in
-                      if case let .detailTrailer(routeState) = route.screen {
-                          return routeState.requestID == requestID
-                      }
-                      return false
-                  })
-            else { return .none }
-            state.routes.presentSheet(.detailTrailer(
-                DetailTrailerRouteFeature.State(
-                    parentRouteIndex: detailRouteIndex,
-                    parent: .vod(itemID: vodState.vod.id),
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(
-            detailRouteIndex,
-            .vodDetail(.delegate(.presentUnmatchedMovie(requestID)))
-        )):
-            guard state.routes.indices.contains(detailRouteIndex),
-                  detailRouteIndex == state.routes.count - 1,
-                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
-                  vodState.unmatchedMoviePresentationRequestID == requestID,
-                  vodState.selectedUnmatchedMovie != nil,
-                  !state.routes.contains(where: { route in
-                      if case let .detailUnmatchedMovie(routeState) = route.screen {
-                          return routeState.requestID == requestID
-                      }
-                      return false
-                  })
-            else { return .none }
-            state.routes.presentSheet(.detailUnmatchedMovie(
-                DetailUnmatchedMovieRouteFeature.State(
-                    parentRouteIndex: detailRouteIndex,
-                    itemID: vodState.vod.id,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case .router(.routeAction(_, .vodDetail(.delegate(.close)))):
-            if case .vodDetail = state.routes.last?.screen {
-                state.routes.goBack()
-            }
-            return .none
-
-        // ── Playlist Management Delegates ────────────────────────
         case let .router(.routeAction(
             playlistManagementRouteIndex,
             .playlistManagement(.delegate(.presentPlaylistPIN(requestID, flow)))
@@ -3176,6 +900,1010 @@ public struct AppCoordinator {
             return .none
 
         // ── Player Delegates ─────────────────────────────────────
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reducePaywallAndSecurity(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case .router(.routeAction(_, .paywall(.dismiss))),
+             .router(.routeAction(_, .paywall(.closeButtonTapped))):
+            if case .paywall = state.routes.last?.screen {
+                state.routes.dismiss()
+            }
+            return .send(.checkSubscriptionStatus)
+
+        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didCancelFromRoute(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
+                  parentalLockState.presentationID == presentationID
+            else { return .none }
+            let pendingCategoryID = parentalLockState.parent == nil
+                ? parentalLockState.pendingCategory?.id
+                : nil
+            state.routes.dismiss()
+            if let pendingCategoryID {
+                return forwardLiveTVAction(.cancelPendingEPGGuide(categoryID: pendingCategoryID), state: state)
+            }
+            return .none
+
+        case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didUnlockFromRoute(presentationID, category, item))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
+                  parentalLockState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            switch parentalLockState.parent {
+            case let .vod(homeRouteIndex, config):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .movies,
+                      homeState.vod.config == config
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.vod(.coordinatorParentalLockUnlocked(category: category, item: item)))
+                )))
+
+            case let .series(homeRouteIndex, config):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == config
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.coordinatorParentalLockUnlocked(category: category, item: item)))
+                )))
+
+            case nil:
+                return forwardLiveTVAction(.parentalLockUnlocked(category: category, item: item), state: state)
+            }
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceEPG(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgGuide(guideState) = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .run { [previewPlayerClient, ownerID = guideState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
+            }
+
+        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.playChannel(
+            channel,
+            focusChannelID: focusChannelID,
+            presentationID: presentationID
+        ))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgGuide(guideState) = state.routes[routeIndex].screen,
+                  guideState.presentationID == presentationID,
+                  let playerState = makeLivePlayerState(
+                      channel: channel,
+                      playlist: guideState.channels,
+                      config: guideState.config
+                  )
+            else {
+                return .run { [playerClient, presentationID] _ in
+                    await MainActor.run {
+                        playerClient.discardPreviewPromotionOwned(presentationID)
+                    }
+                }
+            }
+            state.routes.dismiss()
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            guard let homeRouteIndex = state.routes.lastIndex(where: { route in
+                if case .home = route.screen {
+                    return true
+                }
+                return false
+            }) else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.restoreChannelFocus(channelID: focusChannelID)))
+            )))
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentProgramDetails(
+            timelinePresentationID: timelinePresentationID,
+            detailRequestID: detailRequestID,
+            program: program,
+            channel: channel
+        ))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.presentationID == timelinePresentationID,
+                  timelineState.selectedProgramDetailRequestID == detailRequestID,
+                  timelineState.selectedProgramDetail == program,
+                  timelineState.selectedProgramChannel == channel
+            else { return .none }
+
+            state.routes.presentSheet(.epgTimelineProgramDetail(
+                EPGTimelineProgramDetailRouteFeature.State(
+                    timelineRouteIndex: routeIndex,
+                    timelinePresentationID: timelinePresentationID,
+                    detailRequestID: detailRequestID,
+                    config: timelineState.config,
+                    program: program,
+                    channel: channel
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentChannelLogoEditor(
+            timelinePresentationID: timelinePresentationID,
+            channelID: channelID
+        ))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.presentationID == timelinePresentationID,
+                  let playlistID = timelineState.config.playlistID,
+                  let channel = timelineState.channels.first(where: { $0.id == channelID && $0.type == .live })
+            else { return .none }
+
+            state.routes.presentSheet(.epgTimelineChannelLogoEditor(
+                EPGTimelineChannelLogoEditorRouteFeature.State(
+                    timelineRouteIndex: routeIndex,
+                    timelinePresentationID: timelinePresentationID,
+                    playlistID: playlistID,
+                    channel: channel
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.dismissProgramDetails))):
+            guard state.routes.indices.contains(routeIndex),
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  let detailRequestID = timelineState.selectedProgramDetailRequestID
+            else { return .none }
+
+            if let detailRouteIndex = state.routes.indices.last(where: { index in
+                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
+                return detailState.timelineRouteIndex == routeIndex
+                    && detailState.timelinePresentationID == timelineState.presentationID
+                    && detailState.detailRequestID == detailRequestID
+            }), detailRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimelineProgramDetail(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimelineProgramDetail(detailState) = state.routes[routeIndex].screen,
+                  detailState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: detailState.timelineRouteIndex,
+                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailState.detailRequestID))
+            )))
+
+        case let .router(.routeAction(routeIndex, .epgTimelineChannelLogoEditor(.closeTapped(presentationID)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimelineChannelLogoEditor(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
+            }
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.playChannel(channel, presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.presentationID == presentationID,
+                  let playerState = makeLivePlayerState(
+                      channel: channel,
+                      playlist: timelineState.channels,
+                      config: timelineState.config
+                  )
+            else {
+                return .run { [playerClient, presentationID] _ in
+                    await MainActor.run {
+                        playerClient.discardPreviewPromotionOwned(presentationID)
+                    }
+                }
+            }
+            state.routes.dismiss()
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .run { [previewPlayerClient, ownerID = timelineState.presentationID] _ in
+                await previewPlayerClient.stopPreviewOwned(ownerID)
+            }
+
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.config.playlistID == playlistID,
+                  let homeRouteIndex = state.routes.lastIndex(where: { route in
+                      if case .home = route.screen {
+                          return true
+                      }
+                      return false
+                  })
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.channelLogoOverrideUpdated(channelID: channelID, playlistID: playlistID, url: url)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .customEPGSettings(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .customEPGSettings(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .customEPGSourceAdd(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .customEPGSourceAdd(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
+                  customEPGState.presentationID == routeState.customEPGSettingsPresentationID,
+                  customEPGState.homeRouteIndex == routeState.homeRouteIndex,
+                  state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
+                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSourceAdd(requestID: requestID)))
+            )))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceMultiView(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .multiView(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .multiView = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .multiViewChannelSelection(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .multiViewChannelSelection(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[routeState.multiViewRouteIndex].screen,
+                  multiViewState.presentationID == routeState.multiViewPresentationID,
+                  multiViewState.isSelectingChannelForSlotID == routeState.slotID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.multiViewRouteIndex,
+                action: .multiView(.channelSelectionDismissed)
+            )))
+
+        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.channelSelectionFinished(slotID, presentationID))))):
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == presentationID,
+                  multiViewState.isSelectingChannelForSlotID == nil,
+                  case let .multiViewChannelSelection(selectionState) = state.routes.last?.screen,
+                  selectionState.multiViewRouteIndex == multiViewRouteIndex,
+                  selectionState.multiViewPresentationID == presentationID,
+                  selectionState.slotID == slotID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(multiViewRouteIndex, .multiView(.delegate(.presentChannelSelection(slotID, presentationID))))):
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  multiViewRouteIndex == state.routes.count - 1,
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == presentationID,
+                  multiViewState.isSelectingChannelForSlotID == slotID,
+                  multiViewState.slots.contains(where: { $0.id == slotID && $0.item == nil })
+            else { return .none }
+            state.routes.presentSheet(.multiViewChannelSelection(
+                MultiViewChannelSelectionRouteFeature.State(
+                    multiViewRouteIndex: multiViewRouteIndex,
+                    multiViewPresentationID: presentationID,
+                    slotID: slotID
+                )
+            ))
+            return .none
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceChannelAndCategoryManagement(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .favoriteChannelListManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .favoriteChannelListManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .categoryManagement(.delegate(.close)))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case .categoryManagement = state.routes[routeIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .m3uCategoryMappingEditor(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .m3uCategoryMappingEditor(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoriesUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
+            else { return .none }
+
+            switch categoryState.parent {
+            case let .liveTV(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .liveTV,
+                      homeState.liveTV.config == categoryState.config,
+                      categoryState.type == .live
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.liveTV(.categoryPreferencesUpdated))
+                )))
+
+            case let .vod(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.vod.config == categoryState.config,
+                      categoryState.type == .vod
+                else { return .none }
+                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
+                )))
+                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
+                    ? .send(.router(.routeAction(
+                        id: homeRouteIndex,
+                        action: .home(.vod(.reloadPreferences))
+                    )))
+                    : .none
+                return .merge(dashboardRefresh, vodRefresh)
+
+            case let .series(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == categoryState.config,
+                      categoryState.type == .series
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.reloadPreferences))
+                )))
+
+            case nil:
+                return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
+            }
+
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoryNameRulesUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
+            else { return .none }
+
+            switch categoryState.parent {
+            case let .liveTV(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .liveTV,
+                      homeState.liveTV.config == categoryState.config,
+                      categoryState.type == .live
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.liveTV(.reloadCategories(config: categoryState.config)))
+                )))
+
+            case let .vod(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.vod.config == categoryState.config,
+                      categoryState.type == .vod
+                else { return .none }
+                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
+                )))
+                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
+                    ? .send(.router(.routeAction(
+                        id: homeRouteIndex,
+                        action: .home(.vod(.reloadCategories(config: categoryState.config)))
+                    )))
+                    : .none
+                return .merge(dashboardRefresh, vodRefresh)
+
+            case let .series(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == categoryState.config,
+                      categoryState.type == .series
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.reloadCategories(config: categoryState.config)))
+                )))
+
+            case nil:
+                return .none
+            }
+
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  categoryRouteIndex == state.routes.count - 1,
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+                  categoryState.type == .live,
+                  categoryState.config.type == .m3u,
+                  let playlistID = categoryState.config.playlistID
+            else { return .none }
+
+            guard let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
+                guard routeIndex < categoryRouteIndex else { return false }
+                if case .home = state.routes[routeIndex].screen {
+                    return true
+                }
+                return false
+            }),
+                case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                homeState.liveTV.config?.type == .m3u,
+                homeState.liveTV.config?.playlistID == playlistID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.liveCategoryMappingsUpdated))
+            )))
+
+        case let .router(.routeAction(routeIndex, .smartChannelGroupManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .smartChannelGroupManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .channelPresentationEditor(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .channelPresentationEditor(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        // ── Home Delegates ───────────────────────────────────────
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.presentM3UCategoryMapping(categoryPresentationID))))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  categoryRouteIndex == state.routes.count - 1,
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+                  categoryState.presentationID == categoryPresentationID,
+                  categoryState.type == .live,
+                  categoryState.config.type == .m3u,
+                  let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
+                      guard routeIndex < categoryRouteIndex else { return false }
+                      if case .home = state.routes[routeIndex].screen {
+                          return true
+                      }
+                      return false
+                  }),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.type == .m3u,
+                  homeState.liveTV.config?.playlistID == categoryState.config.playlistID
+            else { return .none }
+
+            state.routes.presentSheet(.m3uCategoryMappingEditor(
+                M3UCategoryMappingEditorRouteFeature.State(
+                    categoryRouteIndex: categoryRouteIndex,
+                    categoryPresentationID: categoryPresentationID,
+                    homeRouteIndex: homeRouteIndex,
+                    config: categoryState.config
+                )
+            ))
+            return .none
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceDashboardPresentation(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(routeIndex, .dashboardPresentation(.delegate(.selectEPGChannel(presentationID, channel))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .dashboardPresentation(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  case let .epgChannelPicker(playlistID, profileScope, event) = routeState.presentation,
+                  state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.config == routeState.homeConfig,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
+                  profileScope.map({ homeState.dashboard.activeProfileScope == $0 }) ?? true,
+                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id }),
+                  homeState.dashboard.epgCandidateChannels.contains(where: { $0.id == channel.id && $0.type == .live })
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.dashboard(.mapEPGEventToChannel(
+                    playlistID: playlistID,
+                    event: event,
+                    channelID: channel.id
+                )))
+            )))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceSeriesDetail(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(_, .seriesDetail(.delegate(.didSelectEpisode(playable, playlist))))):
+            let playerState = PlayerFeature.State(item: playable, playlist: playlist)
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case .router(.routeAction(_, .seriesDetail(.delegate(.close)))):
+            if case .seriesDetail = state.routes.last?.screen {
+                state.routes.goBack()
+            }
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .seriesDetail(.delegate(.presentTMDBMatchPicker(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
+                  seriesState.tmdbMatchPresentationRequestID == requestID,
+                  seriesState.isTMDBMatchPickerPresented
+            else { return .none }
+            state.routes.presentSheet(.detailTMDBMatchPicker(
+                DetailTMDBMatchPickerRouteFeature.State(
+                    detailRouteIndex: detailRouteIndex,
+                    parent: .series(itemID: seriesState.series.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .seriesDetail(.delegate(.presentTrailer(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .seriesDetail(seriesState) = state.routes[detailRouteIndex].screen,
+                  seriesState.trailerPresentationRequestID == requestID,
+                  seriesState.isTrailerPresented,
+                  seriesState.trailerVideoKey != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailTrailer(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailTrailer(
+                DetailTrailerRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    parent: .series(itemID: seriesState.series.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        // ── VOD Detail Delegates ─────────────────────────────────
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceVODDetail(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectPlay(playable))))):
+            let playerState = PlayerFeature.State(item: playable)
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case let .router(.routeAction(detailRouteIndex, .vodDetail(.delegate(.didSelectVOD(vod))))):
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
+            guard state.routes.indices.contains(detailRouteIndex),
+                  case let .vodDetail(detailState) = state.routes[detailRouteIndex].screen
+            else { return .none }
+            let config = detailState.config
+            state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentTMDBMatchPicker(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.tmdbMatchPresentationRequestID == requestID,
+                  vodState.isTMDBMatchPickerPresented
+            else { return .none }
+            state.routes.presentSheet(.detailTMDBMatchPicker(
+                DetailTMDBMatchPickerRouteFeature.State(
+                    detailRouteIndex: detailRouteIndex,
+                    parent: .vod(itemID: vodState.vod.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentActorBiography(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.actorBiographyPresentationRequestID == requestID,
+                  vodState.selectedActor != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailActorBiography(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailActorBiography(
+                DetailActorBiographyRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    itemID: vodState.vod.id,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentTrailer(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.trailerPresentationRequestID == requestID,
+                  vodState.isTrailerPresented,
+                  vodState.trailerVideoKey != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailTrailer(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailTrailer(
+                DetailTrailerRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    parent: .vod(itemID: vodState.vod.id),
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(
+            detailRouteIndex,
+            .vodDetail(.delegate(.presentUnmatchedMovie(requestID)))
+        )):
+            guard state.routes.indices.contains(detailRouteIndex),
+                  detailRouteIndex == state.routes.count - 1,
+                  case let .vodDetail(vodState) = state.routes[detailRouteIndex].screen,
+                  vodState.unmatchedMoviePresentationRequestID == requestID,
+                  vodState.selectedUnmatchedMovie != nil,
+                  !state.routes.contains(where: { route in
+                      if case let .detailUnmatchedMovie(routeState) = route.screen {
+                          return routeState.requestID == requestID
+                      }
+                      return false
+                  })
+            else { return .none }
+            state.routes.presentSheet(.detailUnmatchedMovie(
+                DetailUnmatchedMovieRouteFeature.State(
+                    parentRouteIndex: detailRouteIndex,
+                    itemID: vodState.vod.id,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case .router(.routeAction(_, .vodDetail(.delegate(.close)))):
+            if case .vodDetail = state.routes.last?.screen {
+                state.routes.goBack()
+            }
+            return .none
+
+        // ── Playlist Management Delegates ────────────────────────
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceDetailModals(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(
+            routeIndex,
+            .detailTMDBMatchPicker(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailTMDBMatchPicker(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.detailRouteIndex) else { return .none }
+            switch (routeState.parent, state.routes[routeState.detailRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: routeState.detailRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: routeState.detailRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailSynopsis(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailSynopsis(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailActorBiography(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailActorBiography(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            return .send(.detailActorBiographyRouteDidDisappear(
+                presentationID: presentationID,
+                parentRouteIndex: routeState.parentRouteIndex,
+                itemID: routeState.itemID,
+                requestID: requestID
+            ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailTrailer(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailTrailer(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            return .send(.detailTrailerRouteDidDisappear(
+                presentationID: presentationID,
+                parentRouteIndex: routeState.parentRouteIndex,
+                parent: routeState.parent,
+                requestID: requestID
+            ))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .detailUnmatchedMovie(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .detailUnmatchedMovie(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            return .send(.detailUnmatchedMovieRouteDidDisappear(
+                presentationID: presentationID,
+                parentRouteIndex: routeState.parentRouteIndex,
+                itemID: routeState.itemID,
+                requestID: requestID
+            ))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reducePlayerRoute(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(
+            routeIndex,
+            .playerSpeedTest(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playerSpeedTest(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.playerRouteIndex),
+                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
+                  playerState.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.playerRouteIndex,
+                action: .player(.closeSpeedTest(requestID: requestID))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .playerSubtitleSearch(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .playerSubtitleSearch(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.playerRouteIndex),
+                  case let .player(playerState) = state.routes[routeState.playerRouteIndex].screen,
+                  playerState.subtitleSearchPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.playerRouteIndex,
+                action: .player(.closeSubtitleSearch(requestID: requestID))
+            )))
+
         case let .router(.routeAction(playerRouteIndex, .player(.delegate(.presentSpeedTest(requestID))))):
             guard state.routes.indices.contains(playerRouteIndex),
                   playerRouteIndex == state.routes.count - 1,
@@ -3365,6 +2093,1004 @@ public struct AppCoordinator {
             }
 
         // ── Mini Player Controls ─────────────────────────────────
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHomeSettings(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentSpeedTest(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            state.routes.presentSheet(.settingsSpeedTest(
+                SettingsSpeedTestRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentPINSetup(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.pinSetupPresentationRequestID == requestID,
+                  homeState.settings.isShowingPINSetup
+            else { return .none }
+            state.routes.presentSheet(.settingsPINSetup(
+                SettingsPINSetupRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktAuth(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.traktAuthPresentationRequestID == requestID,
+                  homeState.settings.isTraktAuthSheetPresented
+            else { return .none }
+            state.routes.presentSheet(.settingsTraktAuth(
+                SettingsTraktAuthRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktWatchlist(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID,
+                  homeState.settings.isTraktWatchlistPresented
+            else { return .none }
+            state.routes.presentSheet(.settingsTraktWatchlist(
+                SettingsTraktWatchlistRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentHiddenContentManagement(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.hiddenContentPresentationRequestID == requestID,
+                  homeState.settings.isShowingHiddenContentSheet
+            else { return .none }
+            state.routes.presentSheet(.settingsHiddenContent(
+                SettingsHiddenContentRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentDiagnosticReport(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID,
+                  let url = homeState.settings.diagnosticReportURL
+            else { return .none }
+            guard homeRouteIndex == state.routes.count - 1,
+                  homeState.selectedTab == .settings
+            else {
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+                )))
+            }
+            state.routes.presentSheet(.settingsDiagnosticReport(
+                SettingsDiagnosticReportRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID,
+                    url: url
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentBackupPreview(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID,
+                  homeState.settings.backupPreview != nil,
+                  homeState.settings.pendingBackupURL != nil
+            else { return .none }
+            guard homeRouteIndex == state.routes.count - 1,
+                  homeState.selectedTab == .settings
+            else {
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+                )))
+            }
+            state.routes.presentSheet(.settingsBackupPreview(
+                SettingsBackupPreviewRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentCustomEPGSettings(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings,
+                  homeState.settings.customEPGPresentationRequestID == requestID,
+                  homeState.settings.isCustomEPGSheetPresented
+            else { return .none }
+            state.routes.presentSheet(.customEPGSettings(
+                CustomEPGSettingsRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentCustomEPGSourceAdd(requestID)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
+                  customEPGState.homeRouteIndex == homeRouteIndex,
+                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
+                  homeState.settings.isCustomEPGSheetPresented,
+                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID,
+                  homeState.settings.isAddCustomEPGSourceSheetPresented
+            else { return .none }
+            state.routes.presentSheet(.customEPGSourceAdd(
+                CustomEPGSourceAddRouteFeature.State(
+                    customEPGSettingsPresentationID: customEPGState.presentationID,
+                    homeRouteIndex: homeRouteIndex,
+                    requestID: requestID
+                )
+            ))
+            return .none
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHomeDashboard(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeSettings(config)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.config == config
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .homeSettings(reloadConfig: config)
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentHomeCategoryPinManagement(playlistID, profileScope)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.activeProfileScope == profileScope
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .categoryPinManagement(
+                        playlistID: playlistID,
+                        profileScope: profileScope
+                    )
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.dashboard(.delegate(.presentEPGChannelPicker(playlistID, event)))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .dashboard,
+                  homeState.dashboard.activePlaylistID == playlistID,
+                  homeState.dashboard.epgCandidatePlaylistID == playlistID,
+                  homeState.dashboard.epgEvents.contains(where: { $0.id == event.id })
+            else { return .none }
+            state.routes.presentSheet(.dashboardPresentation(
+                DashboardPresentationRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config,
+                    presentation: .epgChannelPicker(
+                        playlistID: playlistID,
+                        profileScope: homeState.dashboard.activeProfileScope,
+                        event: event
+                    )
+                )
+            ))
+            return .none
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHomeChannelDelegates(state: inout State, action: Action, handled: inout Bool) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        handled = true
+        switch action {
+        case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
+            let config: PlaylistConfig
+            if let sourcePlaylistID = channel.playlistID,
+               state.activeConfig?.playlistID != sourcePlaylistID
+            {
+                guard let savedPlaylist = playlistRepository.getPlaylists().first(where: { $0.id == sourcePlaylistID }),
+                      let savedConfig = savedPlaylist.toPlaylistConfig()
+                else { return .none }
+                config = savedConfig
+            } else {
+                guard let activeConfig = state.activeConfig else { return .none }
+                config = activeConfig
+            }
+            let belongsToSelectedPlaylist = channel.playlistID == nil || channel.playlistID == config.playlistID
+            guard let playerState = makeLivePlayerState(
+                channel: channel,
+                playlist: belongsToSelectedPlaylist ? playlist : nil,
+                config: config
+            ) else { return .none }
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentEPGGuide(guideState))))):
+            #if os(tvOS)
+                state.routes.presentCover(.epgGuide(guideState))
+            #else
+                state.routes.presentSheet(.epgGuide(guideState))
+            #endif
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentEPGTimeline(timelineState))))):
+            #if os(tvOS)
+                state.routes.presentCover(.epgTimeline(timelineState))
+            #else
+                state.routes.presentSheet(.epgTimeline(timelineState))
+            #endif
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentMultiView(multiViewState))))):
+            state.routes.presentCover(.multiView(multiViewState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .liveTV,
+                  homeState.liveTV.config == categoryState.config,
+                  categoryState.type == .live
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .liveTV(routeIndex: homeRouteIndex)
+            state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentVODCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .movies,
+                  homeState.vod.config == categoryState.config,
+                  categoryState.type == .vod
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .vod(routeIndex: homeRouteIndex)
+            state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesCategoryManagement(categoryState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .series,
+                  homeState.series.config == categoryState.config,
+                  categoryState.type == .series
+            else { return .none }
+            var categoryState = categoryState
+            categoryState.parent = .series(routeIndex: homeRouteIndex)
+            state.routes.presentSheet(.categoryManagement(categoryState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSmartGroupManager)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case .home = state.routes[homeRouteIndex].screen
+            else { return .none }
+            state.routes.presentSheet(.smartChannelGroupManagement(
+                SmartChannelGroupManagementRouteFeature.State(homeRouteIndex: homeRouteIndex)
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentFavoriteListManagement)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .liveTV,
+                  homeState.liveTV.config == homeState.config
+            else { return .none }
+            state.routes.presentSheet(.favoriteChannelListManagement(
+                FavoriteChannelListManagementRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    homeConfig: homeState.config
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentChannelPresentationEditor(channel, playlistID, profileScope))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.playlistID == playlistID,
+                  homeState.liveTV.channelPresentationPlaylistID == playlistID,
+                  homeState.liveTV.channelPresentationProfileScope == profileScope
+            else { return .none }
+            state.routes.presentSheet(.channelPresentationEditor(
+                ChannelPresentationEditorRouteFeature.State(
+                    homeRouteIndex: homeRouteIndex,
+                    channel: channel,
+                    playlistID: playlistID,
+                    profileScope: profileScope
+                )
+            ))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(categoryID, parentalLockState))))):
+            let multiViewRouteIndices = state.routes.indices.filter { routeIndex in
+                if case .multiView = state.routes[routeIndex].screen {
+                    return true
+                }
+                return false
+            }
+            return .run { send in
+                for routeIndex in multiViewRouteIndices {
+                    await send(.router(.routeAction(
+                        id: routeIndex,
+                        action: .multiView(.restrictCategory(categoryID))
+                    )))
+                }
+                await send(.presentParentalLock(parentalLockState))
+            }
+
+        case let .router(.routeAction(_, .home(.delegate(.restrictMultiViewCategory(categoryID))))):
+            let effects = state.routes.indices.compactMap { routeIndex -> Effect<Action>? in
+                guard case .multiView = state.routes[routeIndex].screen else { return nil }
+                return .send(.router(.routeAction(
+                    id: routeIndex,
+                    action: .multiView(.restrictCategory(categoryID))
+                )))
+            }
+            return .merge(effects)
+
+        default:
+            handled = false
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHomeMediaDelegates(state: inout State, action: Action, handled: inout Bool) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        handled = true
+        switch action {
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSearch)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen
+            else { return .none }
+            state.routes.presentCover(.globalSearch(GlobalSearchRouteFeature.State(
+                homeRouteIndex: homeRouteIndex,
+                config: homeState.config
+            )))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentHiddenMediaManagement)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings
+            else { return .none }
+            state.routes.presentCover(.hiddenMediaManagement(HiddenMediaManagementRouteFeature.State()))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.presentParentalLock(parentalLockState))))):
+            return .send(.presentParentalLock(parentalLockState))
+
+        case let .router(.routeAction(
+            homeRouteIndex,
+            .home(.delegate(.presentVODParentalLock(parentalLockState, closeVODDetailsOnExpiry)))
+        )):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .movies,
+                  let config = homeState.vod.config,
+                  parentalLockState.pendingCategory != nil,
+                  parentalLockState.isCoordinatorRoute
+            else { return .none }
+
+            let categoryID = parentalLockState.pendingCategory?.id
+            let hasMatchingVODDetail = state.routes.indices.contains { routeIndex in
+                guard routeIndex > homeRouteIndex,
+                      case let .vodDetail(detailState) = state.routes[routeIndex].screen
+                else { return false }
+                return detailState.config == config && detailState.vod.categoryID == categoryID
+            }
+            let homeIsTopRoute = homeRouteIndex == state.routes.count - 1
+            guard homeIsTopRoute || (closeVODDetailsOnExpiry && hasMatchingVODDetail) else { return .none }
+
+            if closeVODDetailsOnExpiry, hasMatchingVODDetail {
+                while state.routes.count - 1 > homeRouteIndex {
+                    state.routes.dismiss()
+                }
+            }
+
+            var parentalLockState = parentalLockState
+            parentalLockState.parent = .vod(routeIndex: homeRouteIndex, config: config)
+            state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
+
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentSeriesParentalLock(parentalLockState))))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .series,
+                  let config = homeState.series.config,
+                  parentalLockState.pendingCategory != nil,
+                  parentalLockState.isCoordinatorRoute
+            else { return .none }
+            var parentalLockState = parentalLockState
+            parentalLockState.parent = .series(routeIndex: homeRouteIndex, config: config)
+            state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.didSelectVOD(vod))))):
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
+            guard let config = detailConfig(for: vod, activeConfig: state.activeConfig) else { return .none }
+            state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.didSelectSeries(series))))):
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
+            guard let config = detailConfig(for: series, activeConfig: state.activeConfig) else { return .none }
+            state.routes.push(.seriesDetail(SeriesDetailFeature.State(series: series, config: config)))
+            return .none
+
+        case let .router(.routeAction(_, .home(.delegate(.playHistoryItem(item))))):
+            return playHistoryItem(item, state: &state, forceRestart: false)
+
+        case let .router(.routeAction(_, .home(.delegate(.playOfflineMedia(item, episodeQueue))))):
+            return playOfflineMedia(item, episodeQueue: episodeQueue, state: &state)
+
+        case let .router(.routeAction(_, .home(.delegate(.restartHistoryItem(item))))):
+            return playHistoryItem(item, state: &state, forceRestart: true)
+
+        case .router(.routeAction(_, .home(.delegate(.openManagePlaylists)))):
+            state.routes.push(.playlistManagement(PlaylistManagementFeature.State(
+                unlockedPlaylistIDs: state.unlockedPlaylistIDs
+            )))
+            return .none
+
+        case .router(.routeAction(_, .home(.delegate(.switchProfile)))):
+            state.routes = [.root(.profileSelection(ProfileSelectionFeature.State()), withNavigation: true)]
+            return .none
+
+        // ── Series Detail Delegates ──────────────────────────────
+        default:
+            handled = false
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceSettingsModals(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsSpeedTest(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsSpeedTest(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsPINSetup(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsPINSetup(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.pinSetupPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsTraktAuth(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsTraktAuth(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.traktAuthPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsTraktWatchlist(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsTraktWatchlist(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsHiddenContent(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsHiddenContent(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.hiddenContentPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissHiddenContentManagement(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsDiagnosticReport(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsDiagnosticReport(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+            )))
+
+        case let .router(.routeAction(
+            routeIndex,
+            .settingsBackupPreview(.delegate(.close(presentationID, requestID)))
+        )):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .settingsBackupPreview(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID,
+                  routeState.requestID == requestID
+            else { return .none }
+            state.routes.dismiss()
+
+            guard state.routes.indices.contains(routeState.homeRouteIndex),
+                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: routeState.homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+            )))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceGlobalSearch(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  searchState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectChannel(channel, playlist))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectChannel(channel, playlist: playlist)))
+            )))
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectVOD(vod))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectVOD(vod)))
+            )))
+
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectSeries(series))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectSeries(series)))
+            )))
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceHiddenMediaManagement(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case let .router(.routeAction(routeIndex, .hiddenMediaManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .hiddenMediaManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceLifecycleAndHandoff(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
+        case .proceedToApp:
+            let activePlaylist: SavedPlaylist?
+            switch playlistRepository.readStartupPlaylist() {
+            case let .loaded(playlist):
+                activePlaylist = playlist
+                state.isStartupPlaylistReadFailed = false
+            case .failed:
+                state.isStartupPlaylistReadFailed = true
+                return .none
+            }
+            if let activePlaylist,
+               parentalControlClient.isPlaylistLocked(activePlaylist.id),
+               !state.unlockedPlaylistIDs.contains(activePlaylist.id)
+            {
+                state.routes = [.root(
+                    .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: activePlaylist.id)),
+                    withNavigation: true
+                )]
+                return .none
+            }
+            let hasValidPlaylist = activePlaylist?.toPlaylistConfig() != nil
+
+            withAnimation(.easeInOut(duration: 0.35)) {
+                if hasValidPlaylist {
+                    state.routes = [.root(.profileSelection(ProfileSelectionFeature.State()), withNavigation: true)]
+                } else {
+                    state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
+                }
+            }
+            return .none
+
+        // ── Profile Selection ────────────────────────────────────
+        case .checkSubscriptionStatus:
+            return .run { send in
+                await send(.subscriptionStatusResponse(TaskResult {
+                    try await purchases.customerInfo()
+                }))
+            }
+
+        case let .subscriptionStatusResponse(.success(info)):
+            state.isPremium = !info.entitlements.active.isEmpty
+            if !state.isPremium {
+                return .send(.presentPaywall)
+            }
+            return .none
+
+        case .subscriptionStatusResponse(.failure):
+            state.isPremium = false
+            return .send(.presentPaywall)
+
+        case .presentPaywall:
+            state.routes.presentSheet(.paywall(PaywallFeature.State()))
+            return .none
+
+        case let .receiveStreamHandoff(request):
+            if parentalControlClient.isPlaylistLocked(request.playlistID),
+               !state.unlockedPlaylistIDs.contains(request.playlistID)
+            {
+                state.isStreamHandoffErrorPresented = true
+                return .none
+            }
+            let requestID = UUID()
+            state.activeStreamHandoffRequestID = requestID
+            state.isStreamHandoffErrorPresented = false
+            return .run { send in
+                let playlist = playlistRepository.getPlaylists().first { $0.id == request.playlistID }
+                guard let playlist, let config = playlist.toPlaylistConfig() else {
+                    await send(.streamHandoffResolved(requestID: requestID, playable: nil))
+                    return
+                }
+
+                let playable: PlayerFeature.PlayableItem?
+                switch request.mediaKind {
+                case .live:
+                    let item = try? await iptvClient.resolveLiveItem(config, request.itemID, request.categoryID)
+                    playable = item.flatMap { item in
+                        guard let url = item.streamURL else { return nil }
+                        return PlayerFeature.PlayableItem(
+                            id: item.id,
+                            title: request.title,
+                            streamURL: url,
+                            coverURL: item.displayLogoURL,
+                            fallbackCoverURL: item.coverURL,
+                            isLive: true,
+                            config: config,
+                            epgChannelID: item.epgChannelID,
+                            tvArchive: item.tvArchive,
+                            categoryID: item.categoryID
+                        )
+                    }
+                case .vod:
+                    let item = try? await iptvClient.resolveVODItem(config, request.itemID, request.categoryID, nil)
+                    playable = item.flatMap { item in
+                        guard let url = item.streamURL else { return nil }
+                        return PlayerFeature.PlayableItem(
+                            id: item.id,
+                            title: item.title,
+                            streamURL: url,
+                            coverURL: item.displayLogoURL,
+                            startPosition: request.playbackPosition,
+                            config: config,
+                            categoryID: item.categoryID
+                        )
+                    }
+                case .episode:
+                    guard let seriesID = request.seriesID else {
+                        await send(.streamHandoffResolved(requestID: requestID, playable: nil))
+                        return
+                    }
+                    let details = try? await iptvClient.fetchSeriesInfo(config, seriesID)
+                    playable = details?.episodes.first(where: { $0.id == request.itemID }).map { episode in
+                        PlayerFeature.PlayableItem(
+                            id: episode.id,
+                            title: request.title,
+                            seriesTitle: request.seriesTitle,
+                            streamURL: episode.streamURL,
+                            coverURL: episode.coverURL,
+                            seriesID: seriesID,
+                            startPosition: request.playbackPosition,
+                            config: config
+                        )
+                    }
+                }
+                await send(.streamHandoffResolved(requestID: requestID, playable: playable))
+            }
+            .cancellable(id: CancelID.streamHandoffResolution, cancelInFlight: true)
+
+        case let .streamHandoffResolved(requestID, playable):
+            guard state.activeStreamHandoffRequestID == requestID else { return .none }
+            state.activeStreamHandoffRequestID = nil
+            guard let playable else {
+                state.isStreamHandoffErrorPresented = true
+                return .none
+            }
+            let playerState = PlayerFeature.State(item: playable)
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(playerState))
+            return .none
+
+        case .dismissStreamHandoffError:
+            state.isStreamHandoffErrorPresented = false
+            return .none
+
+        case .appEnteredForeground:
+            state.isForeground = true
+            let reminderClient = reminderClient
+            return .run { send in
+                while !Task.isCancelled {
+                    let due = await reminderClient.reconcileScheduledReminders()
+                    await send(.epgReminderMonitorTick(due))
+                    do {
+                        try await Task.sleep(for: .seconds(15))
+                    } catch {
+                        return
+                    }
+                }
+            }.cancellable(id: CancelID.epgReminderMonitor, cancelInFlight: true)
+
+        case .appEnteredBackground:
+            state.isForeground = false
+            var effects: [Effect<Action>] = [.cancel(id: CancelID.epgReminderMonitor)]
+            for routeIndex in state.routes.indices {
+                guard case .epgTimeline = state.routes[routeIndex].screen else { continue }
+                effects.append(.send(.router(.routeAction(id: routeIndex, action: .epgTimeline(.cancelEPGSync)))))
+            }
+            return .merge(effects)
+
+        case let .epgReminderMonitorTick(reminders):
+            guard state.isForeground,
+                  settingsClient.autoSwitchOnEPGReminder(),
+                  state.routes.count == 1,
+                  !state.isPlayerMini,
+                  state.miniPlayer == nil,
+                  case let .home(home) = state.routes[0].screen,
+                  home.liveTV.epgTimeline?.activePreviewChannel == nil,
+                  home.liveTV.epgTimeline?.isPiPActive != true,
+                  let activeConfig = state.activeConfig
+            else { return .none }
+            let activeIdentity = EPGReminderIdentifier.playlistIdentity(for: activeConfig)
+            guard let reminder = reminders.first(where: {
+                !$0.autoSwitchHandled && !state.handledEPGReminderIDs.contains($0.id)
+                    && $0.playlistIdentity == activeIdentity
+                    && $0.startTime <= Date() && Date() < $0.endTime
+            }) else { return .none }
+            let channels = home.liveTV.channelsByCategory.values.flatMap(\.self)
+                + home.liveTV.smartGroupChannels
+                + home.liveTV.favoriteListResolvedChannels
+            guard let channel = channels.first(where: { $0.id == reminder.channelID }),
+                  let streamURL = channel.streamURL
+            else {
+                return .none
+            }
+            state.handledEPGReminderIDs.insert(reminder.id)
+            let playable = PlayerFeature.PlayableItem(
+                id: channel.id, title: channel.title, streamURL: streamURL,
+                coverURL: channel.displayLogoURL, fallbackCoverURL: channel.coverURL,
+                isLive: true, config: activeConfig,
+                epgChannelID: channel.epgChannelID, tvArchive: channel.tvArchive,
+                categoryID: channel.categoryID
+            )
+            state.routes.presentCover(.player(PlayerFeature.State(item: playable)))
+            let reminderClient = reminderClient
+            return .run { _ in
+                await reminderClient.markAutoSwitchHandled(reminder.id)
+            }
+
+        default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reducePlayerAndMiniPlayer(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
         case .expandPlayer:
             guard let mini = state.miniPlayer else { return .none }
             var expanded = mini
@@ -3398,50 +3124,18 @@ public struct AppCoordinator {
             state.isPlayerMini.toggle()
             return .none
 
-        case let .epgGuideRouteDidDisappear(presentationID):
-            return .run { [previewPlayerClient] _ in
-                await previewPlayerClient.stopPreviewOwned(presentationID)
-            }
-
-        case let .epgTimelineRouteDidDisappear(presentationID):
-            return .run { [previewPlayerClient] _ in
-                await previewPlayerClient.stopPreviewOwned(presentationID)
-            }
-
-        case let .epgTimelineProgramDetailRouteDidDisappear(
-            presentationID,
-            timelineRouteIndex,
-            timelinePresentationID,
-            detailRequestID
-        ):
-            if let detailRouteIndex = state.routes.indices.last(where: { index in
-                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
-                return detailState.presentationID == presentationID
-            }) {
-                guard detailRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(timelineRouteIndex),
-                  case let .epgTimeline(timelineState) = state.routes[timelineRouteIndex].screen,
-                  timelineState.presentationID == timelinePresentationID,
-                  timelineState.selectedProgramDetailRequestID == detailRequestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: timelineRouteIndex,
-                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailRequestID))
-            )))
-
-        case let .epgTimelineChannelLogoEditorRouteDidDisappear(presentationID):
-            if let routeIndex = state.routes.indices.last(where: { index in
-                guard case let .epgTimelineChannelLogoEditor(routeState) = state.routes[index].screen else { return false }
-                return routeState.presentationID == presentationID
-            }), routeIndex == state.routes.count - 1 {
-                state.routes.dismiss()
-            }
+        default:
             return .none
+        }
+    }
 
-        // ── Deep Linking ─────────────────────────────────────────
+    @inline(never)
+    private func reduceDeepLinkingAndTransfer(state: inout State, action: Action) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        switch action {
         case let .handleDeepLink(url):
             state.topShelfDeepLinkRequestID = nil
             guard url.scheme == "pureiptv" else { return .none }
@@ -3724,6 +3418,729 @@ public struct AppCoordinator {
             )
 
         default:
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceDisappearancesMedia(state: inout State, action: Action, handled: inout Bool) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        handled = true
+        switch action {
+        case let .multiViewChannelSelectionRouteDidDisappear(presentationID, multiViewRouteIndex, multiViewPresentationID, slotID):
+            if let selectionRouteIndex = state.routes.indices.last(where: { index in
+                if case let .multiViewChannelSelection(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), selectionRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(multiViewRouteIndex),
+                  case let .multiView(multiViewState) = state.routes[multiViewRouteIndex].screen,
+                  multiViewState.presentationID == multiViewPresentationID,
+                  multiViewState.isSelectingChannelForSlotID == slotID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: multiViewRouteIndex,
+                action: .multiView(.channelSelectionDismissed)
+            )))
+
+        case let .playerSpeedTestRouteDidDisappear(presentationID, playerRouteIndex, requestID):
+            let speedTestRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playerSpeedTest(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let speedTestRouteIndex {
+                guard speedTestRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playerRouteIndex),
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playerRouteIndex,
+                action: .player(.closeSpeedTest(requestID: requestID))
+            )))
+
+        case let .playerSubtitleSearchRouteDidDisappear(presentationID, playerRouteIndex, requestID):
+            let subtitleSearchRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playerSubtitleSearch(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let subtitleSearchRouteIndex {
+                guard subtitleSearchRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playerRouteIndex),
+                  case let .player(playerState) = state.routes[playerRouteIndex].screen,
+                  playerState.subtitleSearchPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playerRouteIndex,
+                action: .player(.closeSubtitleSearch(requestID: requestID))
+            )))
+
+        case let .detailTMDBMatchPickerRouteDidDisappear(presentationID, detailRouteIndex, parent, requestID):
+            let pickerRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailTMDBMatchPicker(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let pickerRouteIndex {
+                guard pickerRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(detailRouteIndex) else { return .none }
+            switch (parent, state.routes[detailRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: detailRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.tmdbMatchPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: detailRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTMDBMatchPicker(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
+
+        case let .detailSynopsisRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
+            let synopsisRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailSynopsis(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.requestID == requestID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.parent == parent
+                }
+                return false
+            })
+            if let synopsisRouteIndex {
+                guard synopsisRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+            return .none
+
+        case let .detailActorBiographyRouteDidDisappear(presentationID, parentRouteIndex, itemID, requestID):
+            let actorRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailActorBiography(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.itemID == itemID
+                        && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let actorRouteIndex {
+                guard actorRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(parentRouteIndex),
+                  case let .vodDetail(vodState) = state.routes[parentRouteIndex].screen,
+                  vodState.vod.id == itemID,
+                  vodState.actorBiographyPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: parentRouteIndex,
+                action: .vodDetail(.coordinatorDismissActorBiography(requestID: requestID))
+            )))
+
+        case let .detailTrailerRouteDidDisappear(presentationID, parentRouteIndex, parent, requestID):
+            let trailerRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailTrailer(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.parent == parent
+                        && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let trailerRouteIndex {
+                guard trailerRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(parentRouteIndex) else { return .none }
+            switch (parent, state.routes[parentRouteIndex].screen) {
+            case let (.vod(itemID), .vodDetail(vodState))
+                where vodState.vod.id == itemID && vodState.trailerPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: parentRouteIndex,
+                    action: .vodDetail(.coordinatorDismissTrailer(requestID: requestID))
+                )))
+
+            case let (.series(itemID), .seriesDetail(seriesState))
+                where seriesState.series.id == itemID && seriesState.trailerPresentationRequestID == requestID:
+                return .send(.router(.routeAction(
+                    id: parentRouteIndex,
+                    action: .seriesDetail(.coordinatorDismissTrailer(requestID: requestID))
+                )))
+
+            default:
+                return .none
+            }
+
+        case let .detailUnmatchedMovieRouteDidDisappear(presentationID, parentRouteIndex, itemID, requestID):
+            let unmatchedMovieRouteIndex = state.routes.indices.last(where: { index in
+                if case let .detailUnmatchedMovie(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                        && routeState.parentRouteIndex == parentRouteIndex
+                        && routeState.itemID == itemID
+                        && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let unmatchedMovieRouteIndex {
+                guard unmatchedMovieRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(parentRouteIndex),
+                  case let .vodDetail(vodState) = state.routes[parentRouteIndex].screen,
+                  vodState.vod.id == itemID,
+                  vodState.unmatchedMoviePresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: parentRouteIndex,
+                action: .vodDetail(.coordinatorDismissUnmatchedMovie(requestID: requestID))
+            )))
+
+        case let .epgGuideRouteDidDisappear(presentationID):
+            return .run { [previewPlayerClient] _ in
+                await previewPlayerClient.stopPreviewOwned(presentationID)
+            }
+
+        case let .epgTimelineRouteDidDisappear(presentationID):
+            return .run { [previewPlayerClient] _ in
+                await previewPlayerClient.stopPreviewOwned(presentationID)
+            }
+
+        case let .epgTimelineProgramDetailRouteDidDisappear(
+            presentationID,
+            timelineRouteIndex,
+            timelinePresentationID,
+            detailRequestID
+        ):
+            if let detailRouteIndex = state.routes.indices.last(where: { index in
+                guard case let .epgTimelineProgramDetail(detailState) = state.routes[index].screen else { return false }
+                return detailState.presentationID == presentationID
+            }) {
+                guard detailRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(timelineRouteIndex),
+                  case let .epgTimeline(timelineState) = state.routes[timelineRouteIndex].screen,
+                  timelineState.presentationID == timelinePresentationID,
+                  timelineState.selectedProgramDetailRequestID == detailRequestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: timelineRouteIndex,
+                action: .epgTimeline(.dismissProgramDetailsIfCurrent(detailRequestID))
+            )))
+
+        case let .epgTimelineChannelLogoEditorRouteDidDisappear(presentationID):
+            if let routeIndex = state.routes.indices.last(where: { index in
+                guard case let .epgTimelineChannelLogoEditor(routeState) = state.routes[index].screen else { return false }
+                return routeState.presentationID == presentationID
+            }), routeIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+            return .none
+
+        // ── Deep Linking ─────────────────────────────────────────
+        default:
+            handled = false
+            return .none
+        }
+    }
+
+    @inline(never)
+    private func reduceDisappearancesSettings(state: inout State, action: Action, handled: inout Bool) -> Effect<Action> {
+        let playlistRepository = playlistRepository
+        let iptvClient = iptvClient
+        let previewPlayerClient = previewPlayerClient
+
+        handled = true
+        switch action {
+        case let .profileAddProfileRouteDidDisappear(presentationID, profileSelectionRouteIndex):
+            guard !state.routes.contains(where: { route in
+                guard case let .profileAddProfile(routeState) = route.screen else { return false }
+                return routeState.presentationID == presentationID
+                    || routeState.profileSelectionRouteIndex == profileSelectionRouteIndex
+            }),
+                state.routes.indices.contains(profileSelectionRouteIndex),
+                case let .profileSelection(profileState) = state.routes[profileSelectionRouteIndex].screen,
+                profileState.showingAddProfile
+            else { return .none }
+
+            return .send(.router(.routeAction(
+                id: profileSelectionRouteIndex,
+                action: .profileSelection(.binding(.set(\.showingAddProfile, false)))
+            )))
+
+        case let .dashboardPresentationRouteDidDisappear(presentationID, homeRouteIndex, homeConfig, reloadConfig):
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .dashboardPresentation(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), routeIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard let reloadConfig,
+                  state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.config == homeConfig
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.dashboard(.onAppear(config: reloadConfig)))
+            )))
+
+        case let .favoriteChannelListManagementRouteDidDisappear(presentationID):
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .favoriteChannelListManagement(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), routeIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+            return .none
+
+        case let .addPlaylistQRTransferRouteDidDisappear(presentationID, parent, wasPaired):
+            var didPair = wasPaired
+            if let routeIndex = state.routes.indices.last(where: { index in
+                if case let .addPlaylistQRTransfer(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }) {
+                guard routeIndex == state.routes.count - 1,
+                      case let .addPlaylistQRTransfer(routeState) = state.routes[routeIndex].screen
+                else { return .none }
+                didPair = didPair || routeState.isPaired
+                state.routes.dismiss()
+            }
+
+            switch parent {
+            case let .addPlaylistRoute(routeIndex):
+                guard state.routes.indices.contains(routeIndex),
+                      routeIndex == state.routes.count - 1,
+                      case .addPlaylist = state.routes[routeIndex].screen
+                else { return .none }
+                let childAction: AddPlaylistFeature.Action = didPair
+                    ? .delegate(.didReceiveTransferredPlaylist)
+                    : .qrTransferRouteDidDismiss(presentationID)
+                return .send(.router(.routeAction(
+                    id: routeIndex,
+                    action: .addPlaylist(childAction)
+                )))
+
+            case let .playlistManagementAddPlaylistRoute(routeIndex, parentPresentationID, requestID):
+                guard state.routes.indices.contains(routeIndex),
+                      routeIndex == state.routes.count - 1,
+                      case let .playlistManagementAddPlaylist(addPlaylistState) = state.routes[routeIndex].screen,
+                      addPlaylistState.presentationID == parentPresentationID,
+                      addPlaylistState.requestID == requestID,
+                      state.routes.indices.contains(addPlaylistState.playlistManagementRouteIndex),
+                      case let .playlistManagement(managementState) = state.routes[addPlaylistState.playlistManagementRouteIndex].screen,
+                      managementState.addPlaylistPresentationRequestID == requestID,
+                      managementState.addPlaylist != nil,
+                      managementState.startupUnlockPlaylistID == nil
+                else { return .none }
+                let childAction: AddPlaylistFeature.Action = didPair
+                    ? .delegate(.didReceiveTransferredPlaylist)
+                    : .qrTransferRouteDidDismiss(presentationID)
+                return .send(.playlistManagementAddPlaylistChildAction(
+                    presentationID: parentPresentationID,
+                    requestID: requestID,
+                    action: childAction
+                ))
+            }
+
+        case let .playlistTransferRouteDidDisappear(presentationID, sessionID):
+            let routeIndex = state.routes.indices.last(where: { index in
+                if case let .playlistQRTransferConfirmation(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.sessionID == sessionID
+                }
+                return false
+            })
+            if let routeIndex {
+                guard routeIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.playlistTransferPresentationID == presentationID,
+                  state.playlistTransferPairing?.sessionID == sessionID
+            else { return .none }
+            return .send(.cancelPlaylistTransfer(sessionID: sessionID, presentationID: presentationID))
+
+        case let .playlistManagementSettingsRouteDidDisappear(presentationID, playlistManagementRouteIndex, editRequestID):
+            let settingsRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playlistManagementSettings(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.editRequestID == editRequestID
+                }
+                return false
+            })
+            if let settingsRouteIndex {
+                guard settingsRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.playlistSettingsEditRequestID == editRequestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playlistManagementRouteIndex,
+                action: .playlistManagement(.cancelPlaylistSettings)
+            )))
+
+        case let .playlistManagementPINRouteDidDisappear(presentationID, playlistManagementRouteIndex, requestID, flow):
+            let pinRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playlistManagementPIN(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let pinRouteIndex {
+                guard pinRouteIndex == state.routes.count - 1,
+                      case let .playlistManagementPIN(routeState) = state.routes[pinRouteIndex].screen,
+                      !routeState.isStartupUnlock
+                else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.pinPresentationRequestID == requestID,
+                  managementState.pinFlow == flow
+            else { return .none }
+            if case .startup = flow {
+                return .none
+            }
+            return .send(.router(.routeAction(
+                id: playlistManagementRouteIndex,
+                action: .playlistManagement(.cancelPlaylistPIN)
+            )))
+
+        case let .playlistManagementAddPlaylistRouteDidDisappear(presentationID, playlistManagementRouteIndex, requestID):
+            let addPlaylistRouteIndex = state.routes.indices.last(where: { index in
+                if case let .playlistManagementAddPlaylist(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let addPlaylistRouteIndex {
+                guard addPlaylistRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: playlistManagementRouteIndex,
+                action: .playlistManagement(.closeAddPlaylistTapped(requestID: requestID))
+            )))
+
+        case let .playlistManagementAddPlaylistChildAction(presentationID, requestID, childAction):
+            guard case let .playlistManagementAddPlaylist(addPlaylistRouteState) = state.routes.last?.screen,
+                  addPlaylistRouteState.presentationID == presentationID,
+                  addPlaylistRouteState.requestID == requestID,
+                  state.routes.indices.contains(addPlaylistRouteState.playlistManagementRouteIndex),
+                  case let .playlistManagement(managementState) = state.routes[addPlaylistRouteState.playlistManagementRouteIndex].screen,
+                  managementState.addPlaylistPresentationRequestID == requestID,
+                  managementState.addPlaylist != nil,
+                  managementState.startupUnlockPlaylistID == nil
+            else { return .none }
+
+            return .send(.router(.routeAction(
+                id: addPlaylistRouteState.playlistManagementRouteIndex,
+                action: .playlistManagement(.addPlaylist(.presented(childAction)))
+            )))
+
+        case let .settingsSpeedTestRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let settingsSpeedTestRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsSpeedTest(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let settingsSpeedTestRouteIndex {
+                guard settingsSpeedTestRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.speedTestPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.closeSpeedTest(requestID: requestID)))
+            )))
+
+        case let .settingsPINSetupRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let pinSetupRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsPINSetup(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let pinSetupRouteIndex {
+                guard pinSetupRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.pinSetupPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
+            )))
+
+        case let .settingsTraktAuthRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let traktAuthRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsTraktAuth(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let traktAuthRouteIndex {
+                guard traktAuthRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.traktAuthPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
+            )))
+
+        case let .settingsTraktWatchlistRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let traktWatchlistRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsTraktWatchlist(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let traktWatchlistRouteIndex {
+                guard traktWatchlistRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.traktWatchlistPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
+            )))
+
+        case let .settingsHiddenContentRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let hiddenContentRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsHiddenContent(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let hiddenContentRouteIndex {
+                guard hiddenContentRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.hiddenContentPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissHiddenContentManagement(requestID: requestID)))
+            )))
+
+        case let .settingsDiagnosticReportRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let diagnosticReportRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsDiagnosticReport(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let diagnosticReportRouteIndex {
+                guard diagnosticReportRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.diagnosticReportPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissDiagnosticReport(requestID: requestID)))
+            )))
+
+        case let .settingsBackupPreviewRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let backupPreviewRouteIndex = state.routes.indices.last(where: { index in
+                if case let .settingsBackupPreview(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let backupPreviewRouteIndex {
+                guard backupPreviewRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.backupPreviewPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissBackupPreview(requestID: requestID)))
+            )))
+
+        case let .customEPGSettingsRouteDidDisappear(presentationID, homeRouteIndex, requestID):
+            let customEPGRouteIndex = state.routes.indices.last(where: { index in
+                if case let .customEPGSettings(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let customEPGRouteIndex {
+                guard customEPGRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSettings(requestID: requestID)))
+            )))
+
+        case let .customEPGSourceAddRouteDidDisappear(presentationID, customEPGSettingsPresentationID, homeRouteIndex, requestID):
+            let sourceAddRouteIndex = state.routes.indices.last(where: { index in
+                if case let .customEPGSourceAdd(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID && routeState.requestID == requestID
+                }
+                return false
+            })
+            if let sourceAddRouteIndex {
+                guard sourceAddRouteIndex == state.routes.count - 1 else { return .none }
+                state.routes.dismiss()
+            }
+
+            guard case let .customEPGSettings(customEPGState) = state.routes.last?.screen,
+                  customEPGState.presentationID == customEPGSettingsPresentationID,
+                  customEPGState.homeRouteIndex == homeRouteIndex,
+                  state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.settings.customEPGPresentationRequestID == customEPGState.requestID,
+                  homeState.settings.customEPGSourceAddPresentationRequestID == requestID
+            else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.settings(.coordinatorDismissCustomEPGSourceAdd(requestID: requestID)))
+            )))
+
+        case let .m3uCategoryMappingsSaved(presentationID, categoryRouteIndex, categoryPresentationID, homeRouteIndex, maybePlaylistID):
+            if let editorRouteIndex = state.routes.indices.last(where: { index in
+                if case let .m3uCategoryMappingEditor(routeState) = state.routes[index].screen {
+                    return routeState.presentationID == presentationID
+                }
+                return false
+            }), editorRouteIndex == state.routes.count - 1 {
+                state.routes.dismiss()
+            }
+
+            guard let playlistID = maybePlaylistID,
+                  state.routes.indices.contains(homeRouteIndex),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.liveTV.config?.type == .m3u,
+                  homeState.liveTV.config?.playlistID == playlistID
+            else { return .none }
+
+            if state.routes.indices.contains(categoryRouteIndex),
+               categoryRouteIndex > homeRouteIndex,
+               case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen,
+               categoryState.presentationID == categoryPresentationID,
+               categoryState.type == .live,
+               categoryState.config.type == .m3u,
+               categoryState.config.playlistID == playlistID
+            {
+                return .send(.router(.routeAction(
+                    id: categoryRouteIndex,
+                    action: .categoryManagement(.m3uCategoryMappingsUpdated)
+                )))
+            }
+
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.liveCategoryMappingsUpdated))
+            )))
+
+        case let .presentParentalLock(parentalLockState):
+            state.routes.presentSheet(.parentalLock(parentalLockState))
+            return .none
+
+        case let .presentDetailSynopsis(parent, text):
+            let parentRouteIndex = state.routes.indices.last(where: { index in
+                switch (parent, state.routes[index].screen) {
+                case let (.vod(itemID), .vodDetail(vodState)):
+                    vodState.vod.id == itemID
+                case let (.series(itemID), .seriesDetail(seriesState)):
+                    seriesState.series.id == itemID
+                default:
+                    false
+                }
+            })
+            guard let parentRouteIndex, parentRouteIndex == state.routes.count - 1 else { return .none }
+            state.routes.presentSheet(.detailSynopsis(
+                DetailSynopsisRouteFeature.State(
+                    parentRouteIndex: parentRouteIndex,
+                    parent: parent,
+                    text: text
+                )
+            ))
+            return .none
+
+        default:
+            handled = false
             return .none
         }
     }

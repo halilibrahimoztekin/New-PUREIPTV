@@ -1500,7 +1500,7 @@ public enum AppScreen {
     case addPlaylist(AddPlaylistFeature)
     case profileSelection(ProfileSelectionFeature)
     case profileAddProfile(ProfileAddProfileRouteFeature)
-    case home(HomeFeature)
+    indirect case home(HomeFeature)
     case globalSearch(GlobalSearchRouteFeature)
     case hiddenMediaManagement(HiddenMediaManagementRouteFeature)
     case player(PlayerFeature)
