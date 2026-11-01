@@ -31,7 +31,7 @@ struct PureIPTVApp: App {
             diskPath: "pureiptv_url_cache"
         )
 
-        #if os(iOS)
+        #if os(iOS) || os(tvOS)
             NotificationCenter.default.addObserver(
                 forName: UIApplication.didReceiveMemoryWarningNotification,
                 object: nil,
@@ -41,6 +41,38 @@ struct PureIPTVApp: App {
                 URLCache.shared.removeAllCachedResponses()
             }
         #endif
+
+        Task.detached(priority: .utility) {
+            let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            let fileManager = FileManager.default
+            if let files = try? fileManager.contentsOfDirectory(at: tmpURL, includingPropertiesForKeys: [.contentModificationDateKey]) {
+                let dayAgo = Date().addingTimeInterval(-86400)
+                for file in files {
+                    if let values = try? file.resourceValues(forKeys: [.contentModificationDateKey]),
+                       let modDate = values.contentModificationDate,
+                       modDate < dayAgo
+                    {
+                        try? fileManager.removeItem(at: file)
+                    }
+                }
+            }
+        }
+
+        Task.detached(priority: .utility) {
+            let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            let fileManager = FileManager.default
+            if let files = try? fileManager.contentsOfDirectory(at: tmpURL, includingPropertiesForKeys: [.contentModificationDateKey]) {
+                let dayAgo = Date().addingTimeInterval(-86400)
+                for file in files {
+                    if let values = try? file.resourceValues(forKeys: [.contentModificationDateKey]),
+                       let modDate = values.contentModificationDate,
+                       modDate < dayAgo
+                    {
+                        try? fileManager.removeItem(at: file)
+                    }
+                }
+            }
+        }
 
         Task {
             do {
