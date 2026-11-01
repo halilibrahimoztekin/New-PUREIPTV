@@ -26,6 +26,7 @@ public struct EPGItemDTO: Codable, Sendable {
     public var stopV: String?
     public var nowPlaying: Int?
     public var hasArchive: Int?
+    public var icon: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -41,6 +42,7 @@ public struct EPGItemDTO: Codable, Sendable {
         case stopV = "stop_v"
         case nowPlaying = "now_playing"
         case hasArchive = "has_archive"
+        case icon
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,5 +82,6 @@ public struct EPGItemDTO: Codable, Sendable {
         stopTimestamp = decodeInt(forKey: .stopTimestamp)
         nowPlaying = decodeInt(forKey: .nowPlaying)
         hasArchive = decodeInt(forKey: .hasArchive)
+        icon = try? container.decode(String.self, forKey: .icon)
     }
 }

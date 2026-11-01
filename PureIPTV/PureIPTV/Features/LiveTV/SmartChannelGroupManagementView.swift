@@ -116,13 +116,20 @@ public struct SmartChannelGroupManagementView: View {
                         .foregroundStyle(Color.accentColor)
                 }
             }
+            #if os(tvOS)
+            .frame(minHeight: 44)
+            #endif
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled((isUnavailable && !isSelected) || hasReachedLimit)
         .accessibilityLabel(title)
         .accessibilityValue(isSelected ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        #if os(tvOS)
+            .tvFocusEffect()
+        #else
+            .buttonStyle(.plain)
+        #endif
     }
 
     private func resetEditor() {

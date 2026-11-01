@@ -33,7 +33,7 @@ public struct SeriesCardView: View {
                     )
 
                 // Poster
-                if let coverURL = series.coverURL {
+                if let coverURL = series.displayCoverURL {
                     KFImage.url(coverURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: coverURL, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID))
                         .requestModifier { request in
                             PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID)
@@ -85,7 +85,7 @@ public struct SeriesCardView: View {
 
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(series.title)
+                    Text(series.displayTitle)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Color.white)
                         .lineLimit(2)

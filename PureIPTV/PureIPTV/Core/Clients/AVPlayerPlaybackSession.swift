@@ -24,6 +24,13 @@ final class AVPlayerPlaybackSession {
         return seconds.isFinite ? max(0, seconds) : 0
     }
 
+    #if os(tvOS)
+        func preferredDisplayCriteria() async -> AVDisplayCriteria? {
+            guard let asset = player.currentItem?.asset else { return nil }
+            return try? await asset.load(.preferredDisplayCriteria)
+        }
+    #endif
+
     func prepare(
         url: URL,
         positionSeconds: Double,

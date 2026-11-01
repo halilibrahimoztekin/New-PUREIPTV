@@ -30,6 +30,9 @@ public struct OriginalLanguageFilterBar: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 4)
+                #if os(tvOS)
+                    .focusSection()
+                #endif
             }
             .accessibilityLabel(AppStrings.Player.originalLanguageFilter)
             .accessibilityHint(AppStrings.Player.originalLanguageUnknownHint)

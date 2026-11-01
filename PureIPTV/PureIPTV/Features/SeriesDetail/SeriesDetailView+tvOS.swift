@@ -29,6 +29,7 @@
                             contentView
                         }
                     }
+                    .focusSection()
                     .task(id: store.pendingEpisodeReveal?.id) {
                         guard let request = store.pendingEpisodeReveal else { return }
                         await Task.yield()
@@ -61,18 +62,66 @@
                 store.send(.closeTapped)
             }
             .overlay(alignment: .topTrailing) {
-                if store.canManageTMDBMatch {
-                    Button { store.send(.showTMDBMatchPicker) } label: {
-                        Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
-                            .font(.title3.weight(.semibold))
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 15)
-                            .background(.ultraThinMaterial, in: Capsule())
+                VStack(alignment: .trailing, spacing: 12) {
+                    if store.canManageTMDBMatch {
+                        Button { store.send(.showTMDBMatchPicker) } label: {
+                            Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
+                                .font(.title3.weight(.semibold))
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 15)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
                     }
-                    .padding(.top, 28)
-                    .padding(.trailing, 36)
+
+                    if store.canManagePresentation {
+                        Button { store.send(.editPresentationTapped) } label: {
+                            Label(AppStrings.MediaPresentation.edit, systemImage: "pencil")
+                                .font(.title3.weight(.semibold))
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 15)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                        .disabled(!store.isPresentationOverrideLoaded)
+                        .accessibilityHint(AppStrings.MediaPresentation.localOnlyDescription)
+                    }
                 }
+                .padding(.top, 28)
+                .padding(.trailing, 36)
             }
+        }
+
+        private var episodeSortMenu: some View {
+            Menu {
+                Section(AppStrings.Settings.contentSorting) {
+                    Button {
+                        store.send(.episodeSortOrderSelected(.oldestFirst))
+                    } label: {
+                        if store.episodeSortOrder == .oldestFirst {
+                            Label(AppStrings.SeriesDetail.oldestEpisodesFirst, systemImage: "checkmark")
+                        } else {
+                            Text(AppStrings.SeriesDetail.oldestEpisodesFirst)
+                        }
+                    }
+
+                    Button {
+                        store.send(.episodeSortOrderSelected(.newestFirst))
+                    } label: {
+                        if store.episodeSortOrder == .newestFirst {
+                            Label(AppStrings.SeriesDetail.newestEpisodesFirst, systemImage: "checkmark")
+                        } else {
+                            Text(AppStrings.SeriesDetail.newestEpisodesFirst)
+                        }
+                    }
+                }
+            } label: {
+                Label(store.episodeSortOrder.title, systemImage: "arrow.up.arrow.down")
+                    .font(.system(size: 18, weight: .semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+            .accessibilityLabel(AppStrings.Settings.contentSorting)
+            .accessibilityValue(store.episodeSortOrder.title)
         }
 
         // MARK: – Header
@@ -81,6 +130,7 @@
             ZStack(alignment: .bottomLeading) {
                 // Background Blur
                 let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" }
+                    ?? store.series.presentationOverride?.posterURL?.absoluteString
                     ?? store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" }
                     ?? store.series.coverURL?.absoluteString
 
@@ -115,7 +165,8 @@
                 // Content
                 HStack(alignment: .bottom, spacing: 40) {
                     // Poster
-                    let posterURL = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? store.series.coverURL?.absoluteString
+                    let posterURL = store.series.presentationOverride?.posterURL?.absoluteString ??
+                        store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? store.series.coverURL?.absoluteString
 
                     if let urlString = posterURL, let url = URL(string: urlString) {
                         KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID))
@@ -131,13 +182,23 @@
 
                     // Info
                     VStack(alignment: .leading, spacing: 20) {
-                        Text(store.tmdbTV?.name ?? store.series.title)
+                        Text(store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title)
                             .font(.system(size: 48, weight: .bold))
                             .foregroundStyle(.white)
                             .lineLimit(2)
 
                         // Rating + Status
                         HStack(spacing: 16) {
+                            if let year = store.series.presentationOverride?.year {
+                                Text(String(year))
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.75))
+                            } else if let releaseDate = store.tmdbTV?.firstAirDate ?? store.info?.releaseDate ?? store.series.releaseDate, !releaseDate.isEmpty {
+                                Text(String(releaseDate.prefix(4)))
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.75))
+                            }
+
                             if let rating = store.tmdbTV?.voteAverage ?? store.info?.rating, rating > 0 {
                                 HStack(spacing: 6) {
                                     Image(systemName: "star.fill")
@@ -225,7 +286,6 @@
                             TVHeaderFavoriteButton(isFavorite: store.isFavorite) {
                                 store.send(.toggleFavorite)
                             }
-
                         }
                     }
                 }
@@ -270,6 +330,17 @@
                         .padding(.horizontal, 80)
                 }
 
+                WatchAvailabilitySection(
+                    countryCode: store.watchAvailabilityCountryCode,
+                    availability: store.watchAvailability,
+                    updatedAt: store.watchAvailabilityLoadedAt,
+                    isLoading: store.isWatchAvailabilityLoading,
+                    failed: store.watchAvailabilityFailed,
+                    onSelectCountry: { store.send(.watchAvailabilityCountrySelected($0)) },
+                    onRetry: { store.send(.retryWatchAvailability) }
+                )
+                .padding(.horizontal, 80)
+
                 // Next Up Episode Auto-Cue Banner (if available)
                 if let nextEp = store.nextUpEpisode {
                     VStack(alignment: .leading, spacing: 16) {
@@ -281,13 +352,18 @@
                             episode: nextEp,
                             userAgentOverride: store.config.userAgentOverride,
                             playlistID: store.config.playlistID,
-                            seriesTitle: store.series.title,
+                            seriesTitle: store.series.displayTitle,
                             progressItem: store.episodeProgressMap[nextEp.id]
                         ) {
                             store.send(.playNextEpisodeTapped)
                         }
                     }
                     .padding(.horizontal, 80)
+                }
+
+                if let diagnostics = store.info?.seriesCatalogDiagnostics, !diagnostics.isEmpty {
+                    SeriesEpisodeCatalogDiagnosticsView(diagnostics: diagnostics)
+                        .padding(.horizontal, 80)
                 }
 
                 // Seasons
@@ -351,6 +427,8 @@
                                     }
                                     .font(.system(size: 20))
                                     .foregroundStyle(Color.white.opacity(0.6))
+
+                                    episodeSortMenu
                                 }
 
                                 if store.canShuffleEpisodes {
@@ -401,7 +479,7 @@
                             EmptyView()
                         } else if store.episodeLayoutMode == .list {
                             LazyVStack(spacing: 20) {
-                                ForEach(store.currentEpisodes) { episode in
+                                ForEach(store.displayEpisodes) { episode in
                                     TVEpisodeRow(
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],
@@ -419,7 +497,7 @@
                             .focusSection()
                         } else {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 32), GridItem(.flexible(), spacing: 32)], spacing: 32) {
-                                ForEach(store.currentEpisodes) { episode in
+                                ForEach(store.displayEpisodes) { episode in
                                     TVEpisodeGridCard(
                                         episode: episode,
                                         progressItem: store.episodeProgressMap[episode.id],

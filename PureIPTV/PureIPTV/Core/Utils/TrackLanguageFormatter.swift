@@ -17,26 +17,48 @@ public struct FormattedTrackInfo: Equatable, Sendable {
 }
 
 public enum TrackLanguageFormatter {
-    public static func format(trackName: String, isSubtitle _: Bool = false) -> FormattedTrackInfo {
+    public static func formatSubtitle(trackName: String, reportedLanguage: String?) -> FormattedTrackInfo {
+        let named = format(trackName: trackName, isSubtitle: true)
+        guard let reportedLanguage = reportedLanguage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !reportedLanguage.isEmpty
+        else { return named }
+
+        let language = format(trackName: reportedLanguage, isSubtitle: true)
+        guard language.flag != nil || language.languageName.localizedCaseInsensitiveCompare(reportedLanguage) != .orderedSame
+        else { return named }
+        return FormattedTrackInfo(
+            rawName: named.rawName,
+            displayName: language.displayName,
+            flag: language.flag ?? named.flag,
+            languageName: language.languageName,
+            formatDetail: named.formatDetail,
+            isSDHOrCC: named.isSDHOrCC
+        )
+    }
+
+    public static func format(trackName: String, isSubtitle: Bool = false) -> FormattedTrackInfo {
         let trimmed = trackName.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
 
         // 1. Detect audio / subtitle tags
-        var formatDetail: String?
-        if lower.contains("5.1") || lower.contains("surround") {
-            formatDetail = "5.1 Surround"
+        let formatDetail: String? = if isSubtitle {
+            subtitleFormat(in: trimmed)
+        } else if lower.contains("5.1") || lower.contains("surround") {
+            "5.1 Surround"
         } else if lower.contains("7.1") {
-            formatDetail = "7.1 Surround"
+            "7.1 Surround"
         } else if lower.contains("atmos") {
-            formatDetail = "Dolby Atmos"
+            "Dolby Atmos"
         } else if lower.contains("dts") {
-            formatDetail = "DTS"
+            "DTS"
         } else if lower.contains("ac3") || lower.contains("ac-3") {
-            formatDetail = "Dolby Digital"
+            "Dolby Digital"
         } else if lower.contains("aac") {
-            formatDetail = "AAC"
+            "AAC"
         } else if lower.contains("stereo") {
-            formatDetail = "Stereo"
+            "Stereo"
+        } else {
+            nil
         }
 
         let isSDH = lower.contains("sdh") || lower.contains("cc") || lower.contains("hearing")
@@ -46,7 +68,7 @@ public enum TrackLanguageFormatter {
 
         let resolvedName: String
         if let lang {
-            if let detail = formatDetail {
+            if !isSubtitle, let detail = formatDetail {
                 resolvedName = "\(lang) (\(detail))"
             } else if isSDH {
                 resolvedName = "\(lang) [CC]"
@@ -70,6 +92,38 @@ public enum TrackLanguageFormatter {
             formatDetail: formatDetail,
             isSDHOrCC: isSDH
         )
+    }
+
+    private static func subtitleFormat(in trackName: String) -> String? {
+        let supportedFormats = [
+            ("webvtt", "WebVTT"),
+            ("srt", "SRT"),
+            ("ass", "ASS"),
+            ("ssa", "SSA"),
+            ("vtt", "WebVTT"),
+            ("idx", "VobSub"),
+            ("pgs", "PGS"),
+            ("dvb", "DVB"),
+            ("ttml", "TTML"),
+            ("stl", "STL"),
+            ("smi", "SAMI"),
+            ("sbv", "SBV"),
+            ("scc", "SCC"),
+            ("sub", "SUB"),
+        ]
+        let ext = URL(fileURLWithPath: trackName).pathExtension.lowercased()
+        if let format = supportedFormats.first(where: { $0.0 == ext })?.1 {
+            return format
+        }
+        let lower = trackName.lowercased()
+        for (token, format) in supportedFormats {
+            let pattern = #"(?i)\b"# + NSRegularExpression.escapedPattern(for: token) + #"\b"#
+            guard let expression = try? NSRegularExpression(pattern: pattern),
+                  expression.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)) != nil
+            else { continue }
+            return format
+        }
+        return nil
     }
 
     private static func detectLanguage(_ text: String) -> (String?, String?) {

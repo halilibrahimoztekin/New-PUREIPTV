@@ -106,7 +106,7 @@ struct DashboardHeroArtworkView: View {
             let result = response.results?.first { candidate in
                 guard let backdropPath = candidate.backdropPath, !backdropPath.isEmpty else { return false }
                 let titles = [candidate.title, candidate.name, candidate.originalTitle, candidate.originalName]
-                    .compactMap { $0 }
+                    .compactMap(\.self)
                 guard titles.contains(where: { normalized($0) == targetTitle }) else { return false }
 
                 guard let targetYear,

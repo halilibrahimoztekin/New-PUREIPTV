@@ -1,5 +1,29 @@
-import Kingfisher
 import SwiftUI
+
+func highlightedSearchText(
+    _ source: String,
+    queryTerms: [String],
+    highlightColor: Color = Color(hex: "#FFD60A")
+) -> Text {
+    var attributed = AttributedString(source)
+    let phrase = queryTerms.joined(separator: " ")
+    guard !phrase.isEmpty,
+          let range = attributed.range(of: phrase, options: .caseInsensitive)
+    else { return Text(attributed) }
+
+    if phrase.count < 3 {
+        guard let sourceRange = source.range(of: phrase, options: .caseInsensitive) else { return Text(attributed) }
+        let previousCharacter = source[..<sourceRange.lowerBound].last
+        guard previousCharacter?.isLetter != true, previousCharacter?.isNumber != true else {
+            return Text(attributed)
+        }
+    }
+
+    attributed[range].foregroundColor = highlightColor
+    attributed[range].backgroundColor = highlightColor.opacity(0.18)
+    attributed[range].inlinePresentationIntent = .stronglyEmphasized
+    return Text(attributed)
+}
 
 // MARK: - Global Search Result Card
 
@@ -118,20 +142,22 @@ public struct GlobalSearchResultCard: View {
 
     @ViewBuilder
     private var mediaCoverImage: some View {
-        if let url = result.item.displayLogoURL {
-            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: result.item.userAgentOverride, playlistID: result.item.playlistID))
-                .requestModifier { request in
-                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: result.item.userAgentOverride, playlistID: result.item.playlistID)
-                }
-                .placeholder {
+        if let url = isChannel ? result.item.displayLogoURL : result.item.displayCoverURL {
+            PlaylistAsyncImage(
+                url: url,
+                fallbackURL: url == result.item.coverURL ? nil : result.item.coverURL,
+                userAgentOverride: result.item.userAgentOverride,
+                playlistID: result.item.playlistID,
+                downsamplingSize: isChannel ? CGSize(width: 320, height: 180) : CGSize(width: 240, height: 360)
+            ) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: isChannel ? .fit : .fill)
+                } else {
                     placeholderBackground
                 }
-                .downsampling(size: isChannel ? CGSize(width: 320, height: 180) : CGSize(width: 240, height: 360))
-                .cacheOriginalImage()
-                .resizable()
-                .aspectRatio(contentMode: isChannel ? .fit : .fill)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(isChannel ? 16 : 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(isChannel ? 16 : 0)
         } else {
             placeholderBackground
         }
@@ -215,21 +241,61 @@ public struct GlobalSearchResultCard: View {
 
     private var bottomMetadata: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(result.item.title)
-                .font(.system(size: titleFontSize, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(isChannel ? 1 : 2)
-                .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+            Group {
+                if let searchMatch = result.searchMatch,
+                   searchMatch.field == .title || searchMatch.field == .channel,
+                   searchMatch.sourceText == result.item.displayTitle
+                {
+                    highlightedSearchText(result.item.displayTitle, queryTerms: searchMatch.queryTerms)
+                } else {
+                    Text(result.item.displayTitle)
+                }
+            }
+            .font(.system(size: titleFontSize, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(isChannel ? 1 : 2)
+            .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+
+            if let searchMatch = result.searchMatch {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(searchMatch.field.localizedTitle)
+                        .fontWeight(.semibold)
+                    Text("·")
+                    Text(searchMatch.queryTerms.joined(separator: " "))
+                    if searchMatch.field == .category
+                        || (searchMatch.field == .program && searchMatch.sourceText != result.matchedEPGTitle)
+                        || ((searchMatch.field == .title || searchMatch.field == .channel)
+                            && searchMatch.sourceText != result.item.displayTitle)
+                    {
+                        Text("·")
+                        highlightedSearchText(searchMatch.sourceText, queryTerms: searchMatch.queryTerms)
+                    }
+                }
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Color(hex: "#FFD60A"))
+                .lineLimit(1)
+            }
 
             if let epg = result.matchedEPGTitle {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.badge.checkmark.fill")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Color(hex: "#30D158"))
-                    Text(epg)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color(hex: "#30D158"))
-                        .lineLimit(1)
+                    Group {
+                        if let searchMatch = result.searchMatch,
+                           searchMatch.field == .program,
+                           searchMatch.sourceText == epg
+                        {
+                            highlightedSearchText(epg, queryTerms: searchMatch.queryTerms)
+                        } else {
+                            Text(epg)
+                        }
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color(hex: "#30D158"))
+                    .lineLimit(1)
                     if isReminderPending {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 9, weight: .bold))
@@ -255,7 +321,11 @@ public struct GlobalSearchResultCard: View {
                         }
                     }
 
-                    if let year = result.item.releaseDate, !year.isEmpty {
+                    if let year = result.item.presentationOverride?.year {
+                        Text(String(year))
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.6))
+                    } else if let year = result.item.releaseDate, !year.isEmpty {
                         Text(year.prefix(4))
                             .font(.system(size: 10, weight: .regular))
                             .foregroundStyle(.white.opacity(0.6))
@@ -348,13 +418,19 @@ public struct ProgramSearchResultCard: View {
     let program: EPGProgram
     let channel: MediaModels.Item
     let playlistName: String?
+    let query: String
     let action: () -> Void
 
-    public init(program: EPGProgram, channel: MediaModels.Item, playlistName: String?, action: @escaping () -> Void) {
+    public init(program: EPGProgram, channel: MediaModels.Item, playlistName: String?, query: String = "", action: @escaping () -> Void) {
         self.program = program
         self.channel = channel
         self.playlistName = playlistName
+        self.query = query
         self.action = action
+    }
+
+    private var queryTerms: [String] {
+        query.split(whereSeparator: \.isWhitespace).map(String.init)
     }
 
     public var body: some View {
@@ -371,7 +447,19 @@ public struct ProgramSearchResultCard: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(program.isPlayingNow ? Color(hex: "#FF453A") : Color(hex: "#64D2FF"))
 
-                Text(program.title)
+                if !queryTerms.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "magnifyingglass")
+                        Text(AppStrings.Search.programs)
+                        Text("·")
+                        Text(query)
+                            .lineLimit(1)
+                    }
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Color(hex: "#FFD60A"))
+                }
+
+                highlightedSearchText(program.title, queryTerms: queryTerms)
                     .font(titleFont)
                     .foregroundStyle(.white)
                     .lineLimit(2)
@@ -383,7 +471,7 @@ public struct ProgramSearchResultCard: View {
                     .lineLimit(1)
 
                 if !program.description.isEmpty {
-                    Text(program.description)
+                    highlightedSearchText(program.description, queryTerms: queryTerms)
                         .font(.caption)
                         .foregroundStyle(Color(hex: "#9B9BA5"))
                         .lineLimit(2)
@@ -403,7 +491,7 @@ public struct ProgramSearchResultCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel("\(program.title), \(channel.title), \(LocalTimePresentation.string(from: program.startTime, locale: locale))")
+        .accessibilityLabel("\(program.title), \(channel.title), \(LocalTimePresentation.string(from: program.startTime, locale: locale)), \(AppStrings.Search.programs), \(query)")
         .accessibilityHint(AppStrings.Common.watchNow)
     }
 

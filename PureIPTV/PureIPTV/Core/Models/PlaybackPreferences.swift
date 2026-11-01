@@ -5,7 +5,9 @@ public nonisolated enum PlaybackContentKind: String, CaseIterable, Codable, Equa
     case vod
     case archive
 
-    public var id: Self { self }
+    public var id: Self {
+        self
+    }
 
     public var title: String {
         switch self {
@@ -16,7 +18,9 @@ public nonisolated enum PlaybackContentKind: String, CaseIterable, Codable, Equa
     }
 
     public static func resolve(isLive: Bool, isArchive: Bool) -> Self {
-        if isArchive { return .archive }
+        if isArchive {
+            return .archive
+        }
         return isLive ? .live : .vod
     }
 }
@@ -53,7 +57,9 @@ public nonisolated enum PlaybackBufferChoice: String, CaseIterable, Codable, Equ
     case balanced
     case smooth
 
-    public var id: Self { self }
+    public var id: Self {
+        self
+    }
 
     public var title: String {
         switch self {
@@ -82,6 +88,30 @@ public nonisolated enum PlaybackBufferChoice: String, CaseIterable, Codable, Equ
     }
 }
 
+public nonisolated enum PlaybackSkipInterval: Int, CaseIterable, Codable, Equatable, Hashable, Identifiable, Sendable {
+    case seconds10 = 10
+    case seconds15 = 15
+    case seconds30 = 30
+    case minute = 60
+    case minutes2 = 120
+    case minutes5 = 300
+
+    public var id: Int {
+        rawValue
+    }
+
+    public var compactTitle: String {
+        switch self {
+        case .seconds10: "10s"
+        case .seconds15: "15s"
+        case .seconds30: "30s"
+        case .minute: "1m"
+        case .minutes2: "2m"
+        case .minutes5: "5m"
+        }
+    }
+}
+
 public nonisolated struct PlaybackDefaults: Codable, Equatable, Sendable {
     public var preferredEngine: PlaybackEngine
     public var preferredAudioLanguage: String
@@ -91,6 +121,19 @@ public nonisolated struct PlaybackDefaults: Codable, Equatable, Sendable {
     public var deinterlaceMode: DeinterlaceMode
     public var isAFREnabled: Bool
     public var isMatchDynamicRangeEnabled: Bool
+    public var isForceSDROutputEnabled: Bool?
+    public var catchupSkipIntervalRawValue: Int?
+    public var vodSkipIntervalRawValue: Int?
+
+    public var catchupSkipInterval: PlaybackSkipInterval {
+        get { catchupSkipIntervalRawValue.flatMap(PlaybackSkipInterval.init(rawValue:)) ?? .minute }
+        set { catchupSkipIntervalRawValue = newValue.rawValue }
+    }
+
+    public var vodSkipInterval: PlaybackSkipInterval {
+        get { vodSkipIntervalRawValue.flatMap(PlaybackSkipInterval.init(rawValue:)) ?? .seconds10 }
+        set { vodSkipIntervalRawValue = newValue.rawValue }
+    }
 
     public init(
         preferredEngine: PlaybackEngine = .vlc,
@@ -100,7 +143,10 @@ public nonisolated struct PlaybackDefaults: Codable, Equatable, Sendable {
         bufferChoice: PlaybackBufferChoice = .automatic,
         deinterlaceMode: DeinterlaceMode = .automatic,
         isAFREnabled: Bool = true,
-        isMatchDynamicRangeEnabled: Bool = true
+        isMatchDynamicRangeEnabled: Bool = true,
+        isForceSDROutputEnabled: Bool? = nil,
+        catchupSkipInterval: PlaybackSkipInterval = .minute,
+        vodSkipInterval: PlaybackSkipInterval = .seconds10
     ) {
         self.preferredEngine = preferredEngine
         self.preferredAudioLanguage = preferredAudioLanguage
@@ -110,6 +156,9 @@ public nonisolated struct PlaybackDefaults: Codable, Equatable, Sendable {
         self.deinterlaceMode = deinterlaceMode
         self.isAFREnabled = isAFREnabled
         self.isMatchDynamicRangeEnabled = isMatchDynamicRangeEnabled
+        self.isForceSDROutputEnabled = isForceSDROutputEnabled
+        catchupSkipIntervalRawValue = catchupSkipInterval.rawValue
+        vodSkipIntervalRawValue = vodSkipInterval.rawValue
     }
 
     public static func legacy(for kind: PlaybackContentKind, defaults: UserDefaults = .standard) -> Self {
@@ -122,10 +171,9 @@ public nonisolated struct PlaybackDefaults: Codable, Equatable, Sendable {
             .flatMap(BufferProfile.init(rawValue:)) ?? .balanced
         let bufferChoice = kind == .vod ? PlaybackBufferChoice.choice(for: legacyBuffer) : .automatic
 
-        let afrKey: String
-        switch kind {
-        case .live, .archive: afrKey = "com.pureiptv.afrEnabled.live"
-        case .vod: afrKey = "com.pureiptv.afrEnabled.vod"
+        let afrKey = switch kind {
+        case .live, .archive: "com.pureiptv.afrEnabled.live"
+        case .vod: "com.pureiptv.afrEnabled.vod"
         }
         let afr = defaults.object(forKey: afrKey) as? Bool
             ?? defaults.object(forKey: "com.pureiptv.afrEnabled") as? Bool
@@ -160,6 +208,9 @@ public nonisolated enum PlaybackPreferenceUpdate: Equatable, Sendable {
     case deinterlaceMode(DeinterlaceMode)
     case isAFREnabled(Bool)
     case isMatchDynamicRangeEnabled(Bool)
+    case isForceSDROutputEnabled(Bool)
+    case catchupSkipInterval(PlaybackSkipInterval)
+    case vodSkipInterval(PlaybackSkipInterval)
 
     public func apply(to defaults: inout PlaybackDefaults) {
         switch self {
@@ -171,6 +222,9 @@ public nonisolated enum PlaybackPreferenceUpdate: Equatable, Sendable {
         case let .deinterlaceMode(value): defaults.deinterlaceMode = value
         case let .isAFREnabled(value): defaults.isAFREnabled = value
         case let .isMatchDynamicRangeEnabled(value): defaults.isMatchDynamicRangeEnabled = value
+        case let .isForceSDROutputEnabled(value): defaults.isForceSDROutputEnabled = value
+        case let .catchupSkipInterval(value): defaults.catchupSkipInterval = value
+        case let .vodSkipInterval(value): defaults.vodSkipInterval = value
         }
     }
 }

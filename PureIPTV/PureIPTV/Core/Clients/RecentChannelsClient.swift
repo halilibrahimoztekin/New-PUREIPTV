@@ -1,6 +1,14 @@
 import ComposableArchitecture
 import Foundation
 
+private nonisolated func postRecentChannelsDidChange(profileID: UUID?, playlistID: UUID) {
+    NotificationCenter.default.post(
+        name: .recentChannelsDidChange,
+        object: playlistID,
+        userInfo: ["profileID": profileID?.uuidString ?? ""]
+    )
+}
+
 private actor PinnedRecentChannelStore {
     static let shared = PinnedRecentChannelStore()
     private let defaults = UserDefaults.standard
@@ -18,6 +26,7 @@ private actor PinnedRecentChannelStore {
             ids.append(id)
         }
         defaults.set(ids, forKey: key)
+        postRecentChannelsDidChange(profileID: profileID, playlistID: playlistID)
         return ids
     }
 
@@ -37,10 +46,13 @@ private actor ScopedRecentChannelStore {
 
     func fetch(profileID: UUID?, playlistID: UUID) -> ScopedRecentChannelSnapshot {
         let key = storageKey(profileID: profileID, playlistID: playlistID)
-        return ScopedRecentChannelSnapshot(records: records(for: key), revision: revisions[key, default: 0])
+        let excludedIDs = excludedChannelIDs(profileID: profileID, playlistID: playlistID)
+        let visibleRecords = records(for: key).filter { !excludedIDs.contains($0.id) }
+        return ScopedRecentChannelSnapshot(records: visibleRecords, revision: revisions[key, default: 0])
     }
 
     func record(_ item: RecentChannelDTO, profileID: UUID?, playlistID: UUID) {
+        guard !excludedChannelIDs(profileID: profileID, playlistID: playlistID).contains(item.id) else { return }
         let key = storageKey(profileID: profileID, playlistID: playlistID)
         var list = records(for: key)
         list.removeAll { $0.id == item.id }
@@ -51,6 +63,7 @@ private actor ScopedRecentChannelStore {
         if let data = try? encoder.encode(list) {
             defaults.set(data, forKey: key)
             revisions[key, default: 0] &+= 1
+            postRecentChannelsDidChange(profileID: profileID, playlistID: playlistID)
         }
         var counts = (defaults.dictionary(forKey: watchCountsKey) as? [String: Int]) ?? [:]
         counts[item.id] = (counts[item.id] ?? 0) + 1
@@ -65,8 +78,35 @@ private actor ScopedRecentChannelStore {
         if list.count != originalCount, let data = try? encoder.encode(list) {
             defaults.set(data, forKey: key)
             revisions[key, default: 0] &+= 1
+            postRecentChannelsDidChange(profileID: profileID, playlistID: playlistID)
         }
-        return ScopedRecentChannelSnapshot(records: list, revision: revisions[key, default: 0])
+        let excludedIDs = excludedChannelIDs(profileID: profileID, playlistID: playlistID)
+        return ScopedRecentChannelSnapshot(
+            records: list.filter { !excludedIDs.contains($0.id) },
+            revision: revisions[key, default: 0]
+        )
+    }
+
+    func fetchExcludedChannelIDs(profileID: UUID?, playlistID: UUID) -> Set<String> {
+        excludedChannelIDs(profileID: profileID, playlistID: playlistID)
+    }
+
+    func setExcluded(
+        _ isExcluded: Bool,
+        id: String,
+        profileID: UUID?,
+        playlistID: UUID
+    ) -> Set<String> {
+        let preferenceKey = exclusionStorageKey(profileID: profileID, playlistID: playlistID)
+        var excludedIDs = excludedChannelIDs(profileID: profileID, playlistID: playlistID)
+        let changed = isExcluded ? excludedIDs.insert(id).inserted : excludedIDs.remove(id) != nil
+        guard changed else { return excludedIDs }
+
+        defaults.set(excludedIDs.sorted(), forKey: preferenceKey)
+        let recentKey = storageKey(profileID: profileID, playlistID: playlistID)
+        revisions[recentKey, default: 0] &+= 1
+        postRecentChannelsDidChange(profileID: profileID, playlistID: playlistID)
+        return excludedIDs
     }
 
     private func records(for key: String) -> [RecentChannelDTO] {
@@ -79,6 +119,18 @@ private actor ScopedRecentChannelStore {
     private func storageKey(profileID: UUID?, playlistID: UUID) -> String {
         "PureIPTV.RecentChannelsList.v2.\(profileID?.uuidString.lowercased() ?? "no-profile").\(playlistID.uuidString.lowercased())"
     }
+
+    private func excludedChannelIDs(profileID: UUID?, playlistID: UUID) -> Set<String> {
+        Set(defaults.stringArray(forKey: exclusionStorageKey(profileID: profileID, playlistID: playlistID)) ?? [])
+    }
+
+    private func exclusionStorageKey(profileID: UUID?, playlistID: UUID) -> String {
+        "PureIPTV.RecentChannelsList.excluded.v1.\(profileID?.uuidString.lowercased() ?? "no-profile").\(playlistID.uuidString.lowercased())"
+    }
+}
+
+public extension Notification.Name {
+    nonisolated static let recentChannelsDidChange = Notification.Name("com.pureiptv.notification.recentChannelsDidChange")
 }
 
 public struct ScopedRecentChannelSnapshot: Equatable, Sendable {
@@ -98,6 +150,8 @@ public struct RecentChannelsClient: Sendable {
     public var fetchScopedRecentChannels: @Sendable (_ profileID: UUID?, _ playlistID: UUID) async -> ScopedRecentChannelSnapshot = { _, _ in ScopedRecentChannelSnapshot(records: [], revision: 0) }
     public var recordScopedChannel: @Sendable (_ item: RecentChannelDTO, _ profileID: UUID?, _ playlistID: UUID) async -> Void = { _, _, _ in }
     public var removeScopedRecentChannel: @Sendable (_ id: String, _ profileID: UUID?, _ playlistID: UUID) async -> ScopedRecentChannelSnapshot = { _, _, _ in ScopedRecentChannelSnapshot(records: [], revision: 0) }
+    public var fetchExcludedChannelIDs: @Sendable (_ profileID: UUID?, _ playlistID: UUID) async -> Set<String> = { _, _ in [] }
+    public var setChannelExcludedFromRecents: @Sendable (_ id: String, _ isExcluded: Bool, _ profileID: UUID?, _ playlistID: UUID) async -> Set<String> = { _, _, _, _ in [] }
     public var clearRecentChannels: @Sendable () async -> Void
     public var fetchWatchCounts: @Sendable () async -> [String: Int] = { [:] }
     public var fetchPinnedChannelIDs: @Sendable (_ profileID: UUID?, _ playlistID: UUID) async -> [String] = { _, _ in [] }
@@ -152,6 +206,17 @@ extension RecentChannelsClient: DependencyKey {
             },
             removeScopedRecentChannel: { id, profileID, playlistID in
                 await ScopedRecentChannelStore.shared.remove(id: id, profileID: profileID, playlistID: playlistID)
+            },
+            fetchExcludedChannelIDs: { profileID, playlistID in
+                await ScopedRecentChannelStore.shared.fetchExcludedChannelIDs(profileID: profileID, playlistID: playlistID)
+            },
+            setChannelExcludedFromRecents: { id, isExcluded, profileID, playlistID in
+                await ScopedRecentChannelStore.shared.setExcluded(
+                    isExcluded,
+                    id: id,
+                    profileID: profileID,
+                    playlistID: playlistID
+                )
             },
             clearRecentChannels: {
                 defaults.removeObject(forKey: storageKey)

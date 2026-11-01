@@ -18,6 +18,8 @@
         @State private var currentScrubLetter: String = ""
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
+        @State private var categorySearchQuery = ""
+        @State private var posterPrefetchController = TVPosterPrefetchController()
 
         public init(store: StoreOf<VODFeature>, config: PlaylistConfig) {
             self.store = store
@@ -39,31 +41,34 @@
                 categoryColumn
                     .frame(width: 300)
                     .focusSection()
-                    .focusGuideBoundary()
 
-                // ── Divider with Focus Guide Bridge ───────────────────
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.06))
-                        .frame(width: 1)
-                    TVFocusGuideBridge()
-                        .frame(width: 24)
-                }
+                // ── Divider ──────────────────────────────────────────
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 1)
+                    .frame(width: 24)
 
                 // ── Right: VOD grid ──────────────────────────────────
                 vodArea
                     .focusSection()
-                    .focusGuideBoundary()
             }
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedVOD?.coverURL,
                     titleSeed: focusedVOD?.title ?? "VOD",
-                    imageRequestDebounceNanoseconds: 150_000_000
+                    imageRequestDebounceNanoseconds: 150_000_000,
+                    userAgentOverride: focusedVOD?.userAgentOverride,
+                    playlistID: focusedVOD?.playlistID
                 )
             )
             .onAppear {
                 store.send(.onAppear(config: config))
+            }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
+            }
+            .onDisappear {
+                posterPrefetchController.cancel()
             }
         }
 
@@ -72,6 +77,24 @@
                 return store.currentVODs.first(where: { $0.id == focusedVODID })
             }
             return store.selectedVOD ?? store.currentVODs.first
+        }
+
+        private var filteredCategories: [MediaModels.Category] {
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
+        }
+
+        private func restoredVODFocusID(preferred: String?, categoryID: String?) -> String? {
+            let visibleIDs = Set(store.currentVODs.map(\.id))
+            let rememberedID = TVFocusMemory.shared.lastVOD(in: categoryID, fallback: nil)
+            if let rememberedID, visibleIDs.contains(rememberedID) {
+                return rememberedID
+            }
+            if let preferred, visibleIDs.contains(preferred) {
+                return preferred
+            }
+            return store.currentVODs.first?.id
         }
 
         // MARK: – Category Column
@@ -132,7 +155,26 @@
                             }
                             .frame(height: 280)
                         } else {
-                            ForEach(store.categories) { category in
+                            if !store.categories.isEmpty {
+                                CategorySearchField(text: $categorySearchQuery) {
+                                    if let firstMatch = filteredCategories.first {
+                                        store.send(.categorySelected(firstMatch))
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 10)
+                            }
+
+                            if !store.categories.isEmpty, filteredCategories.isEmpty {
+                                Text(AppStrings.Common.categoryNotFound)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                            }
+
+                            ForEach(filteredCategories) { category in
                                 TVVODCategoryRow(
                                     category: category,
                                     isSelected: store.selectedCategoryID == category.id,
@@ -151,6 +193,9 @@
                 .background(Color(hex: "#0C0C10"))
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
+                        if !filteredCategories.contains(where: { $0.id == newCatID }) {
+                            categorySearchQuery = ""
+                        }
                         focusedCategory = newCatID
                         TVFocusMemory.shared.lastSelectedVODCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
@@ -185,6 +230,16 @@
                         }
 
                         Spacer()
+
+                        if let category = store.categories.first(where: { $0.id == store.selectedCategoryID }) {
+                            CategoryContentSortMenu(
+                                selection: store.lastSortMethod,
+                                categoryName: category.name,
+                                hasCategoryOverride: store.isCategorySortOverridden,
+                                onSelect: { store.send(.setCategorySortMethod($0)) },
+                                onReset: { store.send(.resetCategorySortMethod) }
+                            )
+                        }
 
                         MediaLanguageFilterBar(
                             availableFilters: store.availableLanguageFilters,
@@ -283,6 +338,12 @@
                                     .id(vod.id)
                                     .contextMenu {
                                         Button {
+                                            store.send(.hideMedia(vod))
+                                        } label: {
+                                            Label(AppStrings.Common.hideMediaItem, systemImage: "eye.slash")
+                                        }
+
+                                        Button {
                                             store.send(.toggleFavorite(vod))
                                         } label: {
                                             if store.favoriteIDs.contains(vod.id) {
@@ -304,40 +365,58 @@
                             .padding(.vertical, 32)
                         }
                         .onChange(of: store.selectedVOD) { _, newVOD in
-                            if let vodID = newVOD?.id {
-                                TVFocusMemory.shared.recordVOD(vodID, in: store.selectedCategoryID)
-                                focusedVODID = vodID
-                                withAnimation { vodProxy.scrollTo(vodID, anchor: .center) }
+                            guard let vodID = newVOD?.id,
+                                  store.currentVODs.contains(where: { $0.id == vodID })
+                            else { return }
+                            TVFocusMemory.shared.recordVOD(vodID, in: store.selectedCategoryID)
+                            focusedVODID = vodID
+                            withAnimation { vodProxy.scrollTo(vodID, anchor: .center) }
+                        }
+                        .onChange(of: store.lastSortMethod) { _, _ in
+                            let categoryID = store.selectedCategoryID
+                            let targetID = restoredVODFocusID(preferred: focusedVODID, categoryID: categoryID)
+                            guard let targetID else { return }
+                            focusedVODID = targetID
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                guard store.selectedCategoryID == categoryID,
+                                      focusedVODID == targetID,
+                                      store.currentVODs.contains(where: { $0.id == targetID })
+                                else { return }
+                                withAnimation { vodProxy.scrollTo(targetID, anchor: .center) }
                             }
                         }
                         .onChange(of: store.selectedCategoryID) { _, newCatID in
-                            let targetID = TVFocusMemory.shared.lastVOD(
-                                in: newCatID,
-                                fallback: store.currentVODs.first?.id
-                            )
+                            let targetID = restoredVODFocusID(preferred: nil, categoryID: newCatID)
                             if let targetID {
                                 focusedVODID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    guard store.selectedCategoryID == newCatID,
+                                          focusedVODID == targetID,
+                                          store.currentVODs.contains(where: { $0.id == targetID })
+                                    else { return }
                                     withAnimation { vodProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onAppear {
-                            let targetID = TVFocusMemory.shared.lastVOD(
-                                in: store.selectedCategoryID,
-                                fallback: store.selectedVOD?.id ?? store.currentVODs.first?.id
-                            )
+                            let categoryID = store.selectedCategoryID
+                            let targetID = restoredVODFocusID(preferred: store.selectedVOD?.id, categoryID: categoryID)
                             if let targetID {
                                 focusedVODID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    guard store.selectedCategoryID == categoryID,
+                                          focusedVODID == targetID,
+                                          store.currentVODs.contains(where: { $0.id == targetID })
+                                    else { return }
                                     withAnimation { vodProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onChange(of: focusedVODID) { _, newID in
+                            posterPrefetchController.schedule(focusedID: newID, items: store.currentVODs)
                             guard let newID else { return }
-                            TVFocusMemory.shared.recordVOD(newID, in: store.selectedCategoryID)
                             guard let vod = store.currentVODs.first(where: { $0.id == newID }) else { return }
+                            TVFocusMemory.shared.recordVOD(newID, in: store.selectedCategoryID)
                             let firstChar = MediaLibraryDerivedData.alphabetLetter(for: vod.title)
                             if firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar

@@ -6,7 +6,7 @@
 
     // Focus Engine design:
     // - Each interactive element is individually focusable
-    // - Focus order: Type Picker → form fields → Connect button
+    // - Focus order: Type Picker → form fields → compatibility check → Connect button
     // - Focused elements scale (1.04x) and gain Electric Blue outline glow
     // - All typography at 10-foot scale (1.5–2x iOS sizes)
 
@@ -81,6 +81,15 @@
                             tvPlexFields
                         } else {
                             tvM3UField
+                        }
+
+                        if store.supportsCompatibilityCheck {
+                            PlaylistHealthPreflightView(
+                                report: store.compatibilityReport,
+                                isChecking: store.isCheckingCompatibility,
+                                isEnabled: store.canConnect && !store.isLoading,
+                                onCheck: { store.send(.checkCompatibilityTapped) }
+                            )
                         }
 
                         // Error
@@ -279,7 +288,7 @@
 
         private var tvConnectButton: some View {
             Button {
-                guard store.canConnect, !store.isLoading else { return }
+                guard store.canConnect, !store.isLoading, !store.isCheckingCompatibility else { return }
                 store.send(.connectTapped)
             } label: {
                 ZStack {
@@ -366,6 +375,7 @@
                     )
             )
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+            .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 14))
         }
     }
 
@@ -384,6 +394,7 @@
                     radius: 16, x: 0, y: 4
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+                .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 14))
         }
     }
 

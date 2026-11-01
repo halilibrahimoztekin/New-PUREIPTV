@@ -4,6 +4,30 @@ import Foundation
 import Kingfisher
 import RevenueCat
 
+public struct RedactedText: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    private let storage: String
+
+    public init(_ value: String = "") {
+        storage = value
+    }
+
+    public var stringValue: String {
+        storage
+    }
+
+    public var description: String {
+        "[REDACTED]"
+    }
+
+    public var debugDescription: String {
+        "[REDACTED]"
+    }
+
+    public var customMirror: Mirror {
+        Mirror(self, children: [])
+    }
+}
+
 @Reducer
 public struct SettingsFeature {
     @ObservableState
@@ -20,6 +44,7 @@ public struct SettingsFeature {
 
         // New Settings
         public var autoPlayNextEpisode: Bool = true
+        public var liveTVArtworkSource: LiveTVArtworkSource = .epgProgram
         public var autoSelectFirstAlternativeSource = false
         public var reverseChannelZappingDirection = false
         public var startMuted: Bool = false
@@ -29,6 +54,7 @@ public struct SettingsFeature {
         public var epgTimeShift: Int = 0
         public var autoUpdateEPG: Bool = true
         public var epgAutoRefreshInterval: EPGAutoRefreshInterval = .fourHours
+        public var deferAutoEPGRefreshOnConstrainedNetwork = false
         public var epgPreviewDelay: EPGPreviewDelay = .short
         public var autoSwitchOnEPGReminder: Bool = false
         public var downloadConcurrencyLimit: Int = 1
@@ -36,6 +62,8 @@ public struct SettingsFeature {
         public var defaultStartupTab: String = "Keşfet"
         public var hideEmptyContentTabs = true
         public var liveTVOnlyNavigation = false
+        public var isSearchHistorySavingEnabled = true
+        public var searchHistoryRetention: SearchHistoryRetention = .thirtyDays
 
         // Picture-in-Picture & Background Audio (Madde #18)
         public var isAutoPiPEnabled: Bool = true
@@ -45,6 +73,7 @@ public struct SettingsFeature {
         public var preferredAudioLanguage: String = "tr"
         public var preferredSubtitleLanguage: String = "off"
         public var subtitleTextSize: SubtitleTextSize = .standard
+        public var subtitleAppearanceProfile: SubtitleAppearanceProfile = .standard
         public var selectedPlaybackContentKind: PlaybackContentKind = .vod
         public var playbackDefaultsByKind: [PlaybackContentKind: PlaybackDefaults] = [:]
         public var rememberMediaTrackPreferences: Bool = true
@@ -60,6 +89,8 @@ public struct SettingsFeature {
 
         /// Apple TV Top Shelf Style (Madde #22)
         public var topShelfStyle: TopShelfStyle = .sectioned
+        public var topShelfSectionOrder = TopShelfContentSection.defaultOrder
+        public var topShelfContentSelection = TopShelfContentSelection()
 
         /// Buffer Profile (Madde #39)
         public var bufferProfile: BufferProfile = .balanced
@@ -110,6 +141,7 @@ public struct SettingsFeature {
         // Custom EPG XMLTV & Time-Shift Offset (Madde #23)
         public var customEPGSources: [CustomEPGSource] = []
         public var channelEPGMappings: [String: ChannelEPGMapping] = [:]
+        public var customEPGPlaylistID: UUID?
         public var epgMappingChannels: [MediaModels.Item] = []
         public var epgMappingOptions: [CustomEPGChannelOption] = []
         public var epgMappingSuggestions: [EPGMappingSuggestion] = []
@@ -125,6 +157,9 @@ public struct SettingsFeature {
         public var newCustomEPGURLString: String = ""
         public var customEPGErrorMessage: String?
         public var isCustomEPGLoading: Bool = false
+        public var customEPGRefreshingSourceID: String?
+        public var customEPGRefreshCurrentIndex = 0
+        public var customEPGRefreshTotalCount = 0
         public var customEPGSourceErrors: [String: String] = [:]
 
         // iCloud Cross-Device Sync (Madde #24)
@@ -138,6 +173,18 @@ public struct SettingsFeature {
         public var isPersonalizedRecommendationsEnabled = true
         public var isShowingRecommendationHistoryResetConfirmation = false
         public var isShowingRecommendationHistoryResetSuccess = false
+        public var viewingStatisticsEntries: [ViewingStatisticsEntry] = []
+        public var viewingStatisticsRequestID: UUID?
+        public var viewingStatisticsScope: ProfileContextSnapshot?
+
+        public var tmdbAPIKeyInput = RedactedText()
+        public var hasSavedTMDBAPIKey = false
+        public var isValidatingTMDBAPIKey = false
+        public var isDeletingTMDBAPIKey = false
+        public var tmdbAPIKeyStatusMessage: String?
+        public var isTMDBAPIKeyStatusError = false
+        public var tmdbAPIKeyOperationID: UUID?
+        public var tmdbAPIKeyLoadRequestID: UUID?
 
         public enum PINStep: Equatable {
             case enterNew
@@ -149,8 +196,13 @@ public struct SettingsFeature {
 
     public enum Action: BindableAction {
         case managePlaylistsTapped
+        case hiddenMediaManagementTapped
         case speedTestTapped
         case closeSpeedTest(requestID: UUID)
+        case loadViewingStatistics
+        case viewingStatisticsLoaded(requestID: UUID, scope: ProfileContextSnapshot, entries: [ViewingStatisticsEntry])
+        case viewingStatisticsCleared(requestID: UUID, scope: ProfileContextSnapshot)
+        case clearViewingStatisticsTapped
         case coordinatorDismissPINSetup(requestID: UUID)
         case coordinatorDismissCustomEPGSettings(requestID: UUID)
         case coordinatorDismissCustomEPGSourceAdd(requestID: UUID)
@@ -159,6 +211,7 @@ public struct SettingsFeature {
 
         public enum Delegate: Equatable {
             case openManagePlaylists
+            case presentUserHiddenMediaManagement
             case switchProfile
             case presentSpeedTest(requestID: UUID)
             case presentCustomEPGSettings(requestID: UUID)
@@ -179,9 +232,20 @@ public struct SettingsFeature {
         case savePIN
         case setVODSortMethod(SortMethod)
         case setSeriesSortMethod(SortMethod)
+        case tmdbAPIKeyInputChanged(RedactedText)
+        case tmdbAPIKeySettingsDisappeared
+        case validateAndSaveTMDBAPIKeyTapped
+        case tmdbAPIKeySaveCompleted(requestID: UUID)
+        case tmdbAPIKeySaveFailed(requestID: UUID)
+        case deleteTMDBAPIKeyTapped
+        case tmdbAPIKeyDeleteCompleted(requestID: UUID)
+        case tmdbAPIKeyDeleteFailed(requestID: UUID)
+        case tmdbAPIKeyStateLoaded(requestID: UUID, hasSavedKey: Bool)
+        case tmdbAPIKeyStateLoadFailed(requestID: UUID)
 
         // New Setting Actions
         case setAutoPlayNextEpisode(Bool)
+        case setLiveTVArtworkSource(LiveTVArtworkSource)
         case setAutoSelectFirstAlternativeSource(Bool)
         case setReverseChannelZappingDirection(Bool)
         case setStartMuted(Bool)
@@ -191,6 +255,7 @@ public struct SettingsFeature {
         case setEpgTimeShift(Int)
         case setAutoUpdateEPG(Bool)
         case setEPGAutoRefreshInterval(EPGAutoRefreshInterval)
+        case setDeferAutoEPGRefreshOnConstrainedNetwork(Bool)
         case setEPGPreviewDelay(EPGPreviewDelay)
         case setAutoSwitchOnEPGReminder(Bool)
         case setDownloadConcurrencyLimit(Int)
@@ -198,9 +263,12 @@ public struct SettingsFeature {
         case setDefaultStartupTab(String)
         case setHideEmptyContentTabs(Bool)
         case setLiveTVOnlyNavigation(Bool)
+        case setSearchHistorySavingEnabled(Bool)
+        case setSearchHistoryRetention(SearchHistoryRetention)
         case setPreferredAudioLanguage(String)
         case setPreferredSubtitleLanguage(String)
         case setSubtitleTextSize(SubtitleTextSize)
+        case setSubtitleAppearanceProfile(SubtitleAppearanceProfile)
         case selectPlaybackContentKind(PlaybackContentKind)
         case updatePlaybackDefaults(PlaybackPreferenceUpdate)
         case setRememberMediaTrackPreferences(Bool)
@@ -211,6 +279,9 @@ public struct SettingsFeature {
         case setAFREnabledForArchive(Bool)
         case setMatchDynamicRangeEnabled(Bool)
         case setTopShelfStyle(TopShelfStyle)
+        case moveTopShelfSection(TopShelfContentSection, direction: Int)
+        case setTopShelfContentSelection(TopShelfContentSection, Bool)
+        case topShelfContentSelectionSyncCompleted(TopShelfContentSelection)
         case setBufferProfile(BufferProfile)
         case setComplianceDemoMode(Bool)
         case setPersonalizedRecommendationsEnabled(Bool)
@@ -285,9 +356,11 @@ public struct SettingsFeature {
         case refreshCustomEPGSource(String)
         case refreshCustomEPGSourceResponse(id: String, result: TaskResult<CustomEPGSource>)
         case refreshAllCustomEPGSources
+        case customEPGRefreshProgress(sourceID: String, current: Int, total: Int)
         case refreshAllCustomEPGSourcesCompleted(CustomEPGRefreshSummary)
         case retryFailedCustomEPGSources
         case retryFailedCustomEPGSourcesCompleted(attemptedIDs: [String], failures: [String: String])
+        case cancelCustomEPGRefresh
         case loadEPGMappingSuggestions
         case epgMappingInputsLoaded(UUID, playlistID: UUID, channels: [MediaModels.Item], options: [CustomEPGChannelOption])
         case epgMappingSuggestionsLoaded(UUID, playlistID: UUID, [EPGMappingSuggestion])
@@ -302,6 +375,7 @@ public struct SettingsFeature {
     }
 
     @Dependency(\.settingsClient) var settingsClient
+    @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.playerClient) var playerClient
     @Dependency(\.purchases) var purchases
     @Dependency(\.traktClient) var traktClient
@@ -313,6 +387,9 @@ public struct SettingsFeature {
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.viewingStatisticsClient) var viewingStatisticsClient
+    @Dependency(\.tmdbClient) var tmdbClient
+    @Dependency(\.tmdbAPIKeyClient) var tmdbAPIKeyClient
     @Injected(\.iptvClient) var iptvClient
     @Injected(\.playlistRepository) var playlistRepository
 
@@ -335,6 +412,12 @@ public struct SettingsFeature {
         return .none
     }
 
+    private static func clearCustomEPGRefreshProgress(state: inout State) {
+        state.customEPGRefreshingSourceID = nil
+        state.customEPGRefreshCurrentIndex = 0
+        state.customEPGRefreshTotalCount = 0
+    }
+
     public var body: some Reducer<State, Action> {
         BindingReducer()
         Scope(state: \.traktState, action: \.traktAction) {
@@ -343,6 +426,8 @@ public struct SettingsFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
+                let tmdbAPIKeyLoadRequestID = UUID()
+                state.tmdbAPIKeyLoadRequestID = tmdbAPIKeyLoadRequestID
                 let currentProfileID = profileContextClient.snapshot().profileID
                 state.personalizationProfileID = currentProfileID
                 state.isPersonalizedRecommendationsEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
@@ -353,6 +438,7 @@ public struct SettingsFeature {
                 state.seriesSortMethod = settingsClient.getSeriesSortMethod()
 
                 state.autoPlayNextEpisode = settingsClient.autoPlayNextEpisode()
+                state.liveTVArtworkSource = settingsClient.liveTVArtworkSource()
                 state.autoSelectFirstAlternativeSource = settingsClient.autoSelectFirstAlternativeSource()
                 state.reverseChannelZappingDirection = settingsClient.reverseChannelZappingDirection()
                 state.startMuted = settingsClient.startMuted()
@@ -362,16 +448,20 @@ public struct SettingsFeature {
                 state.epgTimeShift = settingsClient.epgTimeShift()
                 state.autoUpdateEPG = settingsClient.autoUpdateEPG()
                 state.epgAutoRefreshInterval = settingsClient.epgAutoRefreshInterval()
+                state.deferAutoEPGRefreshOnConstrainedNetwork = settingsClient.deferAutoEPGRefreshOnConstrainedNetwork()
                 state.epgPreviewDelay = settingsClient.epgPreviewDelay()
                 state.autoSwitchOnEPGReminder = settingsClient.autoSwitchOnEPGReminder()
                 state.downloadConcurrencyLimit = settingsClient.downloadConcurrencyLimit()
                 state.hideAdultContent = settingsClient.hideAdultContent()
-                state.defaultStartupTab = settingsClient.defaultStartupTab()
+                state.defaultStartupTab = settingsClient.defaultStartupTabForProfile(currentProfileID)
                 state.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
                 state.liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
+                state.isSearchHistorySavingEnabled = settingsClient.isSearchHistorySavingEnabled()
+                state.searchHistoryRetention = settingsClient.searchHistoryRetention()
                 state.preferredAudioLanguage = settingsClient.preferredAudioLanguage()
                 state.preferredSubtitleLanguage = settingsClient.preferredSubtitleLanguage()
                 state.subtitleTextSize = settingsClient.subtitleTextSize()
+                state.subtitleAppearanceProfile = settingsClient.subtitleAppearanceProfile()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
                 state.isICloudSyncEnabled = settingsClient.isICloudSyncEnabled()
 
@@ -395,6 +485,8 @@ public struct SettingsFeature {
 
                 // Apple TV Top Shelf Style (Madde #22)
                 state.topShelfStyle = topShelfClient.getPreferredStyle()
+                state.topShelfSectionOrder = topShelfClient.getSectionOrder()
+                state.topShelfContentSelection = topShelfClient.getContentSelection()
 
                 state.playbackDefaultsByKind = Dictionary(
                     uniqueKeysWithValues: PlaybackContentKind.allCases.map { kind in
@@ -429,11 +521,136 @@ public struct SettingsFeature {
                         if let info = try? await purchases.customerInfo() {
                             await send(.updatePremiumStatus(!info.entitlements.active.isEmpty))
                         }
+                    },
+                    .run { send in
+                        do {
+                            let hasSavedKey = try await tmdbAPIKeyClient.hasStoredAPIKey()
+                            await send(.tmdbAPIKeyStateLoaded(
+                                requestID: tmdbAPIKeyLoadRequestID,
+                                hasSavedKey: hasSavedKey
+                            ))
+                        } catch {
+                            await send(.tmdbAPIKeyStateLoadFailed(requestID: tmdbAPIKeyLoadRequestID))
+                        }
                     }
                 )
 
+            case let .tmdbAPIKeyInputChanged(value):
+                state.tmdbAPIKeyInput = value
+                state.tmdbAPIKeyStatusMessage = nil
+                state.isTMDBAPIKeyStatusError = false
+                return .none
+
+            case .tmdbAPIKeySettingsDisappeared:
+                state.tmdbAPIKeyInput = RedactedText()
+                return .none
+
+            case .validateAndSaveTMDBAPIKeyTapped:
+                let candidate = state.tmdbAPIKeyInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !candidate.isEmpty, !state.isValidatingTMDBAPIKey, !state.isDeletingTMDBAPIKey else {
+                    return .none
+                }
+                let requestID = UUID()
+                state.tmdbAPIKeyOperationID = requestID
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isValidatingTMDBAPIKey = true
+                state.tmdbAPIKeyStatusMessage = nil
+                state.isTMDBAPIKeyStatusError = false
+                return .run { [tmdbClient, tmdbAPIKeyClient] send in
+                    do {
+                        try await tmdbClient.validateAPIKey(candidate)
+                        try await tmdbAPIKeyClient.saveAPIKey(candidate)
+                        await send(.tmdbAPIKeySaveCompleted(requestID: requestID))
+                    } catch {
+                        await send(.tmdbAPIKeySaveFailed(requestID: requestID))
+                    }
+                }
+
+            case let .tmdbAPIKeySaveCompleted(requestID):
+                guard state.tmdbAPIKeyOperationID == requestID else { return .none }
+                state.tmdbAPIKeyOperationID = nil
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isValidatingTMDBAPIKey = false
+                state.hasSavedTMDBAPIKey = true
+                state.tmdbAPIKeyInput = RedactedText()
+                state.tmdbAPIKeyStatusMessage = AppStrings.Settings.tmdbAPIKeySaved
+                state.isTMDBAPIKeyStatusError = false
+                return .none
+
+            case let .tmdbAPIKeySaveFailed(requestID):
+                guard state.tmdbAPIKeyOperationID == requestID else { return .none }
+                state.tmdbAPIKeyOperationID = nil
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isValidatingTMDBAPIKey = false
+                state.tmdbAPIKeyInput = RedactedText()
+                state.tmdbAPIKeyStatusMessage = AppStrings.Settings.tmdbAPIKeyValidationFailed
+                state.isTMDBAPIKeyStatusError = true
+                return .none
+
+            case .deleteTMDBAPIKeyTapped:
+                guard state.hasSavedTMDBAPIKey,
+                      !state.isValidatingTMDBAPIKey,
+                      !state.isDeletingTMDBAPIKey else { return .none }
+                let requestID = UUID()
+                state.tmdbAPIKeyOperationID = requestID
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isDeletingTMDBAPIKey = true
+                state.tmdbAPIKeyStatusMessage = nil
+                state.isTMDBAPIKeyStatusError = false
+                return .run { [tmdbAPIKeyClient] send in
+                    do {
+                        try await tmdbAPIKeyClient.deleteAPIKey()
+                        await send(.tmdbAPIKeyDeleteCompleted(requestID: requestID))
+                    } catch {
+                        await send(.tmdbAPIKeyDeleteFailed(requestID: requestID))
+                    }
+                }
+
+            case let .tmdbAPIKeyDeleteCompleted(requestID):
+                guard state.tmdbAPIKeyOperationID == requestID else { return .none }
+                state.tmdbAPIKeyOperationID = nil
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isDeletingTMDBAPIKey = false
+                state.hasSavedTMDBAPIKey = false
+                state.tmdbAPIKeyStatusMessage = AppStrings.Settings.tmdbAPIKeyDefaultActive
+                state.isTMDBAPIKeyStatusError = false
+                return .none
+
+            case let .tmdbAPIKeyDeleteFailed(requestID):
+                guard state.tmdbAPIKeyOperationID == requestID else { return .none }
+                state.tmdbAPIKeyOperationID = nil
+                state.tmdbAPIKeyLoadRequestID = nil
+                state.isDeletingTMDBAPIKey = false
+                state.tmdbAPIKeyStatusMessage = AppStrings.Settings.tmdbAPIKeyDeleteFailed
+                state.isTMDBAPIKeyStatusError = true
+                return .none
+
+            case let .tmdbAPIKeyStateLoaded(requestID, hasSavedKey):
+                guard state.tmdbAPIKeyLoadRequestID == requestID else { return .none }
+                state.tmdbAPIKeyLoadRequestID = nil
+                guard state.tmdbAPIKeyOperationID == nil else { return .none }
+                state.hasSavedTMDBAPIKey = hasSavedKey
+                if state.tmdbAPIKeyStatusMessage == nil {
+                    state.tmdbAPIKeyStatusMessage = hasSavedKey
+                        ? AppStrings.Settings.tmdbAPIKeySaved
+                        : AppStrings.Settings.tmdbAPIKeyDefaultActive
+                    state.isTMDBAPIKeyStatusError = false
+                }
+                return .none
+
+            case let .tmdbAPIKeyStateLoadFailed(requestID):
+                guard state.tmdbAPIKeyLoadRequestID == requestID else { return .none }
+                state.tmdbAPIKeyLoadRequestID = nil
+                guard state.tmdbAPIKeyOperationID == nil else { return .none }
+                state.tmdbAPIKeyStatusMessage = AppStrings.Settings.tmdbAPIKeyLoadFailed
+                state.isTMDBAPIKeyStatusError = true
+                return .none
+
             case .managePlaylistsTapped:
                 return .send(.delegate(.openManagePlaylists))
+
+            case .hiddenMediaManagementTapped:
+                return .send(.delegate(.presentUserHiddenMediaManagement))
 
             case .speedTestTapped:
                 guard state.speedTestPresentationRequestID == nil else { return .none }
@@ -448,6 +665,46 @@ public struct SettingsFeature {
 
             case .switchProfileTapped:
                 return .send(.delegate(.switchProfile))
+
+            case .loadViewingStatistics:
+                let scope = profileContextClient.snapshot()
+                let requestID = UUID()
+                state.viewingStatisticsRequestID = requestID
+                state.viewingStatisticsScope = scope
+                state.viewingStatisticsEntries = []
+                return .run { send in
+                    let entries = await viewingStatisticsClient.load(scope.profileID)
+                    await send(.viewingStatisticsLoaded(requestID: requestID, scope: scope, entries: entries))
+                }
+
+            case let .viewingStatisticsLoaded(requestID, scope, entries):
+                guard state.viewingStatisticsRequestID == requestID,
+                      state.viewingStatisticsScope == scope,
+                      profileContextClient.snapshot() == scope
+                else { return .none }
+                state.viewingStatisticsRequestID = nil
+                state.viewingStatisticsEntries = entries
+                return .none
+
+            case let .viewingStatisticsCleared(requestID, scope):
+                guard state.viewingStatisticsRequestID == requestID,
+                      state.viewingStatisticsScope == scope,
+                      profileContextClient.snapshot() == scope
+                else { return .none }
+                state.viewingStatisticsRequestID = nil
+                state.viewingStatisticsEntries = []
+                return .none
+
+            case .clearViewingStatisticsTapped:
+                let scope = profileContextClient.snapshot()
+                let requestID = UUID()
+                state.viewingStatisticsEntries = []
+                state.viewingStatisticsRequestID = requestID
+                state.viewingStatisticsScope = scope
+                return .run { send in
+                    await viewingStatisticsClient.clear(scope.profileID)
+                    await send(.viewingStatisticsCleared(requestID: requestID, scope: scope))
+                }
 
             case .delegate:
                 return .none
@@ -536,6 +793,10 @@ public struct SettingsFeature {
                 state.autoPlayNextEpisode = val
                 return .run { _ in settingsClient.setAutoPlayNextEpisode(val) }
 
+            case let .setLiveTVArtworkSource(source):
+                state.liveTVArtworkSource = source
+                return .run { _ in settingsClient.setLiveTVArtworkSource(source) }
+
             case let .setAutoSelectFirstAlternativeSource(val):
                 state.autoSelectFirstAlternativeSource = val
                 return .run { _ in settingsClient.setAutoSelectFirstAlternativeSource(val) }
@@ -581,6 +842,10 @@ public struct SettingsFeature {
                 state.epgAutoRefreshInterval = interval
                 return .run { _ in settingsClient.setEPGAutoRefreshInterval(interval) }
 
+            case let .setDeferAutoEPGRefreshOnConstrainedNetwork(enabled):
+                state.deferAutoEPGRefreshOnConstrainedNetwork = enabled
+                return .run { _ in settingsClient.setDeferAutoEPGRefreshOnConstrainedNetwork(enabled) }
+
             case let .setEPGPreviewDelay(delay):
                 state.epgPreviewDelay = delay
                 return .run { _ in settingsClient.setEPGPreviewDelay(delay) }
@@ -595,7 +860,8 @@ public struct SettingsFeature {
 
             case let .setDefaultStartupTab(val):
                 state.defaultStartupTab = val
-                return .run { _ in settingsClient.setDefaultStartupTab(val) }
+                let profileID = profileContextClient.snapshot().profileID
+                return .run { _ in settingsClient.setDefaultStartupTabForProfile(profileID, val) }
 
             case let .setHideEmptyContentTabs(val):
                 state.hideEmptyContentTabs = val
@@ -604,6 +870,23 @@ public struct SettingsFeature {
             case let .setLiveTVOnlyNavigation(val):
                 state.liveTVOnlyNavigation = val
                 return .run { _ in settingsClient.setLiveTVOnlyNavigation(val) }
+
+            case let .setSearchHistorySavingEnabled(enabled):
+                state.isSearchHistorySavingEnabled = enabled
+                settingsClient.setIsSearchHistorySavingEnabled(enabled)
+                guard !enabled else { return .none }
+                return .run { _ in
+                    _ = try? await databaseClient.clearSearchHistory()
+                }
+
+            case let .setSearchHistoryRetention(retention):
+                state.searchHistoryRetention = retention
+                settingsClient.setSearchHistoryRetention(retention)
+                guard state.isSearchHistorySavingEnabled else { return .none }
+                let cutoff = Date().addingTimeInterval(-retention.duration)
+                return .run { _ in
+                    _ = try? await databaseClient.fetchSearchHistory(cutoff)
+                }
 
             case let .setPreferredAudioLanguage(val):
                 state.preferredAudioLanguage = val
@@ -629,6 +912,10 @@ public struct SettingsFeature {
                     settingsClient: settingsClient
                 )
 
+            case let .setSubtitleAppearanceProfile(profile):
+                state.subtitleAppearanceProfile = profile
+                return .run { _ in settingsClient.setSubtitleAppearanceProfile(profile) }
+
             case let .selectPlaybackContentKind(kind):
                 state.selectedPlaybackContentKind = kind
                 return .none
@@ -647,9 +934,13 @@ public struct SettingsFeature {
             case let .setICloudSyncEnabled(val):
                 state.isICloudSyncEnabled = val
                 cloudSyncClient.setSyncEnabled(val)
-                return .run { _ in
+                let persistPreference = Effect<Action>.run { _ in
                     settingsClient.setIsICloudSyncEnabled(val)
                 }
+                return .merge(
+                    persistPreference,
+                    val ? .send(.syncNowTapped) : .none
+                )
 
             case let .setTvOSMatchContent(enabled):
                 state.tvOSMatchContent = enabled
@@ -693,6 +984,26 @@ public struct SettingsFeature {
             case let .setTopShelfStyle(style):
                 state.topShelfStyle = style
                 topShelfClient.setPreferredStyle(style)
+                return .none
+
+            case let .moveTopShelfSection(section, direction):
+                guard direction == -1 || direction == 1,
+                      let index = state.topShelfSectionOrder.firstIndex(of: section),
+                      state.topShelfSectionOrder.indices.contains(index + direction) else { return .none }
+                state.topShelfSectionOrder.swapAt(index, index + direction)
+                topShelfClient.setSectionOrder(state.topShelfSectionOrder)
+                return .none
+
+            case let .setTopShelfContentSelection(section, isEnabled):
+                state.topShelfContentSelection.setEnabled(isEnabled, for: section)
+                topShelfClient.setContentSelection(state.topShelfContentSelection)
+                return .run { send in
+                    _ = try? await cloudSyncClient.syncPresentationPreferences()
+                    await send(.topShelfContentSelectionSyncCompleted(topShelfClient.getContentSelection()))
+                }
+
+            case let .topShelfContentSelectionSyncCompleted(selection):
+                state.topShelfContentSelection = selection
                 return .none
 
             case let .setBufferProfile(profile):
@@ -1214,6 +1525,7 @@ public struct SettingsFeature {
                 state.isCustomEPGSheetPresented = true
                 state.customEPGSources = customEPGMappingClient.getSources()
                 state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                state.customEPGPlaylistID = playlistRepository.getActivePlaylistID()
                 state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
                 return .send(.delegate(.presentCustomEPGSettings(requestID: requestID)))
 
@@ -1277,16 +1589,20 @@ public struct SettingsFeature {
                     state.epgMappingSuggestions = []
                     return .none
                 }
-                let previous = state.channelEPGMappings[channelID]
+                guard let playlistID = state.epgMappingSuggestionsPlaylistID else { return .none }
+                let scopedKey = ChannelEPGMapping.storageKey(channelID: channelID, playlistID: playlistID)
+                let legacyKey = ChannelEPGMapping.storageKey(channelID: channelID, playlistID: nil)
+                let previous = state.channelEPGMappings[scopedKey] ?? state.channelEPGMappings[legacyKey]
                 let mapping = ChannelEPGMapping(
                     channelID: channelID,
                     channelName: channelName,
+                    playlistID: playlistID,
                     customEPGChannelID: epgChannelID,
                     customSourceID: sourceID,
                     timeShiftHours: previous?.timeShiftHours ?? 0
                 )
                 customEPGMappingClient.setChannelMapping(mapping)
-                state.channelEPGMappings[channelID] = mapping
+                state.channelEPGMappings[mapping.id] = mapping
                 state.epgMappingSuggestions.removeAll { $0.channelID == channelID }
                 return .none
 
@@ -1328,10 +1644,12 @@ public struct SettingsFeature {
             case .loadCustomEPGData:
                 state.customEPGSources = customEPGMappingClient.getSources()
                 state.channelEPGMappings = customEPGMappingClient.getAllMappings()
+                state.customEPGPlaylistID = playlistRepository.getActivePlaylistID()
                 state.epgTimeShift = customEPGMappingClient.getGlobalTimeShift()
                 return .none
 
             case .addCustomEPGSource:
+                guard !state.isCustomEPGLoading else { return .none }
                 let urlString = state.newCustomEPGURLString.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard let url = URL(string: urlString), url.scheme != nil else {
                     state.customEPGErrorMessage = "Geçersiz URL formatı. Lütfen http:// veya https:// ile başlayan bir link girin."
@@ -1343,15 +1661,18 @@ public struct SettingsFeature {
                     return .none
                 }
                 state.isCustomEPGLoading = true
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 state.customEPGErrorMessage = nil
                 return .run { send in
                     await send(.addCustomEPGSourceResponse(TaskResult {
                         try await customEPGMappingClient.addSource(name, url)
                     }))
                 }
+                .cancellable(id: "SettingsFeature.customEPGRefresh", cancelInFlight: true)
 
             case let .addCustomEPGSourceResponse(.success(source)):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 state.customEPGSources.append(source)
                 state.isAddCustomEPGSourceSheetPresented = false
                 state.newCustomEPGName = ""
@@ -1361,6 +1682,7 @@ public struct SettingsFeature {
 
             case let .addCustomEPGSourceResponse(.failure(error)):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 state.customEPGErrorMessage = "Kaynak eklenemedi: \(error.localizedDescription)"
                 return .none
 
@@ -1381,14 +1703,19 @@ public struct SettingsFeature {
                 guard !state.isCustomEPGLoading else { return .none }
                 guard state.customEPGSources.contains(where: { $0.id == id }) else { return .none }
                 state.isCustomEPGLoading = true
+                state.customEPGRefreshingSourceID = id
+                state.customEPGRefreshCurrentIndex = 1
+                state.customEPGRefreshTotalCount = 1
                 return .run { send in
                     await send(.refreshCustomEPGSourceResponse(id: id, result: TaskResult {
                         try await customEPGMappingClient.refreshSource(id)
                     }))
                 }
+                .cancellable(id: "SettingsFeature.customEPGRefresh", cancelInFlight: true)
 
             case let .refreshCustomEPGSourceResponse(id, .success(source)):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 if let idx = state.customEPGSources.firstIndex(where: { $0.id == source.id }) {
                     state.customEPGSources[idx] = source
                 }
@@ -1397,6 +1724,7 @@ public struct SettingsFeature {
 
             case let .refreshCustomEPGSourceResponse(id, .failure(error)):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 if state.customEPGSources.contains(where: { $0.id == id }) {
                     state.customEPGSourceErrors[id] = error.localizedDescription
                 }
@@ -1405,13 +1733,29 @@ public struct SettingsFeature {
             case .refreshAllCustomEPGSources:
                 guard !state.isCustomEPGLoading else { return .none }
                 state.isCustomEPGLoading = true
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 return .run { send in
-                    let summary = await customEPGMappingClient.refreshAllSources()
-                    await send(.refreshAllCustomEPGSourcesCompleted(summary))
+                    do {
+                        let summary = try await customEPGMappingClient.refreshAllSources { sourceID, current, total in
+                            await send(.customEPGRefreshProgress(sourceID: sourceID, current: current, total: total))
+                        }
+                        await send(.refreshAllCustomEPGSourcesCompleted(summary))
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                    }
                 }
+                .cancellable(id: "SettingsFeature.customEPGRefresh", cancelInFlight: true)
+
+            case let .customEPGRefreshProgress(sourceID, current, total):
+                guard state.isCustomEPGLoading else { return .none }
+                state.customEPGRefreshingSourceID = sourceID
+                state.customEPGRefreshCurrentIndex = current
+                state.customEPGRefreshTotalCount = total
+                return .none
 
             case let .refreshAllCustomEPGSourcesCompleted(summary):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 state.customEPGSources = customEPGMappingClient.getSources()
                 let currentSourceIDs = Set(state.customEPGSources.map(\.id))
                 state.customEPGSourceErrors = state.customEPGSourceErrors.filter { currentSourceIDs.contains($0.key) }
@@ -1431,23 +1775,36 @@ public struct SettingsFeature {
                 guard !failedSources.isEmpty else { return .none }
 
                 state.isCustomEPGLoading = true
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 return .run { send in
                     var failures: [String: String] = [:]
-                    for source in failedSources {
+                    for (offset, source) in failedSources.enumerated() {
+                        guard !Task.isCancelled else { return }
+                        await send(.customEPGRefreshProgress(
+                            sourceID: source.id,
+                            current: offset + 1,
+                            total: failedSources.count
+                        ))
                         do {
                             _ = try await customEPGMappingClient.refreshSource(source.id)
+                        } catch is CancellationError {
+                            return
                         } catch {
+                            guard !Task.isCancelled else { return }
                             failures[source.id] = error.localizedDescription
                         }
                     }
+                    guard !Task.isCancelled else { return }
                     await send(.retryFailedCustomEPGSourcesCompleted(
                         attemptedIDs: failedSources.map(\.id),
                         failures: failures
                     ))
                 }
+                .cancellable(id: "SettingsFeature.customEPGRefresh", cancelInFlight: true)
 
             case let .retryFailedCustomEPGSourcesCompleted(attemptedIDs, failures):
                 state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
                 state.customEPGSources = customEPGMappingClient.getSources()
                 let currentSourceIDs = Set(state.customEPGSources.map(\.id))
                 state.customEPGSourceErrors = state.customEPGSourceErrors.filter { currentSourceIDs.contains($0.key) }
@@ -1458,6 +1815,12 @@ public struct SettingsFeature {
                     state.customEPGSourceErrors[sourceID] = message
                 }
                 return .none
+
+            case .cancelCustomEPGRefresh:
+                guard state.isCustomEPGLoading else { return .none }
+                state.isCustomEPGLoading = false
+                Self.clearCustomEPGRefreshProgress(state: &state)
+                return .cancel(id: "SettingsFeature.customEPGRefresh")
 
             // iCloud Cross-Device Sync (Madde #24)
             case .syncNowTapped:
@@ -1476,6 +1839,7 @@ public struct SettingsFeature {
                 state.cloudSyncStatus = .success(summary.lastSyncDate)
                 state.lastCloudSyncDate = summary.lastSyncDate
                 state.cloudSyncSummary = summary
+                state.topShelfContentSelection = topShelfClient.getContentSelection()
                 state.cloudSyncMessage = "iCloud senkronizasyonu tamamlandı (\(summary.favoritesCount) favori, \(summary.hiddenChannelsCount) gizli kanal)."
                 return .none
 
@@ -1489,6 +1853,7 @@ public struct SettingsFeature {
                 state.lastCloudSyncDate = summary.lastSyncDate
                 state.cloudSyncStatus = .success(summary.lastSyncDate)
                 state.cloudSyncSummary = summary
+                state.topShelfContentSelection = topShelfClient.getContentSelection()
                 return .none
 
             case .startCloudSyncObservation:

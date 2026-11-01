@@ -14,13 +14,14 @@ public final class KeychainManager: @unchecked Sendable {
     private init() {}
 
     /// Saves a Codable object to Keychain securely and syncs via iCloud
-    public nonisolated func save(_ item: some Codable, for key: String) throws {
+    public nonisolated func save(_ item: some Codable, for key: String, synchronizable: Bool = true) throws {
         let data = try JSONEncoder().encode(item)
+        let syncValue = synchronizable ? kCFBooleanTrue! : kCFBooleanFalse!
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: true as CFBoolean, // Enable iCloud Sync
+            kSecAttrSynchronizable as String: syncValue,
         ]
 
         let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
@@ -43,13 +44,14 @@ public final class KeychainManager: @unchecked Sendable {
     }
 
     /// Retrieves a Codable object from Keychain
-    public nonisolated func retrieve<T: Codable>(for key: String, as type: T.Type) throws -> T {
+    public nonisolated func retrieve<T: Codable>(for key: String, as type: T.Type, synchronizable: Bool = true) throws -> T {
+        let syncValue = synchronizable ? kCFBooleanTrue! : kCFBooleanFalse!
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true as CFBoolean,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecAttrSynchronizable as String: true as CFBoolean,
+            kSecAttrSynchronizable as String: syncValue,
         ]
 
         var item: CFTypeRef?
@@ -71,11 +73,12 @@ public final class KeychainManager: @unchecked Sendable {
     }
 
     /// Deletes an item from Keychain
-    public nonisolated func delete(for key: String) throws {
+    public nonisolated func delete(for key: String, synchronizable: Bool = true) throws {
+        let syncValue = synchronizable ? kCFBooleanTrue! : kCFBooleanFalse!
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrSynchronizable as String: true as CFBoolean,
+            kSecAttrSynchronizable as String: syncValue,
         ]
 
         let status = SecItemDelete(query as CFDictionary)

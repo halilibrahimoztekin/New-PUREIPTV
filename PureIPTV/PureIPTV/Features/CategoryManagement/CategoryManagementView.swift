@@ -5,7 +5,7 @@ public struct CategoryManagementView: View {
     @Bindable var store: StoreOf<CategoryManagementFeature>
 
     @FocusState private var focusedItemID: String?
-    @FocusState private var focusedFilterMode: CategoryManagementFeature.State.FilterMode?
+    @State private var editingCategory: MediaModels.Category?
 
     public init(store: StoreOf<CategoryManagementFeature>) {
         self.store = store
@@ -68,6 +68,21 @@ public struct CategoryManagementView: View {
                 .onAppear {
                     store.send(.onAppear)
                 }
+                .sheet(item: $editingCategory) { category in
+                    CategoryNameEditorView(
+                        sourceName: category.sourceName,
+                        currentName: category.name,
+                        onSave: { name in
+                            store.send(.setCategoryNameOverride(categoryID: category.id, name: name))
+                        },
+                        onClose: { editingCategory = nil }
+                    )
+                }
+                .sheet(isPresented: $store.isCategoryNameRulesPresented, onDismiss: {
+                    store.send(.cancelCategoryNameRulesTapped)
+                }) {
+                    CategoryNameRulesView(store: store)
+                }
         }
     }
 
@@ -95,6 +110,17 @@ public struct CategoryManagementView: View {
                     store.send(.m3uCategoryMappingTapped)
                 } label: {
                     Label(AppStrings.M3UCategoryMapping.title, systemImage: "tag")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .padding(.horizontal, 16)
+            }
+
+            if store.config.playlistID != nil {
+                Button {
+                    store.send(.categoryNameRulesTapped)
+                } label: {
+                    Label(AppStrings.CategoryMgmt.nameRulesTitle, systemImage: "text.magnifyingglass")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.bordered)
@@ -158,10 +184,10 @@ public struct CategoryManagementView: View {
                                     in: Capsule()
                                 )
                         }
-                        .buttonStyle(.plain)
                         #if os(tvOS)
-                            .focused($focusedFilterMode, equals: mode)
-                            .scaleEffect(focusedFilterMode == mode ? 1.08 : 1.0)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                        #else
+                        .buttonStyle(.plain)
                         #endif
                     }
                 }
@@ -184,7 +210,11 @@ public struct CategoryManagementView: View {
                         .padding(.vertical, 6)
                         .background(Color.green.opacity(0.14), in: Capsule())
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                #else
                 .buttonStyle(.plain)
+                #endif
 
                 // Hide All Button
                 Button {
@@ -200,7 +230,11 @@ public struct CategoryManagementView: View {
                         .padding(.vertical, 6)
                         .background(Color.red.opacity(0.14), in: Capsule())
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                #else
                 .buttonStyle(.plain)
+                #endif
 
                 // Invert Button
                 Button {
@@ -216,6 +250,9 @@ public struct CategoryManagementView: View {
                         .padding(.vertical, 6)
                         .background(Color.orange.opacity(0.14), in: Capsule())
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                #endif
                 // Country Presets (Madde #52)
                 Menu {
                     Button("Sadece Türkiye (TR) Gruplarını Bırak") {
@@ -232,7 +269,11 @@ public struct CategoryManagementView: View {
                         .padding(.vertical, 6)
                         .background(Color.cyan.opacity(0.14), in: Capsule())
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                #else
                 .buttonStyle(.plain)
+                #endif
 
                 Spacer()
 
@@ -249,7 +290,11 @@ public struct CategoryManagementView: View {
                         .padding(6)
                         .background(Color.white.opacity(0.08), in: Circle())
                 }
+                #if os(tvOS)
+                .buttonStyle(TVCircleButtonStyle())
+                #else
                 .buttonStyle(.plain)
+                #endif
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
@@ -286,6 +331,22 @@ public struct CategoryManagementView: View {
                         .font(.system(size: 15, weight: isHidden ? .regular : .semibold))
                         .foregroundColor(isHidden ? .secondary : .white)
 
+                    Button {
+                        editingCategory = category
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                            .background(Color.white.opacity(0.08), in: Circle())
+                    }
+                    #if os(tvOS)
+                    .buttonStyle(TVCircleButtonStyle())
+                    #else
+                    .buttonStyle(.plain)
+                    #endif
+                    .accessibilityLabel(AppStrings.CategoryMgmt.editCategoryName)
+
                     Spacer()
 
                     // Lock / PIN Protect Button
@@ -304,7 +365,12 @@ public struct CategoryManagementView: View {
                                 in: Circle()
                             )
                     }
+                    #if os(tvOS)
+                    .buttonStyle(TVCircleButtonStyle())
+                    #else
                     .buttonStyle(.plain)
+                    #endif
+                    .accessibilityLabel(isLocked ? AppStrings.CategoryMgmt.unlockCategory : AppStrings.CategoryMgmt.lockCategory)
 
                     // Toggle Button
                     Button {
@@ -331,7 +397,11 @@ public struct CategoryManagementView: View {
                                 .stroke((isHidden ? Color.red : Color.green).opacity(0.3), lineWidth: 1)
                         )
                     }
+                    #if os(tvOS)
+                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                    #else
                     .buttonStyle(.plain)
+                    #endif
                 }
                 .contentShape(Rectangle())
                 .padding(.vertical, 2)
@@ -341,6 +411,25 @@ public struct CategoryManagementView: View {
                     .animation(.spring(response: 0.25, dampingFraction: 0.7), value: focusedItemID)
                 #endif
                     .listRowBackground(Color(hex: "#16161D"))
+                #if os(tvOS)
+                    .contextMenu {
+                        if store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           store.filterMode == .all,
+                           let categoryIndex = store.categories.firstIndex(where: { $0.id == category.id })
+                        {
+                            if categoryIndex > 0 {
+                                Button(AppStrings.CategoryMgmt.moveCategoryUp, systemImage: "arrow.up") {
+                                    store.send(.moveCategory(from: IndexSet(integer: categoryIndex), to: categoryIndex - 1))
+                                }
+                            }
+                            if categoryIndex < store.categories.count - 1 {
+                                Button(AppStrings.CategoryMgmt.moveCategoryDown, systemImage: "arrow.down") {
+                                    store.send(.moveCategory(from: IndexSet(integer: categoryIndex), to: categoryIndex + 1))
+                                }
+                            }
+                        }
+                    }
+                #endif
             }
             .onMove { source, destination in
                 store.send(.moveCategory(from: source, to: destination))

@@ -1,4 +1,3 @@
-import Kingfisher
 import Shimmer
 import SwiftUI
 
@@ -57,19 +56,21 @@ public struct ChannelCardView: View {
 
                 // ── Logo ─────────────────────────────────────────────
                 if let logoURL = channel.displayLogoURL {
-                    KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID))
-                        .requestModifier { request in
-                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID)
-                        }
-                        .placeholder {
+                    PlaylistAsyncImage(
+                        url: logoURL,
+                        fallbackURL: channel.coverURL,
+                        userAgentOverride: channel.userAgentOverride,
+                        playlistID: channel.playlistID,
+                        downsamplingSize: CGSize(width: 300, height: 200)
+                    ) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: .fit)
+                        } else {
                             ChannelLogoPlaceholder()
                         }
-                        .downsampling(size: CGSize(width: 300, height: 200))
-                        .cacheOriginalImage()
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ChannelLogoPlaceholder()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

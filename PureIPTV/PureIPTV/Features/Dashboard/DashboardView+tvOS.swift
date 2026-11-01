@@ -8,6 +8,7 @@
     public struct DashboardView_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
+        @State private var isShowingFollowedSportsEvents = false
 
         public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
             self.store = store
@@ -30,7 +31,9 @@
             ZStack {
                 DynamicMeshBackgroundView(
                     imageURL: store.featuredVODs.first?.coverURL,
-                    titleSeed: store.featuredVODs.first?.title ?? "PureIPTV"
+                    titleSeed: store.featuredVODs.first?.title ?? "PureIPTV",
+                    userAgentOverride: store.featuredVODs.first?.userAgentOverride,
+                    playlistID: store.featuredVODs.first?.playlistID
                 )
 
                 ScrollView {
@@ -58,8 +61,8 @@
                                 .font(.system(size: 18, weight: .semibold))
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                            .disabled(store.activeRefreshID != nil)
                             .accessibilityLabel(AppStrings.Common.retry)
+                            .accessibilityValue(store.activeRefreshID == nil ? "" : AppStrings.Common.loading)
                             Button {
                                 store.send(.delegate(.presentHomeCategoryPinManagement(
                                     playlistID: store.activePlaylistID,
@@ -99,6 +102,14 @@
                         .padding(.horizontal, 60)
                         .padding(.top, 20)
 
+                        if !store.catalogCountChanges.isEmpty {
+                            DashboardCatalogCountSummaryView(
+                                changes: store.catalogCountChanges,
+                                onDismiss: { store.send(.dismissCatalogCountSummary) }
+                            )
+                            .padding(.horizontal, 60)
+                        }
+
                         if store.isLoading {
                             tvLoadingView
                                 .frame(maxWidth: .infinity)
@@ -117,7 +128,7 @@
                                     Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
                                 }
                                 .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
-                                .disabled(store.activeRefreshID != nil)
+                                .accessibilityValue(store.activeRefreshID == nil ? "" : AppStrings.Common.loading)
                             }
                             .padding(.horizontal, 60)
                         }
@@ -147,25 +158,115 @@
 
         private func favoriteShelf(_ items: [FavoriteItem], title: String, cardWidth: CGFloat) -> some View {
             TVShelfSection(title: title) {
-                ForEach(items) { item in
-                    TVFavoriteMediaCard(
-                        item: item,
-                        userAgentOverride: config.userAgentOverride,
-                        unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
-                            ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
-                            : nil
-                    ) {
-                        store.send(.favoriteSelected(item))
-                    }
-                    .frame(width: cardWidth)
-                    .contextMenu {
-                        Button { store.send(.favoriteSelected(item)) } label: {
-                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                ForEach(items, id: \.scopedIdentity) { item in
+                    favoriteMediaCard(item, cardWidth: cardWidth)
+                }
+            }
+        }
+
+        private func favoriteSeriesShelf(_ items: [FavoriteItem]) -> some View {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(alignment: .center, spacing: 28) {
+                    Text(AppStrings.Dashboard.favoriteSeries)
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 12)
+                    favoriteSeriesSortMenu
+                }
+                .padding(.horizontal, 60)
+
+                if store.favoriteSeriesSortDidFail {
+                    Text(AppStrings.Dashboard.favoriteSeriesDatesLoadFailed)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 60)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 40) {
+                        ForEach(items, id: \.scopedIdentity) { item in
+                            favoriteMediaCard(item, cardWidth: 220)
                         }
-                        Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
-                            Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
-                        }
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 40)
+                }
+                .focusSection()
+            }
+        }
+
+        private var favoriteSeriesSortMenu: some View {
+            Menu {
+                Button {
+                    store.send(.setFavoriteSeriesSort(.newestEpisode))
+                } label: {
+                    Label(
+                        AppStrings.Dashboard.newestEpisodeDate,
+                        systemImage: store.favoriteSeriesSortMode == .newestEpisode ? "checkmark" : "calendar"
+                    )
+                }
+                Button {
+                    store.send(.setFavoriteSeriesSort(.existingOrder))
+                } label: {
+                    Label(
+                        AppStrings.Dashboard.existingFavoriteOrder,
+                        systemImage: store.favoriteSeriesSortMode == .existingOrder ? "checkmark" : "list.number"
+                    )
+                }
+            } label: {
+                Label(
+                    store.isLoadingFavoriteSeriesSortDates
+                        ? AppStrings.Dashboard.loadingFavoriteSeriesDates
+                        : AppStrings.Dashboard.sortFavoriteSeries,
+                    systemImage: store.isLoadingFavoriteSeriesSortDates ? "hourglass" : "arrow.up.arrow.down"
+                )
+                .font(.system(size: 22, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel(
+                store.isLoadingFavoriteSeriesSortDates
+                    ? AppStrings.Dashboard.loadingFavoriteSeriesDates
+                    : AppStrings.Dashboard.sortFavoriteSeries
+            )
+            .accessibilityValue(
+                store.favoriteSeriesSortMode == .newestEpisode
+                    ? AppStrings.Dashboard.newestEpisodeDate
+                    : AppStrings.Dashboard.existingFavoriteOrder
+            )
+        }
+
+        private func favoriteMediaCard(_ item: FavoriteItem, cardWidth: CGFloat) -> some View {
+            let mediaType = item.type.lowercased()
+            let canReorder = mediaType == "vod"
+                || (mediaType == "series" && store.favoriteSeriesSortMode != .newestEpisode)
+            return TVFavoriteMediaCard(
+                item: item,
+                userAgentOverride: config.userAgentOverride,
+                unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
+                    ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
+                    : nil
+            ) {
+                store.send(.favoriteSelected(item))
+            }
+            .frame(width: cardWidth)
+            .contextMenu {
+                if canReorder, item.playlistID != nil {
+                    let moveAvailability = store.favoriteMoveAvailability[item.scopedIdentity] ?? []
+                    Button { store.send(.moveFavorite(item, offset: -1)) } label: {
+                        Label(AppStrings.Favorites.moveUp, systemImage: "arrow.left")
+                    }
+                    .disabled(!moveAvailability.contains(-1))
+
+                    Button { store.send(.moveFavorite(item, offset: 1)) } label: {
+                        Label(AppStrings.Favorites.moveDown, systemImage: "arrow.right")
+                    }
+                    .disabled(!moveAvailability.contains(1))
+                }
+                Button { store.send(.favoriteSelected(item)) } label: {
+                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                }
+                Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
+                    Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
                 }
             }
         }
@@ -174,14 +275,14 @@
         private func homeSectionView(
             _ section: HomeSectionConfig,
             favoriteIDs: Set<FavoriteIdentity>,
-            isHeroVisible: Bool,
+            isHeroVisible _: Bool,
             newMovieItems: ArraySlice<MediaModels.Item>
         ) -> some View {
             switch section.type {
             case .hero:
                 if let heroVOD = store.featuredVODs.first {
                     TVHeroBanner(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
-                        .focusGuideBoundary()
+                        .focusSection()
                 }
             case .continueWatching:
                 if !store.continueWatchingItems.isEmpty {
@@ -203,7 +304,7 @@
                     favoriteShelf(items, title: AppStrings.Dashboard.favoriteMovies, cardWidth: 220)
                 }
                 if let items = favorites["series"], !items.isEmpty {
-                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteSeries, cardWidth: 220)
+                    favoriteSeriesShelf(items)
                 }
                 let categorizedTypes = Set(["live", "vod", "series"])
                 let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
@@ -239,21 +340,51 @@
                     hasContent: !store.featuredChannels.isEmpty,
                     isResolved: store.hasResolvedLiveCatalog
                 )
-            case .sportsHub:
-                if store.isSportsHubVisible, !store.epgEvents.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.epgPrograms) {
-                        ForEach(store.epgEvents) { event in
-                            DashboardEPGEventCard(
-                                event: event,
-                                onSelectChannel: { store.send(.channelSelected($0)) },
-                                onChooseChannel: {
-                                    guard let playlistID = store.activePlaylistID else { return }
-                                    store.send(.delegate(.presentEPGChannelPicker(playlistID: playlistID, event: event)))
+            case .recentLiveTV:
+                if !store.recentLiveChannels.isEmpty {
+                    TVShelfSection(title: AppStrings.LiveTV.recentChannels) {
+                        ForEach(store.recentLiveChannels) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TVChannelCard(channel: entry.channel, isSelected: false) {
+                                    store.send(.recentLiveChannelSelected(entry.id))
                                 }
-                            )
-                            .frame(width: 380)
+                                .frame(width: 340)
+                                .accessibilityLabel("\(entry.channel.title), \(entry.playlistName)")
+                                .accessibilityHint(AppStrings.Common.watchNow)
+
+                                Text(entry.playlistName)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.82))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 4)
+                                    .accessibilityHidden(true)
+                            }
+                            .contextMenu {
+                                Button {
+                                    store.send(.recentLiveChannelSelected(entry.id))
+                                } label: {
+                                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                }
+                                Button {
+                                    store.send(.togglePinRecentLiveChannel(entry.id))
+                                } label: {
+                                    Label(
+                                        entry.isPinned ? AppStrings.LiveTV.unpinRecentChannel : AppStrings.LiveTV.pinRecentChannel,
+                                        systemImage: entry.isPinned ? "pin.slash" : "pin"
+                                    )
+                                }
+                                Button(role: .destructive) {
+                                    store.send(.removeRecentLiveChannel(entry.id))
+                                } label: {
+                                    Label(AppStrings.Player.removeRecentChannel, systemImage: "clock.badge.xmark")
+                                }
+                            }
                         }
                     }
+                }
+            case .sportsHub:
+                if store.isSportsHubVisible, !store.sportsHubEvents.isEmpty {
+                    sportsHubSection
                 }
             case .recommendations:
                 if !store.newEpisodeSeries.isEmpty {
@@ -425,7 +556,7 @@
                                 Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
-                            .disabled(store.activeRefreshID != nil)
+                            .accessibilityValue(store.activeRefreshID == nil ? "" : AppStrings.Common.loading)
                         }
                         .padding(.horizontal, 40)
                     }
@@ -601,13 +732,88 @@
                     .padding(.vertical, 40)
                 }
                 .focusSection()
-                .focusGuideBoundary()
             }
         }
 
         private var tvLoadingView: some View {
             PureLoadingView(size: .large, text: AppStrings.Common.loadingAlt)
                 .transition(.opacity)
+        }
+
+        private var sportsHubEventGroupsForDisplay: [DashboardFeature.SportsHubEventGroup] {
+            isShowingFollowedSportsEvents ? store.followedSportsHubEventGroups : store.sportsHubEventGroups
+        }
+
+        private var sportsHubSection: some View {
+            let eventGroups = sportsHubEventGroupsForDisplay
+            return VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 16) {
+                    Text(AppStrings.Dashboard.epgPrograms)
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    if !store.followedSportsIDs.isEmpty || isShowingFollowedSportsEvents {
+                        Button {
+                            isShowingFollowedSportsEvents.toggle()
+                        } label: {
+                            Label(
+                                isShowingFollowedSportsEvents
+                                    ? AppStrings.Dashboard.showAllSportsEvents
+                                    : AppStrings.Dashboard.showFollowedSportsEvents,
+                                systemImage: isShowingFollowedSportsEvents ? "line.3.horizontal.decrease.circle.fill" : "star"
+                            )
+                        }
+                        .font(.title3)
+                        .frame(minHeight: 52)
+                        .tvFocusEffect(shape: .capsule)
+                    }
+                }
+                .padding(.horizontal, 60)
+
+                if eventGroups.isEmpty {
+                    Text(AppStrings.Dashboard.noFollowedSportsEvents)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 60)
+                        .padding(.vertical, 24)
+                } else {
+                    VStack(alignment: .leading, spacing: 28) {
+                        ForEach(eventGroups) { group in
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(group.title ?? AppStrings.Dashboard.otherSportsMatches)
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .accessibilityAddTraits(.isHeader)
+                                    .padding(.horizontal, 60)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 40) {
+                                        ForEach(group.events) { event in
+                                            DashboardEPGEventCard(
+                                                event: event,
+                                                followedSportsIDs: store.followedSportsIDs,
+                                                pendingSportsFollowIDs: Set(store.pendingSportsFollowIDs.keys),
+                                                onToggleSportsFollow: { kind, name in
+                                                    store.send(.toggleSportsFollow(kind: kind, displayName: name))
+                                                },
+                                                onSelectChannel: { store.send(.channelSelected($0)) },
+                                                onChooseChannel: {
+                                                    guard let playlistID = store.activePlaylistID else { return }
+                                                    store.send(.delegate(.presentEPGChannelPicker(playlistID: playlistID, event: event)))
+                                                }
+                                            )
+                                            .frame(width: 380)
+                                        }
+                                    }
+                                    .padding(.horizontal, 60)
+                                    .padding(.vertical, 24)
+                                }
+                                .focusSection()
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -693,7 +899,6 @@
                     .padding(.vertical, 40)
                 }
                 .focusSection()
-                .focusGuideBoundary()
             }
         }
     }

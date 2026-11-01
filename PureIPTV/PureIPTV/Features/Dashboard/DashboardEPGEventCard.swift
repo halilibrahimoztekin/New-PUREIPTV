@@ -3,18 +3,47 @@ import SwiftUI
 struct DashboardEPGEventCard: View {
     @Environment(\.locale) private var locale
     let event: DashboardFeature.EPGEvent
+    let followedSportsIDs: Set<String>
+    let pendingSportsFollowIDs: Set<String>
+    let onToggleSportsFollow: (SportsFollowKind, String) -> Void
     let onSelectChannel: (MediaModels.Item) -> Void
     let onChooseChannel: () -> Void
 
-    private var isSportsFixture: Bool {
-        let lowered = event.program.title.lowercased()
-        return lowered.contains(" vs ") || lowered.contains(" v ") || event.program.title.contains(" - ")
+    private var accessibilitySummary: String {
+        let status = event.program.isPlayingNow
+            ? AppStrings.Dashboard.nowAiring
+            : event.program.formattedStartTime(locale: locale)
+        return "\(event.program.title), \(status), \(event.channel.title), \(event.program.formattedTimeRange(locale: locale))"
+    }
+
+    private var isFollowedSportsMatch: Bool {
+        guard let fixture = SportsHubManager.fixtureIdentity(
+            program: event.program,
+            channelTitle: event.channel.title
+        ) else { return false }
+        return followedSportsIDs.contains(SportsFollowSyncRecord.identity(kind: .team, displayName: fixture.homeTeam))
+            || followedSportsIDs.contains(SportsFollowSyncRecord.identity(kind: .team, displayName: fixture.awayTeam))
+            || fixture.competition.map {
+                followedSportsIDs.contains(SportsFollowSyncRecord.identity(kind: .competition, displayName: $0))
+            } == true
+    }
+
+    private var sportsFollowAccessibilityHint: String {
+        #if os(tvOS)
+            AppStrings.Dashboard.sportsFollowHintTV
+        #else
+            AppStrings.Dashboard.sportsFollowHint
+        #endif
     }
 
     var body: some View {
         Button { onSelectChannel(event.channel) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
+                    if event.isSportsFixture {
+                        Image(systemName: "sportscourt.fill")
+                            .font(.caption2)
+                    }
                     Circle()
                         .fill(event.program.isPlayingNow ? Color.red : Color(hex: "#0A84FF"))
                         .frame(width: 8, height: 8)
@@ -22,6 +51,12 @@ struct DashboardEPGEventCard: View {
                         .font(.caption.weight(.semibold))
                         .monospacedDigit()
                     Spacer(minLength: 8)
+                    if event.isSportsFixture {
+                        Image(systemName: isFollowedSportsMatch ? "star.fill" : "star")
+                            .font(.caption2)
+                            .foregroundStyle(isFollowedSportsMatch ? Color.yellow : Color.white.opacity(0.78))
+                            .accessibilityHidden(true)
+                    }
                     Image(systemName: "play.fill")
                         .font(.caption2)
                 }
@@ -65,11 +100,59 @@ struct DashboardEPGEventCard: View {
         #else
         .buttonStyle(.plain)
         #endif
-        .accessibilityLabel("\(event.program.title), \(event.channel.title), \(event.program.formattedTimeRange(locale: locale))")
-        .accessibilityHint(AppStrings.Common.watchNow)
+        .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint(event.isSportsFixture ? sportsFollowAccessibilityHint : AppStrings.Common.watchNow)
         .contextMenu {
-            if isSportsFixture {
+            if event.isSportsFixture {
                 Button("Kanala elle eşle", systemImage: "magnifyingglass", action: onChooseChannel)
+                if let fixture = SportsHubManager.fixtureIdentity(
+                    program: event.program,
+                    channelTitle: event.channel.title
+                ) {
+                    let homeID = SportsFollowSyncRecord.identity(kind: .team, displayName: fixture.homeTeam)
+                    Button {
+                        onToggleSportsFollow(.team, fixture.homeTeam)
+                    } label: {
+                        Label(
+                            followedSportsIDs.contains(homeID)
+                                ? AppStrings.Dashboard.unfollowSportsTeam(fixture.homeTeam)
+                                : AppStrings.Dashboard.followSportsTeam(fixture.homeTeam),
+                            systemImage: followedSportsIDs.contains(homeID) ? "star.slash" : "star"
+                        )
+                    }
+                    .disabled(pendingSportsFollowIDs.contains(homeID))
+
+                    let awayID = SportsFollowSyncRecord.identity(kind: .team, displayName: fixture.awayTeam)
+                    Button {
+                        onToggleSportsFollow(.team, fixture.awayTeam)
+                    } label: {
+                        Label(
+                            followedSportsIDs.contains(awayID)
+                                ? AppStrings.Dashboard.unfollowSportsTeam(fixture.awayTeam)
+                                : AppStrings.Dashboard.followSportsTeam(fixture.awayTeam),
+                            systemImage: followedSportsIDs.contains(awayID) ? "star.slash" : "star"
+                        )
+                    }
+                    .disabled(pendingSportsFollowIDs.contains(awayID))
+
+                    if let competition = fixture.competition {
+                        let competitionID = SportsFollowSyncRecord.identity(
+                            kind: .competition,
+                            displayName: competition
+                        )
+                        Button {
+                            onToggleSportsFollow(.competition, competition)
+                        } label: {
+                            Label(
+                                followedSportsIDs.contains(competitionID)
+                                    ? AppStrings.Dashboard.unfollowSportsCompetition(competition)
+                                    : AppStrings.Dashboard.followSportsCompetition(competition),
+                                systemImage: followedSportsIDs.contains(competitionID) ? "star.slash" : "star"
+                            )
+                        }
+                        .disabled(pendingSportsFollowIDs.contains(competitionID))
+                    }
+                }
             }
             if !event.alternateChannels.isEmpty {
                 ForEach(event.alternateChannels) { channel in

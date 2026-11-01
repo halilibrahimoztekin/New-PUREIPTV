@@ -66,6 +66,21 @@ public enum ActorRecommendationEngine: Sendable {
         let kind: SourceKind
     }
 
+    public nonisolated static func combinedCredits(
+        for personID: Int,
+        using tmdbClient: TMDBClient
+    ) async -> TMDBPersonCreditsDTO? {
+        if let cached = await LookupCache.shared.credits(for: personID) {
+            return cached
+        }
+        guard !Task.isCancelled,
+              let fetched = try? await tmdbClient.fetchPersonCombinedCredits(personID),
+              !Task.isCancelled
+        else { return nil }
+        await LookupCache.shared.store(fetched, for: personID)
+        return fetched
+    }
+
     public nonisolated static func collections(
         history: [WatchHistoryItem],
         playlistID: UUID?,

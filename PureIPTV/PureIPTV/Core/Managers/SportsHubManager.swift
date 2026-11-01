@@ -24,15 +24,68 @@ public struct SportsMatchItem: Identifiable, Sendable, Equatable {
     }
 }
 
+public struct SportsFixtureIdentity: Equatable, Sendable {
+    public let homeTeam: String
+    public let awayTeam: String
+    public let competition: String?
+}
+
 public final class SportsHubManager: @unchecked Sendable {
     public static let shared = SportsHubManager()
 
     private init() {}
 
-    private let leagues = [
+    private nonisolated static let sportsContextTerms = [
+        "sport", "sports", "football", "soccer", "futbol", "basketball", "basketbol", "hockey", "tennis", "tenis",
+        "rugby", "volleyball", "voleybol", "cricket", "boxing", "wrestling", "güreş", "motorsport", "formula 1",
+        "moto gp", "ufc", "mma", "nba", "nfl", "nhl", "mlb", "premier league", "champions league", "la liga",
+        "serie a", "bundesliga", "süper lig", "super lig", "euroleague", "matchday", "maç", "şampiyonlar ligi",
+    ]
+
+    /// Returns true only for explicit fixture syntax, or a dash-separated title with sports context.
+    public nonisolated static func isSportsFixture(program: EPGProgram, channelTitle: String) -> Bool {
+        teams(in: program.title, allowDashSeparator: false) != nil
+            || (hasSportsContext(program: program, channelTitle: channelTitle)
+                && teams(in: program.title, allowDashSeparator: true) != nil)
+    }
+
+    private nonisolated static func teams(in title: String, allowDashSeparator: Bool) -> (home: String, away: String)? {
+        let explicitSeparators = [" vs. ", " vs ", " v. ", " v "]
+        let separators = explicitSeparators + (allowDashSeparator ? [" – ", " — ", " - "] : [])
+
+        for separator in separators {
+            guard let range = title.range(of: separator, options: .caseInsensitive) else { continue }
+            let home = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let away = String(title[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !home.isEmpty, !away.isEmpty else { continue }
+            return (home, away)
+        }
+        return nil
+    }
+
+    private nonisolated static func hasSportsContext(program: EPGProgram, channelTitle: String) -> Bool {
+        let context = ([channelTitle, program.description] + program.categories)
+            .joined(separator: " ")
+        return sportsContextTerms.contains { context.localizedCaseInsensitiveContains($0) }
+    }
+
+    private nonisolated static let leagues = [
         "Süper Lig", "Şampiyonlar Ligi", "Premier League", "La Liga",
         "Serie A", "Bundesliga", "EuroLeague", "NBA", "Formula 1",
     ]
+
+    public nonisolated static func fixtureIdentity(
+        program: EPGProgram,
+        channelTitle: String
+    ) -> SportsFixtureIdentity? {
+        let allowDashSeparator = hasSportsContext(program: program, channelTitle: channelTitle)
+        guard let teams = teams(in: program.title, allowDashSeparator: allowDashSeparator) else { return nil }
+        let competition = leagues.first {
+            program.title.localizedCaseInsensitiveContains($0)
+                || program.description.localizedCaseInsensitiveContains($0)
+        }
+        return SportsFixtureIdentity(homeTeam: teams.home, awayTeam: teams.away, competition: competition)
+    }
 
     /// Extracts today's sports matches from channel EPG listings
     public func extractMatches(from channels: [MediaModels.Item], epgData: [String: [EPGProgram]]) -> [SportsMatchItem] {
@@ -48,23 +101,12 @@ public final class SportsHubManager: @unchecked Sendable {
                     continue
                 }
 
-                let title = program.title
-                // Detect "Team A - Team B" or "Team A vs Team B" patterns
-                var teams: [String] = []
-                if title.contains(" - ") {
-                    teams = title.components(separatedBy: " - ")
-                } else if title.lowercased().contains(" vs ") {
-                    teams = title.components(separatedBy: " vs ")
-                } else if title.lowercased().contains(" v ") {
-                    teams = title.components(separatedBy: " v ")
-                }
+                if let teams = Self.teams(in: program.title, allowDashSeparator: Self.hasSportsContext(program: program, channelTitle: channel.title)) {
+                    let home = teams.home
+                    let away = teams.away
 
-                if teams.count == 2 {
-                    let home = teams[0].trimmingCharacters(in: .whitespacesAndNewlines)
-                    let away = teams[1].trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    let competition = leagues.first {
-                        title.localizedCaseInsensitiveContains($0) || program.description.localizedCaseInsensitiveContains($0)
+                    let competition = Self.leagues.first {
+                        program.title.localizedCaseInsensitiveContains($0) || program.description.localizedCaseInsensitiveContains($0)
                     } ?? "Canlı Maç"
 
                     let match = SportsMatchItem(

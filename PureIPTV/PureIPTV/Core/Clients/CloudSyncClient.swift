@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -65,6 +66,13 @@ public struct FavoriteSyncDTO: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+private func sportsFollowRecordWins(
+    _ candidate: SportsFollowSyncRecord,
+    over current: SportsFollowSyncRecord
+) -> Bool {
+    candidate.wins(over: current)
+}
+
 private func favoriteSyncVersion(_ dto: FavoriteSyncDTO) -> Date {
     dto.removedAt ?? dto.addedAt
 }
@@ -110,6 +118,62 @@ public struct CloudSyncSummary: Codable, Equatable, Sendable {
     }
 }
 
+private struct HomeSectionPreferenceEntry: Codable {
+    let id: String
+    let isVisible: Bool
+}
+
+private struct HomeSectionPreferenceSyncDTO: Codable {
+    let schemaVersion: Int
+    let sections: [HomeSectionPreferenceEntry]
+    let modifiedAt: Date
+    let deviceID: String
+
+    var isSupported: Bool {
+        schemaVersion == 1 && sections.allSatisfy { HomeSectionType(rawValue: $0.id) != nil }
+    }
+
+    var knownSections: [HomeSectionConfig] {
+        sections.compactMap { entry in
+            guard let type = HomeSectionType(rawValue: entry.id) else { return nil }
+            return HomeSectionConfig(type: type, isVisible: entry.isVisible)
+        }
+    }
+}
+
+private struct TopShelfSelectionSyncDTO: Codable {
+    let schemaVersion: Int
+    let selection: TopShelfContentSelection
+    let modifiedAt: Date
+    let deviceID: String
+
+    var isSupported: Bool {
+        schemaVersion == 1
+    }
+}
+
+private final class PresentationPreferenceSyncGate: @unchecked Sendable {
+    private let lock = NSRecursiveLock()
+
+    func withLock<Value>(_ operation: () throws -> Value) rethrows -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
+}
+
+private func preferenceSyncRecordWins(
+    candidateDate: Date,
+    candidateDeviceID: String,
+    over currentDate: Date,
+    currentDeviceID: String
+) -> Bool {
+    if candidateDate != currentDate {
+        return candidateDate > currentDate
+    }
+    return candidateDeviceID > currentDeviceID
+}
+
 public enum CloudSyncStatus: Equatable, Sendable {
     case idle
     case syncing
@@ -123,10 +187,34 @@ public enum CloudSyncStatus: Equatable, Sendable {
 public struct CloudSyncClient: Sendable {
     public var isSyncEnabled: @Sendable () -> Bool = { true }
     public var setSyncEnabled: @Sendable (_ enabled: Bool) -> Void
+    public var isPlaylistSyncEnabled: @Sendable (_ playlistID: UUID) -> Bool = {
+        PlaylistCloudSyncPreference.isEnabled(for: $0)
+    }
+
+    public var setPlaylistSyncEnabled: @Sendable (_ playlistID: UUID, _ enabled: Bool) async -> Void = { _, _ in }
     public var syncFavorites: @Sendable (_ favorites: [FavoriteSyncDTO]) async throws -> Void
     public var pullFavorites: @Sendable () async throws -> [FavoriteSyncDTO] = { [] }
     public var syncHiddenItems: @Sendable (_ items: [HiddenItemDTO]) async throws -> Void
     public var pullHiddenItems: @Sendable () async throws -> [HiddenItemDTO] = { [] }
+    public var syncPresentationPreferences: @Sendable () async throws -> [HomeSectionConfig] = {
+        HomeSectionManager.shared.sections
+    }
+
+    public var loadSportsFollows: @Sendable (_ profileID: UUID?) async throws -> [SportsFollowSyncRecord] = { _ in [] }
+    public var setSportsFollow: @Sendable (
+        _ profileID: UUID?,
+        _ kind: SportsFollowKind,
+        _ displayName: String,
+        _ isFollowing: Bool
+    ) async throws -> [SportsFollowSyncRecord] = { _, _, _, _ in [] }
+    public var observeSportsFollows: @Sendable (_ profileID: UUID?) -> AsyncStream<[SportsFollowSyncRecord]> = { _ in
+        AsyncStream { $0.finish() }
+    }
+
+    public var observePresentationPreferenceChanges: @Sendable () -> AsyncStream<[HomeSectionConfig]> = {
+        AsyncStream { $0.finish() }
+    }
+
     public var performFullSync: @Sendable () async throws -> CloudSyncSummary
     public var observeRemoteChanges: @Sendable () -> AsyncStream<CloudSyncSummary> = { AsyncStream { $0.finish() } }
     public var lastSyncDate: @Sendable () -> Date? = { nil }
@@ -148,19 +236,31 @@ extension CloudSyncClient: DependencyKey {
     private nonisolated static let hiddenChannelsKey = "com.pureiptv.icloud.hiddenChannels"
     private nonisolated static let blacklistedCategoriesKey = "com.pureiptv.icloud.blacklistedCategories"
     private nonisolated static let lastSyncKey = "com.pureiptv.icloud.lastSyncTimestamp"
+    private nonisolated static let homeSectionsKeyPrefix = "com.pureiptv.icloud.homeSections.v1"
+    private nonisolated static let topShelfSelectionKey = "com.pureiptv.icloud.topShelfSelection.v1"
+    private nonisolated static let localSportsFollowsKeyPrefix = "com.pureiptv.sportsFollows.v1"
+    private nonisolated static let remoteSportsFollowsKeyPrefix = "pure.sports.v1"
+    private nonisolated static let presentationPreferenceSyncGate = PresentationPreferenceSyncGate()
+    private nonisolated static let sportsFollowSyncGate = PresentationPreferenceSyncGate()
     private nonisolated static let enabledKey = "com.pureiptv.isICloudSyncEnabled"
-    private nonisolated static let deviceIDKey = "com.pureiptv.iCloudSyncDeviceUUID"
     private nonisolated static let maxFavoritesCount = 500
     private nonisolated static let maxHiddenCount = 300
+    private nonisolated static let maxSportsFollowDocumentBytes = 256 * 1024
+    private nonisolated static let maxSportsFollowStoreBytes = 900 * 1024
+    private nonisolated static let maxICloudKeyValueStoreKeys = 1024
+
+    private nonisolated static var presentationPlatformKey: String {
+        #if os(tvOS)
+            "tvos"
+        #elseif os(iOS)
+            "ios"
+        #else
+            "other"
+        #endif
+    }
 
     private static var deviceUUID: String {
-        let defaults = UserDefaults.standard
-        if let existing = defaults.string(forKey: deviceIDKey) {
-            return existing
-        }
-        let newID = UUID().uuidString
-        defaults.set(newID, forKey: deviceIDKey)
-        return newID
+        TopShelfService.syncDeviceID
     }
 
     public static let liveValue: CloudSyncClient = {
@@ -183,11 +283,12 @@ extension CloudSyncClient: DependencyKey {
             return keys.flatMap { key in
                 guard let data = store.data(forKey: key) else { return [FavoriteSyncDTO]() }
                 return (try? JSONDecoder().decode([FavoriteSyncDTO].self, from: data)) ?? [FavoriteSyncDTO]()
-            }
+            }.filter { PlaylistCloudSyncPreference.isEnabled(for: $0.playlistID) }
         }
 
         @Sendable func pushLocalFavorites(_ favorites: [FavoriteSyncDTO]) {
-            let grouped = Dictionary(grouping: favorites.prefix(maxFavoritesCount)) { $0.profileID?.uuidString ?? "legacy" }
+            let eligibleFavorites = favorites.filter { PlaylistCloudSyncPreference.isEnabled(for: $0.playlistID) }
+            let grouped = Dictionary(grouping: eligibleFavorites.prefix(maxFavoritesCount)) { $0.profileID?.uuidString ?? "legacy" }
             for (scope, records) in grouped {
                 let key = scope == "legacy" ? favoritesKey : favoritesKey + ".profile." + scope
                 if let data = try? JSONEncoder().encode(Array(records)) {
@@ -195,6 +296,37 @@ extension CloudSyncClient: DependencyKey {
                 }
             }
             store.synchronize()
+        }
+
+        @Sendable func removeRemoteFavorites(for playlistID: UUID) {
+            guard !PlaylistCloudSyncPreference.isEnabled(for: playlistID) else { return }
+            store.synchronize()
+            guard !PlaylistCloudSyncPreference.isEnabled(for: playlistID) else { return }
+            let keys = store.dictionaryRepresentation.keys.filter {
+                $0 == favoritesKey || $0.hasPrefix(favoritesKey + ".profile.")
+            }
+            for key in keys {
+                guard let data = store.data(forKey: key),
+                      let existing = try? JSONDecoder().decode([FavoriteSyncDTO].self, from: data)
+                else { continue }
+                let retained = existing.filter { $0.playlistID != playlistID }
+                guard retained.count != existing.count else { continue }
+                if retained.isEmpty {
+                    store.removeObject(forKey: key)
+                } else if let data = try? JSONEncoder().encode(retained) {
+                    store.set(data, forKey: key)
+                }
+            }
+            store.synchronize()
+        }
+
+        @Sendable func purgeDisabledPlaylistRecords() async {
+            store.synchronize()
+            for playlistID in PlaylistCloudSyncPreference.disabledPlaylistIDs() {
+                guard !PlaylistCloudSyncPreference.isEnabled(for: playlistID) else { continue }
+                removeRemoteFavorites(for: playlistID)
+                await WatchProgressSyncClient.liveValue.removePlaylistFromSync(playlistID)
+            }
         }
 
         @Sendable func pullRemoteHiddenItems() -> [HiddenItemDTO] {
@@ -225,12 +357,325 @@ extension CloudSyncClient: DependencyKey {
             store.synchronize()
         }
 
+        @Sendable func sportsProfileScope(_ profileID: UUID?) -> String {
+            profileID?.uuidString.lowercased() ?? "legacy"
+        }
+
+        @Sendable func localSportsFollowsKey(_ profileID: UUID?) -> String {
+            Self.localSportsFollowsKeyPrefix + ".profile." + sportsProfileScope(profileID)
+        }
+
+        @Sendable func remoteSportsFollowsKey(profileID: UUID?, deviceID: String) -> String {
+            let scope = sportsProfileScope(profileID) + "|" + deviceID
+            let suffix = SHA256.hash(data: Data(scope.utf8))
+                .prefix(16)
+                .map { String(format: "%02x", $0) }
+                .joined()
+            return Self.remoteSportsFollowsKeyPrefix + "." + suffix
+        }
+
+        @Sendable func localSportsFollowRecords(profileID: UUID?) -> [SportsFollowSyncRecord] {
+            guard let data = defaults.data(forKey: localSportsFollowsKey(profileID)),
+                  let records = try? JSONDecoder().decode([SportsFollowSyncRecord].self, from: data)
+            else { return [] }
+            return records.filter { $0.isValid && $0.profileID == profileID }
+        }
+
+        @Sendable func remoteSportsFollowRecords(profileID: UUID?) -> [SportsFollowSyncRecord] {
+            store.dictionaryRepresentation.keys
+                .filter { $0.hasPrefix(Self.remoteSportsFollowsKeyPrefix + ".") }
+                .flatMap { key -> [SportsFollowSyncRecord] in
+                    guard let data = store.data(forKey: key),
+                          let records = try? JSONDecoder().decode([SportsFollowSyncRecord].self, from: data)
+                    else { return [] }
+                    return records.filter { $0.isValid && $0.profileID == profileID }
+                }
+        }
+
+        @Sendable func mergeSportsFollowRecords(
+            _ records: [SportsFollowSyncRecord],
+            profileID: UUID?
+        ) -> [SportsFollowSyncRecord] {
+            var recordsByID: [String: SportsFollowSyncRecord] = [:]
+            for record in records where record.isValid && record.profileID == profileID {
+                if let current = recordsByID[record.id] {
+                    if sportsFollowRecordWins(record, over: current) {
+                        recordsByID[record.id] = record
+                    }
+                } else {
+                    recordsByID[record.id] = record
+                }
+            }
+            return recordsByID.values.sorted { $0.id < $1.id }
+        }
+
+        @Sendable func persistLocalSportsFollowRecords(
+            _ records: [SportsFollowSyncRecord],
+            profileID: UUID?
+        ) {
+            guard let data = try? JSONEncoder().encode(records) else { return }
+            let key = localSportsFollowsKey(profileID)
+            guard defaults.data(forKey: key) != data else { return }
+            defaults.set(data, forKey: key)
+        }
+
+        @Sendable func pushRemoteSportsFollowRecords(
+            _ records: [SportsFollowSyncRecord],
+            profileID: UUID?
+        ) throws {
+            let scopedRecords = records.filter { $0.isValid && $0.profileID == profileID }
+            guard let data = try? JSONEncoder().encode(scopedRecords) else {
+                throw SportsFollowSyncError.invalidRecord
+            }
+            let key = remoteSportsFollowsKey(profileID: profileID, deviceID: deviceUUID)
+            guard data.count <= Self.maxSportsFollowDocumentBytes else {
+                throw SportsFollowSyncError.remoteStorageLimitExceeded
+            }
+            let existingValues = store.dictionaryRepresentation
+            let previousData = store.data(forKey: key)
+            guard previousData != data else { return }
+            guard previousData != nil || existingValues.count < Self.maxICloudKeyValueStoreKeys else {
+                throw SportsFollowSyncError.remoteStorageLimitExceeded
+            }
+            var projectedValues = existingValues
+            projectedValues[key] = data
+            guard let projectedData = try? PropertyListSerialization.data(
+                fromPropertyList: projectedValues,
+                format: .binary,
+                options: 0
+            ),
+                projectedData.count <= Self.maxSportsFollowStoreBytes
+            else {
+                throw SportsFollowSyncError.remoteStorageLimitExceeded
+            }
+            store.set(data, forKey: key)
+            guard store.synchronize() else {
+                if let previousData {
+                    store.set(previousData, forKey: key)
+                } else {
+                    store.removeObject(forKey: key)
+                }
+                _ = store.synchronize()
+                throw SportsFollowSyncError.remoteStoreUnavailable
+            }
+        }
+
+        @Sendable func synchronizeSportsFollows(
+            profileID: UUID?,
+            requireRemoteWrite: Bool = false
+        ) throws -> [SportsFollowSyncRecord] {
+            try Self.sportsFollowSyncGate.withLock {
+                let syncEnabled = isEnabled()
+                if syncEnabled {
+                    store.synchronize()
+                }
+                let localRecords = localSportsFollowRecords(profileID: profileID)
+                let remoteRecords = syncEnabled ? remoteSportsFollowRecords(profileID: profileID) : []
+                let merged = mergeSportsFollowRecords(localRecords + remoteRecords, profileID: profileID)
+                persistLocalSportsFollowRecords(merged, profileID: profileID)
+                if syncEnabled {
+                    if requireRemoteWrite {
+                        try pushRemoteSportsFollowRecords(merged, profileID: profileID)
+                    } else {
+                        try? pushRemoteSportsFollowRecords(merged, profileID: profileID)
+                    }
+                }
+                return merged
+            }
+        }
+
+        @Sendable func updateSportsFollow(
+            profileID: UUID?,
+            kind: SportsFollowKind,
+            displayName: String,
+            isFollowing: Bool
+        ) throws -> [SportsFollowSyncRecord] {
+            try Self.sportsFollowSyncGate.withLock {
+                let syncEnabled = isEnabled()
+                if syncEnabled {
+                    store.synchronize()
+                }
+                let localRecords = localSportsFollowRecords(profileID: profileID)
+                let remoteRecords = syncEnabled ? remoteSportsFollowRecords(profileID: profileID) : []
+                let record = SportsFollowSyncRecord(
+                    kind: kind,
+                    displayName: displayName,
+                    profileID: profileID,
+                    isFollowing: isFollowing,
+                    modifiedAt: .now,
+                    deviceID: deviceUUID
+                )
+                guard record.isValid else { throw SportsFollowSyncError.invalidRecord }
+                var mergedByID = Dictionary(
+                    uniqueKeysWithValues: mergeSportsFollowRecords(localRecords + remoteRecords, profileID: profileID)
+                        .map { ($0.id, $0) }
+                )
+                if let current = mergedByID[record.id] {
+                    if sportsFollowRecordWins(record, over: current) {
+                        mergedByID[record.id] = record
+                    }
+                } else {
+                    mergedByID[record.id] = record
+                }
+                let merged = mergedByID.values.sorted { $0.id < $1.id }
+                if syncEnabled {
+                    try pushRemoteSportsFollowRecords(merged, profileID: profileID)
+                }
+                persistLocalSportsFollowRecords(merged, profileID: profileID)
+                return merged
+            }
+        }
+
+        @Sendable func synchronizeAllSportsFollowScopes() throws {
+            let localKeys = defaults.dictionaryRepresentation().keys.filter {
+                $0.hasPrefix(Self.localSportsFollowsKeyPrefix + ".profile.")
+            }
+            var profileIDs = Set<UUID>()
+            var includesLegacyProfile = false
+            for key in localKeys {
+                let scope = String(key.dropFirst((Self.localSportsFollowsKeyPrefix + ".profile.").count))
+                if scope == "legacy" {
+                    includesLegacyProfile = true
+                } else if let profileID = UUID(uuidString: scope) {
+                    profileIDs.insert(profileID)
+                }
+            }
+            let remoteKeys = store.dictionaryRepresentation.keys.filter {
+                $0.hasPrefix(Self.remoteSportsFollowsKeyPrefix + ".")
+            }
+            for key in remoteKeys {
+                guard let data = store.data(forKey: key),
+                      let records = try? JSONDecoder().decode([SportsFollowSyncRecord].self, from: data)
+                else { continue }
+                for record in records where record.isValid {
+                    if let profileID = record.profileID {
+                        profileIDs.insert(profileID)
+                    } else {
+                        includesLegacyProfile = true
+                    }
+                }
+            }
+            if includesLegacyProfile {
+                _ = try synchronizeSportsFollows(profileID: nil, requireRemoteWrite: true)
+            }
+            for profileID in profileIDs {
+                _ = try synchronizeSportsFollows(profileID: profileID, requireRemoteWrite: true)
+            }
+        }
+
+        @Sendable func syncPresentationPreferences() async throws -> [HomeSectionConfig] {
+            try Self.presentationPreferenceSyncGate.withLock {
+                let sectionManager = HomeSectionManager.shared
+                return sectionManager.withSyncLock {
+                    guard isEnabled() else { return sectionManager.sections }
+
+                    store.synchronize()
+                    let sectionsKey = Self.homeSectionsKeyPrefix + "." + Self.presentationPlatformKey
+                    let localDeviceID = deviceUUID
+                    let localSections = sectionManager.sections
+                    let localModifiedAt = sectionManager.syncModifiedAt
+                    let localSourceDeviceID = sectionManager.syncDeviceID ?? localDeviceID
+                    let remoteSectionsData = store.data(forKey: sectionsKey)
+                    let remoteSections = remoteSectionsData.flatMap {
+                        try? JSONDecoder().decode(HomeSectionPreferenceSyncDTO.self, from: $0)
+                    }
+
+                    if remoteSectionsData == nil || remoteSections?.isSupported == true {
+                        let remoteSectionsWin = remoteSections.map { remote in
+                            guard let localModifiedAt else { return true }
+                            return preferenceSyncRecordWins(
+                                candidateDate: remote.modifiedAt,
+                                candidateDeviceID: remote.deviceID,
+                                over: localModifiedAt,
+                                currentDeviceID: localSourceDeviceID
+                            )
+                        } ?? false
+                        if let remoteSections, remoteSectionsWin {
+                            sectionManager.applySyncedSections(
+                                remoteSections.knownSections,
+                                modifiedAt: remoteSections.modifiedAt,
+                                deviceID: remoteSections.deviceID
+                            )
+                        } else {
+                            let modifiedAt = localModifiedAt ?? Date()
+                            let entries = localSections.map {
+                                HomeSectionPreferenceEntry(id: $0.type.rawValue, isVisible: $0.isVisible)
+                            }
+                            let record = HomeSectionPreferenceSyncDTO(
+                                schemaVersion: 1,
+                                sections: entries,
+                                modifiedAt: modifiedAt,
+                                deviceID: localSourceDeviceID
+                            )
+                            if let data = try? JSONEncoder().encode(record), data.count <= 8192 {
+                                store.set(data, forKey: sectionsKey)
+                                sectionManager.applySyncedSections(
+                                    localSections,
+                                    modifiedAt: modifiedAt,
+                                    deviceID: localSourceDeviceID
+                                )
+                            }
+                        }
+                    }
+
+                    #if os(tvOS)
+                        TopShelfService.shared.withContentSelectionSyncLock {
+                            let localTopShelf = TopShelfService.shared.contentSelection
+                            let localTopShelfModifiedAt = TopShelfService.shared.contentSelectionSyncModifiedAt
+                            let localTopShelfSourceDeviceID = TopShelfService.shared.contentSelectionSyncDeviceID ?? localDeviceID
+                            let remoteTopShelfData = store.data(forKey: Self.topShelfSelectionKey)
+                            let remoteTopShelf = remoteTopShelfData.flatMap {
+                                try? JSONDecoder().decode(TopShelfSelectionSyncDTO.self, from: $0)
+                            }
+                            if remoteTopShelfData == nil || remoteTopShelf?.isSupported == true {
+                                let remoteTopShelfWins = remoteTopShelf.map { remote in
+                                    guard let localTopShelfModifiedAt else { return true }
+                                    return preferenceSyncRecordWins(
+                                        candidateDate: remote.modifiedAt,
+                                        candidateDeviceID: remote.deviceID,
+                                        over: localTopShelfModifiedAt,
+                                        currentDeviceID: localTopShelfSourceDeviceID
+                                    )
+                                } ?? false
+                                if let remoteTopShelf, remoteTopShelfWins {
+                                    TopShelfService.shared.applySyncedContentSelection(
+                                        remoteTopShelf.selection,
+                                        modifiedAt: remoteTopShelf.modifiedAt,
+                                        deviceID: remoteTopShelf.deviceID
+                                    )
+                                } else {
+                                    let modifiedAt = localTopShelfModifiedAt ?? Date()
+                                    let record = TopShelfSelectionSyncDTO(
+                                        schemaVersion: 1,
+                                        selection: localTopShelf,
+                                        modifiedAt: modifiedAt,
+                                        deviceID: localTopShelfSourceDeviceID
+                                    )
+                                    if let data = try? JSONEncoder().encode(record), data.count <= 8192 {
+                                        store.set(data, forKey: Self.topShelfSelectionKey)
+                                        TopShelfService.shared.applySyncedContentSelection(
+                                            localTopShelf,
+                                            modifiedAt: modifiedAt,
+                                            deviceID: localTopShelfSourceDeviceID
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    #endif
+
+                    store.synchronize()
+                    return sectionManager.sections
+                }
+            }
+        }
+
         @Sendable func mergeRemoteFavoritesIntoDatabase(remote: [FavoriteSyncDTO], modelContainer: ModelContainer) async throws -> Int {
             guard !remote.isEmpty else { return 0 }
             let context = ModelContext(modelContainer)
             var merged = 0
 
-            for dto in remote {
+            for dto in remote where PlaylistCloudSyncPreference.isEnabled(for: dto.playlistID) {
                 let id = dto.id
                 let type = dto.type
                 let profileID = dto.profileID
@@ -331,6 +776,7 @@ extension CloudSyncClient: DependencyKey {
         }
 
         @Sendable func fullSync() async throws -> CloudSyncSummary {
+            await purgeDisabledPlaylistRecords()
             guard isEnabled() else {
                 return CloudSyncSummary(
                     favoritesCount: 0,
@@ -354,6 +800,7 @@ extension CloudSyncClient: DependencyKey {
             // 2. Read all local favorites and push union to cloud
             let context = ModelContext(modelContainer)
             let localFavorites = try context.fetch(FetchDescriptor<FavoriteItem>())
+                .filter { PlaylistCloudSyncPreference.isEnabled(for: $0.playlistID) }
             func identity(_ dto: FavoriteSyncDTO) -> String {
                 "\(dto.profileID?.uuidString ?? "legacy")|\(dto.type)|\(dto.playlistID?.uuidString ?? "")|\(dto.id)"
             }
@@ -415,6 +862,11 @@ extension CloudSyncClient: DependencyKey {
             // 5. Watch Progress Sync
             let watchMerged = try await WatchProgressSyncClient.liveValue.pullAndMergeRemoteChanges()
 
+            // Sports follows contain normalized identities only, with no playlist or provider data.
+            try synchronizeAllSportsFollowScopes()
+
+            _ = try await syncPresentationPreferences()
+
             let now = Date()
             defaults.set(now.timeIntervalSince1970, forKey: lastSyncKey)
             store.set(now.timeIntervalSince1970, forKey: lastSyncKey)
@@ -436,18 +888,28 @@ extension CloudSyncClient: DependencyKey {
             return summary
         }
 
-        return CloudSyncClient(
+        let client = CloudSyncClient(
             isSyncEnabled: {
                 isEnabled()
             },
             setSyncEnabled: { enabled in
                 defaults.set(enabled, forKey: enabledKey)
             },
+            isPlaylistSyncEnabled: { playlistID in
+                PlaylistCloudSyncPreference.isEnabled(for: playlistID)
+            },
+            setPlaylistSyncEnabled: { playlistID, enabled in
+                guard PlaylistCloudSyncPreference.isEnabled(for: playlistID) == enabled,
+                      !enabled
+                else { return }
+                await purgeDisabledPlaylistRecords()
+            },
             syncFavorites: { favorites in
                 guard isEnabled() else { return }
                 pushLocalFavorites(favorites)
             },
             pullFavorites: {
+                await purgeDisabledPlaylistRecords()
                 guard isEnabled() else { return [] }
                 return pullRemoteFavorites()
             },
@@ -459,6 +921,63 @@ extension CloudSyncClient: DependencyKey {
                 guard isEnabled() else { return [] }
                 return pullRemoteHiddenItems()
             },
+            syncPresentationPreferences: {
+                try await syncPresentationPreferences()
+            },
+            loadSportsFollows: { profileID in
+                try synchronizeSportsFollows(profileID: profileID)
+            },
+            setSportsFollow: { profileID, kind, displayName, isFollowing in
+                try updateSportsFollow(
+                    profileID: profileID,
+                    kind: kind,
+                    displayName: displayName,
+                    isFollowing: isFollowing
+                )
+            },
+            observeSportsFollows: { profileID in
+                AsyncStream { continuation in
+                    let observer = NotificationCenter.default.addObserver(
+                        forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+                        object: store,
+                        queue: .main
+                    ) { notification in
+                        if let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String],
+                           !changedKeys.contains(where: { $0.hasPrefix(Self.remoteSportsFollowsKeyPrefix + ".") })
+                        {
+                            return
+                        }
+                        Task {
+                            guard isEnabled() else { return }
+                            let records = (try? synchronizeSportsFollows(profileID: profileID))
+                                ?? localSportsFollowRecords(profileID: profileID)
+                            continuation.yield(records)
+                        }
+                    }
+                    continuation.onTermination = { @Sendable _ in
+                        NotificationCenter.default.removeObserver(observer)
+                    }
+                }
+            },
+            observePresentationPreferenceChanges: {
+                AsyncStream { continuation in
+                    let observer = NotificationCenter.default.addObserver(
+                        forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+                        object: store,
+                        queue: .main
+                    ) { _ in
+                        Task {
+                            if let sections = try? await syncPresentationPreferences() {
+                                continuation.yield(sections)
+                            }
+                        }
+                    }
+
+                    continuation.onTermination = { @Sendable _ in
+                        NotificationCenter.default.removeObserver(observer)
+                    }
+                }
+            },
             performFullSync: {
                 try await fullSync()
             },
@@ -469,8 +988,9 @@ extension CloudSyncClient: DependencyKey {
                         object: store,
                         queue: .main
                     ) { _ in
-                        guard isEnabled() else { return }
                         Task {
+                            await purgeDisabledPlaylistRecords()
+                            guard isEnabled() else { return }
                             if let summary = try? await fullSync() {
                                 continuation.yield(summary)
                             }
@@ -495,6 +1015,25 @@ extension CloudSyncClient: DependencyKey {
                 return .idle
             }
         )
+
+        // Purge records on every device when an iCloud playlist opt-out arrives,
+        // including when global sync is disabled or Settings is not observing.
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: store,
+            queue: nil
+        ) { notification in
+            if let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String],
+               !changedKeys.contains(where: PlaylistCloudSyncPreference.isPreferenceKey)
+            {
+                return
+            }
+            Task.detached(priority: .utility) {
+                await purgeDisabledPlaylistRecords()
+            }
+        }
+
+        return client
     }()
 
     public static let testValue: CloudSyncClient = .init()

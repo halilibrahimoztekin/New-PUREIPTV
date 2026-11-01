@@ -17,6 +17,7 @@ public struct AppCoordinator {
         static let epgReminderMonitor = "AppCoordinator.epgReminderMonitor"
         static let playlistTransferLoad = "AppCoordinator.playlistTransferLoad"
         static let playlistTransferSubmission = "AppCoordinator.playlistTransferSubmission"
+        static let topShelfDeepLinkResolution = "AppCoordinator.topShelfDeepLinkResolution"
     }
 
     public enum PlayerDisplayMode: Equatable, Sendable {
@@ -47,6 +48,7 @@ public struct AppCoordinator {
         public var isSubmittingPlaylistTransfer = false
         public var isLoadingPlaylistTransfer = false
         public var playlistTransferError: String?
+        public var topShelfDeepLinkRequestID: UUID?
 
         public static var initialState: State {
             State(routes: [.root(.splash(SplashFeature.State()), withNavigation: true)])
@@ -84,6 +86,11 @@ public struct AppCoordinator {
         case checkSubscriptionStatus
         case subscriptionStatusResponse(TaskResult<RevenueCat.CustomerInfo>)
         case handleDeepLink(URL)
+        case topShelfItemResolved(
+            requestID: UUID,
+            profileScope: ProfileContextSnapshot,
+            playable: PlayerFeature.PlayableItem?
+        )
         case selectPlaylistForTransfer(sessionID: UUID, presentationID: UUID, playlistID: UUID)
         case playlistTransferPlaylistsLoaded(sessionID: UUID, presentationID: UUID, playlists: [SavedPlaylist]?)
         case confirmPlaylistTransfer(sessionID: UUID, presentationID: UUID)
@@ -242,12 +249,16 @@ public struct AppCoordinator {
     }
 
     @Injected(\.playlistRepository) var playlistRepository
+    @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.profileContextClient) var profileContextClient
     @Dependency(\.parentalControlClient) var parentalControlClient
+    @Dependency(\.playlistContentSourceClient) var playlistContentSourceClient
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.reminderClient) var reminderClient
     @Dependency(\.previewPlayerClient) var previewPlayerClient
     @Dependency(\.purchases) var purchases
+    @Injected(\.playerClient) var playerClient
 
     public init() {}
 
@@ -285,7 +296,7 @@ public struct AppCoordinator {
         // ── Proceed To App ───────────────────────────────────────
         case .proceedToApp:
             let activePlaylist: SavedPlaylist?
-            switch playlistRepository.readActivePlaylist() {
+            switch playlistRepository.readStartupPlaylist() {
             case let .loaded(playlist):
                 activePlaylist = playlist
                 state.isStartupPlaylistReadFailed = false
@@ -352,13 +363,13 @@ public struct AppCoordinator {
 
         case let .profileAddProfileRouteDidDisappear(presentationID, profileSelectionRouteIndex):
             guard !state.routes.contains(where: { route in
-                      guard case let .profileAddProfile(routeState) = route.screen else { return false }
-                      return routeState.presentationID == presentationID
-                          || routeState.profileSelectionRouteIndex == profileSelectionRouteIndex
-                  }),
-                  state.routes.indices.contains(profileSelectionRouteIndex),
-                  case let .profileSelection(profileState) = state.routes[profileSelectionRouteIndex].screen,
-                  profileState.showingAddProfile
+                guard case let .profileAddProfile(routeState) = route.screen else { return false }
+                return routeState.presentationID == presentationID
+                    || routeState.profileSelectionRouteIndex == profileSelectionRouteIndex
+            }),
+                state.routes.indices.contains(profileSelectionRouteIndex),
+                case let .profileSelection(profileState) = state.routes[profileSelectionRouteIndex].screen,
+                profileState.showingAddProfile
             else { return .none }
 
             return .send(.router(.routeAction(
@@ -367,6 +378,7 @@ public struct AppCoordinator {
             )))
 
         case .router(.routeAction(_, .profileSelection(.delegate(.didSelectProfile)))):
+            ThemeManager.shared.activateProfileTheme(profileID: profileContextClient.snapshot().profileID)
             guard case let .loaded(activePlaylist) = playlistRepository.readActivePlaylist() else {
                 state.isStartupPlaylistReadFailed = true
                 return .none
@@ -374,7 +386,7 @@ public struct AppCoordinator {
             guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
 
             withAnimation(.easeInOut(duration: 0.35)) {
-                state.routes = [.root(.home(HomeFeature.State(config: config)), withNavigation: true)]
+                state.routes = [.root(.home(makeHomeState(config: config, unlockedPlaylistIDs: state.unlockedPlaylistIDs)), withNavigation: true)]
             }
             return .send(.checkSubscriptionStatus)
 
@@ -387,19 +399,24 @@ public struct AppCoordinator {
                 return .none
             }
             guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
-            state.routes = [.root(.home(HomeFeature.State(config: config)), withNavigation: true)]
+            state.routes = [.root(.home(makeHomeState(config: config, unlockedPlaylistIDs: state.unlockedPlaylistIDs)), withNavigation: true)]
             return .send(.checkSubscriptionStatus)
 
         case let .router(.routeAction(_, .playlistManagement(.delegate(.didChangePlaylistLock(id, isLocked))))):
             state.unlockedPlaylistIDs.remove(id)
-            guard isLocked, playlistRepository.getActivePlaylistID() == id else { return .none }
-            state.miniPlayer = nil
-            state.isPlayerMini = false
-            state.routes = [.root(
-                .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: id)),
-                withNavigation: true
-            )]
-            return .none
+            if isLocked, playlistRepository.getActivePlaylistID() == id {
+                state.miniPlayer = nil
+                state.isPlayerMini = false
+                state.routes = [.root(
+                    .playlistManagement(PlaylistManagementFeature.State(startupUnlockPlaylistID: id)),
+                    withNavigation: true
+                )]
+                return .none
+            }
+            return contentSourceConfigsUpdateEffect(
+                state: state,
+                profileContext: profileContextClient.snapshot()
+            )
 
         case let .router(.routeAction(_, .playlistManagement(.delegate(.didUnlockStartupPlaylist(id))))):
             state.unlockedPlaylistIDs.insert(id)
@@ -477,6 +494,7 @@ public struct AppCoordinator {
                             title: request.title,
                             streamURL: url,
                             coverURL: item.displayLogoURL,
+                            fallbackCoverURL: item.coverURL,
                             isLive: true,
                             config: config,
                             epgChannelID: item.epgChannelID,
@@ -485,7 +503,7 @@ public struct AppCoordinator {
                         )
                     }
                 case .vod:
-                    let item = try? await iptvClient.resolveVODItem(config, request.itemID, request.categoryID)
+                    let item = try? await iptvClient.resolveVODItem(config, request.itemID, request.categoryID, nil)
                     playable = item.flatMap { item in
                         guard let url = item.streamURL else { return nil }
                         return PlayerFeature.PlayableItem(
@@ -590,7 +608,8 @@ public struct AppCoordinator {
             state.handledEPGReminderIDs.insert(reminder.id)
             let playable = PlayerFeature.PlayableItem(
                 id: channel.id, title: channel.title, streamURL: streamURL,
-                coverURL: channel.displayLogoURL, isLive: true, config: activeConfig,
+                coverURL: channel.displayLogoURL, fallbackCoverURL: channel.coverURL,
+                isLive: true, config: activeConfig,
                 epgChannelID: channel.epgChannelID, tvArchive: channel.tvArchive,
                 categoryID: channel.categoryID
             )
@@ -617,21 +636,41 @@ public struct AppCoordinator {
                 await previewPlayerClient.stopPreviewOwned(ownerID)
             }
 
-        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.playChannel(channel))))):
+        case let .router(.routeAction(routeIndex, .epgGuide(.delegate(.playChannel(
+            channel,
+            focusChannelID: focusChannelID,
+            presentationID: presentationID
+        ))))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
                   case let .epgGuide(guideState) = state.routes[routeIndex].screen,
+                  guideState.presentationID == presentationID,
                   let playerState = makeLivePlayerState(
                       channel: channel,
                       playlist: guideState.channels,
                       config: guideState.config
                   )
-            else { return .none }
+            else {
+                return .run { [playerClient, presentationID] _ in
+                    await MainActor.run {
+                        playerClient.discardPreviewPromotionOwned(presentationID)
+                    }
+                }
+            }
             state.routes.dismiss()
             state.isPlayerMini = false
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
-            return .none
+            guard let homeRouteIndex = state.routes.lastIndex(where: { route in
+                if case .home = route.screen {
+                    return true
+                }
+                return false
+            }) else { return .none }
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.liveTV(.restoreChannelFocus(channelID: focusChannelID)))
+            )))
 
         case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.presentProgramDetails(
             timelinePresentationID: timelinePresentationID,
@@ -729,16 +768,23 @@ public struct AppCoordinator {
                 await previewPlayerClient.stopPreviewOwned(ownerID)
             }
 
-        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.playChannel(channel))))):
+        case let .router(.routeAction(routeIndex, .epgTimeline(.delegate(.playChannel(channel, presentationID))))):
             guard state.routes.indices.contains(routeIndex),
                   routeIndex == state.routes.count - 1,
                   case let .epgTimeline(timelineState) = state.routes[routeIndex].screen,
+                  timelineState.presentationID == presentationID,
                   let playerState = makeLivePlayerState(
                       channel: channel,
                       playlist: timelineState.channels,
                       config: timelineState.config
                   )
-            else { return .none }
+            else {
+                return .run { [playerClient, presentationID] _ in
+                    await MainActor.run {
+                        playerClient.discardPreviewPromotionOwned(presentationID)
+                    }
+                }
+            }
             state.routes.dismiss()
             state.isPlayerMini = false
             state.miniPlayer = nil
@@ -1031,7 +1077,9 @@ public struct AppCoordinator {
                   managementState.pinPresentationRequestID == requestID,
                   managementState.pinFlow == flow
             else { return .none }
-            if case .startup = flow { return .none }
+            if case .startup = flow {
+                return .none
+            }
             return .send(.router(.routeAction(
                 id: playlistManagementRouteIndex,
                 action: .playlistManagement(.cancelPlaylistPIN)
@@ -1927,14 +1975,20 @@ public struct AppCoordinator {
             case let .vod(homeRouteIndex):
                 guard state.routes.indices.contains(homeRouteIndex),
                       case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                      homeState.selectedTab == .movies,
                       homeState.vod.config == categoryState.config,
                       categoryState.type == .vod
                 else { return .none }
-                return .send(.router(.routeAction(
+                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
                     id: homeRouteIndex,
-                    action: .home(.vod(.reloadPreferences))
+                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
                 )))
+                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
+                    ? .send(.router(.routeAction(
+                        id: homeRouteIndex,
+                        action: .home(.vod(.reloadPreferences))
+                    )))
+                    : .none
+                return .merge(dashboardRefresh, vodRefresh)
 
             case let .series(homeRouteIndex):
                 guard state.routes.indices.contains(homeRouteIndex),
@@ -1952,6 +2006,58 @@ public struct AppCoordinator {
                 return forwardLiveTVAction(.categoryPreferencesUpdated, state: state)
             }
 
+        case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.categoryNameRulesUpdated)))):
+            guard state.routes.indices.contains(categoryRouteIndex),
+                  case let .categoryManagement(categoryState) = state.routes[categoryRouteIndex].screen
+            else { return .none }
+
+            switch categoryState.parent {
+            case let .liveTV(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .liveTV,
+                      homeState.liveTV.config == categoryState.config,
+                      categoryState.type == .live
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.liveTV(.reloadCategories(config: categoryState.config)))
+                )))
+
+            case let .vod(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.vod.config == categoryState.config,
+                      categoryState.type == .vod
+                else { return .none }
+                let dashboardRefresh = Effect<Action>.send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.dashboard(.movieCategoryPoliciesUpdated))
+                )))
+                let vodRefresh: Effect<Action> = homeState.selectedTab == .movies
+                    ? .send(.router(.routeAction(
+                        id: homeRouteIndex,
+                        action: .home(.vod(.reloadCategories(config: categoryState.config)))
+                    )))
+                    : .none
+                return .merge(dashboardRefresh, vodRefresh)
+
+            case let .series(homeRouteIndex):
+                guard state.routes.indices.contains(homeRouteIndex),
+                      case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                      homeState.selectedTab == .series,
+                      homeState.series.config == categoryState.config,
+                      categoryState.type == .series
+                else { return .none }
+                return .send(.router(.routeAction(
+                    id: homeRouteIndex,
+                    action: .home(.series(.reloadCategories(config: categoryState.config)))
+                )))
+
+            case nil:
+                return .none
+            }
+
         case let .router(.routeAction(categoryRouteIndex, .categoryManagement(.delegate(.m3uMappingsUpdated)))):
             guard state.routes.indices.contains(categoryRouteIndex),
                   categoryRouteIndex == state.routes.count - 1,
@@ -1963,12 +2069,14 @@ public struct AppCoordinator {
 
             guard let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
                 guard routeIndex < categoryRouteIndex else { return false }
-                if case .home = state.routes[routeIndex].screen { return true }
+                if case .home = state.routes[routeIndex].screen {
+                    return true
+                }
                 return false
             }),
-            case let .home(homeState) = state.routes[homeRouteIndex].screen,
-            homeState.liveTV.config?.type == .m3u,
-            homeState.liveTV.config?.playlistID == playlistID
+                case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                homeState.liveTV.config?.type == .m3u,
+                homeState.liveTV.config?.playlistID == playlistID
             else { return .none }
             return .send(.router(.routeAction(
                 id: homeRouteIndex,
@@ -1981,7 +2089,13 @@ public struct AppCoordinator {
                   case let .parentalLock(parentalLockState) = state.routes[routeIndex].screen,
                   parentalLockState.presentationID == presentationID
             else { return .none }
+            let pendingCategoryID = parentalLockState.parent == nil
+                ? parentalLockState.pendingCategory?.id
+                : nil
             state.routes.dismiss()
+            if let pendingCategoryID {
+                return forwardLiveTVAction(.cancelPendingEPGGuide(categoryID: pendingCategoryID), state: state)
+            }
             return .none
 
         case let .router(.routeAction(routeIndex, .parentalLock(.delegate(.didUnlockFromRoute(presentationID, category, item))))):
@@ -2048,6 +2162,24 @@ public struct AppCoordinator {
             )))
             return .none
 
+        case let .router(.routeAction(homeRouteIndex, .home(.delegate(.presentHiddenMediaManagement)))):
+            guard state.routes.indices.contains(homeRouteIndex),
+                  homeRouteIndex == state.routes.count - 1,
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
+                  homeState.selectedTab == .settings
+            else { return .none }
+            state.routes.presentCover(.hiddenMediaManagement(HiddenMediaManagementRouteFeature.State()))
+            return .none
+
+        case let .router(.routeAction(routeIndex, .hiddenMediaManagement(.delegate(.close(presentationID))))):
+            guard state.routes.indices.contains(routeIndex),
+                  routeIndex == state.routes.count - 1,
+                  case let .hiddenMediaManagement(routeState) = state.routes[routeIndex].screen,
+                  routeState.presentationID == presentationID
+            else { return .none }
+            state.routes.dismiss()
+            return .none
+
         case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.close(presentationID))))):
             guard state.routes.indices.contains(searchRouteIndex),
                   searchRouteIndex == state.routes.count - 1,
@@ -2066,8 +2198,8 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.dismiss()
             return .send(.router(.routeAction(
-                searchState.homeRouteIndex,
-                .home(.delegate(.didSelectChannel(channel, playlist: playlist)))
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectChannel(channel, playlist: playlist)))
             )))
 
         case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectVOD(vod))))):
@@ -2079,8 +2211,8 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.dismiss()
             return .send(.router(.routeAction(
-                searchState.homeRouteIndex,
-                .home(.delegate(.didSelectVOD(vod)))
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectVOD(vod)))
             )))
 
         case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectSeries(series))))):
@@ -2092,13 +2224,29 @@ public struct AppCoordinator {
             else { return .none }
             state.routes.dismiss()
             return .send(.router(.routeAction(
-                searchState.homeRouteIndex,
-                .home(.delegate(.didSelectSeries(series)))
+                id: searchState.homeRouteIndex,
+                action: .home(.delegate(.didSelectSeries(series)))
             )))
 
         case let .router(.routeAction(_, .home(.delegate(.didSelectChannel(channel, playlist))))):
-            guard let config = state.activeConfig else { return .none }
-            guard let playerState = makeLivePlayerState(channel: channel, playlist: playlist, config: config) else { return .none }
+            let config: PlaylistConfig
+            if let sourcePlaylistID = channel.playlistID,
+               state.activeConfig?.playlistID != sourcePlaylistID
+            {
+                guard let savedPlaylist = playlistRepository.getPlaylists().first(where: { $0.id == sourcePlaylistID }),
+                      let savedConfig = savedPlaylist.toPlaylistConfig()
+                else { return .none }
+                config = savedConfig
+            } else {
+                guard let activeConfig = state.activeConfig else { return .none }
+                config = activeConfig
+            }
+            let belongsToSelectedPlaylist = channel.playlistID == nil || channel.playlistID == config.playlistID
+            guard let playerState = makeLivePlayerState(
+                channel: channel,
+                playlist: belongsToSelectedPlaylist ? playlist : nil,
+                config: config
+            ) else { return .none }
             state.isPlayerMini = false
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
@@ -2407,7 +2555,9 @@ public struct AppCoordinator {
                   categoryState.config.type == .m3u,
                   let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
                       guard routeIndex < categoryRouteIndex else { return false }
-                      if case .home = state.routes[routeIndex].screen { return true }
+                      if case .home = state.routes[routeIndex].screen {
+                          return true
+                      }
                       return false
                   }),
                   case let .home(homeState) = state.routes[homeRouteIndex].screen,
@@ -2571,11 +2721,11 @@ public struct AppCoordinator {
             let parentRouteIndex = state.routes.indices.last(where: { index in
                 switch (parent, state.routes[index].screen) {
                 case let (.vod(itemID), .vodDetail(vodState)):
-                    return vodState.vod.id == itemID
+                    vodState.vod.id == itemID
                 case let (.series(itemID), .seriesDetail(seriesState)):
-                    return seriesState.series.id == itemID
+                    seriesState.series.id == itemID
                 default:
-                    return false
+                    false
                 }
             })
             guard let parentRouteIndex, parentRouteIndex == state.routes.count - 1 else { return .none }
@@ -2602,7 +2752,7 @@ public struct AppCoordinator {
             if !state.isPremium {
                 return .send(.presentPaywall)
             }
-            guard let config = state.activeConfig else { return .none }
+            guard let config = detailConfig(for: vod, activeConfig: state.activeConfig) else { return .none }
             state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
             return .none
 
@@ -2610,18 +2760,23 @@ public struct AppCoordinator {
             if !state.isPremium {
                 return .send(.presentPaywall)
             }
-            guard let config = state.activeConfig else { return .none }
+            guard let config = detailConfig(for: series, activeConfig: state.activeConfig) else { return .none }
             state.routes.push(.seriesDetail(SeriesDetailFeature.State(series: series, config: config)))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.playHistoryItem(item))))):
             return playHistoryItem(item, state: &state, forceRestart: false)
 
+        case let .router(.routeAction(_, .home(.delegate(.playOfflineMedia(item, episodeQueue))))):
+            return playOfflineMedia(item, episodeQueue: episodeQueue, state: &state)
+
         case let .router(.routeAction(_, .home(.delegate(.restartHistoryItem(item))))):
             return playHistoryItem(item, state: &state, forceRestart: true)
 
         case .router(.routeAction(_, .home(.delegate(.openManagePlaylists)))):
-            state.routes.push(.playlistManagement(PlaylistManagementFeature.State()))
+            state.routes.push(.playlistManagement(PlaylistManagementFeature.State(
+                unlockedPlaylistIDs: state.unlockedPlaylistIDs
+            )))
             return .none
 
         case .router(.routeAction(_, .home(.delegate(.switchProfile)))):
@@ -2695,11 +2850,14 @@ public struct AppCoordinator {
             state.routes.presentCover(.player(playerState))
             return .none
 
-        case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectVOD(vod))))):
+        case let .router(.routeAction(detailRouteIndex, .vodDetail(.delegate(.didSelectVOD(vod))))):
             if !state.isPremium {
                 return .send(.presentPaywall)
             }
-            guard let config = state.activeConfig else { return .none }
+            guard state.routes.indices.contains(detailRouteIndex),
+                  case let .vodDetail(detailState) = state.routes[detailRouteIndex].screen
+            else { return .none }
+            let config = detailState.config
             state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
             return .none
 
@@ -2862,6 +3020,34 @@ public struct AppCoordinator {
             ))
             return .none
 
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didChangeContentPlaylistSources(profileContext))))):
+            return contentSourceConfigsUpdateEffect(state: state, profileContext: profileContext)
+
+        case let .router(.routeAction(_, .playlistManagement(.delegate(.didUpdatePlaylistSettings(playlist, profileContext))))):
+            let currentProfileContext = profileContextClient.snapshot()
+            guard currentProfileContext == profileContext,
+                  playlist.toPlaylistConfig() != nil,
+                  let homeRouteIndex = state.routes.indices.last(where: { routeIndex in
+                      guard case .home = state.routes[routeIndex].screen else { return false }
+                      return true
+                  }),
+                  case let .home(homeState) = state.routes[homeRouteIndex].screen
+            else { return .none }
+            let selection = playlistContentSourceClient.load(currentProfileContext.profileID)
+            let isAssigned = PlaylistContentArea.allCases.contains {
+                selection.playlistID(for: $0) == playlist.id
+            }
+            guard isAssigned else { return .none }
+            let configs = contentSourceConfigs(
+                baseConfig: homeState.config,
+                profileID: profileContext.profileID,
+                unlockedPlaylistIDs: state.unlockedPlaylistIDs
+            )
+            return .send(.router(.routeAction(
+                id: homeRouteIndex,
+                action: .home(.contentSourceConfigsUpdated(configs))
+            )))
+
         case .router(.routeAction(_, .playlistManagement(.delegate(.didChangeActivePlaylist)))):
             state.miniPlayer = nil
             state.isPlayerMini = false
@@ -2881,7 +3067,11 @@ public struct AppCoordinator {
                 if let activePlaylist = playlistRepository.getActivePlaylist(),
                    let config = activePlaylist.toPlaylistConfig()
                 {
-                    state.routes = [.root(.home(HomeFeature.State(config: config, deferDashboardRefresh: true)), withNavigation: true)]
+                    state.routes = [.root(.home(makeHomeState(
+                        config: config,
+                        deferDashboardRefresh: true,
+                        unlockedPlaylistIDs: state.unlockedPlaylistIDs
+                    )), withNavigation: true)]
                 } else {
                     state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
                 }
@@ -2899,7 +3089,10 @@ public struct AppCoordinator {
                     || homeState.config.password != config.password
                     || homeState.config.m3uURL != config.m3uURL
                 if connectionChanged {
-                    var refreshedHome = HomeFeature.State(config: config)
+                    var refreshedHome = makeHomeState(
+                        config: config,
+                        unlockedPlaylistIDs: state.unlockedPlaylistIDs
+                    )
                     refreshedHome.selectedTab = homeState.selectedTab
                     state.miniPlayer = nil
                     state.isPlayerMini = false
@@ -2909,20 +3102,21 @@ public struct AppCoordinator {
                     return .none
                 }
             }
+            var contentSourceUpdates: [Effect<Action>] = []
+            let currentProfileID = profileContextClient.snapshot().profileID
+            let sourceConfigs = contentSourceConfigs(
+                baseConfig: config,
+                profileID: currentProfileID,
+                unlockedPlaylistIDs: state.unlockedPlaylistIDs
+            )
             for index in state.routes.indices {
                 guard case var .home(homeState) = state.routes[index].screen else { continue }
+                let startupRefreshPreferenceChanged = homeState.config.automaticallyRefreshCatalogOnStartup
+                    != config.automaticallyRefreshCatalogOnStartup
                 homeState.config = config
-                homeState.liveTV.config = config
-                homeState.liveTV.channelsByCategory = homeState.liveTV.channelsByCategory.mapValues { items in
-                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
-                }
-                homeState.vod.config = config
-                homeState.vod.vodsByCategory = homeState.vod.vodsByCategory.mapValues { items in
-                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
-                }
-                homeState.series.config = config
-                homeState.series.seriesByCategory = homeState.series.seriesByCategory.mapValues { items in
-                    items.map { $0.replacingUserAgentOverride(config.userAgentOverride) }
+                homeState.dashboard.activePlaylistConfig = config
+                if startupRefreshPreferenceChanged {
+                    homeState.dashboard.deferInitialRemoteRefresh = !config.automaticallyRefreshCatalogOnStartup
                 }
                 homeState.dashboard.featuredChannels = homeState.dashboard.featuredChannels.map {
                     $0.replacingUserAgentOverride(config.userAgentOverride)
@@ -2937,6 +3131,10 @@ public struct AppCoordinator {
                     $0.replacingUserAgentOverride(config.userAgentOverride)
                 }
                 state.routes[index].screen = .home(homeState)
+                contentSourceUpdates.append(.send(.router(.routeAction(
+                    id: index,
+                    action: .home(.contentSourceConfigsUpdated(sourceConfigs))
+                ))))
             }
             if let miniPlayer = state.miniPlayer {
                 var updated = miniPlayer
@@ -2963,7 +3161,7 @@ public struct AppCoordinator {
                 updated.epgBrowseChannel = playerState.epgBrowseChannel?.replacingPlaylistConfig(config)
                 state.routes[index].screen = .player(updated)
             }
-            return .none
+            return .merge(contentSourceUpdates)
 
         case .router(.routeAction(_, .playlistManagement(.delegate(.addPlaylistDidConnect)))):
             withAnimation(.easeInOut(duration: 0.35)) {
@@ -3006,16 +3204,41 @@ public struct AppCoordinator {
                   !playerState.isMinimized,
                   !playerState.isClosing
             else { return .none }
+            let item = playerState.item
+            let seriesTitle = item.seriesTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isEpisode = item.seriesID != nil || seriesTitle != nil
+            let titleCoordinates: (season: Int, episode: Int)? = {
+                let pattern = #"(?i)\bS(\d{1,3})\s*E(\d{1,3})\b"#
+                guard let expression = try? NSRegularExpression(pattern: pattern),
+                      let match = expression.firstMatch(in: item.title, range: NSRange(item.title.startIndex..., in: item.title)),
+                      let seasonRange = Range(match.range(at: 1), in: item.title),
+                      let episodeRange = Range(match.range(at: 2), in: item.title),
+                      let season = Int(item.title[seasonRange]),
+                      let episode = Int(item.title[episodeRange])
+                else { return nil }
+                return (season, episode)
+            }()
+            let inferredTitle = item.title.replacingOccurrences(
+                of: #"(?i)\s*[-–:]?\s*S\d{1,3}\s*E\d{1,3}\s*$"#,
+                with: "",
+                options: .regularExpression
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            let searchTitle = seriesTitle.flatMap { $0.isEmpty ? nil : $0 }
+                ?? (isEpisode && !inferredTitle.isEmpty ? inferredTitle : item.title)
             state.routes.presentSheet(.playerSubtitleSearch(
                 PlayerSubtitleSearchRouteFeature.State(
                     playerRouteIndex: playerRouteIndex,
                     requestID: requestID,
                     itemID: playerState.item.id,
                     playbackRequestID: playerState.playbackRequestID,
-                    itemTitle: [playerState.item.seriesTitle, playerState.item.title]
+                    itemTitle: [item.seriesTitle, item.title]
                         .compactMap(\.self)
                         .filter { !$0.isEmpty }
-                        .joined(separator: " ")
+                        .joined(separator: " "),
+                    searchTitle: searchTitle,
+                    contentType: isEpisode ? .episode : .movie,
+                    seasonNumber: item.seasonNumber ?? titleCoordinates?.season,
+                    episodeNumber: item.episodeNumber ?? titleCoordinates?.episode
                 )
             ))
             return .none
@@ -3085,14 +3308,13 @@ public struct AppCoordinator {
         case let .router(.routeAction(playerRouteIndex, .player(.delegate(.didClose)))):
             state.miniPlayer = nil
             state.isPlayerMini = false
-            let playerOverlayRouteIndex: Int?
-            switch state.routes.last?.screen {
+            let playerOverlayRouteIndex: Int? = switch state.routes.last?.screen {
             case let .some(.playerSpeedTest(routeState)):
-                playerOverlayRouteIndex = routeState.playerRouteIndex
+                routeState.playerRouteIndex
             case let .some(.playerSubtitleSearch(routeState)):
-                playerOverlayRouteIndex = routeState.playerRouteIndex
+                routeState.playerRouteIndex
             default:
-                playerOverlayRouteIndex = nil
+                nil
             }
             if playerOverlayRouteIndex == playerRouteIndex,
                state.routes.indices.contains(playerRouteIndex),
@@ -3119,14 +3341,13 @@ public struct AppCoordinator {
             miniPlayerState.subtitleSearchPresentationRequestID = nil
             state.miniPlayer = miniPlayerState
             state.isPlayerMini = true
-            let playerOverlayRouteIndex: Int?
-            switch state.routes.last?.screen {
+            let playerOverlayRouteIndex: Int? = switch state.routes.last?.screen {
             case let .some(.playerSpeedTest(routeState)):
-                playerOverlayRouteIndex = routeState.playerRouteIndex
+                routeState.playerRouteIndex
             case let .some(.playerSubtitleSearch(routeState)):
-                playerOverlayRouteIndex = routeState.playerRouteIndex
+                routeState.playerRouteIndex
             default:
-                playerOverlayRouteIndex = nil
+                nil
             }
             if playerOverlayRouteIndex == playerRouteIndex {
                 state.routes.dismiss()
@@ -3222,6 +3443,7 @@ public struct AppCoordinator {
 
         // ── Deep Linking ─────────────────────────────────────────
         case let .handleDeepLink(url):
+            state.topShelfDeepLinkRequestID = nil
             guard url.scheme == "pureiptv" else { return .none }
             guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return .none }
             let queryItems = components.queryItems ?? []
@@ -3278,7 +3500,103 @@ public struct AppCoordinator {
                     .cancellable(id: CancelID.playlistTransferLoad, cancelInFlight: true)
                 )
             }
-            guard let host = components.host, host == "play" || host == "channel" else { return .none }
+            guard let host = components.host else { return .none }
+            if host == "topshelf" {
+                guard let id = queryItems.first(where: { $0.name == "id" })?.value,
+                      let type = queryItems.first(where: { $0.name == "type" })?.value
+                else { return .none }
+
+                let requestedPlaylistID = queryItems.first(where: { $0.name == "playlistID" })?.value.flatMap { UUID(uuidString: $0) }
+                let config: PlaylistConfig?
+                if let playlistIDValue = queryItems.first(where: { $0.name == "playlistID" })?.value {
+                    guard let playlistID = UUID(uuidString: playlistIDValue),
+                          let playlist = playlistRepository.getPlaylists().first(where: { $0.id == playlistID })
+                    else { return .none }
+                    config = playlist.toPlaylistConfig()
+                } else {
+                    config = state.activeConfig
+                }
+                guard let config else { return .none }
+
+                let profileScope = profileContextClient.snapshot()
+                if let profileIDValue = queryItems.first(where: { $0.name == "profileID" })?.value {
+                    guard UUID(uuidString: profileIDValue) == profileScope.profileID else { return .none }
+                }
+
+                let requestID = UUID()
+                state.topShelfDeepLinkRequestID = requestID
+                let startPosition = queryItems.first(where: { $0.name == "startPosition" })?.value
+                    .flatMap { Double($0) }
+                    .flatMap { $0.isFinite ? min(1, max(0, $0)) : nil }
+
+                return .run { send in
+                    let playable: PlayerFeature.PlayableItem?
+                    if type == "live" {
+                        let resolved = try? await iptvClient.resolveLiveItem(config, id, nil)
+                        playable = resolved.flatMap { item in
+                            guard let streamURL = item.streamURL else { return nil }
+                            return PlayerFeature.PlayableItem(
+                                id: item.id,
+                                title: item.title,
+                                streamURL: streamURL,
+                                coverURL: item.displayLogoURL,
+                                fallbackCoverURL: item.coverURL,
+                                isLive: true,
+                                config: config,
+                                epgChannelID: item.epgChannelID,
+                                tvArchive: item.tvArchive,
+                                categoryID: item.categoryID
+                            )
+                        }
+                    } else if let progress = try? await databaseClient.getWatchProgress(
+                        id,
+                        type,
+                        requestedPlaylistID,
+                        profileScope
+                    ), progress.removedAt == nil,
+                    let streamURL = progress.streamURL.flatMap({ URL(string: $0) }) {
+                        let resumePosition = progress.duration > 0 && progress.duration.isFinite && progress.progress.isFinite
+                            ? min(1, max(0, progress.progress / progress.duration))
+                            : startPosition
+                        playable = PlayerFeature.PlayableItem(
+                            id: progress.id,
+                            title: progress.title,
+                            seriesTitle: progress.seriesTitle,
+                            streamURL: streamURL,
+                            coverURL: progress.coverURL.flatMap { URL(string: $0) },
+                            seriesID: progress.seriesID,
+                            startPosition: resumePosition,
+                            initialDuration: progress.duration > 0 && progress.duration.isFinite ? progress.duration : nil,
+                            initialProgress: progress.progress.isFinite ? progress.progress : nil,
+                            config: config
+                        )
+                    } else if type == "vod" {
+                        let resolved = try? await iptvClient.resolveVODItem(config, id, nil, nil)
+                        playable = resolved.flatMap { item in
+                            guard let streamURL = item.streamURL else { return nil }
+                            return PlayerFeature.PlayableItem(
+                                id: item.id,
+                                title: item.title,
+                                streamURL: streamURL,
+                                coverURL: item.displayLogoURL,
+                                startPosition: startPosition,
+                                config: config,
+                                categoryID: item.categoryID
+                            )
+                        }
+                    } else {
+                        playable = nil
+                    }
+                    await send(.topShelfItemResolved(
+                        requestID: requestID,
+                        profileScope: profileScope,
+                        playable: playable
+                    ))
+                }
+                .cancellable(id: CancelID.topShelfDeepLinkResolution, cancelInFlight: true)
+            }
+
+            guard host == "play" || host == "channel" else { return .none }
             guard let id = queryItems.first(where: { $0.name == "id" })?.value,
                   let streamURLStr = queryItems.first(where: { $0.name == "streamURL" })?.value,
                   let streamURL = URL(string: streamURLStr)
@@ -3312,6 +3630,15 @@ public struct AppCoordinator {
             state.isPlayerMini = false
             state.miniPlayer = nil
             state.routes.presentCover(.player(playerState))
+            return .none
+
+        case let .topShelfItemResolved(requestID, profileScope, playable):
+            guard state.topShelfDeepLinkRequestID == requestID else { return .none }
+            state.topShelfDeepLinkRequestID = nil
+            guard profileContextClient.snapshot() == profileScope, let playable else { return .none }
+            state.isPlayerMini = false
+            state.miniPlayer = nil
+            state.routes.presentCover(.player(PlayerFeature.State(item: playable)))
             return .none
 
         case let .selectPlaylistForTransfer(sessionID, presentationID, playlistID):
@@ -3418,6 +3745,84 @@ public struct AppCoordinator {
         )))
     }
 
+    private func detailConfig(for item: MediaModels.Item, activeConfig: PlaylistConfig?) -> PlaylistConfig? {
+        guard let sourcePlaylistID = item.playlistID else { return activeConfig }
+        if let activeConfig, activeConfig.playlistID == sourcePlaylistID {
+            return activeConfig
+        }
+        guard let playlist = playlistRepository.getPlaylists().first(where: { $0.id == sourcePlaylistID }) else {
+            return nil
+        }
+        return playlist.toPlaylistConfig()
+    }
+
+    private func contentSourceConfigs(
+        baseConfig: PlaylistConfig,
+        profileID: UUID?,
+        unlockedPlaylistIDs: Set<UUID>
+    ) -> PlaylistContentSourceConfigs {
+        let selection = playlistContentSourceClient.load(profileID)
+        let playlistsByID = Dictionary(uniqueKeysWithValues: playlistRepository.getPlaylists().map { ($0.id, $0) })
+
+        func resolve(_ area: PlaylistContentArea) -> PlaylistConfig {
+            guard let playlistID = selection.playlistID(for: area),
+                  let playlist = playlistsByID[playlistID],
+                  !parentalControlClient.isPlaylistLocked(playlistID) || unlockedPlaylistIDs.contains(playlistID),
+                  let config = playlist.toPlaylistConfig()
+            else { return baseConfig }
+            return config
+        }
+
+        return PlaylistContentSourceConfigs(
+            liveTV: resolve(.liveTV),
+            movies: resolve(.movies),
+            series: resolve(.series)
+        )
+    }
+
+    private func makeHomeState(
+        config: PlaylistConfig,
+        deferDashboardRefresh: Bool = false,
+        unlockedPlaylistIDs: Set<UUID>
+    ) -> HomeFeature.State {
+        let profileID = profileContextClient.snapshot().profileID
+        let contentSourceConfigs = contentSourceConfigs(
+            baseConfig: config,
+            profileID: profileID,
+            unlockedPlaylistIDs: unlockedPlaylistIDs
+        )
+        return HomeFeature.State(
+            config: config,
+            deferDashboardRefresh: deferDashboardRefresh,
+            contentSourceConfigs: contentSourceConfigs
+        )
+    }
+
+    private func contentSourceConfigsUpdateEffect(
+        state: State,
+        profileContext: ProfileContextSnapshot
+    ) -> Effect<Action> {
+        guard profileContextClient.snapshot() == profileContext,
+              let homeRouteIndex = state.routes.lastIndex(where: { route in
+                  if case .home = route.screen {
+                      return true
+                  }
+                  return false
+              }),
+              case let .home(homeState) = state.routes[homeRouteIndex].screen
+        else { return .none }
+
+        let configs = contentSourceConfigs(
+            baseConfig: homeState.config,
+            profileID: profileContext.profileID,
+            unlockedPlaylistIDs: state.unlockedPlaylistIDs
+        )
+        return .send(.router(.routeAction(
+            id: homeRouteIndex,
+            action: .home(.contentSourceConfigsUpdated(configs))
+        )))
+    }
+
     private func makeLivePlayerState(
         channel: MediaModels.Item,
         playlist: [MediaModels.Item]?,
@@ -3431,6 +3836,7 @@ public struct AppCoordinator {
                 title: item.title,
                 streamURL: itemStreamURL,
                 coverURL: item.displayLogoURL,
+                fallbackCoverURL: item.coverURL,
                 seriesID: nil,
                 startPosition: nil,
                 isLive: true,
@@ -3444,6 +3850,7 @@ public struct AppCoordinator {
             title: channel.title,
             streamURL: streamURL,
             coverURL: channel.displayLogoURL,
+            fallbackCoverURL: channel.coverURL,
             seriesID: nil,
             startPosition: nil,
             isLive: true,
@@ -3452,6 +3859,64 @@ public struct AppCoordinator {
             categoryID: channel.categoryID
         )
         return PlayerFeature.State(item: playable, playlist: playablePlaylist)
+    }
+
+    private func playOfflineMedia(
+        _ item: OfflineMediaSnapshot,
+        episodeQueue: [OfflineMediaSnapshot],
+        state: inout State
+    ) -> Effect<Action> {
+        guard state.isPremium else { return .send(.presentPaywall) }
+        guard let activeConfig = state.activeConfig else { return .none }
+
+        let metadata = item.episodeMetadata
+        let config: PlaylistConfig = if let playlistID = metadata?.playlistID,
+                                        activeConfig.playlistID != playlistID,
+                                        let savedPlaylist = playlistRepository.getPlaylists().first(where: { $0.id == playlistID }),
+                                        let savedConfig = savedPlaylist.toPlaylistConfig()
+        {
+            savedConfig
+        } else {
+            activeConfig
+        }
+
+        func playableItem(for media: OfflineMediaSnapshot) -> PlayerFeature.PlayableItem {
+            let episode = media.episodeMetadata
+            return PlayerFeature.PlayableItem(
+                id: media.id,
+                title: media.title,
+                seriesTitle: episode?.seriesTitle,
+                streamURL: URL(fileURLWithPath: media.localFilePath),
+                coverURL: media.coverURL.flatMap(URL.init(string:)),
+                seriesID: episode?.seriesID,
+                episodeOrdinal: episode?.episodeOrdinal,
+                isLive: false,
+                config: config,
+                userAgentOverride: media.userAgentOverride
+            )
+        }
+
+        let matchingEpisodeQueue: [PlayerFeature.PlayableItem] = if let metadata,
+                                                                    let playlistID = metadata.playlistID
+        {
+            episodeQueue.filter { candidate in
+                guard candidate.isAvailable,
+                      let candidateMetadata = candidate.episodeMetadata
+                else { return false }
+                return candidateMetadata.seriesID == metadata.seriesID && candidateMetadata.playlistID == playlistID
+            }.map(playableItem(for:))
+        } else {
+            []
+        }
+
+        let playerState = PlayerFeature.State(
+            item: playableItem(for: item),
+            playlist: matchingEpisodeQueue.isEmpty ? nil : matchingEpisodeQueue
+        )
+        state.isPlayerMini = false
+        state.miniPlayer = nil
+        state.routes.presentCover(.player(playerState))
+        return .none
     }
 
     private func playHistoryItem(_ item: WatchHistoryItem, state: inout State, forceRestart: Bool = false) -> Effect<Action> {
@@ -3568,6 +4033,8 @@ public struct AppCoordinatorView: View {
                 HomeView(store: store)
             case let .globalSearch(screenStore):
                 GlobalSearchRouteView(routeStore: screenStore)
+            case let .hiddenMediaManagement(screenStore):
+                HiddenMediaManagementRouteView(routeStore: screenStore)
             case let .player(store):
                 PlayerView(store: store)
             case let .epgGuide(screenStore):
@@ -3945,7 +4412,7 @@ public struct AppCoordinatorView: View {
                 }
                 .disabled(isDeletionInProgress)
                 #if os(iOS)
-                .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
+                    .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
                 #endif
                 Button(AppStrings.Common.cancel, role: .cancel) {
                     performConfirmationDialogButtonAction {
@@ -3960,7 +4427,7 @@ public struct AppCoordinatorView: View {
                 }
                 .disabled(isDeletionInProgress)
                 #if os(iOS)
-                .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
+                    .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
                 #endif
                 Button(AppStrings.Common.cancel, role: .cancel) {
                     performConfirmationDialogButtonAction {
@@ -4123,53 +4590,53 @@ public struct AppCoordinatorView: View {
     }
 
     #if os(iOS)
-    private var backupImportPickerContext: (routeIndex: Int, requestID: UUID)? {
-        guard let routeIndex = store.routes.indices.last,
-              case let .home(state) = store.routes[routeIndex].screen,
-              state.selectedTab == .settings,
-              let requestID = state.settings.backupImportPickerRequestID
-        else { return nil }
-        return (routeIndex, requestID)
-    }
+        private var backupImportPickerContext: (routeIndex: Int, requestID: UUID)? {
+            guard let routeIndex = store.routes.indices.last,
+                  case let .home(state) = store.routes[routeIndex].screen,
+                  state.selectedTab == .settings,
+                  let requestID = state.settings.backupImportPickerRequestID
+            else { return nil }
+            return (routeIndex, requestID)
+        }
 
-    private var backupImportFileImporterIsPresented: Binding<Bool> {
-        Binding(
-            get: {
-                guard let context = backupImportPickerContext,
-                      case let .home(state) = store.routes[context.routeIndex].screen
-                else { return false }
-                return state.settings.isImportingBackup
-            },
-            set: { isPresented in
-                guard !isPresented, let context = backupImportPickerContext else { return }
+        private var backupImportFileImporterIsPresented: Binding<Bool> {
+            Binding(
+                get: {
+                    guard let context = backupImportPickerContext,
+                          case let .home(state) = store.routes[context.routeIndex].screen
+                    else { return false }
+                    return state.settings.isImportingBackup
+                },
+                set: { isPresented in
+                    guard !isPresented, let context = backupImportPickerContext else { return }
+                    sendSettingsAlertAction(
+                        .backupImportPickerDismissed(requestID: context.requestID),
+                        routeIndex: context.routeIndex
+                    )
+                }
+            )
+        }
+
+        private func handleBackupImport(
+            _ result: Result<[URL], Error>,
+            context: (routeIndex: Int, requestID: UUID)
+        ) {
+            switch result {
+            case let .failure(error):
                 sendSettingsAlertAction(
-                    .backupImportPickerDismissed(requestID: context.requestID),
+                    .backupImportPickerFailed(
+                        requestID: context.requestID,
+                        message: "Yedek dosyası açılamadı: \(error.localizedDescription)"
+                    ),
+                    routeIndex: context.routeIndex
+                )
+            case let .success(urls):
+                sendSettingsAlertAction(
+                    .backupImportFilesSelected(requestID: context.requestID, urls: urls),
                     routeIndex: context.routeIndex
                 )
             }
-        )
-    }
-
-    private func handleBackupImport(
-        _ result: Result<[URL], Error>,
-        context: (routeIndex: Int, requestID: UUID)
-    ) {
-        switch result {
-        case let .failure(error):
-            sendSettingsAlertAction(
-                .backupImportPickerFailed(
-                    requestID: context.requestID,
-                    message: "Yedek dosyası açılamadı: \(error.localizedDescription)"
-                ),
-                routeIndex: context.routeIndex
-            )
-        case let .success(urls):
-            sendSettingsAlertAction(
-                .backupImportFilesSelected(requestID: context.requestID, urls: urls),
-                routeIndex: context.routeIndex
-            )
         }
-    }
     #endif
 
     private var rootAlertIsPresented: Binding<Bool> {
@@ -4213,24 +4680,24 @@ public struct AppCoordinatorView: View {
 
     private var playlistDeletionContext: (routeIndex: Int, playlist: SavedPlaylist)? {
         guard let routeIndex = store.routes.indices.last(where: { index in
-                  guard case let .playlistManagement(state) = store.routes[index].screen else { return false }
-                  return state.startupUnlockPlaylistID == nil && state.playlistToDelete != nil
-              }),
-              case let .playlistManagement(state) = store.routes[routeIndex].screen,
-              let playlist = state.playlistToDelete
+            guard case let .playlistManagement(state) = store.routes[index].screen else { return false }
+            return state.startupUnlockPlaylistID == nil && state.playlistToDelete != nil
+        }),
+            case let .playlistManagement(state) = store.routes[routeIndex].screen,
+            let playlist = state.playlistToDelete
         else { return nil }
         return (routeIndex, playlist)
     }
 
     private var hideSelectedChannelsContext: (routeIndex: Int, selectedCount: Int)? {
         guard let routeIndex = store.routes.indices.last(where: { index in
-                  guard case let .home(state) = store.routes[index].screen else { return false }
-                  return state.selectedTab == .liveTV
-                      && state.liveTV.isChannelSelectionMode
-                      && state.liveTV.isConfirmingHideSelectedChannels
-                      && !state.liveTV.selectedCurrentChannelIDs.isEmpty
-              }),
-              case let .home(state) = store.routes[routeIndex].screen
+            guard case let .home(state) = store.routes[index].screen else { return false }
+            return state.selectedTab == .liveTV
+                && state.liveTV.isChannelSelectionMode
+                && state.liveTV.isConfirmingHideSelectedChannels
+                && !state.liveTV.selectedCurrentChannelIDs.isEmpty
+        }),
+            case let .home(state) = store.routes[routeIndex].screen
         else { return nil }
         return (routeIndex, state.liveTV.selectedCurrentChannelIDs.count)
     }
@@ -4385,7 +4852,6 @@ private struct SmartChannelGroupManagementRouteView: View {
     @Bindable var coordinatorStore: StoreOf<AppCoordinator>
     let routeStore: StoreOf<SmartChannelGroupManagementRouteFeature>
 
-    @ViewBuilder
     var body: some View {
         if coordinatorStore.routes.indices.contains(routeStore.homeRouteIndex),
            case let .home(homeState) = coordinatorStore.routes[routeStore.homeRouteIndex].screen
@@ -4405,8 +4871,6 @@ private struct SmartChannelGroupManagementRouteView: View {
                     routeStore.send(.closeTapped)
                 }
             )
-        } else {
-            EmptyView()
         }
     }
 
@@ -4433,7 +4897,7 @@ private struct FavoriteChannelListManagementRouteView: View {
                     onDismiss: { routeStore.send(.closeTapped) }
                 )
                 #if os(tvOS)
-                    .onExitCommand { routeStore.send(.closeTapped) }
+                .onExitCommand { routeStore.send(.closeTapped) }
                 #endif
             }
         }
@@ -4512,7 +4976,7 @@ private struct AddPlaylistQRTransferRouteView: View {
                     onPaired: { routeStore.send(.paired) }
                 )
                 #if os(tvOS)
-                    .onExitCommand { routeStore.send(.closeTapped) }
+                .onExitCommand { routeStore.send(.closeTapped) }
                 #endif
             }
         }
@@ -4578,6 +5042,11 @@ private struct ChannelPresentationEditorRouteView: View {
                     channelTitle: routeStore.channel.title,
                     currentName: override?.name,
                     currentNumber: override?.number,
+                    isIncludedInRecentChannels: !liveTVState.excludedRecentChannelIDs.contains(routeStore.channel.id),
+                    isRecentChannelPreferenceLoaded: liveTVState.recentChannelExclusionsLoaded
+                        && liveTVState.recentChannelExclusionPlaylistID == routeStore.playlistID
+                        && liveTVState.recentChannelExclusionProfileScope == routeStore.profileScope
+                        && liveTVState.pendingRecentChannelExclusionMutations[routeStore.channel.id] == nil,
                     onSave: { name, number in
                         sendToLiveTV(.saveChannelPresentationOverride(
                             channelID: routeStore.channel.id,
@@ -4587,12 +5056,18 @@ private struct ChannelPresentationEditorRouteView: View {
                             profileScope: routeStore.profileScope
                         ))
                     },
+                    onToggleRecentChannelInclusion: { isIncluded in
+                        sendToLiveTV(.setRecentChannelExcluded(
+                            channelID: routeStore.channel.id,
+                            isExcluded: !isIncluded,
+                            playlistID: routeStore.playlistID,
+                            profileScope: routeStore.profileScope
+                        ))
+                    },
                     onClose: {
                         routeStore.send(.closeTapped)
                     }
                 )
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)
@@ -4672,8 +5147,6 @@ private struct ProfileAddProfileRouteView: View {
                         ))
                     }
                 )
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)
@@ -4753,11 +5226,9 @@ private struct EPGTimelineProgramDetailRouteView: View {
             if isCurrentContext {
                 EPGTimelineView(store: timelineStore)
                     .programDetailSheet(program: routeStore.program, channel: routeStore.channel)
-                    #if os(tvOS)
+                #if os(tvOS)
                     .onExitCommand { routeStore.send(.closeTapped) }
-                    #endif
-            } else {
-                EmptyView()
+                #endif
             }
         }
         .onAppear(perform: closeIfContextChanged)
@@ -4843,15 +5314,15 @@ private struct EPGTimelineChannelLogoEditorRouteView: View {
                     onClose: close
                 )
                 #if os(tvOS)
-                    .onExitCommand(perform: close)
+                .onExitCommand(perform: close)
                 #endif
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)
         .onChange(of: isCurrentContext) { _, isCurrent in
-            if !isCurrent { close() }
+            if !isCurrent {
+                close()
+            }
         }
         .onDisappear(perform: notifyRouteDidDisappear)
     }
@@ -4908,8 +5379,6 @@ private struct MultiViewChannelSelectionRouteView: View {
                     onDismiss: { routeStore.send(.closeTapped) }
                 )
                 .presentationDetents([.medium, .large])
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)
@@ -4988,8 +5457,6 @@ private struct MultiViewChannelSelectionRouteView: View {
                         },
                         onCancel: { routeStore.send(.cancelTapped) }
                     )
-                } else {
-                    EmptyView()
                 }
             }
             .onAppear(perform: closeIfStale)
@@ -5046,10 +5513,8 @@ private struct PlaylistManagementSettingsRouteView: View {
                         }
                 }
                 #if os(tvOS)
-                    .onExitCommand { routeStore.send(.closeTapped) }
+                .onExitCommand { routeStore.send(.closeTapped) }
                 #endif
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)
@@ -5128,8 +5593,6 @@ private struct PlaylistManagementPINRouteView: View {
                         }
                     }
                 #endif
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfStale)
@@ -5194,11 +5657,11 @@ private struct PlaylistManagementAddPlaylistRouteView: View {
             if isCurrentPresentation {
                 NavigationStack {
                     AddPlaylistView(store: addPlaylistStore)
-                        #if os(tvOS)
-                            .onExitCommand {
-                                routeStore.send(.closeTapped)
-                            }
-                        #endif
+                    #if os(tvOS)
+                        .onExitCommand {
+                            routeStore.send(.closeTapped)
+                        }
+                    #endif
                 }
             }
         }
@@ -5340,6 +5803,10 @@ private struct PlayerSubtitleSearchRouteView: View {
             if isCurrentPresentation {
                 OpenSubtitlesSearchView(
                     itemTitle: routeStore.itemTitle,
+                    searchTitle: routeStore.searchTitle,
+                    contentType: routeStore.contentType,
+                    seasonNumber: routeStore.seasonNumber,
+                    episodeNumber: routeStore.episodeNumber,
                     onSubtitleDownloaded: { url in
                         guard isCurrentPresentation, isRouteActive else { return }
                         coordinatorStore.send(.router(.routeAction(
@@ -5421,7 +5888,7 @@ private struct SettingsSpeedTestRouteView: View {
                     routeStore.send(.closeTapped)
                 }
                 #if os(iOS)
-                    .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large])
                 #endif
             }
         }
@@ -5478,9 +5945,9 @@ private struct SettingsPINSetupRouteView: View {
         Group {
             if isCurrentPresentation {
                 PINSetupView(store: settingsStore)
-                    #if os(iOS)
+                #if os(iOS)
                     .presentationDetents([.height(300)])
-                    #endif
+                #endif
             }
         }
         .onAppear(perform: closeIfStale)
@@ -5956,9 +6423,9 @@ private struct SettingsBackupPreviewRouteView: View {
 private struct DetailSynopsisRouteView: View {
     @Bindable var coordinatorStore: StoreOf<AppCoordinator>
     let routeStore: StoreOf<DetailSynopsisRouteFeature>
-#if os(tvOS)
-    @FocusState private var isSynopsisTextFocused: Bool
-#endif
+    #if os(tvOS)
+        @FocusState private var isSynopsisTextFocused: Bool
+    #endif
 
     var body: some View {
         Group {
@@ -6023,15 +6490,15 @@ private struct DetailSynopsisRouteView: View {
             let limit = text.index(segmentStart, offsetBy: maximumSegmentLength, limitedBy: text.endIndex)
                 ?? text.endIndex
             guard limit < text.endIndex else {
-                segments.append(String(text[segmentStart..<text.endIndex]))
+                segments.append(String(text[segmentStart ..< text.endIndex]))
                 break
             }
 
-            let candidate = text[segmentStart..<limit]
+            let candidate = text[segmentStart ..< limit]
             let segmentEnd = candidate.lastIndex(where: \.isWhitespace)
                 .map { text.index(after: $0) }
                 ?? limit
-            segments.append(String(text[segmentStart..<segmentEnd]))
+            segments.append(String(text[segmentStart ..< segmentEnd]))
             segmentStart = segmentEnd
         }
 
@@ -6214,9 +6681,9 @@ private struct DetailTrailerRouteView: View {
     private var isCurrentParent: Bool {
         switch routeStore.parent {
         case .vod:
-            return vodState?.trailerVideoKey != nil
+            vodState?.trailerVideoKey != nil
         case .series:
-            return seriesState?.trailerVideoKey != nil
+            seriesState?.trailerVideoKey != nil
         }
     }
 
@@ -6378,9 +6845,9 @@ private struct DetailTMDBMatchPickerRouteView: View {
     private var isCurrentPresentation: Bool {
         switch routeStore.parent {
         case .vod:
-            return vodState?.isTMDBMatchPickerPresented == true
+            vodState?.isTMDBMatchPickerPresented == true
         case .series:
-            return seriesState?.isTMDBMatchPickerPresented == true
+            seriesState?.isTMDBMatchPickerPresented == true
         }
     }
 
@@ -6645,15 +7112,13 @@ private struct DashboardPresentationRouteView: View {
                         onClose: close
                     )
 
-                case let .epgChannelPicker(_, _, _):
+                case .epgChannelPicker:
                     DashboardEPGChannelPicker(
                         channels: homeState.dashboard.epgCandidateChannels,
                         onSelect: { routeStore.send(.selectEPGChannel($0)) },
                         onCancel: close
                     )
                 }
-            } else {
-                EmptyView()
             }
         }
         .onAppear(perform: closeIfContextChanged)

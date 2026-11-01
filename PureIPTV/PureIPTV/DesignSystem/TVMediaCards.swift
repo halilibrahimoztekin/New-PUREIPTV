@@ -2,6 +2,74 @@
     import Kingfisher
     import SwiftUI
 
+    @MainActor
+    final class TVPosterPrefetchController {
+        private var pendingTask: Task<Void, Never>?
+        private var prefetcher: ImagePrefetcher?
+
+        func schedule(focusedID: String?, items: [MediaModels.Item]) {
+            cancel()
+
+            guard let focusedID,
+                  let focusedIndex = items.firstIndex(where: { $0.id == focusedID })
+            else { return }
+
+            let neighborIndices = [focusedIndex - 1, focusedIndex + 1]
+                .filter { items.indices.contains($0) }
+            let neighbors = neighborIndices.compactMap { index -> MediaModels.Item? in
+                let item = items[index]
+                return item.coverURL == nil ? nil : item
+            }
+            guard let requestContext = neighbors.first else { return }
+
+            var seenCacheKeys = Set<String>()
+            let resources = neighbors.compactMap { item -> Kingfisher.ImageResource? in
+                guard let posterURL = item.coverURL else { return nil }
+                let cacheKey = PlaylistArtworkRequest.cacheKey(
+                    for: posterURL,
+                    userAgentOverride: item.userAgentOverride,
+                    playlistID: item.playlistID
+                )
+                guard seenCacheKeys.insert(cacheKey).inserted else { return nil }
+                return Kingfisher.ImageResource(downloadURL: posterURL, cacheKey: cacheKey)
+            }
+            guard !resources.isEmpty else { return }
+
+            let requestModifier = AnyModifier { request in
+                var request = request
+                PlaylistArtworkRequest.applyHeaders(
+                    to: &request,
+                    userAgentOverride: requestContext.userAgentOverride,
+                    playlistID: requestContext.playlistID
+                )
+                return request
+            }
+            let options: KingfisherOptionsInfo = [
+                .processor(DownsamplingImageProcessor(size: CGSize(width: 300, height: 450))),
+                .cacheOriginalImage,
+                .downloadPriority(0.2),
+                .requestModifier(requestModifier),
+            ]
+
+            pendingTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !Task.isCancelled else { return }
+
+                let prefetcher = ImagePrefetcher(resources: resources, options: options)
+                prefetcher.maxConcurrentDownloads = 2
+                self?.prefetcher = prefetcher
+                prefetcher.start()
+            }
+        }
+
+        func cancel() {
+            pendingTask?.cancel()
+            pendingTask = nil
+            prefetcher?.stop()
+            prefetcher = nil
+        }
+    }
+
     // MARK: - TV Channel Parallax Card (16:9)
 
     public struct TVChannelCard: View {
@@ -9,6 +77,7 @@
         public let isSelected: Bool
         public let presentationName: String?
         public let presentationNumber: Int?
+        public let sequenceNumber: Int?
         public let action: () -> Void
 
         @Environment(\.isFocused) private var isFocused
@@ -19,12 +88,14 @@
             isSelected: Bool = false,
             presentationName: String? = nil,
             presentationNumber: Int? = nil,
+            sequenceNumber: Int? = nil,
             action: @escaping () -> Void
         ) {
             self.channel = channel
             self.isSelected = isSelected
             self.presentationName = presentationName
             self.presentationNumber = presentationNumber
+            self.sequenceNumber = sequenceNumber
             self.action = action
         }
 
@@ -51,21 +122,23 @@
                     // Katman 3: Öne fırlayan Parallax Logo & Bilgiler
                     ZStack(alignment: .bottomLeading) {
                         if let logoURL = channel.displayLogoURL {
-                            KFImage.url(logoURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: logoURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID))
-                                .requestModifier { request in
-                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID)
-                                }
-                                .placeholder {
+                            PlaylistAsyncImage(
+                                url: logoURL,
+                                fallbackURL: channel.coverURL,
+                                userAgentOverride: channel.userAgentOverride,
+                                playlistID: channel.playlistID,
+                                downsamplingSize: CGSize(width: 240, height: 160)
+                            ) { phase in
+                                if let image = phase.image {
+                                    image.resizable().aspectRatio(contentMode: .fit)
+                                } else {
                                     Image(systemName: "tv.fill")
                                         .font(.system(size: 34))
                                         .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
                                 }
-                                .downsampling(size: CGSize(width: 240, height: 160))
-                                .cacheOriginalImage()
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: 110, maxHeight: 72)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .frame(maxWidth: 110, maxHeight: 72)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             Image(systemName: "tv.fill")
                                 .font(.system(size: 34))
@@ -94,11 +167,28 @@
                         .padding(.horizontal, 14)
                         .padding(.bottom, 12)
                     }
+                    .overlay(alignment: .topLeading) {
+                        if let sequenceNumber {
+                            Text("#\(sequenceNumber)")
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.black.opacity(0.72), in: Capsule())
+                                .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                                .padding(10)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 }
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel([presentationNumber.map(String.init), presentationName ?? channel.title].compactMap(\.self).joined(separator: ", "))
+            .accessibilityLabel([
+                sequenceNumber.map { "\(AppStrings.LiveTV.channelNumber) \($0)" },
+                presentationNumber.map(String.init),
+                presentationName ?? channel.title,
+            ].compactMap(\.self).joined(separator: ", "))
         }
     }
 
@@ -146,6 +236,8 @@
                                 }
                                 .downsampling(size: CGSize(width: 300, height: 450))
                                 .cacheOriginalImage()
+                                .downloadPriority(isFocused ? 1.0 : 0.35)
+                                .cancelOnDisappear(true)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                         } else {
@@ -256,6 +348,8 @@
                                 }
                                 .downsampling(size: CGSize(width: 300, height: 450))
                                 .cacheOriginalImage()
+                                .downloadPriority(isFocused ? 1.0 : 0.35)
+                                .cancelOnDisappear(true)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                         } else {

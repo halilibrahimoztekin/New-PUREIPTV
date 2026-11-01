@@ -33,6 +33,9 @@ public struct AddPlaylistFeature {
 
         // UI state
         public var isLoading: Bool = false
+        public var isCheckingCompatibility = false
+        public var compatibilityCheckRequestID: UUID?
+        public var compatibilityReport: PlaylistHealthReport?
         public var errorMessage: String?
         public var isPasswordVisible: Bool = false
         public var qrTransferFocusRequestID: UUID?
@@ -55,6 +58,10 @@ public struct AddPlaylistFeature {
             }
         }
 
+        public var supportsCompatibilityCheck: Bool {
+            playlistType == .xtream || playlistType == .m3u
+        }
+
         public init() {}
     }
 
@@ -67,6 +74,8 @@ public struct AddPlaylistFeature {
 
         case binding(BindingAction<State>)
         case playlistTypeChanged(PlaylistType)
+        case checkCompatibilityTapped
+        case compatibilityCheckCompleted(requestID: UUID, report: PlaylistHealthReport)
         case connectTapped
         case qrTransferTapped
         case qrTransferRouteDidDismiss(UUID)
@@ -97,6 +106,7 @@ public struct AddPlaylistFeature {
     @Dependency(\.mediaServerClient) var mediaServerClient
     @Dependency(\.hapticClient) var hapticClient
     @Dependency(\.continuousClock) var clock
+    @Dependency(\.playlistHealthClient) var playlistHealthClient
 
     public init() {}
 
@@ -105,6 +115,7 @@ public struct AddPlaylistFeature {
         let playlistRepository = playlistRepository
         let mediaServerClient = mediaServerClient
         let clock = clock
+        let playlistHealthClient = playlistHealthClient
 
         BindingReducer()
 
@@ -141,10 +152,13 @@ public struct AddPlaylistFeature {
                 if let url = state.detectedClipboardURL {
                     state.m3uURL = url
                     state.playlistType = .m3u
+                    state.compatibilityReport = nil
+                    state.compatibilityCheckRequestID = nil
+                    state.isCheckingCompatibility = false
                     state.isShowingClipboardBanner = false
                     state.detectedClipboardURL = nil
                 }
-                return .none
+                return .cancel(id: "AddPlaylistFeature.compatibilityCheck")
 
             case .dismissClipboardBanner:
                 state.isShowingClipboardBanner = false
@@ -154,19 +168,26 @@ public struct AddPlaylistFeature {
             case .binding:
                 // Clear error on any field change
                 state.errorMessage = nil
-                return .none
+                state.compatibilityReport = nil
+                state.compatibilityCheckRequestID = nil
+                state.isCheckingCompatibility = false
+                return .cancel(id: "AddPlaylistFeature.compatibilityCheck")
 
             case let .playlistTypeChanged(type):
                 state.playlistType = type
                 state.errorMessage = nil
                 state.isLoading = false
+                state.isCheckingCompatibility = false
+                state.compatibilityCheckRequestID = nil
+                state.compatibilityReport = nil
                 state.plexPIN = nil
                 state.plexAccountToken = nil
                 state.discoveredPlexServers = []
                 state.selectedPlexServerID = nil
                 return .merge(
                     .cancel(id: "AddPlaylistFeature.plexPinPolling"),
-                    .cancel(id: "AddPlaylistFeature.authentication")
+                    .cancel(id: "AddPlaylistFeature.authentication"),
+                    .cancel(id: "AddPlaylistFeature.compatibilityCheck")
                 )
 
             case .togglePasswordVisibility:
@@ -180,8 +201,60 @@ public struct AddPlaylistFeature {
                 state.qrTransferFocusRequestID = presentationID
                 return .none
 
+            case .checkCompatibilityTapped:
+                guard state.supportsCompatibilityCheck,
+                      state.canConnect,
+                      !state.isLoading,
+                      !state.isCheckingCompatibility else { return .none }
+                let requestID = UUID()
+                let config: PlaylistConfig
+                switch state.playlistType {
+                case .xtream:
+                    let rawURL = state.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let username = state.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                    config = PlaylistConfig(
+                        type: .xtream,
+                        serverURL: URL(string: rawURL),
+                        username: username,
+                        password: state.password
+                    )
+                case .m3u:
+                    let rawURL = state.m3uURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    config = PlaylistConfig(type: .m3u, m3uURL: URL(string: rawURL))
+                case .plex, .emby:
+                    return .none
+                }
+                state.compatibilityReport = nil
+                state.compatibilityCheckRequestID = requestID
+                state.isCheckingCompatibility = true
+                return .run { [playlistHealthClient] send in
+                    do {
+                        let report = try await playlistHealthClient.inspect(config)
+                        await send(.compatibilityCheckCompleted(requestID: requestID, report: report))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        let report = PlaylistHealthReport(
+                            playlistType: config.type,
+                            checks: PlaylistHealthCheckKind.allCases.map { kind in
+                                .init(kind: kind, status: .notChecked(.invalidResponse))
+                            }
+                        )
+                        await send(.compatibilityCheckCompleted(requestID: requestID, report: report))
+                    }
+                }
+                .cancellable(id: "AddPlaylistFeature.compatibilityCheck", cancelInFlight: true)
+
+            case let .compatibilityCheckCompleted(requestID, report):
+                guard state.compatibilityCheckRequestID == requestID,
+                      state.playlistType == report.playlistType else { return .none }
+                state.isCheckingCompatibility = false
+                state.compatibilityCheckRequestID = nil
+                state.compatibilityReport = report
+                return .none
+
             case .connectTapped:
-                guard !state.isLoading, state.canConnect else { return .none }
+                guard !state.isLoading, !state.isCheckingCompatibility, state.canConnect else { return .none }
                 state.isLoading = true
                 state.errorMessage = nil
 

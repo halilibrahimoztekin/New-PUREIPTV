@@ -41,7 +41,12 @@ public struct StreamSpeedTestView: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .accessibilityLabel(AppStrings.Common.close)
+                #if os(tvOS)
+                    .tvFocusEffect(shape: .circle)
+                #else
+                    .buttonStyle(.plain)
+                #endif
             }
 
             // Gauge / Results Display
@@ -145,7 +150,11 @@ public struct StreamSpeedTestView: View {
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            #if os(tvOS)
+            .tvFocusEffect()
+            #else
             .buttonStyle(.plain)
+            #endif
         }
         .padding(24)
         .background(

@@ -31,6 +31,8 @@
 
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
         @Environment(\.scenePhase) private var scenePhase
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var categorySearchQuery = ""
 
         public var body: some View {
             Group {
@@ -55,6 +57,9 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
+            }
             .onDisappear {
                 store.send(.onDisappear)
             }
@@ -71,34 +76,36 @@
 
                 VStack(spacing: 0) {
                     // ── Header Actions ─────────────────────────────────
-                    HStack {
+                    HStack(spacing: 8) {
                         Text(AppStrings.LiveTV.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
 
                         Spacer()
 
-                        HStack(spacing: 10) {
-                            Button {
-                                store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
-                            } label: {
-                                if store.isRefreshingContent, store.refreshStage?.canCancel != true {
-                                    ProgressView()
-                                        .frame(width: 36, height: 36)
-                                } else {
-                                    Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.9))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                        HStack(spacing: 8) {
+                            if config.type == .m3u {
+                                Button {
+                                    store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
+                                } label: {
+                                    if store.isRefreshingContent, store.refreshStage?.canCancel != true {
+                                        ProgressView()
+                                            .frame(width: 44, height: 44)
+                                    } else {
+                                        Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(Color.white.opacity(0.9))
+                                            .frame(width: 44, height: 44)
+                                            .background(Circle().fill(Color(hex: "#1F1F23")))
+                                    }
                                 }
+                                .buttonStyle(.plain)
+                                .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                                .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                             }
-                            .buttonStyle(.plain)
-                            .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                            .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
-                            .opacity(config.type == .m3u ? 1 : 0)
-                            .accessibilityHidden(config.type != .m3u)
 
                             Button {
                                 store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
@@ -106,46 +113,44 @@
                                 Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
+                                    .frame(width: 44, height: 44)
                                     .background(Circle().fill(Color(hex: "#1F1F23")))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
 
-                            Button {
-                                store.send(.smartGroupManagerTapped)
+                            LiveTVChannelSortMenu(store: store)
+
+                            Menu {
+                                Button {
+                                    store.send(.smartGroupManagerTapped)
+                                } label: {
+                                    Label(AppStrings.LiveTV.smartGroups, systemImage: "square.stack.3d.up")
+                                }
+                                .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+
+                                Button {
+                                    HapticManager.shared.trigger(.light)
+                                    store.send(.openMultiViewTapped)
+                                } label: {
+                                    Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.split.2x2.fill")
+                                }
+
+                                Button {
+                                    HapticManager.shared.trigger(.light)
+                                    store.send(.editCategoriesTapped)
+                                } label: {
+                                    Label(AppStrings.CategoryMgmt.manageTitle(for: AppStrings.LiveTV.categories), systemImage: "slider.horizontal.3")
+                                }
                             } label: {
-                                Image(systemName: "square.stack.3d.up")
-                                    .font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.system(size: 20, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
+                                    .frame(width: 44, height: 44)
                                     .background(Circle().fill(Color(hex: "#1F1F23")))
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(AppStrings.LiveTV.smartGroups)
-                            .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
-
-                            Button {
-                                HapticManager.shared.trigger(.light)
-                                store.send(.openMultiViewTapped)
-                            } label: {
-                                Image(systemName: "square.split.2x2.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
-                            }
-
-                            Button {
-                                HapticManager.shared.trigger(.light)
-                                store.send(.editCategoriesTapped)
-                            } label: {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
-                            }
+                            .accessibilityLabel(AppStrings.Common.more)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -245,19 +250,67 @@
 
         // MARK: – Category Bar
 
+        private var filteredCategories: [MediaModels.Category] {
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
+        }
+
         private var categoryBar: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(store.categories) { category in
-                        CategoryPill(
-                            name: category.name,
-                            isSelected: store.selectedCategoryID == category.id
-                        ) {
-                            store.send(.categorySelected(category))
+            VStack(spacing: 8) {
+                if !store.categories.isEmpty {
+                    CategorySearchField(text: $categorySearchQuery) {
+                        if let firstMatch = filteredCategories.first {
+                            store.send(.categorySelected(firstMatch))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+
+                    ScrollViewReader { proxy in
+                        Group {
+                            if filteredCategories.isEmpty {
+                                Text(AppStrings.Common.categoryNotFound)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                                    .padding(.horizontal, 16)
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(filteredCategories) { category in
+                                            CategoryPill(
+                                                name: category.name,
+                                                isSelected: store.selectedCategoryID == category.id
+                                            ) {
+                                                store.send(.categorySelected(category))
+                                            }
+                                            .id(category.id)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                            }
+                        }
+                        .onChange(of: categorySearchQuery) { _, _ in
+                            guard let firstMatchID = filteredCategories.first?.id else { return }
+                            if reduceMotion {
+                                proxy.scrollTo(firstMatchID, anchor: .center)
+                            } else {
+                                withAnimation { proxy.scrollTo(firstMatchID, anchor: .center) }
+                            }
+                        }
+                        .onChange(of: store.selectedCategoryID) { _, selectedID in
+                            guard let selectedID,
+                                  filteredCategories.contains(where: { $0.id == selectedID })
+                            else { return }
+                            if reduceMotion {
+                                proxy.scrollTo(selectedID, anchor: .center)
+                            } else {
+                                withAnimation { proxy.scrollTo(selectedID, anchor: .center) }
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 16)
             }
         }
 
@@ -386,6 +439,8 @@
                                     FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
 
                                     if !isUnavailable {
+                                        RecentChannelExclusionMenuAction(store: store, channelID: channel.id)
+
                                         Button {
                                             guard let playlistID = store.channelPresentationPlaylistID,
                                                   let profileScope = store.channelPresentationProfileScope else { return }

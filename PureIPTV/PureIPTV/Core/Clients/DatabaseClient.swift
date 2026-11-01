@@ -19,12 +19,24 @@ public struct DatabaseClient {
     public var getSeriesWatchProgress: @Sendable (_ seriesID: String, _ playlistID: UUID?, _ scope: ProfileContextSnapshot) async throws -> WatchHistoryItem?
     public var fetchSeriesEpisodesWatchHistory: @Sendable (_ seriesID: String, _ playlistID: UUID?, _ scope: ProfileContextSnapshot) async throws -> [WatchHistoryItem]
 
-    public var fetchCategoryPreferences: @Sendable (_ type: String) async throws -> [CategoryPreferenceDTO]
-    public var saveCategoryPreferences: @Sendable (_ preferences: [CategoryPreferenceDTO]) async throws -> Void
+    public var fetchCategoryPreferences: @Sendable (_ type: String, _ scope: CategoryPreferenceScope) async throws -> [CategoryPreferenceDTO]
+    public var saveCategoryPreferences: @Sendable (_ preferences: [CategoryPreferenceDTO], _ scope: CategoryPreferenceScope) async throws -> Void
+    public var fetchHiddenMediaItems: @Sendable (_ type: String?, _ scope: ProfileContextSnapshot) async throws -> [HiddenMediaEntry]
+    public var setHiddenMediaItem: @Sendable (_ item: HiddenMediaEntry, _ isHidden: Bool, _ scope: ProfileContextSnapshot) async throws -> Bool
 
-    public var fetchSearchHistory: @Sendable () async throws -> [SearchHistoryItem]
-    public var saveSearchHistory: @Sendable (_ query: String) async throws -> Void
+    public var fetchSearchHistory: @Sendable (_ retainingSince: Date) async throws -> [SearchHistoryItem]
+    public var saveSearchHistory: @Sendable (_ query: String, _ retainingSince: Date) async throws -> Void
     public var clearSearchHistory: @Sendable () async throws -> Void
+}
+
+public struct CategoryPreferenceScope: Equatable, Sendable {
+    public let profileID: UUID?
+    public let playlistID: UUID?
+
+    public init(profileID: UUID?, playlistID: UUID?) {
+        self.profileID = profileID
+        self.playlistID = playlistID
+    }
 }
 
 public struct CategoryPreferenceDTO: Equatable, Sendable {
@@ -58,6 +70,124 @@ private func favoriteScopeKey(_ item: FavoriteItem) -> String {
 
 private func historyScopeKey(_ item: WatchHistoryItem) -> String {
     "\(item.type)|\(item.playlistID?.uuidString ?? "")|\(item.id)"
+}
+
+private func categoryPreferenceStorageID(
+    type: String,
+    categoryID: String,
+    scope: CategoryPreferenceScope
+) -> String {
+    let encodedComponents = [
+        type,
+        scope.profileID?.uuidString.lowercased() ?? "default-profile",
+        scope.playlistID?.uuidString.lowercased() ?? "default-playlist",
+        categoryID,
+    ]
+    .map { "\($0.utf8.count):\($0)" }
+    .joined(separator: "|")
+    return "category-preference-v2|" + encodedComponents
+}
+
+private func legacyCategoryPreferenceID(type: String, categoryID: String) -> String {
+    "\(type)_\(categoryID)"
+}
+
+private func hiddenMediaEntries(
+    in context: ModelContext,
+    profileID: UUID?,
+    type: String? = nil
+) throws -> [HiddenMediaEntry] {
+    let ownedDescriptor = FetchDescriptor<HiddenMediaRecord>(
+        predicate: #Predicate { $0.profileID == profileID },
+        sortBy: [SortDescriptor(\.hiddenAt, order: .reverse)]
+    )
+    let owned = try context.fetch(ownedDescriptor)
+    let legacyRows: [HiddenMediaRecord]
+    if let profileID, profileID == legacyDataOwnerID(in: context) {
+        let legacyDescriptor = FetchDescriptor<HiddenMediaRecord>(
+            predicate: #Predicate { $0.profileID == nil },
+            sortBy: [SortDescriptor(\.hiddenAt, order: .reverse)]
+        )
+        legacyRows = try context.fetch(legacyDescriptor)
+    } else {
+        legacyRows = []
+    }
+
+    let shadowedKeys = Set(owned.map(\.identityKey))
+    var seenKeys = Set<String>()
+    return (owned + legacyRows.filter { !shadowedKeys.contains($0.identityKey) })
+        .filter { record in
+            guard record.removedAt == nil else { return false }
+            guard let type else { return true }
+            return record.type.caseInsensitiveCompare(type) == .orderedSame
+        }
+        .compactMap { record in
+            guard seenKeys.insert(record.identityKey).inserted else { return nil }
+            return HiddenMediaEntry(
+                identity: HiddenMediaIdentity(type: record.type, playlistID: record.playlistID, mediaID: record.mediaID),
+                title: record.title,
+                hiddenAt: record.hiddenAt
+            )
+        }
+}
+
+private func setHiddenMediaEntry(
+    _ entry: HiddenMediaEntry,
+    isHidden: Bool,
+    scope: ProfileContextSnapshot,
+    modelContainer: ModelContainer,
+    profileContextClient: ProfileContextClient
+) throws -> Bool {
+    guard entry.identity.type == "vod" || entry.identity.type == "series" else { return false }
+
+    let profileID = scope.profileID
+    let identityKey = entry.identity.storageKey
+    let context = ModelContext(modelContainer)
+    let descriptor = FetchDescriptor<HiddenMediaRecord>(predicate: #Predicate {
+        $0.identityKey == identityKey && $0.profileID == profileID
+    })
+    var records = try context.fetch(descriptor)
+
+    if records.isEmpty,
+       let profileID,
+       profileID == legacyDataOwnerID(in: context)
+    {
+        let legacyDescriptor = FetchDescriptor<HiddenMediaRecord>(predicate: #Predicate {
+            $0.identityKey == identityKey && $0.profileID == nil
+        })
+        records = try context.fetch(legacyDescriptor)
+    }
+
+    if let primaryRecord = records.first {
+        if let profileID, primaryRecord.profileID == nil {
+            records.forEach { $0.profileID = profileID }
+        }
+        if isHidden {
+            primaryRecord.mediaID = entry.identity.mediaID
+            primaryRecord.type = entry.identity.type
+            primaryRecord.title = entry.title
+            primaryRecord.playlistID = entry.identity.playlistID
+            primaryRecord.hiddenAt = Date()
+            primaryRecord.removedAt = nil
+            for duplicate in records.dropFirst() where duplicate.removedAt == nil {
+                duplicate.removedAt = Date()
+            }
+        } else {
+            let removedAt = Date()
+            for record in records where record.removedAt == nil {
+                record.removedAt = removedAt
+            }
+        }
+    } else if isHidden {
+        context.insert(HiddenMediaRecord(entry: entry, profileID: profileID))
+    } else {
+        return true
+    }
+
+    guard profileContextClient.snapshot() == scope else { return false }
+    try context.save()
+    NotificationCenter.default.post(name: .hiddenMediaDidChange, object: nil)
+    return true
 }
 
 private func favorites(in context: ModelContext, profileID: UUID?, type: String? = nil) throws -> [FavoriteItem] {
@@ -207,22 +337,22 @@ extension DatabaseClient: DependencyKey {
         return DatabaseClient(
             fetchFavorites: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID)
             },
             fetchFavoritesByType: { type, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID, type: type)
             },
             isFavorite: { id, type, playlistID, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try favorites(in: context, profileID: profileID, type: type).contains { $0.id == id && $0.playlistID == playlistID }
             },
             toggleFavorite: { item, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let id = item.id
                 let type = item.type
                 let descriptor = FetchDescriptor<FavoriteItem>(predicate: #Predicate {
@@ -268,13 +398,13 @@ extension DatabaseClient: DependencyKey {
                     items,
                     isFavorite: isFavorite,
                     scope: scope,
-                    modelContainer: try SharedDatabaseConfig.shared,
+                    modelContainer: SharedDatabaseConfig.shared,
                     profileContextClient: profileContextClient
                 )
             },
             fetchWatchHistory: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let allItems = try watchHistory(in: context, profileID: profileID)
                 var seenSeriesIDs = Set<String>()
                 var deduplicatedItems: [WatchHistoryItem] = []
@@ -294,14 +424,14 @@ extension DatabaseClient: DependencyKey {
                 return deduplicatedItems
             },
             fetchEpisodeWatchHistory: { scope in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).filter {
                     $0.type.caseInsensitiveCompare("episode") == .orderedSame
                 }
             },
             saveWatchProgress: { item, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let id = item.id
                 let type = item.type
                 let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
@@ -343,13 +473,14 @@ extension DatabaseClient: DependencyKey {
                 }
                 guard profileContextClient.snapshot() == scope else { return }
                 try context.save()
+                NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
                 if let saved = try? context.fetch(descriptor).first(where: { $0.playlistID == item.playlistID }) {
                     try? await WatchProgressSyncClient.liveValue.syncItem(saved)
                 }
             },
             deleteWatchProgress: { id, type, playlistID, scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate {
                     $0.id == id && $0.type == type && $0.profileID == profileID
                 })
@@ -371,7 +502,7 @@ extension DatabaseClient: DependencyKey {
             },
             clearWatchHistory: { scope in
                 let profileID = scope.profileID
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let existing = try watchHistory(in: context, profileID: profileID)
                 let deletionDate = Date()
                 for item in existing {
@@ -387,55 +518,87 @@ extension DatabaseClient: DependencyKey {
                 NotificationCenter.default.post(name: .watchHistoryDidChange, object: nil)
             },
             getWatchProgress: { id, type, playlistID, scope in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).first { $0.id == id && $0.type == type && $0.playlistID == playlistID }
             },
             getSeriesWatchProgress: { seriesID, playlistID, scope in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).first {
                     $0.seriesID == seriesID && $0.type == "episode" && $0.playlistID == playlistID
                 }
             },
             fetchSeriesEpisodesWatchHistory: { seriesID, playlistID, scope in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 return try watchHistory(in: context, profileID: scope.profileID).filter {
                     $0.seriesID == seriesID && $0.type == "episode" && $0.playlistID == playlistID
                 }
             },
-            fetchCategoryPreferences: { type in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+            fetchCategoryPreferences: { type, scope in
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 let descriptor = FetchDescriptor<CategoryPreference>(
                     predicate: #Predicate { $0.type == type },
                     sortBy: [SortDescriptor(\.orderIndex)]
                 )
                 let models = try context.fetch(descriptor)
-                return models.map {
-                    CategoryPreferenceDTO(
-                        id: $0.id,
-                        type: $0.type,
-                        categoryID: $0.categoryID,
-                        isHidden: $0.isHidden,
-                        isLocked: $0.isLocked,
-                        orderIndex: $0.orderIndex
+
+                var preferencesByCategory: [String: CategoryPreferenceDTO] = [:]
+                for model in models where model.profileID == nil
+                    && model.playlistID == nil
+                    && model.id == legacyCategoryPreferenceID(type: type, categoryID: model.categoryID)
+                {
+                    preferencesByCategory[model.categoryID] = CategoryPreferenceDTO(
+                        id: categoryPreferenceStorageID(type: type, categoryID: model.categoryID, scope: scope),
+                        type: model.type,
+                        categoryID: model.categoryID,
+                        isHidden: model.isHidden,
+                        isLocked: model.isLocked,
+                        orderIndex: model.orderIndex
                     )
                 }
+
+                for model in models where model.profileID == scope.profileID
+                    && model.playlistID == scope.playlistID
+                    && model.id == categoryPreferenceStorageID(type: type, categoryID: model.categoryID, scope: scope)
+                {
+                    preferencesByCategory[model.categoryID] = CategoryPreferenceDTO(
+                        id: model.id,
+                        type: model.type,
+                        categoryID: model.categoryID,
+                        isHidden: model.isHidden,
+                        isLocked: model.isLocked,
+                        orderIndex: model.orderIndex
+                    )
+                }
+
+                return preferencesByCategory.values.sorted {
+                    if $0.orderIndex != $1.orderIndex {
+                        return $0.orderIndex < $1.orderIndex
+                    }
+                    return $0.categoryID < $1.categoryID
+                }
             },
-            saveCategoryPreferences: { preferences in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+            saveCategoryPreferences: { preferences, scope in
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 for pref in preferences {
-                    let id = pref.id
+                    let id = categoryPreferenceStorageID(type: pref.type, categoryID: pref.categoryID, scope: scope)
                     let descriptor = FetchDescriptor<CategoryPreference>(
                         predicate: #Predicate { $0.id == id }
                     )
-                    if let existing = try? context.fetch(descriptor).first {
+                    if let existing = try context.fetch(descriptor).first {
+                        existing.type = pref.type
+                        existing.categoryID = pref.categoryID
+                        existing.profileID = scope.profileID
+                        existing.playlistID = scope.playlistID
                         existing.isHidden = pref.isHidden
                         existing.isLocked = pref.isLocked
                         existing.orderIndex = pref.orderIndex
                     } else {
                         let newModel = CategoryPreference(
-                            id: pref.id,
+                            id: id,
                             type: pref.type,
                             categoryID: pref.categoryID,
+                            profileID: scope.profileID,
+                            playlistID: scope.playlistID,
                             isHidden: pref.isHidden,
                             isLocked: pref.isLocked,
                             orderIndex: pref.orderIndex
@@ -445,13 +608,42 @@ extension DatabaseClient: DependencyKey {
                 }
                 try context.save()
             },
-            fetchSearchHistory: {
-                let context = ModelContext(try SharedDatabaseConfig.shared)
-                let descriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
-                return try context.fetch(descriptor)
+            fetchHiddenMediaItems: { type, scope in
+                guard profileContextClient.snapshot() == scope else { return [] }
+                let context = try ModelContext(SharedDatabaseConfig.shared)
+                return try hiddenMediaEntries(in: context, profileID: scope.profileID, type: type)
             },
-            saveSearchHistory: { query in
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+            setHiddenMediaItem: { item, isHidden, scope in
+                try setHiddenMediaEntry(
+                    item,
+                    isHidden: isHidden,
+                    scope: scope,
+                    modelContainer: SharedDatabaseConfig.shared,
+                    profileContextClient: profileContextClient
+                )
+            },
+            fetchSearchHistory: { retainingSince in
+                let context = try ModelContext(SharedDatabaseConfig.shared)
+                let descriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+                let items = try context.fetch(descriptor)
+                let expiredItems = items.filter { $0.timestamp < retainingSince }
+                for item in expiredItems {
+                    context.delete(item)
+                }
+                if !expiredItems.isEmpty {
+                    try context.save()
+                }
+                return items.filter { $0.timestamp >= retainingSince }
+            },
+            saveSearchHistory: { query, retainingSince in
+                let context = try ModelContext(SharedDatabaseConfig.shared)
+
+                let allDescriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+                let allItems = try context.fetch(allDescriptor)
+                for item in allItems where item.timestamp < retainingSince {
+                    context.delete(item)
+                }
+
                 let descriptor = FetchDescriptor<SearchHistoryItem>(predicate: #Predicate { $0.query == query })
                 let existing = try context.fetch(descriptor)
 
@@ -463,10 +655,9 @@ extension DatabaseClient: DependencyKey {
                 }
 
                 // Keep only top 20
-                let allDescriptor = FetchDescriptor<SearchHistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
-                let allItems = try context.fetch(allDescriptor)
-                if allItems.count > 20 {
-                    for item in allItems.dropFirst(20) {
+                let retainedItems = try context.fetch(allDescriptor)
+                if retainedItems.count > 20 {
+                    for item in retainedItems.dropFirst(20) {
                         context.delete(item)
                     }
                 }
@@ -474,7 +665,7 @@ extension DatabaseClient: DependencyKey {
                 try context.save()
             },
             clearSearchHistory: {
-                let context = ModelContext(try SharedDatabaseConfig.shared)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
                 try context.delete(model: SearchHistoryItem.self)
                 try context.save()
             }

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Kingfisher
 import SwiftUI
 #if canImport(UIKit)
     import UIKit
@@ -48,49 +49,145 @@ public struct DynamicMeshPalette: Equatable, Sendable {
     }
 }
 
+private final class KingfisherDownloadCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var downloadTask: DownloadTask?
+    private var isCancelled = false
+
+    func set(_ downloadTask: DownloadTask?) {
+        guard let downloadTask else { return }
+
+        lock.lock()
+        let shouldCancel = isCancelled
+        if !shouldCancel {
+            self.downloadTask = downloadTask
+        }
+        lock.unlock()
+
+        if shouldCancel {
+            downloadTask.cancel()
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        let task = downloadTask
+        downloadTask = nil
+        isCancelled = true
+        lock.unlock()
+
+        task?.cancel()
+    }
+}
+
 // MARK: - Dominant Color Extractor Service
 
 public actor DominantColorExtractor {
     public static let shared = DominantColorExtractor()
 
-    private var cache: [URL: DynamicMeshPalette] = [:]
+    private var cache: [String: DynamicMeshPalette] = [:]
 
     private init() {}
 
     /// Asynchronously extracts a rich atmospheric mesh palette from an image URL
-    public func extractPalette(from url: URL?, fallbackTitle: String = "PureIPTV") async -> DynamicMeshPalette {
+    public func extractPalette(
+        from url: URL?,
+        fallbackTitle: String = "PureIPTV",
+        userAgentOverride: String? = nil,
+        playlistID: UUID? = nil
+    ) async -> DynamicMeshPalette {
         guard let url else {
             return DynamicMeshPalette.fromSeed(fallbackTitle)
         }
 
-        if let cached = cache[url] {
+        let cacheKey = PlaylistArtworkRequest.cacheKey(
+            for: url,
+            userAgentOverride: userAgentOverride,
+            playlistID: playlistID
+        )
+        if let cached = cache[cacheKey] {
             return cached
         }
 
         #if canImport(UIKit)
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let image = UIImage(data: data),
-                      let cgImage = image.cgImage
-                else {
+                let image = try await retrieveImage(
+                    from: url,
+                    cacheKey: cacheKey,
+                    userAgentOverride: userAgentOverride,
+                    playlistID: playlistID
+                )
+                guard let cgImage = image.cgImage else {
                     let fallback = DynamicMeshPalette.fromSeed(fallbackTitle)
-                    cache[url] = fallback
+                    cache[cacheKey] = fallback
                     return fallback
                 }
 
                 let palette = extractColors(from: cgImage)
-                cache[url] = palette
+                cache[cacheKey] = palette
                 return palette
             } catch {
                 guard !Task.isCancelled else { return DynamicMeshPalette.fromSeed(fallbackTitle) }
                 let fallback = DynamicMeshPalette.fromSeed(fallbackTitle)
-                cache[url] = fallback
+                cache[cacheKey] = fallback
                 return fallback
             }
         #else
             return DynamicMeshPalette.fromSeed(fallbackTitle)
         #endif
     }
+
+    #if canImport(UIKit)
+        private func retrieveImage(
+            from url: URL,
+            cacheKey: String,
+            userAgentOverride: String?,
+            playlistID: UUID?
+        ) async throws -> UIImage {
+            let cancellation = KingfisherDownloadCancellation()
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    guard !Task.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+
+                    let resource = ImageResource(downloadURL: url, cacheKey: cacheKey)
+                    let requestModifier = AnyModifier { request in
+                        var request = request
+                        PlaylistArtworkRequest.applyHeaders(
+                            to: &request,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: playlistID
+                        )
+                        return request
+                    }
+                    let options: KingfisherOptionsInfo = [
+                        .processor(DownsamplingImageProcessor(size: CGSize(width: 300, height: 450))),
+                        .cacheOriginalImage,
+                        .downloadPriority(1.0),
+                        .requestModifier(requestModifier),
+                    ]
+
+                    KingfisherManager.shared.retrieveImage(
+                        with: resource,
+                        options: options,
+                        downloadTaskUpdated: { cancellation.set($0) }
+                    ) { result in
+                        switch result {
+                        case let .success(result):
+                            continuation.resume(returning: result.image)
+                        case let .failure(error):
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+            } onCancel: {
+                cancellation.cancel()
+            }
+        }
+    #endif
 
     #if canImport(UIKit)
         private func extractColors(from cgImage: CGImage) -> DynamicMeshPalette {
@@ -160,6 +257,8 @@ public struct DynamicMeshBackgroundView: View {
     let imageURL: URL?
     let titleSeed: String
     let imageRequestDebounceNanoseconds: UInt64
+    let userAgentOverride: String?
+    let playlistID: UUID?
 
     @State private var currentPalette: DynamicMeshPalette = .default
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -167,11 +266,24 @@ public struct DynamicMeshBackgroundView: View {
     public init(
         imageURL: URL? = nil,
         titleSeed: String = "PureIPTV",
-        imageRequestDebounceNanoseconds: UInt64 = 0
+        imageRequestDebounceNanoseconds: UInt64 = 0,
+        userAgentOverride: String? = nil,
+        playlistID: UUID? = nil
     ) {
         self.imageURL = imageURL
         self.titleSeed = titleSeed
         self.imageRequestDebounceNanoseconds = imageRequestDebounceNanoseconds
+        self.userAgentOverride = userAgentOverride
+        self.playlistID = playlistID
+    }
+
+    private var imageRequestID: String {
+        guard let imageURL else { return titleSeed }
+        return PlaylistArtworkRequest.cacheKey(
+            for: imageURL,
+            userAgentOverride: userAgentOverride,
+            playlistID: playlistID
+        ) + "|title:\(titleSeed)"
     }
 
     public var body: some View {
@@ -209,12 +321,17 @@ public struct DynamicMeshBackgroundView: View {
             )
             .ignoresSafeArea()
         }
-        .task(id: imageURL) {
+        .task(id: imageRequestID) {
             if imageRequestDebounceNanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: imageRequestDebounceNanoseconds)
                 guard !Task.isCancelled else { return }
             }
-            let palette = await DominantColorExtractor.shared.extractPalette(from: imageURL, fallbackTitle: titleSeed)
+            let palette = await DominantColorExtractor.shared.extractPalette(
+                from: imageURL,
+                fallbackTitle: titleSeed,
+                userAgentOverride: userAgentOverride,
+                playlistID: playlistID
+            )
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.85)) {

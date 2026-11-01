@@ -109,7 +109,9 @@ struct PureIPTVApp: App {
                         Task { await initializePersistence() }
                     } label: {
                         HStack(spacing: 12) {
-                            if isStarting { ProgressView() }
+                            if isStarting {
+                                ProgressView()
+                            }
                             Text(isStarting ? AppStrings.Common.loadingAlt : AppStrings.Common.retry)
                         }
                         .frame(minWidth: 220, minHeight: 48)
@@ -145,7 +147,9 @@ struct PureIPTVApp: App {
             }
             store = readyStore
             startupFailureCode = nil
-            if scenePhase == .active { readyStore.send(.appEnteredForeground) }
+            if scenePhase == .active {
+                readyStore.send(.appEnteredForeground)
+            }
             if let url = pendingURL {
                 pendingURL = nil
                 readyStore.send(.handleDeepLink(url))

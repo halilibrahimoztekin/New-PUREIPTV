@@ -93,7 +93,7 @@
                                 .font(.system(size: 32))
                                 .foregroundStyle(Color.white.opacity(0.7))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(TVCircleButtonStyle())
                         .padding(40)
                     }
                     Spacer()

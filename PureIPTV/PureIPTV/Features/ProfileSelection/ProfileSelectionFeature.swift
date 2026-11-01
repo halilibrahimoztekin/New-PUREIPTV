@@ -52,6 +52,7 @@ public struct ProfileSelectionFeature: Sendable {
 
     @Dependency(\.uuid) var uuid
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.viewingStatisticsClient) var viewingStatisticsClient
 
     public init() {}
 
@@ -72,7 +73,9 @@ public struct ProfileSelectionFeature: Sendable {
                 state.requestID = nil
                 state.isLoadingProfiles = false
                 state.isPerformingProfileOperation = false
-                if state.pendingOperation == nil { state.errorMessage = nil }
+                if state.pendingOperation == nil {
+                    state.errorMessage = nil
+                }
                 return hadRequest ? .cancel(id: ProfileSelectionCancelID.request) : .none
 
             case .retry:
@@ -124,10 +127,13 @@ public struct ProfileSelectionFeature: Sendable {
                         state.profiles.sort { $0.createdAt < $1.createdAt }
                     }
                     state.showingAddProfile = false
+                    return .none
                 case let .delete(profile):
                     state.profiles.removeAll { $0.id == profile.id }
+                    return .run { _ in
+                        await viewingStatisticsClient.clear(profile.id)
+                    }
                 }
-                return .none
 
             case let .operationSucceeded(requestID, profiles):
                 guard state.requestID == requestID else { return .none }
@@ -227,7 +233,7 @@ public struct ProfileSelectionFeature: Sendable {
     @MainActor
     private func loadProfilesOrCreateDefaults() throws -> [UserProfile] {
         try Task.checkCancellation()
-        let context = ModelContext(try SharedDatabaseConfig.shared)
+        let context = try ModelContext(SharedDatabaseConfig.shared)
         let descriptor = FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.createdAt)])
         var profiles = try context.fetch(descriptor)
         if profiles.isEmpty {
@@ -242,13 +248,13 @@ public struct ProfileSelectionFeature: Sendable {
     }
 
     private func fetchProfiles() async throws -> [UserProfile] {
-        let context = ModelContext(try SharedDatabaseConfig.shared)
+        let context = try ModelContext(SharedDatabaseConfig.shared)
         let descriptor = FetchDescriptor<UserProfile>(sortBy: [SortDescriptor(\.createdAt)])
         return try context.fetch(descriptor)
     }
 
     private func saveProfile(_ profile: UserProfile) async throws {
-        let context = ModelContext(try SharedDatabaseConfig.shared)
+        let context = try ModelContext(SharedDatabaseConfig.shared)
         let id = profile.id
         let descriptor = FetchDescriptor<UserProfile>(predicate: #Predicate { $0.id == id })
         guard try context.fetch(descriptor).isEmpty else { return }
@@ -257,7 +263,7 @@ public struct ProfileSelectionFeature: Sendable {
     }
 
     private func deleteProfile(_ profile: UserProfile) async throws {
-        let context = ModelContext(try SharedDatabaseConfig.shared)
+        let context = try ModelContext(SharedDatabaseConfig.shared)
         let id = profile.id
         let descriptor = FetchDescriptor<UserProfile>(predicate: #Predicate { $0.id == id })
         if let existing = try context.fetch(descriptor).first {

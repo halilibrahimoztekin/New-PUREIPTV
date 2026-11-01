@@ -224,6 +224,28 @@ import SwiftUI
                     .accessibilityLabel(item.isPaused ? AppStrings.Downloads.resumeDownload : AppStrings.Downloads.pauseDownload)
                     .accessibilityValue(store.pendingDownloadCommandIDs.contains(item.id) ? AppStrings.Common.loading : "")
 
+                    if item.isQueued, store.nextQueuedDownloadID != item.id {
+                        Button {
+                            guard !store.pendingDownloadCommandIDs.contains(item.id) else { return }
+                            store.send(.prioritizeQueuedDownload(item.id))
+                        } label: {
+                            HStack(spacing: 12) {
+                                if store.pendingDownloadCommandIDs.contains(item.id) {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "arrow.up.circle")
+                                        .accessibilityHidden(true)
+                                }
+                                Text(AppStrings.Downloads.downloadNext)
+                            }
+                            .font(.title3.weight(.semibold))
+                            .frame(minWidth: 270, minHeight: 72)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(store.pendingDownloadCommandIDs.contains(item.id))
+                        .accessibilityValue(store.pendingDownloadCommandIDs.contains(item.id) ? AppStrings.Common.loading : "")
+                    }
+
                     Button(role: .destructive) {
                         guard !store.pendingDownloadCommandIDs.contains(item.id) else { return }
                         store.send(.cancelActiveDownload(item.id))
@@ -456,7 +478,7 @@ import SwiftUI
                         .foregroundStyle(.secondary)
                 }
 
-                if item.isAvailable && (isPreparingPlayback(item) || isDeletionInProgress) {
+                if item.isAvailable, isPreparingPlayback(item) || isDeletionInProgress {
                     HStack(spacing: 12) {
                         ProgressView()
                         Text(AppStrings.Common.loading)

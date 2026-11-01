@@ -61,7 +61,7 @@ public struct PlayerSidebarDrawer: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .transition(.move(edge: .leading).combined(with: .opacity))
         .onAppear {
-            focusedItemID = store.item.id
+            focusedItemID = preferredChannelFocusID
         }
         .onChange(of: focusedItemID) { _, newID in
             if let newID, let ch = store.playlist?.first(where: { $0.id == newID }) {
@@ -519,9 +519,13 @@ public struct PlayerSidebarDrawer: View {
                 #endif
             }
             .onAppear {
+                guard let restorationID = preferredChannelFocusID else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    guard focusedItemID == restorationID,
+                          filteredChannels.contains(where: { $0.id == restorationID })
+                    else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(store.item.id, anchor: .center)
+                        proxy.scrollTo(restorationID, anchor: .center)
                     }
                 }
             }
@@ -724,7 +728,7 @@ public struct PlayerSidebarDrawer: View {
     private func channelLogo(item: PlayerFeature.PlayableItem) -> some View {
         Group {
             if let coverURL = item.coverURL {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
+                PlaylistAsyncImage(url: coverURL, fallbackURL: item.fallbackCoverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
                     switch phase {
                     case let .success(image):
                         image
@@ -874,6 +878,11 @@ public struct PlayerSidebarDrawer: View {
         }
     }
 
+    private var preferredChannelFocusID: String? {
+        let channels = filteredChannels
+        return channels.first(where: { $0.id == store.item.id })?.id ?? channels.first?.id
+    }
+
     /// Returns the first eligible match in provider playlist order. Availability
     /// is intentionally determined by normal playback and retry behavior; no
     /// network probe is issued before selecting this candidate.
@@ -916,6 +925,7 @@ public struct PlayerSidebarDrawer: View {
                         y: 0
                     )
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
             }
         }
     }
@@ -943,6 +953,7 @@ public struct PlayerSidebarDrawer: View {
                         y: 0
                     )
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
             }
         }
     }
@@ -970,6 +981,7 @@ public struct PlayerSidebarDrawer: View {
                         y: 0
                     )
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
             }
         }
     }

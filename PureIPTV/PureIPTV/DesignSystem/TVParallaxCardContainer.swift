@@ -129,6 +129,10 @@
                         lineWidth: isFocused ? 3.5 : (isSelected ? 2 : 1)
                     )
             }
+            .tvHighContrastFocusOutline(
+                isFocused: isFocused,
+                shape: .roundedRectangle(cornerRadius: cornerRadius)
+            )
             .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.06 : 1.0))
             .offset(y: reduceMotion ? 0 : (isFocused ? -3 : 0))
             // Çift Katmanlı Gölge: 1. Zemin derinlik gölgesi + 2. Neon ambiyans parlaması

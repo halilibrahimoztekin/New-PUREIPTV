@@ -27,10 +27,10 @@ public struct SmartChannelGroupManagementRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -64,10 +64,10 @@ public struct FavoriteChannelListManagementRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -111,10 +111,10 @@ public struct ChannelPresentationEditorRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -158,10 +158,10 @@ public struct M3UCategoryMappingEditorRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -211,10 +211,10 @@ public struct EPGTimelineProgramDetailRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -289,10 +289,10 @@ public struct MultiViewChannelSelectionRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -432,13 +432,13 @@ public struct PlaylistQRTransferConfirmationRouteFeature {
         Reduce { state, action in
             switch action {
             case .cancelTapped:
-                return .send(.delegate(.cancel(
+                .send(.delegate(.cancel(
                     presentationID: state.presentationID,
                     sessionID: state.sessionID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -479,13 +479,13 @@ public struct PlaylistManagementSettingsRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     editRequestID: state.editRequestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -513,7 +513,9 @@ public struct PlaylistManagementPINRouteFeature {
         }
 
         public var isStartupUnlock: Bool {
-            if case .startup = flow { return true }
+            if case .startup = flow {
+                return true
+            }
             return false
         }
     }
@@ -531,13 +533,13 @@ public struct PlaylistManagementPINRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -575,13 +577,13 @@ public struct PlaylistManagementAddPlaylistRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -625,13 +627,13 @@ public struct PlayerSpeedTestRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -647,6 +649,10 @@ public struct PlayerSubtitleSearchRouteFeature {
         public let itemID: String
         public let playbackRequestID: UUID
         public let itemTitle: String
+        public let searchTitle: String
+        public let contentType: OpenSubtitleContentType
+        public let seasonNumber: Int?
+        public let episodeNumber: Int?
 
         public init(
             playerRouteIndex: Int,
@@ -654,6 +660,10 @@ public struct PlayerSubtitleSearchRouteFeature {
             itemID: String,
             playbackRequestID: UUID,
             itemTitle: String,
+            searchTitle: String,
+            contentType: OpenSubtitleContentType,
+            seasonNumber: Int? = nil,
+            episodeNumber: Int? = nil,
             presentationID: UUID = UUID()
         ) {
             self.presentationID = presentationID
@@ -662,6 +672,10 @@ public struct PlayerSubtitleSearchRouteFeature {
             self.itemID = itemID
             self.playbackRequestID = playbackRequestID
             self.itemTitle = itemTitle
+            self.searchTitle = searchTitle
+            self.contentType = contentType
+            self.seasonNumber = seasonNumber
+            self.episodeNumber = episodeNumber
         }
     }
 
@@ -678,13 +692,13 @@ public struct PlayerSubtitleSearchRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -722,13 +736,13 @@ public struct SettingsSpeedTestRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -766,13 +780,13 @@ public struct SettingsPINSetupRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -810,13 +824,13 @@ public struct SettingsTraktAuthRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -854,13 +868,13 @@ public struct SettingsTraktWatchlistRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -898,13 +912,13 @@ public struct SettingsHiddenContentRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -945,13 +959,13 @@ public struct SettingsDiagnosticReportRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -989,13 +1003,13 @@ public struct SettingsBackupPreviewRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1044,13 +1058,13 @@ public struct DetailSynopsisRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1091,13 +1105,13 @@ public struct DetailActorBiographyRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1143,13 +1157,13 @@ public struct DetailTrailerRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1190,13 +1204,13 @@ public struct DetailUnmatchedMovieRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1242,13 +1256,13 @@ public struct DetailTMDBMatchPickerRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1286,13 +1300,13 @@ public struct CustomEPGSettingsRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1333,13 +1347,13 @@ public struct CustomEPGSourceAddRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(
+                .send(.delegate(.close(
                     presentationID: state.presentationID,
                     requestID: state.requestID
                 )))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1377,10 +1391,10 @@ public struct ProfileAddProfileRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case .delegate:
-                return .none
+                .none
             }
         }
     }
@@ -1423,19 +1437,57 @@ public struct GlobalSearchRouteFeature {
         Reduce { state, action in
             switch action {
             case .closeTapped:
-                return .send(.delegate(.close(presentationID: state.presentationID)))
+                .send(.delegate(.close(presentationID: state.presentationID)))
 
             case let .search(.delegate(.didSelectChannel(channel, playlist))):
-                return .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
+                .send(.delegate(.didSelectChannel(channel, playlist: playlist)))
 
             case let .search(.delegate(.didSelectVOD(vod))):
-                return .send(.delegate(.didSelectVOD(vod)))
+                .send(.delegate(.didSelectVOD(vod)))
 
             case let .search(.delegate(.didSelectSeries(series))):
-                return .send(.delegate(.didSelectSeries(series)))
+                .send(.delegate(.didSelectSeries(series)))
 
             case .search, .delegate:
-                return .none
+                .none
+            }
+        }
+    }
+}
+
+@Reducer
+public struct HiddenMediaManagementRouteFeature {
+    @ObservableState
+    public struct State: Equatable {
+        public let presentationID: UUID
+        public var manager = HiddenMediaManagementFeature.State()
+
+        public init(presentationID: UUID = UUID()) {
+            self.presentationID = presentationID
+        }
+    }
+
+    public enum Action {
+        case manager(HiddenMediaManagementFeature.Action)
+        case closeTapped
+        case delegate(Delegate)
+
+        public enum Delegate: Equatable {
+            case close(presentationID: UUID)
+        }
+    }
+
+    public var body: some Reducer<State, Action> {
+        Scope(state: \.manager, action: \.manager) {
+            HiddenMediaManagementFeature()
+        }
+
+        Reduce { state, action in
+            switch action {
+            case .closeTapped:
+                .send(.delegate(.close(presentationID: state.presentationID)))
+            case .manager, .delegate:
+                .none
             }
         }
     }
@@ -1450,6 +1502,7 @@ public enum AppScreen {
     case profileAddProfile(ProfileAddProfileRouteFeature)
     case home(HomeFeature)
     case globalSearch(GlobalSearchRouteFeature)
+    case hiddenMediaManagement(HiddenMediaManagementRouteFeature)
     case player(PlayerFeature)
     case epgGuide(EPGGuideFeature)
     case epgTimeline(EPGTimelineFeature)
@@ -1501,6 +1554,7 @@ extension AppScreen.State: Hashable {
         case let (.profileAddProfile(l), .profileAddProfile(r)): l.presentationID == r.presentationID
         case let (.home(l), .home(r)): l == r
         case let (.globalSearch(l), .globalSearch(r)): l.presentationID == r.presentationID
+        case let (.hiddenMediaManagement(l), .hiddenMediaManagement(r)): l.presentationID == r.presentationID
         case let (.player(l), .player(r)): l == r
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
@@ -1561,6 +1615,9 @@ extension AppScreen.State: Hashable {
             hasher.combine(4)
         case let .globalSearch(state):
             hasher.combine(45)
+            hasher.combine(state.presentationID)
+        case let .hiddenMediaManagement(state):
+            hasher.combine(46)
             hasher.combine(state.presentationID)
         case let .player(state):
             hasher.combine(5)

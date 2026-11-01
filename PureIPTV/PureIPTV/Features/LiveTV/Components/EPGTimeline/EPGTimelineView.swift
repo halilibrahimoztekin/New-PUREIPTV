@@ -24,6 +24,46 @@ public struct EPGTimelineView: View {
     #endif
 
     @AppStorage("epgTimelineCompactMode") private var isCompactMode = false
+    @AppStorage(LiveTVArtworkSource.storageKey) private var liveTVArtworkSourceRawValue = LiveTVArtworkSource.epgProgram.rawValue
+    #if os(tvOS)
+        @AppStorage(EPGTimelinePreferenceKeys.hideChannelsWithoutPrograms) private var hideChannelsWithoutPrograms = false
+        @State private var lastFocusedChannelID: String?
+    #endif
+
+    private var liveTVArtworkSource: LiveTVArtworkSource {
+        LiveTVArtworkSource(rawValue: liveTVArtworkSourceRawValue) ?? .epgProgram
+    }
+
+    private var displayedChannels: [MediaModels.Item] {
+        #if os(tvOS)
+            let channels = store.filteredChannels
+            let query = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard hideChannelsWithoutPrograms,
+                  query.isEmpty,
+                  !store.isSyncingEPG,
+                  !(store.isFavoritesOnly && store.favoriteSortMode == .manual) else { return channels }
+            if let failureDate = store.lastSyncFailureTimestamp,
+               store.lastSyncTimestamp.map({ failureDate >= $0 }) ?? true
+            {
+                return channels
+            }
+
+            return channels.filter { channel in
+                guard let programs = store.epgData[channel.id], programs.isEmpty,
+                      !store.epgLoadFailures.contains(channel.id),
+                      store.isLoading[channel.id] != true else { return true }
+                return false
+            }
+        #else
+            store.filteredChannels
+        #endif
+    }
+
+    #if os(tvOS)
+        private var displayedChannelIDs: [String] {
+            displayedChannels.map(\.id)
+        }
+    #endif
 
     private var rowHeight: CGFloat {
         isCompactMode ? compactRowHeight : standardRowHeight
@@ -31,6 +71,14 @@ public struct EPGTimelineView: View {
 
     private var channelColumnWidth: CGFloat {
         isCompactMode ? compactChannelColumnWidth : standardChannelColumnWidth
+    }
+
+    private var hasLoadingEPGPlaceholder: Bool {
+        store.epgRequestIDs.keys.contains { channelID in
+            store.isLoading[channelID] == true
+                && store.epgData[channelID] == nil
+                && !store.epgLoadFailures.contains(channelID)
+        }
     }
 
     private let totalHoursCount: Int = 24
@@ -45,8 +93,12 @@ public struct EPGTimelineView: View {
     @State private var navigationStepHours = 1
     @State private var lastSearchNavigationKey: String?
     @State private var pendingSearchChannelID: String?
+    @State private var showingEPGDiagnostics = false
     #if os(tvOS)
         @State private var restoringProgramFocusID: String?
+        @State private var pendingFocusRestoreChannelID: String?
+        @State private var focusedProgramTimeAnchor: Date?
+        @State private var verticalChannelTimeReturnArmed = false
     #endif
 
     // Focus state for tvOS
@@ -110,7 +162,9 @@ public struct EPGTimelineView: View {
                     }
 
                     // Sync Status Badge
-                    if let msg = store.syncStatusMessage {
+                    if store.isAutomaticEPGRefreshDeferred {
+                        syncStatusBadge(message: AppStrings.Settings.epgAutoRefreshDeferredMessage)
+                    } else if let msg = store.syncStatusMessage {
                         syncStatusBadge(message: msg)
                     }
 
@@ -121,17 +175,19 @@ public struct EPGTimelineView: View {
                     Divider().background(Color.white.opacity(0.12))
 
                     // Virtualized Dual-Axis Grid Body
-                    if store.filteredChannels.isEmpty {
+                    if displayedChannels.isEmpty {
                         emptyStateView
                     } else {
                         channelGridScrollView(availableWidth: availableGridWidth, containerHeight: geo.size.height)
                     }
-                }
 
-                timeNavigationControls(availableWidth: availableGridWidth)
+                    HStack {
+                        Spacer(minLength: 0)
+                        timeNavigationControls(availableWidth: availableGridWidth)
+                    }
                     .padding(.trailing, 20)
-                    .padding(.bottom, 24)
-                    .transition(.scale.combined(with: .opacity))
+                    .padding(.vertical, 10)
+                }
 
                 // PiP-in-EPG Mini Preview Floating Card (Madde #25)
                 if let previewChannel = store.activePreviewChannel {
@@ -155,36 +211,58 @@ public struct EPGTimelineView: View {
                     horizontalOffset = target
                 }
                 #if os(tvOS)
-                    restoringProgramFocusID = store.savedFocusedProgramID
-                    focusedProgramId = store.savedFocusedProgramID
-                    focusedChannelId = store.savedFocusedProgramID == nil ? store.savedFocusedChannelID : nil
+                    focusedProgramTimeAnchor = nil
+                    verticalChannelTimeReturnArmed = false
+                    focusedProgramId = nil
+                    if let savedChannelID = store.savedFocusedChannelID {
+                        restoringProgramFocusID = store.savedFocusedProgramID
+                        pendingFocusRestoreChannelID = savedChannelID
+                        focusedChannelId = nil
+                    } else {
+                        restoringProgramFocusID = nil
+                        pendingFocusRestoreChannelID = nil
+                        focusedChannelId = displayedChannels.first?.id
+                    }
                 #endif
                 // Prewarm first 15 channels EPG data
                 for channel in store.filteredChannels.prefix(15) {
                     store.send(.fetchEPG(streamID: channel.id))
                 }
-                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                    shimmerPhase = 1.0
-                }
+                updateShimmerAnimation()
             }
             .onChange(of: availableGridWidth) { _, width in
                 horizontalOffset = min(max(0, totalTimelineWidth - width), max(0, horizontalOffset))
             }
+            .onChange(of: hasLoadingEPGPlaceholder) { _, _ in
+                updateShimmerAnimation()
+            }
+            .onChange(of: reduceMotion) { _, _ in
+                updateShimmerAnimation()
+            }
             #if os(tvOS)
             .onChange(of: focusedChannelId) { _, channelID in
+                if let channelID {
+                    lastFocusedChannelID = channelID
+                }
                 let channel = channelID.flatMap { focusedID in
                     store.channels.first { $0.id == focusedID }
                 }
                 store.send(.channelFocused(channel))
             }
+            .onChange(of: displayedChannelIDs) { oldIDs, newIDs in
+                reconcileChannelFocus(previousIDs: oldIDs, currentIDs: newIDs)
+            }
             #endif
             .onDisappear {
+                stopShimmerAnimation()
                 #if os(tvOS)
                     store.send(.onDisappear(
                         horizontalOffset: horizontalOffset,
                         focusedProgramID: focusedProgramId ?? store.savedFocusedProgramID,
                         focusedChannelID: focusedChannelId ?? store.savedFocusedChannelID
                     ))
+                    pendingFocusRestoreChannelID = nil
+                    restoringProgramFocusID = nil
                 #else
                     store.send(.onDisappear(
                         horizontalOffset: horizontalOffset,
@@ -202,13 +280,45 @@ public struct EPGTimelineView: View {
             }
             .onChange(of: store.epgData) { _, _ in
                 navigateToSearchMatch(store.searchQuery, availableWidth: availableGridWidth)
+                #if os(tvOS)
+                    restoreSavedFocusIfAvailable()
+                #endif
             }
+            .alert(AppStrings.Player.epgDiagnosticsTitle, isPresented: $showingEPGDiagnostics) {
+                Button(AppStrings.Common.close, role: .cancel) {}
+            } message: {
+                Text(store.epgDiagnosticsText)
+            }
+            #if os(tvOS)
+            .onChange(of: store.channels.count) { _, _ in
+                restoreSavedFocusIfAvailable()
+            }
+            #endif
         }
         #if os(tvOS)
         .onExitCommand {
             store.send(.closeTapped)
         }
         #endif
+    }
+
+    private func updateShimmerAnimation() {
+        guard !reduceMotion, hasLoadingEPGPlaceholder else {
+            stopShimmerAnimation()
+            return
+        }
+        guard shimmerPhase == 0 else { return }
+        withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+            shimmerPhase = 1.0
+        }
+    }
+
+    private func stopShimmerAnimation() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            shimmerPhase = 0
+        }
     }
 
     // MARK: - Header Bar
@@ -326,18 +436,32 @@ public struct EPGTimelineView: View {
             HStack(spacing: 6) {
                 Image(systemName: store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
                     ? "exclamationmark.triangle.fill"
-                    : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
-                        ? "clock.fill" : "checkmark.circle.fill"))
+                    : (store.epgSourceIdentity == nil || store.lastSyncTimestamp == nil
+                        ? "questionmark.circle"
+                        : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
+                            ? "clock.fill" : "checkmark.circle.fill")))
                     .foregroundColor(store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
                         ? .orange
-                        : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
-                            ? .yellow : .green))
+                        : (store.epgSourceIdentity == nil || store.lastSyncTimestamp == nil
+                            ? .white.opacity(0.55)
+                            : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
+                                ? .yellow : .green)))
                 Text(store.epgFreshnessLabel)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption)
                     .foregroundColor(.white.opacity(0.8))
                 if store.isSyncingEPG {
                     ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .cyan)).scaleEffect(0.6)
                 }
+                Button {
+                    showingEPGDiagnostics = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AppStrings.Player.epgDiagnosticsTitle)
             }
 
             if let retryAt = store.providerCooldownFormatted {
@@ -413,6 +537,10 @@ public struct EPGTimelineView: View {
                                 horizontalOffset = 0
                             }
                         }
+                        #if os(tvOS)
+                            focusedProgramTimeAnchor = nil
+                            verticalChannelTimeReturnArmed = false
+                        #endif
                         store.send(.selectDate(date))
                     } label: {
                         HStack(spacing: 5) {
@@ -678,10 +806,10 @@ public struct EPGTimelineView: View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 2) {
-                    ForEach(store.filteredChannels) { channel in
+                    ForEach(displayedChannels) { channel in
                         HStack(spacing: 0) {
                             // 100% Pinned Left Channel Cell
-                            stickyChannelCell(channel)
+                            stickyChannelCell(channel, timelineViewportWidth: availableWidth)
                                 .frame(width: channelColumnWidth, height: rowHeight)
 
                             // Synchronized Program Strip
@@ -744,15 +872,22 @@ public struct EPGTimelineView: View {
                     scrollProxy.scrollTo(channelID, anchor: .center)
                 }
             }
+            #if os(tvOS)
+            .onChange(of: pendingFocusRestoreChannelID) { _, channelID in
+                guard let channelID else { return }
+                scrollProxy.scrollTo(channelID, anchor: .center)
+                restoreSavedFocusIfAvailable()
+            }
+            #endif
         }
     }
 
     // MARK: - Sticky Channel Cell
 
-    private func stickyChannelCell(_ channel: MediaModels.Item) -> some View {
+    private func stickyChannelCell(_ channel: MediaModels.Item, timelineViewportWidth: CGFloat) -> some View {
         let isFav = store.defaultFavoriteIDs.contains(channel.id)
-        let favoriteIndex = store.filteredChannels.firstIndex(where: { $0.id == channel.id }) ?? 0
-        let favoriteCount = store.filteredChannels.count
+        let favoriteIndex = displayedChannels.firstIndex(where: { $0.id == channel.id }) ?? 0
+        let favoriteCount = displayedChannels.count
 
         return Button {
             HapticManager.shared.trigger(.medium)
@@ -761,7 +896,7 @@ public struct EPGTimelineView: View {
             HStack(spacing: 8) {
                 // Channel Logo
                 if let url = channel.displayLogoURL {
-                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                    PlaylistAsyncImage(url: url, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                         if let image = phase.image {
                             image.resizable().aspectRatio(contentMode: .fit)
                         } else {
@@ -796,7 +931,11 @@ public struct EPGTimelineView: View {
                         }
 
                         Text(channel.title)
+                        #if os(tvOS)
+                            .font(.system(size: isCompactMode ? 13 : 15, weight: .bold))
+                        #else
                             .font(.caption2.bold())
+                        #endif
                             .foregroundColor(.white)
                             .lineLimit(isCompactMode ? 1 : 2)
                             .truncationMode(.tail)
@@ -805,12 +944,24 @@ public struct EPGTimelineView: View {
                     if channel.tvArchive == 1 {
                         HStack(spacing: 3) {
                             Image(systemName: "clock.arrow.circlepath")
+                            #if os(tvOS)
+                                .font(.system(size: 11, weight: .bold))
+                            #else
                                 .font(.system(size: 8, weight: .bold))
+                            #endif
                             Text(AppStrings.Player.catchUp)
+                            #if os(tvOS)
+                                .font(.system(size: 11, weight: .bold))
+                            #else
                                 .font(.system(size: 8, weight: .bold))
+                            #endif
                             if let days = channel.tvArchiveDuration, days > 0 {
                                 Text(AppStrings.Player.catchUpArchiveDays(days))
+                                #if os(tvOS)
+                                    .font(.system(size: 12, weight: .bold))
+                                #else
                                     .font(.system(size: 10, weight: .bold))
+                                #endif
                             }
                         }
                         .foregroundColor(.purple)
@@ -842,6 +993,25 @@ public struct EPGTimelineView: View {
                     focusedProgramID: nil,
                     focusedChannelID: channel.id
                 ))
+            }
+            .onMoveCommand { direction in
+                switch direction {
+                case .up, .down:
+                    verticalChannelTimeReturnArmed = focusedProgramTimeAnchor != nil
+                case .right:
+                    guard verticalChannelTimeReturnArmed,
+                          let focusedProgramTimeAnchor else { return }
+                    verticalChannelTimeReturnArmed = false
+                    restoreProgramFocus(
+                        in: channel,
+                        nearest: focusedProgramTimeAnchor,
+                        viewportWidth: timelineViewportWidth
+                    )
+                case .left:
+                    verticalChannelTimeReturnArmed = false
+                @unknown default:
+                    verticalChannelTimeReturnArmed = false
+                }
             }
         #endif
             .contextMenu {
@@ -1012,12 +1182,12 @@ public struct EPGTimelineView: View {
             ]
         }
 
-        // Channel has EPG data: Sort by startTime and bridge any empty intervals > 10 mins
-        let sorted = rawPrograms.sorted { $0.startTime < $1.startTime }
+        // Channel programs are sorted once when their response enters feature state.
+        // Bridge any empty intervals > 10 mins without sorting again during rendering.
         var bridged: [EPGProgram] = []
         var cursor = timelineStart
 
-        for prog in sorted {
+        for prog in rawPrograms {
             if prog.endTime <= timelineStart {
                 continue
             }
@@ -1124,11 +1294,19 @@ public struct EPGTimelineView: View {
         let titleFontSize: CGFloat
         let titleFontWeight: Font.Weight
         let timeFontSize: CGFloat
+        let badgeFontSize: CGFloat
+        let statusFontSize: CGFloat
         #if os(tvOS)
             let isFocused = focusedProgramId == program.id
-            titleFontSize = isFocused && width >= 140 ? 14 : (isCompactMode ? 10 : 11)
+            titleFontSize = if isFocused {
+                width >= 180 ? 18 : (width >= 100 ? 16 : 14)
+            } else {
+                width >= 220 ? 16 : (width >= 120 ? 14 : 12)
+            }
             titleFontWeight = isFocused || isNow || isSearchMatch ? .bold : .medium
-            timeFontSize = isFocused && width >= 120 ? 11 : 9.5
+            timeFontSize = width >= 140 ? 12 : 10
+            badgeFontSize = 11
+            statusFontSize = 12
             if isFocused {
                 cardBackgroundColor = .white.opacity(0.22)
                 cardBorderColor = .white
@@ -1138,6 +1316,8 @@ public struct EPGTimelineView: View {
             titleFontSize = isCompactMode ? 10 : 11
             titleFontWeight = isNow || isSearchMatch ? .bold : .medium
             timeFontSize = 9.5
+            badgeFontSize = 7
+            statusFontSize = 8
         #endif
 
         return Button {
@@ -1175,7 +1355,7 @@ public struct EPGTimelineView: View {
                     HStack(spacing: 4) {
                         if let badge = genre.badgeText {
                             Text(badge)
-                                .font(.system(size: 7, weight: .bold))
+                                .font(.system(size: badgeFontSize, weight: .bold))
                                 .foregroundColor(genre.border)
                                 .padding(.horizontal, 3)
                                 .padding(.vertical, 1)
@@ -1185,31 +1365,31 @@ public struct EPGTimelineView: View {
                         if isNow {
                             Circle()
                                 .fill(Color.red)
-                                .frame(width: 5, height: 5)
+                                .frame(width: 6, height: 6)
                             Text(AppStrings.Player.liveLabel)
-                                .font(.system(size: 8, weight: .heavy))
+                                .font(.system(size: statusFontSize, weight: .heavy))
                                 .foregroundColor(.red)
                         } else if isCatchUp {
                             Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: badgeFontSize, weight: .bold))
                                 .foregroundColor(.purple)
                         }
 
                         if isScheduled {
                             Image(systemName: "bell.fill")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(.system(size: badgeFontSize, weight: .bold))
                                 .foregroundColor(.yellow)
                         }
 
                         if isSearchMatch {
                             Image(systemName: "magnifyingglass")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(.system(size: badgeFontSize, weight: .bold))
                                 .foregroundColor(.cyan)
                         }
 
                         if isFallback, !isNow {
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 8, weight: .semibold))
+                                .font(.system(size: badgeFontSize, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.45))
                         }
 
@@ -1279,8 +1459,34 @@ public struct EPGTimelineView: View {
         }
         #if os(tvOS)
         .focused($focusedProgramId, equals: program.id)
+        .onMoveCommand { direction in
+            switch direction {
+            case .up, .down:
+                if isCatchUp {
+                    focusedProgramTimeAnchor = program.startTime.addingTimeInterval(
+                        program.endTime.timeIntervalSince(program.startTime) / 2
+                    )
+                    verticalChannelTimeReturnArmed = true
+                } else {
+                    focusedProgramTimeAnchor = nil
+                    verticalChannelTimeReturnArmed = false
+                }
+            case .left, .right:
+                verticalChannelTimeReturnArmed = false
+            @unknown default:
+                verticalChannelTimeReturnArmed = false
+            }
+        }
         .onChange(of: focusedProgramId) { _, newId in
             if newId == program.id {
+                if isCatchUp {
+                    focusedProgramTimeAnchor = program.startTime.addingTimeInterval(
+                        program.endTime.timeIntervalSince(program.startTime) / 2
+                    )
+                } else {
+                    focusedProgramTimeAnchor = nil
+                    verticalChannelTimeReturnArmed = false
+                }
                 if restoringProgramFocusID == newId {
                     restoringProgramFocusID = nil
                     return
@@ -1325,11 +1531,53 @@ public struct EPGTimelineView: View {
         return min(max(0, totalTimelineWidth - viewportWidth), max(0, target))
     }
 
+    #if os(tvOS)
+        private func restoreProgramFocus(in channel: MediaModels.Item, nearest anchor: Date, viewportWidth: CGFloat) {
+            let isShowingLoadingPlaceholder = store.isLoading[channel.id] == true && store.epgData[channel.id] == nil
+            let isShowingFailurePlaceholder = store.epgLoadFailures.contains(channel.id)
+                && store.epgData[channel.id]?.isEmpty != false
+            guard !isShowingLoadingPlaceholder, !isShowingFailurePlaceholder else { return }
+
+            guard let program = resolvedPrograms(for: channel).min(by: { lhs, rhs in
+                distance(from: anchor, to: lhs) < distance(from: anchor, to: rhs)
+            }) else { return }
+
+            let duration = program.endTime.timeIntervalSince(program.startTime)
+            let width = max(30, CGFloat(duration / 3600) * hourWidth)
+            let targetOffset = horizontalOffsetRevealing(program, width: width, viewportWidth: viewportWidth)
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                horizontalOffset = targetOffset
+            }
+
+            Task { @MainActor in
+                await Task.yield()
+                guard focusedChannelId == channel.id,
+                      displayedChannels.contains(where: { $0.id == channel.id }),
+                      resolvedPrograms(for: channel).contains(where: { $0.id == program.id }) else { return }
+                focusedProgramId = program.id
+            }
+        }
+
+        private func distance(from anchor: Date, to program: EPGProgram) -> TimeInterval {
+            if anchor < program.startTime {
+                return program.startTime.timeIntervalSince(anchor)
+            }
+            if anchor > program.endTime {
+                return anchor.timeIntervalSince(program.endTime)
+            }
+            return 0
+        }
+    #endif
+
     // MARK: - Floating Action Buttons
 
     private func jumpToNowButton(availableWidth: CGFloat) -> some View {
         Button {
             HapticManager.shared.trigger(.medium)
+            #if os(tvOS)
+                focusedProgramTimeAnchor = nil
+                verticalChannelTimeReturnArmed = false
+            #endif
             let target = targetCenteredNowOffset(availableWidth: availableWidth)
             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                 horizontalOffset = target
@@ -1358,6 +1606,10 @@ public struct EPGTimelineView: View {
     private func returnToTodayButton(availableWidth: CGFloat) -> some View {
         Button {
             HapticManager.shared.trigger(.medium)
+            #if os(tvOS)
+                focusedProgramTimeAnchor = nil
+                verticalChannelTimeReturnArmed = false
+            #endif
             let now = Date()
             store.send(.selectDate(now))
             let target = targetHorizontalOffset(for: now, availableWidth: availableWidth)
@@ -1406,7 +1658,7 @@ public struct EPGTimelineView: View {
             HStack {
                 HStack(spacing: 10) {
                     if let url = channel.displayLogoURL {
-                        PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                        PlaylistAsyncImage(url: url, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                             if let img = phase.image {
                                 img.resizable().scaledToFit()
                             } else {
@@ -1563,14 +1815,22 @@ public struct EPGTimelineView: View {
                     endPoint: .bottomTrailing
                 )
 
-                // Blurred channel artwork backdrop if available
-                if let url = channel.displayLogoURL {
-                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                let artworkURL = liveTVArtworkSource.primaryArtworkURL(for: program, channel: channel)
+                let isProgramArtwork = liveTVArtworkSource == .epgProgram &&
+                    channel.logoURLOverride == nil && program.artworkURL != nil
+                if artworkURL != nil || channel.coverURL != nil {
+                    PlaylistAsyncImage(
+                        url: artworkURL,
+                        fallbackURL: channel.coverURL,
+                        userAgentOverride: channel.userAgentOverride,
+                        playlistID: channel.playlistID,
+                        downsamplingSize: CGSize(width: 640, height: 360)
+                    ) { phase in
                         if let img = phase.image {
                             img.resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .opacity(0.18)
-                                .blur(radius: 12)
+                                .opacity(isProgramArtwork ? 0.38 : 0.18)
+                                .blur(radius: isProgramArtwork ? 2 : 12)
                         }
                     }
                 }
@@ -1789,7 +2049,7 @@ public struct EPGTimelineView: View {
             Image(systemName: "tv.slash")
                 .font(.system(size: 40))
                 .foregroundColor(.white.opacity(0.3))
-            Text(AppStrings.LiveTV.noChannels)
+            Text(store.filteredChannels.isEmpty ? AppStrings.LiveTV.noChannels : AppStrings.EPG.noData)
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.6))
             Spacer()
@@ -1877,6 +2137,10 @@ public struct EPGTimelineView: View {
 
     private func shiftTimeline(byHours hours: Int, availableWidth: CGFloat) {
         HapticManager.shared.trigger(.light)
+        #if os(tvOS)
+            focusedProgramTimeAnchor = nil
+            verticalChannelTimeReturnArmed = false
+        #endif
         let maxOffset = max(0, totalTimelineWidth - availableWidth)
         let target = horizontalOffset + CGFloat(hours) * hourWidth
         withAnimation(.easeInOut(duration: 0.25)) {
@@ -1900,7 +2164,9 @@ public struct EPGTimelineView: View {
                 < abs(rhs.1.startTime.timeIntervalSince(store.currentTime))
         }) else { return }
 
-        let key = "\(query)|\(match.0.id)|\(match.1.id)"
+        let startMilliseconds = Int64(match.1.startTime.timeIntervalSince1970 * 1000)
+        let endMilliseconds = Int64(match.1.endTime.timeIntervalSince1970 * 1000)
+        let key = "\(query)|\(match.0.id)|\(match.1.id)|\(startMilliseconds)|\(endMilliseconds)"
         guard key != lastSearchNavigationKey else { return }
         lastSearchNavigationKey = key
         if !Calendar.current.isDate(match.1.startTime, inSameDayAs: store.selectedDate) {
@@ -1924,10 +2190,80 @@ public struct EPGTimelineView: View {
         }
         pendingSearchChannelID = match.0.id
         #if os(tvOS)
+            pendingFocusRestoreChannelID = nil
+            restoringProgramFocusID = nil
             focusedChannelId = nil
             focusedProgramId = match.1.id
         #endif
     }
+
+    #if os(tvOS)
+        private func reconcileChannelFocus(previousIDs: [String], currentIDs: [String]) {
+            guard pendingFocusRestoreChannelID == nil, focusedProgramId == nil else { return }
+            guard !currentIDs.isEmpty else {
+                focusedChannelId = nil
+                return
+            }
+            if let focusedChannelId, currentIDs.contains(focusedChannelId) {
+                return
+            }
+            if let lastFocusedChannelID, currentIDs.contains(lastFocusedChannelID) {
+                focusedChannelId = lastFocusedChannelID
+                return
+            }
+
+            let previousIndex = lastFocusedChannelID.flatMap { previousIDs.firstIndex(of: $0) } ?? 0
+            let replacementID = currentIDs[min(previousIndex, currentIDs.count - 1)]
+            lastFocusedChannelID = replacementID
+            focusedChannelId = replacementID
+        }
+
+        private func restoreSavedFocusIfAvailable() {
+            guard let channelID = pendingFocusRestoreChannelID else { return }
+            guard !displayedChannels.isEmpty else { return }
+            guard displayedChannels.contains(where: { $0.id == channelID }) else {
+                restoringProgramFocusID = nil
+                pendingFocusRestoreChannelID = displayedChannels.first?.id
+                return
+            }
+
+            guard let programID = restoringProgramFocusID else {
+                Task { @MainActor in
+                    await Task.yield()
+                    guard pendingFocusRestoreChannelID == channelID,
+                          restoringProgramFocusID == nil,
+                          displayedChannels.contains(where: { $0.id == channelID }) else { return }
+                    focusedChannelId = channelID
+                    pendingFocusRestoreChannelID = nil
+                }
+                return
+            }
+
+            guard let programs = store.epgData[channelID] else { return }
+            guard programs.contains(where: { $0.id == programID }) else {
+                guard store.isLoading[channelID] != true else { return }
+                restoringProgramFocusID = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    guard pendingFocusRestoreChannelID == channelID,
+                          restoringProgramFocusID == nil,
+                          displayedChannels.contains(where: { $0.id == channelID }) else { return }
+                    focusedChannelId = channelID
+                    pendingFocusRestoreChannelID = nil
+                }
+                return
+            }
+
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingFocusRestoreChannelID == channelID,
+                      restoringProgramFocusID == programID,
+                      store.epgData[channelID]?.contains(where: { $0.id == programID }) == true else { return }
+                focusedProgramId = programID
+                pendingFocusRestoreChannelID = nil
+            }
+        }
+    #endif
 
     private func isProgramMatchingSearch(_ program: EPGProgram) -> Bool {
         let query = store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1989,6 +2325,10 @@ struct EPGTimelineChannelLogoEditorForm: View {
     let onSave: (String?) -> Void
     let onClose: () -> Void
 
+    private var canSaveLogo: Bool {
+        ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) != nil
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -2026,11 +2366,12 @@ struct EPGTimelineChannelLogoEditorForm: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(AppStrings.Common.save) {
-                        guard ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) != nil else { return }
+                        guard canSaveLogo else { return }
                         onClose()
                         onSave(logoURLDraft)
                     }
-                    .disabled(ChannelLogoOverrideURL.validatedURL(from: logoURLDraft) == nil)
+                    .opacity(canSaveLogo ? 1 : 0.5)
+                    .accessibilityHint(canSaveLogo ? "" : AppStrings.LiveTV.invalidChannelLogoURL)
                 }
             }
         }

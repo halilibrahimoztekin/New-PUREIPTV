@@ -22,6 +22,10 @@ Bu rapor `swift-focusengine-pro` ve `swift-accessibility-skill` ile kaynak kodun
 
 Önce: `epgResponse(Result<...>)` → Sonra: `epgResponse(channelID:requestID:Result<...>)`, `cancelInFlight`, iki kimlik için guard ve açık görünüm yaşam döngüsü. Aynı kanala ait başarılı veri dönüşte korunuyor. Hata/boş durumlarına kumandayla erişilebilir Retry düğmesi eklendi. Reviewer onayladı; iOS/tvOS Release compile-only build’leri başarılı. Cihaz doğrulaması yapılmadı.
 
+31 Ekim 2026 follow-up: Guide `onAppear` ayrıca EPG source identity çözümlemesi başlatıyordu. Eski UUID yanıtı state’i değiştiremese de görünüm kapandıktan sonra çalışma sürebiliyordu. Bu etki artık ayrı cancellation ID kullanıyor, `Task.isCancelled` kontrol ediyor ve `onDisappear` sırasında iptal ediliyor. Close, normal oynatma ve catch-up başlatma eylemleri görünürlük/istek kimliğini hemen geçersiz kılıp kaynak çözümlemesini iptal ediyor. Preview promotion handoff’u cancellation ID ile izleniyor; delegate gönderilmeden iptal alınırsa henüz Player ekranınca tüketilmemiş promotion aynı VLC player/URL çifti doğrulanarak geri alınıyor. Delegate gönderildikten sonraki Guide kaybolması beklenen route geçişi sayılıyor ve promotion korunuyor. Play delegate’i `presentationID` taşıyor ve coordinator güncel Guide örneğini eşleştiriyor. Handoff sürerken iOS interaktif dismissal ve iki platformda Guide etkileşimleri devre dışı. Bağımsız review `[APPROVED]`; targeted parse/diff kontrolü başarılı. Xcode build bu pre-build SwiftFormat’ın ContactCleaner kaynak grubuna erişme riski nedeniyle çalıştırılmadı.
+
+EPG Timeline performans follow-up: Placeholder shimmer daha önce her görünmede sonsuz animasyona başlıyor, yükleme bitse de ekran açıkken çalışmayı sürdürüyordu. Şimdi yalnız aktif isteği olan, verisi henüz bulunmayan ve başarısız sayılmayan satırlar varken animasyon yapıyor; bu birleşik görünürlük koşulu değiştiğinde duruyor/başlıyor. Reduce Motion açıkken ve görünüm kapanınca sabit faza dönüyor.
+
 ### EPGTimelineFeature.swift / EPGTimelineView.swift — görünürlük ve viewport (#211)
 
 Görünüm kapanırken yalnızca sync grubundaki kanal istekleri iptal ediliyordu; bağımsız kanal yüklemeleri devam edebiliyordu. Program odağında `totalTimelineWidth - 800` kullanılıyordu; gerçek viewport daha genişken son saatlerde içerik sınırının ötesine kayılabiliyordu. Kural: focus ve scroll aynı gerçek geometriyi kullanmalı; gizlenen ekranın işleri sona ermeli.
@@ -44,29 +48,21 @@ Aktif indirme var ve tamamlanmış indirme yoksa boş ekran koşulu atlanıyor, 
 
 Önce: kök exit zinciri `isUpNextVisible` durumunu ele almıyor, kartta yerel Geri handler’ı yoktu. Overlay artık kendi `onExitCommand` yoluyla kapatılıyor; Cancel ve kök exit de aynı dismiss/focus-restore yolunu kullanıyor. Odağın görünür player kontrollerine (`controller` veya `play`) dönmesi sağlandı. Bağımsız reviewer `[APPROVED]`; tvOS/iOS Swift parse ve `git diff --check` başarılı. Build ve Apple TV cihaz focus doğrulaması yapılmadı.
 
-### ProfileSelectionView+tvOS.swift:203, 231 — iç içe profil düğmeleri (P2, açık)
+### ProfileSelectionView+tvOS.swift — edit modunda seçim/silme focus yolu (P2, düzeltildi)
 
-Kart seçme Button’ı içinde düzenleme modunun Delete Button’ı var; dış eylem bu modda no-op oluyor. Kural: native etkileşimli kontrolleri iç içe yerleştirme.
+İlk taramada silme Button’ının seçim Button’ı içinde olduğu sanılmıştı. Güncel yapı seçim Button’ını yalnız normal modda gösteriyor; edit modunda artwork ve 44 pt kardeş silme Button’ı kullanılıyor. Silme eylemi profil adıyla etiketli ve `.focusSection()` içindeki yatay raf ile aşağıdaki Done kontrolü arasında gezinilebiliyor. Statik kaynak incelemesi cihazdaki gerçek focus sırasını kanıtlamaz.
 
-Önce: `Button { ... Button(delete) ... }` → Öneri: seçim ve silmeyi aynı kart düzeninde kardeş Button’lar yap; edit modunda silme hedefini açıkça odakla.
+### PlaylistManagementView.swift — satır kontrolleri ve yoğun güncelleme (P2, düzeltildi)
 
-### PlaylistManagementView.swift:245, 293 — iç içe playlist düğmeleri (P2, açık)
+İlk iç içe Button bulgusu güncel kaynakta geçerli değildi: seçim, ayar ve silme kontrolleri HStack kardeşleri. Asıl sorun tüm satıra uygulanan `.disabled(isUpdatingSources)` idi. Satır artık focus zincirinde kalıyor; seçim, ayar, kilit ve silme action’ları update sürerken reducer’da durduruluyor, kontroller loading değerini VoiceOver’a bildiriyor. Silme reducer guard’ı ve güncelleme sırasında context-menu kilit eylemi devre dışı kalıyor. Apple TV cihazında doğrulanmadı.
 
-Playlist seçen tüm satır Button’ının içinde tvOS ayar ve silme Button’ları var. Kural: her eylemin bağımsız focus geometrisi olmalı.
+### VODView+tvOS.swift / SeriesView+tvOS.swift — filtre sonrası görünmeyen focus kimliği (P2, düzeltildi)
 
-Önce: seçim Button’ı içinde ayar/silme → Öneri: HStack içinde ayrı seçim alanı, Settings ve Delete düğmeleri.
+Hatırlanan veya seçili öğe focus/scroll uygulanmadan önce güncel `currentVODs` / `currentSeries` kimlikleriyle doğrulanıyor. Gecikmeli scroll category ve focus kimliği hâlâ aynıysa çalışıyor; stale focus günlüğe kaydedilmiyor.
 
-### VODView+tvOS.swift:319 / SeriesView+tvOS.swift:316 — filtre sonrası görünmeyen focus kimliği (P2, açık)
+### CategoryManagementView.swift — tvOS kategori sırası ve focus stili (P2, düzeltildi)
 
-Kategori dönüşünde hafızadan gelen kimlik, güncel filtrelenmiş listede doğrulanmadan focus ve `scrollTo` hedefi oluyor. Kural: veri değişince odak kimliğinin hâlâ görünür olduğunu doğrula.
-
-Önce: doğrudan `lastItem(...)` ataması → Öneri: `visibleIDs.contains(savedID)` kontrolü; geçersizse ilk görünür öğe; asenkron kategori sonucu geldikten sonra aynı kontrol.
-
-### CategoryManagementView.swift:351, 359 — tvOS kategori sırası (P2, açık)
-
-`moveCategory` yalnız `.onMove` yolunda; edit modu iOS koşulu altında. tvOS’ta bu eylemin ayrı kumanda yolu bulunmadı. Kural: gesture/edit-mode işlemlerinin alternatif düğmesi olmalı.
-
-Önce: yalnız `.onMove` → Öneri: satır context menu’sünde uygun olduğunda Yukarı/Aşağı Taşı eylemleri.
+`moveCategory` daha önce yalnız iOS edit-mode `.onMove` yolundaydı. tvOS satır context menu’süne, yalnız arama ve filtre kapalıyken kullanılabilen Yukarı/Aşağı Taşı eylemleri eklendi; mevcut reducer sıralama ve preference indekslerini güncelliyor. Düzenle/kilitle düğmeleri daire focus stilini, görünürlük düğmesi kapsül focus stilini kullanıyor. Remote long-press ve focus sırası cihazda doğrulanmadı.
 
 ### SearchView+tvOS.swift — kapsam odağı ve yinelenen scroll (#200)
 
@@ -74,39 +70,43 @@ Yerel focus değişimi reducer’a aktarılıyor; hem yerel focus hem reducer’
 
 #200’de aynı sorgu boyunca filtre/playlist başına 64 kayıtla sınırlı geçerli odak hafızası; ortak görünür ID/fallback kaynak kimliği; yalnız açık restoration isteğinden ScrollPosition kaydırması eklendi. Sonuçlara girişte bir kez hatırlanan karta dönüş, LazyVGrid hücresi çizildikten sonra ve görünürlük/istek/origin guard’larıyla yapılacak. Kullanıcının input/odak değişimi eski isteği etkisiz kılıyor. EPG yanıtında eksik UUID ve playlist kimliği karşılaştırma hatası da aynı incelemede ele alınıyor. Katalog değişiminde tam pipeline yenileme, kaynak/type/item kimlik ayrımı ve dedupe düzeltmeleri de eklendi. Bağımsız reviewer onayladı; iOS/tvOS Release compile-only build’leri başarılı ve görev çıktıları temizlendi. Cihaz akışı çalıştırılmadı.
 
-### VODDetailView.swift:1604 — gecikmiş başlangıç odağı (P2, açık)
+### VODDetailView.swift — gecikmiş başlangıç odağı (bulgu güncel kaynakta yok)
 
-Açılıştan 500 ms sonra koşulsuz Play odağı atanıyor. Kullanıcı o sürede başka kontrole gitse bile geri çekiliyor. Kural: asenkron başlangıç odağı kullanıcı hareketini ezmemeli.
+Önceki satır notundaki koşulsuz 500 ms `asyncAfter` güncel tvOS görünümünde bulunmuyor. Play kontrolleri `.defaultFocus(..., priority: .userInitiated)` kullanıyor; VODDetail görünümünde gecikmeli focus ataması yok. Eski bulgu kaynak snapshot’ı eskidiği için kapatıldı.
 
-Önce: koşulsuz `asyncAfter { isPlayButtonFocused = true }` → Öneri: iptal edilebilir başlangıç task’ı ve kullanıcının henüz gezinmediği guard’ı veya uygun default-focus.
+### EPGGuideFeature.swift / EPGGuideView+iOS.swift — görünmeyen otomatik preview (P2, düzeltildi)
 
-### EPGGuideFeature.swift / EPGGuideView+iOS.swift — görünmeyen otomatik preview (P2, açık)
+iOS Guide preview alanı çizmediği halde kanal seçimi gizli preview başlatabiliyordu. State artık tvOS’ta otomatik preview’ı açık, iOS’ta kapalı başlatıyor. Guide seçimi, odak, preview başlangıcı ve yanıtlar görünürlükle korunuyor; geç gelen action gizli ekranda video veya EPG isteği başlatmıyor. tvOS preview akışı ve cihaz odağı ayrıca doğrulanmadı.
 
-Guide state’inde `isAutoPreviewEnabled` varsayılanı true; kanal seçimi preview oynatmayı başlatıyor. iOS Guide görünümünde preview’ı çizen bir alan yok. Kural: ekranda kullanılmayan video işini başlatma; görünümün sunduğu yetenekle reducer davranışı eşleşmeli.
+### EPGTimelineFeature.swift — başarısız kanalın yeniden açılışta boş kalması (P2, düzeltildi)
 
-Önce: bütün platformlarda otomatik preview → Öneri: preview gösteren sunumdan açık capability/config geçir veya iOS’ta görünür, kullanıcı tarafından kontrol edilen preview sun. Mevcut preview engine test sözleşmesi ve promotion akışı birlikte incelenmeli.
+Önce `.fetchEPG`, başarısız isteklerin `[]` sentinel’ini cache sanıp tekrar istemiyordu. Şimdi ekran yeniden göründüğünde ilk 15 filtrelenmiş kanal içindeki başarısızlar deneniyor; sonraki LazyVStack satırları ekrana girdiğinde de `.fetchEPG` backoff süresi geçince yeniden deneyebilir. Program kategorisi filtresi başarısız kanalları gizlemiyor. 15/30/300 saniye ve sonrasında 300 saniyede kalan kanal başı bekleme istek fırtınasını önlüyor; provider-wide cooldown tüm row fetch’lerini durduruyor. Retry zamanlayıcı değildir: aynı satır ekranda kalırsa süre geçtikten sonra yeniden görünmesi veya ekranın açılması gerekir.
 
-### DesignSystem/TVFocusGuide.swift:21–34 — hedefsiz UIKit köprüsü (P2, açık)
+EPG sync’te ilk 20 kanalın request UUID’si cache yenilenirken reducer’da rezerve ediliyor; mevcut bağımsız fetch iptal ediliyor ve sequential worker aynı UUID’lerle yanıt sahipliğini koruyor. Cache aşaması, sonuç ve gecikmeli status temizliği sync UUID’siyle doğrulandığından eski iptal edilmiş sync daha yenisini değiştiremiyor. Cache hatasında eski EPG korunup rezervasyon temizleniyor; provider-wide 429 başladığında sync dışındaki aktif satır fetch’leri de geçersiz kılınıp iptal ediliyor. Tarihsiz 429 için 60 saniyelik cooldown gösterilip kaydediliyor. Ekran kapanınca fetch, sync, PiP ve preview başlangıçları görünürlük/cancellation ile durduruluyor. Bağımsız sync lifecycle review’u `[APPROVED]`; cihaz davranışı ve Xcode derlemesi yapılmadı.
+
+### DesignSystem/TVFocusGuide.swift:21–34 — hedefsiz UIKit köprüsü (P2, düzeltildi)
 
 UIFocusGuide oluşturulup boyutlandırılıyor, fakat hiçbir `preferredFocusEnvironments` hedefi atanmıyor. `focusGuideBoundary` ve sütun arasındaki bridge bu nedenle bir yönlendirme tanımlamıyor. Kural: UIKit guide’ın görünür, focus alabilen bir hedefi olmalı; boş yardımcıya güvenerek erişim kanıtlanamaz.
 
-Önce: hedefsiz UIFocusGuide → Öneri: SwiftUI sütunlarında gerçek `.focusSection()`/açık focus hedefleriyle geometriyi doğrula; UIKit yönlendirme gerekmiyorsa no-op köprüyü kaldır, gerekiyorsa hedefleri açıkça bağla.
+Önce: hedefsiz UIFocusGuide → Düzeltme: kullanılmayan köprü ve modifier kaldırıldı; var olan SwiftUI `.focusSection()` sınırları bırakıldı. Cihazda focus geometrisi ayrıca doğrulanmalı.
 
 ## Statik riskler: uygulama düzeltmesi ve cihaz kontrolü gerekli
 
 | Dosya / satır | Kural ve risk | Önce → önerilen değişiklik |
 |---|---|---|
-| PlayerView+tvOS.swift:680, 702 | Görünmez etkileşimli katmanlar focus hedefi bırakmamalı. Kontrol ağacı sürekli kurulup yalnız `opacity(0)` ile gizleniyor. | Opacity ile gizleme → fade sonrası alt ağacı kaldırma ve yüzeye focus dönüşü. |
-| MultiView.swift:383–489 | Tam slot `.focusable()` hedefi, aynı ZStack’teki Button/Menu’larla geometrik olarak örtüşüyor. | Tüm slot hedefi → kontrollerle örtüşmeyen ayrı seçim alanı. |
-| PlayerView+tvOS.swift:324, 601 | Koşullu özel HUD kapanışında kaynak kontrole dönüş tanımlı olmalı. Yalnız EPG bunu açıkça yapıyor. | Sadece EPG restore → her HUD için kararlı kaynak kimliği ve kapanış sonrası restore. |
-| PlayerSidebarDrawer.swift:504 | Lazy satırlar tekrar girişte focus hafızasıyla eşleşmeli. | Yalnız LazyVStack → kaydedilmiş satır kimliği + koordineli scroll/focus; büyük listeyi sırf bunun için eager VStack’e çevirme. |
-| DashboardView+tvOS.swift:62, 118, 435 | Busy durumunda `.disabled` focus’taki düğmeyi zincirden çıkarabiliyor. | `.disabled(busy)` → action guard + görünür busy durumu; reducer guard’ını koru. |
-| CategoryManagementView.swift:180–258 | Plain düğmenin odaklandığı görünür olmalı. | Stilsiz `.plain` → ortak focus stilini kullan. |
-| ChannelSelectionToolbar.swift:37–68 | Toplu işlem başlayınca birden çok düğme focus zincirinden çıkarılıyor. | `.disabled(isBusy)` → tvOS action guard, busy açıklaması; iOS doğrulamasını koru. |
-| MediaLanguageFilterBar.swift:24 / OriginalLanguageFilterBar.swift:23 | Dikey içerikteki yatay filtre satırları focus bölümü oluşturmalı. | Yatay ScrollView → tvOS `.focusSection()`. |
-| MovieVersionPickerView.swift:43 / VODDetailView.swift:1457, 1525 / SportsHubView.swift:43 | Yatay sürüm/oyuncu/benzer/maç satırlarının focus geometrisi ayrılmalı. | Yatay ScrollView → tvOS `.focusSection()`. |
-| VODDetailView.swift:1276 / SeriesDetailView+tvOS.swift:21 | Dikey katalog alanlarının sınırı tanımlanmalı. | Katalog ScrollView → uygun `.focusSection()`, yukarı sekme barına çıkış korunarak cihaz kontrolü. Downloads kapsamındaki focus bölümleri #198’de eklendi. |
-| EPGTimelineView.swift | tvOS program başlıkları 10–14 pt, bazı badge’ler 7–9 pt; kanepeden okunabilirlik zayıf. Alt sağ floating navigasyon grid hücreleriyle örtüşüyor. | Küçük metin/floating controls → tvOS tipografi ve row ölçüleri; navigasyonu ayrı inset/bölüme al. |
+| PlayerView+tvOS.swift:680, 702 | Görünmez etkileşimli katmanlar focus hedefi bırakmamalı. | Düzeltildi: controller yalnız görünürken ekleniyor, opacity transition ile kapanıyor ve `.play` focus hedefi tekrar etkinleşiyor. Focus review `[APPROVED]`; gerçek cihazda yön hareketi ayrıca doğrulanmalı. |
+| MultiView.swift:383–489 | Tam slot `.focusable()` hedefi, aynı ZStack’teki Button/Menu’larla geometrik olarak örtüşüyordu. | Düzeltildi: tvOS kanal adı 44 pt minimum yüksekliğe sahip ayrı slot-focus düğmesi; audio/aspect/remove/swap kontrolleri bağımsız focus alıyor. Play/Pause handler focus almayan ortak slot üst görünümünde. Review `[APPROVED]`; cihaz kontrolü açık. |
+| PlayerView+tvOS.swift | Etkileşimli HUD açıkken idle timer controller’ı kaldırıp kapanışta kaynak focus’u kaybettirebilirdi. | Düzeltildi: etkileşimli HUD’lar açıkken controller mounted kalıyor; HUD kapanışı yeni idle timer başlatıyor. Up Next Play Now yolu da timer’ı yeniliyor. Hedefli review `[APPROVED]`; cihaz kontrolü açık. |
+| PlayerSidebarDrawer.swift:504 | Lazy satırlar tekrar girişte focus hafızasıyla eşleşmeli. | Düzeltildi: açılışta görünür listedeki oynatılan kanal, yoksa ilk görünür kanal seçiliyor; gecikmeli ScrollViewReader kaydırması yalnız aynı satır hâlâ odaktayken çalışıyor. Review `[APPROVED]`; cihaz kontrolü açık. |
+| DashboardView+tvOS.swift:62, 118, 435 | Busy durumunda `.disabled` focus’taki düğmeyi zincirden çıkarabiliyordu. | Düzeltildi: retry kontrolleri focus’ta kalıyor, spinner/loading değeri gösteriyor; reducer yinelenen isteği reddediyor. |
+| CategoryManagementView.swift:180–258 | Plain düğmelerde focus farkı görünmüyordu. | Düzeltildi: tvOS edit/kilit kontrolleri TVCircle, görünürlük eylemi TVCapsule focus stilini kullanıyor. |
+| ChannelSelectionToolbar.swift | Toplu işlem başlayınca düğmeler focus zincirinden çıkıyordu; iOS eylemleri dar ekranda yatay kaydırma arkasında kalıyordu. | Düzeltildi: iOS’ta ana eylemler 44 pt araç çubuğunda, ikinciller More menüsünde; tvOS’ta göstergeli yatay raf ve action guard/busy geri bildirimi var. Hide etiketi 22 locale çevrildi. |
+| LiveTVView+iOS.swift / LiveTVView+tvOS.swift | Dar iPhone başlığında beş küçük hedef; tvOS kategori sütunu başlığında aksiyon sıkışması ve eager satırlar. | Düzeltildi: iOS ikincil eylemleri More menüsünde, kalan hedefler 44 pt; tvOS eylemleri ayrı satırda ve kategori satırları lazy focus section içinde. |
+| UpNextCountdownOverlayView.swift | Thumbnail, uzun metin ve yan yana iki aksiyon iPhone portrede yatay taşma riski taşıyordu. | Düzeltildi: ViewThatFits dar yatay alanda kompakt dikey yerleşimi seçiyor; iki eylem 44 pt minimum yüksekliğe sahip. |
+| MediaLanguageFilterBar.swift / OriginalLanguageFilterBar.swift | Dikey içerikteki yatay filtre satırları focus bölümü oluşturmalı. | Düzeltildi: her yatay HStack tvOS’ta `.focusSection()` sınırı taşıyor. |
+| MovieVersionPickerView.swift / VODDetailView.swift / SportsHubView.swift | Yatay sürüm/oyuncu/benzer/maç satırlarının focus geometrisi ayrılmalı. | Düzeltildi: sürüm seçici, tvOS oyuncu/benzer rafları ve maç rafı focus bölümlerine ayrıldı. Focus review `[APPROVED]`; cihaz kontrolü açık. |
+| VODDetailView.swift / SeriesDetailView+tvOS.swift | Dikey katalog alanlarının sınırı tanımlanmalı. | Düzeltildi: tvOS VOD ve Series ScrollView’larına `.focusSection()` eklendi. Yukarı sekme barına çıkış cihazda doğrulanmalı. Downloads kapsamındaki focus bölümleri #198’de eklendi. |
+| EPGTimelineView.swift | tvOS program metinleri küçük, alt sağ floating navigasyon grid hücrelerini kapatıyordu. | Düzeltildi: tvOS program başlıkları kullanılabilir karta göre 12–18 pt, badge’ler 11–12 pt, kanal başlıkları 13–15 pt; zaman kontrolleri kaydırılabilir grid’in altında ayrı focus section’da. Reviewer `[APPROVED]`; dar kartlar başlığı kısaltabilir, cihaz okunabilirlik kontrolü açık. |
 
 ## EPG sunum mimarisi araştırması
 
@@ -132,7 +132,7 @@ EPGTimeline preview’ı route `presentationID` ve playback-attempt UUID’siyle
 
 ## İndirme incelemesinden kalan çapraz ekran işleri
 
-- `VODDetailFeature.downloadTapped` ve `SeriesDetailFeature.downloadEpisode` mevcut dosya indirildi olarak işaretliyken doğrudan silme API’sine gidiyor; queue ekranına eklenen onay bu iki ayrıntı akışında henüz yok. Aynı onay ve görünür hata sözleşmesi bu çağrı noktalarına da taşınmalı. Manager’ın canonical/aktif görev/düzenli dosya koruması bu çağrılar için de uygulanıyor.
+- **VOD/Series indirme silme akışı (#234):** İndirildi düğmesi artık dosyayı doğrudan silmiyor; mevcut Downloads onay metniyle destructive confirmation istiyor. Series reducer bekleyen bölüm kimliğini doğruluyor, silme hatasını görünür alert’te gösteriyor ve başarıda yalnız silinen bölümü yerel listeden çıkarıyor. Series liste kartındaki iç içe Button’lar ve grid’de eksik olan indirme eylemi düzeltildi; Play/İndir hedefleri birbirinden bağımsız ve en az 44 pt, silme sürerken spinner/erişilebilir busy değeri gösteriliyor. VOD silmesi de busy feedback alıyor. Dialog kapanış sırası ve view disappearance için pending state temizliği eklendi. Manager’ın canonical/aktif görev/düzenli dosya koruması aynen kullanılıyor. Hedefli kaynak incelemesi ve `git diff --check` dışında doğrulama yok; ContactCleaner sınırı nedeniyle Xcode build çalıştırılmadı.
 - DownloadManager’ın custom context’leri aynı actor içinde tutulup UI’ye Sendable snapshot dönüyor. `SharedDatabaseConfig.shared` erişimi ise projedeki mevcut MainActor varsayımı nedeniyle iOS derlemesinde Swift 6 uyarısı üretiyor. Container’ın açık actor/isolation enjeksiyonu ayrı bir concurrency incelemesi gerektiriyor; uyarının giderildiği veya uygulamanın Swift 6 modunda temiz olduğu iddia edilmiyor.
 
 ## Başlangıç ve veri koruma incelemesi (#199)
@@ -145,9 +145,46 @@ EPGTimeline preview’ı route `presentationID` ve playback-attempt UUID’siyle
 
 1. #211 EPG yanıt/yaşam döngüsü ve viewport düzeltmeleri reviewer + iOS/tvOS compile-only build ile tamamlandı; görev çıktıları temizlendi.
 2. #198 indirme UI/veri değişiklikleri reviewer + iOS/tvOS compile-only build ile tamamlandı; görev çıktıları temizlendi.
-3. Player scrubber / Up Next / görünmez kontroller ve HUD focus dönüşlerini düzelt.
+3. Player scrubber ve Up Next Geri hataları düzeltildi; görünmez kontroller ve diğer HUD focus dönüşlerini sürdür.
 4. İç içe profil/playlist kontrollerini ayır; kategori sıralamasına remote yolu ekle.
 5. Filtre/row focus geometrisi, scroll döngüleri, tvOS tipografi ve örtüşen kontrol alanlarını düzelt.
 6. Merkezi ekran sunumu ve EPG dönüş yolunu tutarlı hale getir. Kalan ortak UI ve iOS ekranlarının ayrıntılı taramasını sürdür.
 
 Tüm açık maddeler kapanmadan ve gerçek cihaz erişim yolları kullanıcı tarafından doğrulanmadan genel hedef tamamlanmış sayılmaz.
+
+## 29 Ekim 2026 devam denetimi
+
+- EPG sync görünüm kapanırken etkinse otomatik yenileme deneme damgası temizleniyor; böylece yarıda kesilen yenileme tekrar açılışta bekleme aralığına takılmıyor.
+- Timeline yeniden açıldığında kaydedilmiş kanal veya program odağı verilmeden önce lazy kanal satırı dikey olarak görünür alana kaydırılıyor; kayıtlı program artık yoksa kanal odağına dönülüyor.
+- Player EPG’de başka kanala ait program düğmeleri odak alabilir durumda; seçim action içinde korunuyor ve erişilebilir ipucu veriliyor.
+- tvOS oynatıcı controller’ı `isMaskShow` false iken focus ağacından kaldırılıyor; mevcut fade geçişi ve `.play` focus dönüşü korunuyor. Hedefli source review `[APPROVED]`.
+- MultiView’de full-slot focus hedefi kaldırıldı. Kanal adı tvOS’ta görünür 44 pt slot seçim düğmesi; alttaki/üstteki sibling kontroller ayrı focus alıyor ve Play/Pause komutu ortak slot üst görünümünden fullscreen/swap davranışını koruyor. Reviewer `[APPROVED]`; cihaz test edilmedi.
+- PlayerSidebarDrawer lazy satırları açılışta görünür geçerli kanal ID’sine odaklanıyor; gecikmeli scroll callback odak veya filtre değişince stale kalıyor ve atlanıyor. Hedefli review `[APPROVED]`.
+- tvOS yatay dil/versiyon/oyuncu/benzer/maç satırları `.focusSection()` ile ayrıldı; VOD detayının dikey kataloğu da focus section sınırında. Reviewer yatay section’ları ve VOD modifier kapsamını `[APPROVED]` etti; cihaz kontrolü açık.
+- Etkileşimli Player HUD açıkken idle timer artık controller’ı kaldırmıyor. HUD kapanışı ve Up Next Play Now timer’ı yeniliyor; focused source view açık kaldığından dismissal focus kaybetmiyor. Reviewer `[APPROVED]`.
+- Series detayının dış dikey kataloğuna `.focusSection()` eklendi. Hedefsiz UIFocusGuide helper kaldırıldı.
+- Yukarıdaki düzeltilen EPG/focus yollarının hedefli kaynak review’ları onaylandı. Tam iOS/tvOS compile-only build ve fiziksel Apple TV focus doğrulaması tamamlanmadı; uygulama akışları bu hedefte çalıştırılmayacak.
+
+### 29 Ekim 2026 Focus Engine tarama devamı
+
+- **Player EPG:** Program timeline ve kanal picker yatay ScrollView’larına kendi `.focusSection()` sınırları eklendi. Program seçimi mümkün değilken tvOS’ta kartlar odakta kalıp açıklama sunuyor; iOS’ta aynı kartlar hâlâ disabled ve VoiceOver/touch eylemi oluşturmuyor.
+- **Player yardımcı şeritleri:** Catch-up program şeridi ve numara tuşlama eşleşme şeridi focus section sınırında; dikey kumanda hareketi bu yatay satırların dışına beklenmedik sıçramamalı.
+- **Trakt:** Watchlist ve playback-progress kartları tvOS’ta odak alınabilir, birleşik erişilebilirlik metni ve belirgin çerçeve sunuyor; dikey scroll view section olarak gruplanıyor. Mevcut TraktFeature’da içerik açma/play action’ı bulunmadığından kartlara yeni action uydurulmadı.
+- **MultiView:** Audio, aspect ratio, kaldır, kanal başlığı ve companion swap eylemleri ayrı `MultiViewSlotFocusTarget` kimlikleri kullanıyor. Slot vurgusu tüm focused descendants’ı izliyor; aynı slotta tekrar odak event’i audio state’ini yeniden yazmıyor. Bağımsız kaynak reviewer `[APPROVED]`.
+- **Ayarlar ve ön kontrol:** CategoryManagement bulk/filter/reset, Paywall kapat, playlist preflight, Cloud Sync, tanılama raporu ve özel EPG yenileme kontrolleri tvOS focus geri bildirimi gösteriyor. Çalışan işlemler sırasında tvOS kontrolleri focus zincirinde kalırken action guard’ları tekrar isteği önlüyor; kullanılabilir olmayan preflight focus dışı kalıyor. iOS disabled davranışı korunuyor. Kaynak review `[APPROVED]`.
+- **Kanal isimleri:** EPG Guide aynı tvOS iki-satır tercihini kullanıyor; mevcut setting Live TV/favori kartları ve player drawer’da da tüketiliyor. EPG Timeline kompakt/standart satır seçimini koruyor.
+- **Ortak ağ hızı ekranı:** `StreamSpeedTestView`’daki simge-only kapatma düğmesinin erişilebilir etiketi yoktu ve `.plain` stil tvOS focus vurgusunu kaldırıyordu. Yerelleştirilmiş Kapat etiketi ve dairesel `tvFocusEffect` eklendi; ana test/durdur düğmesi de tvOS’ta ortak odak vurgusunu kullanıyor. Bağımsız kaynak review `[APPROVED]`; build veya ekran akışı çalıştırılmadı.
+- **SportsHub maç rafı:** Kartın tek kumanda eylemi olan “İzle” düğmesi `.plain` nedeniyle odakta görünmüyordu ve 44 pt’den kısa kalıyordu. tvOS’ta minimum yükseklik 44 pt ve kapsül `tvFocusEffect` eklendi; iOS stili değişmedi. Bağımsız kaynak review `[APPROVED]`.
+- **EPG Guide başlangıç odağı:** Seçili kanal ilk LazyVStack ekranının dışındaysa doğrudan `@FocusState` ataması odaklanabilir satır bulamıyordu. Kanal listesi açılışta seçili/geçerli kanal kimliğine kayıyor; view-lifecycle task bir run-loop adımı sonra odak atıyor ve görünüm iptali, güncel seçim ile yeni odak guard’ları eski atamanın geç kalmasını önlüyor. Boş/eski seçime ilk görünür kanal fallback’i var. Preview mute düğmesi 44×44 hedef ve `TVCircleButtonStyle` odak görünümü kullanıyor. Reviewer `[APPROVED]`.
+- **LiveTV seçim modu focus dönüşü:** Kaydedilmiş kanal seçim sırasında gizlenirse dönüş odağı artık `displayChannels` içinden görünür fallback seçiyor. Her seçim modu geçişi restore generation token’ını yeniliyor; gecikmiş callback modun hâlâ kapalı olduğunu ve aynı request’in geçerli kaldığını doğruluyor, geçerli yeni kanal/kategori odağını ezmiyor. Reviewer `[APPROVED]`.
+- **Settings işlem odağı ve tanılama raporu:** tvOS’ta çalışan Custom EPG, Cloud Sync ve tanılama eylemleri odakta kalıyor; yinelenen işlem action/reducer guard’larıyla reddediliyor, iOS disabled davranışı korunuyor. Eylem adları busy spinner sırasında da sabit ve loading accessibility value’su var. Tanılama raporu üreticisi 2 KiB üst sınırı koyuyor; önizleme dosyayı arka planda cancellation-linked işçiyle okuyup beş satırlık focusable `VStack` bölümleri olarak `.focusSection()` içinde gösteriyor, böylece uzun rapor satırları virtualization yüzünden odağı kaybetmiyor. Custom EPG kaynak yenileme ve Toggle busy sırasında focus zincirinde kalıyor; etiket ve loading value korunuyor. Kaynak reviewer `[APPROVED]`.
+- **SportsHub yatay focus sınırı:** `.focusSection()` değişken içerik genişliğindeki HStack’ten tam viewport genişliğini sağlayan horizontal ScrollView’a taşındı. Kaynak reviewer `[APPROVED]`.
+- **Kullanılmayan ortak ekran adayları:** `ChannelNumberPadView` ve `ShuffleMoviePickerView` için uygulama içi çağrı yeri kaynak aramasında bulunmadı. Bu nedenle erişilebilirlikleri canlı ekran denetimi sayılmadı; silme kararı ayrı dead-code incelemesine bırakıldı.
+- **Açık cihaz riski:** SeriesDetail uzun sezon listesi stable ID, `@FocusState` binding ve `.focusSection()` taşıyor; kaynakta kalıcı bir focus dead-end bulunmadı. Apple TV HD’de LazyVStack virtualization sırasında hızlı dikey gezinme riski yalnız gerçek cihazda doğrulanabilir. Bu hedefte app flow çalıştırılmıyor.
+- **Doğrulama:** Hedefli `git diff --check` başarılı. Xcode build, test, simulator veya uygulama akışı çalıştırılmadı; Xcode pre-build SwiftFormat’ın ContactCleaner’a erişmeyeceği garanti edilemiyor.
+
+## 31 Ekim 2026 devam denetimi
+
+- **Recent Live TV rafı:** Pin kaldırma işlemi sürerken Dashboard tüm kartı devre dışı bırakıyordu; bu, ayrı Watch düğmesini de tvOS focus ağacından çıkarıyordu. Kart genelindeki `.disabled` kaldırıldı. Bağımsız reviewer Watch eyleminin odakta kaldığını ve reducer’ın yinelenen pin/remove çağrılarını reddettiğini doğruladı.
+- **EPG kanal oynatma:** Timeline ve Guide, `streamURL` boş olsa bile oynatma öncesi görünmez duruma geçebiliyordu. Her iki akışta da URL doğrulaması görünürlük/preview state değişikliklerinden önce yapılıyor; route, geçersiz oynatmada açık ve kapatılabilir kalıyor.
+- **Doğrulama:** EPG handoff iptali, sahiplik temizliği ve route sunum kimliği reviewer tarafından `[APPROVED]` edildi. Değişen Swift dosyalarında `swiftc -frontend -parse` ve hedefli `git diff --check` başarılı. Build, simulator, app flow ve cihaz focus kontrolü çalıştırılmadı; EPG metin okunabilirliği ve kumanda ile gerçek cihaz dolaşımı hâlâ cihazda doğrulanmalı.

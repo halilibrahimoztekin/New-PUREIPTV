@@ -6,9 +6,11 @@ public struct PureIPTVBackupData: Codable, Sendable {
     public let backupDate: Date
     public let preferredAudioLanguage: String?
     public let preferredSubtitleLanguage: String?
+    public let subtitleAppearanceProfile: String?
     public let playbackDefaultsByKind: [String: PlaybackDefaults]?
     public let hideAdultContent: Bool?
     public let defaultStartupTab: String?
+    public let defaultStartupTabsByProfile: [String: String]?
     public let vodSortMethod: String?
     public let seriesSortMethod: String?
     public let customUserAgentPreset: String?
@@ -21,9 +23,11 @@ public struct PureIPTVBackupData: Codable, Sendable {
         backupDate: Date = Date(),
         preferredAudioLanguage: String? = nil,
         preferredSubtitleLanguage: String? = nil,
+        subtitleAppearanceProfile: String? = nil,
         playbackDefaultsByKind: [String: PlaybackDefaults]? = nil,
         hideAdultContent: Bool? = nil,
         defaultStartupTab: String? = nil,
+        defaultStartupTabsByProfile: [String: String]? = nil,
         vodSortMethod: String? = nil,
         seriesSortMethod: String? = nil,
         customUserAgentPreset: String? = nil,
@@ -35,9 +39,11 @@ public struct PureIPTVBackupData: Codable, Sendable {
         self.backupDate = backupDate
         self.preferredAudioLanguage = preferredAudioLanguage
         self.preferredSubtitleLanguage = preferredSubtitleLanguage
+        self.subtitleAppearanceProfile = subtitleAppearanceProfile
         self.playbackDefaultsByKind = playbackDefaultsByKind
         self.hideAdultContent = hideAdultContent
         self.defaultStartupTab = defaultStartupTab
+        self.defaultStartupTabsByProfile = defaultStartupTabsByProfile
         self.vodSortMethod = vodSortMethod
         self.seriesSortMethod = seriesSortMethod
         self.customUserAgentPreset = customUserAgentPreset
@@ -71,15 +77,24 @@ public final class BackupManager: Sendable {
                 (kind.rawValue, PlaybackDefaultsStore.load(for: kind, defaults: defaults))
             }
         )
+        let startupTabsByProfile = Self.profileStartupTabs(defaults: defaults)
+        let activeProfileID = Self.activeProfileID(defaults: defaults)
+        let activeStartupTab = activeProfileID
+            .flatMap { startupTabsByProfile[$0.uuidString] }
+            ?? defaults.string(forKey: StartupTabPreferenceStorageKey.legacy)
+        let defaultStartupTab = activeStartupTab.flatMap { HomeTab(rawValue: $0) == nil ? nil : $0 }
+            ?? "Keşfet"
 
         let backup = PureIPTVBackupData(
             appVersion: "1.0",
             backupDate: Date(),
             preferredAudioLanguage: vodPlaybackDefaults.preferredAudioLanguage,
             preferredSubtitleLanguage: vodPlaybackDefaults.preferredSubtitleLanguage,
+            subtitleAppearanceProfile: SubtitleAppearanceProfile.selectedForNextLaunch.rawValue,
             playbackDefaultsByKind: playbackDefaultsByKind,
             hideAdultContent: defaults.object(forKey: "com.pureiptv.hideAdultContent") as? Bool,
-            defaultStartupTab: defaults.string(forKey: "com.pureiptv.defaultStartupTab"),
+            defaultStartupTab: defaultStartupTab,
+            defaultStartupTabsByProfile: startupTabsByProfile.isEmpty ? nil : startupTabsByProfile,
             vodSortMethod: defaults.string(forKey: "com.pureiptv.vodSortMethod"),
             seriesSortMethod: defaults.string(forKey: "com.pureiptv.seriesSortMethod"),
             customUserAgentPreset: defaults.string(forKey: "pureiptv_user_agent_preset"),
@@ -136,8 +151,23 @@ public final class BackupManager: Sendable {
         if backup.hideAdultContent != nil {
             include("Yetişkin içeriğini gizle", keys: ["com.pureiptv.hideAdultContent"])
         }
-        if backup.defaultStartupTab != nil {
-            include("Başlangıç sekmesi", keys: ["com.pureiptv.defaultStartupTab"])
+        if backup.subtitleAppearanceProfile != nil {
+            include("VLC altyazı görünümü", keys: [SubtitleAppearanceProfile.userDefaultsKey])
+        }
+        if backup.defaultStartupTab != nil || backup.defaultStartupTabsByProfile != nil {
+            let profileIDs = Set(
+                (backup.defaultStartupTabsByProfile ?? [:]).keys.compactMap(UUID.init(uuidString:))
+            )
+            var startupTabKeys = profileIDs.map(StartupTabPreferenceStorageKey.profile)
+            if backup.defaultStartupTab != nil {
+                startupTabKeys.append(StartupTabPreferenceStorageKey.legacy)
+                if let activeProfileID = Self.activeProfileID(defaults: defaults),
+                   !profileIDs.contains(activeProfileID)
+                {
+                    startupTabKeys.append(StartupTabPreferenceStorageKey.profile(activeProfileID))
+                }
+            }
+            include("Başlangıç sekmesi", keys: startupTabKeys)
         }
         if backup.vodSortMethod != nil {
             include("Film sıralaması", keys: ["com.pureiptv.vodSortMethod"])
@@ -170,6 +200,11 @@ public final class BackupManager: Sendable {
         if let sub = backup.preferredSubtitleLanguage {
             defaults.set(sub, forKey: "com.pureiptv.preferredSubtitleLanguage")
         }
+        if let rawProfile = backup.subtitleAppearanceProfile,
+           let profile = SubtitleAppearanceProfile(rawValue: rawProfile)
+        {
+            defaults.set(profile.rawValue, forKey: SubtitleAppearanceProfile.userDefaultsKey)
+        }
         if let scopedPlaybackDefaults = backup.playbackDefaultsByKind {
             for kind in PlaybackContentKind.allCases {
                 if let value = scopedPlaybackDefaults[kind.rawValue] {
@@ -194,7 +229,21 @@ public final class BackupManager: Sendable {
             defaults.set(hideAdult, forKey: "com.pureiptv.hideAdultContent")
         }
         if let tab = backup.defaultStartupTab {
-            defaults.set(tab, forKey: "com.pureiptv.defaultStartupTab")
+            defaults.set(tab, forKey: StartupTabPreferenceStorageKey.legacy)
+        }
+        var restoredProfileIDs = Set<UUID>()
+        for (rawID, tab) in backup.defaultStartupTabsByProfile ?? [:] {
+            guard let profileID = UUID(uuidString: rawID) else { continue }
+            defaults.set(tab, forKey: StartupTabPreferenceStorageKey.profile(profileID))
+            restoredProfileIDs.insert(profileID)
+        }
+        if let tab = backup.defaultStartupTab,
+           let activeProfileID = Self.activeProfileID(defaults: defaults),
+           !restoredProfileIDs.contains(activeProfileID)
+        {
+            // Apply the backup's effective tab to the active profile when it has no
+            // matching entry, so a local override cannot mask the restore.
+            defaults.set(tab, forKey: StartupTabPreferenceStorageKey.profile(activeProfileID))
         }
         if let vodSort = backup.vodSortMethod {
             defaults.set(vodSort, forKey: "com.pureiptv.vodSortMethod")
@@ -251,8 +300,16 @@ public final class BackupManager: Sendable {
               backup.backupDate <= Date().addingTimeInterval(5 * 60),
               Self.isSafeString(backup.preferredAudioLanguage, maximumLength: 512),
               Self.isSafeString(backup.preferredSubtitleLanguage, maximumLength: 512),
+              backup.subtitleAppearanceProfile.map({ SubtitleAppearanceProfile(rawValue: $0) != nil }) ?? true,
               Self.isSafeString(backup.defaultStartupTab, maximumLength: 128),
               backup.defaultStartupTab.map({ HomeTab(rawValue: $0) != nil }) ?? true,
+              backup.defaultStartupTabsByProfile.map({ startupTabs in
+                  startupTabs.count <= 1000 && startupTabs.allSatisfy { rawID, tab in
+                      UUID(uuidString: rawID) != nil
+                          && Self.isSafeString(tab, maximumLength: 128)
+                          && HomeTab(rawValue: tab) != nil
+                  }
+              }) ?? true,
               Self.isSafeString(backup.vodSortMethod, maximumLength: 128),
               backup.vodSortMethod.map({ SortMethod(rawValue: $0) != nil }) ?? true,
               Self.isSafeString(backup.seriesSortMethod, maximumLength: 128),
@@ -273,6 +330,25 @@ public final class BackupManager: Sendable {
     private nonisolated static func isSafeString(_ value: String?, maximumLength: Int) -> Bool {
         guard let value else { return true }
         return value.count <= maximumLength && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func activeProfileID(defaults: UserDefaults) -> UUID? {
+        defaults.string(forKey: "currentProfileID").flatMap(UUID.init(uuidString:))
+    }
+
+    private static func profileStartupTabs(defaults: UserDefaults) -> [String: String] {
+        var startupTabs: [String: String] = [:]
+        for (key, value) in defaults.dictionaryRepresentation() {
+            guard key.hasPrefix(StartupTabPreferenceStorageKey.profilePrefix),
+                  let profileID = UUID(
+                      uuidString: String(key.dropFirst(StartupTabPreferenceStorageKey.profilePrefix.count))
+                  ),
+                  let tab = value as? String,
+                  HomeTab(rawValue: tab) != nil
+            else { continue }
+            startupTabs[profileID.uuidString] = tab
+        }
+        return startupTabs
     }
 
     private nonisolated static func isValidThemeColor(_ value: String?) -> Bool {

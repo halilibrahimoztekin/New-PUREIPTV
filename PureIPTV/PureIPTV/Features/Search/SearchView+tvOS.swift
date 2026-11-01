@@ -19,7 +19,9 @@
         private enum SearchFocusTarget: Hashable {
             case search
             case clearQuery
+            case pinSearch
             case playlist(UUID?)
+            case contentScope(SearchFeature.SearchContentScope)
             case filter(SearchFeature.SearchFilter)
             case result(String)
         }
@@ -62,9 +64,13 @@
                         .padding(.top, 40)
 
                     // Multi-Playlist Filter Bar (if multiple playlists exist)
-                    if store.savedPlaylists.count > 1 {
+                    if store.savedPlaylists.count > 1, store.filter != .downloads {
                         playlistFilterBar
                             .padding(.horizontal, 60)
+                    }
+
+                    if store.filter != .downloads {
+                        contentScopeBar
                     }
 
                     // Instant Filter Badges Bar
@@ -72,15 +78,18 @@
                         .padding(.bottom, 12)
 
                     // Results or Discovery State
-                    if store.isLoading {
+                    if store.isLoading, store.filter != .downloads {
                         loadingView
-                    } else if let error = store.errorMessage {
+                    } else if let error = store.errorMessage, store.filter != .downloads {
                         errorView(error)
-                    } else if store.hasLoaded, store.searchQuery.isEmpty {
+                    } else if store.hasLoaded, store.searchQuery.isEmpty, store.filter != .downloads {
                         emptySearchDiscoveryView
                     } else if store.isSearching || store.isCurrentScopeSearching, store.totalResultsCount == 0 {
                         searchingView
-                    } else if store.totalResultsCount == 0 {
+                    } else if store.totalResultsCount == 0, store.filter == .downloads
+                        || (!store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && store.searchContentScope != .all)
+                        || !store.hasVisibleCuratedPlaylistItems
+                    {
                         emptyStateView(AppStrings.Search.noResults, icon: "doc.text.magnifyingglass")
                     } else {
                         resultsScrollView
@@ -147,6 +156,21 @@
                 guard !isSearching, shouldFocusResultsWhenAvailable else { return }
                 focusFirstResult()
             }
+            .alert(
+                AppStrings.Search.pinnedSearchLimitTitle,
+                isPresented: Binding(
+                    get: { store.isPinnedSearchLimitAlertPresented },
+                    set: { isPresented in
+                        if !isPresented, store.isPinnedSearchLimitAlertPresented {
+                            store.send(.pinnedSearchLimitAlertDismissed)
+                        }
+                    }
+                )
+            ) {
+                Button(AppStrings.Common.ok, role: .cancel) {}
+            } message: {
+                Text(AppStrings.Search.pinnedSearchLimitMessage)
+            }
         }
 
         // MARK: – UI Components
@@ -172,7 +196,7 @@
                         .padding(.trailing, 10)
                 }
 
-                if !store.searchQuery.isEmpty {
+                if !store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
                         cancelPendingResultFocus()
                         focusedTarget = .search
@@ -187,6 +211,22 @@
                     .buttonStyle(TVCircleButtonStyle())
                     .focused($focusedTarget, equals: .clearQuery)
                     .accessibilityFocused($accessibilityFocusedTarget, equals: .clearQuery)
+                }
+
+                if !store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        store.send(.togglePinnedSearch(store.searchQuery))
+                    } label: {
+                        Image(systemName: store.isCurrentSearchPinned ? "pin.slash.fill" : "pin")
+                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                            .font(.system(size: 28))
+                            .padding(6)
+                    }
+                    .buttonStyle(TVCircleButtonStyle())
+                    .focused($focusedTarget, equals: .pinSearch)
+                    .accessibilityFocused($accessibilityFocusedTarget, equals: .pinSearch)
+                    .accessibilityLabel(store.isCurrentSearchPinned ? AppStrings.Search.unpinSearch : AppStrings.Search.pinSearch)
+                    .accessibilityHint(AppStrings.Search.togglePinnedSearchHint)
                 }
 
                 if let onClose {
@@ -303,236 +343,287 @@
             .focusSection()
         }
 
+        private var contentScopeBar: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(SearchFeature.SearchContentScope.allCases, id: \.self) { scope in
+                        let isSelected = store.searchContentScope == scope
+                        Button {
+                            selectContentScope(scope)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: scope.icon)
+                                    .font(.system(size: 20))
+                                Text(scope.title)
+                                    .font(.system(size: 22, weight: isSelected ? .bold : .medium))
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                        .focused($focusedTarget, equals: .contentScope(scope))
+                        .accessibilityFocused($accessibilityFocusedTarget, equals: .contentScope(scope))
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, 60)
+            }
+            .focusSection()
+        }
+
         // MARK: - Results Scroll View
 
         private var resultsScrollView: some View {
             ScrollView {
                 VStack(spacing: 60) {
-                    // 1. Live Channels Section
-                    let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
-                        GlobalSearchResultItem(
-                            item: $0,
-                            playlistBadge: store.fallbackSourceBadge
-                        )
-                    } : store.enrichedLiveResults
+                    if store.filter == .downloads {
+                        downloadedMediaResultsSection
+                    } else {
+                        if store.searchQuery.isEmpty || store.searchContentScope == .all {
+                            curatedPlaylistSection
+                        }
 
-                    if !live.isEmpty {
-                        resultSection(title: AppStrings.Search.liveTV, count: live.count) {
-                            LazyVGrid(columns: channelColumns, spacing: 40) {
-                                ForEach(live) { result in
-                                    GlobalSearchResultCard(
-                                        result: result,
-                                        isSelected: false,
-                                        showPlaylistBadge: store.savedPlaylists.count > 1,
-                                        isReminderScheduled: result.matchedEPGProgram.map {
-                                            store.scheduledReminderIDs.contains(result.reminderID(for: $0))
-                                                || store.scheduledReminderIDs.contains($0.id)
-                                        } ?? false,
-                                        isReminderPending: result.matchedEPGProgram.map {
-                                            store.pendingReminderRequestIDs[result.reminderID(for: $0)] != nil
-                                        } ?? false
-                                    ) {
-                                        store.send(.channelSelected(result.item))
-                                    }
-                                    .id(result.id)
-                                    .focused($focusedTarget, equals: .result(result.id))
-                                    .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
-                                    .onAppear {
-                                        renderedResultIDs.insert(result.id)
-                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
-                                    }
-                                    .onDisappear { renderedResultIDs.remove(result.id) }
-                                    .contextMenu {
-                                        Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
-                                        } label: {
-                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
-                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                            } else {
-                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                            }
-                                        }
+                        // 1. Live Channels Section
+                        let live = store.enrichedLiveResults.isEmpty ? store.liveResults.map {
+                            GlobalSearchResultItem(
+                                item: $0,
+                                playlistBadge: store.fallbackSourceBadge
+                            )
+                        } : store.enrichedLiveResults
 
-                                        Button {
+                        if !live.isEmpty {
+                            resultSection(title: AppStrings.Search.liveTV, count: live.count) {
+                                LazyVGrid(columns: channelColumns, spacing: 40) {
+                                    ForEach(live) { result in
+                                        GlobalSearchResultCard(
+                                            result: result,
+                                            isSelected: false,
+                                            showPlaylistBadge: store.savedPlaylists.count > 1,
+                                            isReminderScheduled: result.matchedEPGProgram.map {
+                                                store.scheduledReminderIDs.contains(result.reminderID(for: $0))
+                                                    || store.scheduledReminderIDs.contains($0.id)
+                                            } ?? false,
+                                            isReminderPending: result.matchedEPGProgram.map {
+                                                store.pendingReminderRequestIDs[result.reminderID(for: $0)] != nil
+                                            } ?? false
+                                        ) {
                                             store.send(.channelSelected(result.item))
-                                        } label: {
-                                            Label(AppStrings.Common.watchNow, systemImage: "play.fill")
                                         }
-                                    }
-                                }
-                            }
-                            .scrollTargetLayout()
-                        }
-                    }
-
-                    // 2. Movies (VOD) Section
-                    let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
-                        GlobalSearchResultItem(
-                            item: $0,
-                            playlistBadge: store.fallbackSourceBadge
-                        )
-                    } : store.enrichedVODResults
-
-                    if !vods.isEmpty {
-                        resultSection(title: AppStrings.Search.movies, count: vods.count) {
-                            LazyVGrid(columns: mediaColumns, spacing: 40) {
-                                ForEach(vods) { result in
-                                    GlobalSearchResultCard(
-                                        result: result,
-                                        isSelected: false,
-                                        showPlaylistBadge: store.savedPlaylists.count > 1
-                                    ) {
-                                        store.send(.vodSelected(result.item))
-                                    }
-                                    .id(result.id)
-                                    .focused($focusedTarget, equals: .result(result.id))
-                                    .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
-                                    .onAppear {
-                                        renderedResultIDs.insert(result.id)
-                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
-                                    }
-                                    .onDisappear { renderedResultIDs.remove(result.id) }
-                                    .contextMenu {
-                                        Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
-                                        } label: {
-                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
-                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                            } else {
-                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                            }
+                                        .id(result.id)
+                                        .focused($focusedTarget, equals: .result(result.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(result.id)
+                                            focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
                                         }
+                                        .onDisappear { renderedResultIDs.remove(result.id) }
+                                        .contextMenu {
+                                            curatedPlaylistContextMenuItem(for: result)
 
-                                        Button {
-                                            store.send(.vodSelected(result.item))
-                                        } label: {
-                                            Label("Detayları Gör", systemImage: "info.circle")
-                                        }
-                                    }
-                                }
-                            }
-                            .scrollTargetLayout()
-                        }
-                    }
-
-                    // 3. Series Section
-                    let series = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
-                        GlobalSearchResultItem(
-                            item: $0,
-                            playlistBadge: store.fallbackSourceBadge
-                        )
-                    } : store.enrichedSeriesResults
-
-                    if !series.isEmpty {
-                        resultSection(title: AppStrings.Search.series, count: series.count) {
-                            LazyVGrid(columns: mediaColumns, spacing: 40) {
-                                ForEach(series) { result in
-                                    GlobalSearchResultCard(
-                                        result: result,
-                                        isSelected: false,
-                                        showPlaylistBadge: store.savedPlaylists.count > 1
-                                    ) {
-                                        store.send(.seriesSelected(result.item))
-                                    }
-                                    .id(result.id)
-                                    .focused($focusedTarget, equals: .result(result.id))
-                                    .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
-                                    .onAppear {
-                                        renderedResultIDs.insert(result.id)
-                                        focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
-                                    }
-                                    .onDisappear { renderedResultIDs.remove(result.id) }
-                                    .contextMenu {
-                                        Button {
-                                            store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
-                                        } label: {
-                                            if store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
-                                                Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
-                                            } else {
-                                                Label(AppStrings.Common.addToFavorites, systemImage: "heart")
-                                            }
-                                        }
-
-                                        Button {
-                                            store.send(.seriesSelected(result.item))
-                                        } label: {
-                                            Label("Bölümleri Gör", systemImage: "list.number")
-                                        }
-                                    }
-                                }
-                            }
-                            .scrollTargetLayout()
-                        }
-                    }
-
-                    if store.filter == .all || store.filter == .people, !store.peopleResults.isEmpty {
-                        resultSection(title: AppStrings.Search.people, count: store.peopleResults.count) {
-                            LazyVGrid(columns: personColumns, spacing: 28) {
-                                ForEach(store.peopleResults) { credit in
-                                    Button {
-                                        store.send(.personCreditSelected(credit))
-                                    } label: {
-                                        HStack(spacing: 18) {
-                                            AsyncImage(url: credit.portraitURL) { phase in
-                                                if let image = phase.image {
-                                                    image.resizable().scaledToFill()
+                                            Button {
+                                                store.send(.toggleFavorite(item: result.item, type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
+                                            } label: {
+                                                if store.favoriteIDs.contains(FavoriteIdentity(type: "live", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
                                                 } else {
-                                                    ZStack {
-                                                        Color(hex: "#25252B")
-                                                        Image(systemName: "person.fill").font(.system(size: 38)).foregroundStyle(Color(hex: "#9B9BA5"))
-                                                    }
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
                                                 }
                                             }
-                                            .frame(width: 112, height: 156)
-                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                            VStack(alignment: .leading, spacing: 10) {
-                                                Text(credit.personName).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
-                                                Text(credit.result.item.title).font(.system(size: 20)).foregroundStyle(Color(hex: "#C0C6D6")).lineLimit(2)
-                                                Text(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies)
-                                                    .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(hex: "#64D2FF"))
-                                            }
-                                            Spacer(minLength: 0)
-                                            Image(systemName: "play.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(Color(hex: "#0A84FF"))
-                                        }
-                                        .padding(18)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                    }
-                                    .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
-                                    .id(credit.id)
-                                    .focused($focusedTarget, equals: .result(credit.id))
-                                    .accessibilityFocused($accessibilityFocusedTarget, equals: .result(credit.id))
-                                    .onAppear {
-                                        renderedResultIDs.insert(credit.id)
-                                        focusRenderedResultIfRequested(credit.id, requestID: focusRequestSequence)
-                                    }
-                                    .onDisappear { renderedResultIDs.remove(credit.id) }
-                                    .accessibilityLabel("\(credit.personName), \(credit.result.item.title)")
-                                    .accessibilityHint(AppStrings.Common.watchNow)
-                                }
-                            }
-                            .scrollTargetLayout()
-                        }
-                    }
 
-                    if store.filter == .all || store.filter == .programs, !store.programResults.isEmpty {
-                        resultSection(title: AppStrings.Search.programs, count: store.programResults.count) {
-                            LazyVGrid(columns: channelColumns, spacing: 40) {
-                                ForEach(store.programResults) { match in
-                                    ProgramSearchResultCard(program: match.program, channel: match.result.item, playlistName: store.savedPlaylists.count > 1 ? match.result.playlistBadge.playlistName : nil) {
-                                        store.send(.programSelected(match))
+                                            Button {
+                                                store.send(.channelSelected(result.item))
+                                            } label: {
+                                                Label(AppStrings.Common.watchNow, systemImage: "play.fill")
+                                            }
+                                        }
                                     }
-                                    .id(match.id)
-                                    .focused($focusedTarget, equals: .result(match.id))
-                                    .accessibilityFocused($accessibilityFocusedTarget, equals: .result(match.id))
-                                    .onAppear {
-                                        renderedResultIDs.insert(match.id)
-                                        focusRenderedResultIfRequested(match.id, requestID: focusRequestSequence)
-                                    }
-                                    .onDisappear { renderedResultIDs.remove(match.id) }
                                 }
+                                .scrollTargetLayout()
                             }
-                            .scrollTargetLayout()
+                        }
+
+                        // 2. Movies (VOD) Section
+                        let vods = store.enrichedVODResults.isEmpty ? store.vodResults.map {
+                            GlobalSearchResultItem(
+                                item: $0,
+                                playlistBadge: store.fallbackSourceBadge
+                            )
+                        } : store.enrichedVODResults
+
+                        if !vods.isEmpty {
+                            resultSection(title: AppStrings.Search.movies, count: vods.count) {
+                                LazyVGrid(columns: mediaColumns, spacing: 40) {
+                                    ForEach(vods) { result in
+                                        GlobalSearchResultCard(
+                                            result: result,
+                                            isSelected: false,
+                                            showPlaylistBadge: store.savedPlaylists.count > 1
+                                        ) {
+                                            store.send(.vodSelected(result.item))
+                                        }
+                                        .id(result.id)
+                                        .focused($focusedTarget, equals: .result(result.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(result.id)
+                                            focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                        }
+                                        .onDisappear { renderedResultIDs.remove(result.id) }
+                                        .contextMenu {
+                                            curatedPlaylistContextMenuItem(for: result)
+
+                                            Button {
+                                                store.send(.toggleFavorite(item: result.item, type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
+                                            } label: {
+                                                if store.favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.vodSelected(result.item))
+                                            } label: {
+                                                Label("Detayları Gör", systemImage: "info.circle")
+                                            }
+                                        }
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
+                        }
+
+                        // 3. Series Section
+                        let series = store.enrichedSeriesResults.isEmpty ? store.seriesResults.map {
+                            GlobalSearchResultItem(
+                                item: $0,
+                                playlistBadge: store.fallbackSourceBadge
+                            )
+                        } : store.enrichedSeriesResults
+
+                        if !series.isEmpty {
+                            resultSection(title: AppStrings.Search.series, count: series.count) {
+                                LazyVGrid(columns: mediaColumns, spacing: 40) {
+                                    ForEach(series) { result in
+                                        GlobalSearchResultCard(
+                                            result: result,
+                                            isSelected: false,
+                                            showPlaylistBadge: store.savedPlaylists.count > 1
+                                        ) {
+                                            store.send(.seriesSelected(result.item))
+                                        }
+                                        .id(result.id)
+                                        .focused($focusedTarget, equals: .result(result.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(result.id)
+                                            focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                        }
+                                        .onDisappear { renderedResultIDs.remove(result.id) }
+                                        .contextMenu {
+                                            curatedPlaylistContextMenuItem(for: result)
+
+                                            Button {
+                                                store.send(.toggleFavorite(item: result.item, type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID))
+                                            } label: {
+                                                if store.favoriteIDs.contains(FavoriteIdentity(type: "series", playlistID: store.playlistIDsByBadgeID[result.playlistBadge.id] ?? store.selectedPlaylistID, id: result.item.id)) {
+                                                    Label(AppStrings.Common.removeFromFavorites, systemImage: "heart.slash")
+                                                } else {
+                                                    Label(AppStrings.Common.addToFavorites, systemImage: "heart")
+                                                }
+                                            }
+
+                                            Button {
+                                                store.send(.seriesSelected(result.item))
+                                            } label: {
+                                                Label("Bölümleri Gör", systemImage: "list.number")
+                                            }
+                                        }
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
+                        }
+
+                        if store.filter == .all || store.filter == .people, !store.peopleResults.isEmpty {
+                            resultSection(title: AppStrings.Search.people, count: store.peopleResults.count) {
+                                LazyVGrid(columns: personColumns, spacing: 28) {
+                                    ForEach(store.peopleResults) { credit in
+                                        Button {
+                                            store.send(.personCreditSelected(credit))
+                                        } label: {
+                                            HStack(spacing: 18) {
+                                                AsyncImage(url: credit.portraitURL) { phase in
+                                                    if let image = phase.image {
+                                                        image.resizable().scaledToFill()
+                                                    } else {
+                                                        ZStack {
+                                                            Color(hex: "#25252B")
+                                                            Image(systemName: "person.fill").font(.system(size: 38)).foregroundStyle(Color(hex: "#9B9BA5"))
+                                                        }
+                                                    }
+                                                }
+                                                .frame(width: 112, height: 156)
+                                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                                VStack(alignment: .leading, spacing: 10) {
+                                                    highlightedSearchText(credit.personName, queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init))
+                                                        .font(.system(size: 24, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
+                                                    Text("\(AppStrings.Search.people) · \(store.debouncedQuery)")
+                                                        .font(.system(size: 16, weight: .medium))
+                                                        .foregroundStyle(Color(hex: "#FFD60A"))
+                                                        .lineLimit(1)
+                                                    Text(credit.result.item.displayTitle).font(.system(size: 20)).foregroundStyle(Color(hex: "#C0C6D6")).lineLimit(2)
+                                                    Text(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies)
+                                                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(hex: "#64D2FF"))
+                                                    if store.selectedPlaylistID == nil, store.savedPlaylists.count > 1 {
+                                                        Text(credit.result.playlistBadge.playlistName)
+                                                            .font(.system(size: 15)).foregroundStyle(Color(hex: "#9B9BA5")).lineLimit(1)
+                                                    }
+                                                }
+                                                Spacer(minLength: 0)
+                                                Image(systemName: "play.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(Color(hex: "#0A84FF"))
+                                            }
+                                            .padding(18)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        }
+                                        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
+                                        .id(credit.id)
+                                        .focused($focusedTarget, equals: .result(credit.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(credit.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(credit.id)
+                                            focusRenderedResultIfRequested(credit.id, requestID: focusRequestSequence)
+                                        }
+                                        .onDisappear { renderedResultIDs.remove(credit.id) }
+                                        .accessibilityLabel("\(credit.personName), \(credit.result.item.displayTitle), \(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies), \(AppStrings.Search.people), \(store.debouncedQuery), \(credit.result.playlistBadge.playlistName)")
+                                        .accessibilityHint(AppStrings.Common.watchNow)
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
+                        }
+
+                        if store.filter == .all || store.filter == .programs, !store.programResults.isEmpty {
+                            resultSection(title: AppStrings.Search.programs, count: store.programResults.count) {
+                                LazyVGrid(columns: channelColumns, spacing: 40) {
+                                    ForEach(store.programResults) { match in
+                                        ProgramSearchResultCard(program: match.program, channel: match.result.item, playlistName: store.savedPlaylists.count > 1 ? match.result.playlistBadge.playlistName : nil, query: store.debouncedQuery) {
+                                            store.send(.programSelected(match))
+                                        }
+                                        .id(match.id)
+                                        .focused($focusedTarget, equals: .result(match.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(match.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(match.id)
+                                            focusRenderedResultIfRequested(match.id, requestID: focusRequestSequence)
+                                        }
+                                        .onDisappear { renderedResultIDs.remove(match.id) }
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
                         }
                     }
                 }
@@ -565,11 +656,217 @@
             }
         }
 
+        private var downloadedMediaResultsSection: some View {
+            resultSection(title: AppStrings.Downloads.completedDownloads, count: store.downloadedMediaResults.count) {
+                LazyVGrid(columns: mediaColumns, spacing: 32) {
+                    ForEach(store.downloadedMediaResults) { item in
+                        Button {
+                            store.send(.offlineMediaSelected(item))
+                        } label: {
+                            HStack(spacing: 20) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 42, weight: .medium))
+                                    .foregroundStyle(Color(hex: "#30D158"))
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(item.title)
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(2)
+                                    if let episode = item.episodeMetadata {
+                                        Text("\(episode.seriesTitle) · S\(episode.seasonNumber) E\(episode.episodeNumber)")
+                                            .font(.system(size: 18))
+                                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                                            .lineLimit(1)
+                                    }
+                                    Text(ByteCountFormatter.string(fromByteCount: item.fileSize, countStyle: .file))
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Color(hex: "#9B9BA5"))
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                            }
+                            .padding(24)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .id(item.id)
+                        .focused($focusedTarget, equals: .result(item.id))
+                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(item.id))
+                        .onAppear {
+                            renderedResultIDs.insert(item.id)
+                            focusRenderedResultIfRequested(item.id, requestID: focusRequestSequence)
+                        }
+                        .onDisappear { renderedResultIDs.remove(item.id) }
+                        .accessibilityLabel(item.title)
+                        .accessibilityHint(AppStrings.Common.watchNow)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+        }
+
+        @ViewBuilder
+        private var curatedPlaylistSection: some View {
+            let results = store.curatedPlaylistResults
+            let unavailable = store.unavailableCuratedPlaylistEntries
+            if !results.isEmpty || !unavailable.isEmpty {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack {
+                        Label(AppStrings.Search.myCollection, systemImage: "rectangle.stack.fill")
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Text("\(results.count + unavailable.count)")
+                            .font(.system(size: 22, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 30) {
+                            ForEach(results) { result in
+                                GlobalSearchResultCard(result: result, isSelected: false, showPlaylistBadge: true) {
+                                    selectCuratedResult(result)
+                                }
+                                .frame(width: result.item.type == .live ? 340 : 230)
+                                .contextMenu {
+                                    Button {
+                                        store.send(.toggleCuratedPlaylistItem(result))
+                                    } label: {
+                                        Label(AppStrings.LiveTV.removeSelectedFromList, systemImage: "bookmark.slash")
+                                    }
+                                }
+                            }
+
+                            ForEach(unavailable) { entry in
+                                unavailableCuratedCard(entry)
+                            }
+                        }
+                    }
+                }
+                .focusSection()
+            }
+        }
+
+        private func selectCuratedResult(_ result: GlobalSearchResultItem) {
+            switch result.item.type {
+            case .live: store.send(.channelSelected(result.item))
+            case .vod: store.send(.vodSelected(result.item))
+            case .series: store.send(.seriesSelected(result.item))
+            }
+        }
+
+        private func unavailableCuratedCard(_ entry: CuratedPlaylistEntry) -> some View {
+            let sourceDetails = entry.categoryID.isEmpty
+                ? entry.playlistNameSnapshot
+                : "\(entry.playlistNameSnapshot) · \(entry.categoryID)"
+            return VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Button {
+                        store.send(.removeCuratedPlaylistItem(entry.id))
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(TVCircleButtonStyle())
+                    .accessibilityLabel(AppStrings.Common.delete)
+                }
+                Text(entry.titleSnapshot)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(sourceDetails)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .frame(width: 260, height: 210, alignment: .leading)
+            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+
+        @ViewBuilder
+        private func curatedPlaylistContextMenuItem(for result: GlobalSearchResultItem) -> some View {
+            if store.withState({ $0.canToggleCuratedPlaylist(result) }) {
+                let isSaved = store.withState { $0.isInCuratedPlaylist(result) }
+                Button {
+                    store.send(.toggleCuratedPlaylistItem(result))
+                } label: {
+                    Label(
+                        isSaved ? AppStrings.LiveTV.removeSelectedFromList : AppStrings.LiveTV.addSelectedToList,
+                        systemImage: isSaved ? "bookmark.slash" : "bookmark"
+                    )
+                }
+            }
+        }
+
         // MARK: - Discovery & Empty Views
+
+        private var pinnedSearchesSection: some View {
+            VStack(alignment: .leading, spacing: 24) {
+                Label(AppStrings.Search.pinnedSearches, systemImage: "pin.fill")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(.white)
+                Text(AppStrings.Search.pinnedSearchesDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                VStack(spacing: 14) {
+                    ForEach(store.pinnedSearchQueries, id: \.self) { query in
+                        HStack(spacing: 16) {
+                            Button {
+                                store.send(.recentSearchTapped(query))
+                            } label: {
+                                HStack(spacing: 20) {
+                                    Image(systemName: "pin.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(Color(hex: "#0A84FF"))
+                                    Text(query)
+                                        .font(.system(size: 28, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.4))
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 18)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(TVCapsuleButtonStyle())
+                            .accessibilityHint(AppStrings.Search.runPinnedSearchHint)
+
+                            Button {
+                                store.send(.togglePinnedSearch(query))
+                            } label: {
+                                Image(systemName: "pin.slash")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                                    .frame(width: 56, height: 56)
+                            }
+                            .buttonStyle(TVCircleButtonStyle())
+                            .accessibilityLabel(AppStrings.Search.unpinSearch)
+                        }
+                    }
+                }
+            }
+        }
 
         private var emptySearchDiscoveryView: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 48) {
+                    curatedPlaylistSection
+
+                    if !store.pinnedSearchQueries.isEmpty {
+                        pinnedSearchesSection
+                    }
+
                     // Recent Searches (if available)
                     if !store.recentSearches.isEmpty {
                         VStack(alignment: .leading, spacing: 24) {
@@ -745,10 +1042,18 @@
             store.send(.selectPlaylistFilter(playlistID))
         }
 
+        private func selectContentScope(_ scope: SearchFeature.SearchContentScope) {
+            cancelPendingResultFocus()
+            shouldRestoreScopeFocus = store.searchContentScope != scope
+            focusedTarget = .contentScope(scope)
+            accessibilityFocusedTarget = .contentScope(scope)
+            store.send(.searchContentScopeChanged(scope))
+        }
+
         private var isSearchOrFilterControlFocused: Bool {
             guard let focusedTarget else { return false }
             return switch focusedTarget {
-            case .search, .clearQuery, .playlist(_), .filter: true
+            case .search, .clearQuery, .pinSearch, .playlist(_), .contentScope, .filter: true
             case .result: false
             }
         }
@@ -797,9 +1102,27 @@
                 Text(message)
                     .font(.system(size: 32))
                     .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                if let suggestion = store.searchRecoverySuggestion {
+                    Button {
+                        applySearchRecovery(suggestion)
+                    } label: {
+                        Text(suggestion.title)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: "#0A84FF"))
+                }
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+        private func applySearchRecovery(_ suggestion: SearchFeature.SearchRecoverySuggestion) {
+            switch suggestion {
+            case .allContentTypes:
+                store.send(.filterChanged(.all))
+            case .allPlaylists:
+                store.send(.selectPlaylistFilter(nil))
+            }
         }
 
         private func errorView(_ error: String) -> some View {

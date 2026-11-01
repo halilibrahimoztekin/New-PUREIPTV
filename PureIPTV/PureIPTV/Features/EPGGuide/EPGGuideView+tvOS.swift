@@ -11,7 +11,13 @@ import SwiftVLC
         @FocusState private var focusedChannelID: String?
         @FocusState private var focusedProgramID: String?
         @FocusState private var isScheduleWatchButtonFocused: Bool
+        @AppStorage("com.pureiptv.tvOSChannelTitlesTwoLines") private var showTwoLineChannelTitles = false
+        @AppStorage(LiveTVArtworkSource.storageKey) private var liveTVArtworkSourceRawValue = LiveTVArtworkSource.epgProgram.rawValue
         @State private var isLivePulsing: Bool = false
+
+        private var liveTVArtworkSource: LiveTVArtworkSource {
+            LiveTVArtworkSource(rawValue: liveTVArtworkSourceRawValue) ?? .epgProgram
+        }
 
         public init(store: StoreOf<EPGGuideFeature>) {
             self.store = store
@@ -23,22 +29,16 @@ import SwiftVLC
                 channelColumn
                     .frame(width: 440)
                     .focusSection()
-                    .focusGuideBoundary()
 
-                // ── Center: Vertical Divider & Focus Bridge ─────────────
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: 2)
-
-                    TVFocusGuideBridge()
-                        .frame(width: 32)
-                }
+                // ── Center: Vertical Divider ────────────────────────────
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 2)
+                    .frame(width: 32)
 
                 // ── Right: EPG Timeline & Schedule ──────────────────────
                 epgScheduleArea
                     .focusSection()
-                    .focusGuideBoundary()
             }
             .background(
                 ZStack {
@@ -62,13 +62,11 @@ import SwiftVLC
             .onAppear {
                 isLivePulsing = true
                 store.send(.onAppear)
-                if let initialID = store.selectedChannel?.id {
-                    focusedChannelID = initialID
-                }
             }
             .onDisappear {
                 store.send(.onDisappear)
             }
+            .disabled(!store.isVisible)
         }
 
         // MARK: - Left: Channel Column
@@ -98,15 +96,29 @@ import SwiftVLC
                 .padding(.bottom, 20)
 
                 // Channels List
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 10) {
-                        ForEach(store.channels) { channel in
-                            channelRow(channel)
-                                .id(channel.id)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 10) {
+                            ForEach(store.channels) { channel in
+                                channelRow(channel)
+                                    .id(channel.id)
+                            }
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 8)
+                    .task {
+                        let initialSelectionID = store.selectedChannel?.id
+                        let initialID = store.channels.first(where: { $0.id == initialSelectionID })?.id
+                            ?? store.channels.first?.id
+                        guard let initialID else { return }
+                        proxy.scrollTo(initialID, anchor: .center)
+                        await Task.yield()
+                        guard !Task.isCancelled,
+                              store.selectedChannel?.id == initialSelectionID,
+                              focusedChannelID == nil || focusedChannelID == initialID else { return }
+                        focusedChannelID = initialID
+                    }
                 }
                 .onChange(of: focusedChannelID) { _, newID in
                     if let newID, let matchingChannel = store.channels.first(where: { $0.id == newID }) {
@@ -123,13 +135,13 @@ import SwiftVLC
             let isSelected = store.selectedChannel?.id == channel.id
 
             return Button {
-                store.send(.selectChannel(channel))
+                store.send(.playTapped(channel))
             } label: {
                 HStack(spacing: 14) {
                     // Logo
                     Group {
                         if let coverURL = channel.displayLogoURL {
-                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                            PlaylistAsyncImage(url: coverURL, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                                 switch phase {
                                 case let .success(image):
                                     image
@@ -156,7 +168,7 @@ import SwiftVLC
                         Text(channel.title)
                             .font(.system(size: 17, weight: isFocused || isSelected ? .bold : .medium))
                             .foregroundStyle(isFocused ? .white : (isSelected ? Color(hex: "#0A84FF") : .white.opacity(0.85)))
-                            .lineLimit(1)
+                            .lineLimit(showTwoLineChannelTitles ? 2 : 1)
 
                         HStack(spacing: 6) {
                             if channel.tvArchive == 1 {
@@ -340,7 +352,7 @@ import SwiftVLC
                                     .frame(width: 44, height: 44)
                                     .background(Color.black.opacity(0.6), in: Circle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(TVCircleButtonStyle())
                             .accessibilityLabel(store.isPreviewMuted ? AppStrings.EPG.unmutePreview : AppStrings.EPG.mutePreview)
                             .padding(4)
                         }
@@ -348,7 +360,7 @@ import SwiftVLC
                         // Large Logo
                         Group {
                             if let coverURL = selected.displayLogoURL {
-                                PlaylistAsyncImage(url: coverURL, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
+                                PlaylistAsyncImage(url: coverURL, fallbackURL: selected.coverURL, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
                                     switch phase {
                                     case let .success(img):
                                         img.resizable().aspectRatio(contentMode: .fit)
@@ -399,8 +411,14 @@ import SwiftVLC
                                 .foregroundStyle(.white.opacity(0.5))
                         }
                         Text(store.epgFreshnessLabel)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption)
                             .foregroundStyle(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.55))
+                        if let source = store.epgSourceIdentity {
+                            Text(source.displayLabel)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
                     }
 
                     Spacer()
@@ -501,6 +519,32 @@ import SwiftVLC
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         .frame(width: 70, alignment: .leading)
+
+                        let channel = store.selectedChannel
+                        let artworkURL = liveTVArtworkSource.primaryArtworkURL(for: program, channel: channel)
+                        if artworkURL != nil || channel?.coverURL != nil {
+                            PlaylistAsyncImage(
+                                url: artworkURL,
+                                fallbackURL: channel?.coverURL,
+                                userAgentOverride: channel?.userAgentOverride,
+                                playlistID: channel?.playlistID,
+                                downsamplingSize: CGSize(width: 224, height: 126)
+                            ) { phase in
+                                if let image = phase.image {
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.white.opacity(0.06))
+                                        .overlay {
+                                            Image(systemName: "film")
+                                                .foregroundStyle(.white.opacity(0.35))
+                                        }
+                                }
+                            }
+                            .frame(width: 112, height: 63)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .accessibilityHidden(true)
+                        }
 
                         // Title & Tags
                         VStack(alignment: .leading, spacing: 4) {

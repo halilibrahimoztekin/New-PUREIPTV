@@ -6,6 +6,9 @@ import SwiftUI
 public struct TraktWatchlistView: View {
     @Bindable var store: StoreOf<TraktFeature>
     @State private var selectedTab: TraktHubTab = .watchlist
+    #if os(tvOS)
+        @FocusState private var focusedListItemID: String?
+    #endif
 
     public enum TraktHubTab: String, CaseIterable, Identifiable {
         case watchlist = "İzleme Listesi"
@@ -77,6 +80,10 @@ public struct TraktWatchlistView: View {
                     spacing: 20
                 ) {
                     ForEach(store.watchlist) { item in
+                        #if os(tvOS)
+                            let focusID = "watchlist:\(item.id)"
+                            let isFocused = focusedListItemID == focusID
+                        #endif
                         VStack(alignment: .leading, spacing: 8) {
                             ZStack(alignment: .topTrailing) {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -109,10 +116,27 @@ public struct TraktWatchlistView: View {
                                     .foregroundStyle(.white.opacity(0.6))
                             }
                         }
+                        #if os(tvOS)
+                        .focusable()
+                        .focused($focusedListItemID, equals: focusID)
+                        .padding(10)
+                        .background(
+                            isFocused ? Color.white.opacity(0.08) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                        )
+                        .accessibilityElement(children: .combine)
+                        #endif
                     }
                 }
                 .padding(20)
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
         }
     }
 
@@ -130,6 +154,10 @@ public struct TraktWatchlistView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(store.playbackItems) { item in
+                        #if os(tvOS)
+                            let focusID = "progress:\(item.id)"
+                            let isFocused = focusedListItemID == focusID
+                        #endif
                         HStack(spacing: 16) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -180,10 +208,22 @@ public struct TraktWatchlistView: View {
                                 .fill(Color.white.opacity(0.04))
                                 .background(.ultraThinMaterial)
                         )
+                        #if os(tvOS)
+                        .focusable()
+                        .focused($focusedListItemID, equals: focusID)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(isFocused ? Color.white : Color.clear, lineWidth: 3)
+                        )
+                        .accessibilityElement(children: .combine)
+                        #endif
                     }
                 }
                 .padding(20)
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
         }
     }
 

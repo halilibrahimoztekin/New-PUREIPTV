@@ -12,6 +12,7 @@ public struct ChannelInfoOSDView: View {
     public let nextProgram: EPGProgram?
     public let isCleaningEnabled: Bool
     public let dynamicRange: VideoDynamicRange?
+    public let playlistName: String?
 
     @State private var isLivePulsing: Bool = false
 
@@ -22,7 +23,8 @@ public struct ChannelInfoOSDView: View {
         currentProgram: EPGProgram? = nil,
         nextProgram: EPGProgram? = nil,
         isCleaningEnabled: Bool = true,
-        dynamicRange: VideoDynamicRange? = nil
+        dynamicRange: VideoDynamicRange? = nil,
+        playlistName: String? = nil
     ) {
         self.item = item
         self.channelIndex = channelIndex
@@ -31,6 +33,7 @@ public struct ChannelInfoOSDView: View {
         self.nextProgram = nextProgram
         self.isCleaningEnabled = isCleaningEnabled
         self.dynamicRange = dynamicRange
+        self.playlistName = playlistName
     }
 
     public var body: some View {
@@ -89,6 +92,18 @@ public struct ChannelInfoOSDView: View {
                     isCompact: false,
                     showProgressRing: true
                 )
+
+                if let playlistName, !playlistName.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .accessibilityHidden(true)
+                        Text("\(AppStrings.Search.playlistSource) \(playlistName)")
+                            .lineLimit(1)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -128,7 +143,7 @@ public struct ChannelInfoOSDView: View {
     private var channelLogoView: some View {
         Group {
             if let coverURL = item.coverURL {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
+                PlaylistAsyncImage(url: coverURL, fallbackURL: item.fallbackCoverURL, userAgentOverride: item.userAgentOverride, playlistID: item.config?.playlistID) { phase in
                     switch phase {
                     case let .success(image):
                         image

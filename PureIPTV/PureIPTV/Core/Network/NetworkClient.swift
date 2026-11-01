@@ -1,5 +1,13 @@
 import Foundation
 
+public struct M3UHTTPResponseMetadata: Sendable {
+    public let statusCode: Int
+    public let etag: String?
+    public let lastModified: String?
+    public let cacheControl: String?
+    public let vary: String?
+}
+
 private nonisolated let mediaServerCredentialQueryKeys: Set<String> = [
     "token", "access_token", "authtoken", "auth", "authorization", "password", "username",
     "api_key", "api-key", "apikey", "secret", "x-plex-token", "x-emby-token",
@@ -22,6 +30,7 @@ private nonisolated func mediaServerCredentialSafeURL(
 public struct NetworkClient {
     private let session: URLSession
     private let credentialedSession: URLSession
+    private let m3uSession: URLSession
     private let decoder: JSONDecoder
 
     public init(session: URLSession = .shared) {
@@ -35,6 +44,13 @@ public struct NetworkClient {
             delegate: CredentialedRedirectDelegate(),
             delegateQueue: nil
         )
+
+        let m3uConfiguration = URLSessionConfiguration.ephemeral
+        m3uConfiguration.urlCache = nil
+        m3uConfiguration.httpCookieStorage = nil
+        m3uConfiguration.httpShouldSetCookies = false
+        m3uSession = URLSession(configuration: m3uConfiguration)
+
         decoder = JSONDecoder()
         // Some APIs return empty arrays instead of objects on failure or empty results
         // Also might need date decoding strategies depending on API format.
@@ -52,6 +68,185 @@ public struct NetworkClient {
         }
         guard (200 ... 299).contains(httpResponse.statusCode) else { throw NetworkError.invalidResponse }
         return data
+    }
+
+    /// Streams a bounded playlist response to a consumer in fixed-size chunks.
+    public func fetchDataInChunks(
+        url: URL,
+        userAgentOverride: String? = nil,
+        ifNoneMatch: String? = nil,
+        ifModifiedSince: String? = nil,
+        maximumBytes: Int,
+        receiveChunk: @escaping @Sendable (Data, Int64?) async throws -> Void
+    ) async throws -> M3UHTTPResponseMetadata {
+        guard maximumBytes > 0 else { throw NetworkError.invalidURL }
+
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
+        request.httpShouldHandleCookies = false
+        if let ifNoneMatch, Self.isSafeHTTPValidator(ifNoneMatch) {
+            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
+        }
+        if let ifModifiedSince, Self.isSafeHTTPValidator(ifModifiedSince) {
+            request.setValue(ifModifiedSince, forHTTPHeaderField: "If-Modified-Since")
+        }
+
+        let (bytes, response) = try await m3uSession.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode == 429 {
+            throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+        }
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            throw NetworkError.unauthorized
+        }
+        let metadata = M3UHTTPResponseMetadata(
+            statusCode: httpResponse.statusCode,
+            etag: httpResponse.value(forHTTPHeaderField: "ETag"),
+            lastModified: httpResponse.value(forHTTPHeaderField: "Last-Modified"),
+            cacheControl: httpResponse.value(forHTTPHeaderField: "Cache-Control"),
+            vary: httpResponse.value(forHTTPHeaderField: "Vary")
+        )
+        if httpResponse.statusCode == 304 {
+            return metadata
+        }
+        // Playlist catalog updates must never accept a partial response as a
+        // complete replacement. This request does not use Range semantics.
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode >= 500 {
+                throw NetworkError.serverError(statusCode: httpResponse.statusCode)
+            }
+            throw NetworkError.invalidResponse
+        }
+
+        let expectedByteCount = httpResponse.expectedContentLength > 0
+            ? httpResponse.expectedContentLength
+            : nil
+        if let expectedByteCount, expectedByteCount > Int64(maximumBytes) {
+            throw URLError(.dataLengthExceedsMaximum)
+        }
+
+        let chunkSize = 32 * 1024
+        var chunk = Data()
+        chunk.reserveCapacity(chunkSize)
+        var receivedByteCount = 0
+        var iterator = bytes.makeAsyncIterator()
+        while let byte = try await iterator.next() {
+            guard receivedByteCount < maximumBytes else {
+                throw URLError(.dataLengthExceedsMaximum)
+            }
+            chunk.append(byte)
+            receivedByteCount += 1
+
+            guard chunk.count == chunkSize else { continue }
+            try Task.checkCancellation()
+            try await receiveChunk(chunk, expectedByteCount)
+            chunk.removeAll(keepingCapacity: true)
+        }
+
+        if !chunk.isEmpty {
+            try await receiveChunk(chunk, expectedByteCount)
+        }
+        try Task.checkCancellation()
+        return metadata
+    }
+
+    private static func isSafeHTTPValidator(_ value: String) -> Bool {
+        value.utf8.count <= 4096 && !value.contains("\r") && !value.contains("\n")
+    }
+
+    /// Fetches an XMLTV source without buffering more than its supported compressed-input limit.
+    public func fetchXMLTVData(url: URL, userAgentOverride: String? = nil) async throws -> Data {
+        var request = URLRequest(url: url)
+        UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode == 429 {
+            throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+        }
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            throw NetworkError.invalidResponse
+        }
+
+        let maximumBytes = XMLTVArchiveDecoder.maximumDownloadBytes
+        if httpResponse.expectedContentLength > Int64(maximumBytes) {
+            throw XMLTVArchiveError.invalidOrUnsupported
+        }
+
+        var data = Data()
+        data.reserveCapacity(min(maximumBytes, 1 * 1024 * 1024))
+        var iterator = bytes.makeAsyncIterator()
+        while let byte = try await iterator.next() {
+            guard data.count < maximumBytes else {
+                throw XMLTVArchiveError.invalidOrUnsupported
+            }
+            data.append(byte)
+            if data.count.isMultiple(of: 64 * 1024) {
+                try Task.checkCancellation()
+            }
+        }
+        try Task.checkCancellation()
+        return data
+    }
+
+    /// Reads only a bounded response prefix for diagnostics that must not download a full playlist or EPG file.
+    public func fetchPrefix(
+        url: URL,
+        userAgentOverride: String? = nil,
+        maximumBytes: Int
+    ) async throws -> NetworkResponsePrefix {
+        guard (1 ... 1_048_576).contains(maximumBytes) else { throw NetworkError.invalidURL }
+
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("bytes=0-\(maximumBytes - 1)", forHTTPHeaderField: "Range")
+        UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
+
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode == 429 {
+            throw NetworkError.rateLimited(retryAfter: Self.retryAfterDate(from: httpResponse))
+        }
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            throw NetworkError.unauthorized
+        }
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            throw NetworkError.serverError(statusCode: httpResponse.statusCode)
+        }
+
+        var data = Data()
+        data.reserveCapacity(min(maximumBytes, 64 * 1024))
+        var iterator = bytes.makeAsyncIterator()
+        var wasTruncated = false
+        while let byte = try await iterator.next() {
+            if data.count == maximumBytes {
+                wasTruncated = true
+                break
+            }
+            data.append(byte)
+            if data.count.isMultiple(of: 4096) {
+                try Task.checkCancellation()
+            }
+        }
+        try Task.checkCancellation()
+
+        let contentRangeTotal = httpResponse.value(forHTTPHeaderField: "Content-Range")?
+            .split(separator: "/").last
+            .flatMap { Int64($0) }
+        let serverTruncated = httpResponse.statusCode == 206
+            && (contentRangeTotal.map { $0 > Int64(data.count) } ?? (data.count == maximumBytes))
+
+        return NetworkResponsePrefix(
+            data: data,
+            statusCode: httpResponse.statusCode,
+            contentType: httpResponse.mimeType,
+            wasTruncated: wasTruncated || serverTruncated
+        )
     }
 
     /// Fetches bytes using a request whose credentials are carried in headers, never in its URL.
@@ -157,6 +352,20 @@ public struct NetworkClient {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
         return formatter.date(from: value)
+    }
+}
+
+public struct NetworkResponsePrefix: Sendable {
+    public let data: Data
+    public let statusCode: Int
+    public let contentType: String?
+    public let wasTruncated: Bool
+
+    public init(data: Data, statusCode: Int, contentType: String?, wasTruncated: Bool) {
+        self.data = data
+        self.statusCode = statusCode
+        self.contentType = contentType
+        self.wasTruncated = wasTruncated
     }
 }
 

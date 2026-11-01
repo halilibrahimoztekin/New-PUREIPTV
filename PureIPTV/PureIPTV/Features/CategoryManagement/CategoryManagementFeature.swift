@@ -2,6 +2,15 @@ import ComposableArchitecture
 import Foundation
 import SwiftUI
 
+private func loadCategoryNameOverrides(
+    client: CategoryNameOverrideClient,
+    playlistID: UUID?,
+    mediaType: String
+) async -> [String: String] {
+    guard let playlistID else { return [:] }
+    return await client.load(playlistID, mediaType)
+}
+
 @Reducer
 public struct CategoryManagementFeature {
     @ObservableState
@@ -15,12 +24,20 @@ public struct CategoryManagementFeature {
         public let presentationID: UUID
         public let config: PlaylistConfig
         public var type: CategoryType
-        public var parent: Parent? = nil
+        public var parent: Parent?
         public var isLoading = false
         public var loadRequestID: UUID?
         public var categories: [MediaModels.Category] = []
         public var originalCategories: [MediaModels.Category] = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:] // key: categoryID
+        public var categoryNameOverrides: [String: String] = [:]
+        public var profileScope: ProfileContextSnapshot?
+        public var categoryNameRules: [CategoryNameRule] = []
+        public var draftCategoryNameRules: [CategoryNameRule] = []
+        public var isCategoryNameRulesPresented = false
+        public var hasCategoryNameRuleChanges = false
+        public var isSavingCategoryNameRules = false
+        public var categoryNameRuleSaveFailed = false
         public var hasUnsavedChanges = false
         public var searchQuery: String = ""
         public var filterMode: FilterMode = .all
@@ -92,7 +109,19 @@ public struct CategoryManagementFeature {
         case onAppear
         case loadData
         case categoriesResponse(requestID: UUID, Result<[MediaModels.Category], Error>)
-        case preferencesLoaded(requestID: UUID, [CategoryPreferenceDTO])
+        case preferencesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, [CategoryPreferenceDTO])
+        case categoryNameOverridesLoaded(requestID: UUID, [String: String])
+        case categoryNameRulesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, [CategoryNameRule])
+        case setCategoryNameOverride(categoryID: String, name: String)
+        case categoryNameRulesTapped
+        case addCategoryNameRuleTapped
+        case setCategoryNameRulePattern(id: UUID, pattern: String)
+        case setCategoryNameRuleMode(id: UUID, mode: CategoryNameRule.MatchMode)
+        case toggleCategoryNameRule(id: UUID)
+        case removeCategoryNameRule(id: UUID)
+        case cancelCategoryNameRulesTapped
+        case saveCategoryNameRulesTapped
+        case categoryNameRulesSaveResponse(success: Bool, rules: [CategoryNameRule])
         case toggleVisibility(categoryID: String)
         case toggleLock(categoryID: String)
         case moveCategory(from: IndexSet, to: Int)
@@ -113,6 +142,7 @@ public struct CategoryManagementFeature {
         public enum Delegate: Equatable {
             case close
             case categoriesUpdated
+            case categoryNameRulesUpdated
             case m3uMappingsUpdated
             case presentM3UCategoryMapping(presentationID: UUID)
         }
@@ -120,6 +150,9 @@ public struct CategoryManagementFeature {
 
     @Dependency(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
+    @Dependency(\.categoryNameOverrideClient) var categoryNameOverrideClient
+    @Dependency(\.categoryNameRuleClient) var categoryNameRuleClient
+    @Dependency(\.profileContextClient) var profileContextClient
 
     public init() {}
 
@@ -137,6 +170,10 @@ public struct CategoryManagementFeature {
                 state.isLoading = true
                 let config = state.config
                 let type = state.type
+                let profileScope = profileContextClient.snapshot()
+                state.profileScope = profileScope
+                let categoryNameOverrideClient = categoryNameOverrideClient
+                let categoryNameRuleClient = categoryNameRuleClient
                 let requestID = UUID()
                 state.loadRequestID = requestID
                 return .run { send in
@@ -149,16 +186,36 @@ public struct CategoryManagementFeature {
                         }
                     }
                     // Fetch preferences
-                    async let prefs = try? await databaseClient.fetchCategoryPreferences(type.rawValue)
+                    async let prefs = try? await databaseClient.fetchCategoryPreferences(
+                        type.rawValue,
+                        CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config.playlistID)
+                    )
+                    async let nameOverrides = loadCategoryNameOverrides(
+                        client: categoryNameOverrideClient,
+                        playlistID: config.playlistID,
+                        mediaType: type.rawValue
+                    )
+                    async let nameRules: [CategoryNameRule] = {
+                        guard let playlistID = config.playlistID else { return [] }
+                        return await categoryNameRuleClient.load(profileScope.profileID, playlistID, type.rawValue)
+                    }()
 
                     let cats = await categoriesResult
                     let p = await prefs ?? []
-                    await send(.preferencesLoaded(requestID: requestID, p))
+                    let names = await nameOverrides
+                    let rules = await nameRules
+                    await send(.preferencesLoaded(requestID: requestID, profileScope: profileScope, p))
+                    await send(.categoryNameOverridesLoaded(requestID: requestID, names))
+                    await send(.categoryNameRulesLoaded(requestID: requestID, profileScope: profileScope, rules))
                     await send(.categoriesResponse(requestID: requestID, cats))
                 }
 
-            case let .preferencesLoaded(requestID, prefs):
-                guard state.loadRequestID == requestID, !state.hasUnsavedChanges else { return .none }
+            case let .preferencesLoaded(requestID, profileScope, prefs):
+                guard state.loadRequestID == requestID,
+                      state.profileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope,
+                      !state.hasUnsavedChanges
+                else { return .none }
                 var dict: [String: CategoryPreferenceDTO] = [:]
                 for pref in prefs {
                     dict[pref.categoryID] = pref
@@ -166,8 +223,124 @@ public struct CategoryManagementFeature {
                 state.categoryPreferences = dict
                 return .none
 
+            case let .categoryNameOverridesLoaded(requestID, overrides):
+                guard state.loadRequestID == requestID, !state.hasUnsavedChanges else { return .none }
+                state.categoryNameOverrides = overrides
+                return .none
+
+            case let .categoryNameRulesLoaded(requestID, profileScope, rules):
+                guard state.loadRequestID == requestID,
+                      state.profileScope == profileScope,
+                      !state.hasCategoryNameRuleChanges else { return .none }
+                state.categoryNameRules = rules
+                state.draftCategoryNameRules = rules
+                return .none
+
+            case .categoryNameRulesTapped:
+                guard state.config.playlistID != nil else { return .none }
+                state.draftCategoryNameRules = state.categoryNameRules
+                state.hasCategoryNameRuleChanges = false
+                state.categoryNameRuleSaveFailed = false
+                state.isCategoryNameRulesPresented = true
+                return .none
+
+            case .addCategoryNameRuleTapped:
+                guard state.draftCategoryNameRules.count < 100 else { return .none }
+                state.draftCategoryNameRules.append(CategoryNameRule())
+                state.hasCategoryNameRuleChanges = true
+                state.categoryNameRuleSaveFailed = false
+                return .none
+
+            case let .setCategoryNameRulePattern(id, pattern):
+                guard let index = state.draftCategoryNameRules.firstIndex(where: { $0.id == id }) else { return .none }
+                state.draftCategoryNameRules[index].pattern = String(pattern.prefix(256))
+                state.hasCategoryNameRuleChanges = true
+                state.categoryNameRuleSaveFailed = false
+                return .none
+
+            case let .setCategoryNameRuleMode(id, mode):
+                guard let index = state.draftCategoryNameRules.firstIndex(where: { $0.id == id }) else { return .none }
+                state.draftCategoryNameRules[index].mode = mode
+                state.hasCategoryNameRuleChanges = true
+                state.categoryNameRuleSaveFailed = false
+                return .none
+
+            case let .toggleCategoryNameRule(id):
+                guard let index = state.draftCategoryNameRules.firstIndex(where: { $0.id == id }) else { return .none }
+                state.draftCategoryNameRules[index].isEnabled.toggle()
+                state.hasCategoryNameRuleChanges = true
+                state.categoryNameRuleSaveFailed = false
+                return .none
+
+            case let .removeCategoryNameRule(id):
+                state.draftCategoryNameRules.removeAll { $0.id == id }
+                state.hasCategoryNameRuleChanges = true
+                state.categoryNameRuleSaveFailed = false
+                return .none
+
+            case .cancelCategoryNameRulesTapped:
+                state.draftCategoryNameRules = state.categoryNameRules
+                state.hasCategoryNameRuleChanges = false
+                state.categoryNameRuleSaveFailed = false
+                state.isCategoryNameRulesPresented = false
+                return .none
+
+            case .saveCategoryNameRulesTapped:
+                guard !state.isSavingCategoryNameRules,
+                      let profileScope = state.profileScope,
+                      let playlistID = state.config.playlistID else { return .none }
+                state.isSavingCategoryNameRules = true
+                state.categoryNameRuleSaveFailed = false
+                let rules = state.draftCategoryNameRules
+                let mediaType = state.type.rawValue
+                let client = categoryNameRuleClient
+                let profileContextClient = profileContextClient
+                return .run { send in
+                    let success = await client.save(rules, profileScope.profileID, playlistID, mediaType)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    await send(.categoryNameRulesSaveResponse(success: success, rules: rules))
+                }
+
+            case let .categoryNameRulesSaveResponse(success, rules):
+                state.isSavingCategoryNameRules = false
+                guard success else {
+                    state.categoryNameRuleSaveFailed = true
+                    return .none
+                }
+                state.categoryNameRules = rules
+                state.draftCategoryNameRules = rules
+                state.hasCategoryNameRuleChanges = false
+                state.isCategoryNameRulesPresented = false
+                return .send(.delegate(.categoryNameRulesUpdated))
+
+            case let .setCategoryNameOverride(categoryID, name):
+                guard let index = state.categories.firstIndex(where: { $0.id == categoryID }) else { return .none }
+                let category = state.categories[index]
+                let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                let normalizedName = String(trimmedName.prefix(80))
+                if normalizedName.isEmpty || normalizedName == category.sourceName {
+                    state.categoryNameOverrides.removeValue(forKey: categoryID)
+                } else {
+                    state.categoryNameOverrides[categoryID] = normalizedName
+                }
+                let displayName = state.categoryNameOverrides[categoryID] ?? category.sourceName
+                let updatedCategory = MediaModels.Category(
+                    id: category.id,
+                    name: displayName,
+                    sourceName: category.sourceName
+                )
+                state.categories[index] = updatedCategory
+                if let originalIndex = state.originalCategories.firstIndex(where: { $0.id == categoryID }) {
+                    state.originalCategories[originalIndex] = updatedCategory
+                }
+                state.hasUnsavedChanges = true
+                return .none
+
             case let .categoriesResponse(requestID, .success(categories)):
-                guard state.loadRequestID == requestID else { return .none }
+                guard state.loadRequestID == requestID,
+                      let profileScope = state.profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
                 state.isLoading = false
                 state.originalCategories = categories
 
@@ -188,7 +361,10 @@ public struct CategoryManagementFeature {
                 return .none
 
             case let .categoriesResponse(requestID, .failure):
-                guard state.loadRequestID == requestID else { return .none }
+                guard state.loadRequestID == requestID,
+                      let profileScope = state.profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
                 state.isLoading = false
                 return .none
 
@@ -361,9 +537,23 @@ public struct CategoryManagementFeature {
 
             case .saveTapped:
                 let prefs = Array(state.categoryPreferences.values)
+                let nameOverrides = state.categoryNameOverrides
+                let playlistID = state.config.playlistID
+                let mediaType = state.type.rawValue
+                let preferenceScope = CategoryPreferenceScope(
+                    profileID: state.profileScope?.profileID,
+                    playlistID: playlistID
+                )
+                let profileScope = state.profileScope ?? profileContextClient.snapshot()
+                let profileContextClient = profileContextClient
+                let categoryNameOverrideClient = categoryNameOverrideClient
                 return .run { send in
+                    guard profileContextClient.snapshot() == profileScope else { return }
                     do {
-                        try await databaseClient.saveCategoryPreferences(prefs)
+                        try await databaseClient.saveCategoryPreferences(prefs, preferenceScope)
+                        if let playlistID {
+                            await categoryNameOverrideClient.save(nameOverrides, playlistID, mediaType)
+                        }
                         await send(.saveResponse(.success(())))
                     } catch {
                         await send(.saveResponse(.failure(error)))

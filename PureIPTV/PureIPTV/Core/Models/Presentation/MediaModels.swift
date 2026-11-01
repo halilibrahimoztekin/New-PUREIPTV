@@ -6,7 +6,38 @@ public enum LocalTimePresentation {
     }
 }
 
+public enum EPGArtworkURL {
+    public static func parse(_ rawValue: String?) -> URL? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host,
+              !host.isEmpty
+        else { return nil }
+        return components.url
+    }
+}
+
 public nonisolated enum MediaModels: Sendable {
+    /// Safe, display-only description of a media-server playback source.
+    /// The source identifier is sent back to the server for fresh resolution; URLs and headers stay private.
+    public struct MediaServerPlaybackOption: Equatable, Identifiable, Sendable {
+        public let id: String
+        public let title: String
+        public let detail: String?
+        public var displayLabel: String {
+            [title, detail].compactMap(\.self).joined(separator: " · ")
+        }
+
+        public init(id: String, title: String, detail: String? = nil) {
+            self.id = id
+            self.title = title
+            self.detail = detail
+        }
+    }
+
     public struct ServerPlaybackStatus: Equatable, Sendable {
         public enum Mode: String, Equatable, Sendable {
             case directPlay
@@ -44,8 +75,18 @@ public nonisolated enum MediaModels: Sendable {
         public let streamURL: URL? // Nil for Series until an episode is selected
         public let coverURL: URL?
         public let logoURLOverride: URL?
+        public let logoOverrideStorageKey: String?
+        public let presentationOverride: MediaPresentationOverride?
         public var displayLogoURL: URL? {
             logoURLOverride ?? coverURL
+        }
+
+        public var displayTitle: String {
+            presentationOverride?.title ?? title
+        }
+
+        public var displayCoverURL: URL? {
+            presentationOverride?.posterURL ?? coverURL
         }
 
         public let categoryID: String
@@ -78,6 +119,8 @@ public nonisolated enum MediaModels: Sendable {
             streamURL: URL? = nil,
             coverURL: URL? = nil,
             logoURLOverride: URL? = nil,
+            logoOverrideStorageKey: String? = nil,
+            presentationOverride: MediaPresentationOverride? = nil,
             categoryID: String,
             type: ItemType,
             originalLanguageCode: String? = nil,
@@ -101,6 +144,8 @@ public nonisolated enum MediaModels: Sendable {
             self.streamURL = streamURL
             self.coverURL = coverURL
             self.logoURLOverride = logoURLOverride
+            self.logoOverrideStorageKey = logoOverrideStorageKey
+            self.presentationOverride = presentationOverride
             self.categoryID = categoryID
             self.type = type
             self.originalLanguageSourceValue = originalLanguageSourceValue ?? originalLanguageCode
@@ -127,6 +172,8 @@ public nonisolated enum MediaModels: Sendable {
                 streamURL: streamURL,
                 coverURL: coverURL,
                 logoURLOverride: logoURLOverride,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: presentationOverride,
                 categoryID: categoryID,
                 type: type,
                 originalLanguageCode: originalLanguageCode,
@@ -147,6 +194,35 @@ public nonisolated enum MediaModels: Sendable {
             )
         }
 
+        public func replacingPlaylistID(_ value: UUID?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                logoURLOverride: logoURLOverride,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: presentationOverride,
+                categoryID: categoryID,
+                type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: userAgentOverride,
+                playlistID: value,
+                seriesID: seriesID,
+                resumePosition: resumePosition,
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
+            )
+        }
+
         public func replacingLogoURLOverride(_ value: URL?) -> Self {
             Self(
                 id: id,
@@ -154,6 +230,8 @@ public nonisolated enum MediaModels: Sendable {
                 streamURL: streamURL,
                 coverURL: coverURL,
                 logoURLOverride: value,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: presentationOverride,
                 categoryID: categoryID,
                 type: type,
                 originalLanguageCode: originalLanguageCode,
@@ -181,6 +259,8 @@ public nonisolated enum MediaModels: Sendable {
                 streamURL: streamURL,
                 coverURL: coverURL,
                 logoURLOverride: logoURLOverride,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: presentationOverride,
                 categoryID: categoryID,
                 type: type,
                 originalLanguageCode: originalLanguageCode,
@@ -208,6 +288,37 @@ public nonisolated enum MediaModels: Sendable {
                 streamURL: value,
                 coverURL: coverURL,
                 logoURLOverride: logoURLOverride,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: presentationOverride,
+                categoryID: categoryID,
+                type: type,
+                originalLanguageCode: originalLanguageCode,
+                originalLanguageSourceValue: originalLanguageSourceValue,
+                rating: rating,
+                releaseDate: releaseDate,
+                duration: duration,
+                addedDate: addedDate,
+                epgChannelID: epgChannelID,
+                tvArchive: tvArchive,
+                tvArchiveDuration: tvArchiveDuration,
+                userAgentOverride: userAgentOverride,
+                playlistID: playlistID,
+                seriesID: seriesID,
+                resumePosition: resumePosition,
+                playbackRequestHeaders: playbackRequestHeaders,
+                serverPlaybackStatus: serverPlaybackStatus
+            )
+        }
+
+        public func replacingPresentationOverride(_ value: MediaPresentationOverride?) -> Self {
+            Self(
+                id: id,
+                title: title,
+                streamURL: streamURL,
+                coverURL: coverURL,
+                logoURLOverride: logoURLOverride,
+                logoOverrideStorageKey: logoOverrideStorageKey,
+                presentationOverride: value,
                 categoryID: categoryID,
                 type: type,
                 originalLanguageCode: originalLanguageCode,
@@ -232,10 +343,12 @@ public nonisolated enum MediaModels: Sendable {
     public struct Category: Equatable, Identifiable, Sendable {
         public let id: String
         public let name: String
+        public let sourceName: String
 
-        public init(id: String, name: String) {
+        public init(id: String, name: String, sourceName: String? = nil) {
             self.id = id
             self.name = name
+            self.sourceName = sourceName ?? name
         }
     }
 }
@@ -296,8 +409,18 @@ public struct EPGProgram: Equatable, Identifiable, Sendable {
     public let endTime: Date
     public let isPlayingNow: Bool
     public let categories: [String]
+    public let artworkURL: URL?
 
-    public init(id: String, title: String, description: String, startTime: Date, endTime: Date, isPlayingNow: Bool, categories: [String] = []) {
+    public init(
+        id: String,
+        title: String,
+        description: String,
+        startTime: Date,
+        endTime: Date,
+        isPlayingNow: Bool,
+        categories: [String] = [],
+        artworkURL: URL? = nil
+    ) {
         self.id = id
         self.title = title
         self.description = description
@@ -305,6 +428,7 @@ public struct EPGProgram: Equatable, Identifiable, Sendable {
         self.endTime = endTime
         self.isPlayingNow = isPlayingNow
         self.categories = categories
+        self.artworkURL = artworkURL
     }
 }
 

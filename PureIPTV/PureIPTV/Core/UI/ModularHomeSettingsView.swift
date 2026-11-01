@@ -1,7 +1,9 @@
+import ComposableArchitecture
 import SwiftUI
 
 public struct ModularHomeSettingsView: View {
     @State private var sections: [HomeSectionConfig] = HomeSectionManager.shared.sections
+    @Dependency(\.cloudSyncClient) private var cloudSyncClient
     let onClose: () -> Void
 
     public init(onClose: @escaping () -> Void) {
@@ -29,8 +31,15 @@ public struct ModularHomeSettingsView: View {
                                 .labelsHidden()
                                 .accessibilityLabel(sec.type.title)
                                 .accessibilityValue(sec.isVisible ? "Gösteriliyor" : "Gizli")
-                                .onChange(of: sec.isVisible) { _, _ in
-                                    HomeSectionManager.shared.toggleSection(type: sec.type)
+                                .onChange(of: sec.isVisible) { _, isVisible in
+                                    guard HomeSectionManager.shared.sections.first(where: { $0.type == sec.type })?.isVisible != isVisible else {
+                                        return
+                                    }
+                                    HomeSectionManager.shared.setSectionVisibility(
+                                        type: sec.type,
+                                        isVisible: isVisible
+                                    )
+                                    syncPreferences()
                                 }
                         }
                         .padding(.vertical, 4)
@@ -56,6 +65,7 @@ public struct ModularHomeSettingsView: View {
                     .onMove { source, destination in
                         sections.move(fromOffsets: source, toOffset: destination)
                         HomeSectionManager.shared.move(from: source, to: destination)
+                        syncPreferences()
                     }
                 } header: {
                     Text("Ana Ekran Sıralaması ve Görünürlük")
@@ -67,6 +77,7 @@ public struct ModularHomeSettingsView: View {
                     Button("Varsayılana Sıfırla") {
                         HomeSectionManager.shared.resetToDefault()
                         sections = HomeSectionManager.shared.sections
+                        syncPreferences()
                     }
                     .foregroundColor(.red)
                 }
@@ -85,6 +96,15 @@ public struct ModularHomeSettingsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            .task {
+                let changes = cloudSyncClient.observePresentationPreferenceChanges()
+                if let syncedSections = try? await cloudSyncClient.syncPresentationPreferences() {
+                    sections = syncedSections
+                }
+                for await syncedSections in changes {
+                    sections = syncedSections
+                }
+            }
         }
     }
 
@@ -96,6 +116,16 @@ public struct ModularHomeSettingsView: View {
             let source = IndexSet(integer: index)
             sections.move(fromOffsets: source, toOffset: destination)
             HomeSectionManager.shared.move(from: source, to: destination)
+            syncPreferences()
         }
     #endif
+
+    @MainActor
+    private func syncPreferences() {
+        Task { @MainActor in
+            if let syncedSections = try? await cloudSyncClient.syncPresentationPreferences() {
+                sections = syncedSections
+            }
+        }
+    }
 }

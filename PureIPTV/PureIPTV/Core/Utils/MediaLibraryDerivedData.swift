@@ -62,15 +62,40 @@ public struct MediaLibraryDerivedData: Equatable {
             }
         }
 
-        switch sortMethod {
-        case .alphabetical:
-            filteredItems.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        case .rating:
-            filteredItems.sort { ($0.rating ?? 0) > ($1.rating ?? 0) }
-        case .dateAdded:
-            filteredItems.sort { ($0.addedDate ?? .distantPast) > ($1.addedDate ?? .distantPast) }
-        case .defaultOrder:
-            break
+        if sortMethod != .defaultOrder {
+            filteredItems = filteredItems.enumerated().sorted { lhs, rhs in
+                switch sortMethod {
+                case .alphabetical:
+                    let comparison = lhs.element.title.localizedCaseInsensitiveCompare(rhs.element.title)
+                    return comparison == .orderedSame ? lhs.offset < rhs.offset : comparison == .orderedAscending
+                case .rating:
+                    let lhsRating = lhs.element.rating.flatMap { $0.isFinite ? $0 : nil }
+                    let rhsRating = rhs.element.rating.flatMap { $0.isFinite ? $0 : nil }
+                    switch (lhsRating, rhsRating) {
+                    case let (lhsRating?, rhsRating?) where lhsRating != rhsRating:
+                        return lhsRating > rhsRating
+                    case (_?, nil):
+                        return true
+                    case (nil, _?):
+                        return false
+                    default:
+                        return lhs.offset < rhs.offset
+                    }
+                case .dateAdded, .dateAddedOldest:
+                    switch (lhs.element.addedDate, rhs.element.addedDate) {
+                    case let (lhsDate?, rhsDate?) where lhsDate != rhsDate:
+                        return sortMethod == .dateAdded ? lhsDate > rhsDate : lhsDate < rhsDate
+                    case (_?, nil):
+                        return true
+                    case (nil, _?):
+                        return false
+                    default:
+                        return lhs.offset < rhs.offset
+                    }
+                case .defaultOrder:
+                    return lhs.offset < rhs.offset
+                }
+            }.map(\.element)
         }
 
         let sortedCodes = originalCodes.sorted()

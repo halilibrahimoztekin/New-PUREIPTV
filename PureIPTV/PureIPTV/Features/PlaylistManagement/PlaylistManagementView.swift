@@ -26,6 +26,7 @@ public struct PlaylistManagementView: View {
                     Spacer(minLength: 4)
                     Button("Yenile") { store.send(.refreshPlaylistStore) }
                         .font(.footnote)
+                        .disabled(store.isUpdatingSources)
                 }
                 .padding(.vertical, 4)
 
@@ -60,6 +61,97 @@ public struct PlaylistManagementView: View {
                 Text(AppStrings.PlaylistMgmt.switchNote)
             }
 
+            if store.startupUnlockPlaylistID == nil,
+               store.playlistStoreStatus == .available,
+               store.assignableContentPlaylists.count > 1
+            {
+                Section {
+                    contentSourcePicker(AppStrings.PlaylistMgmt.liveTVRefreshFrequency, area: .liveTV)
+                    contentSourcePicker(AppStrings.PlaylistMgmt.moviesRefreshFrequency, area: .movies)
+                    contentSourcePicker(AppStrings.PlaylistMgmt.seriesRefreshFrequency, area: .series)
+                } header: {
+                    Text(AppStrings.PlaylistMgmt.contentSources)
+                } footer: {
+                    Text(AppStrings.PlaylistMgmt.contentSourcesDescription)
+                }
+            }
+
+            if store.startupUnlockPlaylistID == nil, hasUpdateableSources {
+                Section {
+                    Button {
+                        store.send(.updateAllSources)
+                    } label: {
+                        HStack {
+                            Label(AppStrings.PlaylistMgmt.updateAllSources, systemImage: "arrow.clockwise")
+                            Spacer()
+                            if store.isUpdatingSources {
+                                ProgressView()
+                                    .accessibilityLabel(AppStrings.Common.loading)
+                            }
+                        }
+                    }
+                    .disabled(store.isUpdatingSources)
+                    .accessibilityHint(store.isUpdatingSources ? AppStrings.Common.loading : AppStrings.PlaylistMgmt.refreshSource)
+
+                    if store.isUpdatingSources {
+                        Button(AppStrings.Common.cancel) {
+                            store.send(.cancelSourceUpdates)
+                        }
+                    }
+
+                    ForEach(store.updateSources) { source in
+                        Button {
+                            store.send(.updateSourceTapped(source.id))
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: updateSourceSymbol(source.kind))
+                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(source.title)
+                                        .foregroundStyle(.primary)
+                                    Text(updateSourceKindTitle(source.kind))
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                    if case let .updating(stage) = source.status {
+                                        Text(stage)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    } else if case .failed = source.status {
+                                        Text(AppStrings.PlaylistMgmt.updateFailed)
+                                            .font(.caption)
+                                            .foregroundStyle(.red)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    } else if case .unavailable = source.status {
+                                        Text(AppStrings.PlaylistMgmt.healthNotConfigured)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                updateSourceStatusView(source.status)
+                            }
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .disabled(isUpdateSourceDisabled(source))
+                        .accessibilityLabel(
+                            "\(source.title), \(updateSourceKindTitle(source.kind)), \(updateSourceStatusTitle(source.status))"
+                        )
+                        .accessibilityHint(store.isUpdatingSources ? AppStrings.Common.loading : AppStrings.PlaylistMgmt.refreshSource)
+                        #if os(tvOS)
+                            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                        #else
+                            .buttonStyle(.plain)
+                        #endif
+                    }
+                } header: {
+                    Text(AppStrings.PlaylistMgmt.updateCenter)
+                }
+            }
+
             if store.startupUnlockPlaylistID == nil {
                 // Section: Add Account Button
                 Section {
@@ -77,10 +169,11 @@ public struct PlaylistManagementView: View {
                         }
                         .padding(.vertical, 6)
                     }
+                    .disabled(store.isUpdatingSources)
                     #if os(tvOS)
-                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                        .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
                     #else
-                    .buttonStyle(.plain)
+                        .buttonStyle(.plain)
                     #endif
                 }
             }
@@ -118,6 +211,7 @@ public struct PlaylistManagementView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
+                        .disabled(store.isUpdatingSources)
                     }
                 }
             }
@@ -158,96 +252,185 @@ public struct PlaylistManagementView: View {
         #endif
     }
 
+    private func updateSourceKindTitle(_ kind: PlaylistManagementFeature.State.UpdateSourceKind) -> String {
+        switch kind {
+        case .playlistCatalog: AppStrings.PlaylistMgmt.updateCatalog
+        case .providerEPG: AppStrings.PlaylistMgmt.updateProviderEPG
+        case .customEPG: AppStrings.PlaylistMgmt.updateCustomEPG
+        }
+    }
+
+    private func updateSourceSymbol(_ kind: PlaylistManagementFeature.State.UpdateSourceKind) -> String {
+        switch kind {
+        case .playlistCatalog: "square.stack.3d.up"
+        case .providerEPG: "calendar"
+        case .customEPG: "calendar.badge.clock"
+        }
+    }
+
+    @ViewBuilder
+    private func updateSourceStatusView(_ status: PlaylistManagementFeature.State.UpdateSourceStatus) -> some View {
+        switch status {
+        case .ready:
+            Image(systemName: "arrow.clockwise")
+                .foregroundStyle(Color.secondary)
+                .accessibilityLabel(AppStrings.PlaylistMgmt.refreshSource)
+        case .queued:
+            Image(systemName: "clock")
+                .foregroundStyle(Color.secondary)
+                .accessibilityLabel(AppStrings.Common.loading)
+        case .updating:
+            ProgressView()
+                .accessibilityLabel(AppStrings.Common.loading)
+        case .succeeded:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.green)
+                .accessibilityLabel(AppStrings.Common.done)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.red)
+                .accessibilityLabel(AppStrings.PlaylistMgmt.updateFailed)
+        case .unavailable:
+            Image(systemName: "minus.circle")
+                .foregroundStyle(Color.secondary)
+                .accessibilityLabel(AppStrings.PlaylistMgmt.healthNotConfigured)
+        }
+    }
+
+    private func isUnavailable(_ status: PlaylistManagementFeature.State.UpdateSourceStatus) -> Bool {
+        if case .unavailable = status {
+            return true
+        }
+        return false
+    }
+
+    private var hasUpdateableSources: Bool {
+        store.updateSources.contains { source in
+            if case .customEPG = source.kind {
+                return true
+            }
+            return store.playlistStoreStatus == .available
+        }
+    }
+
+    private func isUpdateSourceDisabled(_ source: PlaylistManagementFeature.State.UpdateSource) -> Bool {
+        guard !isUnavailable(source.status) else { return true }
+        if case .customEPG = source.kind {
+            return false
+        }
+        return store.playlistStoreStatus != .available
+    }
+
+    private func updateSourceStatusTitle(_ status: PlaylistManagementFeature.State.UpdateSourceStatus) -> String {
+        switch status {
+        case .ready: AppStrings.PlaylistMgmt.refreshSource
+        case .queued, .updating: AppStrings.Common.loading
+        case .succeeded: AppStrings.Common.done
+        case .failed: AppStrings.PlaylistMgmt.updateFailed
+        case .unavailable: AppStrings.PlaylistMgmt.healthNotConfigured
+        }
+    }
+
     // MARK: - Playlist Row
 
     @ViewBuilder
     private func playlistRow(_ playlist: SavedPlaylist) -> some View {
         let isActive = store.activePlaylistID == playlist.id
 
-        Button {
-            store.send(.setActivePlaylist(playlist.id))
-        } label: {
-            HStack(spacing: 16) {
-                // Type Icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isActive ? Color(hex: "#0A84FF").opacity(0.2) : Color.white.opacity(0.08))
-                        .frame(width: 44, height: 44)
+        HStack(spacing: 8) {
+            Button {
+                store.send(.setActivePlaylist(playlist.id))
+            } label: {
+                HStack(spacing: 16) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isActive ? Color(hex: "#0A84FF").opacity(0.2) : Color.white.opacity(0.08))
+                            .frame(width: 44, height: 44)
 
-                    Image(systemName: playlist.type == .xtream ? "server.rack" : "doc.text")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(isActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.6))
-                }
+                        Image(systemName: playlist.type == .xtream ? "server.rack" : "doc.text")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(isActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.6))
+                            .accessibilityHidden(true)
+                    }
 
-                // Title & Details
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(playlist.name)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color.white)
-
-                        if isActive {
-                            Text("Aktif")
-                                .font(.system(size: 11, weight: .bold))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(playlist.name)
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(Color.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(Color.green))
+
+                            if isActive {
+                                Text("Aktif")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(Color.green))
+                            }
                         }
+
+                        Text(displayAddress(for: playlist))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
+                            .lineLimit(1)
                     }
 
-                    Text(playlist.serverURL ?? playlist.m3uURL ?? "")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                if store.lockedPlaylistIDs.contains(playlist.id) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.orange)
-                        .accessibilityLabel("PIN ile kilitli")
-                }
-
-                #if os(tvOS)
-                    Button {
-                        store.send(.editPlaylistSettings(playlist))
-                    } label: {
-                        Image(systemName: "text.badge.checkmark")
-                            .font(.system(size: 20))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
-                            .padding(8)
+                    if store.lockedPlaylistIDs.contains(playlist.id) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.orange)
+                            .accessibilityLabel("PIN ile kilitli")
                     }
-                    .buttonStyle(TVCircleButtonStyle())
-                    .accessibilityLabel(AppStrings.PlaylistMgmt.playbackSettings)
 
-                    // Delete button on tvOS
-                    Button {
-                        store.send(.confirmDeletePlaylist(playlist))
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 20))
-                            .foregroundStyle(Color.red.opacity(0.8))
-                            .padding(8)
+                    Spacer(minLength: 0)
+
+                    if isActive {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Color.green)
+                            .accessibilityLabel("Aktif playlist")
                     }
-                    .buttonStyle(TVCircleButtonStyle())
-                #endif
-
-                if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.green)
                 }
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 4)
+            #if os(tvOS)
+            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: isActive))
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .opacity(store.isUpdatingSources ? 0.65 : 1)
+            .accessibilityValue(store.isUpdatingSources ? AppStrings.Common.loading : "")
+
+            #if os(tvOS)
+                Button {
+                    store.send(.editPlaylistSettings(playlist))
+                } label: {
+                    Image(systemName: "text.badge.checkmark")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color(hex: "#0A84FF"))
+                        .padding(8)
+                }
+                .buttonStyle(TVCircleButtonStyle())
+                .accessibilityLabel(AppStrings.PlaylistMgmt.playbackSettings)
+                .opacity(store.isUpdatingSources ? 0.65 : 1)
+                .accessibilityValue(store.isUpdatingSources ? AppStrings.Common.loading : "")
+
+                Button {
+                    store.send(.confirmDeletePlaylist(playlist))
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.red.opacity(0.8))
+                        .padding(8)
+                }
+                .buttonStyle(TVCircleButtonStyle())
+                .accessibilityLabel(AppStrings.Common.delete)
+                .opacity(store.isUpdatingSources ? 0.65 : 1)
+                .accessibilityValue(store.isUpdatingSources ? AppStrings.Common.loading : "")
+            #endif
         }
-        #if os(tvOS)
-        .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: isActive))
-        #else
-        .buttonStyle(.plain)
-        #endif
         .contextMenu {
             Button {
                 store.send(.playlistLockTapped(playlist.id))
@@ -257,6 +440,7 @@ public struct PlaylistManagementView: View {
                     systemImage: store.lockedPlaylistIDs.contains(playlist.id) ? "lock.open" : "lock"
                 )
             }
+            .disabled(store.isUpdatingSources)
         }
     }
 
@@ -265,9 +449,88 @@ public struct PlaylistManagementView: View {
         return AppStrings.PlaylistMgmt.channelZappingDelayValue(store.channelZappingDelayDraft)
     }
 
+    private func displayAddress(for playlist: SavedPlaylist) -> String {
+        guard let rawAddress = playlist.serverURL ?? playlist.m3uURL,
+              let components = URLComponents(string: rawAddress),
+              let host = components.host,
+              let scheme = components.scheme?.lowercased(), ["http", "https"].contains(scheme)
+        else {
+            return AppStrings.Errors.invalidURL
+        }
+        let port = components.port.map { ":\($0)" } ?? ""
+        return "\(scheme)://\(host)\(port)"
+    }
+
+    private func contentSourcePicker(_ title: String, area: PlaylistContentArea) -> some View {
+        Picker(title, selection: Binding(
+            get: {
+                guard let playlistID = store.contentSourceSelection.playlistID(for: area),
+                      store.assignableContentPlaylists.contains(where: { $0.id == playlistID })
+                else { return nil }
+                return playlistID
+            },
+            set: { store.send(.setContentSource(area: area, playlistID: $0)) }
+        )) {
+            Text(AppStrings.PlaylistMgmt.activePlaylistSource)
+                .tag(UUID?.none)
+            ForEach(store.assignableContentPlaylists) { playlist in
+                Text(playlist.name)
+                    .tag(Optional(playlist.id))
+            }
+        }
+        .disabled(store.isUpdatingSources)
+    }
+
     func playlistSettingsForm(for playlist: SavedPlaylist) -> some View {
         Form {
             Section(playlist.name) {
+                Toggle(
+                    isOn: Binding(
+                        get: { store.defaultStartupPlaylistID == playlist.id },
+                        set: { isEnabled in
+                            store.send(.setDefaultStartupPlaylist(isEnabled ? playlist.id : nil))
+                        }
+                    )
+                ) {
+                    Text(AppStrings.PlaylistMgmt.defaultStartupPlaylist)
+                }
+                .accessibilityHint(AppStrings.PlaylistMgmt.defaultStartupPlaylistDescription)
+
+                Toggle(AppStrings.PlaylistMgmt.automaticCatalogRefresh, isOn: $store.automaticCatalogRefreshEnabledDraft)
+                Text(AppStrings.PlaylistMgmt.automaticCatalogRefreshDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Text(AppStrings.PlaylistMgmt.refreshScheduleTitle)
+                    .font(.headline)
+                if playlist.type == .xtream || playlist.type == .m3u {
+                    Picker(PlaylistRefreshTarget.live.title, selection: $store.refreshScheduleDraft.live) {
+                        ForEach(PlaylistRefreshInterval.allCases) { interval in
+                            Text(interval.title).tag(interval)
+                        }
+                    }
+                }
+                Picker(PlaylistRefreshTarget.movies.title, selection: $store.refreshScheduleDraft.movies) {
+                    ForEach(PlaylistRefreshInterval.allCases) { interval in
+                        Text(interval.title).tag(interval)
+                    }
+                }
+                Picker(PlaylistRefreshTarget.series.title, selection: $store.refreshScheduleDraft.series) {
+                    ForEach(PlaylistRefreshInterval.allCases) { interval in
+                        Text(interval.title).tag(interval)
+                    }
+                }
+                if playlist.type == .xtream || playlist.type == .m3u {
+                    Picker(PlaylistRefreshTarget.epg.title, selection: $store.refreshScheduleDraft.epg) {
+                        ForEach(PlaylistRefreshInterval.allCases) { interval in
+                            Text(interval.title).tag(interval)
+                        }
+                    }
+                }
+                Text(AppStrings.PlaylistMgmt.refreshScheduleDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
                 if playlist.type == .xtream {
                     TextField("Server URL", text: $store.serverURLDraft)
                         .textInputAutocapitalization(.never)
@@ -351,6 +614,124 @@ public struct PlaylistManagementView: View {
                         .font(.footnote)
                 }
             }
+
+            Section {
+                Toggle(
+                    AppStrings.PlaylistMgmt.playlistICloudSync,
+                    isOn: Binding(
+                        get: { store.playlistCloudSyncEnabledDraft },
+                        set: { store.send(.setPlaylistCloudSyncEnabled(playlist.id, $0)) }
+                    )
+                )
+                Text(AppStrings.PlaylistMgmt.playlistICloudSyncDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(AppStrings.Settings.cloudSyncSection)
+            }
+
+            Section {
+                Button {
+                    store.send(.checkPlaylistHealth)
+                } label: {
+                    Label(AppStrings.PlaylistMgmt.healthCheck, systemImage: "waveform.path.ecg")
+                }
+                .disabled(store.isCheckingPlaylistHealth || store.isRefreshingPlaylist)
+                .accessibilityHint(AppStrings.PlaylistMgmt.healthCheckDescription)
+
+                if store.isCheckingPlaylistHealth {
+                    ProgressView(AppStrings.PlaylistMgmt.healthCheckProgress)
+                        .accessibilityLabel(AppStrings.PlaylistMgmt.healthCheckProgress)
+                }
+            } header: {
+                Text(AppStrings.PlaylistMgmt.healthReportTitle)
+            } footer: {
+                Text(AppStrings.PlaylistMgmt.healthCheckDescription)
+            }
+
+            if let report = store.playlistHealthReport {
+                Section {
+                    ForEach(report.checks) { check in
+                        let title = healthCheckTitle(check.kind)
+                        let statusTitle = healthStatusTitle(check.status)
+                        let detail = healthStatusDetail(check.status)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 10) {
+                                Image(systemName: healthStatusSymbol(check.status))
+                                    .foregroundStyle(healthStatusColor(check.status))
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(title)
+                                        .font(.body.weight(.medium))
+                                    Text(statusTitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(healthStatusColor(check.status))
+                                }
+                                Spacer(minLength: 8)
+                            }
+                            if let detail {
+                                Text(detail)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 3)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(title). \(statusTitle). \(detail ?? "")")
+                    }
+                    Text(report.checkedAt, style: .time)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text(AppStrings.PlaylistMgmt.healthReportTitle)
+                }
+            }
+        }
+    }
+
+    private func healthCheckTitle(_ kind: PlaylistHealthCheckKind) -> String {
+        switch kind {
+        case .connection: AppStrings.PlaylistMgmt.healthConnection
+        case .authentication: AppStrings.PlaylistMgmt.healthAuthentication
+        case .format: AppStrings.PlaylistMgmt.healthFormat
+        case .parsing: AppStrings.PlaylistMgmt.healthParsing
+        case .epg: AppStrings.PlaylistMgmt.healthEPG
+        }
+    }
+
+    private func healthStatusTitle(_ status: PlaylistHealthStatus) -> String {
+        switch status {
+        case .passed: AppStrings.PlaylistMgmt.healthPassed
+        case .failed: AppStrings.PlaylistMgmt.healthFailed
+        case .notChecked: AppStrings.PlaylistMgmt.healthNotChecked
+        case .notConfigured: AppStrings.PlaylistMgmt.healthNotConfigured
+        case .notApplicable: AppStrings.PlaylistMgmt.healthNotApplicable
+        }
+    }
+
+    private func healthStatusDetail(_ status: PlaylistHealthStatus) -> String? {
+        switch status {
+        case let .failed(issue), let .notChecked(issue):
+            AppStrings.PlaylistMgmt.healthIssueDescription(issue)
+        case .passed, .notConfigured, .notApplicable:
+            nil
+        }
+    }
+
+    private func healthStatusSymbol(_ status: PlaylistHealthStatus) -> String {
+        switch status {
+        case .passed: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        case .notChecked, .notConfigured, .notApplicable: "minus.circle"
+        }
+    }
+
+    private func healthStatusColor(_ status: PlaylistHealthStatus) -> Color {
+        switch status {
+        case .passed: .green
+        case .failed: .red
+        case .notChecked, .notConfigured, .notApplicable: .secondary
         }
     }
 }
@@ -380,9 +761,9 @@ struct PlaylistManagementPINPromptView: View {
                             set: { store.send(.playlistPINConfirmationChanged($0)) }
                         ))
                         #if os(iOS)
-                            .keyboardType(.numberPad)
+                        .keyboardType(.numberPad)
                         #endif
-                            .accessibilityLabel("PIN doğrulaması")
+                        .accessibilityLabel("PIN doğrulaması")
                     }
                     if let error = store.playlistPINError {
                         Text(error)

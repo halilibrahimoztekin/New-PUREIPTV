@@ -8,11 +8,11 @@
         let url: URL
         let onDismiss: () -> Void
 
-        func makeUIViewController(context: Context) -> SafariPresentationHostController {
+        func makeUIViewController(context _: Context) -> SafariPresentationHostController {
             SafariPresentationHostController(url: url, onDismiss: onDismiss)
         }
 
-        func updateUIViewController(_ controller: SafariPresentationHostController, context: Context) {
+        func updateUIViewController(_ controller: SafariPresentationHostController, context _: Context) {
             controller.onDismiss = onDismiss
             controller.presentSafariIfNeeded()
         }
@@ -31,7 +31,7 @@
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) {
+        required init?(coder _: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
@@ -59,7 +59,7 @@
             present(safariViewController, animated: true)
         }
 
-        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+        func safariViewControllerDidFinish(_: SFSafariViewController) {
             onDismiss()
         }
     }

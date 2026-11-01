@@ -17,6 +17,42 @@ private func mergeDownloadSnapshot(_ snapshot: [DownloadProgressItem], live: [Do
     }
 }
 
+private func orderedOfflineEpisodeQueue(
+    startingWith current: OfflineMediaSnapshot,
+    downloadedItems: [OfflineMediaSnapshot]
+) -> [OfflineMediaSnapshot] {
+    guard let metadata = current.episodeMetadata,
+          metadata.episodeOrdinal != nil,
+          let playlistID = metadata.playlistID,
+          current.isAvailable
+    else { return [] }
+
+    let episodes = downloadedItems.filter { item in
+        guard item.isAvailable,
+              let candidate = item.episodeMetadata,
+              candidate.episodeOrdinal != nil
+        else { return false }
+        return candidate.seriesID == metadata.seriesID &&
+            candidate.playlistID == playlistID
+    }.sorted { lhs, rhs in
+        guard let left = lhs.episodeMetadata,
+              let right = rhs.episodeMetadata,
+              let leftOrdinal = left.episodeOrdinal,
+              let rightOrdinal = right.episodeOrdinal
+        else { return lhs.id < rhs.id }
+        if leftOrdinal != rightOrdinal {
+            return leftOrdinal < rightOrdinal
+        }
+        if left.seasonNumber != right.seasonNumber {
+            return left.seasonNumber < right.seasonNumber
+        }
+        return lhs.id < rhs.id
+    }
+
+    guard episodes.contains(where: { $0.id == current.id && $0.localFilePath == current.localFilePath }) else { return [] }
+    return episodes
+}
+
 @Reducer
 public struct DownloadsFeature {
     @ObservableState
@@ -42,6 +78,10 @@ public struct DownloadsFeature {
         public var queueGeneration: UInt64 = 0
         public var queueChanges: [String: UInt64] = [:]
 
+        public var nextQueuedDownloadID: String? {
+            activeDownloads.first(where: { $0.isQueued && !$0.isPaused })?.id
+        }
+
         public init() {}
 
         mutating func recordQueueChange(_ id: String) {
@@ -57,6 +97,7 @@ public struct DownloadsFeature {
         case downloadsResponse(requestID: UUID, generation: UInt64, Result<DownloadLibrarySnapshot, Error>)
         case downloadProgressUpdated(DownloadProgressItem)
         case togglePauseActiveDownload(String)
+        case prioritizeQueuedDownload(String)
         case cancelActiveDownload(String)
         case dismissFailedDownload(String)
         case downloadCommandResponse(id: String, succeeded: Bool)
@@ -71,12 +112,12 @@ public struct DownloadsFeature {
         case dismissClearFailure
         case dismissError
         case playDownload(OfflineMediaSnapshot)
-        case playbackResponse(requestID: UUID, OfflineMediaSnapshot?)
+        case playbackResponse(requestID: UUID, current: OfflineMediaSnapshot?, downloadedItems: [OfflineMediaSnapshot])
         case playbackUnavailable
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
-            case playOfflineMedia(OfflineMediaSnapshot)
+            case playOfflineMedia(OfflineMediaSnapshot, episodeQueue: [OfflineMediaSnapshot])
         }
     }
 
@@ -134,7 +175,9 @@ public struct DownloadsFeature {
                 state.hasLoadedDownloads = true
                 state.storageSummary = snapshot.storageSummary
                 state.loadFailureMessage = nil
-                if state.errorMessage == AppStrings.Downloads.downloadLoadFailure { state.errorMessage = nil }
+                if state.errorMessage == AppStrings.Downloads.downloadLoadFailure {
+                    state.errorMessage = nil
+                }
                 let changedIDs = Set(state.queueChanges.filter { $0.value > generation }.map(\.key))
                 state.activeDownloads = mergeDownloadSnapshot(snapshot.activeDownloads, live: state.activeDownloads, changedIDs: changedIDs)
                 state.failedDownloads = mergeDownloadSnapshot(snapshot.failedDownloads, live: state.failedDownloads, changedIDs: changedIDs)
@@ -150,7 +193,8 @@ public struct DownloadsFeature {
 
             case let .downloadProgressUpdated(update):
                 if !update.isCompleted, !update.isFailed, !update.isCancelled,
-                   state.activeDownloads.first(where: { $0.id == update.id }) == update {
+                   state.activeDownloads.first(where: { $0.id == update.id }) == update
+                {
                     return .none
                 }
                 state.recordQueueChange(update.id)
@@ -185,6 +229,16 @@ public struct DownloadsFeature {
                     }
                 }
 
+            case let .prioritizeQueuedDownload(id):
+                guard state.hasLoadedDownloads,
+                      state.nextQueuedDownloadID != id,
+                      state.activeDownloads.contains(where: { $0.id == id && $0.isQueued && !$0.isPaused }),
+                      state.pendingDownloadCommandIDs.insert(id).inserted else { return .none }
+                return .run { [downloadClient] send in
+                    let succeeded = await downloadClient.prioritizeQueuedDownload(id)
+                    await send(.downloadCommandResponse(id: id, succeeded: succeeded))
+                }
+
             case let .togglePauseActiveDownload(id):
                 guard let item = state.activeDownloads.first(where: { $0.id == id }),
                       state.pendingDownloadCommandIDs.insert(id).inserted else { return .none }
@@ -212,7 +266,9 @@ public struct DownloadsFeature {
             case let .downloadCommandResponse(id, succeeded):
                 state.pendingDownloadCommandIDs.remove(id)
                 state.loadRequestID = nil
-                if !succeeded { state.errorMessage = AppStrings.Downloads.downloadCommandFailure }
+                if !succeeded {
+                    state.errorMessage = AppStrings.Downloads.downloadCommandFailure
+                }
                 return state.isVisible ? .send(.loadDownloads) : .none
 
             case let .deleteDownload(id):
@@ -243,8 +299,12 @@ public struct DownloadsFeature {
             case let .deleteDownloadResponse(id, succeeded):
                 state.deletingDownloadIDs.remove(id)
                 state.loadRequestID = nil
-                if succeeded { state.downloadedItems.removeAll { $0.id == id } }
-                if !succeeded { state.errorMessage = AppStrings.Downloads.deleteDownloadFailure }
+                if succeeded {
+                    state.downloadedItems.removeAll { $0.id == id }
+                }
+                if !succeeded {
+                    state.errorMessage = AppStrings.Downloads.deleteDownloadFailure
+                }
                 return state.isVisible ? .send(.loadDownloads) : .none
 
             case .clearCompletedTapped:
@@ -278,7 +338,9 @@ public struct DownloadsFeature {
             case let .clearCompletedResponse(result):
                 state.isClearingCompleted = false
                 state.loadRequestID = nil
-                if result.failureCount > 0 { state.clearFailureMessage = AppStrings.Downloads.clearCompletedFailure }
+                if result.failureCount > 0 {
+                    state.clearFailureMessage = AppStrings.Downloads.clearCompletedFailure
+                }
                 return state.isVisible ? .send(.loadDownloads) : .none
 
             case .dismissClearFailure:
@@ -296,21 +358,24 @@ public struct DownloadsFeature {
                 state.playbackRequestID = requestID
                 state.pendingPlaybackItemID = item.id
                 return .run { [downloadClient] send in
-                    let current = try? await downloadClient.getDownloadedMedia().first(where: { $0.id == item.id && $0.isAvailable })
+                    let downloadedItems = await (try? downloadClient.getDownloadedMedia()) ?? []
+                    let current = downloadedItems.first(where: { $0.id == item.id && $0.isAvailable })
                     guard !Task.isCancelled else { return }
-                    await send(.playbackResponse(requestID: requestID, current))
+                    await send(.playbackResponse(requestID: requestID, current: current, downloadedItems: downloadedItems))
                 }
                 .cancellable(id: DownloadsCancelID.playback, cancelInFlight: true)
 
-            case let .playbackResponse(requestID, current):
+            case let .playbackResponse(requestID, current, downloadedItems):
                 guard state.isVisible, state.playbackRequestID == requestID else { return .none }
                 state.playbackRequestID = nil
                 state.pendingPlaybackItemID = nil
                 guard let current, state.downloadedItems.contains(where: { $0.id == current.id && $0.isAvailable }),
-                      !state.deletingDownloadIDs.contains(current.id), !state.isClearingCompleted else {
+                      !state.deletingDownloadIDs.contains(current.id), !state.isClearingCompleted
+                else {
                     return .send(.playbackUnavailable)
                 }
-                return .send(.delegate(.playOfflineMedia(current)))
+                let episodeQueue = orderedOfflineEpisodeQueue(startingWith: current, downloadedItems: downloadedItems)
+                return .send(.delegate(.playOfflineMedia(current, episodeQueue: episodeQueue)))
 
             case .playbackUnavailable:
                 state.errorMessage = AppStrings.Downloads.missingDownload

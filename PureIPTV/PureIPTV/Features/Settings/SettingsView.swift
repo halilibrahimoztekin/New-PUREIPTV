@@ -11,20 +11,51 @@ public struct SettingsView: View {
 
     @State private var backupExportURL: URL? = nil
     @State private var isGeneratingDiagnosticReport = false
+    @State private var isThemePackageImporterPresented = false
+    @State private var isThemePackageMessagePresented = false
+    @State private var themePackageMessage = ""
+    @State private var themePackageImportProfileID: UUID?
     #if os(tvOS)
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var playerRemoteDownAction = TVPlayerRemoteAction.channelDown.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var playerRemoteLeftAction = TVPlayerRemoteAction.openChannelList.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var playerRemoteRightAction = TVPlayerRemoteAction.recallLastChannel.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var playerRemoteUpAction = TVPlayerRemoteAction.defaultUpAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var playerRemoteDownAction = TVPlayerRemoteAction.defaultDownAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var playerRemoteLeftAction = TVPlayerRemoteAction.defaultLeftAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var playerRemoteRightAction = TVPlayerRemoteAction.defaultRightAction.rawValue
+        @AppStorage("com.pureiptv.tvOSHighContrastFocusFrame") private var isHighContrastFocusFrameEnabled = false
+        @AppStorage(LiveTVFocusPreferenceKeys.favoriteChannelWrapAround) private var isFavoriteWrapAroundFocusEnabled = false
+        @AppStorage(EPGTimelinePreferenceKeys.hideChannelsWithoutPrograms) private var hideChannelsWithoutPrograms = false
     #endif
 
     public init(store: StoreOf<SettingsFeature>) {
         self.store = store
     }
 
+    #if os(tvOS)
+        private var hasCustomPlayerRemoteActions: Bool {
+            playerRemoteUpAction != TVPlayerRemoteAction.defaultUpAction.rawValue
+                || playerRemoteDownAction != TVPlayerRemoteAction.defaultDownAction.rawValue
+                || playerRemoteLeftAction != TVPlayerRemoteAction.defaultLeftAction.rawValue
+                || playerRemoteRightAction != TVPlayerRemoteAction.defaultRightAction.rawValue
+        }
+
+        private func restorePlayerRemoteActions() {
+            playerRemoteUpAction = TVPlayerRemoteAction.defaultUpAction.rawValue
+            playerRemoteDownAction = TVPlayerRemoteAction.defaultDownAction.rawValue
+            playerRemoteLeftAction = TVPlayerRemoteAction.defaultLeftAction.rawValue
+            playerRemoteRightAction = TVPlayerRemoteAction.defaultRightAction.rawValue
+        }
+    #endif
+
     private var selectedPlaybackDefaults: PlaybackDefaults {
         store.playbackDefaultsByKind[store.selectedPlaybackContentKind]
             ?? .legacy(for: store.selectedPlaybackContentKind)
+    }
+
+    private func topShelfSectionTitle(_ section: TopShelfContentSection) -> String {
+        switch section {
+        case .continueWatching: AppStrings.Dashboard.continueWatching
+        case .favoriteChannels: AppStrings.Dashboard.favoriteLiveTV
+        case .recentMovies: AppStrings.Dashboard.newMovies
+        }
     }
 
     public var body: some View {
@@ -149,6 +180,120 @@ public struct SettingsView: View {
                 }
             }
 
+            Section(
+                header: Text(AppStrings.Settings.tmdbAPIKeyTitle),
+                footer: Text(AppStrings.Settings.tmdbAPIKeyDescription)
+            ) {
+                SecureField(
+                    AppStrings.Settings.tmdbAPIKeyPlaceholder,
+                    text: Binding(
+                        get: { store.tmdbAPIKeyInput.stringValue },
+                        set: { store.send(.tmdbAPIKeyInputChanged(RedactedText($0))) }
+                    )
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .privacySensitive()
+                .disabled(store.isValidatingTMDBAPIKey || store.isDeletingTMDBAPIKey)
+
+                Button {
+                    store.send(.validateAndSaveTMDBAPIKeyTapped)
+                } label: {
+                    HStack(spacing: 10) {
+                        if store.isValidatingTMDBAPIKey {
+                            ProgressView()
+                            Text(AppStrings.Settings.tmdbAPIKeyValidating)
+                        } else {
+                            Label(AppStrings.Settings.tmdbAPIKeyValidateAndSave, systemImage: "checkmark.shield")
+                        }
+                    }
+                    .frame(minHeight: 36, alignment: .leading)
+                }
+                .disabled(
+                    store.tmdbAPIKeyInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || store.isValidatingTMDBAPIKey
+                        || store.isDeletingTMDBAPIKey
+                )
+
+                if let statusMessage = store.tmdbAPIKeyStatusMessage {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(store.isTMDBAPIKeyStatusError ? Color.red : Color.secondary)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+
+                if store.hasSavedTMDBAPIKey {
+                    Button(role: .destructive) {
+                        store.send(.deleteTMDBAPIKeyTapped)
+                    } label: {
+                        HStack(spacing: 10) {
+                            if store.isDeletingTMDBAPIKey {
+                                ProgressView()
+                            }
+                            Label(AppStrings.Settings.tmdbAPIKeyDelete, systemImage: "key.slash")
+                        }
+                        .frame(minHeight: 36, alignment: .leading)
+                    }
+                    .disabled(store.isValidatingTMDBAPIKey || store.isDeletingTMDBAPIKey)
+                }
+            }
+
+            Section(header: Text(AppStrings.Settings.contentManagement)) {
+                Button {
+                    store.send(.hiddenMediaManagementTapped)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "eye.slash")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(AppStrings.Settings.hiddenMediaManagement)
+                                .foregroundStyle(.primary)
+                            Text(AppStrings.Settings.hiddenMediaManagementDescription)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Section {
+                NavigationLink {
+                    ViewingStatisticsView(store: store)
+                } label: {
+                    Label(AppStrings.ViewingStatistics.title, systemImage: "chart.bar.xaxis")
+                        .foregroundStyle(.primary)
+                        .labelStyle(.titleAndIcon)
+                        .tint(.blue)
+                }
+            }
+
+            Section(
+                header: Text(AppStrings.Settings.searchHistory),
+                footer: Text(AppStrings.Settings.searchHistoryDescription)
+            ) {
+                Toggle(AppStrings.Settings.saveRecentSearches, isOn: Binding(
+                    get: { store.isSearchHistorySavingEnabled },
+                    set: { store.send(.setSearchHistorySavingEnabled($0)) }
+                ))
+
+                if store.isSearchHistorySavingEnabled {
+                    Picker(AppStrings.Settings.searchHistoryRetention, selection: Binding(
+                        get: { store.searchHistoryRetention },
+                        set: { store.send(.setSearchHistoryRetention($0)) }
+                    )) {
+                        ForEach(SearchHistoryRetention.allCases) { retention in
+                            Text(retention.title).tag(retention)
+                        }
+                    }
+                }
+            }
+
             Section(header: Text(AppStrings.Settings.appearance)) {
                 Picker(AppStrings.Settings.visualThemePreset, selection: Binding(
                     get: { theme.selectedPresetID },
@@ -166,6 +311,57 @@ public struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                #if os(iOS)
+                    Button {
+                        guard let profileID = store.personalizationProfileID else { return }
+                        themePackageImportProfileID = profileID
+                        isThemePackageImporterPresented = true
+                    } label: {
+                        Label(AppStrings.Settings.visualThemePackageImport, systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(store.personalizationProfileID == nil)
+                #endif
+
+                ForEach(theme.importedPackages) { package in
+                    HStack(spacing: 10) {
+                        Button {
+                            theme.setThemePreset(id: package.id)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(package.accentColor)
+                                    .frame(width: 16, height: 16)
+                                    .accessibilityHidden(true)
+                                Text(package.name)
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                if theme.selectedPresetID == package.id {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(theme.selectedPresetID == package.id ? .isSelected : [])
+
+                        Button(role: .destructive) {
+                            theme.removeImportedThemePackage(id: package.id)
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(AppStrings.Settings.visualThemePackageRemove(package.name))
+                    }
+                }
+
+                Text(AppStrings.Settings.visualThemePackageDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Picker(AppStrings.Settings.appIcon, selection: $theme.currentAppIconName) {
                     ForEach(theme.availableIcons, id: \.name) { icon in
                         Text(icon.name).tag(icon.iconName ?? "AppIcon")
@@ -180,6 +376,16 @@ public struct SettingsView: View {
                         get: { store.showTwoLineTVChannelTitles },
                         set: { store.send(.setShowTwoLineTVChannelTitles($0)) }
                     ))
+
+                    Toggle(AppStrings.Settings.highContrastFocusFrame, isOn: $isHighContrastFocusFrameEnabled)
+                    Text(AppStrings.Settings.highContrastFocusFrameDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Toggle(AppStrings.Settings.favoriteChannelWrapAroundFocus, isOn: $isFavoriteWrapAroundFocusEnabled)
+                    Text(AppStrings.Settings.favoriteChannelWrapAroundFocusDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 #endif
 
                 Picker(AppStrings.Settings.startupScreen, selection: Binding(
@@ -227,6 +433,10 @@ public struct SettingsView: View {
                         Text(method.title).tag(method)
                     }
                 }
+
+                Text(AppStrings.Settings.categorySortFallbackDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section(header: Text(AppStrings.Settings.playerSettings)) {
@@ -277,6 +487,12 @@ public struct SettingsView: View {
                     Text(AppStrings.Settings.remoteControlsDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Button {
+                        restorePlayerRemoteActions()
+                    } label: {
+                        Label(AppStrings.Settings.restoreRemoteControlDirections, systemImage: "arrow.counterclockwise")
+                    }
+                    .disabled(!hasCustomPlayerRemoteActions)
                 #endif
 
                 Toggle(AppStrings.Settings.startMuted, isOn: Binding(
@@ -322,6 +538,9 @@ public struct SettingsView: View {
                         }
                     }
                     Text("Otomatik, VOD için eski arabellek ayarını; Canlı ve Arşiv için motorun varsayılanını kullanır.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Daha büyük arabellek ilk görüntüyü geciktirir ve daha fazla bellek kullanır; kesintili bağlantılarda oynatımı daha dayanıklı kılabilir.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -374,6 +593,17 @@ public struct SettingsView: View {
                 Text("Bu varsayılanlar sonraki oynatımlarda uygulanır. Eşleme etkin olduğunda desteklenen içerik, oynatım başlarken kare hızı ve renk aralığına göre ekrana eşlenir.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if #available(iOS 26.0, tvOS 26.0, *) {
+                    Toggle(AppStrings.Settings.forceSDROutput, isOn: Binding(
+                        get: { selectedPlaybackDefaults.isForceSDROutputEnabled ?? false },
+                        set: { store.send(.updatePlaybackDefaults(.isForceSDROutputEnabled($0))) }
+                    ))
+                    .disabled(selectedPlaybackDefaults.preferredEngine != .avPlayer)
+                    Text(AppStrings.Settings.forceSDROutputDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             #if os(tvOS)
@@ -384,6 +614,42 @@ public struct SettingsView: View {
                     )) {
                         ForEach(TopShelfStyle.allCases, id: \.self) { style in
                             Text(style.title).tag(style)
+                        }
+                    }
+
+                    Toggle(AppStrings.Dashboard.continueWatching, isOn: Binding(
+                        get: { store.topShelfContentSelection.continueWatching },
+                        set: { store.send(.setTopShelfContentSelection(.continueWatching, $0)) }
+                    ))
+                    Toggle(AppStrings.Dashboard.favoriteLiveTV, isOn: Binding(
+                        get: { store.topShelfContentSelection.favoriteChannels },
+                        set: { store.send(.setTopShelfContentSelection(.favoriteChannels, $0)) }
+                    ))
+                    Toggle(AppStrings.Dashboard.newMovies, isOn: Binding(
+                        get: { store.topShelfContentSelection.recentMovies },
+                        set: { store.send(.setTopShelfContentSelection(.recentMovies, $0)) }
+                    ))
+
+                    ForEach(Array(store.topShelfSectionOrder.enumerated()), id: \.element) { entry in
+                        let index = entry.offset
+                        let section = entry.element
+                        HStack(spacing: 12) {
+                            Text(topShelfSectionTitle(section))
+                            Spacer()
+                            if index > 0 {
+                                Button {
+                                    store.send(.moveTopShelfSection(section, direction: -1))
+                                } label: {
+                                    Label(AppStrings.CategoryMgmt.moveCategoryUp, systemImage: "arrow.up")
+                                }
+                            }
+                            if index + 1 < store.topShelfSectionOrder.count {
+                                Button {
+                                    store.send(.moveTopShelfSection(section, direction: 1))
+                                } label: {
+                                    Label(AppStrings.CategoryMgmt.moveCategoryDown, systemImage: "arrow.down")
+                                }
+                            }
                         }
                     }
 
@@ -415,6 +681,32 @@ public struct SettingsView: View {
             }
 
             Section(header: Text("\(AppStrings.Settings.audioAndSubtitleSettings) — \(store.selectedPlaybackContentKind.title)")) {
+                if store.selectedPlaybackContentKind == .vod {
+                    Picker(AppStrings.Settings.vodSkipInterval, selection: Binding(
+                        get: { selectedPlaybackDefaults.vodSkipInterval },
+                        set: { store.send(.updatePlaybackDefaults(.vodSkipInterval($0))) }
+                    )) {
+                        ForEach(PlaybackSkipInterval.allCases) { interval in
+                            Text(interval.compactTitle).tag(interval)
+                        }
+                    }
+                    Text(AppStrings.Settings.vodSkipIntervalDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if store.selectedPlaybackContentKind == .archive {
+                    Picker(AppStrings.Settings.catchupSkipInterval, selection: Binding(
+                        get: { selectedPlaybackDefaults.catchupSkipInterval },
+                        set: { store.send(.updatePlaybackDefaults(.catchupSkipInterval($0))) }
+                    )) {
+                        ForEach(PlaybackSkipInterval.allCases) { interval in
+                            Text(interval.compactTitle).tag(interval)
+                        }
+                    }
+                    Text(AppStrings.Settings.catchupSkipIntervalDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Picker(AppStrings.Settings.defaultAudioLanguage, selection: Binding(
                     get: { selectedPlaybackDefaults.preferredAudioLanguage },
                     set: { store.send(.updatePlaybackDefaults(.preferredAudioLanguage($0))) }
@@ -464,6 +756,23 @@ public struct SettingsView: View {
                 ))
             }
 
+            Section {
+                Picker(AppStrings.Settings.subtitleAppearanceProfile, selection: Binding(
+                    get: { store.subtitleAppearanceProfile },
+                    set: { store.send(.setSubtitleAppearanceProfile($0)) }
+                )) {
+                    ForEach(SubtitleAppearanceProfile.allCases) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+                Text(AppStrings.Settings.subtitleAppearanceGlobalScope)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(AppStrings.Settings.subtitleAppearanceDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section(header: Text(AppStrings.Settings.epgSettings)) {
                 #if os(tvOS)
                     Picker("Kanal önizlemesi", selection: Binding(
@@ -477,6 +786,11 @@ public struct SettingsView: View {
                     Text("Rehberde bir kanalda bekleyince sessiz önizlemeyi başlatır. Kapalı seçeneği odak gezinirken yayın isteği göndermez; kanal menüsünden önizleme yine açılabilir.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Toggle(AppStrings.Settings.hideChannelsWithoutPrograms, isOn: $hideChannelsWithoutPrograms)
+                    Text(AppStrings.Settings.hideChannelsWithoutProgramsDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 #endif
 
                 #if os(iOS)
@@ -488,6 +802,18 @@ public struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 #endif
+
+                Picker(AppStrings.Settings.liveTVArtworkSource, selection: Binding(
+                    get: { store.liveTVArtworkSource },
+                    set: { store.send(.setLiveTVArtworkSource($0)) }
+                )) {
+                    ForEach(LiveTVArtworkSource.allCases) { source in
+                        Text(source.title).tag(source)
+                    }
+                }
+                Text(AppStrings.Settings.liveTVArtworkSourceDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
                 #if os(tvOS)
                     HStack {
@@ -527,6 +853,15 @@ public struct SettingsView: View {
                 }
                 .disabled(!store.autoUpdateEPG)
                 Text(AppStrings.Settings.epgAutoRefreshDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Toggle(AppStrings.Settings.deferAutoEPGRefreshOnConstrainedNetwork, isOn: Binding(
+                    get: { store.deferAutoEPGRefreshOnConstrainedNetwork },
+                    set: { store.send(.setDeferAutoEPGRefreshOnConstrainedNetwork($0)) }
+                ))
+                .disabled(!store.autoUpdateEPG)
+                Text(AppStrings.Settings.deferAutoEPGRefreshOnConstrainedNetworkDescription)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
@@ -582,19 +917,19 @@ public struct SettingsView: View {
                         Spacer()
 
                         Button {
+                            guard !store.isCloudSyncing else { return }
                             store.send(.syncNowTapped)
                         } label: {
                             HStack(spacing: 6) {
                                 if store.isCloudSyncing {
                                     ProgressView()
                                         .controlSize(.small)
-                                } else {
-                                    Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
-                                        .font(.caption)
-                                    Text("Şimdi Eşitle")
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
                                 }
+                                Image(systemName: "arrow.triangle.2.circlepath.icloud.fill")
+                                    .font(.caption)
+                                Text("Şimdi Eşitle")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -604,10 +939,14 @@ public struct SettingsView: View {
                             )
                             .foregroundStyle(Color(hex: "#0A84FF"))
                         }
+                        .accessibilityLabel("Şimdi Eşitle")
+                        .accessibilityValue(store.isCloudSyncing ? AppStrings.Player.syncing : "")
                         #if !os(tvOS)
-                        .buttonStyle(.plain)
+                            .buttonStyle(.plain)
                         #endif
+                        #if !os(tvOS)
                         .disabled(store.isCloudSyncing)
+                        #endif
                     }
 
                     if let summary = store.cloudSyncSummary {
@@ -805,9 +1144,9 @@ public struct SettingsView: View {
                 .foregroundColor(.primary)
 
                 Button(action: {
+                    guard !isGeneratingDiagnosticReport else { return }
+                    isGeneratingDiagnosticReport = true
                     Task {
-                        guard !isGeneratingDiagnosticReport else { return }
-                        isGeneratingDiagnosticReport = true
                         defer { isGeneratingDiagnosticReport = false }
                         if let reportURL = await FeedbackReportManager.shared.generateDiagnosticReport() {
                             store.send(.presentDiagnosticReport(reportURL))
@@ -826,13 +1165,25 @@ public struct SettingsView: View {
                             : AppStrings.Settings.createDiagnosticReport)
                     }
                 }
+                #if !os(tvOS)
                 .disabled(isGeneratingDiagnosticReport)
+                #endif
                 .accessibilityLabel(AppStrings.Settings.createDiagnosticReport)
                 .accessibilityHint(AppStrings.Settings.diagnosticReportHint)
+                .accessibilityValue(isGeneratingDiagnosticReport ? AppStrings.Settings.diagnosticReportGenerating : "")
                 .foregroundColor(.primary)
             }
 
-            Section(header: Text(AppStrings.Settings.about), footer: Text(AppStrings.Settings.appVersion)) {
+            Section(
+                header: Text(AppStrings.Settings.about),
+                footer: VStack(alignment: .leading, spacing: 6) {
+                    Text(AppStrings.Settings.appVersion)
+                    Text(AppStrings.Settings.tmdbAttribution)
+                    if let tmdbURL = URL(string: "https://www.themoviedb.org") {
+                        Link("TMDB", destination: tmdbURL)
+                    }
+                }
+            ) {
                 HStack {
                     Text(AppStrings.Settings.version)
                     Spacer()
@@ -845,28 +1196,115 @@ public struct SettingsView: View {
         .onAppear {
             store.send(.onAppear)
         }
+        .onDisappear {
+            store.send(.tmdbAPIKeySettingsDisappeared)
+        }
+        #if os(iOS)
+        .fileImporter(
+            isPresented: $isThemePackageImporterPresented,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false,
+            onCompletion: handleThemePackageImport
+        )
+        .alert(AppStrings.Settings.visualThemePreset, isPresented: $isThemePackageMessagePresented) {
+            Button(AppStrings.Common.ok, role: .cancel) {}
+        } message: {
+            Text(themePackageMessage)
+        }
+        #endif
     }
+
+    #if os(iOS)
+        private func handleThemePackageImport(_ result: Result<[URL], Error>) {
+            guard let profileID = themePackageImportProfileID else {
+                return
+            }
+            themePackageImportProfileID = nil
+
+            switch result {
+            case let .success(urls):
+                guard let url = urls.first, urls.count == 1 else { return }
+                let hasSecurityScope = url.startAccessingSecurityScopedResource()
+                defer {
+                    if hasSecurityScope {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                do {
+                    let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                    guard values.isRegularFile == true,
+                          let fileSize = values.fileSize
+                    else {
+                        throw NSError(
+                            domain: "PureIPTV.VisualThemePackage",
+                            code: 1,
+                            userInfo: [NSLocalizedDescriptionKey: AppStrings.Settings.visualThemePackageInvalid]
+                        )
+                    }
+                    guard fileSize <= 16 * 1024 else {
+                        throw NSError(
+                            domain: "PureIPTV.VisualThemePackage",
+                            code: 2,
+                            userInfo: [NSLocalizedDescriptionKey: AppStrings.Settings.visualThemePackageTooLarge]
+                        )
+                    }
+                    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                    let package = try theme.importThemePackage(data, for: profileID)
+                    themePackageMessage = AppStrings.Settings.visualThemePackageAdded(package.name)
+                } catch {
+                    themePackageMessage = error.localizedDescription
+                }
+                isThemePackageMessagePresented = true
+
+            case let .failure(error):
+                guard (error as? CocoaError)?.code != .userCancelled else { return }
+                themePackageMessage = error.localizedDescription
+                isThemePackageMessagePresented = true
+            }
+        }
+    #endif
 }
 
 struct DiagnosticReportPreviewView: View {
     let url: URL
     let onClose: () -> Void
-
-    private var reportText: String {
-        (try? String(contentsOf: url, encoding: .utf8)) ?? AppStrings.Settings.diagnosticReportUnavailable
-    }
+    @State private var reportText = ""
+    @State private var reportChunks: [String] = []
+    @State private var isLoadingReport = true
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                Text(reportText)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                #if os(iOS)
-                    .textSelection(.enabled)
-                #endif
-                    .padding()
+                Group {
+                    if isLoadingReport {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 180)
+                    } else {
+                        #if os(tvOS)
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(reportChunks.indices, id: \.self) { index in
+                                    Text(reportChunks[index])
+                                        .font(.system(.body, design: .monospaced))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(8)
+                                        .focusable()
+                                        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        #else
+                            Text(reportText)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        #endif
+                    }
+                }
+                .padding()
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
             .navigationTitle(AppStrings.Settings.diagnosticReportTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -888,6 +1326,32 @@ struct DiagnosticReportPreviewView: View {
                     }
                 #endif
             }
+        }
+        .task(id: url) {
+            isLoadingReport = true
+            let reportURL = url
+            let unavailableText = AppStrings.Settings.diagnosticReportUnavailable
+            let worker = Task.detached(priority: .userInitiated) { () -> (String, [String])? in
+                guard !Task.isCancelled else { return nil }
+                let text = (try? String(contentsOf: reportURL, encoding: .utf8)) ?? unavailableText
+                guard !Task.isCancelled else { return nil }
+                let lines = text.components(separatedBy: .newlines)
+                var chunks: [String] = []
+                for start in stride(from: 0, to: lines.count, by: 5) {
+                    guard !Task.isCancelled else { return nil }
+                    chunks.append(lines[start ..< min(start + 5, lines.count)].joined(separator: "\n"))
+                }
+                return (text, chunks)
+            }
+            let result = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+            guard !Task.isCancelled, let result else { return }
+            reportText = result.0
+            reportChunks = result.1
+            isLoadingReport = false
         }
     }
 }

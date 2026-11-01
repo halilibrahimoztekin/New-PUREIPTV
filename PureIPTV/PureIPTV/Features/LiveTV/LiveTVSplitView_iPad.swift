@@ -16,10 +16,9 @@ import SwiftUI
         }
 
         private var filteredCategories: [MediaModels.Category] {
-            if categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return store.categories
-            }
-            return store.categories.filter { $0.name.localizedCaseInsensitiveContains(categorySearchQuery) }
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
         }
 
         private var filteredChannels: [MediaModels.Item] {
@@ -37,6 +36,9 @@ import SwiftUI
                 channelListView
                 Divider().background(Color.white.opacity(0.15))
                 detailView
+            }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
             }
         }
 
@@ -98,24 +100,11 @@ import SwiftUI
                         .padding(.bottom, 8)
                 }
 
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.white.opacity(0.5))
-                        .font(.caption)
-                    TextField(AppStrings.Search.searchPlaceholder, text: $categorySearchQuery)
-                        .font(.subheadline)
-                        .foregroundColor(.white)
-                    if !categorySearchQuery.isEmpty {
-                        Button { categorySearchQuery = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.white.opacity(0.5))
-                                .font(.caption)
-                        }
+                CategorySearchField(text: $categorySearchQuery) {
+                    if let firstMatch = filteredCategories.first {
+                        store.send(.categorySelected(firstMatch))
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
 
@@ -146,6 +135,15 @@ import SwiftUI
                             }
                             .buttonStyle(.plain)
                             .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+                        }
+                        if !categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           filteredCategories.isEmpty
+                        {
+                            Text(AppStrings.Common.categoryNotFound)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.55))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
                         }
                         ForEach(filteredCategories) { category in
                             let isSelected = store.selectedCategoryID == category.id
@@ -223,6 +221,8 @@ import SwiftUI
                     Spacer()
 
                     HStack(spacing: 8) {
+                        LiveTVChannelSortMenu(store: store)
+
                         Button {
                             store.send(.openMultiViewTapped)
                         } label: {
@@ -320,7 +320,7 @@ import SwiftUI
                             .frame(width: 44, height: 44)
 
                         if let coverURL = channel.displayLogoURL {
-                            PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                            PlaylistAsyncImage(url: coverURL, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                                 if let image = phase.image {
                                     image.resizable().scaledToFit()
                                 } else {
@@ -432,6 +432,8 @@ import SwiftUI
                 FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
 
                 if !isUnavailable {
+                    RecentChannelExclusionMenuAction(store: store, channelID: channel.id)
+
                     Button {
                         guard let playlistID = store.channelPresentationPlaylistID,
                               let profileScope = store.channelPresentationProfileScope else { return }
@@ -519,7 +521,7 @@ import SwiftUI
                         .overlay(
                             VStack(spacing: 12) {
                                 if let cover = selected.displayLogoURL {
-                                    PlaylistAsyncImage(url: cover, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
+                                    PlaylistAsyncImage(url: cover, fallbackURL: selected.coverURL, userAgentOverride: selected.userAgentOverride, playlistID: selected.playlistID) { phase in
                                         if let img = phase.image {
                                             img.resizable().scaledToFit()
                                         } else {

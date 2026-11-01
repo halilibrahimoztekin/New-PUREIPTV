@@ -3,7 +3,7 @@ import SwiftData
 
 public nonisolated enum SharedDatabaseConfig {
     /// Serializes the first store open and caches only a successfully created container.
-    private nonisolated final class ContainerCache: @unchecked Sendable {
+    private final nonisolated class ContainerCache: @unchecked Sendable {
         private let lock = NSLock()
         private var container: ModelContainer?
 
@@ -18,11 +18,13 @@ public nonisolated enum SharedDatabaseConfig {
             return container
         }
     }
+
     private nonisolated static let cache = ContainerCache()
     public static var cloudModels: [any PersistentModel.Type] {
         [
             FavoriteItem.self,
             WatchHistoryItem.self,
+            HiddenMediaRecord.self,
             CategoryPreference.self,
             SearchHistoryItem.self,
             UserProfile.self,

@@ -1,34 +1,40 @@
 import Foundation
 
-/// Read-only catalog and playback resolution for authenticated Plex and Emby servers.
+/// Catalog refresh and playback resolution for authenticated Plex and Emby servers.
 /// IDs and URLs returned here never contain access tokens; credentials are applied only
 /// when a request is constructed.
 public struct MediaServerCatalogClient: Sendable {
     public var validate: @Sendable (_ config: PlaylistConfig) async throws -> Void
+    public var refreshCatalog: @Sendable (_ config: PlaylistConfig) async throws -> Void
     public var fetchCategories: @Sendable (_ config: PlaylistConfig, _ type: MediaModels.ItemType) async throws -> [MediaModels.Category]
     public var fetchItems: @Sendable (_ config: PlaylistConfig, _ type: MediaModels.ItemType, _ categoryID: String?) async throws -> [MediaModels.Item]
     public var search: @Sendable (_ config: PlaylistConfig, _ query: String) async throws -> (vods: [MediaModels.Item], series: [MediaModels.Item])
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ itemID: String) async throws -> DetailModels.Info
-    public var resolvePlaybackItem: @Sendable (_ config: PlaylistConfig, _ itemID: String) async throws -> MediaModels.Item?
+    public var fetchPlaybackOptions: @Sendable (_ config: PlaylistConfig, _ itemID: String) async throws -> [MediaModels.MediaServerPlaybackOption]
+    public var resolvePlaybackItem: @Sendable (_ config: PlaylistConfig, _ itemID: String, _ selectedSourceID: String?) async throws -> MediaModels.Item?
     public var invalidate: @Sendable (_ config: PlaylistConfig, _ type: MediaModels.ItemType?) async -> Void
 
     public init(
         validate: @escaping @Sendable (PlaylistConfig) async throws -> Void,
+        refreshCatalog: @escaping @Sendable (PlaylistConfig) async throws -> Void = { _ in },
         fetchCategories: @escaping @Sendable (PlaylistConfig, MediaModels.ItemType) async throws -> [MediaModels.Category],
         fetchItems: @escaping @Sendable (PlaylistConfig, MediaModels.ItemType, String?) async throws -> [MediaModels.Item],
         search: @escaping @Sendable (PlaylistConfig, String) async throws -> (vods: [MediaModels.Item], series: [MediaModels.Item]),
         fetchSeriesInfo: @escaping @Sendable (PlaylistConfig, String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode]),
         fetchVODInfo: @escaping @Sendable (PlaylistConfig, String) async throws -> DetailModels.Info,
-        resolvePlaybackItem: @escaping @Sendable (PlaylistConfig, String) async throws -> MediaModels.Item?,
+        fetchPlaybackOptions: @escaping @Sendable (PlaylistConfig, String) async throws -> [MediaModels.MediaServerPlaybackOption] = { _, _ in [] },
+        resolvePlaybackItem: @escaping @Sendable (PlaylistConfig, String, String?) async throws -> MediaModels.Item?,
         invalidate: @escaping @Sendable (PlaylistConfig, MediaModels.ItemType?) async -> Void
     ) {
         self.validate = validate
+        self.refreshCatalog = refreshCatalog
         self.fetchCategories = fetchCategories
         self.fetchItems = fetchItems
         self.search = search
         self.fetchSeriesInfo = fetchSeriesInfo
         self.fetchVODInfo = fetchVODInfo
+        self.fetchPlaybackOptions = fetchPlaybackOptions
         self.resolvePlaybackItem = resolvePlaybackItem
         self.invalidate = invalidate
     }
@@ -69,6 +75,60 @@ public struct MediaServerCatalogClient: Sendable {
             case .xtream, .m3u:
                 throw NetworkError.invalidURL
             }
+        }
+
+        let refreshCatalog: @Sendable (PlaylistConfig) async throws -> Void = { config in
+            let server = try connection(config)
+            let vodCategories: [MediaModels.Category]
+            let seriesCategories: [MediaModels.Category]
+            switch server.provider {
+            case .plex:
+                let libraries = try await fetchPlexLibraries(server, networkClient: networkClient)
+                vodCategories = libraries.compactMap { library in
+                    guard library.type?.lowercased() == "movie",
+                          let rawID = MediaServerIdentifier.validated(library.key) else { return nil }
+                    return MediaModels.Category(
+                        id: MediaServerIdentifier.stableID(provider: server.provider, serverID: server.serverID, itemID: rawID),
+                        name: library.title
+                    )
+                }
+                seriesCategories = libraries.compactMap { library in
+                    guard library.type?.lowercased() == "show",
+                          let rawID = MediaServerIdentifier.validated(library.key) else { return nil }
+                    return MediaModels.Category(
+                        id: MediaServerIdentifier.stableID(provider: server.provider, serverID: server.serverID, itemID: rawID),
+                        name: library.title
+                    )
+                }
+            case .emby:
+                let views = try await fetchEmbyViews(server, networkClient: networkClient)
+                vodCategories = views.compactMap { view in
+                    guard view.collectionType?.lowercased() == "movies",
+                          let rawID = view.id.flatMap(MediaServerIdentifier.validated) else { return nil }
+                    return MediaModels.Category(
+                        id: MediaServerIdentifier.stableID(provider: server.provider, serverID: server.serverID, itemID: rawID),
+                        name: view.name ?? "Library"
+                    )
+                }
+                seriesCategories = views.compactMap { view in
+                    guard view.collectionType?.lowercased() == "tvshows",
+                          let rawID = view.id.flatMap(MediaServerIdentifier.validated) else { return nil }
+                    return MediaModels.Category(
+                        id: MediaServerIdentifier.stableID(provider: server.provider, serverID: server.serverID, itemID: rawID),
+                        name: view.name ?? "Library"
+                    )
+                }
+            case .xtream, .m3u:
+                throw NetworkError.invalidURL
+            }
+            try Task.checkCancellation()
+            await cache.replaceCatalog(
+                vodCategories: vodCategories,
+                vodKey: server.cacheKey(type: .vod, categoryID: nil),
+                seriesCategories: seriesCategories,
+                seriesKey: server.cacheKey(type: .series, categoryID: nil),
+                playlistID: config.playlistID
+            )
         }
 
         let fetchCategories: @Sendable (PlaylistConfig, MediaModels.ItemType) async throws -> [MediaModels.Category] = { config, itemType in
@@ -290,7 +350,29 @@ public struct MediaServerCatalogClient: Sendable {
             }
         }
 
-        let resolvePlaybackItem: @Sendable (PlaylistConfig, String) async throws -> MediaModels.Item? = { config, itemID in
+        let fetchPlaybackOptions: @Sendable (PlaylistConfig, String) async throws -> [MediaModels.MediaServerPlaybackOption] = { config, itemID in
+            let server = try connection(config)
+            guard let rawItemID = MediaServerIdentifier.rawItemID(itemID, provider: server.provider, serverID: server.serverID) else {
+                return []
+            }
+            switch server.provider {
+            case .plex:
+                let metadata = try await fetchPlexMetadata(server, itemID: rawItemID, networkClient: networkClient)
+                return plexPlaybackOptions(metadata, server: server)
+            case .emby:
+                let response = try await fetchEmbyPlaybackInfo(
+                    server,
+                    itemID: rawItemID,
+                    preference: config.mediaServerPlaybackPreference,
+                    networkClient: networkClient
+                )
+                return embyPlaybackOptions(response.mediaSources, preference: config.mediaServerPlaybackPreference)
+            case .xtream, .m3u:
+                return []
+            }
+        }
+
+        let resolvePlaybackItem: @Sendable (PlaylistConfig, String, String?) async throws -> MediaModels.Item? = { config, itemID, selectedSourceID in
             let server = try connection(config)
             guard let rawItemID = MediaServerIdentifier.rawItemID(itemID, provider: server.provider, serverID: server.serverID) else {
                 return nil
@@ -298,7 +380,19 @@ public struct MediaServerCatalogClient: Sendable {
             switch server.provider {
             case .plex:
                 let metadata = try await fetchPlexMetadata(server, itemID: rawItemID, networkClient: networkClient)
-                guard let partKey = metadata.media?.lazy.flatMap(\.parts).compactMap(\.key).first,
+                let selectedMedia: PlexMedia?
+                if let selectedSourceID {
+                    selectedMedia = metadata.media?.first(where: {
+                        MediaServerIdentifier.validated($0.id) == selectedSourceID
+                            && $0.parts.contains(where: { $0.key.flatMap { providerURL($0, server: server) } != nil })
+                    })
+                    guard selectedMedia != nil else { throw NetworkError.invalidResponse }
+                } else {
+                    selectedMedia = metadata.media?.first(where: {
+                        $0.parts.contains(where: { $0.key.flatMap { providerURL($0, server: server) } != nil })
+                    })
+                }
+                guard let partKey = selectedMedia?.parts.compactMap(\.key).first(where: { providerURL($0, server: server) != nil }),
                       let streamURL = providerURL(partKey, server: server)
                 else { throw NetworkError.invalidResponse }
                 return plexMediaItem(metadata, server: server, categoryID: metadata.librarySectionID, streamURL: streamURL, itemType: metadata.type?.lowercased() == "show" ? .series : .vod)
@@ -308,6 +402,7 @@ public struct MediaServerCatalogClient: Sendable {
                     server,
                     itemID: rawItemID,
                     preference: config.mediaServerPlaybackPreference,
+                    selectedSourceID: selectedSourceID,
                     networkClient: networkClient
                 )
                 let itemType: MediaModels.ItemType = metadata.type?.lowercased() == "series" ? .series : .vod
@@ -327,11 +422,13 @@ public struct MediaServerCatalogClient: Sendable {
 
         return Self(
             validate: validate,
+            refreshCatalog: refreshCatalog,
             fetchCategories: fetchCategories,
             fetchItems: fetchItems,
             search: search,
             fetchSeriesInfo: fetchSeriesInfo,
             fetchVODInfo: fetchVODInfo,
+            fetchPlaybackOptions: fetchPlaybackOptions,
             resolvePlaybackItem: resolvePlaybackItem,
             invalidate: { config, itemType in await cache.invalidate(playlistID: config.playlistID, itemType: itemType) }
         )
@@ -436,6 +533,22 @@ private actor MediaServerCatalogCache {
             expiresAt: now.addingTimeInterval(lifetime),
             value: MediaServerSearchResults(vods: value.vods, series: value.series)
         )
+    }
+
+    func replaceCatalog(
+        vodCategories: [MediaModels.Category],
+        vodKey: String,
+        seriesCategories: [MediaModels.Category],
+        seriesKey: String,
+        playlistID: UUID?
+    ) {
+        store(vodCategories, for: vodKey)
+        store(seriesCategories, for: seriesKey)
+        if let playlistID {
+            let prefix = playlistID.uuidString
+            items = items.filter { !$0.key.hasPrefix(prefix) }
+            searches = searches.filter { !$0.key.hasPrefix(prefix) }
+        }
     }
 
     private func pruneExpiredEntries(at date: Date) {
@@ -863,30 +976,18 @@ private nonisolated func fetchEmbyPlaybackURL(
     _ server: MediaServerConnection,
     itemID: String,
     preference: MediaServerPlaybackPreference,
+    selectedSourceID: String?,
     networkClient: NetworkClient
 ) async throws -> (url: URL, headers: [String: String]?, status: MediaModels.ServerPlaybackStatus) {
-    guard let userID = server.userID,
-          let itemID = MediaServerIdentifier.validated(itemID),
-          let url = serverURL(server.baseURL, path: ["Items", itemID, "PlaybackInfo"], query: [
-              URLQueryItem(name: "UserId", value: userID),
-          ]) else { throw NetworkError.invalidURL }
-    var request = server.context.makeRequest(for: url)
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-    if preference == .directStreamOnly {
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(EmbyPlaybackInfoRequest(
-            id: itemID,
-            userID: userID,
-            enableDirectPlay: false,
-            enableDirectStream: true,
-            enableTranscoding: false,
-            isPlayback: true
-        ))
-    }
-    let response: EmbyPlaybackInfoResponse = try await networkClient.fetch(request: request)
+    let response = try await fetchEmbyPlaybackInfo(server, itemID: itemID, preference: preference, networkClient: networkClient)
     let source: EmbyMediaSource?
-    if preference == .directStreamOnly {
+    if let selectedSourceID {
+        source = response.mediaSources.first(where: {
+            MediaServerIdentifier.validated($0.id) == selectedSourceID
+                && (preference != .directStreamOnly || $0.supportsDirectStream == true || $0.directStreamURL != nil)
+        })
+        guard source != nil else { throw NetworkError.invalidResponse }
+    } else if preference == .directStreamOnly {
         source = response.mediaSources.first(where: { $0.supportsDirectStream == true || $0.directStreamURL != nil })
         guard source != nil else { throw EmbyPlaybackResolutionError.directStreamUnavailable }
     } else {
@@ -921,6 +1022,72 @@ private nonisolated func fetchEmbyPlaybackURL(
           let safeURL = server.context.makeRequest(for: streamURL).url else { throw NetworkError.invalidURL }
     playbackStatus = MediaModels.ServerPlaybackStatus(mode: .directStream, evidence: .playbackResponse)
     return (safeURL, safeEmbyPlaybackHeaders(source.requiredHTTPHeaders), playbackStatus)
+}
+
+private nonisolated func fetchEmbyPlaybackInfo(
+    _ server: MediaServerConnection,
+    itemID: String,
+    preference: MediaServerPlaybackPreference,
+    networkClient: NetworkClient
+) async throws -> EmbyPlaybackInfoResponse {
+    guard let userID = server.userID,
+          let itemID = MediaServerIdentifier.validated(itemID),
+          let url = serverURL(server.baseURL, path: ["Items", itemID, "PlaybackInfo"], query: [
+              URLQueryItem(name: "UserId", value: userID),
+          ]) else { throw NetworkError.invalidURL }
+    var request = server.context.makeRequest(for: url)
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    if preference == .directStreamOnly {
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(EmbyPlaybackInfoRequest(
+            id: itemID,
+            userID: userID,
+            enableDirectPlay: false,
+            enableDirectStream: true,
+            enableTranscoding: false,
+            isPlayback: true
+        ))
+    }
+    return try await networkClient.fetch(request: request)
+}
+
+private nonisolated func plexPlaybackOptions(
+    _ metadata: PlexMetadata,
+    server: MediaServerConnection
+) -> [MediaModels.MediaServerPlaybackOption] {
+    (metadata.media ?? []).enumerated().compactMap { index, media in
+        guard let id = MediaServerIdentifier.validated(media.id),
+              media.parts.contains(where: { $0.key.flatMap { providerURL($0, server: server) } != nil }) else { return nil }
+        let resolution = media.videoResolution.flatMap { value -> String? in
+            guard let safeValue = MediaServerIdentifier.validated(value) else { return nil }
+            return safeValue.lowercased() == "4k" ? "4K" : "\(safeValue)p"
+        }
+        let title = resolution ?? "Source \(index + 1)"
+        let details = [media.container.flatMap(MediaServerIdentifier.validated)?.uppercased(), "\(index + 1)"]
+            .compactMap(\.self)
+            .joined(separator: " · ")
+        return MediaModels.MediaServerPlaybackOption(id: id, title: title, detail: details)
+    }
+}
+
+private nonisolated func embyPlaybackOptions(
+    _ sources: [EmbyMediaSource],
+    preference: MediaServerPlaybackPreference
+) -> [MediaModels.MediaServerPlaybackOption] {
+    sources.enumerated().compactMap { index, source in
+        guard let id = MediaServerIdentifier.validated(source.id),
+              preference != .directStreamOnly || source.supportsDirectStream == true || source.directStreamURL != nil
+        else { return nil }
+        let height = source.mediaStreams?.first(where: { $0.type?.lowercased() == "video" })?.height
+        let resolution = height.map { "\($0)p" }
+        let container = source.container.flatMap(MediaServerIdentifier.validated)?.uppercased()
+        let title = resolution ?? container ?? "Source \(index + 1)"
+        let details = [container, "\(index + 1)"]
+            .compactMap(\.self)
+            .joined(separator: " · ")
+        return MediaModels.MediaServerPlaybackOption(id: id, title: title, detail: details)
+    }
 }
 
 private nonisolated enum EmbyPlaybackResolutionError: LocalizedError {
@@ -1264,12 +1431,23 @@ private nonisolated struct PlexMetadata: Decodable {
 }
 
 private nonisolated struct PlexMedia: Decodable {
+    let id: String?
+    let videoResolution: String?
+    let container: String?
     let parts: [PlexPart]
 
-    enum CodingKeys: String, CodingKey { case parts = "Part" }
+    enum CodingKeys: String, CodingKey {
+        case id
+        case videoResolution
+        case container
+        case parts = "Part"
+    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeFlexibleString(forKey: .id)
+        videoResolution = try container.decodeFlexibleString(forKey: .videoResolution)
+        self.container = try container.decodeFlexibleString(forKey: .container)
         parts = try container.decodeIfPresent([PlexPart].self, forKey: .parts) ?? []
     }
 }
@@ -1385,6 +1563,7 @@ private nonisolated struct EmbyMediaSource: Decodable {
     let directStreamURL: String?
     let transcodingURL: String?
     let requiredHTTPHeaders: [String: String]?
+    let mediaStreams: [EmbyMediaStream]?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -1395,6 +1574,7 @@ private nonisolated struct EmbyMediaSource: Decodable {
         case directStreamURL = "DirectStreamUrl"
         case transcodingURL = "TranscodingUrl"
         case requiredHTTPHeaders = "RequiredHttpHeaders"
+        case mediaStreams = "MediaStreams"
     }
 
     init(from decoder: Decoder) throws {
@@ -1407,6 +1587,23 @@ private nonisolated struct EmbyMediaSource: Decodable {
         directStreamURL = try container.decodeFlexibleString(forKey: .directStreamURL)
         transcodingURL = try container.decodeFlexibleString(forKey: .transcodingURL)
         requiredHTTPHeaders = try? container.decode([String: String].self, forKey: .requiredHTTPHeaders)
+        mediaStreams = try container.decodeIfPresent([EmbyMediaStream].self, forKey: .mediaStreams)
+    }
+}
+
+private nonisolated struct EmbyMediaStream: Decodable {
+    let type: String?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case type = "Type"
+        case height = "Height"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decodeFlexibleString(forKey: .type)
+        height = try container.decodeFlexibleIntIfPresent(forKey: .height)
     }
 }
 

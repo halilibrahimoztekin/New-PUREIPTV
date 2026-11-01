@@ -185,16 +185,21 @@ actor ThumbnailGenerationGate {
 
 enum PlayerThumbnailGenerator {
     static func generate(url: URL, userAgentOverride: String?, time: Duration) async throws -> Data {
+        try Task.checkCancellation()
+        let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let media = try Media(
+            url: url,
+            httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
+            httpReferrer: nil
+        )
+        return try await generate(media: media, time: time)
+    }
+
+    static func generate(media: Media, time: Duration) async throws -> Data {
         let gate = ThumbnailGenerationGate.shared
         try await gate.acquire()
         do {
             try Task.checkCancellation()
-            let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let media = try Media(
-                url: url,
-                httpUserAgent: userAgent?.isEmpty == false ? userAgent : UserAgentManager.shared.resolvedUserAgent,
-                httpReferrer: nil
-            )
             let data = try await media.thumbnail(
                 at: time,
                 width: 360,
@@ -214,9 +219,9 @@ enum PlayerThumbnailGenerator {
 }
 
 public enum CatchupSeekCommand: Sendable {
-    case relative(seconds: Int64)
-    case position(Double)
-    case time(Duration)
+    case relative(seconds: Int64, maximumDurationSeconds: Double?)
+    case position(Double, maximumDurationSeconds: Double?)
+    case time(Duration, maximumDurationSeconds: Double?)
 }
 
 public struct CatchupSeekResult: Equatable, Sendable {
@@ -310,11 +315,16 @@ func confirmedVLCSeek(player: Player, command: PlaybackSeekCommand) async -> Pla
 public struct PlayerClient: Sendable {
     public var vlcPlayer: @MainActor @Sendable () -> Player
     public var avPlayer: @MainActor @Sendable () -> AVPlayer = { AVPlayer() }
+    #if os(tvOS)
+        public var preferredDisplayCriteria: @MainActor @Sendable () async -> AVDisplayCriteria? = { nil }
+    #endif
     public var activeEngine: @MainActor @Sendable () -> PlaybackEngine = { .vlc }
     public var isPlaying: @MainActor @Sendable () -> Bool = { false }
     public var switchEngine: @MainActor @Sendable (_ request: PlaybackEngineSwitchRequest) async throws -> DeinterlaceMode = { $0.deinterlaceMode }
-    public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool) -> Void = { _, _, _ in }
+    public var adoptPreviewPlayer: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ startsMuted: Bool, _ ownerID: UUID) -> Void = { _, _, _, _ in }
     public var consumePreviewPromotion: @MainActor @Sendable (_ streamURL: URL) -> Bool = { _ in false }
+    public var discardPreviewPromotion: @MainActor @Sendable (_ player: Player, _ streamURL: URL, _ ownerID: UUID) -> Void = { _, _, _ in }
+    public var discardPreviewPromotionOwned: @MainActor @Sendable (_ ownerID: UUID) -> Void = { _ in }
     public var play: @MainActor @Sendable (
         _ url: URL,
         _ userAgentOverride: String?,
@@ -326,7 +336,7 @@ public struct PlayerClient: Sendable {
         _ subtitleName: String?,
         _ subtitleLanguage: String?
     ) async throws -> PlaybackStartResult
-    public var resume: @MainActor @Sendable () async throws -> Void
+    public var resume: @MainActor @Sendable (_ rate: Float) async throws -> Void
     public var pause: @MainActor @Sendable () async throws -> Void
     public var stop: @MainActor @Sendable () async throws -> Void
     public var release: @MainActor @Sendable () async -> Void
@@ -348,6 +358,7 @@ public struct PlayerClient: Sendable {
     public var seek: @MainActor @Sendable (_ position: Double) async throws -> Void
     public var seekToTime: @MainActor @Sendable (_ time: Duration) async throws -> Void
     public var thumbnail: @Sendable (_ url: URL, _ userAgentOverride: String?, _ time: Duration) async throws -> Data
+    public var currentPlaybackThumbnail: @MainActor @Sendable (_ time: Duration) async throws -> Data? = { _ in nil }
     public var getMediaInfo: @MainActor @Sendable () async -> MediaInfo?
     public var getAudioTracks: @MainActor @Sendable () async -> [Track]
     public var getSubtitleTracks: @MainActor @Sendable () async -> [Track]
@@ -377,7 +388,16 @@ extension PlayerClient: DependencyKey {
             @MainActor var engineSwitchGeneration = UUID()
             @MainActor var alternateSession: AVPlayerPlaybackSession?
             @MainActor var promotedStreamURL: URL?
+            @MainActor var promotedPreviewOwnerID: UUID?
+            @MainActor var externalSubtitleFiles = Set<URL>()
             @MainActor var recordingStopObserver: Task<Void, Never>?
+            @MainActor func removeExternalSubtitleFiles() {
+                for url in externalSubtitleFiles {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                externalSubtitleFiles.removeAll()
+            }
+
             @MainActor func getPlayer() -> Player {
                 if let p = player {
                     return p
@@ -398,7 +418,7 @@ extension PlayerClient: DependencyKey {
         }
         let box = Box()
 
-        return PlayerClient(
+        var client = PlayerClient(
             vlcPlayer: { box.getPlayer() },
             avPlayer: { box.getAlternateSession().player },
             activeEngine: { box.playbackEngine },
@@ -514,24 +534,53 @@ extension PlayerClient: DependencyKey {
                     guard box.engineSwitchGeneration == request.requestID else { throw CancellationError() }
                     alternate.pause()
                     box.playbackEngine = .vlc
+                    box.removeExternalSubtitleFiles()
                 }
                 return appliedDeinterlaceMode
             },
-            adoptPreviewPlayer: { player, streamURL, startsMuted in
+            adoptPreviewPlayer: { player, streamURL, startsMuted, ownerID in
                 if let currentPlayer = box.player, currentPlayer !== player {
                     currentPlayer.stop()
+                    box.removeExternalSubtitleFiles()
                 }
                 box.player = player
                 box.promotedStreamURL = streamURL
+                box.promotedPreviewOwnerID = ownerID
                 try? player.setAudioVolume(Volume(startsMuted ? 0.0 : 1.0))
             },
             consumePreviewPromotion: { streamURL in
                 guard box.promotedStreamURL == streamURL,
                       let player = box.player,
                       player.isPlaying
-                else { return false }
+                else {
+                    box.promotedStreamURL = nil
+                    box.promotedPreviewOwnerID = nil
+                    return false
+                }
                 box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
                 return true
+            },
+            discardPreviewPromotion: { player, streamURL, ownerID in
+                guard box.player === player,
+                      box.promotedStreamURL == streamURL,
+                      box.promotedPreviewOwnerID == ownerID
+                else { return }
+                player.stop()
+                box.removeExternalSubtitleFiles()
+                box.player = nil
+                box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
+            },
+            discardPreviewPromotionOwned: { ownerID in
+                guard box.promotedPreviewOwnerID == ownerID,
+                      let player = box.player
+                else { return }
+                player.stop()
+                box.removeExternalSubtitleFiles()
+                box.player = nil
+                box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
             },
             play: { url, userAgentOverride, networkCachingMilliseconds, deinterlaceMode, engine, audioName, audioLanguage, subtitleName, subtitleLanguage in
                 let playGeneration = UUID()
@@ -542,6 +591,7 @@ extension PlayerClient: DependencyKey {
                 if box.playbackEngine != engine {
                     box.getPlayer().stop()
                     box.getAlternateSession().stop()
+                    box.removeExternalSubtitleFiles()
                     box.playbackEngine = engine
                 }
                 if box.playbackEngine == .avPlayer {
@@ -612,9 +662,11 @@ extension PlayerClient: DependencyKey {
                 box.deinterlaceMode = appliedDeinterlaceMode
                 if box.promotedStreamURL == url, player.isPlaying {
                     box.promotedStreamURL = nil
+                    box.promotedPreviewOwnerID = nil
                     return PlaybackStartResult(engine: .vlc, deinterlaceMode: appliedDeinterlaceMode)
                 }
                 box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
                 let userAgent = userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let media = try Media(
                     url: url,
@@ -625,15 +677,18 @@ extension PlayerClient: DependencyKey {
                     media.addOption(":network-caching=\(networkCachingMilliseconds)")
                 }
                 try player.play(media)
+                box.removeExternalSubtitleFiles()
                 return PlaybackStartResult(engine: .vlc, deinterlaceMode: appliedDeinterlaceMode)
             },
-            resume: {
+            resume: { rate in
                 try await PlaybackAudioSession.setActive(true)
                 try Task.checkCancellation()
                 if box.playbackEngine == .avPlayer {
-                    box.getAlternateSession().play(rate: 1)
+                    box.getAlternateSession().play(rate: rate)
                 } else {
-                    try box.getPlayer().play()
+                    let player = box.getPlayer()
+                    try player.play()
+                    try player.setPlaybackRate(PlaybackRate(max(0.25, min(4, rate))))
                 }
             },
             pause: {
@@ -648,14 +703,19 @@ extension PlayerClient: DependencyKey {
                 box.getAlternateSession().stop()
                 box.playbackEngine = .vlc
                 box.getPlayer().stop()
+                box.removeExternalSubtitleFiles()
+                box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
             },
             release: {
                 box.engineSwitchGeneration = UUID()
                 box.getAlternateSession().stop()
                 box.playbackEngine = .vlc
                 box.player?.stop()
+                box.removeExternalSubtitleFiles()
                 box.player = nil
                 box.promotedStreamURL = nil
+                box.promotedPreviewOwnerID = nil
             },
             startRecording: { directory in
                 let player = box.getPlayer()
@@ -742,28 +802,53 @@ extension PlayerClient: DependencyKey {
                 _ = player.jump(by: offsetDuration)
             },
             catchupSeek: { command in
+                func effectiveDuration(reportedSeconds: Double?, maximumSeconds: Double?) -> Double? {
+                    let reported = reportedSeconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+                    let maximum = maximumSeconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+                    if let reported, let maximum {
+                        return min(reported, maximum)
+                    }
+                    return reported ?? maximum
+                }
+
+                func seconds(_ duration: Duration) -> Double {
+                    let components = duration.components
+                    return Double(components.seconds)
+                        + Double(components.attoseconds) / 1_000_000_000_000_000_000
+                }
+
+                func maximumDurationSeconds(for command: CatchupSeekCommand) -> Double? {
+                    switch command {
+                    case let .relative(_, maximumSeconds), let .position(_, maximumSeconds), let .time(_, maximumSeconds):
+                        maximumSeconds
+                    }
+                }
+
                 if box.playbackEngine == .avPlayer {
                     let session = box.getAlternateSession()
-                    let duration = session.player.currentItem?.duration.seconds ?? 0
+                    let duration = effectiveDuration(
+                        reportedSeconds: session.player.currentItem?.duration.seconds ?? 0,
+                        maximumSeconds: maximumDurationSeconds(for: command)
+                    )
                     let rawCurrentTime = session.currentTimeSeconds
                     let currentTime = rawCurrentTime.isFinite ? max(0, rawCurrentTime) : 0
-                    guard duration.isFinite, duration > 0 else {
+                    guard let duration else {
                         return CatchupSeekResult(currentTime: .seconds(max(0, currentTime)), position: 0, didSucceed: false)
                     }
 
                     let target: Double = switch command {
-                    case let .relative(seconds):
+                    case let .relative(seconds, _):
                         max(0, min(duration, currentTime + Double(seconds)))
-                    case let .position(position):
+                    case let .position(position, _):
                         max(0, min(1, position)) * duration
-                    case let .time(time):
-                        max(0, min(duration, Double(time.components.seconds)))
+                    case let .time(time, _):
+                        max(0, min(duration, seconds(time)))
                     }
 
                     do {
                         try await session.seek(to: target)
                         let rawLandedTime = session.currentTimeSeconds
-                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : currentTime
+                        let landedTime = rawLandedTime.isFinite ? max(0, min(duration, rawLandedTime)) : currentTime
                         return CatchupSeekResult(
                             currentTime: .seconds(max(0, landedTime)),
                             position: max(0, min(1, landedTime / duration)),
@@ -771,7 +856,7 @@ extension PlayerClient: DependencyKey {
                         )
                     } catch {
                         let rawLandedTime = session.currentTimeSeconds
-                        let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : currentTime
+                        let landedTime = rawLandedTime.isFinite ? max(0, min(duration, rawLandedTime)) : currentTime
                         return CatchupSeekResult(
                             currentTime: .seconds(max(0, landedTime)),
                             position: max(0, min(1, landedTime / duration)),
@@ -782,23 +867,59 @@ extension PlayerClient: DependencyKey {
 
                 let player = box.getPlayer()
                 @MainActor func snapshot(didSucceed: Bool) -> CatchupSeekResult {
-                    let position = player.position
+                    let currentTime = seconds(player.currentTime)
+                    let duration: Double? = switch command {
+                    case .relative, .position, .time:
+                        effectiveDuration(
+                            reportedSeconds: player.duration.map(seconds),
+                            maximumSeconds: maximumDurationSeconds(for: command)
+                        )
+                    }
+                    let boundedTime = currentTime.isFinite
+                        ? max(0, duration.map { min($0, currentTime) } ?? currentTime)
+                        : 0
+                    let rawPosition = duration.map { boundedTime / $0 } ?? player.position
                     return CatchupSeekResult(
-                        currentTime: player.currentTime,
-                        position: position.isFinite ? max(0, min(1, position)) : 0,
+                        currentTime: .seconds(boundedTime),
+                        position: rawPosition.isFinite ? max(0, min(1, rawPosition)) : 0,
                         didSucceed: didSucceed
                     )
                 }
 
+                let maximumSeconds = maximumDurationSeconds(for: command)
+                let duration = effectiveDuration(
+                    reportedSeconds: player.duration.map(seconds),
+                    maximumSeconds: maximumSeconds
+                )
                 let request: SeekRequest
                 switch command {
-                case let .relative(seconds):
-                    request = player.requestJump(by: .seconds(Double(seconds)))
-                case let .position(position):
-                    request = player.requestSeek(toPosition: PlaybackPosition(max(0, min(1, position))), fast: false)
-                case let .time(time):
+                case let .relative(offsetSeconds, _):
+                    let currentSeconds = seconds(player.currentTime)
+                    if currentSeconds.isFinite, let duration {
+                        let targetSeconds = max(0, min(duration, currentSeconds + Double(offsetSeconds)))
+                        do {
+                            request = try player.requestSeek(to: .seconds(targetSeconds), fast: false)
+                        } catch {
+                            return snapshot(didSucceed: false)
+                        }
+                    } else {
+                        request = player.requestJump(by: .seconds(Double(offsetSeconds)))
+                    }
+                case let .position(position, _):
+                    let boundedPosition = max(0, min(1, position))
+                    if let duration {
+                        do {
+                            request = try player.requestSeek(to: .seconds(boundedPosition * duration), fast: false)
+                        } catch {
+                            return snapshot(didSucceed: false)
+                        }
+                    } else {
+                        request = player.requestSeek(toPosition: PlaybackPosition(boundedPosition), fast: false)
+                    }
+                case let .time(time, _):
+                    let targetSeconds = max(0, duration.map { min($0, seconds(time)) } ?? seconds(time))
                     do {
-                        request = try player.requestSeek(to: max(.zero, time), fast: false)
+                        request = try player.requestSeek(to: .seconds(targetSeconds), fast: false)
                     } catch {
                         return snapshot(didSucceed: false)
                     }
@@ -912,6 +1033,12 @@ extension PlayerClient: DependencyKey {
                     time: time
                 )
             },
+            currentPlaybackThumbnail: { time in
+                guard box.playbackEngine == .vlc,
+                      let media = box.player?.currentMedia
+                else { return nil }
+                return try await PlayerThumbnailGenerator.generate(media: media, time: time)
+            },
             getMediaInfo: {
                 if box.playbackEngine == .avPlayer {
                     return nil
@@ -970,11 +1097,22 @@ extension PlayerClient: DependencyKey {
                 box.getPlayer().selectedSubtitleTrack = track
             },
             addExternalSubtitleTrack: { url in
-                guard box.playbackEngine == .vlc else { return false }
+                guard box.playbackEngine == .vlc else {
+                    if ExternalSubtitleTextEncoding.isOwnedTemporaryFile(url) {
+                        try? FileManager.default.removeItem(at: url)
+                    }
+                    return false
+                }
                 do {
                     try box.getPlayer().addExternalTrack(from: url, type: .subtitle, select: true)
+                    if ExternalSubtitleTextEncoding.isOwnedTemporaryFile(url) {
+                        box.externalSubtitleFiles.insert(url)
+                    }
                     return true
                 } catch {
+                    if ExternalSubtitleTextEncoding.isOwnedTemporaryFile(url) {
+                        try? FileManager.default.removeItem(at: url)
+                    }
                     return false
                 }
             },
@@ -1074,6 +1212,10 @@ extension PlayerClient: DependencyKey {
                 return box.getPlayer().playbackHealth
             }
         )
+        #if os(tvOS)
+            client.preferredDisplayCriteria = { await box.getAlternateSession().preferredDisplayCriteria() }
+        #endif
+        return client
     }()
 
     public nonisolated static let testValue = PlayerClient(
@@ -1081,7 +1223,7 @@ extension PlayerClient: DependencyKey {
         play: { _, _, _, mode, engine, _, _, _, _ in
             PlaybackStartResult(engine: engine, deinterlaceMode: mode)
         },
-        resume: {},
+        resume: { _ in },
         pause: {},
         stop: {},
         release: {},
@@ -1095,6 +1237,7 @@ extension PlayerClient: DependencyKey {
         seek: { _ in },
         seekToTime: { _ in },
         thumbnail: { _, _, _ in Data() },
+        currentPlaybackThumbnail: { _ in nil },
         getMediaInfo: { nil },
         getAudioTracks: { [] },
         getSubtitleTracks: { [] },

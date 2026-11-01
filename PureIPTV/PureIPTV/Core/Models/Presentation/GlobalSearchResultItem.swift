@@ -1,6 +1,35 @@
 import Foundation
 import SwiftUI
 
+public nonisolated enum SearchMatchField: Equatable, Sendable {
+    case title
+    case channel
+    case program
+    case category
+
+    @MainActor
+    public var localizedTitle: String {
+        switch self {
+        case .title: AppStrings.MediaPresentation.title
+        case .channel: AppStrings.Search.liveTV
+        case .program: AppStrings.Search.programs
+        case .category: AppStrings.CategoryMgmt.categoryName
+        }
+    }
+}
+
+public nonisolated struct SearchMatchDescription: Equatable, Sendable {
+    public let field: SearchMatchField
+    public let sourceText: String
+    public let queryTerms: [String]
+
+    public init(field: SearchMatchField, sourceText: String, queryTerms: [String]) {
+        self.field = field
+        self.sourceText = sourceText
+        self.queryTerms = queryTerms
+    }
+}
+
 // MARK: - Global Search Result Item
 
 public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
@@ -15,6 +44,7 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
     public let matchedEPGTitle: String?
     public let matchedEPGProgram: EPGProgram?
     public let score: Int
+    public let searchMatch: SearchMatchDescription?
 
     public func reminderID(for program: EPGProgram) -> String {
         EPGReminderIdentifier.make(
@@ -30,7 +60,8 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
         is4K: Bool? = nil,
         matchedEPGTitle: String? = nil,
         matchedEPGProgram: EPGProgram? = nil,
-        score: Int = 0
+        score: Int = 0,
+        searchMatch: SearchMatchDescription? = nil
     ) {
         self.item = item
         self.playlistBadge = playlistBadge
@@ -44,6 +75,7 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
         self.matchedEPGTitle = matchedEPGTitle
         self.matchedEPGProgram = matchedEPGProgram
         self.score = score
+        self.searchMatch = searchMatch
     }
 
     @MainActor

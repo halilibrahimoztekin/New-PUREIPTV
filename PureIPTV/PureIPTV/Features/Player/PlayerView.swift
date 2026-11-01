@@ -12,6 +12,10 @@ public struct PlayerView: View {
 
     @Injected(\.playerClient) private var playerClient
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.layoutDirection) private var layoutDirection
+    #if os(tvOS)
+        @State private var epgGuidePanelHeight: CGFloat = 0
+    #endif
     #if os(iOS)
         @State private var pipController: PiPController?
     #endif
@@ -59,29 +63,7 @@ public struct PlayerView: View {
 
     public var body: some View {
         ZStack {
-            if store.playbackEngine == .avPlayer {
-                AVPlayerSurfaceView(player: playerClient.avPlayer(), aspectRatioMode: store.videoAspectRatioMode)
-                    .ignoresSafeArea()
-                    .scaleEffect(x: videoScaleX, y: videoScaleY)
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
-                    .onTapGesture { store.send(.toggleControls) }
-            } else {
-                #if os(iOS)
-                    PiPVideoView(playerClient.vlcPlayer(), controller: $pipController)
-                        .ignoresSafeArea()
-                        .scaleEffect(x: videoScaleX, y: videoScaleY)
-                        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
-                        .onTapGesture { store.send(.toggleControls) }
-                #else
-                    VideoView(playerClient.vlcPlayer())
-                        .ignoresSafeArea()
-                        .scaleEffect(x: videoScaleX, y: videoScaleY)
-                        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
-                #endif
-            }
+            videoSurface
 
             // UI Overlay
             #if os(tvOS)
@@ -171,6 +153,13 @@ public struct PlayerView: View {
                 store.send(.onDisappear)
             }
         }
+        #if os(tvOS)
+        .onPreferenceChange(PlayerEPGGuidePanelHeightPreferenceKey.self) { panelHeight in
+            let panelHeight = max(0, panelHeight)
+            guard abs(epgGuidePanelHeight - panelHeight) > 1 else { return }
+            epgGuidePanelHeight = panelHeight
+        }
+        #endif
         #if os(iOS)
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -236,6 +225,95 @@ public struct PlayerView: View {
             store.send(.closeTapped)
         }
         #endif
+    }
+
+    @ViewBuilder
+    private var videoSurface: some View {
+        #if os(tvOS)
+            GeometryReader { geometry in
+                let isEPGMiniPlayer = store.isEPGVisible && store.item.isLive
+                let width = isEPGMiniPlayer ? min(geometry.size.width * 0.34, 480) : geometry.size.width
+                let height = isEPGMiniPlayer ? width * 9 / 16 : geometry.size.height
+                let previewCorner = store.epgPreviewCorner
+                let alignsToLeading = (previewCorner.isLeft && layoutDirection == .leftToRight)
+                    || (!previewCorner.isLeft && layoutDirection == .rightToLeft)
+                let horizontalAlignment: HorizontalAlignment = alignsToLeading ? .leading : .trailing
+                let verticalAlignment: VerticalAlignment = previewCorner.isTop ? .top : .bottom
+                let alignment = Alignment(horizontal: horizontalAlignment, vertical: verticalAlignment)
+
+                ZStack(alignment: alignment) {
+                    Color.black
+
+                    videoContent
+                        .frame(width: width, height: height)
+                        .scaleEffect(x: videoScaleX, y: videoScaleY)
+                        .clipShape(RoundedRectangle(
+                            cornerRadius: isEPGMiniPlayer ? 16 : 0,
+                            style: .continuous
+                        ))
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: isEPGMiniPlayer ? 16 : 0,
+                                style: .continuous
+                            )
+                            .stroke(Color.white.opacity(isEPGMiniPlayer ? 0.22 : 0), lineWidth: 1)
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            if isEPGMiniPlayer {
+                                Text(store.item.title)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(.black.opacity(0.72), in: Capsule())
+                                    .padding(10)
+                            }
+                        }
+                        .padding(.vertical, isEPGMiniPlayer ? 56 : 0)
+                        .padding(.horizontal, isEPGMiniPlayer ? 72 : 0)
+                        .padding(
+                            .bottom,
+                            isEPGMiniPlayer && !previewCorner.isTop ? epgGuidePanelHeight + 24 : 0
+                        )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityHidden(isEPGMiniPlayer)
+                .allowsHitTesting(!isEPGMiniPlayer)
+                .focusable(false)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .ignoresSafeArea()
+        #else
+            fullScreenVideoSurface
+        #endif
+    }
+
+    @ViewBuilder
+    private var videoContent: some View {
+        if store.playbackEngine == .avPlayer {
+            AVPlayerSurfaceView(
+                player: playerClient.avPlayer(),
+                aspectRatioMode: store.videoAspectRatioMode,
+                forceSDROutput: store.isForceSDROutputEnabled
+            )
+            .onTapGesture { store.send(.toggleControls) }
+        } else {
+            #if os(iOS)
+                PiPVideoView(playerClient.vlcPlayer(), controller: $pipController)
+                    .onTapGesture { store.send(.toggleControls) }
+            #else
+                VideoView(playerClient.vlcPlayer())
+            #endif
+        }
+    }
+
+    private var fullScreenVideoSurface: some View {
+        videoContent
+            .ignoresSafeArea()
+            .scaleEffect(x: videoScaleX, y: videoScaleY)
+            .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: store.videoZoomScale)
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.videoAspectRatioMode)
     }
 
     private func applyVLCAspectRatio(for mode: VideoAspectRatioMode) {

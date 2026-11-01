@@ -2,12 +2,21 @@ import Combine
 import ComposableArchitecture
 import SwiftUI
 
+struct PlayerEPGGuidePanelHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 public struct PlayerEPGTimelineView: View {
     #if os(tvOS)
         private enum FocusTarget: Hashable {
             case close
             case watch
             case currentChannel
+            case previewCorner
             case channel(String)
         }
 
@@ -21,6 +30,8 @@ public struct PlayerEPGTimelineView: View {
     let playingChannelID: String
     let isLoading: Bool
     let canSelectPrograms: Bool
+    let selectedPreviewCorner: EPGPreviewCorner
+    let onSelectPreviewCorner: (EPGPreviewCorner) -> Void
     let onClose: () -> Void
     let onBrowseChannel: (PlayerFeature.PlayableItem) -> Void
     let onReturnToPlayingChannel: () -> Void
@@ -47,6 +58,8 @@ public struct PlayerEPGTimelineView: View {
         playingChannelID: String = "",
         isLoading: Bool = false,
         canSelectPrograms: Bool = true,
+        selectedPreviewCorner: EPGPreviewCorner = .topRight,
+        onSelectPreviewCorner: @escaping (EPGPreviewCorner) -> Void = { _ in },
         onClose: @escaping () -> Void,
         onBrowseChannel: @escaping (PlayerFeature.PlayableItem) -> Void = { _ in },
         onReturnToPlayingChannel: @escaping () -> Void = {},
@@ -61,6 +74,8 @@ public struct PlayerEPGTimelineView: View {
         self.playingChannelID = playingChannelID
         self.isLoading = isLoading
         self.canSelectPrograms = canSelectPrograms
+        self.selectedPreviewCorner = selectedPreviewCorner
+        self.onSelectPreviewCorner = onSelectPreviewCorner
         self.onClose = onClose
         self.onBrowseChannel = onBrowseChannel
         self.onReturnToPlayingChannel = onReturnToPlayingChannel
@@ -82,6 +97,25 @@ public struct PlayerEPGTimelineView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                #if os(tvOS)
+                    Menu {
+                        ForEach(EPGPreviewCorner.allCases) { corner in
+                            Button {
+                                onSelectPreviewCorner(corner)
+                            } label: {
+                                Label(
+                                    corner.accessibilityTitle,
+                                    systemImage: selectedPreviewCorner == corner ? "checkmark" : corner.symbolName
+                                )
+                            }
+                        }
+                    } label: {
+                        Label(AppStrings.Player.epgPreviewCorner, systemImage: "pip.enter")
+                    }
+                    .buttonStyle(.bordered)
+                    .focused($focusedTarget, equals: .previewCorner)
+                    .accessibilityValue(selectedPreviewCorner.accessibilityTitle)
+                #endif
                 if let selectedChannel, selectedChannel.id != playingChannelID {
                     Button(action: onReturnToPlayingChannel) {
                         #if os(tvOS)
@@ -122,6 +156,7 @@ public struct PlayerEPGTimelineView: View {
                 #else
                 .buttonStyle(.plain)
                 #endif
+                .accessibilityLabel(AppStrings.Common.close)
             }
             .padding(16)
             .background(Color.black.opacity(0.4))
@@ -136,27 +171,35 @@ public struct PlayerEPGTimelineView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     if programs.isEmpty {
-                        Text(AppStrings.Player.epgNotFound)
-                            .foregroundColor(.white.opacity(0.5))
-                            .padding(.horizontal, 40)
+                        if !isLoading {
+                            Text(AppStrings.Player.epgNotFound)
+                                .foregroundColor(.white.opacity(0.5))
+                                .padding(.horizontal, 40)
+                        }
                     } else {
                         ForEach(programs) { program in
                             Button(action: {
+                                guard canSelectPrograms else { return }
                                 onSelect(program)
                             }) {
                                 PlayerEPGTimelineCard(program: program, currentTime: currentTime, hasArchive: hasArchive)
                             }
                             #if os(tvOS)
                             .tvFocusEffect()
+                            .opacity(canSelectPrograms ? 1 : 0.72)
+                            .accessibilityHint(canSelectPrograms ? "" : AppStrings.Player.epgProgramSelectionUnavailable)
                             #else
                             .buttonStyle(.plain)
-                            #endif
                             .disabled(!canSelectPrograms)
+                            #endif
                         }
                     }
                 }
                 .padding(16)
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
             if isLoading {
                 ProgressView()
                     .tint(.white)
@@ -214,6 +257,9 @@ public struct PlayerEPGTimelineView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 }
 

@@ -62,6 +62,16 @@
                         formFields
                             .padding(.horizontal, horizontalPadding)
 
+                        if store.supportsCompatibilityCheck {
+                            PlaylistHealthPreflightView(
+                                report: store.compatibilityReport,
+                                isChecking: store.isCheckingCompatibility,
+                                isEnabled: store.canConnect && !store.isLoading,
+                                onCheck: { store.send(.checkCompatibilityTapped) }
+                            )
+                            .padding(.horizontal, horizontalPadding)
+                        }
+
                         // Error banner
                         if let error = store.errorMessage {
                             errorBanner(message: error)
@@ -318,7 +328,7 @@
                 )
                 .opacity(store.canConnect ? 1 : 0.5)
             }
-            .disabled(!store.canConnect || store.isLoading)
+            .disabled(!store.canConnect || store.isLoading || store.isCheckingCompatibility)
             .buttonStyle(.plain)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.canConnect)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: store.isLoading)

@@ -1,14 +1,296 @@
 import ComposableArchitecture
+import Observation
 import SwiftUI
 import SwiftVLC
+
+#if os(tvOS)
+    private enum MultiViewSlotFocusTarget: Hashable {
+        case audio(Int)
+        case aspectRatio(Int)
+        case remove(Int)
+        case channelTitle(Int)
+        case companionSwap(Int)
+        case emptySlot(Int)
+
+        var slotID: Int {
+            switch self {
+            case let .audio(slotID), let .aspectRatio(slotID), let .remove(slotID),
+                 let .channelTitle(slotID), let .companionSwap(slotID), let .emptySlot(slotID):
+                slotID
+            }
+        }
+    }
+#endif
+
+@MainActor
+private final class MultiViewPlaybackSessionStore {
+    private var sessions: [UUID: MultiViewPlaybackSession] = [:]
+    private let clock = ContinuousClock()
+    private var nextStartTime: ContinuousClock.Instant?
+
+    func session(for instanceID: UUID) -> MultiViewPlaybackSession {
+        if let session = sessions[instanceID] {
+            return session
+        }
+        let session = MultiViewPlaybackSession()
+        sessions[instanceID] = session
+        return session
+    }
+
+    func synchronize(slots: [MultiViewSlot], activeAudioSlotID: Int?) {
+        let activeSlots = slots.filter { $0.item != nil }
+        let activeInstanceIDs = Set(activeSlots.map(\.instanceID))
+
+        let inactiveInstanceIDs = sessions.keys.filter { !activeInstanceIDs.contains($0) }
+        for instanceID in inactiveInstanceIDs {
+            sessions.removeValue(forKey: instanceID)?.cancel()
+        }
+
+        for slot in activeSlots.sorted(by: { $0.selectionOrder < $1.selectionOrder }) {
+            guard let item = slot.item else { continue }
+            let session = session(for: slot.instanceID)
+            let isActiveAudio = activeAudioSlotID == slot.id
+            if session.isForInstance(slot.instanceID) {
+                session.setAudioActive(isActiveAudio)
+                continue
+            }
+
+            session.start(
+                item: item,
+                instanceID: slot.instanceID,
+                isActiveAudio: isActiveAudio,
+                delay: reserveStartDelay()
+            )
+        }
+    }
+
+    func cancelAll() {
+        for session in sessions.values {
+            session.cancel()
+        }
+        nextStartTime = nil
+    }
+
+    private func reserveStartDelay() -> Duration {
+        let now = clock.now
+        let scheduledStart = max(now, nextStartTime ?? now)
+        nextStartTime = scheduledStart.advanced(by: .milliseconds(350))
+        return now.duration(to: scheduledStart)
+    }
+}
+
+@Observable
+@MainActor
+private final class MultiViewPlaybackSession {
+    enum Status: Equatable {
+        case idle
+        case starting
+        case buffering
+        case ready
+        case failed
+    }
+
+    private(set) var playerClient: PlayerClient?
+    private(set) var status: Status = .idle
+
+    @ObservationIgnored @Dependency(\.playerFactoryClient) private var playerFactoryClient
+    @ObservationIgnored @Dependency(\.settingsClient) private var settingsClient
+    @ObservationIgnored private var currentInstanceID: UUID?
+    @ObservationIgnored private var playbackTask: Task<Void, Never>?
+    @ObservationIgnored private var latestIsActiveAudio = false
+    @ObservationIgnored private var hasStartedPlayback = false
+    @ObservationIgnored private var volumeGeneration = UUID()
+    @ObservationIgnored private var volumeUpdateTask: Task<Void, Never>?
+    @ObservationIgnored private var playerRunGeneration = UUID()
+
+    func isForInstance(_ instanceID: UUID) -> Bool {
+        currentInstanceID == instanceID
+    }
+
+    func start(item: MediaModels.Item, instanceID: UUID, isActiveAudio: Bool, delay: Duration) {
+        guard currentInstanceID != instanceID else {
+            setAudioActive(isActiveAudio)
+            return
+        }
+
+        let previousTask = playbackTask
+        let previousClient = playerClient
+        previousTask?.cancel()
+        if let previousClient {
+            Task { @MainActor in
+                try? await previousClient.stop()
+            }
+        }
+        currentInstanceID = instanceID
+        latestIsActiveAudio = isActiveAudio
+        hasStartedPlayback = false
+        status = .starting
+        let runGeneration = UUID()
+        playerRunGeneration = runGeneration
+
+        playbackTask = Task { @MainActor [weak self] in
+            await previousTask?.value
+            if delay > .zero {
+                try? await Task.sleep(for: delay)
+            }
+            guard !Task.isCancelled, let self else { return }
+            await runPlayer(item: item, instanceID: instanceID, runGeneration: runGeneration)
+        }
+    }
+
+    func setAudioActive(_ active: Bool) {
+        guard latestIsActiveAudio != active else { return }
+        latestIsActiveAudio = active
+        guard hasStartedPlayback, let playerClient else { return }
+        enqueueVolumeUpdate(active, for: playerClient)
+    }
+
+    func cancel() {
+        currentInstanceID = nil
+        playerRunGeneration = UUID()
+        status = .idle
+        hasStartedPlayback = false
+        let currentClient = playerClient
+        playerClient = nil
+        playbackTask?.cancel()
+        volumeGeneration = UUID()
+        volumeUpdateTask?.cancel()
+        volumeUpdateTask = nil
+        if let currentClient {
+            Task { @MainActor in
+                try? await currentClient.stop()
+            }
+        }
+    }
+
+    private func runPlayer(item: MediaModels.Item, instanceID: UUID, runGeneration: UUID) async {
+        guard currentInstanceID == instanceID,
+              playerRunGeneration == runGeneration,
+              let url = item.streamURL
+        else {
+            if currentInstanceID == instanceID {
+                status = .failed
+            }
+            return
+        }
+
+        let client = playerFactoryClient.createPlayer()
+        playerClient = client
+
+        do {
+            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
+            let events = await client.events()
+            let playbackContentKind: PlaybackContentKind = item.type == .live ? .live : .vod
+            let playbackDefaults = settingsClient.playbackDefaults(playbackContentKind)
+            _ = try await client.play(
+                url,
+                item.userAgentOverride,
+                playbackDefaults.networkCachingMilliseconds(for: playbackContentKind),
+                playbackDefaults.deinterlaceMode,
+                .vlc,
+                nil,
+                playbackDefaults.preferredAudioLanguage,
+                nil,
+                playbackDefaults.preferredSubtitleLanguage
+            )
+            await client.setSubtitleTextScale(playbackDefaults.subtitleTextSize.scale)
+            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
+            hasStartedPlayback = true
+
+            if let position = item.resumePosition, position > 0, item.type != .live {
+                try? await Task.sleep(for: .milliseconds(500))
+                if !Task.isCancelled {
+                    try? await client.seek(position)
+                }
+            }
+
+            for await event in events {
+                guard !Task.isCancelled,
+                      currentInstanceID == instanceID,
+                      playerRunGeneration == runGeneration
+                else { break }
+
+                switch event {
+                case .encounteredError:
+                    status = .failed
+                case let .stateChanged(newState):
+                    switch newState {
+                    case .playing:
+                        status = .ready
+                    case .opening:
+                        status = .starting
+                    case .buffering:
+                        status = .buffering
+                    case .error:
+                        status = .failed
+                    default:
+                        break
+                    }
+                default:
+                    continue
+                }
+
+                if status == .failed {
+                    break
+                }
+            }
+        } catch {
+            if !Task.isCancelled,
+               currentInstanceID == instanceID,
+               playerRunGeneration == runGeneration
+            {
+                status = .failed
+            }
+        }
+
+        await stopPlayer(client, runGeneration: runGeneration)
+        if playerRunGeneration == runGeneration {
+            playerClient = nil
+            if status != .failed {
+                status = .idle
+            }
+        }
+    }
+
+    private func enqueueVolumeUpdate(_ active: Bool, for client: PlayerClient) {
+        volumeGeneration = UUID()
+        let generation = volumeGeneration
+        let runGeneration = playerRunGeneration
+        let previousTask = volumeUpdateTask
+        previousTask?.cancel()
+        volumeUpdateTask = Task { @MainActor [weak self] in
+            await previousTask?.value
+            guard let self,
+                  !Task.isCancelled,
+                  volumeGeneration == generation,
+                  playerRunGeneration == runGeneration,
+                  playerClient?.vlcPlayer() === client.vlcPlayer()
+            else { return }
+            try? await client.setVolume(active ? 100 : 0)
+        }
+    }
+
+    private func stopPlayer(_ client: PlayerClient, runGeneration: UUID) async {
+        if playerRunGeneration == runGeneration {
+            hasStartedPlayback = false
+            let task = volumeUpdateTask
+            volumeUpdateTask = nil
+            volumeGeneration = UUID()
+            task?.cancel()
+            await task?.value
+        }
+        try? await client.stop()
+    }
+}
 
 // MARK: - MultiView View (1+3 Showcase Layout & Audio Swapping)
 
 public struct MultiView: View {
     @Bindable var store: StoreOf<MultiViewFeature>
+    @State private var playbackSessionStore = MultiViewPlaybackSessionStore()
 
     #if os(tvOS)
-        @FocusState private var tvFocusedSlotID: Int?
+        @FocusState private var focusedSlotControl: MultiViewSlotFocusTarget?
         @FocusState private var focusedLayoutMode: MultiViewLayoutMode?
         @FocusState private var isCloseFocused: Bool
         @FocusState private var isPiPFocused: Bool
@@ -49,21 +331,44 @@ public struct MultiView: View {
         }
         .background(Color(hex: "#000000").ignoresSafeArea())
         .onAppear { store.send(.onAppear) }
-        .onDisappear { store.send(.onDisappear) }
+        .onDisappear {
+            store.send(.onDisappear)
+            playbackSessionStore.cancelAll()
+        }
+        .task(id: playbackSignature) {
+            playbackSessionStore.synchronize(
+                slots: visiblePlaybackSlots,
+                activeAudioSlotID: store.activeAudioSlotID
+            )
+        }
         #if os(tvOS)
-            .onExitCommand {
-                if let focused = store.focusedSlotID {
-                    store.send(.toggleFullscreen(slotID: focused), animation: .spring(response: 0.3, dampingFraction: 0.7))
-                } else {
-                    store.send(.delegate(.close))
-                }
+        .onExitCommand {
+            if let focused = store.focusedSlotID {
+                store.send(.toggleFullscreen(slotID: focused), animation: .spring(response: 0.3, dampingFraction: 0.7))
+            } else {
+                store.send(.delegate(.close))
             }
-            .onChange(of: tvFocusedSlotID) { _, newID in
-                if let id = newID {
-                    store.send(.setAudioActive(slotID: id), animation: .spring(response: 0.28, dampingFraction: 0.75))
-                }
-            }
+        }
+        .onChange(of: focusedSlotControl) { _, target in
+            guard let target else { return }
+            store.send(.setAudioActive(slotID: target.slotID), animation: .spring(response: 0.28, dampingFraction: 0.75))
+        }
         #endif
+    }
+
+    private var visiblePlaybackSlots: [MultiViewSlot] {
+        if let focusedSlotID = store.focusedSlotID,
+           let focusedSlot = store.slots.first(where: { $0.id == focusedSlotID })
+        {
+            return [focusedSlot]
+        }
+        return Array(store.slots.prefix(store.layoutMode.requiredSlotCount))
+    }
+
+    private var playbackSignature: String {
+        visiblePlaybackSlots.map { slot in
+            "\(slot.id):\(slot.item == nil ? "empty" : slot.instanceID.uuidString)"
+        }.joined(separator: "|")
     }
 
     // MARK: - Top Navigation Bar
@@ -339,7 +644,7 @@ public struct MultiView: View {
     private func slotView(for slot: MultiViewSlot, isCompanion: Bool) -> some View {
         let isAudioActive = store.activeAudioSlotID == slot.id
         #if os(tvOS)
-            let isFocused = tvFocusedSlotID == slot.id
+            let isFocused = focusedSlotControl?.slotID == slot.id
         #else
             let isFocused = false
         #endif
@@ -348,11 +653,10 @@ public struct MultiView: View {
             if let item = slot.item {
                 ZStack {
                     MultiViewPlayer(
-                        item: item,
                         aspectRatioMode: slot.aspectRatioMode,
                         isActiveAudio: isAudioActive,
                         isPiPActive: store.isPiPActive && isAudioActive,
-                        instanceID: slot.instanceID,
+                        session: playbackSessionStore.session(for: slot.instanceID),
                         onRetry: { store.send(.retrySlotTapped(slotID: slot.id)) }
                     )
                     .contentShape(Rectangle())
@@ -383,8 +687,19 @@ public struct MultiView: View {
                                     isAudioActive ? Color(hex: "#0A84FF").opacity(0.85) : Color.black.opacity(0.6),
                                     in: Capsule()
                                 )
+                                #if os(tvOS)
+                                .overlay {
+                                    Capsule()
+                                        .stroke(focusedSlotControl == .audio(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                }
+                                .scaleEffect(focusedSlotControl == .audio(slot.id) ? 1.08 : 1)
+                                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .audio(slot.id))
+                                #endif
                             }
                             .buttonStyle(.plain)
+                            #if os(tvOS)
+                                .focused($focusedSlotControl, equals: .audio(slot.id))
+                            #endif
 
                             Menu {
                                 ForEach([VideoAspectRatioMode.fit, .fill, .stretch], id: \.rawValue) { mode in
@@ -409,6 +724,7 @@ public struct MultiView: View {
                             .accessibilityValue(aspectRatioTitle(for: slot.aspectRatioMode))
                             #if os(tvOS)
                                 .buttonStyle(TVCircleButtonStyle())
+                                .focused($focusedSlotControl, equals: .aspectRatio(slot.id))
                             #else
                                 .buttonStyle(.plain)
                             #endif
@@ -425,21 +741,49 @@ public struct MultiView: View {
                                     .font(.system(size: 20))
                                     .foregroundStyle(.white.opacity(0.8))
                                     .padding(6)
+                                #if os(tvOS)
+                                    .background(focusedSlotControl == .remove(slot.id) ? Color.white.opacity(0.18) : .clear, in: Circle())
+                                    .overlay {
+                                        Circle()
+                                            .stroke(focusedSlotControl == .remove(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                    }
+                                    .scaleEffect(focusedSlotControl == .remove(slot.id) ? 1.12 : 1)
+                                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .remove(slot.id))
+                                #endif
                             }
                             .buttonStyle(.plain)
+                            #if os(tvOS)
+                                .focused($focusedSlotControl, equals: .remove(slot.id))
+                            #endif
                         }
                         .padding(8)
 
                         Spacer()
 
                         HStack(alignment: .bottom) {
-                            Text(item.title)
-                                .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+                            #if os(tvOS)
+                                Button {
+                                    store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.28, dampingFraction: 0.75))
+                                } label: {
+                                    Text(item.title)
+                                        .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 12)
+                                        .frame(minHeight: 44)
+                                        .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                                .focused($focusedSlotControl, equals: .channelTitle(slot.id))
+                            #else
+                                Text(item.title)
+                                    .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+                            #endif
 
                             Spacer()
 
@@ -461,16 +805,25 @@ public struct MultiView: View {
                                     .padding(.vertical, 4)
                                     .background(Color(hex: "#BF5AF2").opacity(0.85), in: Capsule())
                                     .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 6)
+                                    #if os(tvOS)
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(focusedSlotControl == .companionSwap(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                        }
+                                        .scaleEffect(focusedSlotControl == .companionSwap(slot.id) ? 1.08 : 1)
+                                        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .companionSwap(slot.id))
+                                    #endif
                                 }
                                 .buttonStyle(.plain)
+                                #if os(tvOS)
+                                    .focused($focusedSlotControl, equals: .companionSwap(slot.id))
+                                #endif
                             }
                         }
                         .padding(8)
                     }
                 }
                 #if os(tvOS)
-                .focusable()
-                .focused($tvFocusedSlotID, equals: slot.id)
                 .onPlayPauseCommand {
                     if isCompanion {
                         store.send(.swapToPrimary(slotID: slot.id), animation: .spring(response: 0.35, dampingFraction: 0.75))
@@ -500,7 +853,7 @@ public struct MultiView: View {
                 }
                 .buttonStyle(.plain)
                 #if os(tvOS)
-                    .focused($tvFocusedSlotID, equals: slot.id)
+                    .focused($focusedSlotControl, equals: .emptySlot(slot.id))
                 #endif
             }
         }
@@ -616,7 +969,7 @@ struct ChannelSelectionSheet: View {
                         } label: {
                             HStack(spacing: 12) {
                                 if let url = channel.displayLogoURL {
-                                    PlaylistAsyncImage(url: url, userAgentOverride: channel.userAgentOverride) { phase in
+                                    PlaylistAsyncImage(url: url, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                                         if let img = phase.image {
                                             img.resizable().aspectRatio(contentMode: .fit).frame(width: 34, height: 34)
                                         } else {
@@ -674,29 +1027,19 @@ struct ChannelSelectionSheet: View {
 // MARK: - Independent Player View
 
 private struct MultiViewPlayer: View {
-    let item: MediaModels.Item
     let aspectRatioMode: VideoAspectRatioMode
     let isActiveAudio: Bool
     let isPiPActive: Bool
-    let instanceID: UUID
+    let session: MultiViewPlaybackSession
     let onRetry: () -> Void
 
-    @Dependency(\.settingsClient) private var settingsClient
-
-    @State private var playerClient: PlayerClient?
-    @State private var playbackFailed = false
-    @State private var latestIsActiveAudio = false
-    @State private var hasStartedPlayback = false
-    @State private var volumeGeneration = UUID()
-    @State private var volumeUpdateTask: Task<Void, Never>?
-    @State private var playerRunGeneration = UUID()
     #if os(iOS)
         @State private var pipController: PiPController?
     #endif
 
     var body: some View {
-        Group {
-            if playbackFailed {
+        ZStack {
+            if session.status == .failed {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 24))
@@ -707,7 +1050,7 @@ private struct MultiViewPlayer: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black)
-            } else if let client = playerClient {
+            } else if let client = session.playerClient {
                 #if os(iOS)
                     PiPVideoView(client.vlcPlayer(), controller: $pipController)
                         .scaleEffect(x: videoScaleX, y: videoScaleY)
@@ -720,14 +1063,32 @@ private struct MultiViewPlayer: View {
             } else {
                 Color.black
             }
+
+            if session.status == .starting || session.status == .buffering {
+                VStack(spacing: 6) {
+                    ProgressView()
+                        .tint(.white)
+                    Text(AppStrings.Common.loading)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .padding(10)
+                .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .combine)
+            } else if session.status == .ready {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(8)
+                    .accessibilityHidden(true)
+            }
         }
-        .task(id: instanceID) {
-            await runPlayer()
+        .onAppear {
+            session.setAudioActive(isActiveAudio)
         }
         .onChange(of: isActiveAudio) { _, active in
-            latestIsActiveAudio = active
-            guard hasStartedPlayback, let client = playerClient else { return }
-            enqueueVolumeUpdate(active, for: client)
+            session.setAudioActive(active)
         }
         .onChange(of: isPiPActive) { _, newValue in
             #if os(iOS)
@@ -739,9 +1100,9 @@ private struct MultiViewPlayer: View {
             #endif
         }
         #if os(iOS)
-            .onDisappear {
-                pipController?.stop()
-            }
+        .onDisappear {
+            pipController?.stop()
+        }
         #endif
     }
 
@@ -755,110 +1116,5 @@ private struct MultiViewPlayer: View {
 
     private var videoScaleY: CGFloat {
         aspectRatioMode == .stretch ? 1 : videoScaleX
-    }
-
-    private func runPlayer() async {
-        @Dependency(\.playerFactoryClient) var factory
-        await cancelVolumeUpdates()
-        let runGeneration = UUID()
-        playerRunGeneration = runGeneration
-        playbackFailed = false
-        hasStartedPlayback = false
-        latestIsActiveAudio = isActiveAudio
-        let client = factory.createPlayer()
-        playerClient = client
-
-        guard let url = item.streamURL else {
-            playerClient = nil
-            return
-        }
-
-        do {
-            // Establish mute before starting transport so a companion stream
-            // cannot briefly become audible during decoder startup.
-            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
-            let events = await client.events()
-            let playbackContentKind: PlaybackContentKind = item.type == .live ? .live : .vod
-            let playbackDefaults = settingsClient.playbackDefaults(playbackContentKind)
-            _ = try await client.play(
-                url,
-                item.userAgentOverride,
-                playbackDefaults.networkCachingMilliseconds(for: playbackContentKind),
-                playbackDefaults.deinterlaceMode,
-                .vlc,
-                nil,
-                playbackDefaults.preferredAudioLanguage,
-                nil,
-                playbackDefaults.preferredSubtitleLanguage
-            )
-            await client.setSubtitleTextScale(playbackDefaults.subtitleTextSize.scale)
-            try await client.setVolume(latestIsActiveAudio ? 100 : 0)
-            hasStartedPlayback = true
-            if let position = item.resumePosition, position > 0, item.type != .live {
-                try await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else { return }
-                try? await client.seek(position)
-            }
-            for await event in events {
-                guard !Task.isCancelled else { break }
-                switch event {
-                case .encounteredError, .stateChanged(.error):
-                    playbackFailed = true
-                default:
-                    continue
-                }
-                break
-            }
-        } catch {
-            guard !Task.isCancelled else {
-                await stopPlayer(client, runGeneration: runGeneration)
-                clearPlayerClient(ifMatching: client)
-                return
-            }
-            playbackFailed = true
-        }
-        await stopPlayer(client, runGeneration: runGeneration)
-        if !Task.isCancelled {
-            clearPlayerClient(ifMatching: client)
-        }
-    }
-
-    private func enqueueVolumeUpdate(_ active: Bool, for client: PlayerClient) {
-        volumeGeneration = UUID()
-        let generation = volumeGeneration
-        let runGeneration = playerRunGeneration
-        let previousTask = volumeUpdateTask
-        previousTask?.cancel()
-        volumeUpdateTask = Task { @MainActor in
-            await previousTask?.value
-            guard
-                !Task.isCancelled,
-                volumeGeneration == generation,
-                playerRunGeneration == runGeneration,
-                playerClient?.vlcPlayer() === client.vlcPlayer()
-            else { return }
-            try? await client.setVolume(active ? 100 : 0)
-        }
-    }
-
-    private func cancelVolumeUpdates() async {
-        volumeGeneration = UUID()
-        let task = volumeUpdateTask
-        volumeUpdateTask = nil
-        task?.cancel()
-        await task?.value
-    }
-
-    private func stopPlayer(_ client: PlayerClient, runGeneration: UUID) async {
-        if playerRunGeneration == runGeneration {
-            hasStartedPlayback = false
-            await cancelVolumeUpdates()
-        }
-        try? await client.stop()
-    }
-
-    private func clearPlayerClient(ifMatching client: PlayerClient) {
-        guard let current = playerClient, current.vlcPlayer() === client.vlcPlayer() else { return }
-        playerClient = nil
     }
 }

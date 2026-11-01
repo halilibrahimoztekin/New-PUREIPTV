@@ -55,10 +55,12 @@ extension PlayerFactoryClient: DependencyKey {
                     try player.play(media)
                     return PlaybackStartResult(engine: .vlc, deinterlaceMode: appliedDeinterlaceMode)
                 },
-                resume: {
+                resume: { rate in
                     try await PlaybackAudioSession.setActive(true)
                     try Task.checkCancellation()
-                    try box.getPlayer().play()
+                    let player = box.getPlayer()
+                    try player.play()
+                    try player.setPlaybackRate(PlaybackRate(max(0.25, min(4, rate))))
                 },
                 pause: {
                     box.getPlayer().pause()

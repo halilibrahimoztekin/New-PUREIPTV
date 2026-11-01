@@ -1,9 +1,12 @@
 #if os(iOS)
     import ComposableArchitecture
     import SwiftUI
+    import UIKit
 
     public struct DownloadsView_iOS: View {
         @Bindable var store: StoreOf<DownloadsFeature>
+        @State private var exportPresentation: DownloadExportPresentation?
+        @State private var isShowingExportError = false
 
         public init(store: StoreOf<DownloadsFeature>) {
             self.store = store
@@ -89,6 +92,23 @@
             }
             .listStyle(.insetGrouped)
             .navigationTitle(AppStrings.Downloads.title)
+            .sheet(item: $exportPresentation) { presentation in
+                switch presentation.destination {
+                case .share:
+                    DownloadShareSheet(fileURL: presentation.fileURL) {
+                        exportPresentation = nil
+                    }
+                case .files:
+                    DownloadFileExportPicker(fileURL: presentation.fileURL) {
+                        exportPresentation = nil
+                    }
+                }
+            }
+            .alert(AppStrings.Downloads.exportUnavailableTitle, isPresented: $isShowingExportError) {
+                Button(AppStrings.Common.ok, role: .cancel) {}
+            } message: {
+                Text(AppStrings.Downloads.exportUnavailableMessage)
+            }
         }
 
         private var storageSummarySection: some View {
@@ -356,6 +376,29 @@
                 .buttonStyle(.plain)
                 .accessibilityLabel(item.isPaused ? AppStrings.Downloads.resumeDownload : AppStrings.Downloads.pauseDownload)
 
+                if item.isQueued, store.nextQueuedDownloadID != item.id {
+                    Button {
+                        guard !store.pendingDownloadCommandIDs.contains(item.id) else { return }
+                        store.send(.prioritizeQueuedDownload(item.id))
+                    } label: {
+                        Group {
+                            if store.pendingDownloadCommandIDs.contains(item.id) {
+                                ProgressView()
+                                    .frame(width: 20, height: 20)
+                            } else {
+                                Image(systemName: "arrow.up.circle")
+                                    .font(.title2)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.pendingDownloadCommandIDs.contains(item.id))
+                    .accessibilityLabel(AppStrings.Downloads.downloadNext)
+                    .accessibilityValue(store.pendingDownloadCommandIDs.contains(item.id) ? AppStrings.Common.loading : "")
+                }
+
                 Button {
                     guard !store.pendingDownloadCommandIDs.contains(item.id) else { return }
                     store.send(.cancelActiveDownload(item.id))
@@ -438,18 +481,99 @@
                 HStack(spacing: 12) {
                     completedDownloadContent(item)
                     Spacer(minLength: 8)
-                    deleteDownloadButton(item)
+                    completedDownloadActions(item)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     completedDownloadContent(item)
                     HStack {
                         Spacer()
-                        deleteDownloadButton(item)
+                        completedDownloadActions(item)
                     }
                 }
             }
             .padding(.vertical, 6)
+        }
+
+        private func completedDownloadActions(_ item: OfflineMediaSnapshot) -> some View {
+            HStack(spacing: 8) {
+                exportMenuButton(item)
+                deleteDownloadButton(item)
+            }
+        }
+
+        private func exportMenuButton(_ item: OfflineMediaSnapshot) -> some View {
+            Menu {
+                Button {
+                    presentExport(for: item, destination: .share)
+                } label: {
+                    Label(AppStrings.Downloads.shareCompletedDownload, systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                    presentExport(for: item, destination: .files)
+                } label: {
+                    Label(AppStrings.Downloads.saveCompletedDownloadToFiles, systemImage: "folder")
+                }
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!item.isAvailable || isDeletionInProgress)
+            .accessibilityLabel(AppStrings.Downloads.exportActions)
+            .accessibilityValue(isDeletionInProgress ? AppStrings.Common.loading : "")
+        }
+
+        private func presentExport(for item: OfflineMediaSnapshot, destination: DownloadExportPresentation.Destination) {
+            guard !isDeletionInProgress,
+                  let fileURL = validatedCompletedDownloadURL(for: item)
+            else {
+                isShowingExportError = true
+                if !store.isLoading {
+                    store.send(.loadDownloads)
+                }
+                return
+            }
+            exportPresentation = DownloadExportPresentation(fileURL: fileURL, destination: destination)
+        }
+
+        private func validatedCompletedDownloadURL(for item: OfflineMediaSnapshot) -> URL? {
+            guard item.isAvailable,
+                  item.fileSize > 0,
+                  !item.id.isEmpty,
+                  item.id != ".",
+                  item.id != "..",
+                  !item.id.contains("/"),
+                  !item.id.contains("\\")
+            else { return nil }
+
+            guard let documentsDirectory = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)
+                .first
+            else { return nil }
+            let documentsURL = documentsDirectory.standardizedFileURL.resolvingSymlinksInPath()
+
+            let expectedURL = documentsURL
+                .appendingPathComponent("\(item.id).mp4", isDirectory: false)
+                .standardizedFileURL
+            let recordedURL = URL(fileURLWithPath: item.localFilePath)
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+                .standardizedFileURL
+            guard expectedURL.deletingLastPathComponent() == documentsURL,
+                  expectedURL.resolvingSymlinksInPath().standardizedFileURL == expectedURL,
+                  recordedURL == expectedURL
+            else { return nil }
+
+            let attributes = try? FileManager.default.attributesOfItem(atPath: expectedURL.path)
+            guard attributes?[.type] as? FileAttributeType == .typeRegular,
+                  let fileSize = (attributes?[.size] as? NSNumber)?.int64Value,
+                  fileSize > 0,
+                  fileSize == item.fileSize
+            else { return nil }
+
+            return expectedURL
         }
 
         @ViewBuilder
@@ -502,7 +626,7 @@
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if item.isAvailable && (isPreparingPlayback(item) || isDeletionInProgress) {
+                if item.isAvailable, isPreparingPlayback(item) || isDeletionInProgress {
                     VStack(spacing: 4) {
                         ProgressView()
                         Text(AppStrings.Common.loading)
@@ -567,6 +691,67 @@
             formatter.allowedUnits = [.useGB, .useMB]
             formatter.countStyle = .file
             return formatter.string(fromByteCount: max(0, bytes))
+        }
+    }
+
+    private struct DownloadExportPresentation: Identifiable {
+        enum Destination {
+            case share
+            case files
+        }
+
+        let id = UUID()
+        let fileURL: URL
+        let destination: Destination
+    }
+
+    private struct DownloadShareSheet: UIViewControllerRepresentable {
+        let fileURL: URL
+        let onComplete: @MainActor @Sendable () -> Void
+
+        func makeUIViewController(context _: Context) -> UIActivityViewController {
+            let controller = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            controller.completionWithItemsHandler = { _, _, _, _ in
+                Task { @MainActor in onComplete() }
+            }
+            return controller
+        }
+
+        func updateUIViewController(_: UIActivityViewController, context _: Context) {}
+    }
+
+    private struct DownloadFileExportPicker: UIViewControllerRepresentable {
+        let fileURL: URL
+        let onComplete: @MainActor () -> Void
+
+        func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+            let picker = UIDocumentPickerViewController(forExporting: [fileURL], asCopy: true)
+            picker.delegate = context.coordinator
+            return picker
+        }
+
+        func updateUIViewController(_: UIDocumentPickerViewController, context _: Context) {}
+
+        @MainActor
+        fileprivate func makeCoordinator() -> Coordinator {
+            Coordinator(onComplete: onComplete)
+        }
+
+        @MainActor
+        fileprivate final class Coordinator: NSObject, UIDocumentPickerDelegate {
+            private let onComplete: @MainActor () -> Void
+
+            init(onComplete: @escaping @MainActor () -> Void) {
+                self.onComplete = onComplete
+            }
+
+            func documentPicker(_: UIDocumentPickerViewController, didPickDocumentsAt _: [URL]) {
+                onComplete()
+            }
+
+            func documentPickerWasCancelled(_: UIDocumentPickerViewController) {
+                onComplete()
+            }
         }
     }
 #endif

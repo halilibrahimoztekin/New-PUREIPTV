@@ -15,11 +15,14 @@
         @Environment(\.scenePhase) private var scenePhase
         @FocusState private var focusedCategory: String?
         @FocusState private var focusedChannelID: String?
+        @AppStorage(LiveTVFocusPreferenceKeys.favoriteChannelWrapAround) private var isFavoriteWrapAroundFocusEnabled = false
 
         @State private var currentScrubLetter: String = ""
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
         @State private var selectionRestoreChannelID: String?
+        @State private var selectionFocusRestoreGeneration = 0
+        @State private var categorySearchQuery = ""
 
         public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
             self.store = store
@@ -41,21 +44,16 @@
                 categoryColumn
                     .frame(width: 280)
                     .focusSection()
-                    .focusGuideBoundary()
 
-                // ── Divider with Focus Guide Bridge ───────────────────
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.06))
-                        .frame(width: 1)
-                    TVFocusGuideBridge()
-                        .frame(width: 24)
-                }
+                // ── Divider ──────────────────────────────────────────
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 1)
+                    .frame(width: 24)
 
                 // ── Right: Channel shelf ──────────────────────────────
                 channelArea
                     .focusSection()
-                    .focusGuideBoundary()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if store.isChannelSelectionMode {
@@ -72,11 +70,16 @@
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedChannel?.displayLogoURL,
-                    titleSeed: focusedChannel?.title ?? "LiveTV"
+                    titleSeed: focusedChannel?.title ?? "LiveTV",
+                    userAgentOverride: focusedChannel?.userAgentOverride,
+                    playlistID: focusedChannel?.playlistID
                 )
             )
             .onAppear {
                 store.send(.onAppear(config: config))
+            }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
             }
             .onDisappear {
                 store.send(.onDisappear)
@@ -87,17 +90,36 @@
                 }
             }
             .onChange(of: store.isChannelSelectionMode) { _, isSelecting in
+                selectionFocusRestoreGeneration &+= 1
+                let restoreGeneration = selectionFocusRestoreGeneration
                 guard !isSelecting, let selectionRestoreChannelID else { return }
+                let restoreID = selectionRestoreChannelID
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    focusedChannelID = selectionRestoreChannelID
+                    guard selectionFocusRestoreGeneration == restoreGeneration,
+                          !store.isChannelSelectionMode,
+                          self.selectionRestoreChannelID == restoreID else { return }
+                    let visibleChannels = store.displayChannels
+                    if let focusedChannelID,
+                       visibleChannels.contains(where: { $0.id == focusedChannelID })
+                    {
+                        self.selectionRestoreChannelID = nil
+                        return
+                    }
+                    guard focusedCategory == nil else {
+                        self.selectionRestoreChannelID = nil
+                        return
+                    }
+                    focusedChannelID = visibleChannels.contains(where: { $0.id == restoreID })
+                        ? restoreID
+                        : visibleChannels.first?.id
                     self.selectionRestoreChannelID = nil
                 }
             }
             .onChange(of: store.hiddenChannelIDs.count) { _, _ in
                 guard let focusedChannelID,
-                      !store.currentChannels.contains(where: { $0.id == focusedChannelID })
+                      !store.displayChannels.contains(where: { $0.id == focusedChannelID })
                 else { return }
-                self.focusedChannelID = store.currentChannels.first?.id
+                self.focusedChannelID = store.displayChannels.first?.id
             }
         }
 
@@ -108,18 +130,66 @@
             return store.selectedChannel ?? store.displayChannels.first
         }
 
+        private var filteredCategories: [MediaModels.Category] {
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
+        }
+
         // MARK: – Category Column
 
         private var categoryColumn: some View {
             ScrollViewReader { catProxy in
+                let itemCountsByCategory = store.visibleChannelCountsByCategory
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
-                        // Header
-                        HStack {
-                            Text(AppStrings.LiveTV.categories)
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundStyle(Color(hex: "#E4E1E7"))
-                            Spacer()
+                    LazyVStack(spacing: 4) {
+                        // Header actions occupy separate rows so the 280 pt category
+                        // column never squeezes six focus targets beside its title.
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(AppStrings.LiveTV.categories)
+                                    .font(.system(size: 26, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                                Spacer(minLength: 8)
+                                Menu {
+                                    Section(AppStrings.LiveTV.categoryOrderTitle) {
+                                        ForEach(LiveTVCategoryOrder.allCases, id: \.self) { order in
+                                            Button {
+                                                store.send(.setCategoryOrder(order))
+                                            } label: {
+                                                if store.categoryOrder == order {
+                                                    Label(order.title, systemImage: "checkmark")
+                                                } else {
+                                                    Text(order.title)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Button {
+                                        store.send(.smartGroupManagerTapped)
+                                    } label: {
+                                        Label(AppStrings.LiveTV.smartGroups, systemImage: "square.stack.3d.up")
+                                    }
+                                    .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
+
+                                    Button {
+                                        store.send(.editCategoriesTapped)
+                                    } label: {
+                                        Label(
+                                            AppStrings.CategoryMgmt.manageTitle(for: AppStrings.LiveTV.categories),
+                                            systemImage: "slider.horizontal.3"
+                                        )
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .frame(width: 44, height: 44)
+                                }
+                                .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel(AppStrings.Common.more)
+                            }
+
                             HStack(spacing: 8) {
                                 if config.type == .m3u {
                                     Button {
@@ -135,10 +205,11 @@
                                             if store.isRefreshingContent, store.refreshStage?.canCancel != true {
                                                 ProgressView()
                                             } else {
-                                                Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise").font(.system(size: 18))
+                                                Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
                                             }
                                         }
-                                        .padding(8)
+                                        .font(.system(size: 18))
+                                        .frame(width: 44, height: 44)
                                     }
                                     .buttonStyle(TVCircleButtonStyle())
                                     .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
@@ -156,50 +227,31 @@
                                 } label: {
                                     Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
                                         .font(.system(size: 18))
-                                        .padding(8)
+                                        .frame(width: 44, height: 44)
                                 }
                                 .buttonStyle(TVCircleButtonStyle())
                                 .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
-
-                                Button {
-                                    store.send(.smartGroupManagerTapped)
-                                } label: {
-                                    Image(systemName: "square.stack.3d.up")
-                                        .font(.system(size: 18))
-                                        .padding(8)
-                                }
-                                .buttonStyle(TVCircleButtonStyle())
-                                .accessibilityLabel(AppStrings.LiveTV.smartGroups)
-                                .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
-
-                                Button {
-                                    store.send(.editCategoriesTapped)
-                                } label: {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 18))
-                                        .padding(8)
-                                }
-                                .buttonStyle(TVCircleButtonStyle())
 
                                 Button {
                                     store.send(.openEPGTimelineTapped)
                                 } label: {
                                     Image(systemName: "calendar.day.timeline.left")
                                         .font(.system(size: 20))
-                                        .padding(8)
+                                        .frame(width: 44, height: 44)
                                 }
                                 .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel(AppStrings.LiveTV.channelGuide)
 
                                 Button {
                                     store.send(.epgGuideTapped)
                                 } label: {
                                     Image(systemName: "calendar.badge.clock")
                                         .font(.system(size: 20))
-                                        .padding(8)
+                                        .frame(width: 44, height: 44)
                                 }
                                 .buttonStyle(TVCircleButtonStyle())
+                                .accessibilityLabel(AppStrings.EPG.guide)
                             }
-                            .padding(.trailing, 8)
                         }
                         .padding(.horizontal, 24)
                         .padding(.top, 48)
@@ -238,25 +290,37 @@
                                 .focused($focusedCategory, equals: "smart-group:\(group.id)")
                                 .id("smart-group:\(group.id)")
                             }
-                            ForEach(store.categories) { category in
-                                TVCategoryRow(
-                                    category: category,
-                                    isSelected: store.selectedCategoryID == category.id,
-                                    isLocked: store.categoryPreferences[category.id]?.isLocked ?? false
-                                ) {
-                                    store.send(.categorySelected(category))
+                            if !store.categories.isEmpty {
+                                CategorySearchField(text: $categorySearchQuery) {
+                                    if let firstMatch = filteredCategories.first {
+                                        store.send(.categorySelected(firstMatch))
+                                    }
                                 }
-                                .padding(.horizontal, 16)
-                                .focused($focusedCategory, equals: category.id)
-                                .id(category.id)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 8)
+                            }
+                            if !store.categories.isEmpty, filteredCategories.isEmpty {
+                                Text(AppStrings.Common.categoryNotFound)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                            }
+                            ForEach(filteredCategories) { category in
+                                categoryRow(for: category, itemCount: itemCountsByCategory[category.id])
                             }
                         }
                     }
                     .padding(.bottom, 48)
                 }
                 .background(Color(hex: "#0C0C10"))
+                .focusSection()
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
+                        if !filteredCategories.contains(where: { $0.id == newCatID }) {
+                            categorySearchQuery = ""
+                        }
                         focusedCategory = newCatID
                         TVFocusMemory.shared.lastSelectedLiveCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
@@ -289,12 +353,78 @@
             }
         }
 
+        private func categoryRow(for category: MediaModels.Category, itemCount: Int?) -> some View {
+            let isSelected = store.selectedCategoryID == category.id
+            let isLocked = store.categoryPreferences[category.id]?.isLocked ?? false
+            return TVCategoryRow(
+                category: category,
+                isSelected: isSelected,
+                isLocked: isLocked,
+                itemCount: itemCount
+            ) {
+                store.send(.categorySelectedAndOpenEPGGuide(category))
+            }
+            .padding(.horizontal, 16)
+            .focused($focusedCategory, equals: category.id)
+            .id(category.id)
+        }
+
+        private var categoryQuickJumpMenu: some View {
+            Menu {
+                ForEach(store.categories) { category in
+                    let isSelected = store.selectedCategoryID == category.id
+                        && store.selectedSmartGroupID == nil
+                        && !store.isFavoriteListMode
+                    let isLocked = store.categoryPreferences[category.id]?.isLocked ?? false
+
+                    Button {
+                        guard !isSelected else { return }
+                        store.send(.categorySelected(category))
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(category.name)
+                            Spacer()
+                            if isLocked {
+                                Image(systemName: "lock.fill")
+                            } else if isSelected {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .accessibilityLabel(category.name)
+                    .accessibilityValue(isLocked ? AppStrings.LiveTV.categoryLockedStatus : "")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            } label: {
+                Label(AppStrings.LiveTV.categoryQuickJump, systemImage: "square.grid.2x2")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 44)
+                    .background(Color.white.opacity(0.08), in: Capsule())
+            }
+            .accessibilityLabel(AppStrings.LiveTV.categoryQuickJump)
+            .tvFocusEffect(shape: .capsule)
+        }
+
         // MARK: – Channel Area
 
         private var channelArea: some View {
             VStack(spacing: 0) {
                 FavoriteChannelListSwitcher(store: store)
                     .padding(.top, 8)
+                HStack {
+                    Spacer()
+                    if !store.isChannelSelectionMode {
+                        if !store.categories.isEmpty {
+                            categoryQuickJumpMenu
+                        }
+                        LiveTVChannelSortMenu(store: store)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .focusSection()
                 if store.isLoadingChannels, store.displayChannels.isEmpty {
                     PureLoadingView(size: .large, text: AppStrings.LiveTV.loadingChannels)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -341,7 +471,7 @@
                         if store.isLoadingChannels {
                             PureLoadingView(size: .small)
                         }
-                        channelGrid
+                        channelGrid(channelProxy: channelProxy)
                     }
                 }
                 .onChange(of: store.selectedChannel) { _, newChannel in
@@ -350,6 +480,14 @@
                         focusedChannelID = channelID
                         withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
                     }
+                }
+                .onChange(of: store.channelFocusRestoreRevision) { _, _ in
+                    guard let channelID = store.selectedChannel?.id,
+                          store.displayChannels.contains(where: { $0.id == channelID }),
+                          focusedChannelID != channelID else { return }
+                    TVFocusMemory.shared.recordChannel(channelID, in: store.selectedCategoryID)
+                    focusedChannelID = channelID
+                    withAnimation { channelProxy.scrollTo(channelID, anchor: .center) }
                 }
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     let targetID = TVFocusMemory.shared.lastChannel(
@@ -391,64 +529,130 @@
             }
         }
 
-        private var channelGrid: some View {
+        private func channelGrid(channelProxy: ScrollViewProxy) -> some View {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 24)],
                 spacing: 24
             ) {
-                ForEach(store.displayChannels) { channel in
-                    let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
-                    TVChannelCard(
-                        channel: channel,
-                        isSelected: store.selectedChannel?.id == channel.id,
-                        presentationName: store.channelPresentationOverrides[channel.id]?.name,
-                        presentationNumber: store.channelPresentationOverrides[channel.id]?.number
-                    ) {
-                        store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if isUnavailable {
-                            Text(AppStrings.LiveTV.unavailableFavoriteChannel)
-                                .font(.caption.bold())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.76), in: Capsule())
-                                .padding(12)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .overlay(alignment: .topTrailing) {
-                        if store.isChannelSelectionMode {
-                            Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
-                                .font(.title2)
-                                .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
-                                .padding(12)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .accessibilityValue(isUnavailable
-                        ? AppStrings.LiveTV.unavailableFavoriteChannel
-                        : (store.isChannelSelectionMode
-                            ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
-                            : ""))
-                    .accessibilityHint(isUnavailable
-                        ? AppStrings.LiveTV.unavailableFavoriteChannelHint
-                        : (store.isChannelSelectionMode
-                            ? (store.selectedCurrentChannelIDs.contains(channel.id)
-                                ? AppStrings.LiveTV.deselectChannelAccessibilityHint
-                                : AppStrings.LiveTV.selectChannelAccessibilityHint)
-                            : ""))
-                    .accessibilityAddTraits(store.isChannelSelectionMode && !isUnavailable && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
-                    .focused($focusedChannelID, equals: channel.id)
-                    .id(channel.id)
-                    .contextMenu {
-                        channelContextMenu(for: channel)
-                    }
+                let channels = store.displayChannels
+                let manualOrderableCount = store.isFavoriteListMode
+                    && store.favoriteSortMode == .manual
+                    && !store.isChannelSelectionMode
+                    ? channels.count - store.unavailableFavoriteChannels.count
+                    : 0
+                ForEach(Array(channels.enumerated()), id: \.element.id) { entry in
+                    favoriteChannelCard(
+                        entry.element,
+                        at: entry.offset,
+                        in: channels,
+                        manualOrderableCount: manualOrderableCount,
+                        channelProxy: channelProxy
+                    )
                 }
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 48)
+        }
+
+        @ViewBuilder
+        private func favoriteChannelCard(
+            _ channel: MediaModels.Item,
+            at index: Int,
+            in channels: [MediaModels.Item],
+            manualOrderableCount: Int,
+            channelProxy: ScrollViewProxy
+        ) -> some View {
+            let isUnavailable = store.unavailableFavoriteChannelIDs.contains(channel.id)
+            let manualOrderIndex = !isUnavailable && index < manualOrderableCount ? index : nil
+            let canRepeatManualOrder = manualOrderableCount > 1 && manualOrderIndex != nil
+            let card = TVChannelCard(
+                channel: channel,
+                isSelected: store.selectedChannel?.id == channel.id,
+                presentationName: store.channelPresentationOverrides[channel.id]?.name,
+                presentationNumber: store.channelPresentationOverrides[channel.id]?.number,
+                sequenceNumber: store.selectedCategoryID != nil
+                    && store.selectedSmartGroupID == nil
+                    && !store.isFavoriteListMode
+                    ? index + 1
+                    : nil
+            ) {
+                store.send(store.isChannelSelectionMode ? .toggleChannelSelection(channel) : .channelSelected(channel))
+            }
+            .overlay(alignment: .topLeading) {
+                if isUnavailable {
+                    Text(AppStrings.LiveTV.unavailableFavoriteChannel)
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.76), in: Capsule())
+                        .padding(12)
+                        .accessibilityHidden(true)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if store.isChannelSelectionMode {
+                    Image(systemName: store.selectedCurrentChannelIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(store.selectedCurrentChannelIDs.contains(channel.id) ? Color.accentColor : .white)
+                        .padding(12)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityValue(isUnavailable
+                ? AppStrings.LiveTV.unavailableFavoriteChannel
+                : (store.isChannelSelectionMode
+                    ? (store.selectedCurrentChannelIDs.contains(channel.id) ? AppStrings.LiveTV.selected : AppStrings.LiveTV.notSelected)
+                    : ""))
+            .accessibilityHint(isUnavailable
+                ? AppStrings.LiveTV.unavailableFavoriteChannelHint
+                : (store.isChannelSelectionMode
+                    ? (store.selectedCurrentChannelIDs.contains(channel.id)
+                        ? AppStrings.LiveTV.deselectChannelAccessibilityHint
+                        : AppStrings.LiveTV.selectChannelAccessibilityHint)
+                    : (canRepeatManualOrder ? AppStrings.Favorites.directionalReorderHint : "")))
+            .accessibilityAddTraits(store.isChannelSelectionMode && !isUnavailable && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
+            .focused($focusedChannelID, equals: channel.id)
+            .id(channel.id)
+            .contextMenu {
+                channelContextMenu(for: channel)
+            }
+
+            let canWrapFocus = isFavoriteWrapAroundFocusEnabled
+                && store.isFavoriteListMode
+                && store.favoriteSortMode != .manual
+                && !store.isChannelSelectionMode
+                && channels.count > 1
+            if canRepeatManualOrder, let manualOrderIndex {
+                card.onMoveCommand { direction in
+                    switch direction {
+                    case .up where manualOrderIndex > 0:
+                        store.send(.moveFavoriteChannel(channelID: channel.id, offset: -1))
+                    case .down where manualOrderIndex + 1 < manualOrderableCount:
+                        store.send(.moveFavoriteChannel(channelID: channel.id, offset: 1))
+                    default:
+                        break
+                    }
+                }
+            } else if canWrapFocus, index == 0, let lastChannelID = channels.last?.id {
+                card.onMoveCommand { direction in
+                    guard direction == .up else { return }
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        channelProxy.scrollTo(lastChannelID, anchor: .center)
+                    }
+                    focusedChannelID = lastChannelID
+                }
+            } else if canWrapFocus, index == channels.count - 1, let firstChannelID = channels.first?.id {
+                card.onMoveCommand { direction in
+                    guard direction == .down else { return }
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        channelProxy.scrollTo(firstChannelID, anchor: .center)
+                    }
+                    focusedChannelID = firstChannelID
+                }
+            } else {
+                card
+            }
         }
 
         private func handleFocusChange(_ newID: String?) {
@@ -505,6 +709,8 @@
             FavoriteChannelManualOrderActions(store: store, channelID: channel.id)
 
             if !isUnavailable {
+                RecentChannelExclusionMenuAction(store: store, channelID: channel.id)
+
                 Button {
                     guard let playlistID = store.channelPresentationPlaylistID,
                           let profileScope = store.channelPresentationProfileScope else { return }
@@ -560,12 +766,20 @@
         let category: MediaModels.Category
         let isSelected: Bool
         let isLocked: Bool
+        let itemCount: Int?
         let action: () -> Void
 
-        init(category: MediaModels.Category, isSelected: Bool, isLocked: Bool = false, action: @escaping () -> Void) {
+        init(
+            category: MediaModels.Category,
+            isSelected: Bool,
+            isLocked: Bool = false,
+            itemCount: Int? = nil,
+            action: @escaping () -> Void
+        ) {
             self.category = category
             self.isSelected = isSelected
             self.isLocked = isLocked
+            self.itemCount = itemCount
             self.action = action
         }
 
@@ -582,6 +796,18 @@
                         .lineLimit(1)
 
                     Spacer()
+
+                    if let itemCount {
+                        Text("\(itemCount)")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.72))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                isSelected ? Color.accentColor.opacity(0.35) : Color.white.opacity(0.08),
+                                in: Capsule()
+                            )
+                    }
 
                     if isLocked {
                         Image(systemName: "lock.fill")

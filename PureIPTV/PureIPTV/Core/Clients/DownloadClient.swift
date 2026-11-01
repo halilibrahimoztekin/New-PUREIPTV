@@ -13,6 +13,31 @@ public nonisolated struct DownloadBulkDeleteResult: Equatable, Sendable {
     }
 }
 
+public nonisolated struct OfflineEpisodeMetadata: Codable, Equatable, Sendable {
+    public let seriesID: String
+    public let seriesTitle: String
+    public let seasonNumber: Int
+    public let episodeNumber: Int
+    public let episodeOrdinal: Int?
+    public let playlistID: UUID?
+
+    public init(
+        seriesID: String,
+        seriesTitle: String,
+        seasonNumber: Int,
+        episodeNumber: Int,
+        episodeOrdinal: Int? = nil,
+        playlistID: UUID?
+    ) {
+        self.seriesID = seriesID
+        self.seriesTitle = seriesTitle
+        self.seasonNumber = seasonNumber
+        self.episodeNumber = episodeNumber
+        self.episodeOrdinal = episodeOrdinal
+        self.playlistID = playlistID
+    }
+}
+
 public nonisolated struct OfflineMediaSnapshot: Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
@@ -22,8 +47,19 @@ public nonisolated struct OfflineMediaSnapshot: Equatable, Identifiable, Sendabl
     public let downloadedAt: Date
     public let fileSize: Int64
     public let isAvailable: Bool
+    public let episodeMetadata: OfflineEpisodeMetadata?
 
-    public init(id: String, title: String, localFilePath: String, coverURL: String?, userAgentOverride: String?, downloadedAt: Date, fileSize: Int64, isAvailable: Bool) {
+    public init(
+        id: String,
+        title: String,
+        localFilePath: String,
+        coverURL: String?,
+        userAgentOverride: String?,
+        downloadedAt: Date,
+        fileSize: Int64,
+        isAvailable: Bool,
+        episodeMetadata: OfflineEpisodeMetadata? = nil
+    ) {
         self.id = id
         self.title = title
         self.localFilePath = localFilePath
@@ -32,6 +68,7 @@ public nonisolated struct OfflineMediaSnapshot: Equatable, Identifiable, Sendabl
         self.downloadedAt = downloadedAt
         self.fileSize = fileSize
         self.isAvailable = isAvailable
+        self.episodeMetadata = episodeMetadata
     }
 }
 
@@ -61,10 +98,18 @@ public nonisolated struct DownloadLibrarySnapshot: Equatable, Sendable {
 
 @DependencyClient
 public struct DownloadClient {
-    public var startDownload: @Sendable (_ id: String, _ title: String, _ url: URL, _ coverURL: URL?, _ userAgentOverride: String?) async throws -> Void
+    public var startDownload: @Sendable (
+        _ id: String,
+        _ title: String,
+        _ url: URL,
+        _ coverURL: URL?,
+        _ userAgentOverride: String?,
+        _ episodeMetadata: OfflineEpisodeMetadata?
+    ) async throws -> Void
     public var cancelDownload: @Sendable (_ id: String) async throws -> Void
     public var pauseDownload: @Sendable (_ id: String) async -> Void = { _ in }
     public var resumeDownload: @Sendable (_ id: String) async -> Void = { _ in }
+    public var prioritizeQueuedDownload: @Sendable (_ id: String) async -> Bool = { _ in false }
     public var getDownloadProgress: @Sendable (_ id: String) -> AsyncStream<Double> = { _ in .finished }
     public var getDownloadedMedia: @Sendable () async throws -> [OfflineMediaSnapshot]
     public var deleteDownloadedMedia: @Sendable (_ id: String) async throws -> Void
@@ -79,10 +124,11 @@ public struct DownloadClient {
 
 extension DownloadClient: DependencyKey {
     public static let liveValue: DownloadClient = .init(
-        startDownload: { id, title, url, coverURL, userAgentOverride in
+        startDownload: { id, title, url, coverURL, userAgentOverride, episodeMetadata in
             try await DownloadManager.shared.startDownload(
                 id: id, title: title, url: url, coverURL: coverURL,
-                userAgentOverride: userAgentOverride
+                userAgentOverride: userAgentOverride,
+                episodeMetadata: episodeMetadata
             )
         },
         cancelDownload: { id in
@@ -93,6 +139,9 @@ extension DownloadClient: DependencyKey {
         },
         resumeDownload: { id in
             await DownloadManager.shared.resumeDownload(id: id)
+        },
+        prioritizeQueuedDownload: { id in
+            await DownloadManager.shared.prioritizeQueuedDownload(id: id)
         },
         getDownloadProgress: { id in
             AsyncStream { continuation in

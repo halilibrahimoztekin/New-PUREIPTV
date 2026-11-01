@@ -1,6 +1,5 @@
 import ComposableArchitecture
 import Foundation
-import zlib
 
 // MARK: - Gzip Decompressor
 
@@ -11,35 +10,7 @@ public enum GzipDecompressor {
 
     public static func decompress(_ data: Data) -> Data {
         guard isGzipped(data) else { return data }
-
-        var stream = z_stream()
-        var status: Int32 = inflateInit2_(&stream, 16 + MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
-        guard status == Z_OK else { return data }
-        defer { inflateEnd(&stream) }
-
-        var decompressed = Data()
-        let bufferSize = 65536
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-
-        data.withUnsafeBytes { rawBuffer in
-            guard let base = rawBuffer.bindMemory(to: Bytef.self).baseAddress else { return }
-            stream.next_in = UnsafeMutablePointer<Bytef>(mutating: base)
-            stream.avail_in = uInt(data.count)
-
-            repeat {
-                stream.next_out = buffer
-                stream.avail_out = uInt(bufferSize)
-
-                status = inflate(&stream, Z_NO_FLUSH)
-                if status == Z_OK || status == Z_STREAM_END {
-                    let bytesRead = bufferSize - Int(stream.avail_out)
-                    decompressed.append(buffer, count: bytesRead)
-                }
-            } while status == Z_OK
-        }
-
-        return status == Z_STREAM_END ? decompressed : data
+        return (try? XMLTVArchiveDecoder.decompressGzip(data)) ?? data
     }
 }
 
@@ -75,28 +46,49 @@ public struct CustomEPGSource: Codable, Equatable, Identifiable, Sendable {
 
 public struct ChannelEPGMapping: Codable, Equatable, Identifiable, Sendable {
     public var id: String {
-        channelID
+        Self.storageKey(channelID: channelID, playlistID: playlistID)
     }
 
     public let channelID: String
     public var channelName: String
+    public var playlistID: UUID?
     public var customEPGChannelID: String?
     public var customSourceID: String?
     public var timeShiftHours: Int // -12 to +12 hours per-channel override
 
+    public static func storageKey(channelID: String, playlistID: UUID?) -> String {
+        guard let playlistID else { return channelID }
+        return "\(playlistID.uuidString.lowercased()):\(channelID)"
+    }
+
     public init(
         channelID: String,
         channelName: String,
+        playlistID: UUID? = nil,
         customEPGChannelID: String? = nil,
         customSourceID: String? = nil,
         timeShiftHours: Int = 0
     ) {
         self.channelID = channelID
         self.channelName = channelName
+        self.playlistID = playlistID
         self.customEPGChannelID = customEPGChannelID
         self.customSourceID = customSourceID
         self.timeShiftHours = timeShiftHours
     }
+}
+
+private nonisolated func channelEPGMapping(
+    channelID: String,
+    playlistID: UUID?,
+    in mappings: [String: ChannelEPGMapping]
+) -> ChannelEPGMapping? {
+    if let playlistID,
+       let scopedMapping = mappings[ChannelEPGMapping.storageKey(channelID: channelID, playlistID: playlistID)]
+    {
+        return scopedMapping
+    }
+    return mappings[ChannelEPGMapping.storageKey(channelID: channelID, playlistID: nil)]
 }
 
 public struct CustomEPGChannelOption: Equatable, Identifiable, Sendable {
@@ -122,7 +114,9 @@ public struct CustomEPGRefreshFailure: Equatable, Identifiable, Sendable {
     public let sourceName: String
     public let message: String
 
-    public var id: String { sourceID }
+    public var id: String {
+        sourceID
+    }
 
     public init(sourceID: String, sourceName: String, message: String) {
         self.sourceID = sourceID
@@ -178,6 +172,10 @@ public actor CustomEPGStore {
         }
         return nil
     }
+
+    public func getProgrammes(sourceID: String, channelID: String) -> [XMLTVProgramme]? {
+        parsedSources[sourceID]?.programmes[channelID]
+    }
 }
 
 // MARK: - CustomEPGMappingClient (TCA)
@@ -189,11 +187,13 @@ public struct CustomEPGMappingClient: Sendable {
     public var removeSource: @Sendable (_ id: String) -> Void
     public var toggleSource: @Sendable (_ id: String, _ enabled: Bool) -> Void
     public var refreshSource: @Sendable (_ id: String) async throws -> CustomEPGSource
-    public var refreshAllSources: @Sendable () async -> CustomEPGRefreshSummary = { .init() }
+    public var refreshAllSources: @Sendable (
+        _ reportProgress: @Sendable (_ sourceID: String, _ current: Int, _ total: Int) async -> Void
+    ) async throws -> CustomEPGRefreshSummary = { _ in .init() }
 
-    public var getChannelMapping: @Sendable (_ channelID: String) -> ChannelEPGMapping?
+    public var getChannelMapping: @Sendable (_ channelID: String, _ playlistID: UUID?) -> ChannelEPGMapping?
     public var setChannelMapping: @Sendable (_ mapping: ChannelEPGMapping) -> Void
-    public var removeChannelMapping: @Sendable (_ channelID: String) -> Void
+    public var removeChannelMapping: @Sendable (_ channelID: String, _ playlistID: UUID?) -> Void
     public var getAllMappings: @Sendable () -> [String: ChannelEPGMapping] = { [:] }
 
     public var getChannelTimeShift: @Sendable (_ channelID: String) -> Int = { _ in 0 }
@@ -201,8 +201,8 @@ public struct CustomEPGMappingClient: Sendable {
 
     /// Catch-up clock correction is separate from EPG display correction.
     /// Positive values move the requested archive start later.
-    public var getCatchupTimeShift: @Sendable (_ channelID: String) -> Int = { _ in 0 }
-    public var setCatchupTimeShift: @Sendable (_ channelID: String, _ hours: Int) -> Void
+    public var getCatchupTimeShift: @Sendable (_ channelID: String, _ playlistID: UUID?) -> Int = { _, _ in 0 }
+    public var setCatchupTimeShift: @Sendable (_ channelID: String, _ playlistID: UUID?, _ hours: Int) -> Void
 
     public var getGlobalTimeShift: @Sendable () -> Int = { 0 }
     public var setGlobalTimeShift: @Sendable (_ hours: Int) -> Void
@@ -210,8 +210,8 @@ public struct CustomEPGMappingClient: Sendable {
     public var getAvailableEPGChannels: @Sendable () async -> [XMLTVChannel] = { [] }
     public var getAvailableEPGChannelOptions: @Sendable () async -> [CustomEPGChannelOption] = { [] }
     public var searchCachedPrograms: @Sendable (_ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _ in [] }
-    public var fetchProgramsForChannel: @Sendable (_ channelID: String, _ channelName: String, _ fallbackEPGID: String?) async -> [EPGProgram] = { _, _, _ in [] }
-    public var applyTimeShift: @Sendable (_ programs: [EPGProgram], _ channelID: String) -> [EPGProgram] = { programs, _ in programs }
+    public var fetchProgramsForChannel: @Sendable (_ channelID: String, _ channelName: String, _ fallbackEPGID: String?, _ playlistID: UUID?) async -> [EPGProgram] = { _, _, _, _ in [] }
+    public var applyTimeShift: @Sendable (_ programs: [EPGProgram], _ channelID: String, _ playlistID: UUID?) -> [EPGProgram] = { programs, _, _ in programs }
 }
 
 extension CustomEPGMappingClient: DependencyKey {
@@ -244,31 +244,26 @@ extension CustomEPGMappingClient: DependencyKey {
             }
         }
 
-        @Sendable func loadCatchupShifts() -> [String: Int] {
-            guard let data = defaults.data(forKey: catchupShiftsKey) else { return [:] }
+        @Sendable func catchupShiftsStorageKey(playlistID: UUID?) -> String {
+            guard let playlistID else { return catchupShiftsKey }
+            return "\(catchupShiftsKey).playlist.\(playlistID.uuidString.lowercased())"
+        }
+
+        @Sendable func loadCatchupShifts(playlistID: UUID?) -> [String: Int] {
+            guard let data = defaults.data(forKey: catchupShiftsStorageKey(playlistID: playlistID)) else { return [:] }
             return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
         }
 
-        @Sendable func saveCatchupShifts(_ shifts: [String: Int]) {
+        @Sendable func saveCatchupShifts(_ shifts: [String: Int], playlistID: UUID?) {
             if let data = try? JSONEncoder().encode(shifts) {
-                defaults.set(data, forKey: catchupShiftsKey)
+                defaults.set(data, forKey: catchupShiftsStorageKey(playlistID: playlistID))
             }
         }
 
         @Sendable func parseXMLTVData(from url: URL) async throws -> XMLTVData {
-            let (rawBytes, _) = try await URLSession.shared.data(from: url)
-            let decompressedBytes = GzipDecompressor.decompress(rawBytes)
-
-            return try await Task.detached(priority: .userInitiated) {
-                let parser = XMLParser(data: decompressedBytes)
-                let delegate = XMLTVParserDelegate()
-                parser.delegate = delegate
-                if parser.parse() {
-                    return delegate.getParsedData()
-                } else {
-                    throw NSError(domain: "CustomEPGMappingClient", code: 1, userInfo: [NSLocalizedDescriptionKey: "XMLTV Ayrıştırma Hatası"])
-                }
-            }.value
+            let rawBytes = try await NetworkClient().fetchXMLTVData(url: url)
+            @Dependency(\.xmltvParser) var xmltvParser
+            return try await xmltvParser.parse(rawBytes)
         }
 
         return CustomEPGMappingClient(
@@ -315,6 +310,7 @@ extension CustomEPGMappingClient: DependencyKey {
                     throw NSError(domain: "CustomEPGMappingClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Kaynak bulunamadı"])
                 }
                 let parsed = try await parseXMLTVData(from: source.url)
+                try Task.checkCancellation()
 
                 var currentSources = loadSources()
                 guard
@@ -324,6 +320,7 @@ extension CustomEPGMappingClient: DependencyKey {
                     throw NSError(domain: "CustomEPGMappingClient", code: 409, userInfo: [NSLocalizedDescriptionKey: "Kaynak yenileme sırasında silindi veya adresi değişti"])
                 }
 
+                try Task.checkCancellation()
                 currentSources[index].lastFetched = .now
                 currentSources[index].channelCount = parsed.channels.count
                 currentSources[index].programmeCount = parsed.programmes.values.reduce(0) { $0 + $1.count }
@@ -332,14 +329,18 @@ extension CustomEPGMappingClient: DependencyKey {
                 await CustomEPGStore.shared.setSourceData(sourceID: id, data: parsed)
                 return currentSources[index]
             },
-            refreshAllSources: {
+            refreshAllSources: { reportProgress in
                 let sourceSnapshot = loadSources()
+                let enabledSources = sourceSnapshot.filter(\.isEnabled)
                 var refreshedSourceIDs: [String] = []
                 var failures: [CustomEPGRefreshFailure] = []
 
-                for source in sourceSnapshot where source.isEnabled {
+                for (offset, source) in enabledSources.enumerated() {
+                    try Task.checkCancellation()
+                    await reportProgress(source.id, offset + 1, enabledSources.count)
                     do {
                         let parsed = try await parseXMLTVData(from: source.url)
+                        try Task.checkCancellation()
                         var currentSources = loadSources()
                         guard
                             let index = currentSources.firstIndex(where: { $0.id == source.id }),
@@ -353,7 +354,12 @@ extension CustomEPGMappingClient: DependencyKey {
                         saveSources(currentSources)
                         await CustomEPGStore.shared.setSourceData(sourceID: source.id, data: parsed)
                         refreshedSourceIDs.append(source.id)
+                    } catch is CancellationError {
+                        throw CancellationError()
                     } catch {
+                        if Task.isCancelled {
+                            throw CancellationError()
+                        }
                         failures.append(CustomEPGRefreshFailure(
                             sourceID: source.id,
                             sourceName: source.name,
@@ -367,22 +373,25 @@ extension CustomEPGMappingClient: DependencyKey {
                     failures: failures
                 )
             },
-            getChannelMapping: { channelID in
+            getChannelMapping: { channelID, playlistID in
                 let mappings = loadMappings()
-                return mappings[channelID]
+                return channelEPGMapping(channelID: channelID, playlistID: playlistID, in: mappings)
             },
             setChannelMapping: { mapping in
                 var mappings = loadMappings()
-                mappings[mapping.channelID] = mapping
+                mappings[mapping.id] = mapping
                 saveMappings(mappings)
             },
-            removeChannelMapping: { channelID in
+            removeChannelMapping: { channelID, playlistID in
                 var mappings = loadMappings()
-                mappings.removeValue(forKey: channelID)
+                mappings.removeValue(forKey: ChannelEPGMapping.storageKey(channelID: channelID, playlistID: playlistID))
                 saveMappings(mappings)
             },
             getAllMappings: {
-                loadMappings()
+                Dictionary(
+                    loadMappings().values.map { ($0.id, $0) },
+                    uniquingKeysWith: { _, latest in latest }
+                )
             },
             getChannelTimeShift: { channelID in
                 let mappings = loadMappings()
@@ -401,18 +410,19 @@ extension CustomEPGMappingClient: DependencyKey {
                 }
                 saveMappings(mappings)
             },
-            getCatchupTimeShift: { channelID in
-                loadCatchupShifts()[channelID] ?? 0
+            getCatchupTimeShift: { channelID, playlistID in
+                let hours = loadCatchupShifts(playlistID: playlistID)[channelID] ?? 0
+                return min(12, max(-12, hours))
             },
-            setCatchupTimeShift: { channelID, hours in
-                var shifts = loadCatchupShifts()
+            setCatchupTimeShift: { channelID, playlistID, hours in
+                var shifts = loadCatchupShifts(playlistID: playlistID)
                 let boundedHours = min(12, max(-12, hours))
                 if boundedHours == 0 {
                     shifts.removeValue(forKey: channelID)
                 } else {
                     shifts[channelID] = boundedHours
                 }
-                saveCatchupShifts(shifts)
+                saveCatchupShifts(shifts, playlistID: playlistID)
             },
             getGlobalTimeShift: {
                 defaults.integer(forKey: globalShiftKey)
@@ -469,7 +479,11 @@ extension CustomEPGMappingClient: DependencyKey {
                         if scannedChannels > 20000 {
                             break
                         }
-                        let mapping = mappings[channel.id]
+                        let mapping = channelEPGMapping(
+                            channelID: channel.id,
+                            playlistID: channel.playlistID,
+                            in: mappings
+                        )
                         if let sourceID = mapping?.customSourceID, sourceID != source.id {
                             continue
                         }
@@ -493,7 +507,8 @@ extension CustomEPGMappingClient: DependencyKey {
                                 startTime: start,
                                 endTime: end,
                                 isPlayingNow: start <= now && now <= end,
-                                categories: programme.categories
+                                categories: programme.categories,
+                                artworkURL: programme.artworkURL
                             )
                         }
                         for program in shiftedPrograms {
@@ -532,34 +547,51 @@ extension CustomEPGMappingClient: DependencyKey {
                     return lhs.program.title.localizedStandardCompare(rhs.program.title) == .orderedAscending
                 }.prefix(limit))
             },
-            fetchProgramsForChannel: { channelID, _, fallbackEPGID in
+            fetchProgramsForChannel: { channelID, _, _, playlistID in
                 let mappings = loadMappings()
-                let targetEPGID = mappings[channelID]?.customEPGChannelID ?? fallbackEPGID ?? channelID
+                let mapping = channelEPGMapping(channelID: channelID, playlistID: playlistID, in: mappings)
+                guard let mapping,
+                      let mappedEPGID = mapping.customEPGChannelID,
+                      !mappedEPGID.isEmpty
+                else { return [] }
 
-                if let xmltvProgs = await CustomEPGStore.shared.getProgrammes(channelID: targetEPGID) {
+                let targetEPGID = mappedEPGID
+                let enabledSources = loadSources().filter(\.isEnabled)
+                let sourceIDs: [String] = if let sourceID = mapping.customSourceID {
+                    enabledSources.contains(where: { $0.id == sourceID }) ? [sourceID] : []
+                } else if enabledSources.count == 1 {
+                    // Older mappings may not record a source ID. Resolve them only when unambiguous.
+                    enabledSources.map(\.id)
+                } else {
+                    []
+                }
+
+                for sourceID in sourceIDs {
+                    guard !Task.isCancelled,
+                          let xmltvProgs = await CustomEPGStore.shared.getProgrammes(sourceID: sourceID, channelID: targetEPGID),
+                          !xmltvProgs.isEmpty
+                    else { continue }
+
                     let now = Date()
-                    let shift = mappings[channelID]?.timeShiftHours != 0 ? mappings[channelID]?.timeShiftHours ?? 0 : defaults.integer(forKey: globalShiftKey)
-                    let shiftInterval = TimeInterval(shift * 3600)
-
                     return xmltvProgs.map { prog in
-                        let start = prog.start.addingTimeInterval(shiftInterval)
-                        let end = prog.end.addingTimeInterval(shiftInterval)
-                        return EPGProgram(
-                            id: "\(targetEPGID)_\(start.timeIntervalSince1970)",
+                        EPGProgram(
+                            id: "\(sourceID)-\(targetEPGID)-\(Int(prog.start.timeIntervalSince1970))",
                             title: prog.title,
                             description: prog.description,
-                            startTime: start,
-                            endTime: end,
-                            isPlayingNow: start <= now && now <= end,
-                            categories: prog.categories
+                            startTime: prog.start,
+                            endTime: prog.end,
+                            isPlayingNow: prog.start <= now && now <= prog.end,
+                            categories: prog.categories,
+                            artworkURL: prog.artworkURL
                         )
                     }
                 }
                 return []
             },
-            applyTimeShift: { programs, channelID in
+            applyTimeShift: { programs, channelID, playlistID in
                 let mappings = loadMappings()
-                let shift: Int = if let channelShift = mappings[channelID]?.timeShiftHours, channelShift != 0 {
+                let mapping = channelEPGMapping(channelID: channelID, playlistID: playlistID, in: mappings)
+                let shift: Int = if let channelShift = mapping?.timeShiftHours, channelShift != 0 {
                     channelShift
                 } else {
                     defaults.integer(forKey: globalShiftKey)
@@ -579,7 +611,8 @@ extension CustomEPGMappingClient: DependencyKey {
                         startTime: newStart,
                         endTime: newEnd,
                         isPlayingNow: newStart <= now && now <= newEnd,
-                        categories: prog.categories
+                        categories: prog.categories,
+                        artworkURL: prog.artworkURL
                     )
                 }
             }

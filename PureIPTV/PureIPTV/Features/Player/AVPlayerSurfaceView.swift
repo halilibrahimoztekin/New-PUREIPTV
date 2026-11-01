@@ -4,15 +4,16 @@ import SwiftUI
 struct AVPlayerSurfaceView: UIViewRepresentable {
     let player: AVPlayer
     let aspectRatioMode: VideoAspectRatioMode
+    let forceSDROutput: Bool
 
     func makeUIView(context _: Context) -> PlayerLayerHostView {
         let view = PlayerLayerHostView()
-        view.update(player: player, aspectRatioMode: aspectRatioMode)
+        view.update(player: player, aspectRatioMode: aspectRatioMode, forceSDROutput: forceSDROutput)
         return view
     }
 
     func updateUIView(_ uiView: PlayerLayerHostView, context _: Context) {
-        uiView.update(player: player, aspectRatioMode: aspectRatioMode)
+        uiView.update(player: player, aspectRatioMode: aspectRatioMode, forceSDROutput: forceSDROutput)
     }
 }
 
@@ -30,12 +31,15 @@ final class PlayerLayerHostView: UIView {
         backgroundColor = .black
     }
 
-    func update(player: AVPlayer, aspectRatioMode: VideoAspectRatioMode) {
+    func update(player: AVPlayer, aspectRatioMode: VideoAspectRatioMode, forceSDROutput: Bool) {
         let gravity = aspectRatioMode.avLayerVideoGravity
         if playerLayer.player !== player {
             playerLayer.player = player
         }
         playerLayer.videoGravity = gravity
+        if #available(iOS 26.0, tvOS 26.0, *) {
+            playerLayer.preferredDynamicRange = forceSDROutput && !player.isExternalPlaybackActive ? .standard : .automatic
+        }
         player.externalPlaybackVideoGravity = aspectRatioMode.externalPlaybackVideoGravity
     }
 

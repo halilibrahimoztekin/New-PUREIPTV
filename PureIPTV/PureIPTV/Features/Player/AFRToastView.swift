@@ -2,8 +2,7 @@ import SwiftUI
 
 // MARK: - AFRToastView (Madde #21)
 
-/// A cinematic Obsidian glassmorphic toast notification indicating automatic frame rate (AFR)
-/// and dynamic range display matching for judder-free playback.
+/// Reports whether tvOS received a display-criteria request or why matching was unavailable.
 public struct AFRToastView: View {
     public let result: DisplayMatchResult
     @State private var isGlowPulsing: Bool = false
@@ -14,68 +13,18 @@ public struct AFRToastView: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            // Icon & Hz Badge
-            HStack(spacing: 6) {
-                Image(systemName: iconName)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(tintGradient)
+            Image(systemName: iconName)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(tintGradient)
+                .frame(width: 40, height: 40)
+                .background(tintColor.opacity(0.18), in: Circle())
 
-                Text(String(format: "%.0f Hz", result.matchedRate))
-                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(tintGradient)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(tintColor.opacity(0.18))
-                    .overlay(
-                        Capsule()
-                            .stroke(tintGradient.opacity(0.5), lineWidth: 1)
-                    )
-            )
-
-            // Description / Message
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.message)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                HStack(spacing: 4) {
-                    if result.isJudderFree {
-                        Text("Judder-Free")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#30D158"))
-
-                        Text("•")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
-
-                    Text("Kare Hızı Eşlendi")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-            }
+            Text(result.message)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
-
-            // Dynamic Range Indicator if HDR/DV
-            if result.matchedRange.isHDR {
-                Text(result.matchedRange.shortBadge)
-                    .font(.system(size: 10, weight: .heavy, design: .rounded))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color(hex: result.matchedRange.primaryColorHex).opacity(0.2))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .stroke(Color(hex: result.matchedRange.primaryColorHex).opacity(0.4), lineWidth: 1)
-                            )
-                    )
-                    .foregroundStyle(Color(hex: result.matchedRange.primaryColorHex))
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -116,23 +65,11 @@ public struct AFRToastView: View {
     }
 
     private var iconName: String {
-        if result.matchedRate <= 24.5 {
-            "film.stack"
-        } else if result.matchedRate <= 50.5 {
-            "tv"
-        } else {
-            "gauge.with.needle"
-        }
+        result.status == .requestSubmitted ? "tv" : "exclamationmark.triangle.fill"
     }
 
     private var tintColor: Color {
-        if result.matchedRate <= 24.5 {
-            Color(hex: "#0A84FF") // Apple Blue for Cinematic 24p
-        } else if result.matchedRate <= 50.5 {
-            Color(hex: "#30D158") // Apple Green for Broadcast 50Hz
-        } else {
-            Color(hex: "#BF5AF2") // Apple Purple for 60/120Hz
-        }
+        result.status == .requestSubmitted ? Color(hex: "#0A84FF") : Color(hex: "#FF9F0A")
     }
 
     private var tintGradient: LinearGradient {

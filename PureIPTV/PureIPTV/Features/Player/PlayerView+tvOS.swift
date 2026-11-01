@@ -8,8 +8,15 @@
         case channelUp
         case channelDown
         case openChannelList
+        case openGuide
+        case showChannelInfo
         case recallLastChannel
         case showControls
+
+        static let defaultUpAction = Self.channelUp
+        static let defaultDownAction = Self.channelDown
+        static let defaultLeftAction = Self.openChannelList
+        static let defaultRightAction = Self.recallLastChannel
 
         var id: String {
             rawValue
@@ -20,6 +27,8 @@
             case .channelUp: AppStrings.Player.nextChannel
             case .channelDown: AppStrings.Player.previousChannel
             case .openChannelList: AppStrings.Common.channels
+            case .openGuide: AppStrings.Player.epg
+            case .showChannelInfo: AppStrings.Player.channelInfo
             case .recallLastChannel: AppStrings.Player.recallLastChannel
             case .showControls: AppStrings.Player.showControls
             }
@@ -32,15 +41,16 @@
     public struct PlayerView_tvOS: View {
         @Bindable var store: StoreOf<PlayerFeature>
 
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var remoteUpAction = TVPlayerRemoteAction.channelUp.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var remoteDownAction = TVPlayerRemoteAction.channelDown.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var remoteLeftAction = TVPlayerRemoteAction.openChannelList.rawValue
-        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var remoteRightAction = TVPlayerRemoteAction.recallLastChannel.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteUpAction") private var remoteUpAction = TVPlayerRemoteAction.defaultUpAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteDownAction") private var remoteDownAction = TVPlayerRemoteAction.defaultDownAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var remoteLeftAction = TVPlayerRemoteAction.defaultLeftAction.rawValue
+        @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var remoteRightAction = TVPlayerRemoteAction.defaultRightAction.rawValue
 
         @FocusState private var focusableField: FocusableField?
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
         @State private var focusBeforeEPG: FocusableField?
+        @State private var focusBeforeMediaServerSourcePicker: FocusableField?
 
         fileprivate enum FocusableField: Hashable {
             case play
@@ -62,9 +72,12 @@
                         isDeepDimmed: store.isDeepDimmed
                     )
 
-                    controllerView(playerWidth: proxy.size.width)
-                        .ignoresSafeArea()
-                        .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
+                    if isMaskShow || isUpNextCardVisible {
+                        controllerView(playerHeight: proxy.size.height)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                            .zIndex(isUpNextCardVisible ? 96 : 0)
+                    }
 
                     // Buffering Indicator
                     if store.playerState == .buffering || store.playerState == .opening, store.errorMessage == nil, !store.isReconnecting {
@@ -253,8 +266,12 @@
                                 channels: store.liveChannels,
                                 selectedChannel: store.epgBrowseChannel,
                                 playingChannelID: store.item.id,
-                                isLoading: store.isEPGBrowseLoading,
+                                isLoading: store.isEPGBrowseLoading || store.isEPGLoading,
                                 canSelectPrograms: store.epgBrowseChannel?.id == store.item.id,
+                                selectedPreviewCorner: store.epgPreviewCorner,
+                                onSelectPreviewCorner: { corner in
+                                    store.send(.setEPGPreviewCorner(corner))
+                                },
                                 onClose: {
                                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
                                     resetIdleTimer()
@@ -275,6 +292,14 @@
                             )
                             .padding(.horizontal, 60)
                             .padding(.bottom, 60)
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.preference(
+                                        key: PlayerEPGGuidePanelHeightPreferenceKey.self,
+                                        value: geometry.size.height
+                                    )
+                                }
+                            }
                             .opacity(store.isDeepDimmed ? 0.35 : 1.0)
                             .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
                         }
@@ -292,7 +317,8 @@
                                 currentProgram: store.currentEPGProgram,
                                 nextProgram: store.nextEPGProgram,
                                 isCleaningEnabled: store.isChannelNameCleaningEnabled,
-                                dynamicRange: store.videoDynamicRange
+                                dynamicRange: store.videoDynamicRange,
+                                playlistName: store.sourcePlaylistName
                             )
                             .padding(.horizontal, 60)
                             .padding(.bottom, 60)
@@ -413,31 +439,6 @@
                         .zIndex(99)
                     }
 
-                    // Up Next Episode Countdown Overlay (Madde #42 / #48)
-                    if !store.item.isLive, store.isUpNextVisible, let nextItem = store.nextEpisodeItem {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                UpNextCountdownOverlayView(
-                                    item: nextItem,
-                                    countdownSeconds: store.upNextCountdownSeconds,
-                                    totalSeconds: store.upNextInitialSeconds,
-                                    onPlayNow: {
-                                        store.send(.playNextEpisode)
-                                    },
-                                    onDismiss: {
-                                        dismissUpNextAndRestoreFocus()
-                                    }
-                                )
-                                .padding(.trailing, 60)
-                                .padding(.bottom, 60)
-                            }
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isUpNextVisible)
-                        .zIndex(96)
-                    }
                     // Stream Health & Network Jitter HUD (Feature #3)
                     if store.isStreamHealthHUDVisible {
                         VStack {
@@ -446,6 +447,7 @@
                                     store: store,
                                     onClose: {
                                         store.send(.setStreamHealthHUDVisible(false))
+                                        resetIdleTimer()
                                     }
                                 )
                                 .padding(.leading, 80)
@@ -480,6 +482,7 @@
                                     serverPlaybackStatus: store.mediaServerPlaybackStatus,
                                     onClose: {
                                         store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                                        resetIdleTimer()
                                     }
                                 )
                                 .padding(.leading, 80)
@@ -553,6 +556,7 @@
             }
             .preferredColorScheme(.dark)
             .tint(.white)
+            .modifier(MediaServerPlaybackOptionsDialog(store: store))
             .onPlayPauseCommand {
                 store.send(.userInteracted)
                 if store.playerState == .playing {
@@ -564,24 +568,34 @@
             }
             .onExitCommand {
                 store.send(.userInteracted)
-                if store.isUpNextVisible {
+                if store.isMediaServerPlaybackOptionsPresented {
+                    store.send(.cancelMediaServerPlaybackSourceSelection)
+                } else if store.isUpNextVisible {
                     dismissUpNextAndRestoreFocus()
                 } else if store.isChannelDialerVisible {
                     store.send(.setChannelDialerVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                    resetIdleTimer()
                 } else if store.isAudioEQHUDVisible {
                     store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                    resetIdleTimer()
                 } else if store.isCatchupTimelineVisible {
                     store.send(.setCatchupTimelineVisible(false))
+                    resetIdleTimer()
                 } else if store.isAudioSyncHUDVisible {
                     store.send(.setAudioSyncHUDVisible(false))
+                    resetIdleTimer()
                 } else if store.isRecentChannelsHUDVisible {
                     store.send(.setRecentChannelsHUDVisible(false))
+                    resetIdleTimer()
                 } else if store.isStreamHealthHUDVisible {
                     store.send(.setStreamHealthHUDVisible(false))
+                    resetIdleTimer()
                 } else if store.isShowingStats {
                     store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
+                    resetIdleTimer()
                 } else if store.isChannelOSDVisible {
                     store.send(.hideChannelOSD)
+                    resetIdleTimer()
                 } else if store.isChannelListVisible {
                     store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
                     resetIdleTimer()
@@ -605,6 +619,18 @@
                 } else if let focusBeforeEPG {
                     focusableField = focusBeforeEPG
                     self.focusBeforeEPG = nil
+                }
+            }
+            .onChange(of: store.item.id) { previousItemID, currentItemID in
+                guard previousItemID != currentItemID, store.item.isLive else { return }
+                hideMask()
+            }
+            .onChange(of: store.isMediaServerPlaybackOptionsPresented) { _, isVisible in
+                if isVisible {
+                    focusBeforeMediaServerSourcePicker = focusableField
+                } else if let focusBeforeMediaServerSourcePicker {
+                    focusableField = focusBeforeMediaServerSourcePicker
+                    self.focusBeforeMediaServerSourcePicker = nil
                 }
             }
             .onDisappear {
@@ -659,6 +685,10 @@
             case .openChannelList:
                 guard store.playlist != nil else { showMask(); return }
                 store.send(.setChannelListVisible(true), animation: .spring(response: 0.32, dampingFraction: 0.8))
+            case .openGuide:
+                store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
+            case .showChannelInfo:
+                store.send(.showChannelOSD)
             case .recallLastChannel:
                 guard store.previousChannel != nil else { showMask(); return }
                 store.send(.recallLastChannel)
@@ -670,35 +700,75 @@
         private func dismissUpNextAndRestoreFocus() {
             store.send(.dismissUpNext)
             focusableField = isMaskShow ? .controller : .play
+            resetIdleTimer()
+        }
+
+        private var isUpNextCardVisible: Bool {
+            !store.item.isLive && store.isUpNextVisible && store.nextEpisodeItem != nil
+        }
+
+        @ViewBuilder
+        private var upNextCountdownCard: some View {
+            if isUpNextCardVisible, let nextItem = store.nextEpisodeItem {
+                UpNextCountdownOverlayView(
+                    item: nextItem,
+                    countdownSeconds: store.upNextCountdownSeconds,
+                    totalSeconds: store.upNextInitialSeconds,
+                    onPlayNow: {
+                        store.send(.playNextEpisode)
+                        resetIdleTimer()
+                    },
+                    onDismiss: {
+                        dismissUpNextAndRestoreFocus()
+                    }
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, 60)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(96)
+            }
         }
 
         // MARK: - Controller View (KSPlayer Layout)
 
-        private func controllerView(playerWidth _: Double) -> some View {
+        private func controllerView(playerHeight: CGFloat) -> some View {
             VStack(spacing: 16) {
                 Spacer()
 
                 // Top part of controls: Title + Action Buttons
-                VideoControllerView(
-                    store: store,
-                    onInteraction: { resetIdleTimer() },
-                    onSubtitleSearch: { store.send(.subtitleSearchTapped) }
-                )
+                if isMaskShow {
+                    VideoControllerView(
+                        store: store,
+                        onInteraction: { resetIdleTimer() },
+                        onSubtitleSearch: { store.send(.subtitleSearchTapped) }
+                    )
+                    .padding(.horizontal, 80)
+                    .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
+                    .opacity(store.isDeepDimmed ? 0.35 : 1)
+                }
+
+                // Keep Up Next in the controls stack so it sits above the scrubber.
+                upNextCountdownCard
 
                 // Bottom part of controls: Interactive Fluid Scrubber + Time Display
                 if isMaskShow {
                     VideoTimeShowView(store: store, onInteraction: {
                         resetIdleTimer()
                     })
+                    .padding(.horizontal, 80)
+                    .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
+                    .opacity(store.isDeepDimmed ? 0.35 : 1)
                 }
             }
-            .padding(.horizontal, 80)
-            .padding(.bottom, 60)
-            .background(overlayGradient)
+            .padding(.bottom, isMaskShow ? 60 : max(180, playerHeight * 0.2))
+            .background {
+                if isMaskShow {
+                    overlayGradient
+                        .opacity(store.isDeepDimmed ? 0.35 : 1)
+                }
+            }
             .focused($focusableField, equals: .controller)
-            .opacity(isMaskShow ? (store.isDeepDimmed ? 0.35 : 1) : 0)
             .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
-            .animation(.easeInOut(duration: 0.25), value: isMaskShow)
         }
 
         // MARK: - Overlay Gradient (KSPlayer Design)
@@ -737,11 +807,24 @@
             idleTimer?.invalidate()
             idleTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
                 Task { @MainActor in
-                    if !store.isEPGVisible {
+                    if !keepsControllerVisibleWhileOpen {
                         hideMask()
                     }
                 }
             }
+        }
+
+        private var keepsControllerVisibleWhileOpen: Bool {
+            store.isUpNextVisible
+                || store.isChannelDialerVisible
+                || store.isAudioEQHUDVisible
+                || store.isCatchupTimelineVisible
+                || store.isAudioSyncHUDVisible
+                || store.isRecentChannelsHUDVisible
+                || store.isStreamHealthHUDVisible
+                || store.isShowingStats
+                || store.isChannelListVisible
+                || store.isEPGVisible
         }
     }
 
@@ -826,15 +909,37 @@
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     }
 
-                    if !store.item.isLive || store.item.tvArchive == 1 {
+                    if !store.item.isLive || store.isPlayingCatchup {
                         Button {
                             onInteraction()
                             store.send(.jumpBackward)
                         } label: {
-                            Image(systemName: "gobackward.15")
-                                .font(.system(size: 24, weight: .semibold))
+                            HStack(spacing: 4) {
+                                Image(systemName: "gobackward")
+                                Text(store.activeSkipInterval.compactTitle)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                            }
+                            .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
+                    }
+
+                    if store.canReplayWithSubtitles {
+                        Button {
+                            onInteraction()
+                            store.send(.replayWithSubtitles)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gobackward.10")
+                                Image(systemName: "captions.bubble")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .font(.system(size: 20, weight: .semibold))
+                        }
+                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(AppStrings.Player.replayWithSubtitles)
+                        .accessibilityHint(AppStrings.Player.replayWithSubtitlesHint)
                     }
 
                     Button {
@@ -851,15 +956,20 @@
                     .buttonStyle(PlayerCircleButtonStyle(size: 64))
                     .accessibilityLabel(store.playerState == .playing ? AppStrings.Player.pausePlayback : AppStrings.Common.play)
 
-                    if !store.item.isLive || store.item.tvArchive == 1 {
+                    if !store.item.isLive || store.isPlayingCatchup {
                         Button {
                             onInteraction()
                             store.send(.jumpForward)
                         } label: {
-                            Image(systemName: "goforward.15")
-                                .font(.system(size: 24, weight: .semibold))
+                            HStack(spacing: 4) {
+                                Image(systemName: "goforward")
+                                Text(store.activeSkipInterval.compactTitle)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                            }
+                            .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
                     }
 
                     if !store.item.isLive {
@@ -901,7 +1011,7 @@
                                 }
                             }
 
-                            if store.item.epgChannelID != nil, !store.epgListings.isEmpty {
+                            if store.item.isLive {
                                 Button {
                                     onInteraction()
                                     store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
@@ -922,7 +1032,7 @@
                                     onInteraction()
                                     store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
                                 } label: {
-                                    Label(AppStrings.Player.channelDialerTitle, systemImage: "number.square.fill")
+                                    Label(AppStrings.LiveTV.channelDialerTitle, systemImage: "number.square.fill")
                                 }
                             }
                         } label: {
@@ -967,20 +1077,59 @@
                                             }
                                         }
                                     }
+                                    .accessibilityAddTraits(store.selectedSubtitleTrack == nil ? .isSelected : [])
 
                                     ForEach(store.subtitleTracks) { track in
-                                        let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
+                                        let formatted = TrackLanguageFormatter.formatSubtitle(trackName: track.name, reportedLanguage: track.language)
+                                        let isSelected = store.selectedSubtitleTrack?.id == track.id
+                                        let trimmedTrackName = track.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        let trackName = trimmedTrackName.isEmpty
+                                            ? formatted.displayName
+                                            : trimmedTrackName
+                                        let source = store.externalSubtitleTrackIDs.contains(track.id)
+                                            ? AppStrings.Player.subtitleTrackExternalFile
+                                            : AppStrings.Player.subtitleTrackMediaStream
+                                        let reportedLanguage = track.language?.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        let languageName: String? = if formatted.flag != nil {
+                                            formatted.languageName
+                                        } else if let reportedLanguage, !reportedLanguage.isEmpty, reportedLanguage.lowercased() != "und" {
+                                            reportedLanguage
+                                        } else {
+                                            nil
+                                        }
+                                        let sourceMetadata = "\(AppStrings.Player.subtitleTrackSourceLabel): \(source)"
+                                        let languageMetadata = languageName.map {
+                                            "\(AppStrings.Player.subtitleSearchLanguage): \($0)"
+                                        }
+                                        let formatMetadata = formatted.formatDetail.map {
+                                            "\(AppStrings.Player.subtitleSearchFormat): \($0)"
+                                        }
+                                        let metadataParts: [String?] = [sourceMetadata, languageMetadata, formatMetadata]
+                                        let metadata = metadataParts.compactMap(\.self).joined(separator: " · ")
                                         Button {
                                             onInteraction()
                                             store.send(.selectSubtitleTrack(track))
                                         } label: {
-                                            HStack {
-                                                Text(formatted.titleWithFlag)
-                                                if store.selectedSubtitleTrack?.id == track.id {
+                                            HStack(spacing: 12) {
+                                                if let flag = formatted.flag {
+                                                    Text(flag)
+                                                }
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(trackName)
+                                                        .fixedSize(horizontal: false, vertical: true)
+                                                    Text(metadata)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(2)
+                                                }
+                                                if isSelected {
                                                     Image(systemName: "checkmark")
                                                 }
                                             }
+                                            .fixedSize(horizontal: false, vertical: true)
                                         }
+                                        .accessibilityLabel("\(trackName), \(metadata)")
+                                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                                     }
 
                                     if !store.item.isLive, store.playbackEngine == .vlc {
@@ -1000,7 +1149,7 @@
                     }
 
                     Menu {
-                        if !store.item.isLive {
+                        if store.canSetPlaybackRate {
                             Section(AppStrings.Player.playbackSpeed) {
                                 ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
                                     Button {
@@ -1018,7 +1167,7 @@
                             }
                         }
 
-                        Section(AppStrings.Player.aspectRatioControl) {
+                        Section(AppStrings.MultiView.aspectRatioControl) {
                             ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
                                 Button {
                                     onInteraction()
@@ -1049,6 +1198,33 @@
                                         }
                                     }
                                     .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                }
+                            }
+                        }
+
+                        if store.canManagePlaybackEnginePreference {
+                            Section(AppStrings.Player.itemPlaybackEnginePreference) {
+                                if let preference = store.itemSpecificPlaybackEnginePreference {
+                                    Label(
+                                        AppStrings.Player.itemPlaybackEnginePreferenceValue(preference.title),
+                                        systemImage: "checkmark"
+                                    )
+                                }
+                                if store.canSwitchPlaybackEngine,
+                                   store.itemSpecificPlaybackEnginePreference != store.playbackEngine
+                                {
+                                    Button(AppStrings.Player.saveCurrentPlaybackEngineForItem) {
+                                        onInteraction()
+                                        store.send(.saveCurrentPlaybackEnginePreference)
+                                    }
+                                    .disabled(store.isSwitchingPlaybackEngine)
+                                }
+                                if store.itemSpecificPlaybackEnginePreference != nil {
+                                    Button(AppStrings.Player.useGeneralPlaybackEnginePreference) {
+                                        onInteraction()
+                                        store.send(.clearCurrentPlaybackEnginePreference)
+                                    }
+                                    .disabled(store.isSwitchingPlaybackEngine)
                                 }
                             }
                         }
@@ -1217,6 +1393,7 @@
                     .scaleEffect(isFocused ? 1.15 : (configuration.isPressed ? 0.94 : 1.0))
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .circle)
             }
         }
     }
@@ -1254,6 +1431,7 @@
                     .scaleEffect(isFocused ? 1.08 : (configuration.isPressed ? 0.95 : 1.0))
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
             }
         }
     }
@@ -1274,7 +1452,7 @@
 
         var body: some View {
             let durationDouble = Double(store.totalTime.components.seconds)
-            let isLive = store.item.isLive
+            let isLive = store.item.isLive && !store.isPlayingCatchup
 
             if isLive {
                 HStack(spacing: 8) {
@@ -1459,11 +1637,26 @@
 
             // Debounce automatic seek after user pauses movement
             commitTask?.cancel()
+            let shouldShowCatchupPreview = store.isPlayingCatchup
             commitTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 400_000_000)
-                if !Task.isCancelled {
-                    commitSeek()
+                guard !Task.isCancelled else { return }
+
+                if shouldShowCatchupPreview {
+                    let clock = ContinuousClock()
+                    let deadline = clock.now.advanced(by: .seconds(3.3))
+                    while store.scrubThumbnailRequestID != nil, clock.now < deadline {
+                        try? await Task.sleep(for: .milliseconds(50))
+                        guard !Task.isCancelled else { return }
+                    }
+
+                    if store.scrubThumbnailData != nil {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        guard !Task.isCancelled else { return }
+                    }
                 }
+
+                commitSeek()
             }
         }
 
@@ -1487,6 +1680,35 @@
                 return String(format: "%d:%02d:%02d", hrs, mins, secs)
             }
             return String(format: "%02d:%02d", mins, secs)
+        }
+    }
+
+    private struct MediaServerPlaybackOptionsDialog: ViewModifier {
+        @Bindable var store: StoreOf<PlayerFeature>
+
+        func body(content: Content) -> some View {
+            content.confirmationDialog(
+                AppStrings.VODDetail.versionsAndQuality,
+                isPresented: Binding(
+                    get: { store.isMediaServerPlaybackOptionsPresented },
+                    set: { isPresented in
+                        if !isPresented, store.isMediaServerPlaybackOptionsPresented {
+                            store.send(.cancelMediaServerPlaybackSourceSelection)
+                        }
+                    }
+                )
+            ) {
+                ForEach(store.mediaServerPlaybackOptions) { option in
+                    Button(option.displayLabel) {
+                        store.send(.selectMediaServerPlaybackSource(option.id))
+                    }
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    store.send(.cancelMediaServerPlaybackSourceSelection)
+                }
+            } message: {
+                Text(store.item.title)
+            }
         }
     }
 #endif

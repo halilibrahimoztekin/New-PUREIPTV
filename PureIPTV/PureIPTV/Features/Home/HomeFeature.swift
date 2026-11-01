@@ -45,6 +45,9 @@ public struct HomeFeature {
     public struct State: Equatable {
         public var selectedTab: HomeTab = .dashboard
         public var config: PlaylistConfig
+        public var liveTVSourceConfig: PlaylistConfig
+        public var moviesSourceConfig: PlaylistConfig
+        public var seriesSourceConfig: PlaylistConfig
         public var liveTVOnlyNavigation = false
 
         public var serverURL: String {
@@ -77,23 +80,50 @@ public struct HomeFeature {
             return navigationTabs.filter { tab in
                 switch tab {
                 case .liveTV:
-                    !dashboard.hasResolvedLiveCatalog || dashboard.hasLiveContent
+                    if liveTVSourceConfig.playlistID != config.playlistID {
+                        guard liveTV.config == liveTVSourceConfig else { return true }
+                        return !liveTV.hasResolvedCategories || !liveTV.categories.isEmpty
+                    }
+                    return !dashboard.hasResolvedLiveCatalog || dashboard.hasLiveContent
                 case .movies:
-                    !dashboard.hasResolvedMovieCatalog || dashboard.hasMovieContent
+                    if moviesSourceConfig.playlistID != config.playlistID {
+                        guard vod.config == moviesSourceConfig else { return true }
+                        return !vod.hasResolvedCategories || !vod.categories.isEmpty
+                    }
+                    return !dashboard.hasResolvedMovieCatalog || dashboard.hasMovieContent
                 case .series:
-                    !dashboard.hasResolvedSeriesCatalog || dashboard.hasSeriesContent
+                    if seriesSourceConfig.playlistID != config.playlistID {
+                        guard series.config == seriesSourceConfig else { return true }
+                        return !series.hasResolvedCategories || !series.categories.isEmpty
+                    }
+                    return !dashboard.hasResolvedSeriesCatalog || dashboard.hasSeriesContent
                 default:
-                    true
+                    return true
                 }
             }
         }
 
-        public init(config: PlaylistConfig, deferDashboardRefresh: Bool = false) {
+        fileprivate mutating func normalizeSelectedTab() {
+            guard !visibleTabs.contains(selectedTab) else { return }
+            let fallback: HomeTab = liveTVOnlyNavigation ? .liveTV : .dashboard
+            selectedTab = visibleTabs.contains(fallback) ? fallback : (visibleTabs.first ?? fallback)
+        }
+
+        public init(
+            config: PlaylistConfig,
+            deferDashboardRefresh: Bool = false,
+            contentSourceConfigs: PlaylistContentSourceConfigs? = nil
+        ) {
             self.config = config
-            dashboard.deferInitialRemoteRefresh = deferDashboardRefresh
+            liveTVSourceConfig = contentSourceConfigs?.liveTV ?? config
+            moviesSourceConfig = contentSourceConfigs?.movies ?? config
+            seriesSourceConfig = contentSourceConfigs?.series ?? config
+            dashboard.deferInitialRemoteRefresh = deferDashboardRefresh || !config.automaticallyRefreshCatalogOnStartup
 
             @Dependency(\.settingsClient) var settingsClient
-            let tabString = settingsClient.defaultStartupTab()
+            @Dependency(\.profileContextClient) var profileContextClient
+            let profileID = profileContextClient.snapshot().profileID
+            let tabString = settingsClient.defaultStartupTabForProfile(profileID)
             liveTVOnlyNavigation = settingsClient.liveTVOnlyNavigation()
             if let tab = HomeTab(rawValue: tabString) {
                 selectedTab = tab
@@ -105,6 +135,7 @@ public struct HomeFeature {
                 selectedTab = .liveTV
             }
             settings.hideEmptyContentTabs = settingsClient.hideEmptyContentTabs()
+            normalizeSelectedTab()
         }
     }
 
@@ -117,6 +148,7 @@ public struct HomeFeature {
         case search(SearchFeature.Action)
         case downloads(DownloadsFeature.Action)
         case settings(SettingsFeature.Action)
+        case contentSourceConfigsUpdated(PlaylistContentSourceConfigs)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -139,9 +171,11 @@ public struct HomeFeature {
             case didSelectSeries(MediaModels.Item)
             case playHistoryItem(WatchHistoryItem)
             case restartHistoryItem(WatchHistoryItem)
+            case playOfflineMedia(OfflineMediaSnapshot, episodeQueue: [OfflineMediaSnapshot])
             case openManagePlaylists
             case switchProfile
             case presentSearch
+            case presentHiddenMediaManagement
         }
     }
 
@@ -172,6 +206,75 @@ public struct HomeFeature {
 
         Reduce { state, action in
             switch action {
+            case let .contentSourceConfigsUpdated(configs):
+                let liveTVChanged = state.liveTVSourceConfig != configs.liveTV
+                let moviesChanged = state.moviesSourceConfig != configs.movies
+                let seriesChanged = state.seriesSourceConfig != configs.series
+                let liveTVNeedsSamePlaylistReload = liveTVChanged
+                    && state.liveTVSourceConfig.playlistID == configs.liveTV.playlistID
+                    && (!state.liveTV.categories.isEmpty || state.liveTV.isLoadingCategories)
+                let moviesNeedSamePlaylistReload = moviesChanged
+                    && state.moviesSourceConfig.playlistID == configs.movies.playlistID
+                    && (!state.vod.categories.isEmpty || state.vod.isLoadingCategories)
+                let seriesNeedsSamePlaylistReload = seriesChanged
+                    && state.seriesSourceConfig.playlistID == configs.series.playlistID
+                    && (!state.series.categories.isEmpty || state.series.isLoadingCategories)
+                state.liveTVSourceConfig = configs.liveTV
+                state.moviesSourceConfig = configs.movies
+                state.seriesSourceConfig = configs.series
+                if !state.visibleTabs.contains(state.selectedTab) {
+                    state.normalizeSelectedTab()
+                }
+                let liveTVEffect: Effect<Action> = if liveTVChanged {
+                    if liveTVNeedsSamePlaylistReload {
+                        .concatenate(
+                            .send(.liveTV(.onAppear(config: configs.liveTV))),
+                            .send(.liveTV(.reloadCategories(config: configs.liveTV)))
+                        )
+                    } else {
+                        .send(.liveTV(.onAppear(config: configs.liveTV)))
+                    }
+                } else {
+                    .none
+                }
+                let moviesEffect: Effect<Action> = if moviesChanged {
+                    if moviesNeedSamePlaylistReload {
+                        .concatenate(
+                            .send(.vod(.onAppear(config: configs.movies))),
+                            .send(.vod(.reloadCategories(config: configs.movies)))
+                        )
+                    } else {
+                        .send(.vod(.onAppear(config: configs.movies)))
+                    }
+                } else {
+                    .none
+                }
+                let seriesEffect: Effect<Action> = if seriesChanged {
+                    if seriesNeedsSamePlaylistReload {
+                        .concatenate(
+                            .send(.series(.onAppear(config: configs.series))),
+                            .send(.series(.reloadCategories(config: configs.series)))
+                        )
+                    } else {
+                        .send(.series(.onAppear(config: configs.series)))
+                    }
+                } else {
+                    .none
+                }
+                return .merge(
+                    liveTVEffect,
+                    moviesEffect,
+                    seriesEffect
+                )
+
+            case .liveTV(.categoriesResponse(.success(_), _, _, _)),
+                 .vod(.categoriesResponse(_, _, .success(_), _, _)),
+                 .series(.categoriesResponse(_, _, .success(_), _, _)),
+                 .vod(.categoriesPreferencesLoaded(_, _, _, _)),
+                 .series(.categoriesPreferencesLoaded(_, _, _, _)):
+                state.normalizeSelectedTab()
+                return .none
+
             case let .tabSelected(tab):
                 guard state.visibleTabs.contains(tab) else { return .none }
                 state.selectedTab = tab
@@ -208,9 +311,7 @@ public struct HomeFeature {
                 return .none
 
             case .dashboard:
-                if !state.visibleTabs.contains(state.selectedTab) {
-                    state.selectedTab = .dashboard
-                }
+                state.normalizeSelectedTab()
                 return .none
 
             case let .liveTV(.delegate(.didSelectChannel(channel, playlist))):
@@ -254,6 +355,7 @@ public struct HomeFeature {
                 )))
 
             case .liveTV:
+                state.normalizeSelectedTab()
                 return .none
 
             case let .vod(.delegate(.didSelectVOD(vod))):
@@ -269,6 +371,7 @@ public struct HomeFeature {
                 )))
 
             case .vod:
+                state.normalizeSelectedTab()
                 return .none
 
             case let .series(.delegate(.didSelectSeries(series))):
@@ -281,6 +384,7 @@ public struct HomeFeature {
                 return .send(.delegate(.presentSeriesParentalLock(parentalLockState)))
 
             case .series:
+                state.normalizeSelectedTab()
                 return .none
 
             case let .search(.delegate(.didSelectChannel(channel, playlist))):
@@ -292,11 +396,14 @@ public struct HomeFeature {
             case let .search(.delegate(.didSelectSeries(series))):
                 return .send(.delegate(.didSelectSeries(series)))
 
+            case let .search(.delegate(.playOfflineMedia(item, episodeQueue))):
+                return .send(.delegate(.playOfflineMedia(item, episodeQueue: episodeQueue)))
+
             case .search:
                 return .none
 
-            case let .downloads(.delegate(.playOfflineMedia(item))):
-                return .send(.delegate(.playHistoryItem(WatchHistoryItem(id: item.id, type: "vod", title: item.title, coverURL: item.coverURL, streamURL: item.localFilePath, progress: 0, duration: 0))))
+            case let .downloads(.delegate(.playOfflineMedia(item, episodeQueue))):
+                return .send(.delegate(.playOfflineMedia(item, episodeQueue: episodeQueue)))
 
             case .downloads:
                 return .none
@@ -304,13 +411,14 @@ public struct HomeFeature {
             case .settings(.delegate(.openManagePlaylists)):
                 return .send(.delegate(.openManagePlaylists))
 
+            case .settings(.delegate(.presentUserHiddenMediaManagement)):
+                return .send(.delegate(.presentHiddenMediaManagement))
+
             case .settings(.delegate(.switchProfile)):
                 return .send(.delegate(.switchProfile))
 
             case .settings:
-                if !state.visibleTabs.contains(state.selectedTab) {
-                    state.selectedTab = .dashboard
-                }
+                state.normalizeSelectedTab()
                 return .none
 
             case .delegate:

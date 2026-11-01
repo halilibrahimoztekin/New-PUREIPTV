@@ -7,6 +7,49 @@
         case circle
     }
 
+    private struct TVFocusShapePath: Shape {
+        let shape: TVFocusShape
+
+        func path(in rect: CGRect) -> Path {
+            switch shape {
+            case let .roundedRectangle(cornerRadius):
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+            case .capsule:
+                Capsule().path(in: rect)
+            case .circle:
+                Circle().path(in: rect)
+            }
+        }
+    }
+
+    private struct TVHighContrastFocusOutlineModifier: ViewModifier {
+        let shape: TVFocusShape
+        let isFocused: Bool
+
+        @AppStorage("com.pureiptv.tvOSHighContrastFocusFrame") private var isEnabled = false
+
+        func body(content: Content) -> some View {
+            content.overlay {
+                if isFocused, isEnabled {
+                    TVFocusShapePath(shape: shape)
+                        .stroke(Color.black.opacity(0.96), lineWidth: 8)
+                        .overlay {
+                            TVFocusShapePath(shape: shape)
+                                .stroke(Color.white, lineWidth: 4)
+                        }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+    }
+
+    extension View {
+        func tvHighContrastFocusOutline(isFocused: Bool, shape: TVFocusShape) -> some View {
+            modifier(TVHighContrastFocusOutlineModifier(shape: shape, isFocused: isFocused))
+        }
+    }
+
     extension View {
         func tvFocusEffect(
             shape: TVFocusShape = .roundedRectangle(cornerRadius: 14),
@@ -41,6 +84,7 @@
                     reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
                     value: isFocused
                 )
+                .tvHighContrastFocusOutline(isFocused: isFocused, shape: shape)
         }
 
         @ViewBuilder
@@ -113,6 +157,7 @@
                     )
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
             }
         }
     }
@@ -185,6 +230,7 @@
                     .shadow(color: shadowColor, radius: 10, x: 0, y: 0)
                     .scaleEffect(scale)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
             }
         }
     }
@@ -242,6 +288,7 @@
                     .shadow(color: shadowColor, radius: isFocused ? 16 : 8, x: 0, y: isFocused ? 4 : 2)
                     .scaleEffect(scale)
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 16))
             }
         }
     }
@@ -319,6 +366,7 @@
                     .shadow(color: isFocused ? Color.white.opacity(0.35) : Color.clear, radius: 12, x: 0, y: 0)
                     .scaleEffect(scale)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
             }
         }
     }
@@ -382,6 +430,7 @@
                     .shadow(color: isFocused ? Color.white.opacity(0.3) : Color.clear, radius: 10, x: 0, y: 0)
                     .scaleEffect(scale)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .circle)
             }
         }
     }

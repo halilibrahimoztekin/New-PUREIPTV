@@ -24,6 +24,38 @@ public enum TopShelfStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum TopShelfContentSection: String, Codable, CaseIterable, Hashable, Sendable {
+    case continueWatching
+    case favoriteChannels
+    case recentMovies
+
+    public static let defaultOrder: [Self] = [
+        .continueWatching,
+        .favoriteChannels,
+        .recentMovies,
+    ]
+}
+
+public struct TopShelfContentSelection: Codable, Equatable, Sendable {
+    public var continueWatching = true
+    public var favoriteChannels = true
+    public var recentMovies = true
+
+    public init(continueWatching: Bool = true, favoriteChannels: Bool = true, recentMovies: Bool = true) {
+        self.continueWatching = continueWatching
+        self.favoriteChannels = favoriteChannels
+        self.recentMovies = recentMovies
+    }
+
+    public mutating func setEnabled(_ isEnabled: Bool, for section: TopShelfContentSection) {
+        switch section {
+        case .continueWatching: continueWatching = isEnabled
+        case .favoriteChannels: favoriteChannels = isEnabled
+        case .recentMovies: recentMovies = isEnabled
+        }
+    }
+}
+
 // MARK: - Top Shelf Data Models
 
 public struct TopShelfItemDTO: Codable, Equatable, Identifiable, Sendable {
@@ -110,15 +142,40 @@ public struct TopShelfDataDTO: Codable, Equatable, Sendable {
 
 public final class TopShelfService: @unchecked Sendable {
     public static let shared = TopShelfService()
+    private static let syncDeviceIDLock = NSRecursiveLock()
+    private static let syncDeviceIDDefaultsKey = "com.pureiptv.iCloudSyncDeviceUUID"
+
+    public static var syncDeviceID: String {
+        syncDeviceIDLock.lock()
+        defer { syncDeviceIDLock.unlock() }
+        let defaults = UserDefaults.standard
+        if let existing = defaults.string(forKey: syncDeviceIDDefaultsKey) {
+            return existing
+        }
+        let newID = UUID().uuidString
+        defaults.set(newID, forKey: syncDeviceIDDefaultsKey)
+        return newID
+    }
 
     private let appGroupID = "group.com.pureiptv.app"
     private let topShelfKey = "PureIPTV.TopShelfData"
     private let topShelfStyleKey = "PureIPTV.TopShelfStyle"
+    private let topShelfSectionOrderKey = "PureIPTV.TopShelfSectionOrder"
+    private let topShelfContentSelectionKey = "PureIPTV.TopShelfContentSelection"
+    private let topShelfContentSelectionModifiedAtKey = "PureIPTV.TopShelfContentSelectionModifiedAt"
+    private let topShelfContentSelectionDeviceIDKey = "PureIPTV.TopShelfContentSelectionDeviceID"
+    private let contentSelectionLock = NSRecursiveLock()
 
     private init() {}
 
     private var sharedDefaults: UserDefaults? {
         UserDefaults(suiteName: appGroupID)
+    }
+
+    func withContentSelectionSyncLock<Value>(_ operation: () throws -> Value) rethrows -> Value {
+        contentSelectionLock.lock()
+        defer { contentSelectionLock.unlock() }
+        return try operation()
     }
 
     public var preferredStyle: TopShelfStyle {
@@ -134,7 +191,7 @@ public final class TopShelfService: @unchecked Sendable {
         set {
             guard let sharedDefaults, preferredStyle != newValue else { return }
             sharedDefaults.set(newValue.rawValue, forKey: topShelfStyleKey)
-            if let payload = loadTopShelfData(), payload.preferredStyle != newValue {
+            if let payload = loadRawTopShelfData(), payload.preferredStyle != newValue {
                 let updatedPayload = TopShelfDataDTO(
                     continueWatching: payload.continueWatching,
                     favoriteChannels: payload.favoriteChannels,
@@ -150,6 +207,96 @@ public final class TopShelfService: @unchecked Sendable {
         }
     }
 
+    public var contentSelection: TopShelfContentSelection {
+        get {
+            contentSelectionLock.lock()
+            defer { contentSelectionLock.unlock() }
+            guard let data = sharedDefaults?.data(forKey: topShelfContentSelectionKey),
+                  let selection = try? JSONDecoder().decode(TopShelfContentSelection.self, from: data)
+            else { return TopShelfContentSelection() }
+            return selection
+        }
+        set {
+            contentSelectionLock.lock()
+            let didChange: Bool
+            if let sharedDefaults,
+               contentSelection != newValue,
+               let data = try? JSONEncoder().encode(newValue)
+            {
+                sharedDefaults.set(data, forKey: topShelfContentSelectionKey)
+                sharedDefaults.set(Date(), forKey: topShelfContentSelectionModifiedAtKey)
+                sharedDefaults.set(Self.syncDeviceID, forKey: topShelfContentSelectionDeviceIDKey)
+                didChange = true
+            } else {
+                didChange = false
+            }
+            contentSelectionLock.unlock()
+            if didChange {
+                notifyContentDidChange()
+            }
+        }
+    }
+
+    /// Order of the Sectioned Top Shelf rows, shared with the tvOS extension.
+    /// Carousel presentation keeps its existing item order because it has no sections.
+    public var sectionOrder: [TopShelfContentSection] {
+        get {
+            contentSelectionLock.lock()
+            defer { contentSelectionLock.unlock() }
+            let storedOrder = sharedDefaults?.stringArray(forKey: topShelfSectionOrderKey)?
+                .compactMap(TopShelfContentSection.init(rawValue:)) ?? []
+            return Self.normalizedSectionOrder(storedOrder)
+        }
+        set {
+            contentSelectionLock.lock()
+            let normalizedOrder = Self.normalizedSectionOrder(newValue)
+            let didChange = sectionOrder != normalizedOrder
+            if didChange {
+                sharedDefaults?.set(normalizedOrder.map(\.rawValue), forKey: topShelfSectionOrderKey)
+            }
+            contentSelectionLock.unlock()
+            if didChange {
+                notifyContentDidChange()
+            }
+        }
+    }
+
+    public var contentSelectionSyncModifiedAt: Date? {
+        contentSelectionLock.lock()
+        defer { contentSelectionLock.unlock() }
+        return sharedDefaults?.object(forKey: topShelfContentSelectionModifiedAtKey) as? Date
+    }
+
+    public var contentSelectionSyncDeviceID: String? {
+        contentSelectionLock.lock()
+        defer { contentSelectionLock.unlock() }
+        return sharedDefaults?.string(forKey: topShelfContentSelectionDeviceIDKey)
+    }
+
+    public func applySyncedContentSelection(
+        _ selection: TopShelfContentSelection,
+        modifiedAt: Date,
+        deviceID: String
+    ) {
+        contentSelectionLock.lock()
+        guard let sharedDefaults else {
+            contentSelectionLock.unlock()
+            return
+        }
+        let existing = sharedDefaults.data(forKey: topShelfContentSelectionKey)
+            .flatMap { try? JSONDecoder().decode(TopShelfContentSelection.self, from: $0) }
+        let didChange = existing != selection
+        if didChange, let data = try? JSONEncoder().encode(selection) {
+            sharedDefaults.set(data, forKey: topShelfContentSelectionKey)
+        }
+        sharedDefaults.set(modifiedAt, forKey: topShelfContentSelectionModifiedAtKey)
+        sharedDefaults.set(deviceID, forKey: topShelfContentSelectionDeviceIDKey)
+        contentSelectionLock.unlock()
+        if didChange {
+            notifyContentDidChange()
+        }
+    }
+
     /// Verileri kaydeder ve Apple TV sistemine Top Shelf güncelleme bildirimi gönderir
     public func updateTopShelfData(
         continueWatching: [TopShelfItemDTO],
@@ -159,7 +306,7 @@ public final class TopShelfService: @unchecked Sendable {
     ) {
         guard let sharedDefaults else { return }
         let currentStyle = style ?? preferredStyle
-        if let currentPayload = loadTopShelfData(),
+        if let currentPayload = loadRawTopShelfData(),
            currentPayload.continueWatching == continueWatching,
            currentPayload.favoriteChannels == favoriteChannels,
            currentPayload.recentMovies == recentMovies,
@@ -183,9 +330,42 @@ public final class TopShelfService: @unchecked Sendable {
 
     /// Kaydedilen verileri okur
     public func loadTopShelfData() -> TopShelfDataDTO? {
+        guard let payload = loadRawTopShelfData() else { return nil }
+        let selection = contentSelection
+        return TopShelfDataDTO(
+            continueWatching: selection.continueWatching ? payload.continueWatching : [],
+            favoriteChannels: selection.favoriteChannels ? payload.favoriteChannels : [],
+            recentMovies: selection.recentMovies ? payload.recentMovies : [],
+            preferredStyle: payload.preferredStyle,
+            updatedAt: payload.updatedAt
+        )
+    }
+
+    private func loadRawTopShelfData() -> TopShelfDataDTO? {
         guard let sharedDefaults else { return nil }
         guard let data = sharedDefaults.data(forKey: topShelfKey) else { return nil }
-        return try? JSONDecoder().decode(TopShelfDataDTO.self, from: data)
+        guard let payload = try? JSONDecoder().decode(TopShelfDataDTO.self, from: data) else { return nil }
+        let items = payload.continueWatching + payload.favoriteChannels + payload.recentMovies
+        let containsLegacyStreamURL = items.contains { item in
+            URLComponents(string: item.deepLinkURL)?.queryItems?.contains(where: { $0.name == "streamURL" }) == true
+        }
+        guard !containsLegacyStreamURL else {
+            sharedDefaults.removeObject(forKey: topShelfKey)
+            notifyContentDidChange()
+            return nil
+        }
+        return payload
+    }
+
+    private static func normalizedSectionOrder(_ sections: [TopShelfContentSection]) -> [TopShelfContentSection] {
+        var normalized: [TopShelfContentSection] = []
+        for section in sections where !normalized.contains(section) {
+            normalized.append(section)
+        }
+        for section in TopShelfContentSection.defaultOrder where !normalized.contains(section) {
+            normalized.append(section)
+        }
+        return normalized
     }
 
     private func notifyContentDidChange() {
@@ -198,28 +378,32 @@ public final class TopShelfService: @unchecked Sendable {
     public static func makeDeepLink(
         id: String,
         type: String,
-        title: String,
-        streamURL: String,
-        coverURL: String? = nil,
+        playlistID: UUID?,
+        profileID: UUID?,
+        seriesID: String? = nil,
         startPosition: Double? = nil
     ) -> String {
         var components = URLComponents()
         components.scheme = "pureiptv"
-        components.host = "play"
+        components.host = "topshelf"
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "id", value: id),
             URLQueryItem(name: "type", value: type),
-            URLQueryItem(name: "title", value: title),
-            URLQueryItem(name: "streamURL", value: streamURL),
         ]
-        if let coverURL {
-            queryItems.append(URLQueryItem(name: "coverURL", value: coverURL))
+        if let playlistID {
+            queryItems.append(URLQueryItem(name: "playlistID", value: playlistID.uuidString))
         }
-        if let startPosition {
+        if let profileID {
+            queryItems.append(URLQueryItem(name: "profileID", value: profileID.uuidString))
+        }
+        if let seriesID {
+            queryItems.append(URLQueryItem(name: "seriesID", value: seriesID))
+        }
+        if let startPosition, startPosition.isFinite {
             queryItems.append(URLQueryItem(name: "startPosition", value: String(startPosition)))
         }
         components.queryItems = queryItems
-        return components.url?.absoluteString ?? "pureiptv://play?id=\(id)"
+        return components.url?.absoluteString ?? "pureiptv://topshelf?id=\(id)"
     }
 }
 
@@ -237,6 +421,10 @@ public final class TopShelfService: @unchecked Sendable {
         public var loadTopShelfData: @Sendable () -> TopShelfDataDTO? = { nil }
         public var getPreferredStyle: @Sendable () -> TopShelfStyle = { .sectioned }
         public var setPreferredStyle: @Sendable (_ style: TopShelfStyle) -> Void
+        public var getSectionOrder: @Sendable () -> [TopShelfContentSection] = { TopShelfContentSection.defaultOrder }
+        public var setSectionOrder: @Sendable (_ order: [TopShelfContentSection]) -> Void = { _ in }
+        public var getContentSelection: @Sendable () -> TopShelfContentSelection = { TopShelfContentSelection() }
+        public var setContentSelection: @Sendable (_ selection: TopShelfContentSelection) -> Void = { _ in }
     }
 
     extension TopShelfClient: DependencyKey {
@@ -258,6 +446,18 @@ public final class TopShelfService: @unchecked Sendable {
                 },
                 setPreferredStyle: { style in
                     service.preferredStyle = style
+                },
+                getSectionOrder: {
+                    service.sectionOrder
+                },
+                setSectionOrder: { order in
+                    service.sectionOrder = order
+                },
+                getContentSelection: {
+                    service.contentSelection
+                },
+                setContentSelection: { selection in
+                    service.contentSelection = selection
                 }
             )
         }()

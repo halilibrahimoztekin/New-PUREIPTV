@@ -328,19 +328,45 @@
                                             }
                                         }
 
-                                        if store.canSwitchPlaybackEngine {
+                                        if store.canSwitchPlaybackEngine || store.canManagePlaybackEnginePreference {
                                             Menu {
-                                                ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                                    Button {
-                                                        store.send(.switchPlaybackEngine(engine))
-                                                    } label: {
-                                                        if engine == store.playbackEngine {
-                                                            Label(engine.title, systemImage: "checkmark")
-                                                        } else {
-                                                            Text(engine.title)
+                                                if store.canSwitchPlaybackEngine {
+                                                    ForEach(PlaybackEngine.allCases, id: \.self) { engine in
+                                                        Button {
+                                                            store.send(.switchPlaybackEngine(engine))
+                                                        } label: {
+                                                            if engine == store.playbackEngine {
+                                                                Label(engine.title, systemImage: "checkmark")
+                                                            } else {
+                                                                Text(engine.title)
+                                                            }
+                                                        }
+                                                        .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
+                                                    }
+                                                }
+                                                if store.canManagePlaybackEnginePreference {
+                                                    Section(AppStrings.Player.itemPlaybackEnginePreference) {
+                                                        if let preference = store.itemSpecificPlaybackEnginePreference {
+                                                            Label(
+                                                                AppStrings.Player.itemPlaybackEnginePreferenceValue(preference.title),
+                                                                systemImage: "checkmark"
+                                                            )
+                                                        }
+                                                        if store.canSwitchPlaybackEngine,
+                                                           store.itemSpecificPlaybackEnginePreference != store.playbackEngine
+                                                        {
+                                                            Button(AppStrings.Player.saveCurrentPlaybackEngineForItem) {
+                                                                store.send(.saveCurrentPlaybackEnginePreference)
+                                                            }
+                                                            .disabled(store.isSwitchingPlaybackEngine)
+                                                        }
+                                                        if store.itemSpecificPlaybackEnginePreference != nil {
+                                                            Button(AppStrings.Player.useGeneralPlaybackEnginePreference) {
+                                                                store.send(.clearCurrentPlaybackEnginePreference)
+                                                            }
+                                                            .disabled(store.isSwitchingPlaybackEngine)
                                                         }
                                                     }
-                                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
                                                 }
                                             } label: {
                                                 Label("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)", systemImage: "cpu")
@@ -348,7 +374,7 @@
                                         }
 
                                         // 2. Playback Speed (VOD & Series)
-                                        if !store.item.isLive {
+                                        if store.canSetPlaybackRate {
                                             Menu {
                                                 ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
                                                     Button {
@@ -585,13 +611,19 @@
                                 }
                             }
 
-                            // Jump Backward
-                            Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpBackward) }) {
-                                Image(systemName: "gobackward.10")
-                                    .font(.system(size: 28))
+                            if !store.item.isLive || store.isPlayingCatchup {
+                                Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpBackward) }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "gobackward")
+                                            .font(.system(size: 24))
+                                        Text(store.activeSkipInterval.compactTitle)
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    }
                                     .foregroundColor(.white)
                                     .padding(16)
                                     .background(.ultraThinMaterial, in: Circle())
+                                }
+                                .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
                             }
 
                             // Play/Pause
@@ -609,13 +641,19 @@
                                     .background(.ultraThinMaterial, in: Circle())
                             }
 
-                            // Jump Forward
-                            Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpForward) }) {
-                                Image(systemName: "goforward.10")
-                                    .font(.system(size: 28))
+                            if !store.item.isLive || store.isPlayingCatchup {
+                                Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpForward) }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "goforward")
+                                            .font(.system(size: 24))
+                                        Text(store.activeSkipInterval.compactTitle)
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    }
                                     .foregroundColor(.white)
                                     .padding(16)
                                     .background(.ultraThinMaterial, in: Circle())
+                                }
+                                .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
                             }
                         }
                         .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
@@ -1097,7 +1135,8 @@
                             currentProgram: store.currentEPGProgram,
                             nextProgram: store.nextEPGProgram,
                             isCleaningEnabled: store.isChannelNameCleaningEnabled,
-                            dynamicRange: store.videoDynamicRange
+                            dynamicRange: store.videoDynamicRange,
+                            playlistName: store.sourcePlaylistName
                         )
                         .padding(.horizontal, 16)
                         .padding(.bottom, 24)
@@ -1394,6 +1433,7 @@
                 .allowsHitTesting(false)
             }
             .allowsHitTesting(!store.isMinimized)
+            .modifier(MediaServerPlaybackOptionsDialog(store: store))
             .onDisappear {
                 cancelAllPendingWorkItems()
             }
@@ -1410,6 +1450,34 @@
             } else {
                 return String(format: "%02d:%02d", minutes, seconds)
             }
+        }
+
+        private func subtitleTrackMetadata(
+            source: String,
+            flag: String?,
+            formattedLanguageName: String?,
+            reportedLanguage: String?,
+            formatDetail: String?
+        ) -> String {
+            var parts = ["\(AppStrings.Player.subtitleTrackSourceLabel): \(source)"]
+            let reportedLanguage = reportedLanguage?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let languageName: String? = if flag != nil {
+                formattedLanguageName
+            } else if let reportedLanguage,
+                      !reportedLanguage.isEmpty,
+                      reportedLanguage.lowercased() != "und"
+            {
+                reportedLanguage
+            } else {
+                nil
+            }
+            if let languageName {
+                parts.append("\(AppStrings.Player.subtitleSearchLanguage): \(languageName)")
+            }
+            if let formatDetail {
+                parts.append("\(AppStrings.Player.subtitleSearchFormat): \(formatDetail)")
+            }
+            return parts.joined(separator: " · ")
         }
 
         private var tracksMenuOverlay: some View {
@@ -1588,29 +1656,44 @@
                                             }
                                             .foregroundColor(isSubtitlesOff ? .accentColor : .white)
                                         }
+                                        .accessibilityAddTraits(isSubtitlesOff ? .isSelected : [])
                                         .padding(.vertical, 4)
 
                                         ForEach(store.subtitleTracks) { track in
-                                            let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: true)
+                                            let formatted = TrackLanguageFormatter.formatSubtitle(trackName: track.name, reportedLanguage: track.language)
                                             let isSelected = store.selectedSubtitleTrack?.id == track.id
+                                            let trimmedTrackName = track.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            let trackName = trimmedTrackName.isEmpty
+                                                ? formatted.displayName
+                                                : trimmedTrackName
+                                            let source = store.externalSubtitleTrackIDs.contains(track.id)
+                                                ? AppStrings.Player.subtitleTrackExternalFile
+                                                : AppStrings.Player.subtitleTrackMediaStream
+                                            let metadata = subtitleTrackMetadata(
+                                                source: source,
+                                                flag: formatted.flag,
+                                                formattedLanguageName: formatted.languageName,
+                                                reportedLanguage: track.language,
+                                                formatDetail: formatted.formatDetail
+                                            )
+                                            let metadataContent = Text(metadata)
+                                                .font(.caption)
+                                                .foregroundColor(.white.opacity(0.65))
+                                                .fixedSize(horizontal: false, vertical: true)
                                             Button(action: {
                                                 HapticManager.shared.trigger(.light)
                                                 store.send(.selectSubtitleTrack(track))
                                             }) {
-                                                HStack(spacing: 8) {
+                                                HStack(alignment: .top, spacing: 8) {
                                                     if let flag = formatted.flag {
                                                         Text(flag)
                                                             .font(.body)
                                                     }
-                                                    Text(formatted.displayName)
-                                                        .font(.subheadline)
-                                                    if let detail = formatted.formatDetail {
-                                                        Text(detail)
-                                                            .font(.system(size: 10, weight: .bold))
-                                                            .foregroundColor(.white.opacity(0.85))
-                                                            .padding(.horizontal, 6)
-                                                            .padding(.vertical, 2)
-                                                            .background(Color.white.opacity(0.18), in: Capsule())
+                                                    VStack(alignment: .leading, spacing: 4) {
+                                                        Text(trackName)
+                                                            .font(.subheadline)
+                                                            .fixedSize(horizontal: false, vertical: true)
+                                                        metadataContent
                                                     }
                                                     Spacer()
                                                     if isSelected {
@@ -1620,6 +1703,8 @@
                                                 }
                                                 .foregroundColor(isSelected ? .accentColor : .white)
                                             }
+                                            .accessibilityLabel("\(trackName), \(metadata)")
+                                            .accessibilityAddTraits(isSelected ? .isSelected : [])
                                             .padding(.vertical, 4)
                                         }
 
@@ -1752,20 +1837,21 @@
             }
 
             let tappedSide: ActiveSeekSide = isLeft ? .left : .right
+            let seekStepSeconds = Int(store.skipIntervalSeconds)
 
             if let currentSide = activeSeekSide, currentSide == tappedSide {
                 singleTapWorkItem?.cancel()
                 singleTapWorkItem = nil
                 seekDismissWorkItem?.cancel()
 
-                if isRight && store.item.isLive {
+                if store.item.isLive && !store.isPlayingCatchup {
                     HapticManager.shared.trigger(.warning)
                     triggerLiveWarning()
                     return
                 }
 
-                cumulativeSeekSeconds += 10
-                let offset: Int64 = isLeft ? -10 : 10
+                cumulativeSeekSeconds += seekStepSeconds
+                let offset = isLeft ? -Int64(seekStepSeconds) : Int64(seekStepSeconds)
                 HapticManager.shared.trigger(.light)
 
                 if isLeft {
@@ -1780,21 +1866,21 @@
                 singleTapWorkItem?.cancel()
                 singleTapWorkItem = nil
 
-                if isRight && store.item.isLive {
+                if store.item.isLive && !store.isPlayingCatchup {
                     HapticManager.shared.trigger(.warning)
                     triggerLiveWarning()
                     return
                 }
 
                 activeSeekSide = tappedSide
-                cumulativeSeekSeconds = 10
-                let offset: Int64 = isLeft ? -10 : 10
+                cumulativeSeekSeconds = seekStepSeconds
+                let offset = isLeft ? -Int64(seekStepSeconds) : Int64(seekStepSeconds)
                 HapticManager.shared.trigger(.medium)
 
                 if isLeft {
-                    smartSeekDirection = .backward(seconds: 10)
+                    smartSeekDirection = .backward(seconds: seekStepSeconds)
                 } else {
-                    smartSeekDirection = .forward(seconds: 10)
+                    smartSeekDirection = .forward(seconds: seekStepSeconds)
                 }
 
                 store.send(.jumpBySeconds(offset))
@@ -2109,6 +2195,35 @@
                 Text(value)
                     .foregroundColor(.white)
                     .font(.caption.bold())
+            }
+        }
+    }
+
+    private struct MediaServerPlaybackOptionsDialog: ViewModifier {
+        @Bindable var store: StoreOf<PlayerFeature>
+
+        func body(content: Content) -> some View {
+            content.confirmationDialog(
+                AppStrings.VODDetail.versionsAndQuality,
+                isPresented: Binding(
+                    get: { store.isMediaServerPlaybackOptionsPresented },
+                    set: { isPresented in
+                        if !isPresented, store.isMediaServerPlaybackOptionsPresented {
+                            store.send(.cancelMediaServerPlaybackSourceSelection)
+                        }
+                    }
+                )
+            ) {
+                ForEach(store.mediaServerPlaybackOptions) { option in
+                    Button(option.displayLabel) {
+                        store.send(.selectMediaServerPlaybackSource(option.id))
+                    }
+                }
+                Button(AppStrings.Common.cancel, role: .cancel) {
+                    store.send(.cancelMediaServerPlaybackSourceSelection)
+                }
+            } message: {
+                Text(store.item.title)
             }
         }
     }

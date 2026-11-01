@@ -90,6 +90,7 @@ public struct LiveEPGMiniPreviewView: View {
                             .background(Color(hex: "#0A84FF"), in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(AppStrings.Player.expandEPGPreviewToFullscreen)
 
                     // Close Button
                     Button(action: onClose) {
@@ -162,7 +163,7 @@ public struct LiveEPGMiniPreviewView: View {
                 // Logo
                 Group {
                     if let coverURL = channel.displayLogoURL {
-                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                        PlaylistAsyncImage(url: coverURL, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable().aspectRatio(contentMode: .fit)

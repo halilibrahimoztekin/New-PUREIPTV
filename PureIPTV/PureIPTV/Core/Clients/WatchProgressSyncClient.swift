@@ -21,6 +21,7 @@ private actor WatchProgressSyncWriter {
     }
 
     func write(_ record: WatchProgressSyncRecord) throws {
+        guard PlaylistCloudSyncPreference.isEnabled(for: record.playlistID) else { return }
         store.synchronize()
         guard let data = try? JSONEncoder().encode(record), data.count <= 16 * 1024 else { return }
         let scopedIdentity = syncIdentity(record)
@@ -47,6 +48,45 @@ private actor WatchProgressSyncWriter {
             pruneItems()
         }
         _ = pruneGlobalStorage()
+        store.synchronize()
+    }
+
+    func removePlaylist(_ playlistID: UUID) {
+        guard !PlaylistCloudSyncPreference.isEnabled(for: playlistID) else { return }
+        store.synchronize()
+        let indexKey = "pureiptv_watch_prog_index"
+        let legacyPrefix = "pureiptv_watch_prog_"
+        for (key, value) in store.dictionaryRepresentation where
+            key.hasPrefix(itemPrefix) || key.hasPrefix(deletionPrefix) || key.hasPrefix(fencePrefix)
+            || (key.hasPrefix(legacyPrefix) && key != indexKey)
+        {
+            guard let data = value as? Data,
+                  let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data),
+                  record.playlistID == playlistID
+            else { continue }
+            store.removeObject(forKey: key)
+        }
+
+        let legacyIDs = store.array(forKey: indexKey) as? [String] ?? []
+        var retainedLegacyIDs: [String] = []
+        for id in legacyIDs {
+            let key = legacyPrefix + id
+            guard let data = store.data(forKey: key),
+                  let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+            else {
+                continue
+            }
+            if record.playlistID == playlistID {
+                store.removeObject(forKey: key)
+            } else {
+                retainedLegacyIDs.append(id)
+            }
+        }
+        if retainedLegacyIDs.isEmpty {
+            store.removeObject(forKey: indexKey)
+        } else {
+            store.set(retainedLegacyIDs, forKey: indexKey)
+        }
         store.synchronize()
     }
 
@@ -194,6 +234,7 @@ public struct WatchProgressSyncClient: Sendable {
     public var syncItem: @Sendable (_ item: WatchHistoryItem) async throws -> Void
     public var markUnwatched: @Sendable (_ id: String) async throws -> Void
     public var pullAndMergeRemoteChanges: @Sendable () async throws -> Int
+    public var removePlaylistFromSync: @Sendable (_ playlistID: UUID) async -> Void
     public var observeRemoteChanges: @Sendable () -> AsyncStream<[WatchProgressSyncRecord]>
 
     public init(
@@ -202,6 +243,7 @@ public struct WatchProgressSyncClient: Sendable {
         syncItem: @escaping @Sendable (WatchHistoryItem) async throws -> Void,
         markUnwatched: @escaping @Sendable (String) async throws -> Void,
         pullAndMergeRemoteChanges: @escaping @Sendable () async throws -> Int,
+        removePlaylistFromSync: @escaping @Sendable (UUID) async -> Void,
         observeRemoteChanges: @escaping @Sendable () -> AsyncStream<[WatchProgressSyncRecord]>
     ) {
         self.isSyncEnabled = isSyncEnabled
@@ -209,6 +251,7 @@ public struct WatchProgressSyncClient: Sendable {
         self.syncItem = syncItem
         self.markUnwatched = markUnwatched
         self.pullAndMergeRemoteChanges = pullAndMergeRemoteChanges
+        self.removePlaylistFromSync = removePlaylistFromSync
         self.observeRemoteChanges = observeRemoteChanges
     }
 }
@@ -252,6 +295,7 @@ extension WatchProgressSyncClient: DependencyKey {
             },
             syncItem: { item in
                 guard isEnabled() else { return }
+                guard PlaylistCloudSyncPreference.isEnabled(for: item.playlistID) else { return }
                 _ = try SharedDatabaseConfig.shared
 
                 let record = WatchProgressSyncRecord(from: item, deviceId: localDeviceID)
@@ -259,24 +303,36 @@ extension WatchProgressSyncClient: DependencyKey {
             },
             markUnwatched: { id in
                 guard isEnabled() else { return }
-                _ = try SharedDatabaseConfig.shared
-                let record = WatchProgressSyncRecord(
-                    id: id,
-                    type: "deleted",
-                    title: "",
-                    progress: 0,
-                    duration: 0,
-                    lastWatchedAt: Date(),
-                    deviceId: localDeviceID,
-                    isDeleted: true
-                )
-                try await writer.write(record)
+                let context = try ModelContext(SharedDatabaseConfig.shared)
+                let descriptor = FetchDescriptor<WatchHistoryItem>(predicate: #Predicate { $0.id == id })
+                let records = try context.fetch(descriptor).compactMap { item -> WatchProgressSyncRecord? in
+                    guard PlaylistCloudSyncPreference.isEnabled(for: item.playlistID) else { return nil }
+                    return WatchProgressSyncRecord(
+                        id: item.id,
+                        type: item.type,
+                        title: "",
+                        progress: 0,
+                        duration: 0,
+                        lastWatchedAt: Date(),
+                        playlistID: item.playlistID,
+                        seriesID: item.seriesID,
+                        profileID: item.profileID,
+                        deviceId: localDeviceID,
+                        isDeleted: true
+                    )
+                }
+                for record in records {
+                    try await writer.write(record)
+                }
             },
             pullAndMergeRemoteChanges: {
+                store.synchronize()
+                for playlistID in PlaylistCloudSyncPreference.disabledPlaylistIDs() {
+                    await writer.removePlaylist(playlistID)
+                }
                 guard isEnabled() else { return 0 }
                 let modelContainer = try SharedDatabaseConfig.shared
 
-                store.synchronize()
                 let values = store.dictionaryRepresentation
                 var remoteRecords: [WatchProgressSyncRecord] = values.compactMap { key, value in
                     guard
@@ -294,6 +350,9 @@ extension WatchProgressSyncClient: DependencyKey {
                         let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
                     else { continue }
                     remoteRecords.append(record)
+                }
+                remoteRecords = remoteRecords.filter {
+                    PlaylistCloudSyncPreference.isEnabled(for: $0.playlistID)
                 }
 
                 func scopedIdentity(_ record: WatchProgressSyncRecord) -> String {
@@ -340,7 +399,8 @@ extension WatchProgressSyncClient: DependencyKey {
                     guard
                         key.hasPrefix("pureiptv_watch_del_fence_"),
                         let data = value as? Data,
-                        let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+                        let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data),
+                        PlaylistCloudSyncPreference.isEnabled(for: record.playlistID)
                     else { continue }
                     if record.type == "deleted", record.profileID == nil {
                         legacyDeletionFences[record.id] = max(
@@ -374,6 +434,7 @@ extension WatchProgressSyncClient: DependencyKey {
 
                 for identity in allIDs {
                     guard let remoteRecord = newestLive[identity] ?? newestDeletion[identity] else { continue }
+                    guard PlaylistCloudSyncPreference.isEnabled(for: remoteRecord.playlistID) else { continue }
                     let id = remoteRecord.id
                     let type = remoteRecord.type
                     let profileID = remoteRecord.profileID
@@ -453,6 +514,9 @@ extension WatchProgressSyncClient: DependencyKey {
 
                 return mergedCount
             },
+            removePlaylistFromSync: { playlistID in
+                await writer.removePlaylist(playlistID)
+            },
             observeRemoteChanges: {
                 AsyncStream { continuation in
                     let observer = NotificationCenter.default.addObserver(
@@ -476,7 +540,8 @@ extension WatchProgressSyncClient: DependencyKey {
                                 || key.hasPrefix("pureiptv_watch_del_")
                             {
                                 if let data = store.data(forKey: key),
-                                   let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data)
+                                   let record = try? JSONDecoder().decode(WatchProgressSyncRecord.self, from: data),
+                                   PlaylistCloudSyncPreference.isEnabled(for: record.playlistID)
                                 {
                                     records.append(record)
                                 }
@@ -512,6 +577,7 @@ extension WatchProgressSyncClient: DependencyKey {
         syncItem: { _ in },
         markUnwatched: { _ in },
         pullAndMergeRemoteChanges: { 0 },
+        removePlaylistFromSync: { _ in },
         observeRemoteChanges: { .finished }
     )
 }

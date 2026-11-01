@@ -15,14 +15,19 @@ enum PlaybackAudioSession {
                 do {
                     let session = AVAudioSession.sharedInstance()
                     if active {
+                        #if os(iOS)
+                            let desiredRouteSharingPolicy: AVAudioSession.RouteSharingPolicy = .longFormVideo
+                        #else
+                            let desiredRouteSharingPolicy: AVAudioSession.RouteSharingPolicy = .default
+                        #endif
                         // Avoid reapplying an identical configuration. A
                         // category change can trigger a route update and may
                         // block on system audio work.
                         if session.category != .playback
                             || session.mode != .moviePlayback
-                            || session.routeSharingPolicy != .longFormVideo
+                            || session.routeSharingPolicy != desiredRouteSharingPolicy
                         {
-                            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo)
+                            try session.setCategory(.playback, mode: .moviePlayback, policy: desiredRouteSharingPolicy)
                         }
                     }
                     try session.setActive(active)

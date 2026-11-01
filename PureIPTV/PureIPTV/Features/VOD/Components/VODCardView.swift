@@ -33,7 +33,7 @@ public struct VODCardView: View {
                     )
 
                 // Poster
-                if let posterURL = vod.coverURL {
+                if let posterURL = vod.displayCoverURL {
                     KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
                         .requestModifier { request in
                             PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
@@ -85,7 +85,7 @@ public struct VODCardView: View {
 
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(vod.title)
+                    Text(vod.displayTitle)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Color.white)
                         .lineLimit(2)

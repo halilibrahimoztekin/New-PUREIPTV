@@ -14,13 +14,33 @@ public struct SeriesDetailFeature {
 
     @ObservableState
     public struct State: Equatable {
-        public let series: MediaModels.Item
+        public enum EpisodeSortOrder: String, CaseIterable, Equatable, Sendable {
+            case oldestFirst
+            case newestFirst
+
+            public var title: String {
+                switch self {
+                case .oldestFirst: AppStrings.SeriesDetail.oldestEpisodesFirst
+                case .newestFirst: AppStrings.SeriesDetail.newestEpisodesFirst
+                }
+            }
+        }
+
+        public var series: MediaModels.Item
         public let config: PlaylistConfig
 
         // API Data
         public var info: DetailModels.Info?
         public var seasons: [DetailModels.Season] = []
         public var allEpisodes: [String: [DetailModels.Episode]] = [:] // Keyed by season number string
+        public var watchAvailabilityCountryCode: String?
+        public var watchAvailability: TMDBWatchProviderRegionDTO?
+        public var watchAvailabilityResponse: TMDBWatchProvidersResponseDTO?
+        public var watchAvailabilityLoadedAt: Date?
+        public var watchAvailabilityLoadedMediaID: Int?
+        public var watchAvailabilityRequestID: UUID?
+        public var isWatchAvailabilityLoading = false
+        public var watchAvailabilityFailed = false
         public var nextUpEpisode: DetailModels.Episode?
         public var tmdbTV: TMDBTVDetailsDTO?
         public var awardRecognitions: [WikidataAwardClient.Recognition] = []
@@ -32,21 +52,37 @@ public struct SeriesDetailFeature {
         public var tmdbMatchPresentationRequestID: UUID?
         public var lastTMDBMatchWriteRevision: Date?
         public var isTMDBMatchPickerPresented = false
+        public var presentationProfileScope: ProfileContextSnapshot?
+        public var presentationOverrideRequestID: UUID?
+        public var isPresentationOverrideLoaded = false
+        public var isPresentationEditorPresented = false
 
         public var selectedSeasonNumber: Int?
         public var isLoading = false
         public var isTMDBLoading = false
         public var isFavorite = false
         public var downloadedEpisodes: [String: Bool] = [:]
+        public var downloadedEpisodesRevision: UInt64 = 0
+        public var deletedEpisodeRevisions: [String: UInt64] = [:]
+        public var pendingDeleteEpisodeID: String?
+        public var pendingDeleteEpisodeTitle: String?
+        public var isConfirmingEpisodeDeletion = false
+        public var deletingEpisodeIDs: Set<String> = []
+        public var downloadErrorMessage: String?
         public var historyItem: WatchHistoryItem?
         public var episodeProgressMap: [String: WatchHistoryItem] = [:]
         public var hasUserSelectedSeason = false
         public var pendingEpisodeReveal: EpisodeRevealRequest?
         public var episodeLayoutMode: EpisodeLayoutMode = .list
+        public var episodeSortOrder: EpisodeSortOrder = .oldestFirst
         public var errorMessage: String?
 
         public var autoPlayOnLoad: Bool = false
         public var canManageTMDBMatch: Bool {
+            config.playlistID != nil
+        }
+
+        public var canManagePresentation: Bool {
             config.playlistID != nil
         }
 
@@ -85,23 +121,18 @@ public struct SeriesDetailFeature {
             return allEpisodes[String(seasonNum)] ?? []
         }
 
-        public var sequentialPlaylistEpisodes: [DetailModels.Episode] {
-            let all = allEpisodes.values.flatMap(\.self).sorted {
-                if $0.season != $1.season {
-                    return $0.season < $1.season
-                }
-                return $0.episodeNum < $1.episodeNum
+        public var displayEpisodes: [DetailModels.Episode] {
+            switch episodeSortOrder {
+            case .oldestFirst: currentEpisodes
+            case .newestFirst: Array(currentEpisodes.reversed())
             }
+        }
+
+        public var sequentialPlaylistEpisodes: [DetailModels.Episode] {
+            let all = SeriesEpisodeCatalogNormalizer.sorted(allEpisodes.values.flatMap(\.self))
             return all.isEmpty ? currentEpisodes : all
         }
 
-        public var currentEpisodeRevealTarget: DetailModels.Episode? {
-            guard let history = historyItem else { return nil }
-            let episodes = allEpisodes.values.flatMap(\.self).sorted {
-                if $0.season != $1.season {
-                    return $0.season < $1.season
-                }
-                return $0.episodeNum < $1.episodeNum
         public var canShuffleSelectedSeason: Bool {
             currentEpisodes.count > 1
         }
@@ -114,7 +145,9 @@ public struct SeriesDetailFeature {
             canShuffleSelectedSeason || canShuffleSeries
         }
 
-            }
+        public var currentEpisodeRevealTarget: DetailModels.Episode? {
+            guard let history = historyItem else { return nil }
+            let episodes = SeriesEpisodeCatalogNormalizer.sorted(allEpisodes.values.flatMap(\.self))
             guard let index = episodes.firstIndex(where: { $0.id == history.id }) else { return nil }
             let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
             if isFinished, episodes.index(after: index) < episodes.endIndex {
@@ -136,12 +169,7 @@ public struct SeriesDetailFeature {
         }
 
         public mutating func updateNextUpEpisode() {
-            let allEps = allEpisodes.values.flatMap(\.self).sorted {
-                if $0.season != $1.season {
-                    return $0.season < $1.season
-                }
-                return $0.episodeNum < $1.episodeNum
-            }
+            let allEps = SeriesEpisodeCatalogNormalizer.sorted(allEpisodes.values.flatMap(\.self))
             if let history = historyItem, let currentIndex = allEps.firstIndex(where: { $0.id == history.id }) {
                 let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
                 if isFinished {
@@ -168,9 +196,18 @@ public struct SeriesDetailFeature {
 
     public enum Action {
         case onAppear
+        case presentationOverrideLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, override: MediaPresentationOverride?)
+        case editPresentationTapped
+        case dismissPresentationEditor
+        case savePresentationOverride(MediaPresentationOverride?)
+        case presentationOverrideSaved(requestID: UUID, profileScope: ProfileContextSnapshot)
         case infoResponse(Result<(info: DetailModels.Info, seasons: [DetailModels.Season], allEpisodes: [String: [DetailModels.Episode]]), Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBTVDetailsDTO, Error>)
+        case watchAvailabilityCountrySelected(String?)
+        case loadWatchAvailability(mediaID: Int)
+        case watchAvailabilityResponse(requestID: UUID, mediaID: Int, result: Result<TMDBWatchProvidersResponseDTO, Error>)
+        case retryWatchAvailability
         case awardRecognitionsResponse(tmdbID: Int, result: Result<[WikidataAwardClient.Recognition], Error>)
         case tmdbOverrideLoaded(Int?)
         case manualTMDBSearch(String)
@@ -185,16 +222,22 @@ public struct SeriesDetailFeature {
         case revealCurrentEpisodeTapped
         case episodeRevealHandled(UUID)
         case episodeSelected(DetailModels.Episode)
+        case shuffleEpisodesTapped(EpisodeShuffleScope)
         case toggleLayoutMode
+        case episodeSortOrderSelected(State.EpisodeSortOrder)
         case playNextEpisodeTapped
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
-        case downloadedEpisodesLoaded([String: Bool])
+        case downloadedEpisodesLoaded(revision: UInt64, episodes: [String: Bool])
         case episodeProgressLoaded([WatchHistoryItem], ProfileContextSnapshot)
-        case shuffleEpisodesTapped(EpisodeShuffleScope)
         case markEpisodeUnwatched(String)
         case downloadEpisode(DetailModels.Episode)
+        case cancelDownloadedEpisodeDeletion
+        case downloadedEpisodeDeletionDialogDismissed
+        case confirmDownloadedEpisodeDeletion
+        case downloadedEpisodeDeletionResponse(id: String, succeeded: Bool)
+        case dismissDownloadError
         case historyStatusLoaded(WatchHistoryItem?, ProfileContextSnapshot)
         case resumeTapped
         case restartTapped
@@ -220,10 +263,13 @@ public struct SeriesDetailFeature {
     @Dependency(\.tmdbMatchOverrideClient) var tmdbMatchOverrideClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.wikidataAwardClient) var wikidataAwardClient
+    @Dependency(\.mediaPresentationOverrideClient) var mediaPresentationOverrideClient
+    @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.dismiss) var dismiss
 
     private nonisolated enum CancelID: Hashable, Sendable {
         case awardRecognitions
+        case watchAvailability
     }
 
     public init() {}
@@ -235,34 +281,80 @@ public struct SeriesDetailFeature {
         let cloudSyncClient = cloudSyncClient
         let tmdbMatchOverrideClient = tmdbMatchOverrideClient
         let wikidataAwardClient = wikidataAwardClient
+        let mediaPresentationOverrideClient = mediaPresentationOverrideClient
+        let settingsClient = settingsClient
 
         Reduce { state, action in
             switch action {
             case .onAppear:
-                guard !state.isLoading, state.seasons.isEmpty else { return .none }
+                let savedWatchAvailabilityCountry = settingsClient.getWatchAvailabilityRegionCode()
+                if state.watchAvailabilityCountryCode != savedWatchAvailabilityCountry {
+                    state.watchAvailabilityFailed = false
+                    if let mediaID = state.tmdbTV?.id,
+                       state.watchAvailabilityLoadedMediaID == mediaID,
+                       let response = state.watchAvailabilityResponse
+                    {
+                        state.watchAvailability = savedWatchAvailabilityCountry.flatMap { response.results?[$0] }
+                        state.isWatchAvailabilityLoading = false
+                    } else {
+                        state.watchAvailability = nil
+                    }
+                }
+                state.watchAvailabilityCountryCode = savedWatchAvailabilityCountry
+                let existingAvailabilityEffect: Effect<Action> = if savedWatchAvailabilityCountry != nil,
+                                                                    let mediaID = state.tmdbTV?.id
+                {
+                    .send(.loadWatchAvailability(mediaID: mediaID))
+                } else {
+                    .none
+                }
+                let profileScope = profileContextClient.snapshot()
+                state.episodeSortOrder = SeriesEpisodeSortPreference.load(
+                    profileID: profileScope.profileID,
+                    playlistID: state.config.playlistID,
+                    seriesID: state.series.id
+                ) ?? .oldestFirst
+                let seriesID = state.series.id
+                let presentationRequestID = UUID()
+                if state.presentationProfileScope != profileScope {
+                    state.series = state.series.replacingPresentationOverride(nil)
+                    state.isPresentationOverrideLoaded = false
+                }
+                state.presentationProfileScope = profileScope
+                state.presentationOverrideRequestID = presentationRequestID
+                let presentationOverrideEffect: Effect<Action> = if let playlistID = state.config.playlistID {
+                    .run { send in
+                        let overrides = await mediaPresentationOverrideClient.load(profileScope.profileID, playlistID, .series)
+                        guard profileContextClient.snapshot() == profileScope else { return }
+                        await send(.presentationOverrideLoaded(
+                            requestID: presentationRequestID,
+                            profileScope: profileScope,
+                            override: overrides[seriesID]
+                        ))
+                    }
+                } else {
+                    .none
+                }
+                guard !state.isLoading, state.seasons.isEmpty else {
+                    return .merge(presentationOverrideEffect, existingAvailabilityEffect)
+                }
                 state.isLoading = true
                 state.isTMDBLoading = true
                 state.errorMessage = nil
 
                 let config = state.config
-                let seriesID = state.series.id
                 let searchTitle = state.series.title.cleanedForTMDBSearch()
-                let profileScope = profileContextClient.snapshot()
                 let playlistID = config.playlistID
+                let downloadedEpisodesRevision = state.downloadedEpisodesRevision
 
                 print("Fetching Series Info and TMDB details for: \(searchTitle)")
 
                 let infoEffect: Effect<Action> = .run { send in
                     do {
                         let result = try await iptvClient.fetchSeriesInfo(config, seriesID)
-                        var parsed: [String: [DetailModels.Episode]] = [:]
-                        for ep in result.episodes {
-                            let seasonStr = String(ep.season)
-                            parsed[seasonStr, default: []].append(ep)
-                        }
-                        for (key, eps) in parsed {
-                            parsed[key] = eps.sorted { $0.episodeNum < $1.episodeNum }
-                        }
+                        let episodes = result.episodes
+                        let parsed = Dictionary(grouping: episodes, by: { String($0.season) })
+                            .mapValues { SeriesEpisodeCatalogNormalizer.sorted($0) }
                         await send(.infoResponse(.success((info: result.info, seasons: result.seasons, allEpisodes: parsed))))
                     } catch {
                         await send(.infoResponse(.failure(error)))
@@ -293,7 +385,7 @@ public struct SeriesDetailFeature {
                 let downloadEffect: Effect<Action> = .run { send in
                     let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
                     let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
-                    await send(.downloadedEpisodesLoaded(dict))
+                    await send(.downloadedEpisodesLoaded(revision: downloadedEpisodesRevision, episodes: dict))
                 }
 
                 let episodesHistoryEffect: Effect<Action> = .run { [id = state.series.id] send in
@@ -310,7 +402,136 @@ public struct SeriesDetailFeature {
                     .none
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, episodesHistoryEffect, overrideEffect)
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, episodesHistoryEffect, overrideEffect, presentationOverrideEffect, existingAvailabilityEffect)
+
+            case let .watchAvailabilityCountrySelected(countryCode):
+                guard countryCode == nil || TMDBWatchAvailabilityRegionCode.normalized(countryCode) != nil else { return .none }
+                let normalizedCode = TMDBWatchAvailabilityRegionCode.normalized(countryCode)
+                guard state.watchAvailabilityCountryCode != normalizedCode else { return .none }
+                settingsClient.setWatchAvailabilityRegionCode(normalizedCode)
+                state.watchAvailabilityCountryCode = normalizedCode
+                state.watchAvailabilityFailed = false
+                if let normalizedCode,
+                   let mediaID = state.tmdbTV?.id,
+                   state.watchAvailabilityLoadedMediaID == mediaID,
+                   state.watchAvailabilityLoadedAt != nil,
+                   let response = state.watchAvailabilityResponse
+                {
+                    state.watchAvailability = response.results?[normalizedCode]
+                    state.isWatchAvailabilityLoading = false
+                    return .none
+                }
+                state.watchAvailability = nil
+                guard let normalizedCode, let mediaID = state.tmdbTV?.id else { return .none }
+                return .send(.loadWatchAvailability(mediaID: mediaID))
+
+            case let .loadWatchAvailability(mediaID):
+                guard state.watchAvailabilityCountryCode != nil, state.tmdbTV?.id == mediaID else { return .none }
+                if let loadedMediaID = state.watchAvailabilityLoadedMediaID, loadedMediaID != mediaID {
+                    state.watchAvailabilityResponse = nil
+                    state.watchAvailabilityLoadedAt = nil
+                    state.watchAvailabilityLoadedMediaID = nil
+                    state.watchAvailability = nil
+                }
+                if state.watchAvailabilityLoadedMediaID == mediaID,
+                   state.watchAvailabilityLoadedAt != nil,
+                   let response = state.watchAvailabilityResponse
+                {
+                    state.watchAvailability = state.watchAvailabilityCountryCode.flatMap { response.results?[$0] }
+                    state.isWatchAvailabilityLoading = false
+                    state.watchAvailabilityFailed = false
+                    return .none
+                }
+                guard state.watchAvailabilityRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.watchAvailabilityRequestID = requestID
+                state.isWatchAvailabilityLoading = true
+                state.watchAvailabilityFailed = false
+                return Self.makeWatchAvailabilityRequest(
+                    requestID: requestID,
+                    mediaID: mediaID,
+                    fetch: tmdbClient.fetchTVWatchProviders
+                )
+
+            case let .watchAvailabilityResponse(requestID, mediaID, .success(response)):
+                guard state.watchAvailabilityRequestID == requestID,
+                      state.tmdbTV?.id == mediaID else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailabilityResponse = response
+                state.watchAvailability = state.watchAvailabilityCountryCode.flatMap { response.results?[$0] }
+                state.watchAvailabilityLoadedAt = Date()
+                state.watchAvailabilityLoadedMediaID = mediaID
+                return .none
+
+            case let .watchAvailabilityResponse(requestID, mediaID, .failure):
+                guard state.watchAvailabilityRequestID == requestID,
+                      state.tmdbTV?.id == mediaID else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = true
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                return .none
+
+            case .retryWatchAvailability:
+                guard state.watchAvailabilityCountryCode != nil,
+                      let mediaID = state.tmdbTV?.id else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                return .send(.loadWatchAvailability(mediaID: mediaID))
+
+            case let .presentationOverrideLoaded(requestID, profileScope, override):
+                guard state.presentationOverrideRequestID == requestID,
+                      state.presentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                state.series = state.series.replacingPresentationOverride(override)
+                state.isPresentationOverrideLoaded = true
+                return .none
+
+            case .editPresentationTapped:
+                guard state.canManagePresentation, state.isPresentationOverrideLoaded else { return .none }
+                state.isPresentationEditorPresented = true
+                return .none
+
+            case .dismissPresentationEditor:
+                state.isPresentationEditorPresented = false
+                return .none
+
+            case let .savePresentationOverride(override):
+                guard let playlistID = state.config.playlistID,
+                      let profileScope = state.presentationProfileScope,
+                      profileContextClient.snapshot() == profileScope
+                else {
+                    state.isPresentationEditorPresented = false
+                    return .none
+                }
+                let requestID = UUID()
+                state.presentationOverrideRequestID = requestID
+                state.series = state.series.replacingPresentationOverride(override)
+                state.isPresentationOverrideLoaded = true
+                state.isPresentationEditorPresented = false
+                let mediaID = state.series.id
+                return .run { send in
+                    await mediaPresentationOverrideClient.save(override, mediaID, profileScope.profileID, playlistID, .series)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    await send(.presentationOverrideSaved(requestID: requestID, profileScope: profileScope))
+                }
+
+            case let .presentationOverrideSaved(requestID, profileScope):
+                guard state.presentationOverrideRequestID == requestID,
+                      state.presentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                return .none
 
             case let .infoResponse(.success(result)):
                 let previousSeason = state.selectedSeasonNumber
@@ -376,13 +597,19 @@ public struct SeriesDetailFeature {
                 if !state.seasons.isEmpty {
                     state.isLoading = false
                 }
-                return .run { send in
+                let awardEffect = Effect<Action>.run { send in
                     await send(.awardRecognitionsResponse(
                         tmdbID: tvDetails.id,
                         result: Result { try await wikidataAwardClient.fetchRecognitions([tvDetails.id], .series) }
                     ))
                 }
                 .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
+                let availabilityEffect: Effect<Action> = if state.watchAvailabilityCountryCode != nil {
+                    .send(.loadWatchAvailability(mediaID: tvDetails.id))
+                } else {
+                    .none
+                }
+                return .merge(awardEffect, availabilityEffect)
 
             case let .awardRecognitionsResponse(tmdbID, .success(recognitions)):
                 guard state.tmdbTV?.id == tmdbID else { return .none }
@@ -409,10 +636,17 @@ public struct SeriesDetailFeature {
                 state.isTMDBLoading = false
                 state.tmdbTV = nil
                 state.awardRecognitions = []
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
                 if !state.seasons.isEmpty {
                     state.isLoading = false
                 }
-                return .cancel(id: CancelID.awardRecognitions)
+                return .merge(.cancel(id: CancelID.awardRecognitions), .cancel(id: CancelID.watchAvailability))
 
             case let .tmdbOverrideLoaded(tmdbID):
                 guard !state.didUserChangeTMDBMatch else { return .none }
@@ -421,9 +655,15 @@ public struct SeriesDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = tmdbID
                 state.isTMDBLoading = true
-                return .run { send in
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                return .merge(.cancel(id: CancelID.watchAvailability), .run { send in
                     await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchTVDetails(tmdbID) }))
-                }
+                })
 
             case let .manualTMDBSearch(query):
                 state.isTMDBMatchPickerPresented = true
@@ -478,12 +718,20 @@ public struct SeriesDetailFeature {
                 state.tmdbTV = nil
                 state.awardRecognitions = []
                 state.isTMDBLoading = true
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
                 let itemID = state.series.id
                 let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
                 let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
                 state.lastTMDBMatchWriteRevision = revision
                 return .merge(
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .run { _ in await tmdbMatchOverrideClient.save(tmdbID, playlistID, .series, itemID, cloudSyncEnabled, revision) },
                     .run { send in
                         await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchTVDetails(tmdbID) }))
@@ -497,20 +745,33 @@ public struct SeriesDetailFeature {
                 state.isTMDBLoading = false
                 state.isLoading = false
                 state.isTMDBMatchPickerPresented = false
-                return .run { send in
+                let awardEffect: Effect<Action> = .run { send in
                     await send(.awardRecognitionsResponse(
                         tmdbID: details.id,
                         result: Result { try await wikidataAwardClient.fetchRecognitions([details.id], .series) }
                     ))
                 }
                 .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
+                let availabilityEffect: Effect<Action> = if state.watchAvailabilityCountryCode != nil {
+                    .send(.loadWatchAvailability(mediaID: details.id))
+                } else {
+                    .none
+                }
+                return .merge(awardEffect, availabilityEffect)
 
             case let .manualTMDBDetailsResponse(tmdbID, .failure):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.isTMDBLoading = false
                 state.tmdbTV = nil
                 state.awardRecognitions = []
-                return .cancel(id: CancelID.awardRecognitions)
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                return .merge(.cancel(id: CancelID.awardRecognitions), .cancel(id: CancelID.watchAvailability))
 
             case .clearTMDBMatchOverride:
                 guard let playlistID = state.config.playlistID else { return .none }
@@ -523,10 +784,18 @@ public struct SeriesDetailFeature {
                 state.selectedTMDBMatchID = nil
                 state.tmdbTV = nil
                 state.awardRecognitions = []
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
                 state.isTMDBMatchPickerPresented = false
                 let query = state.series.title.cleanedForTMDBSearch()
                 return .merge(
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .run { _ in await tmdbMatchOverrideClient.save(nil, playlistID, .series, itemID, cloudSyncEnabled, revision) },
                     .run { send in await send(.tmdbSearchResponse(Result { try await tmdbClient.searchTV(query) })) }
                 )
@@ -568,11 +837,33 @@ public struct SeriesDetailFeature {
                 state.episodeLayoutMode = state.episodeLayoutMode == .list ? .grid : .list
                 return .none
 
+            case let .episodeSortOrderSelected(order):
+                state.episodeSortOrder = order
+                SeriesEpisodeSortPreference.save(
+                    order,
+                    profileID: profileContextClient.snapshot().profileID,
+                    playlistID: state.config.playlistID,
+                    seriesID: state.series.id
+                )
+                return .none
+
             case .playNextEpisodeTapped:
                 if let nextEp = state.nextUpEpisode {
                     return .send(.episodeSelected(nextEp))
                 }
                 return .none
+
+            case let .shuffleEpisodesTapped(scope):
+                let episodes: [DetailModels.Episode] = switch scope {
+                case .selectedSeason:
+                    state.currentEpisodes
+                case .series:
+                    state.sequentialPlaylistEpisodes
+                }
+                guard episodes.count > 1 else { return .none }
+                let playbackOrder = episodes.shuffled()
+                guard let firstEpisode = playbackOrder.first else { return .none }
+                return playEpisode(firstEpisode, playbackOrder: playbackOrder, state: &state)
 
             case let .episodeProgressLoaded(items, scope):
                 guard profileContextClient.snapshot() == scope else { return .none }
@@ -587,19 +878,6 @@ public struct SeriesDetailFeature {
                 else { return .none }
                 state.episodeProgressMap.removeValue(forKey: id)
                 if state.historyItem?.id == id {
-            case let .shuffleEpisodesTapped(scope):
-                let episodes: [DetailModels.Episode]
-                switch scope {
-                case .selectedSeason:
-                    episodes = state.currentEpisodes
-                case .series:
-                    episodes = state.sequentialPlaylistEpisodes
-                }
-                guard episodes.count > 1 else { return .none }
-                let playbackOrder = episodes.shuffled()
-                guard let firstEpisode = playbackOrder.first else { return .none }
-                return playEpisode(firstEpisode, playbackOrder: playbackOrder, state: &state)
-
                     state.historyItem = nil
                 }
                 state.updateNextUpEpisode()
@@ -636,6 +914,8 @@ public struct SeriesDetailFeature {
                     streamURL: streamURL,
                     coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                     seriesID: state.series.id,
+                    seasonNumber: matchingEpisode?.season,
+                    episodeNumber: matchingEpisode?.episodeNum,
                     startPosition: startPosition,
                     initialDuration: history.duration > 0 ? history.duration : nil,
                     initialProgress: history.progress > 0 ? history.progress : nil,
@@ -650,6 +930,8 @@ public struct SeriesDetailFeature {
                         streamURL: ep.streamURL,
                         coverURL: ep.coverURL ?? state.series.coverURL,
                         seriesID: state.series.id,
+                        seasonNumber: ep.season,
+                        episodeNumber: ep.episodeNum,
                         config: state.config
                     )
                 }
@@ -674,6 +956,8 @@ public struct SeriesDetailFeature {
                         streamURL: streamURL,
                         coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
                         seriesID: state.series.id,
+                        seasonNumber: matchingEpisode?.season,
+                        episodeNumber: matchingEpisode?.episodeNum,
                         startPosition: 0.0,
                         config: state.config
                     )
@@ -686,6 +970,8 @@ public struct SeriesDetailFeature {
                             streamURL: ep.streamURL,
                             coverURL: ep.coverURL ?? state.series.coverURL,
                             seriesID: state.series.id,
+                            seasonNumber: ep.season,
+                            episodeNumber: ep.episodeNum,
                             config: state.config
                         )
                     }
@@ -699,13 +985,13 @@ public struct SeriesDetailFeature {
                 #if os(tvOS)
                     return .none
                 #else
-                guard state.trailerPresentationRequestID == nil else { return .none }
-                guard let key = state.resolvedTrailerKey else { return .none }
-                let requestID = UUID()
-                state.trailerPresentationRequestID = requestID
-                state.trailerVideoKey = key
-                state.isTrailerPresented = true
-                return .send(.delegate(.presentTrailer(requestID: requestID)))
+                    guard state.trailerPresentationRequestID == nil else { return .none }
+                    guard let key = state.resolvedTrailerKey else { return .none }
+                    let requestID = UUID()
+                    state.trailerPresentationRequestID = requestID
+                    state.trailerVideoKey = key
+                    state.isTrailerPresented = true
+                    return .send(.delegate(.presentTrailer(requestID: requestID)))
                 #endif
 
             case let .coordinatorDismissTrailer(requestID):
@@ -732,24 +1018,44 @@ public struct SeriesDetailFeature {
                 state.isFavorite = isFav
                 return .none
 
-            case let .downloadedEpisodesLoaded(dict):
-                state.downloadedEpisodes = dict
+            case let .downloadedEpisodesLoaded(revision, dict):
+                var currentDownloadedEpisodes = dict
+                for (episodeID, deletionRevision) in state.deletedEpisodeRevisions where revision < deletionRevision {
+                    currentDownloadedEpisodes[episodeID] = nil
+                }
+                state.downloadedEpisodes = currentDownloadedEpisodes
+                if let pendingID = state.pendingDeleteEpisodeID, currentDownloadedEpisodes[pendingID] != true {
+                    state.pendingDeleteEpisodeID = nil
+                    state.pendingDeleteEpisodeTitle = nil
+                    state.isConfirmingEpisodeDeletion = false
+                }
                 return .none
 
             case let .downloadEpisode(episode):
+                guard !state.deletingEpisodeIDs.contains(episode.id) else { return .none }
+                state.pendingDeleteEpisodeID = nil
+                state.pendingDeleteEpisodeTitle = nil
+                state.isConfirmingEpisodeDeletion = false
+                state.downloadErrorMessage = nil
                 if state.downloadedEpisodes[episode.id] == true {
-                    return .run { send in
-                        try? await downloadClient.deleteDownloadedMedia(episode.id)
-                        let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
-                        let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
-                        await send(.downloadedEpisodesLoaded(dict))
-                    }
+                    state.pendingDeleteEpisodeID = episode.id
+                    state.pendingDeleteEpisodeTitle = "\(state.series.title) - S\(episode.season)E\(episode.episodeNum): \(episode.title)"
+                    state.isConfirmingEpisodeDeletion = true
+                    return .none
                 } else {
                     let streamURL = episode.streamURL
 
                     let id = episode.id
                     let title = "\(state.series.title) - S\(episode.season)E\(episode.episodeNum): \(episode.title)"
                     let userAgentOverride = state.config.userAgentOverride
+                    let episodeMetadata = OfflineEpisodeMetadata(
+                        seriesID: state.series.id,
+                        seriesTitle: state.series.title,
+                        seasonNumber: episode.season,
+                        episodeNumber: episode.episodeNum,
+                        episodeOrdinal: state.sequentialPlaylistEpisodes.firstIndex(where: { $0.id == episode.id }),
+                        playlistID: state.config.playlistID
+                    )
 
                     let finalCoverURL: URL? = {
                         if let url = episode.coverURL {
@@ -762,13 +1068,63 @@ public struct SeriesDetailFeature {
                         return nil
                     }()
 
+                    let revision = state.downloadedEpisodesRevision
                     return .run { send in
-                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
+                        try? await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride, episodeMetadata)
                         let downloaded = await (try? downloadClient.getDownloadedMedia()) ?? []
                         let dict = Dictionary(downloaded.filter(\.isAvailable).map { ($0.id, true) }, uniquingKeysWith: { current, _ in current })
-                        await send(.downloadedEpisodesLoaded(dict))
+                        await send(.downloadedEpisodesLoaded(revision: revision, episodes: dict))
                     }
                 }
+
+            case .cancelDownloadedEpisodeDeletion:
+                state.pendingDeleteEpisodeID = nil
+                state.pendingDeleteEpisodeTitle = nil
+                state.isConfirmingEpisodeDeletion = false
+                return .none
+
+            case .downloadedEpisodeDeletionDialogDismissed:
+                // Preserve the pending ID until the dialog action is delivered.
+                // SwiftUI may update the presentation binding before the button action.
+                state.isConfirmingEpisodeDeletion = false
+                return .none
+
+            case .confirmDownloadedEpisodeDeletion:
+                guard let id = state.pendingDeleteEpisodeID,
+                      state.downloadedEpisodes[id] == true,
+                      state.deletingEpisodeIDs.insert(id).inserted
+                else {
+                    state.pendingDeleteEpisodeID = nil
+                    state.pendingDeleteEpisodeTitle = nil
+                    state.isConfirmingEpisodeDeletion = false
+                    return .none
+                }
+                state.pendingDeleteEpisodeID = nil
+                state.pendingDeleteEpisodeTitle = nil
+                state.isConfirmingEpisodeDeletion = false
+                return .run { send in
+                    do {
+                        try await downloadClient.deleteDownloadedMedia(id)
+                        await send(.downloadedEpisodeDeletionResponse(id: id, succeeded: true))
+                    } catch {
+                        await send(.downloadedEpisodeDeletionResponse(id: id, succeeded: false))
+                    }
+                }
+
+            case let .downloadedEpisodeDeletionResponse(id, succeeded):
+                state.deletingEpisodeIDs.remove(id)
+                if succeeded {
+                    state.downloadedEpisodesRevision &+= 1
+                    state.deletedEpisodeRevisions[id] = state.downloadedEpisodesRevision
+                    state.downloadedEpisodes[id] = nil
+                } else {
+                    state.downloadErrorMessage = AppStrings.Downloads.deleteDownloadFailure
+                }
+                return .none
+
+            case .dismissDownloadError:
+                state.downloadErrorMessage = nil
+                return .none
 
             case .toggleFavorite:
                 let profileScope = profileContextClient.snapshot()
@@ -786,21 +1142,43 @@ public struct SeriesDetailFeature {
                 }
 
             case .closeTapped:
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
                 return .merge(
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .send(.delegate(.close))
                 )
 
             case .viewDidDisappear:
                 state.pendingEpisodeReveal = nil
-                return .cancel(id: CancelID.awardRecognitions)
+                state.pendingDeleteEpisodeID = nil
+                state.pendingDeleteEpisodeTitle = nil
+                state.isConfirmingEpisodeDeletion = false
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                return .merge(.cancel(id: CancelID.awardRecognitions), .cancel(id: CancelID.watchAvailability))
 
             case .delegate:
                 return .none
             }
         }
     }
-}
+
+    private static func makeWatchAvailabilityRequest(
+        requestID: UUID,
+        mediaID: Int,
+        fetch: @escaping @Sendable (Int) async throws -> TMDBWatchProvidersResponseDTO
+    ) -> Effect<Action> {
+        .run { send in
+            await send(.watchAvailabilityResponse(
+                requestID: requestID,
+                mediaID: mediaID,
+                result: Result { try await fetch(mediaID) }
+            ))
+        }
+        .cancellable(id: CancelID.watchAvailability, cancelInFlight: true)
+    }
 
     private func playEpisode(
         _ episode: DetailModels.Episode,
@@ -824,6 +1202,7 @@ public struct SeriesDetailFeature {
         } else {
             nil
         }
+        let episodeOrdinal = state.sequentialPlaylistEpisodes.firstIndex(where: { $0.id == episode.id })
 
         let playable = PlayerFeature.PlayableItem(
             id: episode.id,
@@ -832,13 +1211,16 @@ public struct SeriesDetailFeature {
             streamURL: episode.streamURL,
             coverURL: episode.coverURL ?? state.series.coverURL,
             seriesID: state.series.id,
+            episodeOrdinal: episodeOrdinal,
+            seasonNumber: episode.season,
+            episodeNumber: episode.episodeNum,
             startPosition: startPosition,
             initialDuration: history?.duration,
             initialProgress: initialProgress,
             config: state.config
         )
         let playlistEpisodes = playbackOrder ?? state.sequentialPlaylistEpisodes
-        let playlist = playlistEpisodes.isEmpty ? nil : playlistEpisodes.map { item in
+        let playlist = playlistEpisodes.isEmpty ? nil : Array(playlistEpisodes.enumerated().map { index, item in
             PlayerFeature.PlayableItem(
                 id: item.id,
                 title: "\(state.series.title) - S\(String(format: "%02d", item.season))E\(String(format: "%02d", item.episodeNum))",
@@ -846,8 +1228,12 @@ public struct SeriesDetailFeature {
                 streamURL: item.streamURL,
                 coverURL: item.coverURL ?? state.series.coverURL,
                 seriesID: state.series.id,
+                episodeOrdinal: index,
+                seasonNumber: item.season,
+                episodeNumber: item.episodeNum,
                 config: state.config
             )
-        }
+        })
         return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
     }
+}

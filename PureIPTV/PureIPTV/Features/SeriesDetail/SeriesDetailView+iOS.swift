@@ -49,17 +49,31 @@
                 store.send(.viewDidDisappear)
             }
             .overlay(alignment: .topTrailing) {
-                if store.canManageTMDBMatch {
-                    Button { store.send(.showTMDBMatchPicker) } label: {
-                        Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(.ultraThinMaterial, in: Capsule())
+                VStack(alignment: .trailing, spacing: 8) {
+                    if store.canManageTMDBMatch {
+                        Button { store.send(.showTMDBMatchPicker) } label: {
+                            Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
                     }
-                    .padding(.top, 12)
-                    .padding(.trailing, 16)
+
+                    if store.canManagePresentation {
+                        Button { store.send(.editPresentationTapped) } label: {
+                            Label(AppStrings.MediaPresentation.edit, systemImage: "pencil")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                        .disabled(!store.isPresentationOverrideLoaded)
+                        .accessibilityHint(AppStrings.MediaPresentation.localOnlyDescription)
+                    }
                 }
+                .padding(.top, 12)
+                .padding(.trailing, 16)
             }
             #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -91,11 +105,48 @@
             }
         }
 
+        private var episodeSortMenu: some View {
+            Menu {
+                Section(AppStrings.Settings.contentSorting) {
+                    Button {
+                        store.send(.episodeSortOrderSelected(.oldestFirst))
+                    } label: {
+                        if store.episodeSortOrder == .oldestFirst {
+                            Label(AppStrings.SeriesDetail.oldestEpisodesFirst, systemImage: "checkmark")
+                        } else {
+                            Text(AppStrings.SeriesDetail.oldestEpisodesFirst)
+                        }
+                    }
+
+                    Button {
+                        store.send(.episodeSortOrderSelected(.newestFirst))
+                    } label: {
+                        if store.episodeSortOrder == .newestFirst {
+                            Label(AppStrings.SeriesDetail.newestEpisodesFirst, systemImage: "checkmark")
+                        } else {
+                            Text(AppStrings.SeriesDetail.newestEpisodesFirst)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 34, height: 34)
+                    .background(Color(hex: "#1A1A24"), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(AppStrings.Settings.contentSorting)
+            .accessibilityValue(store.episodeSortOrder.title)
+        }
+
         private var headerView: some View {
             ZStack(alignment: .bottom) {
                 // Background Blur
                 GeometryReader { proxy in
                     let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
+                        store.series.presentationOverride?.posterURL?.absoluteString ??
                         store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
                         store.series.coverURL?.absoluteString
 
@@ -131,7 +182,8 @@
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .bottom, spacing: 16) {
                         // Poster
-                        let cover = store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
+                        let cover = store.series.presentationOverride?.posterURL?.absoluteString ??
+                            store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
 
                         if let urlString = cover, let url = URL(string: urlString) {
                             PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
@@ -159,7 +211,7 @@
 
                         // Info block
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(store.tmdbTV?.name ?? store.series.title)
+                            Text(store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title)
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(.white)
                                 .lineLimit(3)
@@ -167,6 +219,16 @@
 
                             // Rating and Status
                             HStack(spacing: 8) {
+                                if let year = store.series.presentationOverride?.year {
+                                    Text(String(year))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.75))
+                                } else if let releaseDate = store.tmdbTV?.firstAirDate ?? store.info?.releaseDate ?? store.series.releaseDate, !releaseDate.isEmpty {
+                                    Text(String(releaseDate.prefix(4)))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.75))
+                                }
+
                                 if let rating = store.tmdbTV?.voteAverage ?? store.info?.rating, rating > 0 {
                                     HStack(spacing: 4) {
                                         Image(systemName: "star.fill")
@@ -376,7 +438,7 @@
                         lineLimit: 5,
                         onPresent: { onPresentSynopsis(plotText) }
                     )
-                        .padding(.horizontal, 24)
+                    .padding(.horizontal, 24)
                 } else if store.isTMDBLoading || store.isLoading {
                     VStack(alignment: .leading, spacing: 6) {
                         RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)).frame(height: 14)
@@ -391,6 +453,17 @@
                     AwardRecognitionMetadataView(recognitions: store.awardRecognitions)
                         .padding(.horizontal, 24)
                 }
+
+                WatchAvailabilitySection(
+                    countryCode: store.watchAvailabilityCountryCode,
+                    availability: store.watchAvailability,
+                    updatedAt: store.watchAvailabilityLoadedAt,
+                    isLoading: store.isWatchAvailabilityLoading,
+                    failed: store.watchAvailabilityFailed,
+                    onSelectCountry: { store.send(.watchAvailabilityCountrySelected($0)) },
+                    onRetry: { store.send(.retryWatchAvailability) }
+                )
+                .padding(.horizontal, 24)
 
                 // Seasons Header
                 if !store.seasons.isEmpty {
@@ -436,7 +509,7 @@
                             episode: nextEp,
                             userAgentOverride: store.config.userAgentOverride,
                             playlistID: store.config.playlistID,
-                            seriesTitle: store.series.title,
+                            seriesTitle: store.series.displayTitle,
                             progressItem: store.episodeProgressMap[nextEp.id],
                             onPlay: {
                                 store.send(.playNextEpisodeTapped)
@@ -444,6 +517,11 @@
                         )
                         .padding(.horizontal, 24)
                     }
+                }
+
+                if let diagnostics = store.info?.seriesCatalogDiagnostics, !diagnostics.isEmpty {
+                    SeriesEpisodeCatalogDiagnosticsView(diagnostics: diagnostics)
+                        .padding(.horizontal, 24)
                 }
 
                 // Episodes List & Grid Toggle
@@ -460,6 +538,8 @@
                                 Text("\(store.currentEpisodes.count) \(AppStrings.SeriesDetail.episodeCount)")
                                     .font(.system(size: 13.5))
                                     .foregroundStyle(Color.white.opacity(0.6))
+
+                                episodeSortMenu
                             }
 
                             if store.canShuffleEpisodes {
@@ -509,13 +589,14 @@
 
                         if store.episodeLayoutMode == .list {
                             LazyVStack(spacing: 12) {
-                                ForEach(store.currentEpisodes) { episode in
+                                ForEach(store.displayEpisodes) { episode in
                                     EpisodeCardView(
                                         episode: episode,
                                         userAgentOverride: store.config.userAgentOverride,
                                         playlistID: store.config.playlistID,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
+                                        isDeleting: store.deletingEpisodeIDs.contains(episode.id),
                                         layoutMode: .list,
                                         onPlay: {
                                             store.send(.episodeSelected(episode))
@@ -539,13 +620,14 @@
                                 ],
                                 spacing: 14
                             ) {
-                                ForEach(store.currentEpisodes) { episode in
+                                ForEach(store.displayEpisodes) { episode in
                                     EpisodeCardView(
                                         episode: episode,
                                         userAgentOverride: store.config.userAgentOverride,
                                         playlistID: store.config.playlistID,
                                         progressItem: store.episodeProgressMap[episode.id],
                                         isDownloaded: store.downloadedEpisodes[episode.id] == true,
+                                        isDeleting: store.deletingEpisodeIDs.contains(episode.id),
                                         layoutMode: .grid,
                                         onPlay: {
                                             store.send(.episodeSelected(episode))
@@ -594,7 +676,5 @@
                 Spacer().frame(height: 40)
             }
         }
-
-
     }
 #endif

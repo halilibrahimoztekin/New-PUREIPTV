@@ -134,6 +134,31 @@ public enum ChannelSortOption: String, CaseIterable, Identifiable, Codable, Send
     }
 }
 
+/// Sort modes for the Live TV catalog grid. Kept separate from `ChannelSortOption`
+/// because that type also drives the player sidebar, which has no catalog-wide EPG data.
+public enum LiveTVChannelSortOption: String, CaseIterable, Identifiable, Codable, Sendable {
+    case providerOrder = "provider_order"
+    case currentProgramStartTime = "current_program_start_time"
+
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .providerOrder: AppStrings.LiveTV.sortDefault
+        case .currentProgramStartTime: AppStrings.LiveTV.sortProgramStartTime
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .providerOrder: "list.number"
+        case .currentProgramStartTime: "clock"
+        }
+    }
+}
+
 /// A sort preference scoped to the live favorites for one profile and playlist.
 public enum FavoriteChannelSortMode: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case defaultOrder

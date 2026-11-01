@@ -89,17 +89,17 @@
             case .liveTV:
                 LiveTVView(
                     store: store.scope(state: \.liveTV, action: \.liveTV),
-                    config: store.config
+                    config: store.liveTVSourceConfig
                 )
             case .movies:
                 VODView(
                     store: store.scope(state: \.vod, action: \.vod),
-                    config: store.config
+                    config: store.moviesSourceConfig
                 )
             case .series:
                 SeriesView(
                     store: store.scope(state: \.series, action: \.series),
-                    config: store.config
+                    config: store.seriesSourceConfig
                 )
             case .search:
                 SearchView_tvOS(

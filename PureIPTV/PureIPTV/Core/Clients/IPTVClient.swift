@@ -1,11 +1,66 @@
 import ComposableArchitecture
+import CryptoKit
 @preconcurrency import Foundation
+
+private actor M3UResponseBodyCollector {
+    private let maximumBytes: Int
+    private var body = Data()
+    private var canRetainBody = true
+
+    init(maximumBytes: Int) {
+        self.maximumBytes = maximumBytes
+    }
+
+    func append(_ chunk: Data) {
+        guard canRetainBody else { return }
+        guard chunk.count <= maximumBytes - body.count else {
+            canRetainBody = false
+            body.removeAll(keepingCapacity: false)
+            return
+        }
+        body.append(chunk)
+    }
+
+    func retainedBody() -> Data? {
+        canRetainBody ? body : nil
+    }
+}
+
+private actor EPGSourceIdentityKeyStore {
+    private let keychainAccount = "com.pureiptv.epgSourceIdentityHMACKey.v1"
+    private var cachedKeyData: Data?
+
+    func keyData() -> Data? {
+        if let cachedKeyData {
+            return cachedKeyData
+        }
+        do {
+            let encodedKey = try KeychainManager.shared.retrieve(for: keychainAccount, as: String.self)
+            guard let keyData = Data(base64Encoded: encodedKey), keyData.count == 32 else { return nil }
+            cachedKeyData = keyData
+            return keyData
+        } catch KeychainError.itemNotFound {
+            let key = SymmetricKey(size: .bits256)
+            let keyData = key.withUnsafeBytes { Data($0) }
+            do {
+                try KeychainManager.shared.save(keyData.base64EncodedString(), for: keychainAccount)
+                cachedKeyData = keyData
+                return keyData
+            } catch {
+                return nil
+            }
+        } catch {
+            return nil
+        }
+    }
+}
 
 actor M3UCache {
     struct Entry {
         var items: [M3UItemDTO] = []
         var epgURL: URL?
         var xmltvData: XMLTVData?
+        var xmltvFetchedAt: Date?
     }
 
     private var entries: [String: Entry] = [:]
@@ -15,6 +70,7 @@ actor M3UCache {
         var entry = entries[key] ?? Entry()
         if entry.epgURL != epgURL {
             entry.xmltvData = nil
+            entry.xmltvFetchedAt = nil
         }
         entry.items = items
         entry.epgURL = epgURL
@@ -29,14 +85,30 @@ actor M3UCache {
         !(entries[key]?.items.isEmpty ?? true)
     }
 
+    func removeCatalog(for key: String) {
+        entries.removeValue(forKey: key)
+    }
+
     func replaceContent(items: [M3UItemDTO], epgURL: URL?, contentType: PlaylistContentType, for key: String) throws {
+        try replaceContents(items: items, epgURL: epgURL, contentTypes: [contentType], for: key)
+    }
+
+    func replaceContents(
+        items: [M3UItemDTO],
+        epgURL: URL?,
+        contentTypes: Set<PlaylistContentType>,
+        for key: String
+    ) throws {
         try Task.checkCancellation()
+        guard !contentTypes.isEmpty else { return }
         var entry = entries[key] ?? Entry()
         if entry.epgURL != epgURL {
             entry.xmltvData = nil
+            entry.xmltvFetchedAt = nil
         }
-        entry.items.removeAll { $0.resolvedMediaType == contentType.mediaType }
-        entry.items.append(contentsOf: items.filter { $0.resolvedMediaType == contentType.mediaType })
+        let mediaTypes = contentTypes.map(\.mediaType)
+        entry.items.removeAll { mediaTypes.contains($0.resolvedMediaType) }
+        entry.items.append(contentsOf: items.filter { mediaTypes.contains($0.resolvedMediaType) })
         entry.epgURL = epgURL
         entries[key] = entry
     }
@@ -49,17 +121,146 @@ actor M3UCache {
         entries[key]?.xmltvData
     }
 
+    func getXmltvSnapshot(for key: String) -> (data: XMLTVData, fetchedAt: Date)? {
+        guard let entry = entries[key],
+              let xmltvData = entry.xmltvData,
+              let fetchedAt = entry.xmltvFetchedAt else { return nil }
+        return (xmltvData, fetchedAt)
+    }
+
     func setXmltvData(_ data: XMLTVData, for key: String) {
-        entries[key, default: Entry()].xmltvData = data
+        var entry = entries[key] ?? Entry()
+        entry.xmltvData = data
+        entry.xmltvFetchedAt = Date()
+        entries[key] = entry
     }
 
     func replaceXmltvData(_ data: XMLTVData, for key: String) throws {
         try Task.checkCancellation()
-        entries[key, default: Entry()].xmltvData = data
+        var entry = entries[key] ?? Entry()
+        entry.xmltvData = data
+        entry.xmltvFetchedAt = Date()
+        entries[key] = entry
     }
 }
 
-public enum PlaylistContentType: Sendable {
+public struct CachedEPGProgramSnapshot: Equatable, Sendable {
+    public let programs: [EPGProgram]
+    public let sourceFingerprint: String
+    public let fetchedAt: Date
+    public let age: TimeInterval
+
+    fileprivate init(programs: [EPGProgram], sourceFingerprint: String, fetchedAt: Date, age: TimeInterval) {
+        self.programs = programs
+        self.sourceFingerprint = sourceFingerprint
+        self.fetchedAt = fetchedAt
+        self.age = age
+    }
+}
+
+private actor EPGProgramSnapshotCache {
+    private struct Key: Hashable {
+        let sourceFingerprint: String
+        let playlistID: UUID
+        let epgChannelID: String
+    }
+
+    private struct Entry: Sendable {
+        let programs: [EPGProgram]
+        let fetchedAt: Date
+        let cachedAt: Date
+        let requestedProgramLimit: Int?
+    }
+
+    private let snapshotLifetime: TimeInterval = 5 * 60
+    private let maximumEntries = 512
+    private var entries: [Key: Entry] = [:]
+
+    func store(
+        _ programs: [EPGProgram],
+        sourceFingerprint: String,
+        playlistID: UUID,
+        epgChannelID: String,
+        fetchedAt: Date,
+        requestedProgramLimit: Int?,
+        now: Date = Date()
+    ) {
+        let normalizedID = epgChannelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedID.isEmpty, normalizedID.count <= 512 else { return }
+        let sourceAge = now.timeIntervalSince(fetchedAt)
+        guard sourceAge >= 0 else { return }
+
+        entries[Key(
+            sourceFingerprint: sourceFingerprint,
+            playlistID: playlistID,
+            epgChannelID: normalizedID
+        )] = Entry(
+            programs: programs,
+            fetchedAt: fetchedAt,
+            cachedAt: now,
+            requestedProgramLimit: requestedProgramLimit
+        )
+        pruneExpiredSnapshots(now: now)
+        if entries.count > maximumEntries {
+            let oldestKeys = entries.sorted { $0.value.cachedAt < $1.value.cachedAt }
+                .prefix(entries.count - maximumEntries)
+                .map(\.key)
+            oldestKeys.forEach { entries.removeValue(forKey: $0) }
+        }
+    }
+
+    func read(
+        sourceFingerprint: String,
+        playlistID: UUID,
+        epgChannelIDs: [String],
+        requiredProgramCount: Int?,
+        maximumSourceAge: TimeInterval,
+        expectedSourceFetchedAt: Date? = nil,
+        now: Date = Date()
+    ) -> [String: CachedEPGProgramSnapshot] {
+        pruneExpiredSnapshots(now: now)
+        var snapshots: [String: CachedEPGProgramSnapshot] = [:]
+        for value in epgChannelIDs {
+            let channelID = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !channelID.isEmpty, channelID.count <= 512 else { continue }
+            let key = Key(
+                sourceFingerprint: sourceFingerprint,
+                playlistID: playlistID,
+                epgChannelID: channelID
+            )
+            guard let entry = entries[key] else { continue }
+            let satisfiesLimit: Bool = if let requiredProgramCount {
+                entry.requestedProgramLimit.map { $0 >= requiredProgramCount } ?? true
+            } else {
+                entry.requestedProgramLimit == nil
+            }
+            guard satisfiesLimit else { continue }
+            if let expectedSourceFetchedAt,
+               abs(entry.fetchedAt.timeIntervalSince(expectedSourceFetchedAt)) > 0.001
+            {
+                continue
+            }
+            let age = now.timeIntervalSince(entry.fetchedAt)
+            guard age >= 0, age <= maximumSourceAge else { continue }
+            snapshots[channelID] = CachedEPGProgramSnapshot(
+                programs: entry.programs,
+                sourceFingerprint: sourceFingerprint,
+                fetchedAt: entry.fetchedAt,
+                age: age
+            )
+        }
+        return snapshots
+    }
+
+    private func pruneExpiredSnapshots(now: Date) {
+        entries = entries.filter { _, entry in
+            let age = now.timeIntervalSince(entry.cachedAt)
+            return age >= 0 && age <= snapshotLifetime
+        }
+    }
+}
+
+public nonisolated enum PlaylistContentType: CaseIterable, Hashable, Sendable {
     case live
     case movies
     case series
@@ -76,20 +277,29 @@ public enum PlaylistContentType: Sendable {
 public enum M3URefreshStage: Equatable, Sendable {
     case downloading
     case validating
+    case parsing(progress: Int?)
     case replacingCatalog
     case loadingCategories
 
     public var title: String {
         switch self {
-        case .downloading: "Playlist indiriliyor…"
-        case .validating: "Playlist doğrulanıyor…"
-        case .replacingCatalog: "Canlı katalog güncelleniyor…"
-        case .loadingCategories: "Kategoriler yenileniyor…"
+        case .downloading: return "Playlist indiriliyor…".localized
+        case .validating: return "Playlist doğrulanıyor…".localized
+        case let .parsing(progress):
+            let title = "Playlist doğrulanıyor…".localized
+            return progress.map { "\(title) \($0)%" } ?? title
+        case .replacingCatalog: return "Katalog güncelleniyor…".localized
+        case .loadingCategories: return "Kategoriler yenileniyor…".localized
         }
     }
 
     public var canCancel: Bool {
-        self == .downloading || self == .validating
+        switch self {
+        case .downloading, .validating, .parsing:
+            true
+        case .replacingCatalog, .loadingCategories:
+            false
+        }
     }
 }
 
@@ -160,12 +370,39 @@ private func m3uCategory(for item: M3UItemDTO, config: PlaylistConfig, mappings:
     )
 }
 
+private func applyingCategoryNameOverrides(
+    _ categories: [MediaModels.Category],
+    config: PlaylistConfig,
+    mediaType: String,
+    client: CategoryNameOverrideClient
+) async -> [MediaModels.Category] {
+    guard let playlistID = config.playlistID else { return categories }
+    let overrides = await client.load(playlistID, mediaType)
+    return categories.map { category in
+        let sourceName = category.sourceName
+        return MediaModels.Category(
+            id: category.id,
+            name: overrides[category.id] ?? sourceName,
+            sourceName: sourceName
+        )
+    }
+}
+
 @DependencyClient
 public struct IPTVClient {
     public var authenticate: @Sendable (_ config: PlaylistConfig) async throws -> Void
+    public var refreshCatalog: @Sendable (
+        _ config: PlaylistConfig,
+        _ reportStage: @escaping @Sendable (M3URefreshStage) async -> Void
+    ) async throws -> Bool = { _, _ in false }
     public var refreshContent: @Sendable (
         _ config: PlaylistConfig,
         _ contentType: PlaylistContentType,
+        _ reportStage: @escaping @Sendable (M3URefreshStage) async -> Void
+    ) async throws -> Void = { _, _, _ in }
+    public var refreshContents: @Sendable (
+        _ config: PlaylistConfig,
+        _ contentTypes: Set<PlaylistContentType>,
         _ reportStage: @escaping @Sendable (M3URefreshStage) async -> Void
     ) async throws -> Void = { _, _, _ in }
     public var fetchLiveCategories: @Sendable (_ config: PlaylistConfig) async throws -> [MediaModels.Category]
@@ -180,9 +417,22 @@ public struct IPTVClient {
     public var searchMediaServer: @Sendable (_ config: PlaylistConfig, _ query: String) async throws -> (vods: [MediaModels.Item], series: [MediaModels.Item]) = { _, _ in ([], []) }
     public var fetchSeriesInfo: @Sendable (_ config: PlaylistConfig, _ seriesID: String) async throws -> (info: DetailModels.Info, seasons: [DetailModels.Season], episodes: [DetailModels.Episode])
     public var fetchVODInfo: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> DetailModels.Info
-    public var resolveVODItem: @Sendable (_ config: PlaylistConfig, _ vodID: String, _ categoryID: String?) async throws -> MediaModels.Item?
-    public var fetchShortEPG: @Sendable (_ config: PlaylistConfig, _ streamID: String, _ limit: Int?) async throws -> [EPGProgram]
+    public var fetchMediaServerPlaybackOptions: @Sendable (_ config: PlaylistConfig, _ vodID: String) async throws -> [MediaModels.MediaServerPlaybackOption] = { _, _ in [] }
+    public var resolveVODItem: @Sendable (_ config: PlaylistConfig, _ vodID: String, _ categoryID: String?, _ mediaSourceID: String?) async throws -> MediaModels.Item?
+    public var fetchShortEPG: @Sendable (
+        _ config: PlaylistConfig,
+        _ channelID: String,
+        _ epgChannelID: String?,
+        _ limit: Int?
+    ) async throws -> [EPGProgram]
     public var refreshEPGCache: @Sendable (_ config: PlaylistConfig) async throws -> Void
+    public var refreshEPGCacheIfAvailable: @Sendable (_ config: PlaylistConfig) async throws -> Bool = { _ in false }
+    public var resolveEPGSourceIdentity: @Sendable (_ config: PlaylistConfig) async -> EPGSourceIdentity? = { _ in nil }
+    public var cachedEPGPrograms: @Sendable (
+        _ config: PlaylistConfig,
+        _ epgChannelIDs: [String],
+        _ requiredProgramCount: Int?
+    ) async -> [String: CachedEPGProgramSnapshot] = { _, _, _ in [:] }
     public var searchCachedEPGPrograms: @Sendable (_ config: PlaylistConfig, _ query: String, _ channels: [MediaModels.Item], _ limit: Int) async -> [CachedEPGProgramMatch] = { _, _, _, _ in [] }
 }
 
@@ -199,9 +449,102 @@ private func decodeEPGItems(_ data: Data) throws -> [EPGItemDTO] {
     }
 }
 
+private nonisolated struct EPGTimeSpan: Sendable {
+    let start: Date
+    let end: Date
+}
+
+private nonisolated func mergedEPGTimeSpans(_ spans: [EPGTimeSpan]) -> [EPGTimeSpan] {
+    let sorted = spans.filter { $0.start < $0.end }.sorted {
+        if $0.start != $1.start {
+            return $0.start < $1.start
+        }
+        return $0.end < $1.end
+    }
+    var merged: [EPGTimeSpan] = []
+    for span in sorted {
+        guard let last = merged.last, span.start <= last.end else {
+            merged.append(span)
+            continue
+        }
+        merged[merged.count - 1] = EPGTimeSpan(start: last.start, end: max(last.end, span.end))
+    }
+    return merged
+}
+
+private nonisolated func mergeEPGPrograms(
+    primary: [EPGProgram],
+    secondary: [EPGProgram],
+    secondaryLimit: Int?
+) -> [EPGProgram] {
+    guard !secondary.isEmpty else {
+        return primary.sorted { $0.startTime < $1.startTime }
+    }
+
+    var occupied = mergedEPGTimeSpans(primary.map {
+        EPGTimeSpan(start: $0.startTime, end: $0.endTime)
+    })
+    var additions: [EPGProgram] = []
+    let maximumAdditions = secondaryLimit.map { max(0, $0) } ?? secondary.count
+    let now = Date()
+    let orderedSecondary = secondary.filter { $0.startTime < $0.endTime }.sorted {
+        if $0.startTime != $1.startTime {
+            return $0.startTime < $1.startTime
+        }
+        if $0.endTime != $1.endTime {
+            return $0.endTime > $1.endTime
+        }
+        return $0.id.localizedStandardCompare($1.id) == .orderedAscending
+    }
+
+    for program in orderedSecondary {
+        guard additions.count < maximumAdditions else { break }
+        var cursor = program.startTime
+        var gaps: [EPGTimeSpan] = []
+
+        for span in occupied {
+            if span.end <= cursor {
+                continue
+            }
+            if span.start >= program.endTime {
+                break
+            }
+            if span.start > cursor {
+                gaps.append(EPGTimeSpan(start: cursor, end: min(span.start, program.endTime)))
+            }
+            cursor = max(cursor, span.end)
+            if cursor >= program.endTime {
+                break
+            }
+        }
+        if cursor < program.endTime {
+            gaps.append(EPGTimeSpan(start: cursor, end: program.endTime))
+        }
+
+        for gap in gaps where gap.start < gap.end {
+            guard additions.count < maximumAdditions else { break }
+            additions.append(EPGProgram(
+                id: "secondary-\(program.id)-\(Int(gap.start.timeIntervalSince1970))-\(Int(gap.end.timeIntervalSince1970))",
+                title: program.title,
+                description: program.description,
+                startTime: gap.start,
+                endTime: gap.end,
+                isPlayingNow: gap.start <= now && now <= gap.end,
+                categories: program.categories,
+                artworkURL: program.artworkURL
+            ))
+            occupied = mergedEPGTimeSpans(occupied + [gap])
+        }
+    }
+
+    return (primary + additions).sorted { $0.startTime < $1.startTime }
+}
+
 private func isEPGRateLimit(_ error: Error) -> Bool {
     guard let networkError = error as? NetworkError else { return false }
-    if case .rateLimited = networkError { return true }
+    if case .rateLimited = networkError {
+        return true
+    }
     return false
 }
 
@@ -271,44 +614,179 @@ extension IPTVClient: DependencyKey {
     public nonisolated static let liveValue: IPTVClient = {
         let networkClient = NetworkClient()
         let m3uCache = M3UCache()
+        let encryptedM3UCache = EncryptedM3UCache()
+        let epgSourceIdentityKeyStore = EPGSourceIdentityKeyStore()
+        let epgProgramSnapshotCache = EPGProgramSnapshotCache()
         let mediaServerCatalogClient = MediaServerCatalogClient.liveValue
         let logoOverrideClient = ChannelLogoOverrideClient.liveValue
         let m3uCategoryMappingClient = M3UCategoryMappingClient.liveValue
+        let categoryNameOverrideClient = CategoryNameOverrideClient.liveValue
+        let m3uMemoryScopeKey = SymmetricKey(size: .bits256)
 
-        let m3uCacheKey: @Sendable (PlaylistConfig) -> String = { config in
-            let identity = config.playlistID?.uuidString ?? config.m3uURL?.absoluteString ?? "unidentified"
-            let sourceURL = config.m3uURL?.absoluteString ?? ""
-            let userAgent = (config.userAgentOverride ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return "\(identity)|\(sourceURL)|\(userAgent.isEmpty ? "default" : userAgent)"
+        let resolvedM3URequestConfig: @Sendable (PlaylistConfig) -> PlaylistConfig = { config in
+            let configuredUserAgent = config.userAgentOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let effectiveUserAgent = configuredUserAgent.flatMap { $0.isEmpty ? nil : $0 }
+                ?? UserAgentManager.resolveUserAgent()
+            return config.replacingUserAgentOverride(effectiveUserAgent)
         }
 
-        let parseValidatedM3U: @Sendable (Data) async throws -> M3UParsedResult = { data in
-            guard let string = String(data: data, encoding: .utf8),
-                  string.range(of: #"(?m)^\s*#EXTM3U(?:\s|$)"#, options: .regularExpression) != nil
-            else {
-                throw NSError(domain: "IPTVClient.M3U", code: 400, userInfo: [NSLocalizedDescriptionKey: "Playlist yenilemesi doğrulanamadı. Mevcut katalog korundu."])
+        let m3uCacheKey: @Sendable (PlaylistConfig) -> String = { config in
+            let requestConfig = resolvedM3URequestConfig(config)
+            let components = [
+                requestConfig.playlistID?.uuidString ?? "",
+                requestConfig.type.rawValue,
+                requestConfig.m3uURL?.absoluteString ?? "",
+                requestConfig.username ?? "",
+                requestConfig.password ?? "",
+                requestConfig.userAgentOverride ?? "",
+            ]
+            var identity = Data("PureIPTV.M3U.memory.scope.v1".utf8)
+            for component in components {
+                let bytes = Data(component.utf8)
+                var length = UInt64(bytes.count).bigEndian
+                withUnsafeBytes(of: &length) { identity.append(contentsOf: $0) }
+                identity.append(bytes)
             }
-            let parser = M3UParser()
-            let result = await Task.detached(priority: .userInitiated) {
-                parser.parse(m3uString: string)
-            }.value
-            try Task.checkCancellation()
-            guard !result.items.isEmpty else {
-                throw NSError(domain: "IPTVClient.M3U", code: 422, userInfo: [NSLocalizedDescriptionKey: "Playlist boş veya okunamıyor. Mevcut katalog korundu."])
+            let code = HMAC<SHA256>.authenticationCode(for: identity, using: m3uMemoryScopeKey)
+            return code.map { String(format: "%02x", $0) }.joined()
+        }
+
+        let fetchAndParseM3U: @Sendable (
+            PlaylistConfig,
+            (@Sendable (M3URefreshStage) async -> Void)?
+        ) async throws -> M3UParsedResult = { config, reportStage in
+            guard config.type == .m3u, let url = config.m3uURL else { throw NetworkError.invalidURL }
+            let scopedConfig = resolvedM3URequestConfig(config)
+            let effectiveUserAgent = scopedConfig.userAgentOverride ?? UserAgentManager.resolveUserAgent()
+            let context = await encryptedM3UCache.prepare(for: scopedConfig)
+
+            let parseCachedBody: @Sendable (Data) async throws -> M3UParsedResult = { body in
+                let parser = M3UIncrementalParser()
+                var offset = 0
+                while offset < body.count {
+                    let end = min(offset + 32 * 1024, body.count)
+                    let chunk = body.subdata(in: offset ..< end)
+                    if let progress = try await parser.append(chunk, expectedByteCount: Int64(body.count)),
+                       let reportStage
+                    {
+                        switch progress {
+                        case .indeterminate:
+                            await reportStage(.parsing(progress: nil))
+                        case let .percentage(value):
+                            await reportStage(.parsing(progress: value))
+                        }
+                    }
+                    offset = end
+                }
+                try Task.checkCancellation()
+                let parsed = try await parser.finish()
+                await reportStage?(.parsing(progress: 100))
+                return parsed
             }
-            return result
+
+            let download: @Sendable (Bool) async throws -> (M3UHTTPResponseMetadata, M3UParsedResult?, Data?) = { useValidators in
+                let parser = M3UIncrementalParser()
+                let bodyCollector = M3UResponseBodyCollector(
+                    maximumBytes: EncryptedM3UCache.maximumPersistedBodyBytes
+                )
+                let snapshot = useValidators ? context?.snapshot : nil
+                let response = try await networkClient.fetchDataInChunks(
+                    url: url,
+                    userAgentOverride: effectiveUserAgent,
+                    ifNoneMatch: snapshot?.etag,
+                    ifModifiedSince: snapshot?.lastModified,
+                    maximumBytes: M3UIncrementalParser.maximumPlaylistBytes
+                ) { chunk, expectedByteCount in
+                    await bodyCollector.append(chunk)
+                    guard let progress = try await parser.append(chunk, expectedByteCount: expectedByteCount) else { return }
+                    guard let reportStage else { return }
+                    switch progress {
+                    case .indeterminate:
+                        await reportStage(.parsing(progress: nil))
+                    case let .percentage(value):
+                        await reportStage(.parsing(progress: value))
+                    }
+                }
+                guard response.statusCode == 200 else { return (response, nil, nil) }
+                try Task.checkCancellation()
+                let parsed = try await parser.finish()
+                await reportStage?(.parsing(progress: 100))
+                return await (response, parsed, bodyCollector.retainedBody())
+            }
+
+            do {
+                let hasValidator = context?.snapshot?.etag != nil || context?.snapshot?.lastModified != nil
+                var outcome = try await download(hasValidator)
+                if outcome.0.statusCode == 304 {
+                    if let snapshot = context?.snapshot,
+                       EncryptedM3UCache.responseValidatorsMatch(outcome.0, snapshot: snapshot)
+                    {
+                        do {
+                            let parsed = try await parseCachedBody(snapshot.body)
+                            if EncryptedM3UCache.responseAllowsPersistence(
+                                outcome.0,
+                                fallbackVary: snapshot.vary
+                            ) {
+                                await encryptedM3UCache.store(
+                                    body: snapshot.body,
+                                    etag: outcome.0.etag ?? snapshot.etag,
+                                    lastModified: outcome.0.lastModified ?? snapshot.lastModified,
+                                    vary: outcome.0.vary ?? snapshot.vary,
+                                    for: scopedConfig
+                                )
+                            } else {
+                                await encryptedM3UCache.invalidate(for: scopedConfig)
+                            }
+                            return parsed
+                        } catch is CancellationError {
+                            throw CancellationError()
+                        } catch {
+                            await encryptedM3UCache.invalidate(for: scopedConfig)
+                        }
+                    } else if context?.snapshot != nil {
+                        await encryptedM3UCache.invalidate(for: scopedConfig)
+                    }
+                    try Task.checkCancellation()
+                    outcome = try await download(false)
+                }
+
+                guard outcome.0.statusCode == 200, let parsed = outcome.1 else {
+                    throw NetworkError.invalidResponse
+                }
+                if let body = outcome.2,
+                   EncryptedM3UCache.responseAllowsPersistence(outcome.0),
+                   EncryptedM3UCache.responseHasUsableValidator(outcome.0)
+                {
+                    await encryptedM3UCache.store(
+                        body: body,
+                        etag: outcome.0.etag,
+                        lastModified: outcome.0.lastModified,
+                        vary: outcome.0.vary,
+                        for: scopedConfig
+                    )
+                } else {
+                    await encryptedM3UCache.invalidate(for: scopedConfig)
+                }
+                return parsed
+            } catch {
+                if let networkError = error as? NetworkError, networkError == .unauthorized {
+                    await encryptedM3UCache.invalidate(for: scopedConfig)
+                    await m3uCache.removeCatalog(for: m3uCacheKey(scopedConfig))
+                }
+                throw error
+            }
         }
 
         let ensureM3UCache: @Sendable (PlaylistConfig) async -> [M3UItemDTO] = { config in
-            let key = m3uCacheKey(config)
+            let requestConfig = resolvedM3URequestConfig(config)
+            let key = m3uCacheKey(requestConfig)
             let existing = await m3uCache.getItems(for: key)
             if !existing.isEmpty {
                 return existing
             }
-            guard let url = config.m3uURL else { return [] }
-            guard let data = try? await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride) else { return [] }
+            guard requestConfig.m3uURL != nil else { return [] }
             do {
-                let parsedResult = try await parseValidatedM3U(data)
+                let parsedResult = try await fetchAndParseM3U(requestConfig, nil)
                 try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
                 return parsedResult.items
             } catch {
@@ -317,16 +795,17 @@ extension IPTVClient: DependencyKey {
         }
 
         let ensureM3UCacheForEPG: @Sendable (PlaylistConfig, SettingsClient) async throws -> [M3UItemDTO] = { config, settingsClient in
-            let key = m3uCacheKey(config)
+            let requestConfig = resolvedM3URequestConfig(config)
+            let key = m3uCacheKey(requestConfig)
             let existing = await m3uCache.getItems(for: key)
             if !existing.isEmpty {
                 return existing
             }
             try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
-            guard let url = config.m3uURL else { return [] }
-            let data: Data
+            guard requestConfig.m3uURL != nil else { return [] }
+            let parsedResult: M3UParsedResult
             do {
-                data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                parsedResult = try await fetchAndParseM3U(requestConfig, nil)
             } catch {
                 recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
                 if isEPGRateLimit(error) {
@@ -335,12 +814,110 @@ extension IPTVClient: DependencyKey {
                 return []
             }
             do {
-                let parsedResult = try await parseValidatedM3U(data)
                 try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
                 return parsedResult.items
             } catch {
                 return await m3uCache.getItems(for: key)
             }
+        }
+
+        let refreshProviderEPGIfAvailable: @Sendable (PlaylistConfig) async throws -> Bool = { config in
+            guard config.type == .m3u else { return false }
+            let requestConfig = resolvedM3URequestConfig(config)
+            @Dependency(\.xmltvParser) var xmltvParser
+            @Dependency(\.settingsClient) var settingsClient
+            let cacheKey = m3uCacheKey(requestConfig)
+            if await m3uCache.getItems(for: cacheKey).isEmpty {
+                guard requestConfig.m3uURL != nil else { throw NetworkError.invalidURL }
+                let parsedPlaylist = try await fetchAndParseM3U(requestConfig, nil)
+                try Task.checkCancellation()
+                try await m3uCache.replaceCatalog(
+                    items: parsedPlaylist.items,
+                    epgURL: parsedPlaylist.epgURL,
+                    for: cacheKey
+                )
+            }
+            guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else { return false }
+            try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
+            let data: Data
+            do {
+                data = try await networkClient.fetchXMLTVData(url: epgURL, userAgentOverride: requestConfig.userAgentOverride)
+            } catch {
+                recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
+                throw error
+            }
+            // Replace the guide only after a full parse succeeds so failed
+            // updates keep the last-known-good XMLTV data available.
+            let parsedXMLTV = try await xmltvParser.parse(data)
+            try Task.checkCancellation()
+            try await m3uCache.replaceXmltvData(parsedXMLTV, for: cacheKey)
+            return true
+        }
+
+        let resolveEPGSourceIdentity: @Sendable (PlaylistConfig) async -> EPGSourceIdentity? = { config in
+            let sourceURL: URL?
+            let identityMaterial: String
+            switch config.type {
+            case .m3u:
+                sourceURL = await m3uCache.getEpgURL(for: m3uCacheKey(config))
+                identityMaterial = [
+                    PlaylistType.m3u.rawValue,
+                    config.m3uURL?.absoluteString ?? "",
+                    sourceURL?.absoluteString ?? "",
+                    config.userAgentOverride ?? "",
+                ].joined(separator: "\u{0}")
+            case .xtream:
+                sourceURL = config.serverURL
+                identityMaterial = [
+                    PlaylistType.xtream.rawValue,
+                    config.serverURL?.absoluteString ?? "",
+                    config.username ?? "",
+                    config.password ?? "",
+                    config.userAgentOverride ?? "",
+                ].joined(separator: "\u{0}")
+            case .plex, .emby:
+                sourceURL = nil
+                identityMaterial = ""
+            }
+            guard let sourceURL,
+                  let keyData = await epgSourceIdentityKeyStore.keyData() else { return nil }
+            return EPGSourceIdentity(
+                playlistType: config.type,
+                url: sourceURL,
+                identityMaterial: identityMaterial,
+                hmacKey: SymmetricKey(data: keyData)
+            )
+        }
+
+        let readCachedEPGPrograms: @Sendable (
+            PlaylistConfig,
+            [String],
+            Int?
+        ) async -> [String: CachedEPGProgramSnapshot] = { config, epgChannelIDs, requiredProgramCount in
+            @Dependency(\.settingsClient) var settingsClient
+            guard let playlistID = config.playlistID,
+                  let sourceIdentity = await resolveEPGSourceIdentity(config) else { return [:] }
+            let maximumSourceAge: TimeInterval = if config.type == .m3u, settingsClient.autoUpdateEPG() {
+                settingsClient.epgAutoRefreshInterval().duration
+            } else {
+                5 * 60
+            }
+            let expectedSourceFetchedAt: Date?
+            if config.type == .m3u {
+                expectedSourceFetchedAt = await m3uCache
+                    .getXmltvSnapshot(for: m3uCacheKey(config))?.fetchedAt
+                guard expectedSourceFetchedAt != nil else { return [:] }
+            } else {
+                expectedSourceFetchedAt = nil
+            }
+            return await epgProgramSnapshotCache.read(
+                sourceFingerprint: sourceIdentity.fingerprint,
+                playlistID: playlistID,
+                epgChannelIDs: Array(epgChannelIDs.prefix(500)),
+                requiredProgramCount: requiredProgramCount,
+                maximumSourceAge: maximumSourceAge,
+                expectedSourceFetchedAt: expectedSourceFetchedAt
+            )
         }
 
         return IPTVClient(
@@ -350,13 +927,13 @@ extension IPTVClient: DependencyKey {
                     return
                 }
                 if config.type == .m3u {
-                    guard let m3uURL = config.m3uURL else {
+                    let requestConfig = resolvedM3URequestConfig(config)
+                    guard requestConfig.m3uURL != nil else {
                         throw NSError(domain: "IPTVClient", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U configuration"])
                     }
-                    let key = m3uCacheKey(config)
+                    let key = m3uCacheKey(requestConfig)
                     do {
-                        let data = try await networkClient.fetchData(url: m3uURL, userAgentOverride: config.userAgentOverride)
-                        let parsedResult = try await parseValidatedM3U(data)
+                        let parsedResult = try await fetchAndParseM3U(requestConfig, nil)
                         try await m3uCache.replaceCatalog(items: parsedResult.items, epgURL: parsedResult.epgURL, for: key)
                     } catch {
                         if error is CancellationError {
@@ -378,24 +955,98 @@ extension IPTVClient: DependencyKey {
                     await AccountInfoManager.shared.update(from: authDTO)
                 }
             },
+            refreshCatalog: { config, reportStage in
+                switch config.type {
+                case .m3u:
+                    let requestConfig = resolvedM3URequestConfig(config)
+                    guard requestConfig.m3uURL != nil else { throw NetworkError.invalidURL }
+                    await reportStage(.downloading)
+                    let parsedResult = try await fetchAndParseM3U(requestConfig, reportStage)
+                    try Task.checkCancellation()
+                    await reportStage(.replacingCatalog)
+                    try await m3uCache.replaceCatalog(
+                        items: parsedResult.items,
+                        epgURL: parsedResult.epgURL,
+                        for: m3uCacheKey(requestConfig)
+                    )
+                    return parsedResult.epgURL != nil
+                case .xtream:
+                    guard let serverURL = config.serverURL,
+                          let username = config.username,
+                          let password = config.password else { throw NetworkError.invalidURL }
+                    let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
+                    await reportStage(.loadingCategories)
+                    let authURL = try XtreamEndpoint.authenticate.url(with: xtreamConfig)
+                    let auth: XtreamAuthResponseDTO = try await networkClient.fetch(
+                        url: authURL,
+                        userAgentOverride: config.userAgentOverride
+                    )
+                    guard auth.userInfo.auth == 1 else {
+                        throw auth.userInfo.auth == 0 ? NetworkError.unauthorized : NetworkError.invalidResponse
+                    }
+                    let liveURL = try XtreamEndpoint.getLiveCategories.url(with: xtreamConfig)
+                    let vodURL = try XtreamEndpoint.getVODCategories.url(with: xtreamConfig)
+                    let seriesURL = try XtreamEndpoint.getSeriesCategories.url(with: xtreamConfig)
+                    let _: [XtreamCategoryDTO] = try await networkClient.fetch(url: liveURL, userAgentOverride: config.userAgentOverride)
+                    try Task.checkCancellation()
+                    let _: [XtreamCategoryDTO] = try await networkClient.fetch(url: vodURL, userAgentOverride: config.userAgentOverride)
+                    try Task.checkCancellation()
+                    let _: [XtreamCategoryDTO] = try await networkClient.fetch(url: seriesURL, userAgentOverride: config.userAgentOverride)
+                    try Task.checkCancellation()
+                    return false
+                case .plex, .emby:
+                    await reportStage(.loadingCategories)
+                    try await mediaServerCatalogClient.refreshCatalog(config)
+                    return false
+                }
+            },
             refreshContent: { config, contentType, reportStage in
                 if config.type == .plex || config.type == .emby {
                     await mediaServerCatalogClient.invalidate(config, contentType == .live ? nil : contentType == .movies ? .vod : .series)
                     return
                 }
-                guard config.type == .m3u, let url = config.m3uURL else { return }
+                guard config.type == .m3u else { return }
+                let requestConfig = resolvedM3URequestConfig(config)
+                guard requestConfig.m3uURL != nil else { return }
                 await reportStage(.downloading)
-                let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
-                try Task.checkCancellation()
-                await reportStage(.validating)
-                let parsedResult = try await parseValidatedM3U(data)
+                let parsedResult = try await fetchAndParseM3U(requestConfig, reportStage)
                 try Task.checkCancellation()
                 await reportStage(.replacingCatalog)
                 try await m3uCache.replaceContent(
                     items: parsedResult.items,
                     epgURL: parsedResult.epgURL,
                     contentType: contentType,
-                    for: m3uCacheKey(config)
+                    for: m3uCacheKey(requestConfig)
+                )
+            },
+            refreshContents: { config, contentTypes, reportStage in
+                guard !contentTypes.isEmpty else { return }
+                if config.type == .plex || config.type == .emby {
+                    if contentTypes.contains(.live) {
+                        await mediaServerCatalogClient.invalidate(config, nil)
+                    } else {
+                        for contentType in PlaylistContentType.allCases where contentTypes.contains(contentType) {
+                            await mediaServerCatalogClient.invalidate(
+                                config,
+                                contentType == .movies ? .vod : .series
+                            )
+                        }
+                    }
+                    return
+                }
+                guard config.type == .m3u else { return }
+                let requestConfig = resolvedM3URequestConfig(config)
+                guard requestConfig.m3uURL != nil else { return }
+                await reportStage(.downloading)
+                let parsedResult = try await fetchAndParseM3U(requestConfig, reportStage)
+                try Task.checkCancellation()
+                await reportStage(.replacingCatalog)
+                let cacheKey = m3uCacheKey(requestConfig)
+                try await m3uCache.replaceContents(
+                    items: parsedResult.items,
+                    epgURL: parsedResult.epgURL,
+                    contentTypes: contentTypes,
+                    for: cacheKey
                 )
             },
             fetchLiveCategories: { config in
@@ -416,14 +1067,16 @@ extension IPTVClient: DependencyKey {
                             categoriesByID[category.id] = category
                         }
                     }
-                    return categoriesByID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                    let categories = categoriesByID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                    return await applyingCategoryNameOverrides(categories, config: config, mediaType: "live", client: categoryNameOverrideClient)
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getLiveCategories.url(with: xtreamConfig)
                 let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
-                return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                let categories = dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                return await applyingCategoryNameOverrides(categories, config: config, mediaType: "live", client: categoryNameOverrideClient)
             },
             fetchM3UCategoryTags: { config in
                 guard config.type == .m3u else { return [] }
@@ -473,6 +1126,7 @@ extension IPTVClient: DependencyKey {
                             title: item.title,
                             streamURL: item.streamURL,
                             coverURL: item.coverURL,
+                            logoOverrideStorageKey: ChannelLogoOverrideIdentity.m3uKey(tvgID: item.tvgID, streamURL: item.streamURL),
                             categoryID: category.id,
                             type: .live,
                             epgChannelID: item.tvgID,
@@ -480,8 +1134,11 @@ extension IPTVClient: DependencyKey {
                         )
                     }
                     guard let playlistID = config.playlistID else { return channels }
-                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, channels.map(\.id))
-                    return channels.map { $0.replacingLogoURLOverride(overrides[$0.id]) }
+                    let overrideKeys = channels.map { $0.logoOverrideStorageKey ?? $0.id }
+                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, overrideKeys)
+                    return channels.map { channel in
+                        channel.replacingLogoURLOverride(overrides[channel.logoOverrideStorageKey ?? channel.id])
+                    }
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
@@ -538,14 +1195,16 @@ extension IPTVClient: DependencyKey {
                         title: item.title,
                         streamURL: item.streamURL,
                         coverURL: item.coverURL,
+                        logoOverrideStorageKey: ChannelLogoOverrideIdentity.m3uKey(tvgID: item.tvgID, streamURL: item.streamURL),
                         categoryID: category.id,
                         type: .live,
                         epgChannelID: item.tvgID,
                         userAgentOverride: config.userAgentOverride
                     )
                     guard let playlistID = config.playlistID else { return resolved }
-                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, [itemID])
-                    return resolved.replacingLogoURLOverride(overrides[itemID])
+                    let storageKey = resolved.logoOverrideStorageKey ?? itemID
+                    let overrides = await logoOverrideClient.fetchOverrides(playlistID, [storageKey])
+                    return resolved.replacingLogoURLOverride(overrides[storageKey])
                 }
                 guard config.type == .xtream,
                       let streamURL = makeXtreamLiveStreamURL(config: config, streamID: itemID) else { return nil }
@@ -563,19 +1222,22 @@ extension IPTVClient: DependencyKey {
             },
             fetchVODCategories: { config in
                 if config.type == .plex || config.type == .emby {
-                    return try await mediaServerCatalogClient.fetchCategories(config, .vod)
+                    let categories = try await mediaServerCatalogClient.fetchCategories(config, .vod)
+                    return await applyingCategoryNameOverrides(categories, config: config, mediaType: "vod", client: categoryNameOverrideClient)
                 }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .vod }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
-                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                    let categories = groups.map { MediaModels.Category(id: $0, name: $0) }
+                    return await applyingCategoryNameOverrides(categories, config: config, mediaType: "vod", client: categoryNameOverrideClient)
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getVODCategories.url(with: xtreamConfig)
                 let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
-                return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                let categories = dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                return await applyingCategoryNameOverrides(categories, config: config, mediaType: "vod", client: categoryNameOverrideClient)
             },
             fetchVODs: { config, categoryID in
                 if config.type == .plex || config.type == .emby {
@@ -625,19 +1287,22 @@ extension IPTVClient: DependencyKey {
             },
             fetchSeriesCategories: { config in
                 if config.type == .plex || config.type == .emby {
-                    return try await mediaServerCatalogClient.fetchCategories(config, .series)
+                    let categories = try await mediaServerCatalogClient.fetchCategories(config, .series)
+                    return await applyingCategoryNameOverrides(categories, config: config, mediaType: "series", client: categoryNameOverrideClient)
                 }
                 if config.type == .m3u {
                     let items = await ensureM3UCache(config).filter { $0.resolvedMediaType == .series }
                     let groups = Array(Set(items.map(\.groupTitle))).sorted()
-                    return groups.map { MediaModels.Category(id: $0, name: $0) }
+                    let categories = groups.map { MediaModels.Category(id: $0, name: $0) }
+                    return await applyingCategoryNameOverrides(categories, config: config, mediaType: "series", client: categoryNameOverrideClient)
                 }
 
                 guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else { return [] }
                 let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
                 let url = try XtreamEndpoint.getSeriesCategories.url(with: xtreamConfig)
                 let dtos: [XtreamCategoryDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
-                return dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                let categories = dtos.map { MediaModels.Category(id: $0.categoryId, name: $0.categoryName) }
+                return await applyingCategoryNameOverrides(categories, config: config, mediaType: "series", client: categoryNameOverrideClient)
             },
             fetchSeries: { config, categoryID in
                 if config.type == .plex || config.type == .emby {
@@ -667,8 +1332,7 @@ extension IPTVClient: DependencyKey {
                 let url = try XtreamEndpoint.getSeries(categoryID: categoryID).url(with: xtreamConfig)
                 let dtos: [XtreamSeriesDTO] = try await networkClient.fetch(url: url, userAgentOverride: config.userAgentOverride)
                 return dtos.map { dto in
-                    let addedDate = dto.lastModified.flatMap { TimeInterval($0) }.map { Date(timeIntervalSince1970: $0) }
-                    return MediaModels.Item(
+                    MediaModels.Item(
                         id: String(dto.seriesId),
                         title: dto.name,
                         streamURL: nil,
@@ -679,7 +1343,6 @@ extension IPTVClient: DependencyKey {
                         originalLanguageSourceValue: dto.originalLanguageSourceValue,
                         rating: dto.rating5based ?? Double(dto.rating ?? "0"),
                         releaseDate: dto.releaseDate,
-                        addedDate: addedDate,
                         userAgentOverride: config.userAgentOverride
                     )
                 }
@@ -690,7 +1353,15 @@ extension IPTVClient: DependencyKey {
             },
             fetchSeriesInfo: { config, seriesID in
                 if config.type == .plex || config.type == .emby {
-                    return try await mediaServerCatalogClient.fetchSeriesInfo(config, seriesID)
+                    let result = try await mediaServerCatalogClient.fetchSeriesInfo(config, seriesID)
+                    var info = result.info
+                    let diagnostics = SeriesEpisodeCatalogNormalizer.diagnostics(for: result.episodes)
+                    info.seriesCatalogDiagnostics = diagnostics.isEmpty ? nil : diagnostics
+                    return (
+                        info: info,
+                        seasons: result.seasons,
+                        episodes: SeriesEpisodeCatalogNormalizer.canonicalized(result.episodes)
+                    )
                 }
                 if config.type == .m3u {
                     // Since M3U series items are flat, we just return a single episode pseudo-info
@@ -713,7 +1384,7 @@ extension IPTVClient: DependencyKey {
                 let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                 let dto = try await MainActor.run { try JSONDecoder().decode(XtreamSeriesInfoDTO.self, from: data) }
 
-                let info = DetailModels.Info(
+                var info = DetailModels.Info(
                     plot: dto.info?.plot,
                     cast: dto.info?.cast,
                     director: dto.info?.director,
@@ -723,20 +1394,25 @@ extension IPTVClient: DependencyKey {
                     releaseDate: dto.info?.releaseDate
                 )
 
-                var seasons: [DetailModels.Season] = []
                 var episodes: [DetailModels.Episode] = []
 
                 if let dtoSeasons = dto.episodes {
                     for (seasonNumStr, seasonEpisodes) in dtoSeasons {
-                        guard let seasonNum = Int(seasonNumStr) else { continue }
-                        seasons.append(DetailModels.Season(id: seasonNumStr, seasonNumber: seasonNum, name: "Sezon \(seasonNum)", episodeCount: seasonEpisodes.count))
-
+                        let groupSeasonNumber = Int(seasonNumStr)
                         for ep in seasonEpisodes {
-                            let ext = ep.containerExtension
-                            let streamURL = xtreamConfig.baseURL.appendingPathComponent("series/\(xtreamConfig.username)/\(xtreamConfig.password)/\(ep.id).\(ext)")
-                            episodes.append(DetailModels.Episode(
-                                id: ep.id,
+                            guard let seasonNum = ep.season.flatMap({ $0 >= 0 ? $0 : nil }) ?? groupSeasonNumber,
+                                  seasonNum >= 0
+                            else { continue }
 
+                            let episodeID = ep.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !episodeID.isEmpty else { continue }
+                            let fileExtension = ep.containerExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let extensionSuffix = fileExtension.isEmpty ? "" : ".\(fileExtension)"
+                            let streamURL = xtreamConfig.baseURL.appendingPathComponent(
+                                "series/\(xtreamConfig.username)/\(xtreamConfig.password)/\(episodeID)\(extensionSuffix)"
+                            )
+                            episodes.append(DetailModels.Episode(
+                                id: episodeID,
                                 episodeNum: ep.episodeNum ?? 0,
                                 title: ep.title,
                                 streamURL: streamURL,
@@ -753,7 +1429,31 @@ extension IPTVClient: DependencyKey {
                     }
                 }
 
-                return (info: info, seasons: seasons.sorted(by: { $0.seasonNumber < $1.seasonNumber }), episodes: episodes)
+                let diagnostics = SeriesEpisodeCatalogNormalizer.diagnostics(for: episodes)
+                info.seriesCatalogDiagnostics = diagnostics.isEmpty ? nil : diagnostics
+
+                let canonicalEpisodes = SeriesEpisodeCatalogNormalizer.canonicalized(episodes)
+                let episodeCountsBySeason = Dictionary(grouping: canonicalEpisodes, by: \.season).mapValues(\.count)
+                var seasonNumbers = Set(canonicalEpisodes.map(\.season))
+                for season in dto.seasons ?? [] {
+                    if let seasonNumber = season.seasonNumber, seasonNumber >= 0 {
+                        seasonNumbers.insert(seasonNumber)
+                    }
+                }
+
+                let seasons = seasonNumbers.sorted().map { seasonNumber in
+                    let providerSeason = dto.seasons?.first(where: { $0.seasonNumber == seasonNumber })
+                    let providerName = providerSeason?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let name = providerName.flatMap { $0.isEmpty ? nil : $0 } ?? "Sezon \(seasonNumber)"
+                    return DetailModels.Season(
+                        id: String(seasonNumber),
+                        seasonNumber: seasonNumber,
+                        name: name,
+                        episodeCount: episodeCountsBySeason[seasonNumber] ?? 0
+                    )
+                }
+
+                return (info: info, seasons: seasons, episodes: canonicalEpisodes)
             },
             fetchVODInfo: { config, vodID in
                 if config.type == .plex || config.type == .emby {
@@ -788,10 +1488,16 @@ extension IPTVClient: DependencyKey {
                     youtubeTrailer: dto.info?.youtubeTrailer
                 )
             },
-            resolveVODItem: { config, vodID, categoryID in
+            fetchMediaServerPlaybackOptions: { config, vodID in
+                guard config.type == .plex || config.type == .emby,
+                      !vodID.isEmpty,
+                      vodID.count <= 512 else { return [] }
+                return try await mediaServerCatalogClient.fetchPlaybackOptions(config, vodID)
+            },
+            resolveVODItem: { config, vodID, categoryID, mediaSourceID in
                 guard !vodID.isEmpty, vodID.count <= 512 else { return nil }
                 if config.type == .plex || config.type == .emby {
-                    return try await mediaServerCatalogClient.resolvePlaybackItem(config, vodID)
+                    return try await mediaServerCatalogClient.resolvePlaybackItem(config, vodID, mediaSourceID)
                 }
 
                 if config.type == .m3u {
@@ -856,96 +1562,152 @@ extension IPTVClient: DependencyKey {
                     userAgentOverride: config.userAgentOverride
                 )
             },
-            fetchShortEPG: { config, streamID, limit in
+            fetchShortEPG: { config, channelID, requestedEPGChannelID, limit in
                 @Dependency(\.xmltvParser) var xmltvParser
                 @Dependency(\.settingsClient) var settingsClient
+                @Dependency(\.customEPGMappingClient) var customEPGMappingClient
+
+                let requestedEPGID = requestedEPGChannelID?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let epgChannelID: String = if config.type == .m3u,
+                                              let requestedEPGID,
+                                              !requestedEPGID.isEmpty
+                {
+                    requestedEPGID
+                } else {
+                    channelID
+                }
+
+                let fetchSecondaryPrograms: @Sendable () async -> [EPGProgram] = {
+                    await customEPGMappingClient.fetchProgramsForChannel(
+                        channelID,
+                        "",
+                        nil,
+                        config.playlistID
+                    )
+                }
+                let finishPrograms: @Sendable ([EPGProgram], [EPGProgram]) -> [EPGProgram] = { primary, secondary in
+                    let merged = mergeEPGPrograms(primary: primary, secondary: secondary, secondaryLimit: limit)
+                    return customEPGMappingClient.applyTimeShift(merged, channelID, config.playlistID)
+                }
+
+                let cachedPrograms = await readCachedEPGPrograms(config, [epgChannelID], limit)
+                if let snapshot = cachedPrograms[epgChannelID] {
+                    return snapshot.programs
+                }
+
                 if config.type == .m3u {
-                    _ = try await ensureM3UCacheForEPG(config, settingsClient)
-                    let cacheKey = m3uCacheKey(config)
-                    guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
-                        throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
-                    }
-                    var currentXMLTV = await m3uCache.getXmltvData(for: cacheKey)
-                    if currentXMLTV == nil {
-                        try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
-                        let data: Data
-                        do {
-                            data = try await networkClient.fetchData(url: epgURL, userAgentOverride: config.userAgentOverride)
-                        } catch {
-                            recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
-                            throw error
+                    let requestConfig = resolvedM3URequestConfig(config)
+                    do {
+                        _ = try await ensureM3UCacheForEPG(requestConfig, settingsClient)
+                        let cacheKey = m3uCacheKey(requestConfig)
+                        guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
+                            throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
                         }
-                        currentXMLTV = try await xmltvParser.parse(data)
-                        if let parsed = currentXMLTV {
+                        var xmltvSnapshot = await m3uCache.getXmltvSnapshot(for: cacheKey)
+                        if xmltvSnapshot == nil {
+                            try checkEPGProviderCooldown(for: requestConfig, settingsClient: settingsClient)
+                            let data: Data
+                            do {
+                                data = try await networkClient.fetchXMLTVData(url: epgURL, userAgentOverride: requestConfig.userAgentOverride)
+                            } catch {
+                                recordEPGProviderCooldown(from: error, for: requestConfig, settingsClient: settingsClient)
+                                throw error
+                            }
+                            let parsed = try await xmltvParser.parse(data)
                             await m3uCache.setXmltvData(parsed, for: cacheKey)
+                            xmltvSnapshot = await m3uCache.getXmltvSnapshot(for: cacheKey)
                         }
-                    }
-                    guard let xmlData = currentXMLTV else {
-                        throw NetworkError.decodingFailed(description: "The XMLTV source could not be parsed.")
-                    }
+                        guard let xmltvSnapshot else {
+                            throw NetworkError.decodingFailed(description: "The XMLTV source could not be parsed.")
+                        }
 
-                    let now = Date()
-                    let programmes = xmlData.programmes[streamID] ?? []
-                    return programmes.map { p in
-                        EPGProgram(
-                            id: "m3u-\(streamID)-\(Int(p.start.timeIntervalSince1970))-\(Int(p.end.timeIntervalSince1970))",
-                            title: p.title,
-                            description: p.description,
-                            startTime: p.start,
-                            endTime: p.end,
-                            isPlayingNow: p.start <= now && p.end >= now,
-                            categories: p.categories
-                        )
+                        let now = Date()
+                        let programmes = xmltvSnapshot.data.programmes[epgChannelID] ?? []
+                        let requestedCount = limit.map { min(max(0, $0), programmes.count) } ?? programmes.count
+                        let primary = programmes.prefix(requestedCount).map { p in
+                            EPGProgram(
+                                id: "m3u-\(epgChannelID)-\(Int(p.start.timeIntervalSince1970))-\(Int(p.end.timeIntervalSince1970))",
+                                title: p.title,
+                                description: p.description,
+                                startTime: p.start,
+                                endTime: p.end,
+                                isPlayingNow: p.start <= now && p.end >= now,
+                                categories: p.categories,
+                                artworkURL: p.artworkURL
+                            )
+                        }
+                        try Task.checkCancellation()
+                        let secondary = await fetchSecondaryPrograms()
+                        try Task.checkCancellation()
+                        let result = finishPrograms(primary, secondary)
+                        if let playlistID = config.playlistID,
+                           let sourceIdentity = await resolveEPGSourceIdentity(config)
+                        {
+                            await epgProgramSnapshotCache.store(
+                                result,
+                                sourceFingerprint: sourceIdentity.fingerprint,
+                                playlistID: playlistID,
+                                epgChannelID: epgChannelID,
+                                fetchedAt: xmltvSnapshot.fetchedAt,
+                                requestedProgramLimit: limit
+                            )
+                        }
+                        return result
+                    } catch {
+                        guard !Task.isCancelled, !(error is CancellationError) else { throw error }
+                        let secondary = await fetchSecondaryPrograms()
+                        try Task.checkCancellation()
+                        guard !secondary.isEmpty else { throw error }
+                        return finishPrograms([], secondary)
                     }
                 }
-
-                guard config.type == .xtream, let serverURL = config.serverURL, let username = config.username, let password = config.password else {
-                    throw NetworkError.invalidResponse
-                }
-                let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
 
                 var response: [EPGItemDTO] = []
                 var receivedValidResponse = false
                 var lastRequestError: Error = NetworkError.invalidResponse
 
-                // Strategy 1: Attempt action=get_short_epg
-                do {
-                    try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
-                    let url = try XtreamEndpoint.getShortEPG(streamID: streamID, limit: limit).url(with: xtreamConfig)
-                    let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
-                    response = try decodeEPGItems(data)
-                    receivedValidResponse = true
-                } catch {
-                    recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
-                    lastRequestError = error
-                }
+                if config.type == .xtream,
+                   let serverURL = config.serverURL,
+                   let username = config.username,
+                   let password = config.password
+                {
+                    let xtreamConfig = ServerConfig(baseURL: serverURL, username: username, password: password)
 
-                // Strategy 2: If empty, attempt action=get_simple_data_table
-                if response.isEmpty, !isEPGRateLimit(lastRequestError) {
+                    // Strategy 1: Attempt action=get_short_epg
                     do {
                         try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
-                        let url = try XtreamEndpoint.getEPGDataTable(streamID: streamID).url(with: xtreamConfig)
+                        let url = try XtreamEndpoint.getShortEPG(streamID: epgChannelID, limit: limit).url(with: xtreamConfig)
                         let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
                         response = try decodeEPGItems(data)
                         receivedValidResponse = true
                     } catch {
+                        guard !Task.isCancelled, !(error is CancellationError) else { throw error }
                         recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
                         lastRequestError = error
                     }
+
+                    // Strategy 2: If empty, attempt action=get_simple_data_table
+                    if response.isEmpty, !isEPGRateLimit(lastRequestError) {
+                        do {
+                            try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
+                            let url = try XtreamEndpoint.getEPGDataTable(streamID: epgChannelID).url(with: xtreamConfig)
+                            let data = try await networkClient.fetchData(url: url, userAgentOverride: config.userAgentOverride)
+                            response = try decodeEPGItems(data)
+                            receivedValidResponse = true
+                        } catch {
+                            guard !Task.isCancelled, !(error is CancellationError) else { throw error }
+                            recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
+                            lastRequestError = error
+                        }
+                    }
                 }
 
-                // Strategy 3: If still empty, check mapped XMLTV sources via CustomEPGMappingClient
-                if response.isEmpty {
-                    if isEPGRateLimit(lastRequestError) {
-                        throw lastRequestError
-                    }
-                    @Dependency(\.customEPGMappingClient) var customEPGMappingClient
-                    let customPrograms = await customEPGMappingClient.fetchProgramsForChannel(streamID, "", nil)
-                    if !customPrograms.isEmpty {
-                        return customPrograms
-                    }
-                    guard receivedValidResponse else { throw lastRequestError }
-                    return []
+                try Task.checkCancellation()
+                let secondary = await fetchSecondaryPrograms()
+                try Task.checkCancellation()
+
+                if response.isEmpty, !receivedValidResponse, secondary.isEmpty {
+                    throw lastRequestError
                 }
 
                 let formatStrings = [
@@ -960,13 +1722,18 @@ extension IPTVClient: DependencyKey {
                     "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
                     "yyyy-MM-dd'T'HH:mm:ssXXXXX",
                 ]
-                let formatters: [DateFormatter] = formatStrings.map { fmt in
+                // Xtream normally includes epoch timestamps. Avoid creating ten
+                // DateFormatter instances for every channel response in that case.
+                let needsDateFormatterFallback = response.contains {
+                    $0.startTimestamp == nil || $0.stopTimestamp == nil
+                }
+                let formatters: [DateFormatter] = needsDateFormatterFallback ? formatStrings.map { fmt in
                     let f = DateFormatter()
                     f.dateFormat = fmt
                     f.locale = Locale(identifier: "en_US_POSIX")
                     f.timeZone = TimeZone(identifier: "UTC")
                     return f
-                }
+                } : []
 
                 let parseEPGDate: (String) -> Date? = { str in
                     let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -995,20 +1762,17 @@ extension IPTVClient: DependencyKey {
                     return text
                 }
 
-                let epgShift = UserDefaults.standard.integer(forKey: "com.pureiptv.epgTimeShift")
-                let shiftInterval = TimeInterval(epgShift * 3600)
-
                 let result: [EPGProgram] = response.compactMap { (item: EPGItemDTO) -> EPGProgram? in
                     var start: Date?
                     var end: Date?
 
                     if let startTS = item.startTimestamp, let endTS = item.stopTimestamp {
-                        start = Date(timeIntervalSince1970: TimeInterval(startTS)).addingTimeInterval(shiftInterval)
-                        end = Date(timeIntervalSince1970: TimeInterval(endTS)).addingTimeInterval(shiftInterval)
+                        start = Date(timeIntervalSince1970: TimeInterval(startTS))
+                        end = Date(timeIntervalSince1970: TimeInterval(endTS))
                     } else {
                         if let s = parseEPGDate(item.start), let e = parseEPGDate(item.end) {
-                            start = s.addingTimeInterval(shiftInterval)
-                            end = e.addingTimeInterval(shiftInterval)
+                            start = s
+                            end = e
                         }
                     }
 
@@ -1023,39 +1787,36 @@ extension IPTVClient: DependencyKey {
                         description: cleanDesc,
                         startTime: finalStart,
                         endTime: finalEnd,
-                        isPlayingNow: item.nowPlaying == 1 || (finalStart <= Date() && Date() <= finalEnd)
+                        isPlayingNow: item.nowPlaying == 1 || (finalStart <= Date() && Date() <= finalEnd),
+                        artworkURL: EPGArtworkURL.parse(item.icon)
                     )
                 }
 
-                return result
+                let finishedPrograms = finishPrograms(result, secondary)
+                if receivedValidResponse,
+                   let playlistID = config.playlistID,
+                   let sourceIdentity = await resolveEPGSourceIdentity(config)
+                {
+                    await epgProgramSnapshotCache.store(
+                        finishedPrograms,
+                        sourceFingerprint: sourceIdentity.fingerprint,
+                        playlistID: playlistID,
+                        epgChannelID: epgChannelID,
+                        fetchedAt: Date(),
+                        requestedProgramLimit: limit
+                    )
+                }
+                return finishedPrograms
             },
             refreshEPGCache: { config in
                 guard config.type == .m3u else { return }
-                @Dependency(\.xmltvParser) var xmltvParser
-                @Dependency(\.settingsClient) var settingsClient
-                _ = try await ensureM3UCacheForEPG(config, settingsClient)
-                let cacheKey = m3uCacheKey(config)
-                guard let epgURL = await m3uCache.getEpgURL(for: cacheKey) else {
+                guard try await refreshProviderEPGIfAvailable(config) else {
                     throw NetworkError.underlying(description: "This M3U playlist has no EPG source.")
                 }
-                try checkEPGProviderCooldown(for: config, settingsClient: settingsClient)
-                let data: Data
-                do {
-                    data = try await networkClient.fetchData(
-                        url: epgURL,
-                        userAgentOverride: config.userAgentOverride
-                    )
-                } catch {
-                    recordEPGProviderCooldown(from: error, for: config, settingsClient: settingsClient)
-                    throw error
-                }
-                // Keep the current parsed XMLTV value intact until parsing has
-                // completed successfully; malformed responses never evict the
-                // last-good cache.
-                let parsedXMLTV = try await xmltvParser.parse(data)
-                try Task.checkCancellation()
-                try await m3uCache.replaceXmltvData(parsedXMLTV, for: cacheKey)
             },
+            refreshEPGCacheIfAvailable: refreshProviderEPGIfAvailable,
+            resolveEPGSourceIdentity: resolveEPGSourceIdentity,
+            cachedEPGPrograms: readCachedEPGPrograms,
             searchCachedEPGPrograms: { config, query, channels, limit in
                 guard config.type == .m3u, limit > 0 else { return [] }
                 let cacheKey = m3uCacheKey(config)
@@ -1106,7 +1867,8 @@ extension IPTVClient: DependencyKey {
                                 startTime: programme.start,
                                 endTime: programme.end,
                                 isPlayingNow: programme.start <= now && programme.end >= now,
-                                categories: programme.categories
+                                categories: programme.categories,
+                                artworkURL: programme.artworkURL
                             ),
                             channel: channel
                         ))
@@ -1135,7 +1897,9 @@ extension IPTVClient: DependencyKey {
 
     public static let testValue = IPTVClient(
         authenticate: { _ in },
+        refreshCatalog: { _, _ in false },
         refreshContent: { _, _, _ in },
+        refreshContents: { _, _, _ in },
         fetchLiveCategories: { _ in [] },
         fetchM3UCategoryTags: { _ in [] },
         fetchSupportedXtreamLiveOutputFormats: { _ in [] },
@@ -1148,9 +1912,13 @@ extension IPTVClient: DependencyKey {
         searchMediaServer: { _, _ in ([], []) },
         fetchSeriesInfo: { _, _ in (DetailModels.Info(), [], []) },
         fetchVODInfo: { _, _ in DetailModels.Info() },
-        resolveVODItem: { _, _, _ in nil },
-        fetchShortEPG: { _, _, _ in [] },
+        fetchMediaServerPlaybackOptions: { _, _ in [] },
+        resolveVODItem: { _, _, _, _ in nil },
+        fetchShortEPG: { _, _, _, _ in [] },
         refreshEPGCache: { _ in },
+        refreshEPGCacheIfAvailable: { _ in false },
+        resolveEPGSourceIdentity: { _ in nil },
+        cachedEPGPrograms: { _, _, _ in [:] },
         searchCachedEPGPrograms: { _, _, _, _ in [] }
     )
 }

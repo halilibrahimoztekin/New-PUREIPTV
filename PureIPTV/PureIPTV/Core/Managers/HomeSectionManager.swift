@@ -6,6 +6,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
     case continueWatching
     case favorites
     case featuredLiveTV
+    case recentLiveTV
     case sportsHub
     case recommendations
     case recentlyAddedVOD
@@ -22,6 +23,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
         case .continueWatching: "İzlemeye Devam Et"
         case .favorites: "Favorilerim"
         case .featuredLiveTV: "Öne Çıkan Canlı TV"
+        case .recentLiveTV: AppStrings.LiveTV.recentChannels
         case .sportsHub: "Günün Maçları (Sports Hub)"
         case .recommendations: "Sana Özel Öneriler"
         case .recentlyAddedVOD: "Yeni Eklenen Filmler"
@@ -36,6 +38,7 @@ public enum HomeSectionType: String, Codable, CaseIterable, Identifiable, Sendab
         case .continueWatching: "play.circle.fill"
         case .favorites: "star.fill"
         case .featuredLiveTV: "tv.fill"
+        case .recentLiveTV: "clock.arrow.circlepath"
         case .sportsHub: "sportscourt.fill"
         case .recommendations: "wand.and.stars"
         case .recentlyAddedVOD: "film.stack.fill"
@@ -63,9 +66,24 @@ public final class HomeSectionManager: @unchecked Sendable {
     public static let shared = HomeSectionManager()
 
     private let storageKey = "pureiptv_home_sections_v1"
+    private let syncModifiedAtKey = "pureiptv_home_sections_sync_modified_at_v1"
+    private let syncDeviceIDKey = "pureiptv_home_sections_sync_device_id_v1"
     private let userDefaults: UserDefaults
+    private let lock = NSRecursiveLock()
 
-    public private(set) var sections: [HomeSectionConfig] = []
+    private var storedSections: [HomeSectionConfig] = []
+
+    public var sections: [HomeSectionConfig] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedSections
+    }
+
+    func withSyncLock<Value>(_ operation: () throws -> Value) rethrows -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
+    }
 
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -77,6 +95,7 @@ public final class HomeSectionManager: @unchecked Sendable {
         HomeSectionConfig(type: .continueWatching, isVisible: true),
         HomeSectionConfig(type: .favorites, isVisible: true),
         HomeSectionConfig(type: .featuredLiveTV, isVisible: true),
+        HomeSectionConfig(type: .recentLiveTV, isVisible: true),
         HomeSectionConfig(type: .sportsHub, isVisible: true),
         HomeSectionConfig(type: .recommendations, isVisible: true),
         HomeSectionConfig(type: .recentlyAddedVOD, isVisible: true),
@@ -85,51 +104,105 @@ public final class HomeSectionManager: @unchecked Sendable {
     ]
 
     public func loadSections() {
+        lock.lock()
+        defer { lock.unlock() }
         if let data = userDefaults.data(forKey: storageKey),
            let saved = try? JSONDecoder().decode([HomeSectionConfig].self, from: data)
         {
-            var migrated = saved.reduce(into: [HomeSectionConfig]()) { result, section in
-                guard !result.contains(where: { $0.type == section.type }) else { return }
-                result.append(section)
-            }
-            for (defaultIndex, section) in Self.defaultSections.enumerated()
-                where !migrated.contains(where: { $0.type == section.type })
-            {
-                let nextDefaultTypes = Self.defaultSections.dropFirst(defaultIndex + 1).map(\.type)
-                let insertionIndex = migrated.firstIndex { nextDefaultTypes.contains($0.type) } ?? migrated.endIndex
-                migrated.insert(section, at: insertionIndex)
-            }
-            sections = migrated
+            let migrated = Self.normalized(saved)
+            storedSections = migrated
             if migrated != saved {
-                saveSections()
+                persistSections(recordModification: false)
             }
         } else {
-            sections = Self.defaultSections
-            saveSections()
+            storedSections = Self.defaultSections
+            persistSections(recordModification: false)
         }
     }
 
     public func saveSections() {
-        if let data = try? JSONEncoder().encode(sections) {
+        lock.lock()
+        defer { lock.unlock() }
+        persistSections(recordModification: true)
+    }
+
+    public var syncModifiedAt: Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return userDefaults.object(forKey: syncModifiedAtKey) as? Date
+    }
+
+    public var syncDeviceID: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return userDefaults.string(forKey: syncDeviceIDKey)
+    }
+
+    public func applySyncedSections(_ syncedSections: [HomeSectionConfig], modifiedAt: Date, deviceID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedSections = Self.normalized(syncedSections)
+        persistSections(recordModification: false)
+        userDefaults.set(modifiedAt, forKey: syncModifiedAtKey)
+        userDefaults.set(deviceID, forKey: syncDeviceIDKey)
+    }
+
+    private func persistSections(recordModification: Bool) {
+        if let data = try? JSONEncoder().encode(storedSections) {
             userDefaults.set(data, forKey: storageKey)
+            if recordModification {
+                userDefaults.set(Date(), forKey: syncModifiedAtKey)
+                userDefaults.set(TopShelfService.syncDeviceID, forKey: syncDeviceIDKey)
+            }
         }
+    }
+
+    private static func normalized(_ saved: [HomeSectionConfig]) -> [HomeSectionConfig] {
+        var normalized = saved.reduce(into: [HomeSectionConfig]()) { result, section in
+            guard !result.contains(where: { $0.type == section.type }) else { return }
+            result.append(section)
+        }
+        for (defaultIndex, section) in defaultSections.enumerated()
+            where !normalized.contains(where: { $0.type == section.type })
+        {
+            let nextDefaultTypes = defaultSections.dropFirst(defaultIndex + 1).map(\.type)
+            let insertionIndex = normalized.firstIndex { nextDefaultTypes.contains($0.type) } ?? normalized.endIndex
+            normalized.insert(section, at: insertionIndex)
+        }
+        return normalized
     }
 
     public func toggleSection(type: HomeSectionType) {
-        if let idx = sections.firstIndex(where: { $0.type == type }) {
-            sections[idx].isVisible.toggle()
-            saveSections()
+        lock.lock()
+        defer { lock.unlock() }
+        if let idx = storedSections.firstIndex(where: { $0.type == type }) {
+            storedSections[idx].isVisible.toggle()
+            persistSections(recordModification: true)
         }
     }
 
+    public func setSectionVisibility(type: HomeSectionType, isVisible: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let idx = storedSections.firstIndex(where: { $0.type == type }),
+              storedSections[idx].isVisible != isVisible
+        else { return }
+        storedSections[idx].isVisible = isVisible
+        persistSections(recordModification: true)
+    }
+
     public func move(from source: IndexSet, to destination: Int) {
-        sections.move(fromOffsets: source, toOffset: destination)
-        saveSections()
+        lock.lock()
+        defer { lock.unlock() }
+        storedSections.move(fromOffsets: source, toOffset: destination)
+        persistSections(recordModification: true)
     }
 
     public func resetToDefault() {
-        sections = Self.defaultSections
-        saveSections()
+        lock.lock()
+        defer { lock.unlock() }
+        storedSections = Self.defaultSections
+        persistSections(recordModification: true)
     }
 }
 

@@ -71,30 +71,36 @@ final class TopShelfEngineTests: XCTestCase {
     // MARK: - 2. Deep Link Generator Tests
 
     func testMakeDeepLink() {
+        let playlistID = UUID()
+        let profileID = UUID()
         let link1 = TopShelfService.makeDeepLink(
             id: "101",
             type: "live",
-            title: "BeIN Sports 1",
-            streamURL: "http://stream.example.com/live.m3u8",
-            coverURL: "http://stream.example.com/logo.png"
+            playlistID: playlistID,
+            profileID: profileID
         )
 
-        XCTAssertTrue(link1.hasPrefix("pureiptv://play"))
-        XCTAssertTrue(link1.contains("id=101"))
-        XCTAssertTrue(link1.contains("type=live"))
-        XCTAssertTrue(link1.contains("title=BeIN%20Sports%201"))
-        XCTAssertTrue(link1.contains("coverURL=http://stream.example.com/logo.png"))
+        let components = URLComponents(string: link1)
+        let queryItems = components?.queryItems ?? []
+        XCTAssertEqual(components?.scheme, "pureiptv")
+        XCTAssertEqual(components?.host, "topshelf")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "id" })?.value, "101")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "type" })?.value, "live")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "playlistID" })?.value, playlistID.uuidString)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "profileID" })?.value, profileID.uuidString)
+        XCTAssertNil(queryItems.first(where: { $0.name == "streamURL" }))
 
         let link2 = TopShelfService.makeDeepLink(
             id: "movie_500",
             type: "vod",
-            title: "Inception",
-            streamURL: "http://stream.example.com/movie.mp4",
-            startPosition: 1245.5
+            playlistID: playlistID,
+            profileID: profileID,
+            startPosition: 0.5
         )
 
-        XCTAssertTrue(link2.contains("type=vod"))
-        XCTAssertTrue(link2.contains("startPosition=1245.5"))
+        let resumeQueryItems = URLComponents(string: link2)?.queryItems ?? []
+        XCTAssertEqual(resumeQueryItems.first(where: { $0.name == "type" })?.value, "vod")
+        XCTAssertEqual(resumeQueryItems.first(where: { $0.name == "startPosition" })?.value, "0.5")
     }
 
     // MARK: - 3. TopShelfClient & Service Tests

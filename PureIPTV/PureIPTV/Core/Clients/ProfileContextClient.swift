@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import Foundation
 
-public struct ProfileContextSnapshot: Equatable, Sendable {
+public nonisolated struct ProfileContextSnapshot: Equatable, Sendable {
     public let profileID: UUID?
     public let generation: UUID
 

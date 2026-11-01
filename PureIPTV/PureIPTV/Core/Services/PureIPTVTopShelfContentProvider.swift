@@ -92,6 +92,9 @@
 
         private func makeSectionedContent(from data: TopShelfDataDTO) -> TVTopShelfSectionedContent? {
             var sections: [TVTopShelfItemCollection<TVTopShelfSectionedItem>] = []
+            var continueSection: TVTopShelfItemCollection<TVTopShelfSectionedItem>?
+            var favoriteSection: TVTopShelfItemCollection<TVTopShelfSectionedItem>?
+            var recentSection: TVTopShelfItemCollection<TVTopShelfSectionedItem>?
 
             // 1. Kaldığın Yerden İzle (Continue Watching)
             if !data.continueWatching.isEmpty {
@@ -115,7 +118,7 @@
                 if !items.isEmpty {
                     let section = TVTopShelfItemCollection(items: items)
                     section.title = "Kaldığın Yerden İzle"
-                    sections.append(section)
+                    continueSection = section
                 }
             }
 
@@ -134,7 +137,7 @@
                 if !items.isEmpty {
                     let section = TVTopShelfItemCollection(items: items)
                     section.title = "Favori Kanallar"
-                    sections.append(section)
+                    favoriteSection = section
                 }
             }
 
@@ -153,7 +156,24 @@
                 if !items.isEmpty {
                     let section = TVTopShelfItemCollection(items: items)
                     section.title = "Yeni Filmler"
-                    sections.append(section)
+                    recentSection = section
+                }
+            }
+
+            for sectionType in TopShelfService.shared.sectionOrder {
+                switch sectionType {
+                case .continueWatching:
+                    if let continueSection {
+                        sections.append(continueSection)
+                    }
+                case .favoriteChannels:
+                    if let favoriteSection {
+                        sections.append(favoriteSection)
+                    }
+                case .recentMovies:
+                    if let recentSection {
+                        sections.append(recentSection)
+                    }
                 }
             }
 

@@ -7,7 +7,10 @@ import SwiftVLC
 enum PlaybackVLC {
     nonisolated static let instance: VLCInstance = {
         do {
-            return try VLCInstance(appleAudioSessionPolicy: .applicationManaged)
+            return try VLCInstance(
+                arguments: VLCInstance.defaultArguments + SubtitleAppearanceProfile.selectedForNextLaunch.libVLCArguments,
+                appleAudioSessionPolicy: .applicationManaged
+            )
         } catch {
             // Falling back to VLCInstance.shared would silently restore library-owned
             // audio-session calls on the main thread.

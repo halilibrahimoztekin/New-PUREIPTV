@@ -15,6 +15,8 @@
         @State private var currentScrubLetter: String = ""
         @State private var isScrubOverlayVisible: Bool = false
         @State private var hideScrubTask: Task<Void, Never>?
+        @State private var categorySearchQuery = ""
+        @State private var posterPrefetchController = TVPosterPrefetchController()
 
         public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig) {
             self.store = store
@@ -36,31 +38,34 @@
                 categoryColumn
                     .frame(width: 300)
                     .focusSection()
-                    .focusGuideBoundary()
 
-                // ── Divider with Focus Guide Bridge ───────────────────
-                ZStack {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.06))
-                        .frame(width: 1)
-                    TVFocusGuideBridge()
-                        .frame(width: 24)
-                }
+                // ── Divider ──────────────────────────────────────────
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 1)
+                    .frame(width: 24)
 
                 // ── Right: Series grid ──────────────────────────────────
                 seriesArea
                     .focusSection()
-                    .focusGuideBoundary()
             }
             .background(
                 DynamicMeshBackgroundView(
                     imageURL: focusedSeries?.coverURL,
                     titleSeed: focusedSeries?.title ?? "Series",
-                    imageRequestDebounceNanoseconds: 150_000_000
+                    imageRequestDebounceNanoseconds: 150_000_000,
+                    userAgentOverride: focusedSeries?.userAgentOverride,
+                    playlistID: focusedSeries?.playlistID
                 )
             )
             .onAppear {
                 store.send(.onAppear(config: config))
+            }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
+            }
+            .onDisappear {
+                posterPrefetchController.cancel()
             }
         }
 
@@ -69,6 +74,24 @@
                 return store.currentSeries.first(where: { $0.id == focusedSeriesID })
             }
             return store.selectedSeries ?? store.currentSeries.first
+        }
+
+        private var filteredCategories: [MediaModels.Category] {
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
+        }
+
+        private func restoredSeriesFocusID(preferred: String?, categoryID: String?) -> String? {
+            let visibleIDs = Set(store.currentSeries.map(\.id))
+            let rememberedID = TVFocusMemory.shared.lastSeries(in: categoryID, fallback: nil)
+            if let rememberedID, visibleIDs.contains(rememberedID) {
+                return rememberedID
+            }
+            if let preferred, visibleIDs.contains(preferred) {
+                return preferred
+            }
+            return store.currentSeries.first?.id
         }
 
         // MARK: – Category Column
@@ -129,7 +152,26 @@
                             }
                             .frame(height: 280)
                         } else {
-                            ForEach(store.categories) { category in
+                            if !store.categories.isEmpty {
+                                CategorySearchField(text: $categorySearchQuery) {
+                                    if let firstMatch = filteredCategories.first {
+                                        store.send(.categorySelected(firstMatch))
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 10)
+                            }
+
+                            if !store.categories.isEmpty, filteredCategories.isEmpty {
+                                Text(AppStrings.Common.categoryNotFound)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                            }
+
+                            ForEach(filteredCategories) { category in
                                 TVSeriesCategoryRow(
                                     category: category,
                                     isSelected: store.selectedCategoryID == category.id,
@@ -148,6 +190,9 @@
                 .background(Color(hex: "#0C0C10"))
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
+                        if !filteredCategories.contains(where: { $0.id == newCatID }) {
+                            categorySearchQuery = ""
+                        }
                         focusedCategory = newCatID
                         TVFocusMemory.shared.lastSelectedSeriesCategoryID = newCatID
                         withAnimation { catProxy.scrollTo(newCatID, anchor: .center) }
@@ -182,6 +227,16 @@
                         }
 
                         Spacer()
+
+                        if let category = store.categories.first(where: { $0.id == store.selectedCategoryID }) {
+                            CategoryContentSortMenu(
+                                selection: store.lastSortMethod,
+                                categoryName: category.name,
+                                hasCategoryOverride: store.isCategorySortOverridden,
+                                onSelect: { store.send(.setCategorySortMethod($0)) },
+                                onReset: { store.send(.resetCategorySortMethod) }
+                            )
+                        }
 
                         MediaLanguageFilterBar(
                             availableFilters: store.availableLanguageFilters,
@@ -280,6 +335,12 @@
                                     .id(series.id)
                                     .contextMenu {
                                         Button {
+                                            store.send(.hideMedia(series))
+                                        } label: {
+                                            Label(AppStrings.Common.hideMediaItem, systemImage: "eye.slash")
+                                        }
+
+                                        Button {
                                             store.send(.toggleFavorite(series))
                                         } label: {
                                             if store.favoriteIDs.contains(series.id) {
@@ -301,40 +362,58 @@
                             .padding(.vertical, 32)
                         }
                         .onChange(of: store.selectedSeries) { _, newSeries in
-                            if let seriesID = newSeries?.id {
-                                TVFocusMemory.shared.recordSeries(seriesID, in: store.selectedCategoryID)
-                                focusedSeriesID = seriesID
-                                withAnimation { seriesProxy.scrollTo(seriesID, anchor: .center) }
+                            guard let seriesID = newSeries?.id,
+                                  store.currentSeries.contains(where: { $0.id == seriesID })
+                            else { return }
+                            TVFocusMemory.shared.recordSeries(seriesID, in: store.selectedCategoryID)
+                            focusedSeriesID = seriesID
+                            withAnimation { seriesProxy.scrollTo(seriesID, anchor: .center) }
+                        }
+                        .onChange(of: store.lastSortMethod) { _, _ in
+                            let categoryID = store.selectedCategoryID
+                            let targetID = restoredSeriesFocusID(preferred: focusedSeriesID, categoryID: categoryID)
+                            guard let targetID else { return }
+                            focusedSeriesID = targetID
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                guard store.selectedCategoryID == categoryID,
+                                      focusedSeriesID == targetID,
+                                      store.currentSeries.contains(where: { $0.id == targetID })
+                                else { return }
+                                withAnimation { seriesProxy.scrollTo(targetID, anchor: .center) }
                             }
                         }
                         .onChange(of: store.selectedCategoryID) { _, newCatID in
-                            let targetID = TVFocusMemory.shared.lastSeries(
-                                in: newCatID,
-                                fallback: store.currentSeries.first?.id
-                            )
+                            let targetID = restoredSeriesFocusID(preferred: nil, categoryID: newCatID)
                             if let targetID {
                                 focusedSeriesID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    guard store.selectedCategoryID == newCatID,
+                                          focusedSeriesID == targetID,
+                                          store.currentSeries.contains(where: { $0.id == targetID })
+                                    else { return }
                                     withAnimation { seriesProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onAppear {
-                            let targetID = TVFocusMemory.shared.lastSeries(
-                                in: store.selectedCategoryID,
-                                fallback: store.selectedSeries?.id ?? store.currentSeries.first?.id
-                            )
+                            let categoryID = store.selectedCategoryID
+                            let targetID = restoredSeriesFocusID(preferred: store.selectedSeries?.id, categoryID: categoryID)
                             if let targetID {
                                 focusedSeriesID = targetID
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    guard store.selectedCategoryID == categoryID,
+                                          focusedSeriesID == targetID,
+                                          store.currentSeries.contains(where: { $0.id == targetID })
+                                    else { return }
                                     withAnimation { seriesProxy.scrollTo(targetID, anchor: .center) }
                                 }
                             }
                         }
                         .onChange(of: focusedSeriesID) { _, newID in
+                            posterPrefetchController.schedule(focusedID: newID, items: store.currentSeries)
                             guard let newID else { return }
-                            TVFocusMemory.shared.recordSeries(newID, in: store.selectedCategoryID)
                             guard let series = store.currentSeries.first(where: { $0.id == newID }) else { return }
+                            TVFocusMemory.shared.recordSeries(newID, in: store.selectedCategoryID)
                             let firstChar = MediaLibraryDerivedData.alphabetLetter(for: series.title)
                             if firstChar != currentScrubLetter {
                                 currentScrubLetter = firstChar

@@ -12,6 +12,8 @@
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 12),
         ]
+        @State private var categorySearchQuery = ""
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         public init(store: StoreOf<VODFeature>, config: PlaylistConfig) {
             self.store = store
@@ -87,6 +89,8 @@
                     categoryBar
                         .padding(.bottom, 6)
 
+                    categorySortMenu
+
                     // ── Audio & Subtitle Language Filter Bar ───────────
                     MediaLanguageFilterBar(
                         availableFilters: store.availableLanguageFilters,
@@ -119,23 +123,92 @@
             .onAppear {
                 store.send(.onAppear(config: config))
             }
+            .onChange(of: config.playlistID) { _, _ in
+                categorySearchQuery = ""
+            }
         }
 
         // MARK: – Category Bar
 
+        private var filteredCategories: [MediaModels.Category] {
+            let query = categorySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return store.categories }
+            return store.categories.filter { $0.name.localizedStandardContains(query) }
+        }
+
         private var categoryBar: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(store.categories) { category in
-                        CategoryPill(
-                            name: category.name,
-                            isSelected: store.selectedCategoryID == category.id
-                        ) {
-                            store.send(.categorySelected(category))
+            VStack(spacing: 8) {
+                if !store.categories.isEmpty {
+                    CategorySearchField(text: $categorySearchQuery) {
+                        if let firstMatch = filteredCategories.first {
+                            store.send(.categorySelected(firstMatch))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+
+                    ScrollViewReader { proxy in
+                        Group {
+                            if filteredCategories.isEmpty {
+                                Text(AppStrings.Common.categoryNotFound)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                                    .padding(.horizontal, 16)
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(filteredCategories) { category in
+                                            CategoryPill(
+                                                name: category.name,
+                                                isSelected: store.selectedCategoryID == category.id
+                                            ) {
+                                                store.send(.categorySelected(category))
+                                            }
+                                            .id(category.id)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                            }
+                        }
+                        .onChange(of: categorySearchQuery) { _, _ in
+                            guard let firstMatchID = filteredCategories.first?.id else { return }
+                            if reduceMotion {
+                                proxy.scrollTo(firstMatchID, anchor: .center)
+                            } else {
+                                withAnimation { proxy.scrollTo(firstMatchID, anchor: .center) }
+                            }
+                        }
+                        .onChange(of: store.selectedCategoryID) { _, selectedID in
+                            guard let selectedID,
+                                  filteredCategories.contains(where: { $0.id == selectedID })
+                            else { return }
+                            if reduceMotion {
+                                proxy.scrollTo(selectedID, anchor: .center)
+                            } else {
+                                withAnimation { proxy.scrollTo(selectedID, anchor: .center) }
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        @ViewBuilder
+        private var categorySortMenu: some View {
+            if let category = store.categories.first(where: { $0.id == store.selectedCategoryID }) {
+                HStack {
+                    Spacer(minLength: 0)
+                    CategoryContentSortMenu(
+                        selection: store.lastSortMethod,
+                        categoryName: category.name,
+                        hasCategoryOverride: store.isCategorySortOverridden,
+                        onSelect: { store.send(.setCategorySortMethod($0)) },
+                        onReset: { store.send(.resetCategorySortMethod) }
+                    )
+                }
                 .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
         }
 
@@ -210,6 +283,12 @@
                                     store.send(.vodSelected(vod))
                                 }
                                 .contextMenu {
+                                    Button {
+                                        store.send(.hideMedia(vod))
+                                    } label: {
+                                        Label(AppStrings.Common.hideMediaItem, systemImage: "eye.slash")
+                                    }
+
                                     Button {
                                         store.send(.toggleFavorite(vod))
                                     } label: {

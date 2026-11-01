@@ -14,6 +14,7 @@ private struct ConnectionFailureContext: Sendable {
 public actor FeedbackReportManager {
     public static let shared = FeedbackReportManager()
     private var latestConnectionFailure: ConnectionFailureContext?
+    private var latestPlaylistHealthReport: PlaylistHealthReport?
 
     private init() {}
 
@@ -44,6 +45,10 @@ public actor FeedbackReportManager {
         latestConnectionFailure = nil
     }
 
+    public func recordPlaylistHealthReport(_ report: PlaylistHealthReport) {
+        latestPlaylistHealthReport = report
+    }
+
     public func generateDiagnosticReport() async -> URL? {
         let bundle = Bundle.main
         let appVersion = bounded(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, limit: 32) ?? "Unknown"
@@ -72,6 +77,18 @@ public actor FeedbackReportManager {
             """
         } ?? "Son başarısız playlist bağlantısı yok."
 
+        let playlistHealthDetails = latestPlaylistHealthReport.map { healthReport in
+            let checks = healthReport.checks.map { check in
+                "\(check.kind.rawValue): \(Self.safeStatusCode(check.status))"
+            }.joined(separator: "\n")
+            return """
+            Son playlist sağlık denetimi:
+            Kaynak türü: \(healthReport.playlistType.rawValue)
+            Denetim zamanı: \(ISO8601DateFormatter().string(from: healthReport.checkedAt))
+            \(checks)
+            """
+        } ?? "Henüz playlist sağlık denetimi yapılmadı."
+
         let report = """
         PureIPTV Gizlilik Korumalı Tanılama Raporu
         Oluşturulma: \(generatedAt)
@@ -81,6 +98,8 @@ public actor FeedbackReportManager {
         İşletim sistemi: \(osVersion)
 
         \(connectionDetails)
+
+        \(playlistHealthDetails)
 
         Gizlilik: Bu rapor yalnızca yukarıdaki bilgileri içerir. Günlükler, etkin kanal,
         oynatma adresleri, hesap veya kullanıcı kimlikleri, ağ bilgileri ve hata metinleri eklenmemiştir.
@@ -107,5 +126,20 @@ public actor FeedbackReportManager {
     private func bounded(_ value: String?, limit: Int) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return String(value.prefix(limit)).filter { !$0.isNewline && !$0.isWhitespace || $0 == " " }
+    }
+
+    private static func safeStatusCode(_ status: PlaylistHealthStatus) -> String {
+        switch status {
+        case .passed:
+            "passed"
+        case let .failed(issue):
+            "failed_\(issue.rawValue)"
+        case let .notChecked(issue):
+            "not_checked_\(issue.rawValue)"
+        case .notConfigured:
+            "not_configured"
+        case .notApplicable:
+            "not_applicable"
+        }
     }
 }

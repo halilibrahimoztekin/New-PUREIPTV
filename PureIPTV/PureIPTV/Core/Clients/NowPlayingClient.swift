@@ -19,6 +19,7 @@ public struct NowPlayingMetadata: Equatable, Sendable {
     public let playbackRate: Double
     public let isLive: Bool
     public let canSeek: Bool
+    public let skipIntervalSeconds: Int64
 
     public init(
         itemID: String,
@@ -31,7 +32,8 @@ public struct NowPlayingMetadata: Equatable, Sendable {
         elapsedTime: Double,
         playbackRate: Double,
         isLive: Bool,
-        canSeek: Bool
+        canSeek: Bool,
+        skipIntervalSeconds: Int64 = 15
     ) {
         self.itemID = itemID
         self.playbackRequestID = playbackRequestID
@@ -44,6 +46,7 @@ public struct NowPlayingMetadata: Equatable, Sendable {
         self.playbackRate = playbackRate
         self.isLive = isLive
         self.canSeek = canSeek
+        self.skipIntervalSeconds = max(1, skipIntervalSeconds)
     }
 }
 
@@ -123,8 +126,8 @@ public extension DependencyValues {
 }
 
 #if os(iOS)
-    // CGImage instances are immutable after ImageIO creates them and can safely
-    // cross back to the main actor for the lightweight UIImage wrappers.
+    /// CGImage instances are immutable after ImageIO creates them and can safely
+    /// cross back to the main actor for the lightweight UIImage wrappers.
     private struct PreparedNowPlayingArtwork: @unchecked Sendable {
         let large: CGImage
         let medium: CGImage
@@ -297,6 +300,8 @@ public extension DependencyValues {
                 command.removeTarget(token)
             }
             commandTargets.removeAll()
+            commandCenter.skipForwardCommand.preferredIntervals = [15]
+            commandCenter.skipBackwardCommand.preferredIntervals = [15]
             setCommandAvailability(hasItem: false, canSeek: false)
         }
 
@@ -313,9 +318,15 @@ public extension DependencyValues {
             guard let metadata else {
                 infoCenter.nowPlayingInfo = nil
                 lastPublishedElapsedTime = nil
+                commandCenter.skipForwardCommand.preferredIntervals = [15]
+                commandCenter.skipBackwardCommand.preferredIntervals = [15]
                 setCommandAvailability(hasItem: false, canSeek: false)
                 return
             }
+
+            let skipInterval = NSNumber(value: metadata.skipIntervalSeconds)
+            commandCenter.skipForwardCommand.preferredIntervals = [skipInterval]
+            commandCenter.skipBackwardCommand.preferredIntervals = [skipInterval]
 
             var info: [String: Any] = [
                 MPMediaItemPropertyTitle: metadata.title,
@@ -333,8 +344,8 @@ public extension DependencyValues {
                 }
             }
             if let artwork {
-                let mediumArtwork = self.mediumArtwork ?? artwork
-                let smallArtwork = self.smallArtwork ?? mediumArtwork
+                let mediumArtwork = mediumArtwork ?? artwork
+                let smallArtwork = smallArtwork ?? mediumArtwork
                 info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: artwork.size) { requestedSize in
                     let requestedDimension = max(requestedSize.width, requestedSize.height)
                     if requestedDimension <= max(smallArtwork.size.width, smallArtwork.size.height) {
@@ -359,12 +370,12 @@ public extension DependencyValues {
                       !Task.isCancelled,
                       let self,
                       self.sessionID == sessionID,
-                      self.artworkKey == key
+                      artworkKey == key
                 else { return }
 
-                self.artwork = UIImage(cgImage: preparedArtwork.large)
-                self.mediumArtwork = UIImage(cgImage: preparedArtwork.medium)
-                self.smallArtwork = UIImage(cgImage: preparedArtwork.small)
+                artwork = UIImage(cgImage: preparedArtwork.large)
+                mediumArtwork = UIImage(cgImage: preparedArtwork.medium)
+                smallArtwork = UIImage(cgImage: preparedArtwork.small)
                 publishInfo()
             }
         }

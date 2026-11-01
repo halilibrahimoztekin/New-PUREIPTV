@@ -26,6 +26,8 @@ public enum AppStrings {
         public static let error = "Hata: %@".localized
         public static let addToFavorites = "Favorilere Ekle".localized
         public static let removeFromFavorites = "Favorilerden Çıkar".localized
+        public static let hideMediaItem = "İçeriği Gizle".localized
+        public static let restoreMediaItem = "Geri Yükle".localized
         public static let favorites = "Favoriler".localized
         public static let favorite = "Favori".localized
         public static let favorited = "Favorilerde".localized
@@ -95,6 +97,12 @@ public enum AppStrings {
         public static let title = "Canlı TV".localized
         public static let channelsTitle = "Kanallar".localized
         public static let categories = "Kategoriler".localized
+        public static let categoryQuickJump = "Kategoriye Hızlı Git".localized
+        public static let categoryLockedStatus = "Kilitli".localized
+        public static let categoryOrderTitle = "Kategori Sırası".localized
+        public static let categoryOrderProvider = "Sağlayıcı Sırası".localized
+        public static let categoryOrderCustom = "Elle Sıralama".localized
+        public static let categoryOrderAlphabetical = "Alfabetik (A–Z)".localized
         public static let emptyCategoryLive = "Bu kategoride kanal bulunamadı".localized
         public static let loadingChannels = "Kanallar yükleniyor…".localized
         public static let noChannels = "Kanal bulunamadı.".localized
@@ -104,6 +112,9 @@ public enum AppStrings {
         public static let compactEPGView = "Kompakt EPG görünümü".localized
         public static let standardEPGView = "Standart EPG görünümü".localized
         public static let recentChannels = "Son İzlenen Kanallar".localized
+        public static let excludeFromRecentChannels = "Son İzlenenlerden Hariç Tut".localized
+        public static let showInRecentChannels = "Son İzlenenlerde Göster".localized
+        public static let recentChannelsScopeHint = "Bu ayar yalnızca bu profil ve playlist için geçerlidir.".localized
         public static let quickZapHint = "Siri Remote ile gezin ve kanala anında geçiş yapın".localized
         public static let noRecentChannels = "Henüz izlenmiş kanal bulunmuyor".localized
         public static let pinRecentChannel = "Geçmişin başına sabitle".localized
@@ -118,6 +129,7 @@ public enum AppStrings {
         public static let cancelChannelSelection = "Seçimi İptal Et".localized
         public static let selectAllChannels = "Tümünü Seç".localized
         public static let clearChannelSelection = "Seçimi Temizle".localized
+        public static let hideSelectedChannels = "Seçilenleri Gizle".localized
         public static let selectedChannelCountFormat = "Seçilen kanal sayısı: %d".localized
         public static func selectedChannelCount(_ count: Int) -> String {
             String(format: selectedChannelCountFormat, locale: Locale.current, arguments: [count])
@@ -144,6 +156,17 @@ public enum AppStrings {
         public static let deleteFavoriteList = "Listeyi Sil".localized
         public static let saveFavoriteListName = "Adı Kaydet".localized
         public static let manageFavoriteListsHint = "Favori kanal listeleri oluşturun ve düzenleyin.".localized
+        public static let favoriteListExport = "M3U8 Olarak Dışa Aktar".localized
+        public static let favoriteListExportWarningTitle = "Kanal Bağlantılarını Dışa Aktar".localized
+        public static let favoriteListExportWarningMessage = "M3U8 dosyası kanal bağlantılarını içerebilir. Bazı bağlantılarda sağlayıcı kullanıcı adı veya parolası bulunabilir. Yalnızca güvendiğiniz kişilerle paylaşın.".localized
+        public static let favoriteListExportContinue = "Dışa Aktar".localized
+        public static let favoriteListExportNoChannels = "Bu favori listesinde dışa aktarılabilecek kanal yok.".localized
+        public static let favoriteListExportFailed = "Favori listesi dışa aktarılamadı.".localized
+        public static let favoriteListExportSkippedFormat = "Dosyaya %lld kanal eklendi; kullanılamayan %lld kanal atlandı.".localized
+        public static func favoriteListExportSkipped(_ exported: Int, _ skipped: Int) -> String {
+            favoriteListExportSkippedFormat.localized(Int64(exported), Int64(skipped))
+        }
+
         public static let newSmartGroup = "Yeni Akıllı Grup".localized
         public static let editSmartGroup = "Akıllı Grubu Düzenle".localized
         public static let smartGroupName = "Grup Adı".localized
@@ -184,6 +207,8 @@ public enum AppStrings {
         public static let jumpToChannel = "Kanala Git".localized
         public static let sortTitle = "Sıralama".localized
         public static let sortDefault = "Varsayılan Sıra".localized
+        public static let sortProgramStartTime = "Şu Anki Program Başlangıç Saati".localized
+        public static let sortPreparingEPG = "EPG sıralaması hazırlanıyor…".localized
         public static let sortNameAZ = "İsim (A-Z)".localized
         public static let sortNameZA = "İsim (Z-A)".localized
         public static let sortMostWatched = "En Çok İzlenenler".localized
@@ -198,12 +223,20 @@ public enum AppStrings {
         public static let moveUp = "Favoriyi Yukarı Taşı".localized
         public static let moveDown = "Favoriyi Aşağı Taşı".localized
         public static let orderingDescription = "Bu playlist ve profilin favori kanallarının sırasını belirler.".localized
+        public static let directionalReorderHint = "Elle sıralamada kanalı taşımak için yukarı/aşağı yön düğmesini basılı tutun. VoiceOver için kanal menüsündeki taşıma eylemlerini kullanın.".localized
     }
 
     // MARK: - Player & EPG
 
     public enum Player {
         public static let playbackEngine = "Oynatma Motoru".localized
+        public static let itemPlaybackEnginePreference = "Bu İçerik İçin".localized
+        public static let saveCurrentPlaybackEngineForItem = "Geçerli Oynatıcıyı Bu İçeriğe Kaydet".localized
+        public static let useGeneralPlaybackEnginePreference = "Genel Oynatıcı Tercihini Kullan".localized
+        public static func itemPlaybackEnginePreferenceValue(_ engine: String) -> String {
+            "Bu içerik için tercih: %@".localized(engine)
+        }
+
         public static let pausePlayback = "Duraklat".localized
         public static let pictureInPicture = "Resim İçinde Resim".localized
         public static let rememberedPlaybackChoiceTitle = "Önceki Oynatıcı Seçimin".localized
@@ -211,14 +244,25 @@ public enum AppStrings {
         public static func rememberedPlaybackChoiceMessage(_ choice: String) -> String {
             "Bu kaynak ve yayın biçimi için son seçimin %@. Oynatıcı kendiliğinden değiştirilmez.".localized(choice)
         }
+
         public static func useRememberedPlaybackChoice(_ choice: String) -> String {
             "%@ ile Aç".localized(choice)
         }
+
         public static let deinterlace = "Deinterlace".localized
         public static let deinterlaceFallback = "Bu akışta Deinterlace uygulanamadı; Otomatik kullanılıyor.".localized
+        public static let deinterlaceMemoryPressureFallback = "Bellek uyarısı nedeniyle Deinterlace kapatıldı. Tercihin sonraki oynatımda geri yüklenir.".localized
+        public static let deinterlaceMemoryPressureFallbackFailed = "Bellek uyarısı nedeniyle Deinterlace kapatılamadı.".localized
         public static let deinterlaceUnknown = "Deinterlace durumu doğrulanamadı.".localized
         public static let deinterlaceUnknownShort = "Bilinmiyor".localized
         public static let playbackEngineSwitchFailed = "Oynatma motoru değiştirilemedi.".localized
+        public static let displayMatchRequested = "tvOS'e ekran eşleme isteği gönderildi. Gerçek geçişi tvOS ve TV belirler.".localized
+        public static let displayMatchSystemDisabled = "tvOS İçeriği Eşleştir kapalı; sistem tercihiniz değiştirilmedi.".localized
+        public static let displayMatchCriteriaUnavailable = "AVPlayer bu yayın için ekran ölçütü vermedi; sistem tercihiniz değiştirilmedi.".localized
+        public static let displayMatchDisplayUnavailable = "tvOS ekran yöneticisine ulaşılamadı; sistem tercihiniz değiştirilmedi.".localized
+        public static let displayMatchEngineUnsupported = "VLC ekran ölçütü sağlayamıyor. Uygun VOD için Oynatıcı menüsünden AVPlayer'ı seçin.".localized
+        public static let displayMatchPartialUnsupported = "tvOS kare hızı ve dinamik aralığı birlikte eşler. Her iki uygulama seçeneğini de açın.".localized
+        public static let displayMatchUnsupportedPlatform = "Bu platformda ekran modu eşleme desteklenmiyor.".localized
         public static let retrySameStream = "Aynı Yayını Yeniden Dene".localized
         public static let retrySameStreamHint = "Aynı yayın bağlantısı yeniden denenir.".localized
         public static let tryOtherPlaybackEngineHint = "Yayını diğer yerleşik oynatıcıda açmayı dener.".localized
@@ -243,6 +287,16 @@ public enum AppStrings {
         public static let recordingStopping = "Kayıt durduruluyor".localized
         public static let recordingCouldNotStop = "Kayıt bitişi doğrulanamadı".localized
         public static let skipMarkers = "Atlama İşaretleri".localized
+        public static func skipBackwardBy(_ interval: String) -> String {
+            "Geri sar: %@".localized(interval)
+        }
+
+        public static func skipForwardBy(_ interval: String) -> String {
+            "İleri sar: %@".localized(interval)
+        }
+
+        public static let replayWithSubtitles = "Altyazıyla tekrar oynat".localized
+        public static let replayWithSubtitlesHint = "Önceki 10 saniyeyi altyazıyla tekrar oynatır.".localized
         public static let skipIntro = "Açılışı Atla".localized
         public static let skipCredits = "Jeneriği Atla".localized
         public static let introMarkerTitle = "Açılış".localized
@@ -264,7 +318,11 @@ public enum AppStrings {
         public static let epgNotFound = "EPG bilgisi bulunamadı.".localized
         public static let nowPlaying = "Şu an".localized
         public static let returnToPlayingChannel = "İzlenen Kanala Dön".localized
+        public static let epgProgramSelectionUnavailable = "Programı seçmek için önce bu kanalı izlemeye başlayın.".localized
+        public static let epgPreviewCorner = "Küçük Video Konumu".localized
         public static let showControls = "Oynatıcı Kontrollerini Göster".localized
+        public static let channelInfo = "Kanal Bilgisi".localized
+        public static let expandEPGPreviewToFullscreen = "Önizlemeyi Tam Ekranda Aç".localized
         public static let nextUp = "Sıradaki:".localized
         public static let upcoming = "Yaklaşan".localized
         public static let nextLabel = "SONRAKİ".localized
@@ -311,11 +369,33 @@ public enum AppStrings {
         public static let subtitleOnlineSearch = "Çevrimiçi Altyazı Ara".localized
         public static let openSubtitlesAPIKey = "OpenSubtitles API anahtarı".localized
         public static let openSubtitlesAPIKeyHint = "Kendi API anahtarınız güvenli olarak Keychain’de saklanır.".localized
+        public static let openSubtitlesAPIKeyRequired = "OpenSubtitles API anahtarı gerekiyor.".localized
+        public static let openSubtitlesInvalidResponse = "OpenSubtitles geçersiz bir yanıt döndürdü.".localized
+        public static let openSubtitlesRequestFailed = "OpenSubtitles isteği başarısız oldu (HTTP %d).".localized
+        public static let openSubtitlesInvalidDownloadURL = "OpenSubtitles güvenli olmayan bir altyazı bağlantısı döndürdü.".localized
         public static let getOpenSubtitlesAPIKey = "API anahtarı alın".localized
         public static let subtitleSearchQuery = "Film veya dizi adı".localized
+        public static let subtitleSearchLanguage = "Altyazı dili".localized
+        public static let subtitleSearchAllLanguages = "Tüm diller".localized
+        public static let subtitleSearchTitleOnlyWarning = "Yalnızca film veya dizi adı girin; URL ve oynatma listesi bilgileri gönderilmez.".localized
         public static let searchSubtitles = "Altyazı ara".localized
         public static let subtitleSearchResults = "Altyazı sonuçları".localized
         public static let subtitleSearchEmpty = "Sonuçları görmek için altyazı arayın.".localized
+        public static let subtitleSearchFormat = "Biçim".localized
+        public static let subtitleSearchUnknownFormat = "Bilinmeyen biçim".localized
+        public static let subtitleTrackSourceLabel = "Kaynak".localized
+        public static let subtitleTrackExternalFile = "Harici altyazı dosyası".localized
+        public static let subtitleTrackMediaStream = "Medya akışı".localized
+        public static let subtitleSearchEpisodeMatch = "Bölüm eşleşmesi".localized
+        public static let subtitleSearchDifferentEpisode = "Farklı bölüm".localized
+        public static let subtitleSearchEpisodeUnverified = "Bölüm doğrulanamadı".localized
+        public static let subtitleSearchTitleMatch = "Başlık eşleşmesi".localized
+        public static let subtitleSearchTitleUnverified = "Başlık doğrulanamadı".localized
+        public static let subtitleTextEncoding = "Harici Altyazı Metin Kodlaması".localized
+        public static let subtitleTextEncodingDescription = "Yalnız indirilen harici metin altyazılarını dönüştürür; gömülü altyazılar etkilenmez. Otomatik, VLC’nin mevcut davranışını korur.".localized
+        public static let subtitleEncodingAutomatic = "Otomatik (VLC varsayılanı)".localized
+        public static let subtitleEncodingFailed = "Altyazı seçilen kodlamayla okunamadı.".localized
+        public static let subtitleFileTooLarge = "Altyazı dosyası 8 MB sınırını aşıyor.".localized
         public static let externalSubtitleAddFailed = "Harici altyazı oynatıcıya eklenemedi.".localized
         public static let tracks = "Ses ve Altyazı".localized
         public static let noOptions = "Seçenek bulunmuyor.".localized
@@ -418,16 +498,40 @@ public enum AppStrings {
             "Son güncelleme: %@".localized(timeString)
         }
 
-        public static func epgDataAge(_ age: String) -> String {
-            "EPG verisi %@ önce güncellendi".localized(age)
+        public static func epgDataAge(_ interval: TimeInterval) -> String {
+            let formatter = DateComponentsFormatter()
+            if interval < 3600 {
+                formatter.allowedUnits = [.minute]
+            } else if interval < 86400 {
+                formatter.allowedUnits = [.hour]
+            } else {
+                formatter.allowedUnits = [.day]
+            }
+            formatter.unitsStyle = .abbreviated
+            formatter.maximumUnitCount = 1
+            let value = formatter.string(from: max(60, interval)) ?? ""
+            return "EPG verisi %@ önce güncellendi".localized(value)
         }
 
         public static let epgDataStale = "EPG verisi eski".localized
         public static let epgLastRefreshIssue = "Son EPG yenilemesinde hata oluştu".localized
         public static let epgFreshnessUnknown = "EPG güncelleme durumu bilinmiyor".localized
+        public static let epgThisDevice = "Bu cihazda".localized
+        public static let epgDiagnosticsTitle = "EPG Tanılaması".localized
+        public static func epgDiagnosticsMessage(
+            playlistID: String,
+            source: String,
+            lastSuccess: String,
+            lastFailure: String
+        ) -> String {
+            "Playlist kimliği: %@\nEPG kaynağı: %@\nBu cihazdaki son başarılı yenileme: %@\nBu cihazdaki son yenileme hatası: %@\nEPG önbelleği ve yenileme zamanı cihazlar arasında eşitlenmez. Diğer cihazlarda playlist kimliğini ve kaynak kodunu karşılaştırın."
+                .localized(playlistID, source, lastSuccess, lastFailure)
+        }
+
         public static func epgProviderCooldownUntil(_ date: String) -> String {
             "Sağlayıcının bildirdiği EPG bekleme süresi %@ tarihinde doluyor".localized(date)
         }
+
         public static let epgProviderRateLimitedWithoutDate = "Sağlayıcı EPG isteklerini sınırladı ancak yeniden deneme zamanı bildirmedi.".localized
 
         public static let automaticBroadcast = "Canlı Yayın".localized
@@ -486,6 +590,8 @@ public enum AppStrings {
         public static let pinMismatch = "PIN kodları eşleşmiyor. Tekrar deneyin.".localized
         public static let incorrectPIN = "Hatalı PIN".localized
         public static let cannotPlayStream = "Yayın oynatılamıyor.".localized
+        public static let invalidXMLTVSource = "XMLTV kaynağı bozuk, izin verilen boyutu aşıyor veya desteklenmeyen bir arşiv biçiminde.".localized
+        public static let hiddenMediaSaveFailed = "İçerik gizlenemedi. Lütfen tekrar deneyin.".localized
 
         public static func serverError(code: Int) -> String {
             "Sunucu hatası (Kod: %lld).".localized(Int64(code))
@@ -563,9 +669,29 @@ public enum AppStrings {
         public static let accounts = "HESAPLAR".localized
         public static let manageAccounts = "Hesap Yönetimi (Playlists)".localized
         public static let security = "GÜVENLİK".localized
+        public static let searchHistory = "Arama Geçmişi".localized
+        public static let saveRecentSearches = "Son Aramaları Kaydet".localized
+        public static let searchHistoryDescription = "Arama geçmişi en fazla 20 aramayı seçilen süre boyunca saklar. Bu tercih bu cihazda tutulur. Geçmiş, CloudKit etkinse cihazlar arasında eşitlenebilen mevcut ortak veri deposunu kullanır. Kapatmak mevcut kayıtları siler.".localized
+        public static let searchHistoryRetention = "Saklama Süresi".localized
+        public static let searchHistorySevenDays = "7 gün".localized
+        public static let searchHistoryThirtyDays = "30 gün".localized
+        public static let searchHistoryNinetyDays = "90 gün".localized
         public static let appearance = "GÖRÜNÜM".localized
         public static let visualThemePreset = "Görsel Tema".localized
         public static let visualThemePresetDescription = "Vurgu rengini tvOS atmosferik arka plan tonuyla eşleştirir.".localized
+        public static let visualThemePackageImport = "Görünüm Paketi İçe Aktar (.json)".localized
+        public static let visualThemePackageDescription = "Paketler bu profilde saklanır. JSON yalnızca ad, kimlik, vurgu rengi ve arka plan rengini belirleyebilir; görsel, kod ve playlist kabul edilmez.".localized
+        public static let visualThemePackageInvalid = "Tema paketi geçersiz. JSON yalnızca ad, kimlik, vurgu rengi ve arka plan rengi içerebilir.".localized
+        public static let visualThemePackageTooLarge = "Tema paketi 16 KB sınırını aşıyor.".localized
+        public static let visualThemePackageLimit = "Bir profilde en fazla 20 tema paketi saklanabilir.".localized
+        public static func visualThemePackageAdded(_ name: String) -> String {
+            "%@ paketi bu profile eklendi.".localized(name)
+        }
+
+        public static func visualThemePackageRemove(_ name: String) -> String {
+            "%@ paketini kaldır".localized(name)
+        }
+
         public static let themePresetClassic = "Klasik".localized
         public static let themePresetOcean = "Okyanus".localized
         public static let themePresetAurora = "Aurora".localized
@@ -573,13 +699,29 @@ public enum AppStrings {
         public static let themePresetEmber = "Kor".localized
         public static let themeColor = "Ana Renk".localized
         public static let twoLineTVChannelTitles = "Kanal Adlarını İki Satırda Göster".localized
+        public static let highContrastFocusFrame = "Yüksek Kontrast Odak Çerçevesi".localized
+        public static let highContrastFocusFrameDescription = "Odaktaki kart ve düğmelerin çevresinde belirgin beyaz ve koyu bir çerçeve gösterir.".localized
+        public static let favoriteChannelWrapAroundFocus = "Favori Listede Sınırda Çevrimsel Odak".localized
+        public static let favoriteChannelWrapAroundFocusDescription = "Açıkken ilk favori kanalda yukarı, son kanalda aşağı yön listenin diğer ucuna geçer. Yalnızca favori kanal listelerinde çalışır.".localized
         public static let appIcon = "Uygulama İkonu".localized
         public static let about = "HAKKINDA".localized
         public static let appVersion = "PureIPTV v1.0.0".localized
+        public static let tmdbAttribution = "Bu ürün TMDB API’sini kullanır ancak TMDB tarafından desteklenmez veya onaylanmaz.".localized
+        public static let tmdbAPIKeyTitle = "Kişisel TMDB API Anahtarı".localized
+        public static let tmdbAPIKeyDescription = "Anahtar cihazın Keychain’inde tutulur ve iCloud eşitlemesine eklenmez. Doğrulama yalnızca düğmeye dokunduğunuzda yapılır.".localized
+        public static let tmdbAPIKeyPlaceholder = "TMDB v3 API anahtarı".localized
+        public static let tmdbAPIKeyValidateAndSave = "Doğrula ve Kaydet".localized
+        public static let tmdbAPIKeyValidating = "TMDB anahtarı doğrulanıyor…".localized
+        public static let tmdbAPIKeySaved = "Kişisel TMDB anahtarı etkin. Değer gizli tutuluyor.".localized
+        public static let tmdbAPIKeyDefaultActive = "Uygulamanın varsayılan TMDB anahtarı kullanılıyor.".localized
+        public static let tmdbAPIKeyDelete = "Kişisel Anahtarı Sil".localized
+        public static let tmdbAPIKeyValidationFailed = "Anahtar doğrulanamadı. Anahtarı veya bağlantıyı kontrol edin.".localized
+        public static let tmdbAPIKeyLoadFailed = "TMDB anahtarı için güvenli depolamaya erişilemedi.".localized
+        public static let tmdbAPIKeyDeleteFailed = "Kişisel TMDB anahtarı güvenli biçimde silinemedi.".localized
         public static let createDiagnosticReport = "Gizlilik Korumalı Tanılama Raporu Oluştur".localized
         public static let diagnosticReportGenerating = "Tanılama raporu hazırlanıyor...".localized
         public static let diagnosticReportTitle = "Tanılama Raporu".localized
-        public static let diagnosticReportHint = "Sürüm, cihaz türü ve varsa son bağlantı denemesinin sansürlenmiş hata kodunu içerir. URL, hesap bilgisi ve günlük eklenmez; hiçbir yere otomatik gönderilmez.".localized
+        public static let diagnosticReportHint = "Sürüm, cihaz türü ve varsa son bağlantı/playlist denetiminin sabit durum kodlarını içerir. URL, hesap bilgisi, günlük ve ham hata metni eklenmez; hiçbir yere otomatik gönderilmez.".localized
         public static let diagnosticReportUnavailable = "Rapor önizlemesi açılamadı.".localized
         public static let shareDiagnosticReport = "Raporu Dışa Aktar veya Paylaş".localized
         public static let version = "Sürüm".localized
@@ -591,24 +733,35 @@ public enum AppStrings {
         public static let startupScreen = "Başlangıç Ekranı".localized
         public static let hideEmptyContentTabs = "Boş içerik sekmelerini gizle".localized
         public static let hideEmptyContentTabsDescription = "Playlist'te içerik olmayan canlı TV, film ve dizi sekmelerini gizler.".localized
+        public static let hideChannelsWithoutPrograms = "EPG programı olmayan kanalları gizle".localized
+        public static let hideChannelsWithoutProgramsDescription = "Yalnızca başarılı EPG yanıtı boş dönen satırları gizler. Yüklenmemiş, yenilenmekte veya hata almış kanallar görünür kalır.".localized
         public static let epgMappingSuggestionsTitle = "EPG Eşleme Önerileri".localized
         public static let epgMappingSuggestionsDescription = "Kanal adlarına göre güven skorlu XMLTV eşleşmeleri önerir; siz onaylamadan hiçbir eşleme kaydedilmez.".localized
+        public static let secondaryEPGSourcePriorityDescription = "Eşleştirmeler aktif playlist'e özeldir. Playlist sağlayıcısının EPG'si önceliklidir; eşleştirdiğiniz harici XMLTV kaynağı yalnız boş zaman aralıklarını tamamlar.".localized
         public static let findEPGMappingSuggestions = "Önerileri Bul veya Yenile".localized
         public static let noEPGMappingSuggestions = "Güvenilir bir EPG eşleşmesi önerisi bulunamadı.".localized
         public static let confirmEPGMapping = "Eşlemeyi Onayla".localized
         public static func retryFailedCustomEPGSources(_ count: Int) -> String {
             "Başarısız EPG Kaynaklarını Yeniden Dene (%lld)".localized(Int64(count))
         }
+
         public static func epgMappingConfidence(_ confidence: Int) -> String {
             "Güven: %lld%%".localized(Int64(confidence))
         }
 
         public static let discover = "Keşfet".localized
         public static let contentSorting = "İçerik Sıralaması".localized
+        public static let categorySortFallbackDescription = "Kategori için özel sıralama seçilmediyse bu varsayılan kullanılır.".localized
+        public static let contentManagement = "İçerik Yönetimi".localized
+        public static let hiddenMediaManagement = "Gizlenen Film ve Diziler".localized
+        public static let hiddenMediaManagementDescription = "Gizlediğiniz film ve dizileri görüntüleyip geri yükleyin.".localized
+        public static let noHiddenMedia = "Henüz gizlenmiş film veya dizi yok.".localized
+        public static let defaultMediaSource = "Varsayılan kaynak".localized
         public static let vodSorting = "Filmler (VOD)".localized
         public static let playerSettings = "Oynatıcı (Player) Ayarları".localized
         public static let remoteControls = "Oynatıcı Kumanda Yönleri".localized
         public static let remoteControlsDescription = "Yalnızca oynatıcı kontrolleri gizliyken yön hareketlerine atanır. Aynı eylemi birden fazla yöne atayabilirsiniz.".localized
+        public static let restoreRemoteControlDirections = "Varsayılan Kumanda Yönlerini Geri Yükle".localized
         public static let remoteDirectionUp = "Yukarı".localized
         public static let remoteDirectionDown = "Aşağı".localized
         public static let remoteDirectionLeft = "Sol".localized
@@ -626,6 +779,10 @@ public enum AppStrings {
         public static let cleanChannelNames = "Kanal İsimlerini Sadeleştir".localized
         public static let cleanChannelNamesDesc = "Kanal adlarındaki gereksiz [TR], FHD, 1080p, 4K, |HEVC| ve VIP etiketlerini temizler.".localized
         public static let epgSettings = "Yayın Akışı (EPG) Ayarları".localized
+        public static let liveTVArtworkSource = "Canlı TV Görsel Kaynağı".localized
+        public static let liveTVArtworkEPG = "EPG Program Görseli".localized
+        public static let liveTVArtworkChannel = "Kanal Logosu".localized
+        public static let liveTVArtworkSourceDescription = "EPG görseli bulunmadığında kanal logosu kullanılır. Playlist’e özel logo her zaman önceliklidir.".localized
         public static let timeShift = "Zaman Kaydırma (Time Shift)".localized
         public static func timeShiftHours(_ hours: Int) -> String {
             hours > 0 ? "+%lld Saat".localized(Int64(hours)) : "%lld Saat".localized(Int64(hours))
@@ -634,6 +791,9 @@ public enum AppStrings {
         public static let autoUpdateEPG = "Akışı Otomatik Güncelle".localized
         public static let epgAutoRefreshInterval = "EPG Otomatik Yenileme Aralığı".localized
         public static let epgAutoRefreshDescription = "Guide refresh checks this interval when the guide opens; background updates are not guaranteed.".localized
+        public static let deferAutoEPGRefreshOnConstrainedNetwork = "Kısıtlı Ağda Tam EPG Yenilemesini Ertele".localized
+        public static let deferAutoEPGRefreshOnConstrainedNetworkDescription = "Tam rehber yenilemesi yalnızca sistem bağlantıyı pahalı veya Düşük Veri olarak işaretlediğinde bekletilir. Rehberdeki Yenile düğmesiyle istediğiniz zaman elle başlatabilirsiniz.".localized
+        public static let epgAutoRefreshDeferredMessage = deferAutoEPGRefreshOnConstrainedNetworkDescription
         public static let subscriptionAndStorage = "Abonelik & Depolama".localized
         public static let subscriptionStatus = "Abonelik Durumu".localized
         public static let premiumStatus = "Premium 👑".localized
@@ -646,6 +806,7 @@ public enum AppStrings {
         public static let clearing = "Temizleniyor...".localized
         public static let calculating = "Hesaplanıyor...".localized
         public static let defaultSort = "Varsayılan".localized
+        public static let useLibrarySortDefault = "Kütüphane varsayılanını kullan".localized
         public static let alphabeticalSort = "A-Z (Alfabetik)".localized
         public static let ratingSort = "IMDb Puanı".localized
         public static let dateAddedSort = "Eklenme Tarihi".localized
@@ -654,6 +815,18 @@ public enum AppStrings {
         public static let defaultSubtitleLanguage = "Varsayılan Altyazı Dili".localized
         public static let subtitleTextSize = "Altyazı Boyutu (VLC)".localized
         public static let subtitleTextSizeDescription = "Boyut VLC’de uygulanır. AVPlayer, WebVTT dışındaki altyazılarda sistem görünümünü kullanır.".localized
+        public static let subtitleAppearanceProfile = "VLC Altyazı Görünümü".localized
+        public static let subtitleAppearanceGlobalScope = "Profil, tüm VLC oynatımları için uygulama genelinde geçerlidir.".localized
+        public static let subtitleAppearanceDescription = "VLC metin altyazıları için geçerlidir. AVPlayer sistem altyazıları, görüntü tabanlı altyazılar ve ASS/SSA’nın kendi stilleri etkilenmez. HDR otomatik algılanmaz. Değişiklik için uygulamayı tamamen kapatıp yeniden açın.".localized
+        public static let subtitleAppearanceStandard = "Varsayılan (Beyaz)".localized
+        public static let subtitleAppearanceSoftGray = "Yumuşak Gri".localized
+        public static let subtitleAppearanceDimGray = "Daha Sönük Gri".localized
+        public static let forceSDROutput = "HDR İçeriği SDR Olarak Görüntüle".localized
+        public static let forceSDROutputDescription = "Seçili motor AVPlayer olmalı. iOS/tvOS 26 ve üzerindeki yerel görüntü HDR içeriği SDR ton aralığına eşler. TV/HDMI görüntü modu değiştirilmez; VLC ve AirPlay etkilenmez.".localized
+        public static let catchupSkipInterval = "Catch-up Atlama Adımı".localized
+        public static let catchupSkipIntervalDescription = "Catch-up sırasında geri ve ileri düğmeleri seçilen aralık kadar atlar. Canlı TV ve VOD atlamaları değişmez.".localized
+        public static let vodSkipInterval = "VOD Atlama Adımı".localized
+        public static let vodSkipIntervalDescription = "Film ve dizi oynatımında geri ve ileri düğmeleri seçilen aralık kadar atlar. Catch-up kendi ayarını kullanır; canlı yayında atlama kullanılamaz.".localized
         public static let rememberTrackPreferences = "Akıllı Tercih Belleği".localized
         public static let rememberTrackPreferencesDesc = "İzlenen her içerik için son seçilen ses ve altyazı otomatik hatırlanır.".localized
         public static let cloudSyncSection = "BULUT & EŞZAMANLAMA".localized
@@ -666,17 +839,28 @@ public enum AppStrings {
     public enum Search {
         public static let startSearch = "Aramaya Başlayın".localized
         public static let noResults = "Sonuç Bulunamadı".localized
+        public static let searchAllTypes = "Tüm İçerik Türlerini Ara".localized
+        public static let searchAllPlaylists = "Tüm Çalma Listelerinde Ara".localized
         public static let searchPlaceholder = "Kanal, film veya dizi ara...".localized
         public static let channelSearchPlaceholder = "Kanal ara...".localized
         public static let liveTV = "Canlı TV".localized
         public static let movies = "Filmler".localized
         public static let series = "Diziler".localized
         public static let recentSearches = "Son Aramalar".localized
+        public static let pinnedSearches = "Sabitlediğim Aramalar".localized
+        public static let pinnedSearchesDescription = "Bu liste bu cihazda saklanır ve son arama geçmişinden bağımsızdır.".localized
+        public static let pinSearch = "Aramayı Sabitle".localized
+        public static let unpinSearch = "Sabitlemeyi Kaldır".localized
+        public static let togglePinnedSearchHint = "Aramayı sabit listenize ekler veya listeden çıkarır.".localized
+        public static let runPinnedSearchHint = "Bu sabit aramayı yeniden çalıştırır.".localized
+        public static let pinnedSearchLimitTitle = "Sabitleme Sınırı".localized
+        public static let pinnedSearchLimitMessage = "En fazla 10 arama sabitlenebilir. Yeni bir arama eklemek için önce birini kaldırın.".localized
         public static let quickTags = "Popüler Kategoriler & Etiketler".localized
         public static let discoverSuggestions = "Öne Çıkan Aramalar".localized
         public static let clear = "Temizle".localized
         public static let loadingMessage = "Arama altyapısı hazırlanıyor...\n(Bu işlem ilk girişte birkaç saniye sürebilir)".localized
         public static let all = "Tümü".localized
+        public static let myCategories = "Kategorilerim".localized
         public static let filter4K = "4K / UHD 🌟".localized
         public static let filterEPG = "EPG Programları 🕒".localized
         public static let people = "Kişiler".localized
@@ -685,6 +869,7 @@ public enum AppStrings {
         public static let allPlaylistsShort = "Tümü (Global)".localized
         public static let liveProgramMatch = "Canlı Program:".localized
         public static let playlistSource = "Liste:".localized
+        public static let myCollection = "Koleksiyonum".localized
     }
 
     // MARK: - MultiView
@@ -733,8 +918,39 @@ public enum AppStrings {
         public static let favoriteLiveTV = "Favori Canlı TV".localized
         public static let favoriteMovies = "Favori Filmler".localized
         public static let favoriteSeries = "Favori Diziler".localized
+        public static let sortFavoriteSeries = "Dizi sıralaması".localized
+        public static let newestEpisodeDate = "En yeni bölüme göre".localized
+        public static let existingFavoriteOrder = "Mevcut sıra".localized
+        public static let loadingFavoriteSeriesDates = "Bölüm tarihleri alınıyor…".localized
+        public static let favoriteSeriesDatesLoadFailed = "Bölüm tarihleri yüklenemedi. Yeniden deneyin.".localized
         public static let featuredLiveTV = "Canlı TV (Önerilen)".localized
+        public static let catalogCountSummaryTitle = "Katalog yenileme özeti".localized
+        public static let catalogCountSummaryDescription = "Önceki başarılı sayımlara göre net toplam farkı. Tek tek eklenen veya kaldırılan içerikler gösterilmez.".localized
         public static let epgPrograms = "Rehberdeki Programlar".localized
+        public static let showFollowedSportsEvents = "Takip Ettiklerim".localized
+        public static let showAllSportsEvents = "Tüm Maçlar".localized
+        public static let noFollowedSportsEvents = "Takip ettiğiniz takımlarda bu aralıkta maç yok.".localized
+        public static let otherSportsMatches = "Diğer Maçlar".localized
+        public static let sportsFollowHint = "İzlemek için seçin. Takım veya tanınan turnuva takibi için basılı tutun.".localized
+        public static let sportsFollowHintTV = "İzlemek için seçin. Takım veya turnuvayı takip etmek için Siri Remote üzerinde Seç düğmesini basılı tutun.".localized
+        public static let sportsFollowSyncLimitExceeded = "iCloud eşitleme alanı sınırına ulaşıldı. Bu takip değişikliği eşitlenmedi.".localized
+        public static let sportsFollowSyncUnavailable = "iCloud şu anda kullanılamıyor. Bu takip değişikliği eşitlenmedi.".localized
+        public static func followSportsTeam(_ team: String) -> String {
+            "Takımı Takip Et: %@".localized(team)
+        }
+
+        public static func unfollowSportsTeam(_ team: String) -> String {
+            "Takım Takibini Bırak: %@".localized(team)
+        }
+
+        public static func followSportsCompetition(_ competition: String) -> String {
+            "Turnuvayı Takip Et: %@".localized(competition)
+        }
+
+        public static func unfollowSportsCompetition(_ competition: String) -> String {
+            "Turnuva Takibini Bırak: %@".localized(competition)
+        }
+
         public static let nowAiring = "ŞU AN".localized
         public static let newMovies = "Yeni Eklenen Filmler".localized
         public static let newSeries = "Yeni Eklenen Diziler".localized
@@ -764,6 +980,31 @@ public enum AppStrings {
         public static let details = "Detaylar".localized
     }
 
+    public enum ViewingStatistics {
+        public static let title = "İzleme İstatistikleri".localized
+        public static let period = "Dönem".localized
+        public static let last7Days = "Son 7 gün".localized
+        public static let last30Days = "Son 30 gün".localized
+        public static let last90Days = "Son 90 gün".localized
+        public static let totalTime = "İzleme Süresi".localized
+        public static let currentPeriod = "Bu dönem".localized
+        public static let previousPeriod = "Önceki dönem".localized
+        public static let periodChangeLabel = "Dönem karşılaştırması".localized
+        public static let noPreviousPeriod = "Önceki dönemde kayıtlı izleme süresi yok.".localized
+        public static let contentTypes = "İçerik Türleri".localized
+        public static let mostWatched = "En Çok İzlenenler".localized
+        public static let noData = "Bu dönemde izleme kaydı yok".localized
+        public static let trackingNote = "İstatistikler bu sürümden itibaren kaydedilir. Geçmişteki kayıtlı oynatma konumu, izlenen süreyi göstermez ve toplama dahil edilmez.".localized
+        public static let privacyTitle = "Gizlilik".localized
+        public static let privacyDetails = "İstatistikler yalnızca bu cihazda ve seçili profilde tutulur; en fazla 180 gün saklanır. iCloud ile eşitlenmez, ham izleme geçmişi veya kaynak bağlantıları sunucuya gönderilmez.".localized
+        public static let clear = "İstatistikleri Sil".localized
+        public static let clearTitle = "İstatistikler silinsin mi?".localized
+        public static let clearMessage = "Bu profilin bu cihazda tutulan izleme istatistikleri kalıcı olarak silinir.".localized
+        public static func periodChange(_ percent: String) -> String {
+            "%@ önceki döneme göre".localized(percent)
+        }
+    }
+
     // MARK: - Downloads
 
     public enum Downloads {
@@ -775,7 +1016,13 @@ public enum AppStrings {
         public static let paused = "Duraklatıldı".localized
         public static let pauseDownload = "İndirmeyi Duraklat".localized
         public static let resumeDownload = "İndirmeye Devam Et".localized
+        public static let downloadNext = "İlk Sırada İndir".localized
         public static let completedDownloads = "İndirilen İçerikler".localized
+        public static let exportActions = "Dışa Aktarma Seçenekleri".localized
+        public static let shareCompletedDownload = "İndirilen Dosyayı Paylaş".localized
+        public static let saveCompletedDownloadToFiles = "Dosyalara Kaydet".localized
+        public static let exportUnavailableTitle = "İndirme Dosyası Kullanılamıyor".localized
+        public static let exportUnavailableMessage = "Bu indirme dosyası artık kullanılamıyor. İndirmeler listesini yenileyip tekrar deneyin.".localized
         public static let totalStorage = "Kullanılan Alan".localized
         public static let availableStorage = "Kullanılabilir Alan".localized
         public static let storageUnavailable = "Alan bilgisi alınamadı".localized
@@ -790,6 +1037,7 @@ public enum AppStrings {
         public static func deleteDownloadMessage(_ title: String) -> String {
             "“%@” bu cihazdan silinecek. İzleme geçmişiniz korunacak.".localized(title)
         }
+
         public static let deleteDownloadFailure = "Dosya silinemedi. Aktif indirmeyi ve depolama alanını kontrol edip yeniden deneyin.".localized
         public static let downloadLoadFailure = "İndirme listesi alınamadı. Yeniden deneyin.".localized
         public static let downloadCommandFailure = "İndirme işlemi tamamlanamadı. Yeniden deneyin.".localized
@@ -799,6 +1047,19 @@ public enum AppStrings {
         public static let clearCompletedFailure = "Bazı tamamlanmış indirmeler silinemedi. Depolama alanını kontrol edip yeniden deneyin.".localized
         public static let downloadSpeed = "Hız".localized
         public static let tvOSNotice = "Çevrimdışı indirme özelliği Apple TV kısıtlamaları nedeniyle yalnızca iOS ve iPadOS cihazlarında desteklenmektedir.".localized
+    }
+
+    // MARK: - Local Media Presentation
+
+    public enum MediaPresentation {
+        public static let edit = "Yerel Bilgileri Düzenle".localized
+        public static let title = "Görünen Başlık".localized
+        public static let posterURL = "Poster URL’si".localized
+        public static let year = "Yıl".localized
+        public static let reset = "Kaynak Bilgilerine Dön".localized
+        public static let localOnlyDescription = "Bu değişiklik yalnızca bu profil ve playlist için saklanır. Sağlayıcı kaydınız değişmez.".localized
+        public static let posterURLDescription = "Poster bağlantısı HTTPS kullanmalıdır.".localized
+        public static let invalidYear = "Yıl 1888 ile 2100 arasında olmalıdır.".localized
     }
 
     // MARK: - VOD Detail
@@ -831,11 +1092,33 @@ public enum AppStrings {
         public static let imdbRating = "IMDb".localized
         public static let watchTrailer = "Fragmanı İzle".localized
         public static let trailerNotAvailable = "Bu film için fragman bulunamadı.".localized
+
         public static let inLibrary = "Kütüphanenizde".localized
         public static let notInLibrary = "Listenizde Bulunamadı".localized
         public static let notInLibraryDesc = "Bu içerik mevcut IPTV çalma listenizde bulunamadı. TMDB özet bilgisi aşağıdadır.".localized
         public static let versionsAndQuality = "Sürüm & Kalite Seçenekleri".localized
         public static let currentVersion = "Mevcut Sürüm".localized
+    }
+
+    public enum WatchAvailability {
+        public static let title = "Yayın Platformları".localized
+        public static let chooseCountry = "Ülke seç".localized
+        public static let clearCountry = "Ülke seçimini kaldır".localized
+        public static let subscription = "Abonelik".localized
+        public static let free = "Ücretsiz".localized
+        public static let adSupported = "Reklam destekli".localized
+        public static let rent = "Kirala".localized
+        public static let buy = "Satın al".localized
+        public static let noAvailability = "Bu ülkede sağlayıcı bilgisi bulunamadı.".localized
+        public static let fetchFailed = "Sağlayıcı bilgileri yüklenemedi.".localized
+        public static let source = "Veri kaynağı: JustWatch · TMDB".localized
+        public static let openOnTMDB = "TMDB’de görüntüle".localized
+
+        public static func updatedAt(_ date: Date, locale: Locale) -> String {
+            var format = Date.FormatStyle(date: .abbreviated, time: .shortened)
+            format.locale = locale
+            return "Son kontrol: %@".localized(date.formatted(format))
+        }
     }
 
     // MARK: - TMDB Match Picker
@@ -861,8 +1144,18 @@ public enum AppStrings {
         public static let restart = "Baştan Başlat".localized
         public static let seasons = "Sezonlar".localized
         public static let episodes = "Bölümler".localized
+        public static let oldestEpisodesFirst = "Önce En Eskiler".localized
+        public static let newestEpisodesFirst = "Önce En Yeniler".localized
+        public static let shuffleEpisodes = "Bölümleri Karıştır".localized
+        public static let shuffleSeason = "Sezonu Karıştır".localized
+        public static let shuffleSeries = "Diziyi Karıştır".localized
         public static let loading = "Dizi bilgileri yükleniyor…".localized
         public static let episodeCount = "bölüm".localized
+        public static let catalogDiagnosticsTitle = "Katalog Tanılaması".localized
+        public static let catalogDiagnosticsDescription = "Yalnızca bu cihazdaki katalog numaralandırmasını denetler. Sağlayıcı verisi kesin olmayabilir; cihazları karşılaştırmaz.".localized
+        public static let possibleMissingEpisodeNumbers = "Olası eksik bölüm numaraları".localized
+        public static let duplicateEpisodePositions = "Aynı bölüm konumunda birden fazla kaynak kaydı".localized
+        public static let sourceIDs = "Kaynak kimlikleri".localized
         public static let nextEpisode = "Sıradaki Bölüm".localized
         public static let playNextEpisode = "Sıradaki Bölümü İzle".localized
         public static let watched = "İzlendi".localized
@@ -877,9 +1170,6 @@ public enum AppStrings {
 
         public static func seasonEpisodeCount(_ num: Int, _ count: Int) -> String {
             "%lld. Sezon (%lld Bölüm)".localized(Int64(num), Int64(count))
-        public static let shuffleEpisodes = "Bölümleri Karıştır".localized
-        public static let shuffleSeason = "Sezonu Karıştır".localized
-        public static let shuffleSeries = "Diziyi Karıştır".localized
         }
     }
 
@@ -910,6 +1200,21 @@ public enum AppStrings {
         public static let filterHidden = "Gizlenenler".localized
         public static let searchPlaceholder = "Kategori ara...".localized
         public static let resetOrder = "Sıralamayı Sıfırla".localized
+        public static let moveCategoryUp = "Yukarı Taşı".localized
+        public static let moveCategoryDown = "Aşağı Taşı".localized
+        public static let lockCategory = "Kategoriyi PIN ile Kilitle".localized
+        public static let unlockCategory = "Kategori Kilidini Kaldır".localized
+        public static let editCategoryName = "Kategori Adını Düzenle".localized
+        public static let categoryName = "Kategori Adı".localized
+        public static let resetCategoryName = "Kaynak Adına Dön".localized
+        public static let nameRulesTitle = "Kategori Adı Kuralları".localized
+        public static let nameRulesDescription = "Açık kurallar yenilemede eşleşen kategorileri gizler. Eşleşenleri inceleyin; yeniden göstermek için kuralı kapatın. Regex: ., [a-z], \\d, ^/$ ve tek tekrar (*, +, ? veya {n}); grup ve | yok.".localized
+        public static let nameRuleMatchType = "Eşleşme Türü".localized
+        public static let nameRuleLiteral = "Metin".localized
+        public static let nameRuleRegularExpression = "Güvenli Regex".localized
+        public static let nameRuleEnabled = "Kuralı Uygula".localized
+        public static let nameRuleInvalidPattern = "Geçersiz ya da desteklenmeyen kural deseni.".localized
+        public static let nameRuleSaveFailed = "Kategori adı kuralları kaydedilemedi.".localized
         public static let bulkActions = "Toplu İşlemler".localized
         public static func visibleCountInfo(visible: Int, total: Int) -> String {
             "%lld / %lld kategori aktif".localized(Int64(visible), Int64(total))
@@ -923,13 +1228,100 @@ public enum AppStrings {
         public static let addAccount = "Yeni Hesap Ekle".localized
         public static let switchNote = "Hesaplar arasında geçiş yaptığınızda uygulama yeni hesaba ait verileri yükleyecektir.".localized
         public static let accountManagement = "Hesap Yönetimi".localized
+        public static let contentSources = "İçerik Kaynakları".localized
+        public static let contentSourcesDescription = "Canlı TV, filmler ve diziler için ayrı playlist seçin. Kaynak kilitliyse veya bulunamıyorsa etkin playlist kullanılır.".localized
+        public static let activePlaylistSource = "Etkin Playlist (varsayılan)".localized
         public static let playbackSettings = "Oynatma Ayarları".localized
+        public static let updateCenter = "Güncelleme Merkezi".localized
+        public static let updateAllSources = "Tüm Kaynakları Güncelle".localized
+        public static let updateCatalog = "Playlist Kataloğu".localized
+        public static let updateProviderEPG = "Sağlayıcı EPG".localized
+        public static let updateCustomEPG = "Özel EPG Kaynağı".localized
+        public static let refreshSource = "Kaynağı Yenile".localized
+        public static let updateFailed = "Kaynak güncellenemedi; mevcut veriler korundu.".localized
+        public static let defaultStartupPlaylist = "Uygulama Açılışında Kullan".localized
+        public static let defaultStartupPlaylistDescription = "Uygulama açıldığında bu playlist otomatik seçilir.".localized
+        public static let playlistICloudSync = "Bu Playlist için iCloud Eşitlemesi".localized
+        public static let playlistICloudSyncDescription = "Kapalıyken bağlantı bilgileri bu cihazın yerel Keychain’inde kalır; ortak iCloud Keychain kopyası ve playlist’in eşitlenmiş favori/izleme kayıtları kaldırılır. Diğer cihazlar da bu playlist’i eşitlemez. Playlist kimliği olmayan eski kayıtlar ile gizli öğeler ve görünüm tercihleri genel ayarı izler.".localized
+        public static let automaticCatalogRefresh = "Açılışta Otomatik Katalog Yenileme".localized
+        public static let automaticCatalogRefreshDescription = "Kapalıysa Ana Sayfa bu playlist’in kataloglarını ve öne çıkan içeriklerini uygulama açılışında otomatik indirmez. Ana Sayfa’daki Yenile düğmesiyle elle güncelleyebilirsiniz.".localized
+        public static let refreshScheduleTitle = "Otomatik Yenileme Sıklığı".localized
+        public static let refreshScheduleDescription = "Seçimler etkin profil ve bu playlist için geçerlidir. Kapalı seçeneği yalnız otomatik yenilemeyi durdurur.".localized
+        public static let liveTVRefreshFrequency = "Canlı TV".localized
+        public static let moviesRefreshFrequency = "Filmler".localized
+        public static let seriesRefreshFrequency = "Diziler".localized
+        public static let refreshEveryOneHour = "Her saat".localized
+        public static let refreshEveryFourHours = "4 saatte bir".localized
+        public static let refreshEveryTwelveHours = "12 saatte bir".localized
+        public static let refreshEveryDay = "Günde bir".localized
+        public static let refreshEveryThreeDays = "3 günde bir".localized
+        public static let refreshEveryWeek = "Haftada bir".localized
         public static let channelZappingDelay = "Kanal Geçiş Gecikmesi".localized
         public static let channelZappingDelayDescription = "Önceki yayın kapandıktan sonra sonraki kanal açılmadan önce beklenecek süre. 0 ms anında geçiş yapar.".localized
         public static let embyPlaybackPreference = "Emby Oynatma Tercihi".localized
         public static let embyPlaybackAutomatic = "Otomatik (sunucu seçsin)".localized
         public static let embyPlaybackDirectStreamOnly = "Direct Stream; dönüştürme kapalı".localized
         public static let embyPlaybackDirectStreamOnlyDescription = "Emby sunucusundan encoding/transcoding yapmamasını ister. Sunucu ve oynatıcı uyumlu doğrudan akış bulamazsa içerik oynatılamayabilir.".localized
+        public static let healthCheck = "Playlist Sağlığını Denetle".localized
+        public static let healthReportTitle = "Playlist sağlık sonuçları".localized
+        public static let healthCheckDescription = "Denetim yalnızca sınırlı bir playlist örneği okur. URL, hesap bilgisi ve ham hata metni paylaşım raporuna eklenmez.".localized
+        public static let healthCheckProgress = "Playlist denetleniyor…".localized
+        public static let healthConnection = "Bağlantı".localized
+        public static let healthAuthentication = "Kimlik doğrulama".localized
+        public static let healthFormat = "Biçim".localized
+        public static let healthParsing = "Ayrıştırma".localized
+        public static let healthEPG = "EPG".localized
+        public static let healthPassed = "Başarılı".localized
+        public static let healthFailed = "Sorun bulundu".localized
+        public static let healthNotChecked = "Denetlenmedi".localized
+        public static let healthNotConfigured = "Yapılandırılmadı".localized
+        public static let healthNotApplicable = "Uygulanamaz".localized
+        public static let healthConnectionFailed = "Playlist sunucusuna bağlanılamadı.".localized
+        public static let healthEPGConnectionFailed = "EPG kaynağına bağlanılamadı.".localized
+        public static let healthServerUnavailable = "Sunucu şu anda kullanılamıyor.".localized
+        public static let healthPlaylistFormatMismatch = "Playlist biçimi tanınmadı.".localized
+        public static let healthEPGFormatMismatch = "EPG yanıt biçimi tanınmadı.".localized
+        public static let healthNoPlayableEntries = "Örnekte oynatılabilir kayıt bulunamadı.".localized
+        public static let healthConfiguredFormatUnsupported = "Seçilen akış biçimi sağlayıcı tarafından desteklenmiyor.".localized
+        public static let healthSampleIncomplete = "Örnek sınırına ulaşıldığı için sonuç doğrulanamadı.".localized
+        public static let healthProviderDidNotReportFormats = "Sağlayıcı desteklenen biçimleri bildirmedi.".localized
+        public static let healthRequiresSampleStream = "EPG denetimi için örnek yayın kimliği gerekiyor.".localized
+
+        public static func healthIssueDescription(_ issue: PlaylistHealthIssue) -> String {
+            switch issue {
+            case .invalidConfiguration:
+                AppStrings.Errors.invalidURL
+            case .connectionFailed:
+                healthConnectionFailed
+            case .epgConnectionFailed:
+                healthEPGConnectionFailed
+            case .credentialsRejected:
+                AppStrings.Errors.unauthorized
+            case .rateLimited:
+                AppStrings.Errors.rateLimited
+            case .serverUnavailable:
+                healthServerUnavailable
+            case .invalidResponse:
+                AppStrings.Errors.invalidResponse
+            case .formatMismatch:
+                healthPlaylistFormatMismatch
+            case .epgFormatMismatch:
+                healthEPGFormatMismatch
+            case .noPlayableEntries:
+                healthNoPlayableEntries
+            case .configuredFormatUnsupported:
+                healthConfiguredFormatUnsupported
+            case .sampleIncomplete:
+                healthSampleIncomplete
+            case .providerDidNotReportFormats:
+                healthProviderDidNotReportFormats
+            case .requiresSampleStream:
+                healthRequiresSampleStream
+            case .noEPGSource:
+                healthNotConfigured
+            }
+        }
+
         public static func channelZappingDelayValue(_ milliseconds: Int) -> String {
             "%lld ms".localized(Int64(milliseconds))
         }

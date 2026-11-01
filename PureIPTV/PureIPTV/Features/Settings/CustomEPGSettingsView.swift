@@ -27,6 +27,12 @@ public struct CustomEPGSettingsView: View {
         store.customEPGSources.filter { $0.isEnabled && store.customEPGSourceErrors[$0.id] != nil }.count
     }
 
+    private var visibleChannelEPGMappings: [ChannelEPGMapping] {
+        store.channelEPGMappings.values.filter { mapping in
+            mapping.playlistID == nil || mapping.playlistID == store.customEPGPlaylistID
+        }
+    }
+
     public init(store: StoreOf<SettingsFeature>, onClose: (() -> Void)? = nil) {
         self.store = store
         self.onClose = onClose
@@ -118,10 +124,15 @@ public struct CustomEPGSettingsView: View {
 
                                     Toggle("", isOn: Binding(
                                         get: { source.isEnabled },
-                                        set: { store.send(.toggleCustomEPGSource(id: source.id, enabled: $0)) }
+                                        set: {
+                                            guard !store.isCustomEPGLoading else { return }
+                                            store.send(.toggleCustomEPGSource(id: source.id, enabled: $0))
+                                        }
                                     ))
                                     .labelsHidden()
-                                    .disabled(store.isCustomEPGLoading)
+                                    #if !os(tvOS)
+                                        .disabled(store.isCustomEPGLoading)
+                                    #endif
                                 }
 
                                 HStack(spacing: 12) {
@@ -142,15 +153,25 @@ public struct CustomEPGSettingsView: View {
                                     Spacer()
 
                                     Button {
+                                        guard !store.isCustomEPGLoading else { return }
                                         store.send(.refreshCustomEPGSource(source.id))
                                     } label: {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.caption)
+                                        if store.customEPGRefreshingSourceID == source.id {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                        } else {
+                                            Image(systemName: "arrow.clockwise")
+                                                .font(.caption)
+                                        }
                                     }
                                     #if !os(tvOS)
                                     .buttonStyle(.bordered)
-                                    #endif
                                     .disabled(store.isCustomEPGLoading)
+                                    #endif
+                                    .accessibilityLabel(AppStrings.PlaylistMgmt.refreshSource)
+                                    .accessibilityValue(
+                                        store.customEPGRefreshingSourceID == source.id ? AppStrings.Common.loading : ""
+                                    )
                                 }
 
                                 if let error = store.customEPGSourceErrors[source.id] {
@@ -180,6 +201,7 @@ public struct CustomEPGSettingsView: View {
 
                     if !store.customEPGSources.isEmpty {
                         Button {
+                            guard !store.isCustomEPGLoading else { return }
                             store.send(.refreshAllCustomEPGSources)
                         } label: {
                             HStack {
@@ -191,11 +213,14 @@ public struct CustomEPGSettingsView: View {
                                 }
                             }
                         }
+                        #if !os(tvOS)
                         .disabled(store.isCustomEPGLoading)
+                        #endif
                     }
 
                     if retryableCustomEPGFailureCount > 0 {
                         Button {
+                            guard !store.isCustomEPGLoading else { return }
                             store.send(.retryFailedCustomEPGSources)
                         } label: {
                             HStack {
@@ -209,7 +234,32 @@ public struct CustomEPGSettingsView: View {
                                 }
                             }
                         }
+                        #if !os(tvOS)
                         .disabled(store.isCustomEPGLoading)
+                        #endif
+                    }
+
+                    if store.isCustomEPGLoading {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel(AppStrings.Common.loading)
+                            if let sourceID = store.customEPGRefreshingSourceID,
+                               let source = store.customEPGSources.first(where: { $0.id == sourceID })
+                            {
+                                Text("\(source.name) · \(store.customEPGRefreshCurrentIndex)/\(store.customEPGRefreshTotalCount)")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                            } else {
+                                Text(AppStrings.Common.loadingAlt)
+                                    .font(.caption)
+                            }
+                            Spacer(minLength: 4)
+                            Button(AppStrings.Common.cancel) {
+                                store.send(.cancelCustomEPGRefresh)
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
                     }
                 } header: {
                     Text("Harici XMLTV / GZ Kaynakları")
@@ -223,6 +273,8 @@ public struct CustomEPGSettingsView: View {
                         .autocorrectionDisabled()
 
                     Button {
+                        guard !store.isLoadingEPGMappingSuggestions,
+                              store.customEPGSources.contains(where: \.isEnabled) else { return }
                         store.send(.loadEPGMappingSuggestions)
                     } label: {
                         HStack {
@@ -233,9 +285,18 @@ public struct CustomEPGSettingsView: View {
                             }
                         }
                     }
+                    #if !os(tvOS)
                     .disabled(store.isLoadingEPGMappingSuggestions || !store.customEPGSources.contains(where: \.isEnabled))
+                    #else
+                    .opacity(store.customEPGSources.contains(where: \.isEnabled) ? 1 : 0.55)
+                    #endif
+                    .accessibilityValue(store.isLoadingEPGMappingSuggestions ? AppStrings.Common.loading : "")
 
                     Text(AppStrings.Settings.epgMappingSuggestionsDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(AppStrings.Settings.secondaryEPGSourcePriorityDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -277,9 +338,9 @@ public struct CustomEPGSettingsView: View {
                 }
 
                 // Section 3: Channel-Specific EPG Mappings & Offsets
-                if !store.channelEPGMappings.isEmpty {
+                if !visibleChannelEPGMappings.isEmpty {
                     Section {
-                        ForEach(Array(store.channelEPGMappings.values)) { mapping in
+                        ForEach(visibleChannelEPGMappings) { mapping in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(mapping.channelName)
@@ -289,6 +350,13 @@ public struct CustomEPGSettingsView: View {
                                         Text("Eşleşen EPG ID: \(epgID)")
                                             .font(.caption2)
                                             .foregroundStyle(Color(hex: "#0A84FF"))
+                                    }
+                                    if let sourceID = mapping.customSourceID,
+                                       let source = store.customEPGSources.first(where: { $0.id == sourceID })
+                                    {
+                                        Label(source.name, systemImage: "antenna.radiowaves.left.and.right")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
 
@@ -306,7 +374,7 @@ public struct CustomEPGSettingsView: View {
                             }
                         }
                     } header: {
-                        Text("Kanal Bazlı EPG Eşleştirmeleri (\(store.channelEPGMappings.count))")
+                        Text("Kanal Bazlı EPG Eşleştirmeleri (\(visibleChannelEPGMappings.count))")
                     }
                 }
             }
@@ -382,6 +450,7 @@ public struct CustomEPGSourceEntryView: View {
 
                 Section {
                     Button {
+                        guard !store.isCustomEPGLoading else { return }
                         store.send(.addCustomEPGSource)
                     } label: {
                         HStack {
@@ -389,14 +458,24 @@ public struct CustomEPGSourceEntryView: View {
                             if store.isCustomEPGLoading {
                                 ProgressView()
                                     .controlSize(.small)
-                            } else {
-                                Text("Kaydet ve Ayrıştır")
-                                    .bold()
                             }
+                            Text("Kaydet ve Ayrıştır")
+                                .bold()
                             Spacer()
                         }
                     }
+                    #if !os(tvOS)
                     .disabled(store.newCustomEPGName.isEmpty || store.newCustomEPGURLString.isEmpty || store.isCustomEPGLoading)
+                    #else
+                    .opacity(
+                        store.newCustomEPGName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || store.newCustomEPGURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? 0.55
+                            : 1
+                    )
+                    #endif
+                    .accessibilityLabel("Kaydet ve Ayrıştır")
+                    .accessibilityValue(store.isCustomEPGLoading ? AppStrings.Common.loading : "")
                 }
             }
             .navigationTitle("Yeni XMLTV Kaynağı")
@@ -405,7 +484,10 @@ public struct CustomEPGSourceEntryView: View {
             #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Vazgeç") {
+                        Button(store.isCustomEPGLoading ? AppStrings.Common.cancel : "Vazgeç") {
+                            if store.isCustomEPGLoading {
+                                store.send(.cancelCustomEPGRefresh)
+                            }
                             onClose()
                         }
                     }

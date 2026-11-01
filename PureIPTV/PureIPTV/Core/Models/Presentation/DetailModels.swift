@@ -19,6 +19,7 @@ public nonisolated enum DetailModels {
         public let productionCompanies: [String]?
         public let similarItems: [SimilarItem]?
         public let youtubeTrailer: String?
+        public var seriesCatalogDiagnostics: SeriesCatalogDiagnostics?
 
         public init(
             plot: String? = nil,
@@ -52,6 +53,36 @@ public nonisolated enum DetailModels {
             self.productionCompanies = productionCompanies
             self.similarItems = similarItems
             self.youtubeTrailer = youtubeTrailer
+            seriesCatalogDiagnostics = nil
+        }
+    }
+
+    public struct SeriesCatalogDiagnostics: Equatable, Sendable {
+        public struct MissingEpisodeRange: Equatable, Identifiable, Sendable {
+            public let seasonNumber: Int
+            public let firstMissingEpisode: Int
+            public let lastMissingEpisode: Int
+
+            public var id: String {
+                "\(seasonNumber)-\(firstMissingEpisode)-\(lastMissingEpisode)"
+            }
+        }
+
+        public struct DuplicateEpisodePosition: Equatable, Identifiable, Sendable {
+            public let seasonNumber: Int
+            public let episodeNumber: Int
+            public let sourceIDs: [String]
+
+            public var id: String {
+                "\(seasonNumber)-\(episodeNumber)"
+            }
+        }
+
+        public let missingEpisodeRanges: [MissingEpisodeRange]
+        public let duplicateEpisodePositions: [DuplicateEpisodePosition]
+
+        public var isEmpty: Bool {
+            missingEpisodeRanges.isEmpty && duplicateEpisodePositions.isEmpty
         }
     }
 

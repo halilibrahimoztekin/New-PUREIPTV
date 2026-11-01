@@ -5,6 +5,21 @@ import Foundation
 private let smartGroupResolutionCancellationID = "LiveTVFeature.smartGroupResolution"
 private let favoriteListResolutionCancellationID = "LiveTVFeature.favoriteListResolution"
 private let favoriteOrderLoadCancellationID = "LiveTVFeature.favoriteOrderLoad"
+private let favoriteListExportCancellationID = "LiveTVFeature.favoriteListExport"
+private let channelSortEPGCancellationID = "LiveTVFeature.channelSortEPG"
+private let channelSortClockCancellationID = "LiveTVFeature.channelSortClock"
+
+private func currentProgramStartTimesByChannelID(
+    _ programsByChannelID: [String: [EPGProgram]],
+    referenceDate: Date
+) -> [String: Date] {
+    programsByChannelID.compactMapValues { programs in
+        programs.lazy
+            .filter { $0.startTime <= referenceDate && $0.endTime > referenceDate }
+            .map(\.startTime)
+            .max()
+    }
+}
 
 private func nextLiveFavoriteOrderRevision(after current: UInt64) -> UInt64 {
     let timeRevision = UInt64(max(0, Date().timeIntervalSince1970 * 1_000_000))
@@ -99,6 +114,122 @@ private func persistFavoriteLists(
     }
 }
 
+private func beginLiveTVChannelSortEPGLoad(
+    state: inout LiveTVFeature.State,
+    channels: [MediaModels.Item],
+    config: PlaylistConfig,
+    categoryID: String,
+    profileScope: ProfileContextSnapshot,
+    iptvClient: IPTVClient
+) -> Effect<LiveTVFeature.Action> {
+    let requestID = UUID()
+    let playlistID = config.playlistID
+    state.channelSortEPGRequestID = requestID
+    state.isLoadingChannelSortEPG = true
+    state.channelSortLoadedCategoryID = nil
+    state.channelSortProgramsByChannelID = [:]
+    state.channelSortCurrentProgramStartByChannelID = [:]
+    state.channelSortReferenceDate = nil
+
+    let loadEffect = Effect<LiveTVFeature.Action>.run { send in
+        var programsByChannelID: [String: [EPGProgram]] = [:]
+        for channel in channels where channel.type == .live {
+            guard !Task.isCancelled else { return }
+            let epgID = channel.epgChannelID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lookupID: String = if config.type == .m3u, let epgID, !epgID.isEmpty {
+                epgID
+            } else {
+                channel.id
+            }
+            guard !lookupID.isEmpty else {
+                programsByChannelID[channel.id] = []
+                continue
+            }
+            do {
+                programsByChannelID[channel.id] = try await iptvClient.fetchShortEPG(
+                    config,
+                    channel.id,
+                    epgID,
+                    20
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                programsByChannelID[channel.id] = []
+            }
+        }
+        guard !Task.isCancelled else { return }
+        await send(.channelSortEPGLoaded(
+            requestID: requestID,
+            categoryID: categoryID,
+            playlistID: playlistID,
+            profileScope: profileScope,
+            programsByChannelID: programsByChannelID,
+            referenceDate: Date()
+        ))
+    }
+    .cancellable(id: channelSortEPGCancellationID, cancelInFlight: true)
+    return .merge(.cancel(id: channelSortClockCancellationID), loadEffect)
+}
+
+private func scheduleLiveTVChannelSortClockRefresh(
+    programsByChannelID: [String: [EPGProgram]],
+    categoryID: String,
+    playlistID: UUID?,
+    profileScope: ProfileContextSnapshot,
+    referenceDate: Date
+) -> Effect<LiveTVFeature.Action> {
+    let nextBoundary = programsByChannelID.values
+        .flatMap(\.self)
+        .flatMap { [$0.startTime, $0.endTime] }
+        .filter { $0 > referenceDate }
+        .min()
+    guard let nextBoundary else { return .none }
+    let delay = min(24 * 60 * 60, max(0.1, nextBoundary.timeIntervalSinceNow))
+    let nanoseconds = UInt64(delay * 1_000_000_000)
+    return .run { send in
+        try? await Task.sleep(nanoseconds: nanoseconds)
+        guard !Task.isCancelled else { return }
+        await send(.channelSortClockTick(
+            categoryID: categoryID,
+            playlistID: playlistID,
+            profileScope: profileScope
+        ))
+    }
+    .cancellable(id: channelSortClockCancellationID, cancelInFlight: true)
+}
+
+private func orderedLiveCategories(
+    _ categories: [MediaModels.Category],
+    preferences: [String: CategoryPreferenceDTO],
+    order: LiveTVCategoryOrder
+) -> [MediaModels.Category] {
+    let indexedCategories = Array(categories.enumerated())
+    switch order {
+    case .provider:
+        return categories
+    case .custom:
+        return indexedCategories.sorted { lhs, rhs in
+            let orderA = preferences[lhs.element.id]?.orderIndex
+            let orderB = preferences[rhs.element.id]?.orderIndex
+            switch (orderA, orderB) {
+            case let (a?, b?) where a != b: return a < b
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return lhs.offset < rhs.offset
+            }
+        }.map(\.element)
+    case .alphabetical:
+        return indexedCategories.sorted { lhs, rhs in
+            switch lhs.element.name.localizedStandardCompare(rhs.element.name) {
+            case .orderedAscending: true
+            case .orderedDescending: false
+            case .orderedSame: lhs.offset < rhs.offset
+            }
+        }.map(\.element)
+    }
+}
+
 // MARK: - LiveTVFeature
 
 @Reducer
@@ -107,6 +238,8 @@ public struct LiveTVFeature {
     public struct State: Equatable {
         // Data
         public var categories: [MediaModels.Category] = []
+        var providerCategories: [MediaModels.Category] = []
+        public var categoryOrder: LiveTVCategoryOrder = .custom
         public var channelsByCategory: [String: [MediaModels.Item]] = [:]
 
         /// Server Info
@@ -114,8 +247,18 @@ public struct LiveTVFeature {
 
         // UI state
         public var selectedCategoryID: String?
+        var pendingEPGGuideCategoryID: String?
         public var selectedChannel: MediaModels.Item?
+        public var channelFocusRestoreRevision = 0
+        public var channelSortOption: LiveTVChannelSortOption = .providerOrder
+        public var isLoadingChannelSortEPG = false
+        var channelSortEPGRequestID: UUID?
+        var channelSortLoadedCategoryID: String?
+        var channelSortProgramsByChannelID: [String: [EPGProgram]] = [:]
+        var channelSortCurrentProgramStartByChannelID: [String: Date] = [:]
+        var channelSortReferenceDate: Date?
         public var isLoadingCategories = false
+        public var hasResolvedCategories = false
         public var isLoadingChannels = false
         public var categoryContentRequestIDs: [String: UUID] = [:]
         public var categoryContentErrors: [String: String] = [:]
@@ -128,6 +271,7 @@ public struct LiveTVFeature {
         public var favoriteIDs: Set<String> = []
         public var hiddenChannelIDs: Set<String> = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
+        public var categoryPreferenceScope: CategoryPreferenceScope?
         public var unlockedCategoryIDs: Set<String> = []
         public var categoryUnlockRequestIDs: [String: UUID] = [:]
         public var categoryUnlockProfileScope: ProfileContextSnapshot?
@@ -172,12 +316,21 @@ public struct LiveTVFeature {
         public var favoriteOrderIDs: [String] = []
         public var favoriteOrderRevision: UInt64 = 0
         public var favoriteOrderRequestID: UUID?
+        public var favoriteListExportRequestID: UUID?
+        public var favoriteListExport: FavoriteChannelM3U8Export?
+        public var favoriteListExportErrorMessage: String?
         public var unavailableFavoriteChannels: [UnavailableFavoriteChannel] = []
         public var favoriteRecoveryRequestIDs: [String: UUID] = [:]
         public var channelPresentationOverrides: [String: ChannelPresentationOverride] = [:]
         public var channelPresentationPlaylistID: UUID?
         public var channelPresentationProfileScope: ProfileContextSnapshot?
         public var channelPresentationLoadID: UUID?
+        public var excludedRecentChannelIDs: Set<String> = []
+        public var recentChannelExclusionPlaylistID: UUID?
+        public var recentChannelExclusionProfileScope: ProfileContextSnapshot?
+        public var recentChannelExclusionLoadID: UUID?
+        public var recentChannelExclusionsLoaded = false
+        public var pendingRecentChannelExclusionMutations: [String: UUID] = [:]
 
         public var unavailableFavoriteChannelIDs: Set<String> {
             Set(unavailableFavoriteChannels.map(\.channelID))
@@ -263,8 +416,8 @@ public struct LiveTVFeature {
 
         @Presents public var epgTimeline: EPGTimelineFeature.State?
 
-        // Computed: channels for the currently selected category
-        public var currentChannels: [MediaModels.Item] {
+        /// Visible channels in the provider's original order, before presentation sorting.
+        public var providerOrderCurrentChannels: [MediaModels.Item] {
             if isFavoriteListMode {
                 return orderedFavoriteListChannels.filter { !hiddenChannelIDs.contains($0.id) }
             }
@@ -279,6 +432,50 @@ public struct LiveTVFeature {
             return all.filter {
                 !hiddenChannelIDs.contains($0.id)
                     && !blacklistedCategoryIDs.contains($0.categoryID)
+            }
+        }
+
+        // Computed: channels for the currently selected category.
+        public var currentChannels: [MediaModels.Item] {
+            let channels = providerOrderCurrentChannels
+            guard !isFavoriteListMode,
+                  selectedSmartGroupID == nil,
+                  channelSortOption == .currentProgramStartTime,
+                  let categoryID = selectedCategoryID,
+                  channelSortLoadedCategoryID == categoryID,
+                  channelSortReferenceDate != nil
+            else { return channels }
+
+            let indexedChannels = Array(channels.enumerated())
+            return indexedChannels.sorted { lhs, rhs in
+                let lhsProgramStart = channelSortCurrentProgramStartByChannelID[lhs.element.id]
+                let rhsProgramStart = channelSortCurrentProgramStartByChannelID[rhs.element.id]
+
+                switch (lhsProgramStart, rhsProgramStart) {
+                case let (lhsStart?, rhsStart?) where lhsStart != rhsStart:
+                    return lhsStart < rhsStart
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                default:
+                    return lhs.offset < rhs.offset
+                }
+            }.map(\.element)
+        }
+
+        public func visibleChannelCount(for categoryID: String) -> Int? {
+            visibleChannelCountsByCategory[categoryID]
+        }
+
+        public var visibleChannelCountsByCategory: [String: Int] {
+            channelsByCategory.mapValues { channels in
+                channels.reduce(into: 0) { count, channel in
+                    guard !hiddenChannelIDs.contains(channel.id),
+                          !blacklistedCategoryIDs.contains(channel.categoryID)
+                    else { return }
+                    count += 1
+                }
             }
         }
 
@@ -351,8 +548,26 @@ public struct LiveTVFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case onDisappear
-        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:], requestID: UUID)
+        case categoriesResponse(
+            Result<[MediaModels.Category], Error>,
+            preferences: [String: CategoryPreferenceDTO] = [:],
+            requestID: UUID,
+            preferenceScope: CategoryPreferenceScope? = nil
+        )
+        case setCategoryOrder(LiveTVCategoryOrder)
         case categorySelected(MediaModels.Category)
+        case categorySelectedAndOpenEPGGuide(MediaModels.Category)
+        case cancelPendingEPGGuide(categoryID: String)
+        case setChannelSortOption(LiveTVChannelSortOption)
+        case channelSortEPGLoaded(
+            requestID: UUID,
+            categoryID: String,
+            playlistID: UUID?,
+            profileScope: ProfileContextSnapshot,
+            programsByChannelID: [String: [EPGProgram]],
+            referenceDate: Date
+        )
+        case channelSortClockTick(categoryID: String, playlistID: UUID?, profileScope: ProfileContextSnapshot)
         case categoryUnlockExpired(categoryID: String, requestID: UUID)
         case smartGroupSelected(String)
         case smartGroupsLoaded(SmartChannelGroupSnapshot, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
@@ -361,6 +576,16 @@ public struct LiveTVFeature {
         case deleteSmartChannelGroup(String)
         case favoriteListsLoaded(FavoriteChannelListsSnapshot, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
         case favoriteListSelected(UUID?)
+        case exportFavoriteListTapped(UUID?)
+        case favoriteListExportPrepared(
+            requestID: UUID,
+            playlistID: UUID,
+            profileScope: ProfileContextSnapshot,
+            persistenceRevision: UInt64,
+            export: FavoriteChannelM3U8Export?,
+            errorMessage: String?
+        )
+        case clearFavoriteListExport
         case clearFavoriteListSelection
         case favoriteListChannelsLoaded(listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID, membershipIDs: Set<String>, unavailableFavorites: [UnavailableFavoriteChannel]?, Result<[MediaModels.Item], Error>)
         case favoriteOrderLoaded(FavoriteChannelOrderSnapshot, listID: UUID?, playlistID: UUID?, profileScope: ProfileContextSnapshot, requestID: UUID)
@@ -387,9 +612,14 @@ public struct LiveTVFeature {
         case retryCategoryContent(categoryID: String)
         case channelsResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
         case channelPresentationOverridesLoaded([String: ChannelPresentationOverride], playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
+        case loadRecentChannelExclusions
+        case recentChannelExclusionsLoaded(Set<String>, playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
+        case setRecentChannelExcluded(channelID: String, isExcluded: Bool, playlistID: UUID, profileScope: ProfileContextSnapshot)
+        case recentChannelExclusionSaved(channelID: String, isExcluded: Bool, playlistID: UUID, profileScope: ProfileContextSnapshot, requestID: UUID)
         case saveChannelPresentationOverride(channelID: String, name: String, number: Int?, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case openChannelPresentationEditor(channel: MediaModels.Item, playlistID: UUID, profileScope: ProfileContextSnapshot)
         case channelSelected(MediaModels.Item)
+        case restoreChannelFocus(channelID: String)
         case selectChannelPreview(MediaModels.Item)
         case channelEPGResponse(Result<[EPGProgram], Error>)
         case toggleFavorite(MediaModels.Item)
@@ -447,8 +677,10 @@ public struct LiveTVFeature {
     }
 
     @Injected(\.iptvClient) var iptvClient
+    @Injected(\.playerClient) var playerClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.categoryNameRuleClient) var categoryNameRuleClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.hapticClient) var hapticClient
     @Dependency(\.parentalControlClient) var parentalControlClient
@@ -456,6 +688,7 @@ public struct LiveTVFeature {
     @Dependency(\.favoriteChannelListsClient) var favoriteChannelListsClient
     @Dependency(\.favoriteChannelOrderClient) var favoriteChannelOrderClient
     @Dependency(\.channelPresentationOverrideClient) var channelPresentationOverrideClient
+    @Dependency(\.recentChannelsClient) var recentChannelsClient
 
     public init() {}
 
@@ -464,7 +697,9 @@ public struct LiveTVFeature {
         let parentalControlClient = parentalControlClient
         let smartChannelGroupClient = smartChannelGroupClient
         let favoriteChannelListsClient = favoriteChannelListsClient
+        let favoriteChannelOrderClient = favoriteChannelOrderClient
         let channelPresentationOverrideClient = channelPresentationOverrideClient
+        let recentChannelsClient = recentChannelsClient
         let databaseClient = databaseClient
 
         let profileContextClient = profileContextClient
@@ -477,6 +712,19 @@ public struct LiveTVFeature {
                 let profileScope = profileContextClient.snapshot()
                 let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
                     || state.categoryUnlockProfileScope != profileScope
+                let previousChannelSortOption = state.channelSortOption
+                state.channelSortOption = settingsClient.getLiveTVChannelSortOption(profileScope.profileID, config.playlistID)
+                let channelSortScopeChanged = playlistChanged
+                    || categoryAccessScopeChanged
+                    || previousChannelSortOption != state.channelSortOption
+                if channelSortScopeChanged {
+                    state.channelSortEPGRequestID = nil
+                    state.channelSortLoadedCategoryID = nil
+                    state.channelSortProgramsByChannelID = [:]
+                    state.channelSortCurrentProgramStartByChannelID = [:]
+                    state.channelSortReferenceDate = nil
+                    state.isLoadingChannelSortEPG = false
+                }
                 if categoryAccessScopeChanged {
                     state.unlockedCategoryIDs = []
                     state.categoryUnlockRequestIDs = [:]
@@ -496,9 +744,15 @@ public struct LiveTVFeature {
                 if configChanged {
                     state.categoryContentRequestIDs = [:]
                     state.categoryContentErrors = [:]
+                    state.hasResolvedCategories = false
                     state.isLoadingChannels = false
                 }
                 state.config = config
+                #if os(tvOS)
+                    state.categoryOrder = LiveTVCategoryOrderPreferenceStore.load(playlistID: config.playlistID)
+                #else
+                    state.categoryOrder = .custom
+                #endif
                 let presentationScopeChanged = state.channelPresentationPlaylistID != config.playlistID
                     || state.channelPresentationProfileScope != profileScope
                 if presentationScopeChanged {
@@ -522,6 +776,8 @@ public struct LiveTVFeature {
                     state.resetChannelSelection()
                     state.unavailableFavoriteChannels = []
                     state.categories = []
+                    state.hasResolvedCategories = false
+                    state.providerCategories = []
                     state.channelsByCategory = [:]
                     state.selectedCategoryID = nil
                     state.selectedChannel = nil
@@ -605,6 +861,38 @@ public struct LiveTVFeature {
                                                profileScope: profileScope, requestID: favoriteListLoadID))
                 }
 
+                let sortCategoryIDOnAppear = state.selectedCategoryID
+                let shouldLoadSortEPGOnAppear = state.channelSortOption == .currentProgramStartTime
+                    && !state.isFavoriteListMode
+                    && state.selectedSmartGroupID == nil
+                    && sortCategoryIDOnAppear.map {
+                        state.channelsByCategory[$0] != nil
+                            && state.channelSortLoadedCategoryID != $0
+                    } == true
+                    && !state.isLoadingChannelSortEPG
+                let sortEPGOnAppear: Effect<Action> = if shouldLoadSortEPGOnAppear,
+                                                         let categoryID = sortCategoryIDOnAppear
+                {
+                    beginLiveTVChannelSortEPGLoad(
+                        state: &state,
+                        channels: state.providerOrderCurrentChannels,
+                        config: config,
+                        categoryID: categoryID,
+                        profileScope: profileScope,
+                        iptvClient: iptvClient
+                    )
+                } else {
+                    .none
+                }
+                let cancelChannelSortOnAppear: Effect<Action> = if channelSortScopeChanged, !shouldLoadSortEPGOnAppear {
+                    .merge(
+                        .cancel(id: channelSortEPGCancellationID),
+                        .cancel(id: channelSortClockCancellationID)
+                    )
+                } else {
+                    .none
+                }
+
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("live", profileScope)) ?? []
                     let visible = favs.filter { $0.playlistID == config.playlistID && config.playlistID != nil }
@@ -631,10 +919,10 @@ public struct LiveTVFeature {
                     refreshSelectedFavoriteList = .none
                 }
 
-                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) }
-                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList) } // Prevent re-fetching on view re-appear
+                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions)) }
+                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions)) } // Prevent re-fetching on view re-appear
 
-                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, .send(.reloadCategories(config: config)))
+                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions), .send(.reloadCategories(config: config)))
 
             case let .channelPresentationOverridesLoaded(values, playlistID, profileScope, requestID):
                 guard state.config?.playlistID == playlistID,
@@ -644,6 +932,89 @@ public struct LiveTVFeature {
                       profileContextClient.snapshot() == profileScope else { return .none }
                 state.channelPresentationLoadID = nil
                 state.channelPresentationOverrides = values
+                return .none
+
+            case .loadRecentChannelExclusions:
+                guard let playlistID = state.config?.playlistID else {
+                    state.excludedRecentChannelIDs = []
+                    state.recentChannelExclusionPlaylistID = nil
+                    state.recentChannelExclusionProfileScope = nil
+                    state.recentChannelExclusionLoadID = nil
+                    state.recentChannelExclusionsLoaded = false
+                    state.pendingRecentChannelExclusionMutations = [:]
+                    return .none
+                }
+                let profileScope = profileContextClient.snapshot()
+                if state.recentChannelExclusionPlaylistID != playlistID
+                    || state.recentChannelExclusionProfileScope != profileScope
+                {
+                    state.excludedRecentChannelIDs = []
+                    state.pendingRecentChannelExclusionMutations = [:]
+                    state.recentChannelExclusionsLoaded = false
+                }
+                state.recentChannelExclusionPlaylistID = playlistID
+                state.recentChannelExclusionProfileScope = profileScope
+                let requestID = UUID()
+                state.recentChannelExclusionLoadID = requestID
+                return .run { send in
+                    let ids = await recentChannelsClient.fetchExcludedChannelIDs(profileScope.profileID, playlistID)
+                    await send(.recentChannelExclusionsLoaded(ids, playlistID: playlistID, profileScope: profileScope, requestID: requestID))
+                }
+
+            case let .recentChannelExclusionsLoaded(ids, playlistID, profileScope, requestID):
+                guard state.recentChannelExclusionLoadID == requestID,
+                      state.recentChannelExclusionPlaylistID == playlistID,
+                      state.recentChannelExclusionProfileScope == profileScope,
+                      state.config?.playlistID == playlistID,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.recentChannelExclusionLoadID = nil
+                state.excludedRecentChannelIDs = ids
+                state.recentChannelExclusionsLoaded = true
+                return .none
+
+            case let .setRecentChannelExcluded(channelID, isExcluded, playlistID, profileScope):
+                guard state.config?.playlistID == playlistID,
+                      state.recentChannelExclusionPlaylistID == playlistID,
+                      state.recentChannelExclusionProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope,
+                      state.pendingRecentChannelExclusionMutations[channelID] == nil else { return .none }
+                state.recentChannelExclusionLoadID = nil
+                state.recentChannelExclusionsLoaded = true
+                if isExcluded {
+                    state.excludedRecentChannelIDs.insert(channelID)
+                } else {
+                    state.excludedRecentChannelIDs.remove(channelID)
+                }
+                let requestID = UUID()
+                state.pendingRecentChannelExclusionMutations[channelID] = requestID
+                return .run { send in
+                    _ = await recentChannelsClient.setChannelExcludedFromRecents(
+                        channelID,
+                        isExcluded,
+                        profileScope.profileID,
+                        playlistID
+                    )
+                    await send(.recentChannelExclusionSaved(
+                        channelID: channelID,
+                        isExcluded: isExcluded,
+                        playlistID: playlistID,
+                        profileScope: profileScope,
+                        requestID: requestID
+                    ))
+                }
+
+            case let .recentChannelExclusionSaved(channelID, isExcluded, playlistID, profileScope, requestID):
+                guard state.pendingRecentChannelExclusionMutations[channelID] == requestID,
+                      state.config?.playlistID == playlistID,
+                      state.recentChannelExclusionPlaylistID == playlistID,
+                      state.recentChannelExclusionProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.pendingRecentChannelExclusionMutations.removeValue(forKey: channelID)
+                if isExcluded {
+                    state.excludedRecentChannelIDs.insert(channelID)
+                } else {
+                    state.excludedRecentChannelIDs.remove(channelID)
+                }
                 return .none
 
             case let .saveChannelPresentationOverride(channelID, name, number, playlistID, profileScope):
@@ -675,6 +1046,7 @@ public struct LiveTVFeature {
                 )))
 
             case .onDisappear:
+                state.pendingEPGGuideCategoryID = nil
                 state.isRefreshingContent = false
                 state.activeContentRefreshID = nil
                 state.refreshStage = nil
@@ -684,47 +1056,80 @@ public struct LiveTVFeature {
                 state.isLoadingChannels = false
                 state.activeFavoriteListRequestID = nil
                 state.favoriteOrderRequestID = nil
+                state.favoriteListExportRequestID = nil
+                state.favoriteListExport = nil
+                state.channelSortEPGRequestID = nil
+                state.channelSortLoadedCategoryID = nil
+                state.channelSortProgramsByChannelID = [:]
+                state.channelSortCurrentProgramStartByChannelID = [:]
+                state.channelSortReferenceDate = nil
+                state.isLoadingChannelSortEPG = false
                 state.resetChannelSelection()
                 return .merge(
                     .cancel(id: smartGroupResolutionCancellationID),
                     .cancel(id: favoriteListResolutionCancellationID),
                     .cancel(id: favoriteOrderLoadCancellationID),
+                    .cancel(id: favoriteListExportCancellationID),
+                    .cancel(id: channelSortEPGCancellationID),
+                    .cancel(id: channelSortClockCancellationID),
                     .cancel(id: "LiveTVFeature.refreshContent")
                 )
 
             case let .reloadCategories(config):
+                state.pendingEPGGuideCategoryID = nil
                 let requestID = UUID()
                 state.activeCategoryRequestID = requestID
                 state.isLoadingCategories = state.categories.isEmpty
                 state.errorMessage = nil
 
                 state.config = config
-                let existingPreferences = state.categoryPreferences
+                let profileScope = profileContextClient.snapshot()
+                let preferenceScope = CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config.playlistID)
+                let existingPreferences = state.categoryPreferenceScope == preferenceScope
+                    ? state.categoryPreferences
+                    : [:]
+                let profileContextClient = profileContextClient
+                let categoryNameRuleClient = categoryNameRuleClient
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
 
                 return .run { send in
                     async let categoriesResult = Result { try await iptvClient.fetchLiveCategories(config) }
-                    async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue) }
+                    async let prefsResult = Result {
+                        try await databaseClient.fetchCategoryPreferences(
+                            CategoryManagementFeature.State.CategoryType.live.rawValue,
+                            CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config.playlistID)
+                        )
+                    }
+                    async let nameRules: [CategoryNameRule] = {
+                        guard let playlistID = config.playlistID else { return [] }
+                        return await categoryNameRuleClient.load(profileScope.profileID, playlistID, CategoryManagementFeature.State.CategoryType.live.rawValue)
+                    }()
 
                     let categories = try await categoriesResult.get()
                     // Keep the currently applied policy if persistence is
                     // temporarily unavailable; an empty fallback would make
                     // hidden and reordered categories appear to reset.
                     let prefs = await (try? prefsResult.get()) ?? Array(existingPreferences.values)
+                    let loadedNameRules = await nameRules
+                    guard profileContextClient.snapshot() == profileScope else { return }
 
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
                     }
 
-                    // Filter and sort
+                    // Filter while preserving the provider's original order.
 
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+                    let ruleHiddenCategoryIDs = CategoryNameRuleMatcher.hiddenCategoryIDs(in: categories, rules: loadedNameRules)
 
-                    var finalCategories = categories.enumerated().filter { _, category in
-                        if hideAdult, isAdultContent(category.name) {
+                    let finalCategories = categories.enumerated().filter { _, category in
+                        if ruleHiddenCategoryIDs.contains(category.id) {
+                            return false
+                        }
+                        if hideAdult, isAdultContent(category.name) || isAdultContent(category.sourceName) {
                             return false
                         }
 
@@ -733,41 +1138,48 @@ public struct LiveTVFeature {
                         }
 
                         if isKidsMode {
-                            let nameLower = category.name.lowercased()
+                            let nameLower = category.sourceName.lowercased()
                             return kidsKeywords.contains { nameLower.contains($0) }
                         }
 
                         return true
                     }
-                    finalCategories.sort { lhs, rhs in
-                        let orderA = dict[lhs.element.id]?.orderIndex
-                        let orderB = dict[rhs.element.id]?.orderIndex
-                        switch (orderA, orderB) {
-                        case let (a?, b?) where a != b: return a < b
-                        case (_?, nil): return true
-                        case (nil, _?): return false
-                        default: return lhs.offset < rhs.offset
-                        }
-                    }
-
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict, requestID: requestID))
+                    await send(.categoriesResponse(
+                        .success(finalCategories.map(\.element)),
+                        preferences: dict,
+                        requestID: requestID,
+                        preferenceScope: preferenceScope
+                    ))
                 } catch: { error, send in
-                    await send(.categoriesResponse(.failure(error), preferences: [:], requestID: requestID))
+                    await send(.categoriesResponse(
+                        .failure(error),
+                        preferences: [:],
+                        requestID: requestID,
+                        preferenceScope: preferenceScope
+                    ))
                 }
 
             case .reloadPreferences:
                 let requestID = UUID()
                 state.activeCategoryRequestID = requestID
-                let currentCats = state.categories
+                let currentCats = state.providerCategories.isEmpty ? state.categories : state.providerCategories
+                let config = state.config
+                let profileScope = profileContextClient.snapshot()
+                let preferenceScope = CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config?.playlistID)
+                let profileContextClient = profileContextClient
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
                     let prefs: [CategoryPreferenceDTO]
                     do {
-                        prefs = try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.live.rawValue)
+                        prefs = try await databaseClient.fetchCategoryPreferences(
+                            CategoryManagementFeature.State.CategoryType.live.rawValue,
+                            preferenceScope
+                        )
                     } catch {
                         return
                     }
+                    guard profileContextClient.snapshot() == profileScope else { return }
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
@@ -776,8 +1188,8 @@ public struct LiveTVFeature {
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
-                    var finalCategories = currentCats.enumerated().filter { _, category in
-                        if hideAdult, isAdultContent(category.name) {
+                    let finalCategories = currentCats.enumerated().filter { _, category in
+                        if hideAdult, isAdultContent(category.name) || isAdultContent(category.sourceName) {
                             return false
                         }
 
@@ -786,25 +1198,124 @@ public struct LiveTVFeature {
                         }
 
                         if isKidsMode {
-                            let nameLower = category.name.lowercased()
+                            let nameLower = category.sourceName.lowercased()
                             return kidsKeywords.contains { nameLower.contains($0) }
                         }
 
                         return true
                     }
-                    finalCategories.sort { lhs, rhs in
-                        let orderA = dict[lhs.element.id]?.orderIndex
-                        let orderB = dict[rhs.element.id]?.orderIndex
-                        switch (orderA, orderB) {
-                        case let (a?, b?) where a != b: return a < b
-                        case (_?, nil): return true
-                        case (nil, _?): return false
-                        default: return lhs.offset < rhs.offset
-                        }
-                    }
-
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict, requestID: requestID))
+                    await send(.categoriesResponse(
+                        .success(finalCategories.map(\.element)),
+                        preferences: dict,
+                        requestID: requestID,
+                        preferenceScope: preferenceScope
+                    ))
                 }
+
+            case let .setCategoryOrder(order):
+                guard state.categoryOrder != order else { return .none }
+                state.categoryOrder = order
+                LiveTVCategoryOrderPreferenceStore.save(order, playlistID: state.config?.playlistID)
+                let categories = state.providerCategories.isEmpty ? state.categories : state.providerCategories
+                state.categories = orderedLiveCategories(
+                    categories,
+                    preferences: state.categoryPreferences,
+                    order: order
+                )
+                return .none
+
+            case let .setChannelSortOption(option):
+                let refreshSelectedEPGSort = option == .currentProgramStartTime
+                    && !state.isLoadingChannelSortEPG
+                guard state.channelSortOption != option || refreshSelectedEPGSort else { return .none }
+                state.channelSortOption = option
+                settingsClient.setLiveTVChannelSortOption(
+                    option,
+                    profileContextClient.snapshot().profileID,
+                    state.config?.playlistID
+                )
+                guard option == .currentProgramStartTime else {
+                    state.channelSortEPGRequestID = nil
+                    state.channelSortLoadedCategoryID = nil
+                    state.channelSortProgramsByChannelID = [:]
+                    state.channelSortCurrentProgramStartByChannelID = [:]
+                    state.channelSortReferenceDate = nil
+                    state.isLoadingChannelSortEPG = false
+                    return .merge(
+                        .cancel(id: channelSortEPGCancellationID),
+                        .cancel(id: channelSortClockCancellationID)
+                    )
+                }
+                guard !state.isFavoriteListMode,
+                      state.selectedSmartGroupID == nil,
+                      let categoryID = state.selectedCategoryID,
+                      state.channelsByCategory[categoryID] != nil,
+                      let config = state.config
+                else { return .none }
+                return beginLiveTVChannelSortEPGLoad(
+                    state: &state,
+                    channels: state.providerOrderCurrentChannels,
+                    config: config,
+                    categoryID: categoryID,
+                    profileScope: profileContextClient.snapshot(),
+                    iptvClient: iptvClient
+                )
+
+            case let .channelSortEPGLoaded(
+                requestID,
+                categoryID,
+                playlistID,
+                profileScope,
+                programsByChannelID,
+                referenceDate
+            ):
+                guard state.channelSortEPGRequestID == requestID,
+                      state.selectedCategoryID == categoryID,
+                      state.selectedSmartGroupID == nil,
+                      !state.isFavoriteListMode,
+                      state.config?.playlistID == playlistID,
+                      state.channelSortOption == .currentProgramStartTime,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                state.channelSortEPGRequestID = nil
+                state.channelSortLoadedCategoryID = categoryID
+                state.channelSortProgramsByChannelID = programsByChannelID
+                state.channelSortCurrentProgramStartByChannelID = currentProgramStartTimesByChannelID(
+                    programsByChannelID,
+                    referenceDate: referenceDate
+                )
+                state.channelSortReferenceDate = referenceDate
+                state.isLoadingChannelSortEPG = false
+                return scheduleLiveTVChannelSortClockRefresh(
+                    programsByChannelID: programsByChannelID,
+                    categoryID: categoryID,
+                    playlistID: playlistID,
+                    profileScope: profileScope,
+                    referenceDate: referenceDate
+                )
+
+            case let .channelSortClockTick(categoryID, playlistID, profileScope):
+                guard state.channelSortOption == .currentProgramStartTime,
+                      state.channelSortLoadedCategoryID == categoryID,
+                      state.selectedCategoryID == categoryID,
+                      state.selectedSmartGroupID == nil,
+                      !state.isFavoriteListMode,
+                      state.config?.playlistID == playlistID,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                let referenceDate = Date()
+                state.channelSortReferenceDate = referenceDate
+                state.channelSortCurrentProgramStartByChannelID = currentProgramStartTimesByChannelID(
+                    state.channelSortProgramsByChannelID,
+                    referenceDate: referenceDate
+                )
+                return scheduleLiveTVChannelSortClockRefresh(
+                    programsByChannelID: state.channelSortProgramsByChannelID,
+                    categoryID: categoryID,
+                    playlistID: playlistID,
+                    profileScope: profileScope,
+                    referenceDate: referenceDate
+                )
 
             case .refreshContentTapped:
                 guard !state.isRefreshingContent,
@@ -876,8 +1387,10 @@ public struct LiveTVFeature {
                 state.refreshMessage = "Yenileme başarısız; mevcut canlı yayın kataloğu korundu. \(message)"
                 return .none
 
-            case let .categoriesResponse(.success(categories), preferences, requestID):
-                guard state.activeCategoryRequestID == requestID else { return .none }
+            case let .categoriesResponse(.success(providerCategories), preferences, requestID, preferenceScope):
+                guard state.activeCategoryRequestID == requestID,
+                      profileContextClient.snapshot().profileID == preferenceScope?.profileID
+                else { return .none }
                 state.activeCategoryRequestID = nil
                 if state.refreshStage == .loadingCategories {
                     state.activeContentRefreshID = nil
@@ -886,9 +1399,19 @@ public struct LiveTVFeature {
                     state.channelsByCategory.removeAll(keepingCapacity: true)
                 }
                 state.isLoadingCategories = false
+                state.hasResolvedCategories = true
                 state.categoryPreferences = preferences
+                state.categoryPreferenceScope = preferenceScope
+                state.providerCategories = providerCategories
+                let categories = orderedLiveCategories(
+                    providerCategories,
+                    preferences: preferences,
+                    order: state.categoryOrder
+                )
                 state.categories = categories
-                state.adultCategoryIDs = Set(categories.compactMap { settingsClient.isAdultContent($0.name) ? $0.id : nil })
+                state.adultCategoryIDs = Set(categories.compactMap {
+                    settingsClient.isAdultContent($0.name) || settingsClient.isAdultContent($0.sourceName) ? $0.id : nil
+                })
                 if let groupID = state.selectedSmartGroupID {
                     state.smartGroupChannels = []
                     state.selectedChannel = nil
@@ -911,7 +1434,7 @@ public struct LiveTVFeature {
                 }
                 return .none
 
-            case let .categoriesResponse(.failure(error), _, requestID):
+            case let .categoriesResponse(.failure(error), _, requestID, _):
                 guard state.activeCategoryRequestID == requestID else { return .none }
                 state.activeCategoryRequestID = nil
                 state.isLoadingCategories = false
@@ -924,10 +1447,24 @@ public struct LiveTVFeature {
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
+            case let .categorySelectedAndOpenEPGGuide(category):
+                state.pendingEPGGuideCategoryID = category.id
+                return .send(.categorySelected(category))
+
+            case let .cancelPendingEPGGuide(categoryID):
+                if state.pendingEPGGuideCategoryID == categoryID {
+                    state.pendingEPGGuideCategoryID = nil
+                }
+                return .none
+
             case let .categorySelected(category):
+                let shouldOpenEPGGuide = state.pendingEPGGuideCategoryID == category.id
+                if !shouldOpenEPGGuide {
+                    state.pendingEPGGuideCategoryID = nil
+                }
                 state.resetChannelSelection()
                 let isLocked = state.categoryPreferences[category.id]?.isLocked ?? false
-                let isAdult = settingsClient.isAdultContent(category.name)
+                let isAdult = settingsClient.isAdultContent(category.name) || settingsClient.isAdultContent(category.sourceName)
                 let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
 
                 if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
@@ -941,6 +1478,15 @@ public struct LiveTVFeature {
                 state.activeSmartGroupRequestID = nil
                 state.smartGroupChannels = []
                 state.isLoadingChannels = false
+                let categoryChanged = state.selectedCategoryID != category.id
+                if categoryChanged {
+                    state.channelSortEPGRequestID = nil
+                    state.channelSortLoadedCategoryID = nil
+                    state.channelSortProgramsByChannelID = [:]
+                    state.channelSortCurrentProgramStartByChannelID = [:]
+                    state.channelSortReferenceDate = nil
+                    state.isLoadingChannelSortEPG = false
+                }
                 state.selectedCategoryID = category.id
                 state.isFavoriteListMode = false
                 state.selectedFavoriteListID = nil
@@ -953,22 +1499,58 @@ public struct LiveTVFeature {
                     timeline.favoriteIDs = state.favoriteIDs
                     timeline.favoriteLoadRequestID = nil
                     timeline.channels = state.currentChannels
-                    timeline.providerOrderChannels = state.currentChannels
+                    timeline.providerOrderChannels = state.providerOrderCurrentChannels
                     timeline.selectedCategoryID = category.id
                     state.epgTimeline = timeline
                 }
                 // If channels are already cached, skip fetching
                 if state.channelsByCategory[category.id] != nil {
-                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
+                    let sortEPGLoad: Effect<Action> = if state.channelSortOption == .currentProgramStartTime,
+                                                         !state.isLoadingChannelSortEPG,
+                                                         state.channelSortLoadedCategoryID != category.id,
+                                                         let config = state.config
+                    {
+                        beginLiveTVChannelSortEPGLoad(
+                            state: &state,
+                            channels: state.providerOrderCurrentChannels,
+                            config: config,
+                            categoryID: category.id,
+                            profileScope: profileContextClient.snapshot(),
+                            iptvClient: iptvClient
+                        )
+                    } else if categoryChanged {
+                        .merge(
+                            .cancel(id: channelSortEPGCancellationID),
+                            .cancel(id: channelSortClockCancellationID)
+                        )
+                    } else {
+                        .none
+                    }
+                    let guideEffect: Effect<Action>
+                    if shouldOpenEPGGuide {
+                        state.pendingEPGGuideCategoryID = nil
+                        guideEffect = state.currentChannels.isEmpty ? .none : .send(.epgGuideTapped)
+                    } else {
+                        guideEffect = .none
+                    }
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, sortEPGLoad, guideEffect, .run { _ in await hapticClient.selection() })
                 }
                 if state.categoryContentRequestIDs[category.id] != nil {
                     state.isLoadingChannels = true
-                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, categoryChanged ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID)) : .none, .run { _ in await hapticClient.selection() })
                 }
                 if state.categoryContentErrors[category.id] != nil {
-                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, .run { _ in await hapticClient.selection() })
+                    if shouldOpenEPGGuide {
+                        state.pendingEPGGuideCategoryID = nil
+                    }
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, categoryChanged ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID)) : .none, .run { _ in await hapticClient.selection() })
                 }
-                guard let config = state.config else { return .merge(cancelGroupResolution, cancelFavoriteListResolution) }
+                guard let config = state.config else {
+                    if shouldOpenEPGGuide {
+                        state.pendingEPGGuideCategoryID = nil
+                    }
+                    return .merge(cancelGroupResolution, cancelFavoriteListResolution, categoryChanged ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID)) : .none)
+                }
 
                 let requestID = UUID()
                 state.categoryContentRequestIDs[category.id] = requestID
@@ -978,6 +1560,7 @@ public struct LiveTVFeature {
                 return .merge(
                     cancelGroupResolution,
                     cancelFavoriteListResolution,
+                    categoryChanged ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID)) : .none,
                     .run { _ in await hapticClient.selection() },
                     .send(.fetchCategoryContent(requestID: requestID, config: config, categoryID: categoryID))
                 )
@@ -1020,6 +1603,7 @@ public struct LiveTVFeature {
                       state.smartGroupPlaylistID == state.config?.playlistID else { return .none }
                 guard let group = state.smartChannelGroups.first(where: { $0.id == groupID }),
                       let config = state.config else { return .none }
+                state.pendingEPGGuideCategoryID = nil
                 if state.parentalControlEnabled,
                    let restrictedCategory = state.categories.first(where: { category in
                        group.categoryIDs.contains(category.id)
@@ -1040,6 +1624,12 @@ public struct LiveTVFeature {
                 state.selectedCategoryID = nil
                 state.selectedChannel = nil
                 state.isFavoriteListMode = false
+                state.channelSortEPGRequestID = nil
+                state.channelSortLoadedCategoryID = nil
+                state.channelSortProgramsByChannelID = [:]
+                state.channelSortCurrentProgramStartByChannelID = [:]
+                state.channelSortReferenceDate = nil
+                state.isLoadingChannelSortEPG = false
                 state.selectedFavoriteListID = nil
                 state.favoriteListResolvedChannels = []
                 state.activeFavoriteListRequestID = nil
@@ -1063,7 +1653,11 @@ public struct LiveTVFeature {
                 let isAdult = settingsClient.isAdultContent
                 let hiddenChannelIDs = state.hiddenChannelIDs
                 let blacklistedCategoryIDs = state.blacklistedCategoryIDs
-                return .run { send in
+                let cancelChannelSort = Effect<Action>.merge(
+                    .cancel(id: channelSortEPGCancellationID),
+                    .cancel(id: channelSortClockCancellationID)
+                )
+                let resolveGroup = Effect<Action>.run { send in
                     do {
                         var combined: [MediaModels.Item] = []
                         var seen = Set<String>()
@@ -1095,6 +1689,7 @@ public struct LiveTVFeature {
                     }
                 }
                 .cancellable(id: smartGroupResolutionCancellationID, cancelInFlight: true)
+                return .merge(cancelChannelSort, resolveGroup)
 
             case let .smartGroupChannelsLoaded(groupID, playlistID, profileScope, hideAdult, requestID, result):
                 guard state.activeSmartGroupRequestID == requestID,
@@ -1167,6 +1762,7 @@ public struct LiveTVFeature {
                 if let listID, !state.favoriteLists.contains(where: { $0.id == listID }) {
                     return .none
                 }
+                state.pendingEPGGuideCategoryID = nil
                 let hasPendingBulkSelection = state.isChannelSelectionMode
                     && state.activeBulkFavoriteRequestID == state.channelSelectionGenerationID
                     && state.channelSelectionPlaylistID == state.config?.playlistID
@@ -1187,6 +1783,12 @@ public struct LiveTVFeature {
                 state.smartGroupChannels = []
                 state.selectedCategoryID = nil
                 state.selectedChannel = nil
+                state.channelSortEPGRequestID = nil
+                state.channelSortLoadedCategoryID = nil
+                state.channelSortProgramsByChannelID = [:]
+                state.channelSortCurrentProgramStartByChannelID = [:]
+                state.channelSortReferenceDate = nil
+                state.isLoadingChannelSortEPG = false
                 if var timeline = state.epgTimeline {
                     timeline.favoriteListID = listID
                     timeline.favoriteIDs = state.selectedFavoriteListChannelIDs
@@ -1217,7 +1819,9 @@ public struct LiveTVFeature {
                     && state.categoryPreferences.values.allSatisfy { !$0.isHidden && !$0.isLocked }
                 let cancelOtherResolutions = Effect<Action>.merge(
                     .cancel(id: smartGroupResolutionCancellationID),
-                    .cancel(id: favoriteListResolutionCancellationID)
+                    .cancel(id: favoriteListResolutionCancellationID),
+                    .cancel(id: channelSortEPGCancellationID),
+                    .cancel(id: channelSortClockCancellationID)
                 )
                 let resolve: Effect<Action> = .run { send in
                     do {
@@ -1308,6 +1912,138 @@ public struct LiveTVFeature {
                     loadOrder,
                     reloadTimeline
                 )
+
+            case let .exportFavoriteListTapped(listID):
+                guard state.favoriteListProfileScope == profileContextClient.snapshot(),
+                      state.favoriteListPlaylistID == state.config?.playlistID,
+                      let config = state.config,
+                      let playlistID = config.playlistID,
+                      let profileScope = state.favoriteListProfileScope,
+                      let profileID = profileScope.profileID
+                else {
+                    state.favoriteListExportErrorMessage = AppStrings.LiveTV.favoriteListExportFailed
+                    return .none
+                }
+                let namedList = listID.flatMap { id in state.favoriteLists.first(where: { $0.id == id }) }
+                guard listID == nil || namedList != nil else {
+                    state.favoriteListExportErrorMessage = AppStrings.LiveTV.favoriteListExportFailed
+                    return .none
+                }
+
+                let listName = namedList?.name ?? AppStrings.Common.favorites
+                let selectedListChannelIDs = namedList?.channelIDs
+                let persistenceRevision = state.favoriteListPersistenceRevision
+                let categoryNames = Dictionary(
+                    state.categories.map { ($0.id, $0.name) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                let requestID = UUID()
+                state.favoriteListExportRequestID = requestID
+                state.favoriteListExport = nil
+                state.favoriteListExportErrorMessage = nil
+
+                return .run { send in
+                    do {
+                        let membershipIDs: Set<String>
+                        if let selectedListChannelIDs {
+                            membershipIDs = Set(selectedListChannelIDs)
+                        } else {
+                            let favoriteRecords = try await databaseClient.fetchFavoritesByType("live", profileScope)
+                            membershipIDs = Set(favoriteRecords.lazy
+                                .filter { $0.playlistID == playlistID }
+                                .map(\.id))
+                        }
+
+                        guard !Task.isCancelled else { return }
+                        guard !membershipIDs.isEmpty else {
+                            await send(.favoriteListExportPrepared(
+                                requestID: requestID,
+                                playlistID: playlistID,
+                                profileScope: profileScope,
+                                persistenceRevision: persistenceRevision,
+                                export: nil,
+                                errorMessage: AppStrings.LiveTV.favoriteListExportNoChannels
+                            ))
+                            return
+                        }
+
+                        let providerChannels = try await iptvClient.fetchLiveChannels(config, nil)
+                        guard !Task.isCancelled else { return }
+                        var matchedIDs = Set<String>()
+                        let matchingChannels = providerChannels.filter { channel in
+                            membershipIDs.contains(channel.id) && matchedIDs.insert(channel.id).inserted
+                        }
+                        let orderSnapshot = await favoriteChannelOrderClient.load(profileID, playlistID, listID)
+                        let orderedChannels = await MainActor.run {
+                            FavoriteChannelSortMode.orderedItems(
+                                matchingChannels,
+                                mode: orderSnapshot.mode,
+                                providerOrder: providerChannels,
+                                manualIDs: orderSnapshot.orderedIDs
+                            )
+                        }
+                        guard var export = FavoriteChannelM3U8Exporter.makeExport(
+                            channels: orderedChannels,
+                            categoryNames: categoryNames,
+                            listName: listName
+                        ) else {
+                            await send(.favoriteListExportPrepared(
+                                requestID: requestID,
+                                playlistID: playlistID,
+                                profileScope: profileScope,
+                                persistenceRevision: persistenceRevision,
+                                export: nil,
+                                errorMessage: AppStrings.LiveTV.favoriteListExportNoChannels
+                            ))
+                            return
+                        }
+
+                        export = FavoriteChannelM3U8Export(
+                            data: export.data,
+                            filename: export.filename,
+                            exportedChannelCount: export.exportedChannelCount,
+                            skippedChannelCount: export.skippedChannelCount + max(0, membershipIDs.count - matchedIDs.count)
+                        )
+                        guard !Task.isCancelled else { return }
+                        await send(.favoriteListExportPrepared(
+                            requestID: requestID,
+                            playlistID: playlistID,
+                            profileScope: profileScope,
+                            persistenceRevision: persistenceRevision,
+                            export: export,
+                            errorMessage: nil
+                        ))
+                    } catch {
+                        guard !Task.isCancelled else { return }
+                        await send(.favoriteListExportPrepared(
+                            requestID: requestID,
+                            playlistID: playlistID,
+                            profileScope: profileScope,
+                            persistenceRevision: persistenceRevision,
+                            export: nil,
+                            errorMessage: AppStrings.LiveTV.favoriteListExportFailed
+                        ))
+                    }
+                }
+                .cancellable(id: favoriteListExportCancellationID, cancelInFlight: true)
+
+            case let .favoriteListExportPrepared(requestID, playlistID, profileScope, persistenceRevision, export, errorMessage):
+                guard state.favoriteListExportRequestID == requestID,
+                      state.favoriteListPlaylistID == playlistID,
+                      state.favoriteListProfileScope == profileScope,
+                      state.favoriteListPersistenceRevision == persistenceRevision,
+                      state.config?.playlistID == playlistID,
+                      profileContextClient.snapshot() == profileScope else { return .none }
+                state.favoriteListExportRequestID = nil
+                state.favoriteListExport = export
+                state.favoriteListExportErrorMessage = errorMessage
+                return .none
+
+            case .clearFavoriteListExport:
+                state.favoriteListExportRequestID = nil
+                state.favoriteListExport = nil
+                state.favoriteListExportErrorMessage = nil
+                return .cancel(id: favoriteListExportCancellationID)
 
             case .clearFavoriteListSelection:
                 state.resetChannelSelection()
@@ -1620,7 +2356,7 @@ public struct LiveTVFeature {
                     timeline.favoriteListID = listID
                     timeline.favoriteLoadRequestID = nil
                     timeline.channels = state.currentChannels
-                    timeline.providerOrderChannels = state.currentChannels
+                    timeline.providerOrderChannels = state.providerOrderCurrentChannels
                     state.epgTimeline = timeline
                 }
                 return persistFavoriteLists(state: &state, client: favoriteChannelListsClient, profileID: profileID, playlistID: playlistID)
@@ -1699,7 +2435,11 @@ public struct LiveTVFeature {
                 }
                 state.hiddenChannelIDs.formUnion(hiddenItems.map(\.id))
                 state.selectedChannelIDs.subtract(hiddenItems.map(\.id))
-                state.syncEPGTimeline(channels: state.currentChannels, selectedCategoryID: state.selectedCategoryID)
+                state.syncEPGTimeline(
+                    channels: state.currentChannels,
+                    selectedCategoryID: state.selectedCategoryID,
+                    providerOrderChannels: state.providerOrderCurrentChannels
+                )
                 return .run { _ in
                     parentalControlClient.hideChannels(hiddenItems)
                     await hapticClient.notification(.success)
@@ -1907,7 +2647,7 @@ public struct LiveTVFeature {
                     timeline.favoriteIDs = Set(pending.updatedLists.first(where: { $0.id == pending.listID })?.channelIDs ?? [])
                     timeline.favoriteOrderIDs = pending.updatedLists.first(where: { $0.id == pending.listID })?.channelIDs ?? []
                     timeline.channels = state.currentChannels
-                    timeline.providerOrderChannels = state.currentChannels
+                    timeline.providerOrderChannels = state.providerOrderCurrentChannels
                     state.epgTimeline = timeline
                 }
                 let sameSelection = state.isChannelSelectionMode
@@ -2098,7 +2838,37 @@ public struct LiveTVFeature {
                 if state.selectedTabMode == .epg, let epg = state.epgTimeline, epg.channels.isEmpty {
                     state.epgTimeline?.channels = channels
                 }
-                return .none
+                let shouldPresentGuide = state.pendingEPGGuideCategoryID == categoryID
+                    && state.selectedCategoryID == categoryID
+                    && state.selectedSmartGroupID == nil
+                    && !state.isFavoriteListMode
+                let guideEffect: Effect<Action>
+                if state.pendingEPGGuideCategoryID == categoryID {
+                    state.pendingEPGGuideCategoryID = nil
+                    guideEffect = shouldPresentGuide && !state.currentChannels.isEmpty
+                        ? .send(.epgGuideTapped)
+                        : .none
+                } else {
+                    guideEffect = .none
+                }
+                let sortEffect: Effect<Action> = if state.selectedCategoryID == categoryID,
+                                                    state.channelSortOption == .currentProgramStartTime,
+                                                    state.selectedSmartGroupID == nil,
+                                                    !state.isFavoriteListMode,
+                                                    let config = state.config
+                {
+                    beginLiveTVChannelSortEPGLoad(
+                        state: &state,
+                        channels: state.providerOrderCurrentChannels,
+                        config: config,
+                        categoryID: categoryID,
+                        profileScope: profileContextClient.snapshot(),
+                        iptvClient: iptvClient
+                    )
+                } else {
+                    .none
+                }
+                return .merge(guideEffect, sortEffect)
 
             case let .channelsResponse(requestID, config, categoryID, .failure(error)):
                 guard state.categoryContentRequestIDs[categoryID] == requestID,
@@ -2112,6 +2882,9 @@ public struct LiveTVFeature {
                     state.isLoadingChannels = false
                 }
                 state.categoryContentErrors[categoryID] = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
+                if state.pendingEPGGuideCategoryID == categoryID {
+                    state.pendingEPGGuideCategoryID = nil
+                }
                 return .none
 
             case let .channelSelected(channel):
@@ -2121,6 +2894,14 @@ public struct LiveTVFeature {
                     .run { _ in await hapticClient.impact(.light) },
                     .send(.delegate(.didSelectChannel(channel, playlist: state.currentChannels)))
                 )
+
+            case let .restoreChannelFocus(channelID):
+                guard let channel = state.currentChannels.first(where: { $0.id == channelID }) else { return .none }
+                if state.selectedChannel?.id != channelID {
+                    state.selectedChannel = channel
+                }
+                state.channelFocusRestoreRevision &+= 1
+                return .none
 
             case let .selectChannelPreview(channel):
                 guard !state.unavailableFavoriteChannelIDs.contains(channel.id) else { return .none }
@@ -2134,7 +2915,7 @@ public struct LiveTVFeature {
                     .run { _ in await hapticClient.impact(.light) },
                     .run { send in
                         await send(.channelEPGResponse(Result {
-                            try await iptvClient.fetchShortEPG(config, epgID, 12)
+                            try await iptvClient.fetchShortEPG(config, channel.id, epgID, 12)
                         }))
                     }
                 )
@@ -2356,7 +3137,7 @@ public struct LiveTVFeature {
                     state.epgTimeline = EPGTimelineFeature.State(
                         config: config,
                         channels: reordered,
-                        providerOrderChannels: state.currentChannels,
+                        providerOrderChannels: state.providerOrderCurrentChannels,
                         categories: state.categories,
                         selectedCategoryID: channel.categoryID,
                         favoriteIDs: state.selectedFavoriteListChannelIDs.isEmpty && !state.isFavoriteListMode
@@ -2396,19 +3177,35 @@ public struct LiveTVFeature {
                 return .send(.reloadPreferences)
 
             case .liveCategoryMappingsUpdated:
-                guard let config = state.config else { return .none }
+                state.pendingEPGGuideCategoryID = nil
                 state.categories = []
+                state.providerCategories = []
                 state.channelsByCategory = [:]
                 state.selectedCategoryID = nil
                 state.selectedChannel = nil
-                return .send(.reloadCategories(config: config))
+                state.channelSortEPGRequestID = nil
+                state.channelSortLoadedCategoryID = nil
+                state.channelSortProgramsByChannelID = [:]
+                state.channelSortCurrentProgramStartByChannelID = [:]
+                state.channelSortReferenceDate = nil
+                state.isLoadingChannelSortEPG = false
+                let cancellations: [Effect<Action>] = [
+                    .cancel(id: channelSortEPGCancellationID),
+                    .cancel(id: channelSortClockCancellationID),
+                ]
+                guard let config = state.config else { return .merge(cancellations) }
+                return .merge(cancellations + [.send(.reloadCategories(config: config))])
 
             case .epgGuideTapped:
                 if let config = state.config, !state.currentChannels.isEmpty {
+                    let channels = state.currentChannels
+                    let initialChannel = state.selectedChannel.flatMap { selectedChannel in
+                        channels.first(where: { $0.id == selectedChannel.id })
+                    } ?? channels.first
                     let guide = EPGGuideFeature.State(
                         config: config,
-                        channels: state.currentChannels,
-                        initialChannel: state.selectedChannel
+                        channels: channels,
+                        initialChannel: initialChannel
                     )
                     return .send(.delegate(.presentEPGGuide(guide)))
                 }
@@ -2429,7 +3226,11 @@ public struct LiveTVFeature {
                 } else if mode == .epg, state.epgTimeline != nil {
                     let channels = state.currentChannels
                     let selectedCategoryID = state.selectedSmartGroupID == nil ? state.selectedCategoryID : nil
-                    state.syncEPGTimeline(channels: channels, selectedCategoryID: selectedCategoryID)
+                    state.syncEPGTimeline(
+                        channels: channels,
+                        selectedCategoryID: selectedCategoryID,
+                        providerOrderChannels: state.providerOrderCurrentChannels
+                    )
                 }
                 return .run { _ in await hapticClient.impact(.light) }
 
@@ -2450,7 +3251,14 @@ public struct LiveTVFeature {
                 state.selectedTabMode = .channels
                 return .none
 
-            case let .epgTimeline(.presented(.delegate(.playChannel(channel)))):
+            case let .epgTimeline(.presented(.delegate(.playChannel(channel, presentationID)))):
+                guard state.epgTimeline?.presentationID == presentationID else {
+                    return .run { [playerClient, presentationID] _ in
+                        await MainActor.run {
+                            playerClient.discardPreviewPromotionOwned(presentationID)
+                        }
+                    }
+                }
                 return .send(.channelSelected(channel))
 
             case let .epgTimeline(.presented(.delegate(.channelLogoOverrideChanged(channelID, playlistID, url)))):
@@ -2461,6 +3269,10 @@ public struct LiveTVFeature {
 
             case let .parentalLockUnlocked(category, item):
                 if let category {
+                    let shouldOpenEPGGuide = state.pendingEPGGuideCategoryID == category.id
+                    if !shouldOpenEPGGuide {
+                        state.pendingEPGGuideCategoryID = nil
+                    }
                     let requestID = UUID()
                     let unlockedCategoryID = category.id
                     state.unlockedCategoryIDs.insert(unlockedCategoryID)
@@ -2475,6 +3287,15 @@ public struct LiveTVFeature {
                     state.activeSmartGroupRequestID = nil
                     state.smartGroupChannels = []
                     state.isLoadingChannels = false
+                    let categoryChanged = state.selectedCategoryID != category.id
+                    if categoryChanged {
+                        state.channelSortEPGRequestID = nil
+                        state.channelSortLoadedCategoryID = nil
+                        state.channelSortProgramsByChannelID = [:]
+                        state.channelSortCurrentProgramStartByChannelID = [:]
+                        state.channelSortReferenceDate = nil
+                        state.isLoadingChannelSortEPG = false
+                    }
                     // Proceed with category selection bypass
                     state.selectedCategoryID = category.id
                     state.isFavoriteListMode = false
@@ -2486,15 +3307,51 @@ public struct LiveTVFeature {
                         timeline.favoriteIDs = state.favoriteIDs
                         timeline.favoriteLoadRequestID = nil
                         timeline.channels = state.currentChannels
-                        timeline.providerOrderChannels = state.currentChannels
+                        timeline.providerOrderChannels = state.providerOrderCurrentChannels
                         timeline.selectedCategoryID = category.id
                         state.epgTimeline = timeline
                     }
                     let cancelGroupResolution = Effect<Action>.cancel(id: smartGroupResolutionCancellationID)
                     if state.channelsByCategory[category.id] != nil {
-                        return .merge(cancelGroupResolution, expirationEffect)
+                        let sortEPGLoad: Effect<Action> = if state.channelSortOption == .currentProgramStartTime,
+                                                             !state.isLoadingChannelSortEPG,
+                                                             state.channelSortLoadedCategoryID != category.id,
+                                                             let config = state.config
+                        {
+                            beginLiveTVChannelSortEPGLoad(
+                                state: &state,
+                                channels: state.providerOrderCurrentChannels,
+                                config: config,
+                                categoryID: category.id,
+                                profileScope: profileContextClient.snapshot(),
+                                iptvClient: iptvClient
+                            )
+                        } else if categoryChanged {
+                            .merge(
+                                .cancel(id: channelSortEPGCancellationID),
+                                .cancel(id: channelSortClockCancellationID)
+                            )
+                        } else {
+                            .none
+                        }
+                        let guideEffect: Effect<Action>
+                        if shouldOpenEPGGuide {
+                            state.pendingEPGGuideCategoryID = nil
+                            guideEffect = state.currentChannels.isEmpty ? .none : .send(.epgGuideTapped)
+                        } else {
+                            guideEffect = .none
+                        }
+                        return .merge(cancelGroupResolution, expirationEffect, sortEPGLoad, guideEffect)
                     }
-                    guard let config = state.config else { return .merge(cancelGroupResolution, expirationEffect) }
+                    guard let config = state.config else {
+                        if shouldOpenEPGGuide {
+                            state.pendingEPGGuideCategoryID = nil
+                        }
+                        let cancelSort: Effect<Action> = categoryChanged
+                            ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID))
+                            : .none
+                        return .merge(cancelGroupResolution, expirationEffect, cancelSort)
+                    }
                     state.isLoadingChannels = true
                     let categoryID = category.id
                     let contentRequestID = UUID()
@@ -2503,11 +3360,15 @@ public struct LiveTVFeature {
                     return .merge(
                         cancelGroupResolution,
                         expirationEffect,
+                        categoryChanged ? .merge(.cancel(id: channelSortEPGCancellationID), .cancel(id: channelSortClockCancellationID)) : .none,
                         .send(.fetchCategoryContent(requestID: contentRequestID, config: config, categoryID: categoryID))
                     )
                 } else if let item {
+                    state.pendingEPGGuideCategoryID = nil
                     state.selectedChannel = item
                     return .send(.delegate(.didSelectChannel(item, playlist: state.currentChannels)))
+                } else {
+                    state.pendingEPGGuideCategoryID = nil
                 }
                 return .none
 
@@ -2521,10 +3382,20 @@ public struct LiveTVFeature {
                 let selectedGroupContainsExpiredCategory = state.smartChannelGroups
                     .first(where: { $0.id == state.selectedSmartGroupID })?
                     .categoryIDs.contains(categoryID) == true
-                if state.selectedCategoryID == categoryID || selectedGroupContainsExpiredCategory {
+                let invalidatesChannelSortScope = state.selectedCategoryID == categoryID || selectedGroupContainsExpiredCategory
+                var effects: [Effect<Action>] = []
+                if invalidatesChannelSortScope {
                     state.selectedCategoryID = nil
                     state.selectedSmartGroupID = nil
                     state.smartGroupChannels = []
+                    state.channelSortEPGRequestID = nil
+                    state.channelSortLoadedCategoryID = nil
+                    state.channelSortProgramsByChannelID = [:]
+                    state.channelSortCurrentProgramStartByChannelID = [:]
+                    state.channelSortReferenceDate = nil
+                    state.isLoadingChannelSortEPG = false
+                    effects.append(.cancel(id: channelSortEPGCancellationID))
+                    effects.append(.cancel(id: channelSortClockCancellationID))
                     if let category = state.categories.first(where: { $0.id == categoryID }) {
                         parentalLockToPresent = ParentalLockFeature.State(
                             category: category,
@@ -2542,12 +3413,14 @@ public struct LiveTVFeature {
                     state.epgTimeline = timeline
                 }
                 if let parentalLockToPresent {
-                    return .send(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(
+                    effects.append(.send(.delegate(.restrictMultiViewCategoryAndPresentParentalLock(
                         categoryID: categoryID,
                         state: parentalLockToPresent
-                    )))
+                    ))))
+                    return .merge(effects)
                 }
-                return .send(.delegate(.restrictMultiViewCategory(categoryID)))
+                effects.append(.send(.delegate(.restrictMultiViewCategory(categoryID))))
+                return .merge(effects)
 
             case .smartGroupManagerTapped:
                 return .send(.delegate(.presentSmartGroupManager))

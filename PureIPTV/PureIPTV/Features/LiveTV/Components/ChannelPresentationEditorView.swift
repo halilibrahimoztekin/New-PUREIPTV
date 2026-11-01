@@ -4,7 +4,10 @@ public struct ChannelPresentationEditorView: View {
     let channelTitle: String
     let currentName: String?
     let currentNumber: Int?
+    let isIncludedInRecentChannels: Bool
+    let isRecentChannelPreferenceLoaded: Bool
     let onSave: (String, Int?) -> Void
+    let onToggleRecentChannelInclusion: (Bool) -> Void
     let onClose: () -> Void
 
     @State private var name: String
@@ -14,13 +17,19 @@ public struct ChannelPresentationEditorView: View {
         channelTitle: String,
         currentName: String?,
         currentNumber: Int?,
+        isIncludedInRecentChannels: Bool,
+        isRecentChannelPreferenceLoaded: Bool,
         onSave: @escaping (String, Int?) -> Void,
+        onToggleRecentChannelInclusion: @escaping (Bool) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.channelTitle = channelTitle
         self.currentName = currentName
         self.currentNumber = currentNumber
+        self.isIncludedInRecentChannels = isIncludedInRecentChannels
+        self.isRecentChannelPreferenceLoaded = isRecentChannelPreferenceLoaded
         self.onSave = onSave
+        self.onToggleRecentChannelInclusion = onToggleRecentChannelInclusion
         self.onClose = onClose
         _name = State(initialValue: currentName ?? "")
         _numberText = State(initialValue: currentNumber.map(String.init) ?? "")
@@ -47,6 +56,19 @@ public struct ChannelPresentationEditorView: View {
                     #if os(iOS)
                         .keyboardType(.numberPad)
                     #endif
+                }
+                Section(AppStrings.LiveTV.recentChannels) {
+                    Toggle(
+                        AppStrings.LiveTV.showInRecentChannels,
+                        isOn: Binding(
+                            get: { isIncludedInRecentChannels },
+                            set: onToggleRecentChannelInclusion
+                        )
+                    )
+                    .disabled(!isRecentChannelPreferenceLoaded)
+                    Text(AppStrings.LiveTV.recentChannelsScopeHint)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 Section {
                     Button(AppStrings.LiveTV.resetChannelPresentation, role: .destructive) {

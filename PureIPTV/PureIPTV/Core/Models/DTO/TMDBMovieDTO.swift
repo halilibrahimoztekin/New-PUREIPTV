@@ -94,6 +94,76 @@ public struct TMDBMovieDetailsDTO: Codable, Equatable, Sendable {
     }
 }
 
+public struct TMDBWatchProvidersResponseDTO: Codable, Equatable, Sendable {
+    public let id: Int
+    public let results: [String: TMDBWatchProviderRegionDTO]?
+
+    public init(id: Int = 0, results: [String: TMDBWatchProviderRegionDTO]? = [:]) {
+        self.id = id
+        self.results = results
+    }
+}
+
+public enum TMDBWatchAvailabilityRegionCode {
+    public static func normalized(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let code = value.uppercased()
+        guard code.count == 2,
+              code.unicodeScalars.allSatisfy({ (65 ... 90).contains($0.value) }) else { return nil }
+        return code
+    }
+}
+
+public struct TMDBWatchProviderRegionDTO: Codable, Equatable, Sendable {
+    public let link: String?
+    public let flatrate: [TMDBWatchProviderDTO]?
+    public let free: [TMDBWatchProviderDTO]?
+    public let ads: [TMDBWatchProviderDTO]?
+    public let rent: [TMDBWatchProviderDTO]?
+    public let buy: [TMDBWatchProviderDTO]?
+
+    public init(
+        link: String? = nil,
+        flatrate: [TMDBWatchProviderDTO]? = nil,
+        free: [TMDBWatchProviderDTO]? = nil,
+        ads: [TMDBWatchProviderDTO]? = nil,
+        rent: [TMDBWatchProviderDTO]? = nil,
+        buy: [TMDBWatchProviderDTO]? = nil
+    ) {
+        self.link = link
+        self.flatrate = flatrate
+        self.free = free
+        self.ads = ads
+        self.rent = rent
+        self.buy = buy
+    }
+}
+
+public struct TMDBWatchProviderDTO: Codable, Equatable, Sendable, Identifiable {
+    public let logoPath: String?
+    public let providerID: Int
+    public let providerName: String
+    public let displayPriority: Int
+
+    public var id: Int {
+        providerID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case logoPath = "logo_path"
+        case providerID = "provider_id"
+        case providerName = "provider_name"
+        case displayPriority = "display_priority"
+    }
+
+    public init(logoPath: String? = nil, providerID: Int, providerName: String, displayPriority: Int = 0) {
+        self.logoPath = logoPath
+        self.providerID = providerID
+        self.providerName = providerName
+        self.displayPriority = displayPriority
+    }
+}
+
 public struct TMDBVideosResponseDTO: Codable, Equatable, Sendable {
     public let results: [TMDBVideoDTO]?
 }

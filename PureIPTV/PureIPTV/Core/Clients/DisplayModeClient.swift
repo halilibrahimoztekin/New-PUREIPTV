@@ -1,11 +1,25 @@
 import AVFoundation
 import ComposableArchitecture
 import Foundation
+#if os(tvOS)
+    import AVKit
+#endif
 #if canImport(QuartzCore)
     import QuartzCore
 #endif
 #if canImport(UIKit)
     import UIKit
+#endif
+
+#if os(tvOS)
+    @MainActor
+    private func activeDisplayManager() -> AVDisplayManager? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .avDisplayManager
+    }
 #endif
 
 // MARK: - FrameRate Enum
@@ -132,17 +146,38 @@ public enum FrameRateDetector {
 
 // MARK: - DisplayMatchResult
 
+public enum DisplayMatchStatus: Equatable, Sendable {
+    /// A legacy rate recommendation. It does not confirm or perform a display switch.
+    case suggestionOnly
+    /// tvOS accepted a preferred criteria request; the resulting TV mode is not observable here.
+    case requestSubmitted
+    case systemMatchingDisabled
+    case criteriaUnavailable
+    case displayManagerUnavailable
+    case unsupportedPlaybackEngine
+    case partialMatchingUnsupported
+    case unsupportedPlatform
+}
+
 public struct DisplayMatchResult: Equatable, Sendable {
     public let matchedRate: Float
     public let matchedRange: VideoDynamicRange
     public let message: String
     public let isJudderFree: Bool
+    public let status: DisplayMatchStatus
 
-    public init(matchedRate: Float, matchedRange: VideoDynamicRange, message: String, isJudderFree: Bool = true) {
+    public init(
+        matchedRate: Float,
+        matchedRange: VideoDynamicRange,
+        message: String,
+        isJudderFree: Bool = true,
+        status: DisplayMatchStatus = .suggestionOnly
+    ) {
         self.matchedRate = matchedRate
         self.matchedRange = matchedRange
         self.message = message
         self.isJudderFree = isJudderFree
+        self.status = status
     }
 }
 
@@ -158,6 +193,7 @@ public struct DisplayModeClient: Sendable {
     public var setMatchDynamicRangeEnabled: @Sendable (_ enabled: Bool) -> Void
     public var currentDisplayRefreshRate: @Sendable () -> Float = { 60.0 }
     public var availableRefreshRates: @Sendable () -> [Float] = { [24.0, 50.0, 60.0] }
+    /// Legacy target-rate estimate; it never changes the device display mode.
     public var switchDisplayMode: @Sendable (_ frameRate: Float, _ dynamicRange: VideoDynamicRange) async -> DisplayMatchResult = { rate, range in
         DisplayMatchResult(
             matchedRate: rate,
@@ -165,6 +201,18 @@ public struct DisplayModeClient: Sendable {
             message: "\(Int(rate)) Hz • Eşlendi (Judder-Free)"
         )
     }
+
+    #if os(tvOS)
+        public var applyPreferredDisplayCriteria: @Sendable (_ criteria: AVDisplayCriteria?) async -> DisplayMatchResult = { _ in
+            DisplayMatchResult(
+                matchedRate: 0,
+                matchedRange: .unknown,
+                message: AppStrings.Player.displayMatchDisplayUnavailable,
+                isJudderFree: false,
+                status: .displayManagerUnavailable
+            )
+        }
+    #endif
 
     public var resetDisplayMode: @Sendable () async -> Void
 }
@@ -186,7 +234,7 @@ extension DisplayModeClient: DependencyKey {
             return defaults.object(forKey: legacyAFRKey) as? Bool ?? true
         }
 
-        return DisplayModeClient(
+        var client = DisplayModeClient(
             isAFREnabledForLive: {
                 afrPreference(for: liveAFRKey)
             },
@@ -262,9 +310,58 @@ extension DisplayModeClient: DependencyKey {
                 )
             },
             resetDisplayMode: {
-                // Reset to standard 60Hz mode when exiting player
+                #if os(tvOS)
+                    await MainActor.run {
+                        activeDisplayManager()?.preferredDisplayCriteria = nil
+                    }
+                #endif
             }
         )
+        #if os(tvOS)
+            client.applyPreferredDisplayCriteria = { criteria in
+                await MainActor.run {
+                    guard let displayManager = activeDisplayManager() else {
+                        return DisplayMatchResult(
+                            matchedRate: 0,
+                            matchedRange: .unknown,
+                            message: AppStrings.Player.displayMatchDisplayUnavailable,
+                            isJudderFree: false,
+                            status: .displayManagerUnavailable
+                        )
+                    }
+                    guard displayManager.isDisplayCriteriaMatchingEnabled else {
+                        displayManager.preferredDisplayCriteria = nil
+                        return DisplayMatchResult(
+                            matchedRate: 0,
+                            matchedRange: .unknown,
+                            message: AppStrings.Player.displayMatchSystemDisabled,
+                            isJudderFree: false,
+                            status: .systemMatchingDisabled
+                        )
+                    }
+                    guard let criteria else {
+                        displayManager.preferredDisplayCriteria = nil
+                        return DisplayMatchResult(
+                            matchedRate: 0,
+                            matchedRange: .unknown,
+                            message: AppStrings.Player.displayMatchCriteriaUnavailable,
+                            isJudderFree: false,
+                            status: .criteriaUnavailable
+                        )
+                    }
+
+                    displayManager.preferredDisplayCriteria = criteria
+                    return DisplayMatchResult(
+                        matchedRate: 0,
+                        matchedRange: .unknown,
+                        message: AppStrings.Player.displayMatchRequested,
+                        isJudderFree: false,
+                        status: .requestSubmitted
+                    )
+                }
+            }
+        #endif
+        return client
     }()
 
     public static let testValue = DisplayModeClient()

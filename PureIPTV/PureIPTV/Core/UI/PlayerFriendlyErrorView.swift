@@ -14,7 +14,19 @@ public enum PlayerDiagnosticCategory: Sendable {
             return .authExpired
         } else if lower.contains("404") || lower.contains("not found") {
             return .streamNotFound
-        } else if lower.contains("limit") || lower.contains("connection") && lower.contains("exceed") {
+        } else if [
+            "too many connections",
+            "maximum connections",
+            "maximum number of connections",
+            "max connections",
+            "connection limit",
+            "concurrent connection",
+            "simultaneous connection",
+            "connection count exceeded",
+            "too many streams",
+            "maximum number of streams",
+            "stream limit",
+        ].contains(where: lower.contains) {
             return .connectionLimitExceeded
         } else if lower.contains("timeout") || lower.contains("unreachable") || lower.contains("network") {
             return .serverUnresponsive

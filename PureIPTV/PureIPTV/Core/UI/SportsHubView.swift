@@ -48,6 +48,9 @@ public struct SportsHubView: View {
                     }
                     .padding(.horizontal)
                 }
+                #if os(tvOS)
+                .focusSection()
+                #endif
             }
         }
     }
@@ -120,7 +123,12 @@ public struct SportsHubView: View {
                     .background(Color.accentColor, in: Capsule())
                     .foregroundColor(.white)
                 }
+                #if os(tvOS)
+                .frame(minHeight: 44)
+                .tvFocusEffect(shape: .capsule)
+                #else
                 .buttonStyle(.plain)
+                #endif
             }
         }
         .padding(14)

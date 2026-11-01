@@ -59,6 +59,8 @@ import SwiftUI
                     store.send(.onDisappear)
                 }
             }
+            .interactiveDismissDisabled(!store.isVisible)
+            .disabled(!store.isVisible)
         }
 
         // MARK: - Channels View
@@ -100,7 +102,7 @@ import SwiftUI
             } label: {
                 HStack(spacing: 12) {
                     if let coverURL = channel.displayLogoURL {
-                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                        PlaylistAsyncImage(url: coverURL, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {
@@ -143,7 +145,7 @@ import SwiftUI
             } label: {
                 VStack(spacing: 8) {
                     if let coverURL = channel.displayLogoURL {
-                        PlaylistAsyncImage(url: coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
+                        PlaylistAsyncImage(url: coverURL, fallbackURL: channel.coverURL, userAgentOverride: channel.userAgentOverride, playlistID: channel.playlistID) { phase in
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {
@@ -202,6 +204,13 @@ import SwiftUI
                             Text(store.epgFreshnessLabel)
                                 .font(.caption2)
                                 .foregroundColor(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.5))
+                            if let source = store.epgSourceIdentity {
+                                Text(source.displayLabel)
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.45))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
                         }
                         Spacer()
                         Button {
@@ -259,6 +268,9 @@ import SwiftUI
                                     EPGGuideRow(
                                         program: program,
                                         hasArchive: hasArchive,
+                                        userAgentOverride: store.selectedChannel?.userAgentOverride,
+                                        playlistID: store.selectedChannel?.playlistID,
+                                        channel: store.selectedChannel,
                                         onCatchUp: {
                                             if let channel = store.selectedChannel {
                                                 store.send(.playCatchUp(program, channel))
@@ -288,13 +300,31 @@ import SwiftUI
 
     public struct EPGGuideRow: View {
         @Environment(\.locale) private var locale
+        @AppStorage(LiveTVArtworkSource.storageKey) private var liveTVArtworkSourceRawValue = LiveTVArtworkSource.epgProgram.rawValue
         let program: EPGProgram
         let hasArchive: Bool
+        let userAgentOverride: String?
+        let playlistID: UUID?
+        let channel: MediaModels.Item?
         var onCatchUp: (() -> Void)?
 
-        public init(program: EPGProgram, hasArchive: Bool = false, onCatchUp: (() -> Void)? = nil) {
+        private var liveTVArtworkSource: LiveTVArtworkSource {
+            LiveTVArtworkSource(rawValue: liveTVArtworkSourceRawValue) ?? .epgProgram
+        }
+
+        public init(
+            program: EPGProgram,
+            hasArchive: Bool = false,
+            userAgentOverride: String? = nil,
+            playlistID: UUID? = nil,
+            channel: MediaModels.Item? = nil,
+            onCatchUp: (() -> Void)? = nil
+        ) {
             self.program = program
             self.hasArchive = hasArchive
+            self.userAgentOverride = userAgentOverride
+            self.playlistID = playlistID
+            self.channel = channel
             self.onCatchUp = onCatchUp
         }
 
@@ -309,6 +339,27 @@ import SwiftUI
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .frame(width: 50, alignment: .leading)
+
+                let artworkURL = liveTVArtworkSource.primaryArtworkURL(for: program, channel: channel)
+                if artworkURL != nil || channel?.coverURL != nil {
+                    PlaylistAsyncImage(
+                        url: artworkURL,
+                        fallbackURL: channel?.coverURL,
+                        userAgentOverride: userAgentOverride,
+                        playlistID: playlistID,
+                        downsamplingSize: CGSize(width: 160, height: 90)
+                    ) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                        }
+                    }
+                    .frame(width: 80, height: 45)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .accessibilityHidden(true)
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {

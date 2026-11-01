@@ -44,6 +44,7 @@ public struct MultiViewSlot: Equatable, Identifiable {
     public var aspectRatioMode: VideoAspectRatioMode = .fit
     public var isLoading: Bool = false
     public var errorMessage: String?
+    public var selectionOrder: Int = 0
 
     /// UUID to differentiate instances even when item changes
     public var instanceID: UUID = .init()
@@ -78,6 +79,7 @@ public struct MultiViewFeature {
         ]
 
         public var activeAudioSlotID: Int? = 0
+        public var nextSlotSelectionOrder = 0
 
         // PiP & Fullscreen
         public var focusedSlotID: Int?
@@ -180,8 +182,12 @@ public struct MultiViewFeature {
                     async let seriesResult = try? await iptvClient.fetchSeries(config, nil)
                     async let vodCategoriesResult = try? await iptvClient.fetchVODCategories(config)
                     async let seriesCategoriesResult = try? await iptvClient.fetchSeriesCategories(config)
-                    async let vodPreferencesResult = try? await databaseClient.fetchCategoryPreferences("vod")
-                    async let seriesPreferencesResult = try? await databaseClient.fetchCategoryPreferences("series")
+                    let categoryPreferenceScope = CategoryPreferenceScope(
+                        profileID: profileScope.profileID,
+                        playlistID: config.playlistID
+                    )
+                    async let vodPreferencesResult = try? await databaseClient.fetchCategoryPreferences("vod", categoryPreferenceScope)
+                    async let seriesPreferencesResult = try? await databaseClient.fetchCategoryPreferences("series", categoryPreferenceScope)
                     async let historyResult = try? await databaseClient.fetchWatchHistory(profileScope)
                     let vods = await vodResult ?? []
                     let series = await seriesResult ?? []
@@ -197,10 +203,10 @@ public struct MultiViewFeature {
                     let allowedVODCategoryIDs: Set<String> = if let vodCategories, vodPreferences != nil {
                         Set(vodCategories.compactMap { category -> String? in
                             let preference = vodPreferenceByID[category.id]
-                            let name = category.name.lowercased()
+                            let name = category.sourceName.lowercased()
                             let allowedForKids = !isKidsMode || kidsKeywords.contains { name.contains($0) }
                             let isRestricted = (parentalControlEnabled && (preference?.isLocked ?? false))
-                                || ((hideAdultContent || isKidsMode) && isAdultContent(category.name))
+                                || ((hideAdultContent || isKidsMode) && (isAdultContent(category.name) || isAdultContent(category.sourceName)))
                             guard
                                 allowedForKids,
                                 !isRestricted,
@@ -215,10 +221,10 @@ public struct MultiViewFeature {
                     let allowedSeriesCategoryIDs: Set<String> = if let seriesCategories, seriesPreferences != nil {
                         Set(seriesCategories.compactMap { category -> String? in
                             let preference = seriesPreferenceByID[category.id]
-                            let name = category.name.lowercased()
+                            let name = category.sourceName.lowercased()
                             let allowedForKids = !isKidsMode || kidsKeywords.contains { name.contains($0) }
                             let isRestricted = (parentalControlEnabled && (preference?.isLocked ?? false))
-                                || ((hideAdultContent || isKidsMode) && isAdultContent(category.name))
+                                || ((hideAdultContent || isKidsMode) && (isAdultContent(category.name) || isAdultContent(category.sourceName)))
                             guard
                                 allowedForKids,
                                 !isRestricted,
@@ -374,18 +380,23 @@ public struct MultiViewFeature {
                 // Swap items between primary and target slots
                 let tempItem = state.slots[primaryIndex].item
                 let tempAspectRatioMode = state.slots[primaryIndex].aspectRatioMode
+                let tempSelectionOrder = state.slots[primaryIndex].selectionOrder
+                let tempInstanceID = state.slots[primaryIndex].instanceID
                 state.slots[primaryIndex].item = state.slots[targetIndex].item
                 state.slots[primaryIndex].aspectRatioMode = state.slots[targetIndex].aspectRatioMode
-                state.slots[primaryIndex].instanceID = UUID()
+                state.slots[primaryIndex].selectionOrder = state.slots[targetIndex].selectionOrder
+                state.slots[primaryIndex].instanceID = state.slots[targetIndex].instanceID
                 state.slots[targetIndex].item = tempItem
                 state.slots[targetIndex].aspectRatioMode = tempAspectRatioMode
-                state.slots[targetIndex].instanceID = UUID()
+                state.slots[targetIndex].selectionOrder = tempSelectionOrder
+                state.slots[targetIndex].instanceID = tempInstanceID
 
                 // Immediately switch audio focus to primary showcase screen
                 state.activeAudioSlotID = state.primarySlotID
                 return .none
 
             case let .setAudioActive(slotID):
+                guard state.activeAudioSlotID != slotID else { return .none }
                 state.activeAudioSlotID = slotID
                 return .none
 
@@ -410,7 +421,8 @@ public struct MultiViewFeature {
             case let .channelSelected(item):
                 guard let slotID = state.isSelectingChannelForSlotID else { return .none }
                 guard let slotIndex = state.slots.firstIndex(where: { $0.id == slotID }),
-                      state.slots[slotIndex].item == nil else {
+                      state.slots[slotIndex].item == nil
+                else {
                     state.isSelectingChannelForSlotID = nil
                     state.selectedSeriesID = nil
                     state.episodeItems = []
@@ -455,6 +467,8 @@ public struct MultiViewFeature {
                 }
                 state.slots[slotIndex].item = item
                 state.slots[slotIndex].aspectRatioMode = .fit
+                state.slots[slotIndex].selectionOrder = state.nextSlotSelectionOrder
+                state.nextSlotSelectionOrder += 1
                 state.slots[slotIndex].instanceID = UUID() // Force new player
 
                 // If no audio is active, make this one active
@@ -489,6 +503,7 @@ public struct MultiViewFeature {
                 if let index = state.slots.firstIndex(where: { $0.id == slotID }) {
                     state.slots[index].item = nil
                     state.slots[index].aspectRatioMode = .fit
+                    state.slots[index].selectionOrder = 0
                     state.slots[index].instanceID = UUID()
                 }
                 if state.activeAudioSlotID == slotID {
@@ -551,6 +566,7 @@ public struct MultiViewFeature {
                     state.slots[index].item = nil
                     state.slots[index].isLoading = false
                     state.slots[index].errorMessage = nil
+                    state.slots[index].selectionOrder = 0
                     state.slots[index].instanceID = UUID()
                 }
                 if let focusedSlotID = state.focusedSlotID, removedSlotIDs.contains(focusedSlotID) {

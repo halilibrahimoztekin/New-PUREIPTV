@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import CryptoKit
 import Foundation
 
 public enum ChannelLogoOverrideURL {
@@ -15,6 +16,21 @@ public enum ChannelLogoOverrideURL {
               let url = components.url,
               url.absoluteString.utf8.count <= maximumLength else { return nil }
         return url
+    }
+}
+
+public enum ChannelLogoOverrideIdentity {
+    public static func m3uKey(tvgID: String?, streamURL: URL) -> String {
+        let normalizedTVGID = tvgID?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let identity = if let normalizedTVGID, !normalizedTVGID.isEmpty {
+            "tvg-id:\(normalizedTVGID)"
+        } else {
+            "stream-url:\(streamURL.absoluteString)"
+        }
+        let digest = SHA256.hash(data: Data(identity.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "m3u.v1.\(digest)"
     }
 }
 

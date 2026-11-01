@@ -13,6 +13,14 @@ public struct VODDetailFeature {
         // API Data
         public var info: DetailModels.Info?
         public var tmdbMovie: TMDBMovieDetailsDTO?
+        public var watchAvailabilityCountryCode: String?
+        public var watchAvailability: TMDBWatchProviderRegionDTO?
+        public var watchAvailabilityResponse: TMDBWatchProvidersResponseDTO?
+        public var watchAvailabilityLoadedAt: Date?
+        public var watchAvailabilityLoadedMediaID: Int?
+        public var watchAvailabilityRequestID: UUID?
+        public var isWatchAvailabilityLoading = false
+        public var watchAvailabilityFailed = false
         public var awardRecognitions: [WikidataAwardClient.Recognition] = []
         public var tmdbSearchResults: [TMDBMovieSearchResultDTO] = []
         public var selectedTMDBMatchID: Int?
@@ -22,18 +30,32 @@ public struct VODDetailFeature {
         public var tmdbMatchPresentationRequestID: UUID?
         public var lastTMDBMatchWriteRevision: Date?
         public var isTMDBMatchPickerPresented = false
+        public var presentationProfileScope: ProfileContextSnapshot?
+        public var presentationOverrideRequestID: UUID?
+        public var isPresentationOverrideLoaded = false
+        public var isPresentationEditorPresented = false
+        public var presentationOverrides: [String: MediaPresentationOverride] = [:]
 
         // UI State
         public var isLoading = false
         public var isTMDBLoading = false
         public var isFavorite = false
         public var isDownloaded = false
+        public var isStartingDownload = false
         public var downloadErrorMessage: String?
+        public var isConfirmingDownloadDeletion = false
+        public var isDeletingDownload = false
+        public var downloadStatusRequestID: UUID?
+        public var downloadDeletionRequestID: UUID?
         public var historyItem: WatchHistoryItem?
         public var errorMessage: String?
 
         public var autoPlayOnLoad: Bool = false
         public var canManageTMDBMatch: Bool {
+            config.playlistID != nil
+        }
+
+        public var canManagePresentation: Bool {
             config.playlistID != nil
         }
 
@@ -48,6 +70,7 @@ public struct VODDetailFeature {
         // Multi-Version & Quality Grouping (Madde #47)
         public var availableVersions: [MovieVersionEdition] = []
         public var selectedVersionId: String?
+        public var matchingRequestID: UUID?
 
         // Similar Movies Intelligent Matching
         public var catalogVODs: [MediaModels.Item] = []
@@ -92,9 +115,18 @@ public struct VODDetailFeature {
 
     public enum Action {
         case onAppear
+        case presentationOverridesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, overrides: [String: MediaPresentationOverride])
+        case editPresentationTapped
+        case dismissPresentationEditor
+        case savePresentationOverride(MediaPresentationOverride?)
+        case presentationOverrideSaved(requestID: UUID, profileScope: ProfileContextSnapshot)
         case infoResponse(Result<DetailModels.Info, Error>)
         case tmdbSearchResponse(Result<TMDBSearchResponseDTO, Error>)
         case tmdbDetailsResponse(Result<TMDBMovieDetailsDTO, Error>)
+        case watchAvailabilityCountrySelected(String?)
+        case loadWatchAvailability(mediaID: Int)
+        case watchAvailabilityResponse(requestID: UUID, mediaID: Int, result: Result<TMDBWatchProvidersResponseDTO, Error>)
+        case retryWatchAvailability
         case awardRecognitionsResponse(tmdbID: Int, result: Result<[WikidataAwardClient.Recognition], Error>)
         case tmdbOverrideLoaded(Int?)
         case manualTMDBSearch(String)
@@ -112,9 +144,13 @@ public struct VODDetailFeature {
         case tmdbTimeout
         case toggleFavorite
         case favoriteStatusLoaded(Bool, ProfileContextSnapshot)
-        case downloadStatusLoaded(Bool)
-        case downloadFailed(String)
+        case downloadStatusLoaded(requestID: UUID, id: String, isDownloaded: Bool)
+        case downloadStartFinished(requestID: UUID, id: String, isDownloaded: Bool, errorMessage: String?)
         case downloadTapped
+        case cancelDownloadDeletion
+        case downloadDeletionDialogDismissed
+        case confirmDownloadDeletion
+        case downloadDeletionFinished(requestID: UUID, id: String, succeeded: Bool)
         case historyStatusLoaded(id: String, item: WatchHistoryItem?, scope: ProfileContextSnapshot)
         case markUnwatched
         case actorTapped(TMDBCastMemberDTO)
@@ -125,7 +161,7 @@ public struct VODDetailFeature {
         case selectVersion(MovieVersionEdition)
         case similarMovieTapped(TMDBSimilarItemDTO)
         case coordinatorDismissUnmatchedMovie(requestID: UUID)
-        case backgroundMatchingCompleted(versions: [MovieVersionEdition], matched: [Int: MediaModels.Item])
+        case backgroundMatchingCompleted(requestID: UUID, versions: [MovieVersionEdition], matched: [Int: MediaModels.Item])
         case delegate(Delegate)
         case closeTapped
         case viewDidDisappear
@@ -144,6 +180,7 @@ public struct VODDetailFeature {
     private nonisolated enum CancelID: Hashable, Sendable {
         case versionHistory
         case awardRecognitions
+        case watchAvailability
     }
 
     @Injected(\.iptvClient) var iptvClient
@@ -154,6 +191,8 @@ public struct VODDetailFeature {
     @Dependency(\.tmdbMatchOverrideClient) var tmdbMatchOverrideClient
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.wikidataAwardClient) var wikidataAwardClient
+    @Dependency(\.mediaPresentationOverrideClient) var mediaPresentationOverrideClient
+    @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.dismiss) var dismiss
 
     public init() {}
@@ -268,24 +307,77 @@ public struct VODDetailFeature {
         let tmdbMatchOverrideClient = tmdbMatchOverrideClient
         let cloudSyncClient = cloudSyncClient
         let wikidataAwardClient = wikidataAwardClient
+        let mediaPresentationOverrideClient = mediaPresentationOverrideClient
+        let settingsClient = settingsClient
 
         Reduce { state, action in
             switch action {
             case .onAppear:
+                let savedWatchAvailabilityCountry = settingsClient.getWatchAvailabilityRegionCode()
+                if state.watchAvailabilityCountryCode != savedWatchAvailabilityCountry {
+                    state.watchAvailabilityFailed = false
+                    if let mediaID = state.tmdbMovie?.id,
+                       state.watchAvailabilityLoadedMediaID == mediaID,
+                       let response = state.watchAvailabilityResponse
+                    {
+                        state.watchAvailability = savedWatchAvailabilityCountry.flatMap { response.results?[$0] }
+                        state.isWatchAvailabilityLoading = false
+                    } else {
+                        state.watchAvailability = nil
+                    }
+                }
+                state.watchAvailabilityCountryCode = savedWatchAvailabilityCountry
+                let existingAvailabilityEffect: Effect<Action> = if savedWatchAvailabilityCountry != nil,
+                                                                    let mediaID = state.tmdbMovie?.id
+                {
+                    .send(.loadWatchAvailability(mediaID: mediaID))
+                } else {
+                    .none
+                }
                 if state.availableVersions.isEmpty {
                     state.availableVersions = [MovieVersionEdition(item: state.vod, isCurrent: true)]
                     state.selectedVersionId = state.vod.id
                 }
-                guard !state.isLoading, state.info == nil else { return .none }
+                let config = state.config
+                let vodID = state.vod.id
+                let profileScope = profileContextClient.snapshot()
+                let playlistID = config.playlistID
+                if state.presentationProfileScope != profileScope {
+                    state.vod = state.vod.replacingPresentationOverride(nil)
+                    state.presentationOverrides = [:]
+                    state.isPresentationOverrideLoaded = false
+                    state.matchingRequestID = nil
+                    let selectedVersionID = state.selectedVersionId
+                    state.availableVersions = state.availableVersions.map { version in
+                        MovieVersionEdition(item: version.item.replacingPresentationOverride(nil), isCurrent: version.id == selectedVersionID)
+                    }
+                    state.catalogVODs = state.catalogVODs.map { $0.replacingPresentationOverride(nil) }
+                    state.matchedVODsByTMDBId = state.matchedVODsByTMDBId.mapValues { $0.replacingPresentationOverride(nil) }
+                }
+                let presentationRequestID = UUID()
+                state.presentationProfileScope = profileScope
+                state.presentationOverrideRequestID = presentationRequestID
+                let presentationOverrideEffect: Effect<Action> = if let playlistID {
+                    .run { send in
+                        let overrides = await mediaPresentationOverrideClient.load(profileScope.profileID, playlistID, .movie)
+                        guard profileContextClient.snapshot() == profileScope else { return }
+                        await send(.presentationOverridesLoaded(
+                            requestID: presentationRequestID,
+                            profileScope: profileScope,
+                            overrides: overrides
+                        ))
+                    }
+                } else {
+                    .none
+                }
+                guard !state.isLoading, state.info == nil else {
+                    return .merge(presentationOverrideEffect, existingAvailabilityEffect)
+                }
                 state.isLoading = true
                 state.isTMDBLoading = true
                 state.errorMessage = nil
 
-                let config = state.config
-                let vodID = state.vod.id
                 let searchTitle = state.vod.title.cleanedForTMDBSearch()
-                let profileScope = profileContextClient.snapshot()
-                let playlistID = config.playlistID
 
                 print("Fetching VOD Info and TMDB details for: \(searchTitle)")
 
@@ -317,9 +409,11 @@ public struct VODDetailFeature {
                 }
                 .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
 
+                let downloadStatusRequestID = UUID()
+                state.downloadStatusRequestID = downloadStatusRequestID
                 let downloadEffect: Effect<Action> = .run { [id = state.vod.id] send in
                     let isDown = await (try? downloadClient.isDownloaded(id)) ?? false
-                    await send(.downloadStatusLoaded(isDown))
+                    await send(.downloadStatusLoaded(requestID: downloadStatusRequestID, id: id, isDownloaded: isDown))
                 }
 
                 let catalogEffect: Effect<Action> = state.catalogVODs.isEmpty ? .run { [config = state.config] send in
@@ -342,28 +436,221 @@ public struct VODDetailFeature {
                     .none
                 }
 
-                let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
-                    let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
-                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                let matchingEffect: Effect<Action>
+                if state.catalogVODs.isEmpty {
+                    matchingEffect = .none
+                } else {
+                    let matchingRequestID = UUID()
+                    state.matchingRequestID = matchingRequestID
+                    matchingEffect = .run { [vod = state.vod, catalog = state.catalogVODs, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
+                        let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
+                        await send(.backgroundMatchingCompleted(requestID: matchingRequestID, versions: res.versions, matched: res.matched))
+                    }
                 }
 
-                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect, matchingEffect, overrideEffect)
+                return .merge(infoEffect, tmdbEffect, timeoutEffect, favoriteEffect, historyEffect, downloadEffect, catalogEffect, matchingEffect, overrideEffect, presentationOverrideEffect, existingAvailabilityEffect)
+
+            case let .watchAvailabilityCountrySelected(countryCode):
+                guard countryCode == nil || TMDBWatchAvailabilityRegionCode.normalized(countryCode) != nil else { return .none }
+                let normalizedCode = TMDBWatchAvailabilityRegionCode.normalized(countryCode)
+                guard state.watchAvailabilityCountryCode != normalizedCode else { return .none }
+                settingsClient.setWatchAvailabilityRegionCode(normalizedCode)
+                state.watchAvailabilityCountryCode = normalizedCode
+                state.watchAvailabilityFailed = false
+                if let normalizedCode,
+                   let mediaID = state.tmdbMovie?.id,
+                   state.watchAvailabilityLoadedMediaID == mediaID,
+                   state.watchAvailabilityLoadedAt != nil,
+                   let response = state.watchAvailabilityResponse
+                {
+                    state.watchAvailability = response.results?[normalizedCode]
+                    state.isWatchAvailabilityLoading = false
+                    return .none
+                }
+                state.watchAvailability = nil
+                guard let normalizedCode, let mediaID = state.tmdbMovie?.id else { return .none }
+                return .send(.loadWatchAvailability(mediaID: mediaID))
+
+            case let .loadWatchAvailability(mediaID):
+                guard state.watchAvailabilityCountryCode != nil, state.tmdbMovie?.id == mediaID else { return .none }
+                if let loadedMediaID = state.watchAvailabilityLoadedMediaID, loadedMediaID != mediaID {
+                    state.watchAvailabilityResponse = nil
+                    state.watchAvailabilityLoadedAt = nil
+                    state.watchAvailabilityLoadedMediaID = nil
+                    state.watchAvailability = nil
+                }
+                if state.watchAvailabilityLoadedMediaID == mediaID,
+                   state.watchAvailabilityLoadedAt != nil,
+                   let response = state.watchAvailabilityResponse
+                {
+                    state.watchAvailability = state.watchAvailabilityCountryCode.flatMap { response.results?[$0] }
+                    state.isWatchAvailabilityLoading = false
+                    state.watchAvailabilityFailed = false
+                    return .none
+                }
+                guard state.watchAvailabilityRequestID == nil else { return .none }
+                let requestID = UUID()
+                state.watchAvailabilityRequestID = requestID
+                state.isWatchAvailabilityLoading = true
+                state.watchAvailabilityFailed = false
+                return Self.makeWatchAvailabilityRequest(
+                    requestID: requestID,
+                    mediaID: mediaID,
+                    fetch: tmdbClient.fetchMovieWatchProviders
+                )
+
+            case let .watchAvailabilityResponse(requestID, mediaID, .success(response)):
+                guard state.watchAvailabilityRequestID == requestID,
+                      state.tmdbMovie?.id == mediaID else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailabilityResponse = response
+                state.watchAvailability = state.watchAvailabilityCountryCode.flatMap { response.results?[$0] }
+                state.watchAvailabilityLoadedAt = Date()
+                state.watchAvailabilityLoadedMediaID = mediaID
+                return .none
+
+            case let .watchAvailabilityResponse(requestID, mediaID, .failure):
+                guard state.watchAvailabilityRequestID == requestID,
+                      state.tmdbMovie?.id == mediaID else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = true
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                return .none
+
+            case .retryWatchAvailability:
+                guard state.watchAvailabilityCountryCode != nil,
+                      let mediaID = state.tmdbMovie?.id else { return .none }
+                state.watchAvailabilityRequestID = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                return .send(.loadWatchAvailability(mediaID: mediaID))
+
+            case let .presentationOverridesLoaded(requestID, profileScope, overrides):
+                guard state.presentationOverrideRequestID == requestID,
+                      state.presentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                state.presentationOverrides = overrides
+                state.vod = state.vod.replacingPresentationOverride(overrides[state.vod.id])
+                state.catalogVODs = state.catalogVODs.map { item in
+                    item.replacingPresentationOverride(overrides[item.id])
+                }
+                let selectedVersionId = state.selectedVersionId
+                state.availableVersions = state.availableVersions.map { version in
+                    MovieVersionEdition(
+                        item: version.item.replacingPresentationOverride(overrides[version.id]),
+                        isCurrent: version.id == selectedVersionId
+                    )
+                }
+                state.matchedVODsByTMDBId = state.matchedVODsByTMDBId.mapValues { item in
+                    item.replacingPresentationOverride(overrides[item.id])
+                }
+                state.isPresentationOverrideLoaded = true
+                return .none
+
+            case .editPresentationTapped:
+                guard state.canManagePresentation, state.isPresentationOverrideLoaded else { return .none }
+                state.isPresentationEditorPresented = true
+                return .none
+
+            case .dismissPresentationEditor:
+                state.isPresentationEditorPresented = false
+                return .none
+
+            case let .savePresentationOverride(override):
+                guard let playlistID = state.config.playlistID,
+                      let profileScope = state.presentationProfileScope,
+                      profileContextClient.snapshot() == profileScope
+                else {
+                    state.isPresentationEditorPresented = false
+                    return .none
+                }
+                let requestID = UUID()
+                state.presentationOverrideRequestID = requestID
+                state.vod = state.vod.replacingPresentationOverride(override)
+                if let override, !override.isEmpty {
+                    state.presentationOverrides[state.vod.id] = override
+                } else {
+                    state.presentationOverrides.removeValue(forKey: state.vod.id)
+                }
+                let presentationOverrides = state.presentationOverrides
+                state.catalogVODs = state.catalogVODs.map { item in
+                    item.replacingPresentationOverride(presentationOverrides[item.id])
+                }
+                let selectedVersionId = state.selectedVersionId
+                state.availableVersions = state.availableVersions.map { version in
+                    MovieVersionEdition(
+                        item: version.item.replacingPresentationOverride(presentationOverrides[version.id]),
+                        isCurrent: version.id == selectedVersionId
+                    )
+                }
+                state.matchedVODsByTMDBId = state.matchedVODsByTMDBId.mapValues { item in
+                    item.replacingPresentationOverride(presentationOverrides[item.id])
+                }
+                state.isPresentationOverrideLoaded = true
+                state.isPresentationEditorPresented = false
+                let mediaID = state.vod.id
+                return .run { send in
+                    await mediaPresentationOverrideClient.save(override, mediaID, profileScope.profileID, playlistID, .movie)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    await send(.presentationOverrideSaved(requestID: requestID, profileScope: profileScope))
+                }
+
+            case let .presentationOverrideSaved(requestID, profileScope):
+                guard state.presentationOverrideRequestID == requestID,
+                      state.presentationProfileScope == profileScope,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                return .none
 
             case let .catalogVODsResponse(.success(items)):
-                state.catalogVODs = items
-                return .run { [vod = state.vod, catalog = items, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
+                let resolvedItems = items.map { item in
+                    let override = state.isPresentationOverrideLoaded
+                        ? state.presentationOverrides[item.id]
+                        : item.presentationOverride
+                    return item.replacingPresentationOverride(override)
+                }
+                state.catalogVODs = resolvedItems
+                let matchingRequestID = UUID()
+                state.matchingRequestID = matchingRequestID
+                return .run { [vod = state.vod, catalog = resolvedItems, similar = state.tmdbMovie?.similar?.results, versionId = state.selectedVersionId] send in
                     let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
-                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                    await send(.backgroundMatchingCompleted(requestID: matchingRequestID, versions: res.versions, matched: res.matched))
                 }
 
             case .catalogVODsResponse(.failure):
                 return .none
 
-            case let .backgroundMatchingCompleted(versions, matched):
+            case let .backgroundMatchingCompleted(requestID, versions, matched):
+                guard state.matchingRequestID == requestID else { return .none }
+                state.matchingRequestID = nil
+                let overrides = state.presentationOverrides
+                let isPresentationOverrideLoaded = state.isPresentationOverrideLoaded
+                let selectedVersionId = state.selectedVersionId
                 state.availableVersions = versions.map {
-                    MovieVersionEdition(item: $0.item, isCurrent: $0.id == state.selectedVersionId)
+                    let override = isPresentationOverrideLoaded
+                        ? overrides[$0.id]
+                        : $0.item.presentationOverride
+                    return MovieVersionEdition(
+                        item: $0.item.replacingPresentationOverride(override),
+                        isCurrent: $0.id == selectedVersionId
+                    )
                 }
-                state.matchedVODsByTMDBId = matched
+                state.matchedVODsByTMDBId = matched.mapValues { item in
+                    let override = isPresentationOverrideLoaded
+                        ? overrides[item.id]
+                        : item.presentationOverride
+                    return item.replacingPresentationOverride(override)
+                }
                 return .none
 
             case let .infoResponse(.success(dto)):
@@ -413,11 +700,23 @@ public struct VODDetailFeature {
                     ))
                 }
                 .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
-                let matchingEffect: Effect<Action> = state.catalogVODs.isEmpty ? .none : .run { [vod = state.vod, catalog = state.catalogVODs, similar = movieDetails.similar?.results, versionId = state.selectedVersionId] send in
-                    let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
-                    await send(.backgroundMatchingCompleted(versions: res.versions, matched: res.matched))
+                let matchingEffect: Effect<Action>
+                if state.catalogVODs.isEmpty {
+                    matchingEffect = .none
+                } else {
+                    let matchingRequestID = UUID()
+                    state.matchingRequestID = matchingRequestID
+                    matchingEffect = .run { [vod = state.vod, catalog = state.catalogVODs, similar = movieDetails.similar?.results, versionId = state.selectedVersionId] send in
+                        let res = await Self.computeMatchingInBackground(vod: vod, catalog: catalog, similar: similar, selectedVersionId: versionId)
+                        await send(.backgroundMatchingCompleted(requestID: matchingRequestID, versions: res.versions, matched: res.matched))
+                    }
                 }
-                return .merge(matchingEffect, awardEffect)
+                let availabilityEffect: Effect<Action> = if state.watchAvailabilityCountryCode != nil {
+                    .send(.loadWatchAvailability(mediaID: movieDetails.id))
+                } else {
+                    .none
+                }
+                return .merge(matchingEffect, awardEffect, availabilityEffect)
 
             case let .tmdbSearchResponse(.failure(error)):
                 guard !state.hasManualTMDBOverride else { return .none }
@@ -434,10 +733,20 @@ public struct VODDetailFeature {
                 state.isTMDBLoading = false
                 state.tmdbMovie = nil
                 state.awardRecognitions = []
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
                 if state.info != nil {
                     state.isLoading = false
                 }
-                return .cancel(id: CancelID.awardRecognitions) // Fail silently for tmdb details
+                return .merge(
+                    .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability)
+                ) // Fail silently for tmdb details
 
             case let .awardRecognitionsResponse(tmdbID, .success(recognitions)):
                 guard state.tmdbMovie?.id == tmdbID else { return .none }
@@ -456,9 +765,15 @@ public struct VODDetailFeature {
                 state.didUserChangeTMDBMatch = true
                 state.selectedTMDBMatchID = tmdbID
                 state.isTMDBLoading = true
-                return .run { send in
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                return .merge(.cancel(id: CancelID.watchAvailability), .run { send in
                     await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchMovieDetails(tmdbID) }))
-                }
+                })
 
             case let .manualTMDBSearch(query):
                 state.isTMDBMatchPickerPresented = true
@@ -513,12 +828,20 @@ public struct VODDetailFeature {
                 state.tmdbMovie = nil
                 state.awardRecognitions = []
                 state.isTMDBLoading = true
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
                 let itemID = state.vod.id
                 let cloudSyncEnabled = cloudSyncClient.isSyncEnabled()
                 let revision = max(Date(), (state.lastTMDBMatchWriteRevision ?? .distantPast).addingTimeInterval(0.001))
                 state.lastTMDBMatchWriteRevision = revision
                 return .merge(
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .run { _ in await tmdbMatchOverrideClient.save(tmdbID, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
                     .run { send in
                         await send(.manualTMDBDetailsResponse(tmdbID, Result { try await tmdbClient.fetchMovieDetails(tmdbID) }))
@@ -532,20 +855,33 @@ public struct VODDetailFeature {
                 state.isTMDBLoading = false
                 state.isLoading = false
                 state.isTMDBMatchPickerPresented = false
-                return .run { send in
+                let awardEffect: Effect<Action> = .run { send in
                     await send(.awardRecognitionsResponse(
                         tmdbID: details.id,
                         result: Result { try await wikidataAwardClient.fetchRecognitions([details.id], .movie) }
                     ))
                 }
                 .cancellable(id: CancelID.awardRecognitions, cancelInFlight: true)
+                let availabilityEffect: Effect<Action> = if state.watchAvailabilityCountryCode != nil {
+                    .send(.loadWatchAvailability(mediaID: details.id))
+                } else {
+                    .none
+                }
+                return .merge(awardEffect, availabilityEffect)
 
             case let .manualTMDBDetailsResponse(tmdbID, .failure):
                 guard state.selectedTMDBMatchID == tmdbID else { return .none }
                 state.isTMDBLoading = false
                 state.tmdbMovie = nil
                 state.awardRecognitions = []
-                return .cancel(id: CancelID.awardRecognitions)
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
+                return .merge(.cancel(id: CancelID.awardRecognitions), .cancel(id: CancelID.watchAvailability))
 
             case .clearTMDBMatchOverride:
                 guard let playlistID = state.config.playlistID else { return .none }
@@ -558,10 +894,18 @@ public struct VODDetailFeature {
                 state.selectedTMDBMatchID = nil
                 state.tmdbMovie = nil
                 state.awardRecognitions = []
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
+                state.watchAvailabilityFailed = false
+                state.watchAvailability = nil
+                state.watchAvailabilityResponse = nil
+                state.watchAvailabilityLoadedAt = nil
+                state.watchAvailabilityLoadedMediaID = nil
                 state.isTMDBMatchPickerPresented = false
                 let query = state.vod.title.cleanedForTMDBSearch()
                 return .merge(
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .run { _ in await tmdbMatchOverrideClient.save(nil, playlistID, .movie, itemID, cloudSyncEnabled, revision) },
                     .run { send in await send(.tmdbSearchResponse(Result { try await tmdbClient.searchMovie(query) })) }
                 )
@@ -620,13 +964,13 @@ public struct VODDetailFeature {
                 #if os(tvOS)
                     return .none
                 #else
-                guard state.trailerPresentationRequestID == nil else { return .none }
-                guard let key = state.resolvedTrailerKey else { return .none }
-                let requestID = UUID()
-                state.trailerPresentationRequestID = requestID
-                state.trailerVideoKey = key
-                state.isTrailerPresented = true
-                return .send(.delegate(.presentTrailer(requestID: requestID)))
+                    guard state.trailerPresentationRequestID == nil else { return .none }
+                    guard let key = state.resolvedTrailerKey else { return .none }
+                    let requestID = UUID()
+                    state.trailerPresentationRequestID = requestID
+                    state.trailerVideoKey = key
+                    state.isTrailerPresented = true
+                    return .send(.delegate(.presentTrailer(requestID: requestID)))
                 #endif
 
             case let .coordinatorDismissTrailer(requestID):
@@ -637,19 +981,65 @@ public struct VODDetailFeature {
                 return .none
 
             case let .selectVersion(version):
+                guard !state.isConfirmingDownloadDeletion, !state.isStartingDownload, !state.isDeletingDownload else { return .none }
                 state.selectedVersionId = version.id
-                state.vod = version.item
+                let profileScope = profileContextClient.snapshot()
+                if state.presentationProfileScope != profileScope {
+                    state.presentationOverrides = [:]
+                    state.matchingRequestID = nil
+                    state.catalogVODs = state.catalogVODs.map { $0.replacingPresentationOverride(nil) }
+                    state.matchedVODsByTMDBId = state.matchedVODsByTMDBId.mapValues { $0.replacingPresentationOverride(nil) }
+                    let selectedVersionID = version.id
+                    state.availableVersions = state.availableVersions.map { existingVersion in
+                        MovieVersionEdition(
+                            item: existingVersion.item.replacingPresentationOverride(nil),
+                            isCurrent: existingVersion.id == selectedVersionID
+                        )
+                    }
+                }
+                state.presentationProfileScope = profileScope
+                state.vod = version.item.replacingPresentationOverride(
+                    state.isPresentationOverrideLoaded ? state.presentationOverrides[version.id] : nil
+                )
+                state.isPresentationOverrideLoaded = false
+                let presentationRequestID = UUID()
+                state.presentationOverrideRequestID = presentationRequestID
                 state.historyItem = nil
+                state.isDownloaded = false
+                let downloadStatusRequestID = UUID()
+                state.downloadStatusRequestID = downloadStatusRequestID
                 state.availableVersions = state.availableVersions.map {
                     MovieVersionEdition(item: $0.item, isCurrent: $0.id == version.id)
                 }
-                let profileScope = profileContextClient.snapshot()
                 let playlistID = state.config.playlistID
-                return .run { [id = version.id] send in
+                let historyEffect: Effect<Action> = .run { [id = version.id] send in
                     let history = try? await databaseClient.getWatchProgress(id, "vod", playlistID, profileScope)
                     await send(.historyStatusLoaded(id: id, item: history, scope: profileScope))
                 }
                 .cancellable(id: CancelID.versionHistory, cancelInFlight: true)
+                let downloadID = version.item.id
+                let downloadStatusEffect: Effect<Action> = .run { send in
+                    let isDownloaded = await (try? downloadClient.isDownloaded(downloadID)) ?? false
+                    await send(.downloadStatusLoaded(
+                        requestID: downloadStatusRequestID,
+                        id: downloadID,
+                        isDownloaded: isDownloaded
+                    ))
+                }
+                let presentationOverrideEffect: Effect<Action> = if let playlistID {
+                    .run { send in
+                        let overrides = await mediaPresentationOverrideClient.load(profileScope.profileID, playlistID, .movie)
+                        guard profileContextClient.snapshot() == profileScope else { return }
+                        await send(.presentationOverridesLoaded(
+                            requestID: presentationRequestID,
+                            profileScope: profileScope,
+                            overrides: overrides
+                        ))
+                    }
+                } else {
+                    .none
+                }
+                return .merge(historyEffect, downloadStatusEffect, presentationOverrideEffect)
 
             case let .similarMovieTapped(movie):
                 if let matched = state.matchedVODsByTMDBId[movie.id] {
@@ -744,31 +1134,37 @@ public struct VODDetailFeature {
                 state.isFavorite = isFav
                 return .none
 
-            case let .downloadStatusLoaded(isDown):
+            case let .downloadStatusLoaded(requestID, id, isDown):
+                guard state.downloadStatusRequestID == requestID, state.vod.id == id else { return .none }
                 state.isDownloaded = isDown
                 return .none
 
-            case let .downloadFailed(message):
-                state.downloadErrorMessage = message
+            case let .downloadStartFinished(requestID, id, isDownloaded, errorMessage):
+                guard state.downloadStatusRequestID == requestID, state.vod.id == id else { return .none }
+                state.isStartingDownload = false
+                if let errorMessage {
+                    state.downloadErrorMessage = errorMessage
+                } else {
+                    state.isDownloaded = isDownloaded
+                }
                 return .none
 
             case .downloadTapped:
-                guard state.config.type != .plex, state.config.type != .emby else { return .none }
+                guard state.config.type != .plex, state.config.type != .emby,
+                      !state.isStartingDownload, !state.isDeletingDownload
+                else { return .none }
                 state.downloadErrorMessage = nil
                 if state.isDownloaded {
-                    return .run { [id = state.vod.id] send in
-                        do {
-                            try await downloadClient.deleteDownloadedMedia(id)
-                            await send(.downloadStatusLoaded(false))
-                        } catch {
-                            await send(.downloadFailed(error.localizedDescription))
-                        }
-                    }
+                    state.isConfirmingDownloadDeletion = true
+                    return .none
                 } else {
                     guard let streamURL = state.vod.streamURL else { return .none }
                     let id = state.vod.id
                     let title = state.vod.title
                     let userAgentOverride = state.config.userAgentOverride
+                    let downloadStatusRequestID = UUID()
+                    state.downloadStatusRequestID = downloadStatusRequestID
+                    state.isStartingDownload = true
 
                     let finalCoverURL: URL? = {
                         if let posterPath = state.tmdbMovie?.posterPath {
@@ -781,14 +1177,56 @@ public struct VODDetailFeature {
 
                     return .run { send in
                         do {
-                            try await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride)
+                            try await downloadClient.startDownload(id, title, streamURL, finalCoverURL, userAgentOverride, nil)
                             let isDownloaded = await (try? downloadClient.isDownloaded(id)) ?? false
-                            await send(.downloadStatusLoaded(isDownloaded))
+                            await send(.downloadStartFinished(
+                                requestID: downloadStatusRequestID,
+                                id: id,
+                                isDownloaded: isDownloaded,
+                                errorMessage: nil
+                            ))
                         } catch {
-                            await send(.downloadFailed(error.localizedDescription))
+                            await send(.downloadStartFinished(
+                                requestID: downloadStatusRequestID,
+                                id: id,
+                                isDownloaded: false,
+                                errorMessage: error.localizedDescription
+                            ))
                         }
                     }
                 }
+
+            case .cancelDownloadDeletion, .downloadDeletionDialogDismissed:
+                state.isConfirmingDownloadDeletion = false
+                return .none
+
+            case .confirmDownloadDeletion:
+                guard state.isDownloaded, !state.isStartingDownload, !state.isDeletingDownload else { return .none }
+                state.isConfirmingDownloadDeletion = false
+                state.isDeletingDownload = true
+                state.downloadStatusRequestID = nil
+                let requestID = UUID()
+                let id = state.vod.id
+                state.downloadDeletionRequestID = requestID
+                return .run { send in
+                    do {
+                        try await downloadClient.deleteDownloadedMedia(id)
+                        await send(.downloadDeletionFinished(requestID: requestID, id: id, succeeded: true))
+                    } catch {
+                        await send(.downloadDeletionFinished(requestID: requestID, id: id, succeeded: false))
+                    }
+                }
+
+            case let .downloadDeletionFinished(requestID, id, succeeded):
+                guard state.downloadDeletionRequestID == requestID, state.vod.id == id else { return .none }
+                state.downloadDeletionRequestID = nil
+                state.isDeletingDownload = false
+                if succeeded {
+                    state.isDownloaded = false
+                } else {
+                    state.downloadErrorMessage = AppStrings.Downloads.deleteDownloadFailure
+                }
+                return .none
 
             case .toggleFavorite:
                 let profileScope = profileContextClient.snapshot()
@@ -806,21 +1244,43 @@ public struct VODDetailFeature {
                 }
 
             case .closeTapped:
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
                 return .merge(
                     .cancel(id: CancelID.versionHistory),
                     .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability),
                     .send(.delegate(.close))
                 )
 
             case .viewDidDisappear:
+                state.isConfirmingDownloadDeletion = false
+                state.watchAvailabilityRequestID = nil
+                state.isWatchAvailabilityLoading = false
                 return .merge(
                     .cancel(id: CancelID.versionHistory),
-                    .cancel(id: CancelID.awardRecognitions)
+                    .cancel(id: CancelID.awardRecognitions),
+                    .cancel(id: CancelID.watchAvailability)
                 )
 
             case .delegate:
                 return .none
             }
         }
+    }
+
+    private static func makeWatchAvailabilityRequest(
+        requestID: UUID,
+        mediaID: Int,
+        fetch: @escaping @Sendable (Int) async throws -> TMDBWatchProvidersResponseDTO
+    ) -> Effect<Action> {
+        .run { send in
+            await send(.watchAvailabilityResponse(
+                requestID: requestID,
+                mediaID: mediaID,
+                result: Result { try await fetch(mediaID) }
+            ))
+        }
+        .cancellable(id: CancelID.watchAvailability, cancelInFlight: true)
     }
 }

@@ -168,67 +168,72 @@
 
         var body: some View {
             VStack(spacing: 18) {
-                Button(action: onSelect) {
-                    ZStack(alignment: .topTrailing) {
-                        // Card Background
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(gradient)
-                            .frame(width: 190, height: 190)
-
-                        // Avatar Icon
-                        Image(systemName: profile.avatarIcon.isEmpty ? "person.crop.circle.fill" : profile.avatarIcon)
-                            .font(.system(size: 78))
-                            .foregroundStyle(Color.white)
-                            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
-                            .frame(width: 190, height: 190)
-
-                        // Kids Badge
-                        if profile.isKidsMode {
-                            Text(AppStrings.Profile.kidsBadge)
-                                .font(.system(size: 13, weight: .black))
-                                .foregroundStyle(Color.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.black.opacity(0.45))
-                                .clipShape(Capsule())
-                                .padding(12)
-                        }
-
-                        // Edit Mode Delete Badge
-                        if isEditing {
-                            Button(action: onDelete) {
-                                Image(systemName: "trash.fill")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(Color.white)
-                                    .frame(width: 44, height: 44)
-                            }
-                            .buttonStyle(TVCircleButtonStyle(isFavorite: true))
-                            .offset(x: 10, y: -10)
-                        }
+                if isEditing {
+                    profileArtwork
+                } else {
+                    Button(action: onSelect) {
+                        profileArtwork
                     }
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(strokeColor, lineWidth: strokeWidth)
-                    )
-                    .shadow(
-                        color: shadowColor,
-                        radius: shadowRadius,
-                        x: 0,
-                        y: shadowY
-                    )
-                    .scaleEffect(cardScale)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
+                    .buttonStyle(.tvGridCard)
+                    .accessibilityLabel(profile.name)
                 }
-                .buttonStyle(.tvGridCard)
 
-                // Profile Name
-                Text(profile.name)
-                    .font(.system(size: 24, weight: isFocused ? .bold : .medium))
-                    .foregroundStyle(nameColor)
-                    .scaleEffect(nameScale)
-                    .lineLimit(1)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
+                HStack(spacing: 8) {
+                    Text(profile.name)
+                        .font(.system(size: isEditing ? 20 : 24, weight: isFocused ? .bold : .medium))
+                        .foregroundStyle(nameColor)
+                        .scaleEffect(nameScale)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, alignment: isEditing ? .leading : .center)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
+
+                    if isEditing {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(TVCircleButtonStyle(isFavorite: true))
+                        .accessibilityLabel("\(AppStrings.Common.delete): \(profile.name)")
+                        .accessibilityHint(AppStrings.Profile.deleteInstruction)
+                    }
+                }
+                .frame(width: 190)
             }
+        }
+
+        private var profileArtwork: some View {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(gradient)
+                    .frame(width: 190, height: 190)
+
+                Image(systemName: profile.avatarIcon.isEmpty ? "person.crop.circle.fill" : profile.avatarIcon)
+                    .font(.system(size: 78))
+                    .foregroundStyle(Color.white)
+                    .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    .frame(width: 190, height: 190)
+
+                if profile.isKidsMode {
+                    Text(AppStrings.Profile.kidsBadge)
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Capsule())
+                        .padding(12)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(strokeColor, lineWidth: strokeWidth)
+            )
+            .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowY)
+            .scaleEffect(cardScale)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
         }
     }
 
@@ -384,6 +389,7 @@
                     .scaleEffect(buttonScale)
                     .shadow(color: shadowColor, radius: 12, x: 0, y: 0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
             }
         }
     }

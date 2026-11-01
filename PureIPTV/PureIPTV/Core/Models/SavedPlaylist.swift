@@ -21,6 +21,12 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
     public let userAgentOverride: String?
     /// Optional to decode playlists saved before this setting existed.
     public let channelZappingDelayMilliseconds: Int?
+    /// Optional for backward compatibility; missing records retain automatic startup refresh.
+    public let automaticallyRefreshCatalogOnStartup: Bool?
+
+    public var isAutomaticCatalogRefreshEnabled: Bool {
+        automaticallyRefreshCatalogOnStartup ?? true
+    }
 
     public init(
         id: UUID = UUID(),
@@ -34,7 +40,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         mediaServerCredentials: MediaServerCredentials? = nil,
         mediaServerPlaybackPreference: MediaServerPlaybackPreference? = nil,
         userAgentOverride: String? = nil,
-        channelZappingDelayMilliseconds: Int? = nil
+        channelZappingDelayMilliseconds: Int? = nil,
+        automaticallyRefreshCatalogOnStartup: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -48,6 +55,7 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
         self.mediaServerPlaybackPreference = mediaServerPlaybackPreference
         self.userAgentOverride = userAgentOverride
         self.channelZappingDelayMilliseconds = channelZappingDelayMilliseconds.map { min(max($0, 0), 3000) }
+        self.automaticallyRefreshCatalogOnStartup = automaticallyRefreshCatalogOnStartup
     }
 
     /// Converts SavedPlaylist to an active PlaylistConfig instance if valid credentials exist.
@@ -68,7 +76,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 password: password,
                 xtreamLiveOutputFormat: xtreamLiveOutputFormat ?? .ts,
                 userAgentOverride: userAgentOverride,
-                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0,
+                automaticallyRefreshCatalogOnStartup: isAutomaticCatalogRefreshEnabled
             )
         } else if type == .m3u {
             guard let m3uURLStr = m3uURL,
@@ -81,7 +90,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 type: .m3u,
                 m3uURL: url,
                 userAgentOverride: userAgentOverride,
-                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0,
+                automaticallyRefreshCatalogOnStartup: isAutomaticCatalogRefreshEnabled
             )
         } else if type == .plex || type == .emby {
             guard let serverURLString = serverURL,
@@ -95,7 +105,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
                 mediaServerCredentials: mediaServerCredentials,
                 mediaServerPlaybackPreference: mediaServerPlaybackPreference ?? .automatic,
                 userAgentOverride: userAgentOverride,
-                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0
+                channelZappingDelayMilliseconds: channelZappingDelayMilliseconds ?? 0,
+                automaticallyRefreshCatalogOnStartup: isAutomaticCatalogRefreshEnabled
             )
             MediaServerRequestContextFactory.register(config)
             return config
@@ -116,7 +127,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: value,
-            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds,
+            automaticallyRefreshCatalogOnStartup: automaticallyRefreshCatalogOnStartup
         )
     }
 
@@ -133,7 +145,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: userAgentOverride,
-            channelZappingDelayMilliseconds: value
+            channelZappingDelayMilliseconds: value,
+            automaticallyRefreshCatalogOnStartup: automaticallyRefreshCatalogOnStartup
         )
     }
 
@@ -155,7 +168,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: userAgentOverride,
-            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds,
+            automaticallyRefreshCatalogOnStartup: automaticallyRefreshCatalogOnStartup
         )
     }
 
@@ -172,7 +186,8 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: value,
             userAgentOverride: userAgentOverride,
-            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds,
+            automaticallyRefreshCatalogOnStartup: automaticallyRefreshCatalogOnStartup
         )
     }
 
@@ -189,7 +204,26 @@ public struct SavedPlaylist: Equatable, Codable, Identifiable, Sendable {
             mediaServerCredentials: mediaServerCredentials,
             mediaServerPlaybackPreference: mediaServerPlaybackPreference,
             userAgentOverride: userAgentOverride,
-            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds,
+            automaticallyRefreshCatalogOnStartup: automaticallyRefreshCatalogOnStartup
+        )
+    }
+
+    public func replacingAutomaticCatalogRefreshOnStartup(_ isEnabled: Bool) -> SavedPlaylist {
+        SavedPlaylist(
+            id: id,
+            name: name,
+            type: type,
+            serverURL: serverURL,
+            username: username,
+            password: password,
+            xtreamLiveOutputFormat: xtreamLiveOutputFormat,
+            m3uURL: m3uURL,
+            mediaServerCredentials: mediaServerCredentials,
+            mediaServerPlaybackPreference: mediaServerPlaybackPreference,
+            userAgentOverride: userAgentOverride,
+            channelZappingDelayMilliseconds: channelZappingDelayMilliseconds,
+            automaticallyRefreshCatalogOnStartup: isEnabled
         )
     }
 }

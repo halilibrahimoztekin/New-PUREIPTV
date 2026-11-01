@@ -19,6 +19,8 @@ public struct VODFeature {
         public var selectedCategoryID: String?
         public var selectedVOD: MediaModels.Item?
         public var isLoadingCategories = false
+        public var hasResolvedCategories = false
+        public var activeCategoryRequestID: UUID?
         public var isLoadingVODs = false
         public var categoryContentRequestIDs: [String: UUID] = [:]
         public var categoryContentErrors: [String: String] = [:]
@@ -27,8 +29,12 @@ public struct VODFeature {
         public var refreshMessage: String?
         public var errorMessage: String?
         public var favoriteIDs: Set<String> = []
+        public var hiddenMediaEntries: [HiddenMediaEntry] = []
+        public var pendingHiddenMediaRequestIDs: [String: UUID] = [:]
         public var lastSortMethod: SortMethod = .defaultOrder
+        public var isCategorySortOverridden = false
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
+        public var categoryPreferenceScope: CategoryPreferenceScope?
         public private(set) var derivedData = MediaLibraryDerivedData()
         public var unlockedCategoryIDs: Set<String> = []
         public var categoryUnlockRequestIDs: [String: UUID] = [:]
@@ -41,7 +47,10 @@ public struct VODFeature {
 
         public var rawVODs: [MediaModels.Item] {
             guard let id = selectedCategoryID else { return [] }
-            return vodsByCategory[id] ?? []
+            return (vodsByCategory[id] ?? []).filter { item in
+                let identity = HiddenMediaIdentity(item: item, fallbackPlaylistID: config?.playlistID)
+                return !hiddenMediaEntries.contains { $0.identity == identity }
+            }
         }
 
         public var availableLanguageFilters: [MediaLanguageFilter] {
@@ -82,17 +91,35 @@ public struct VODFeature {
 
     public enum Action {
         case onAppear(config: PlaylistConfig)
-        case categoriesResponse(Result<[MediaModels.Category], Error>, preferences: [String: CategoryPreferenceDTO] = [:])
+        case categoriesResponse(
+            requestID: UUID,
+            config: PlaylistConfig,
+            result: Result<[MediaModels.Category], Error>,
+            preferences: [String: CategoryPreferenceDTO] = [:],
+            preferenceScope: CategoryPreferenceScope? = nil
+        )
+        case categoriesPreferencesLoaded(
+            config: PlaylistConfig?,
+            categories: [MediaModels.Category],
+            preferences: [String: CategoryPreferenceDTO],
+            preferenceScope: CategoryPreferenceScope? = nil
+        )
         case categorySelected(MediaModels.Category)
         case categoryUnlockExpired(categoryID: String, requestID: UUID)
         case fetchCategoryContent(requestID: UUID, config: PlaylistConfig, categoryID: String)
         case retryCategoryContent(categoryID: String)
         case vodsResponse(requestID: UUID, config: PlaylistConfig, categoryID: String, Result<[MediaModels.Item], Error>)
+        case presentationOverridesLoaded(playlistID: UUID, profileScope: ProfileContextSnapshot, overrides: [String: MediaPresentationOverride])
         case vodSelected(MediaModels.Item)
         case setLanguageFilter(MediaLanguageFilter)
         case setOriginalLanguageFilter(String?)
+        case setCategorySortMethod(SortMethod)
+        case resetCategorySortMethod
         case toggleFavorite(MediaModels.Item)
         case favoritesLoaded(Set<String>, ProfileContextSnapshot)
+        case hiddenMediaLoaded([HiddenMediaEntry], ProfileContextSnapshot)
+        case hideMedia(MediaModels.Item)
+        case hiddenMediaSaveCompleted(requestID: UUID, entry: HiddenMediaEntry, profileScope: ProfileContextSnapshot, Result<Bool, Error>)
         case dismissError
         case reloadCategories(config: PlaylistConfig)
         case refreshContentTapped
@@ -114,8 +141,10 @@ public struct VODFeature {
     @Injected(\.iptvClient) var iptvClient
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.profileContextClient) var profileContextClient
+    @Dependency(\.categoryNameRuleClient) var categoryNameRuleClient
     @Dependency(\.settingsClient) var settingsClient
     @Dependency(\.hapticClient) var hapticClient
+    @Dependency(\.mediaPresentationOverrideClient) var mediaPresentationOverrideClient
 
     public init() {}
 
@@ -123,6 +152,7 @@ public struct VODFeature {
         let iptvClient = iptvClient
 
         let profileContextClient = profileContextClient
+        let mediaPresentationOverrideClient = mediaPresentationOverrideClient
 
         Reduce { state, action in
             switch action {
@@ -130,8 +160,10 @@ public struct VODFeature {
                 let configChanged = state.config != config
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 if configChanged {
+                    state.activeCategoryRequestID = nil
                     state.categoryContentRequestIDs = [:]
                     state.categoryContentErrors = [:]
+                    state.hasResolvedCategories = false
                     state.isLoadingVODs = false
                 }
                 if playlistChanged {
@@ -140,10 +172,28 @@ public struct VODFeature {
                     state.selectedCategoryID = nil
                     state.selectedVOD = nil
                     state.isLoadingCategories = false
+                    state.hasResolvedCategories = false
                     state.errorMessage = nil
                 }
                 state.config = config
                 let profileScope = profileContextClient.snapshot()
+                let profileScopeChanged = state.categoryUnlockProfileScope != profileScope
+                if profileScopeChanged {
+                    // Category availability and pending content work belong to
+                    // the active profile. Keep provider catalog caches, but
+                    // strip the previous profile's presentation overrides.
+                    state.activeCategoryRequestID = nil
+                    state.categoryContentRequestIDs = [:]
+                    state.categoryContentErrors = [:]
+                    state.isLoadingCategories = false
+                    state.isLoadingVODs = false
+                    state.hasResolvedCategories = false
+                    state.errorMessage = nil
+                    state.categories = []
+                    state.vodsByCategory = state.vodsByCategory.mapValues { items in
+                        items.map { $0.replacingPresentationOverride(nil) }
+                    }
+                }
                 let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
                     || state.categoryUnlockProfileScope != profileScope
                 if categoryAccessScopeChanged {
@@ -158,34 +208,76 @@ public struct VODFeature {
                     profileID: profileScope.profileID,
                     library: .movies
                 )
-                state.lastSortMethod = settingsClient.getVODSortMethod()
+                let categorySortMethod = state.selectedCategoryID.flatMap { categoryID in
+                    CategoryContentSortPreference.load(
+                        profileID: profileScope.profileID,
+                        playlistID: config.playlistID,
+                        library: .movies,
+                        categoryID: categoryID
+                    )
+                }
+                state.isCategorySortOverridden = categorySortMethod != nil
+                state.lastSortMethod = categorySortMethod ?? settingsClient.getVODSortMethod()
                 state.rebuildDerivedData()
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("vod", profileScope)) ?? []
                     let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }
                     await send(.favoritesLoaded(Set(visible.map(\.id)), profileScope))
                 }
+                let loadHiddenMedia: Effect<Action> = .run { send in
+                    let entries = await (try? databaseClient.fetchHiddenMediaItems("vod", profileScope)) ?? []
+                    await send(.hiddenMediaLoaded(entries, profileScope))
+                }
+                let loadPresentationOverrides: Effect<Action> = if let playlistID = config.playlistID {
+                    .run { send in
+                        let overrides = await mediaPresentationOverrideClient.load(profileScope.profileID, playlistID, .movie)
+                        guard profileContextClient.snapshot() == profileScope else { return }
+                        await send(.presentationOverridesLoaded(playlistID: playlistID, profileScope: profileScope, overrides: overrides))
+                    }
+                } else {
+                    .none
+                }
+                let localEffects = Effect<Action>.merge(loadFavorites, loadHiddenMedia, loadPresentationOverrides)
 
-                guard !state.isLoadingCategories else { return loadFavorites }
-                guard state.categories.isEmpty else { return loadFavorites }
+                guard !state.isLoadingCategories else { return localEffects }
+                guard state.categories.isEmpty else { return localEffects }
 
-                return .merge(loadFavorites, .send(.reloadCategories(config: config)))
+                return .merge(localEffects, .send(.reloadCategories(config: config)))
 
             case let .reloadCategories(config):
+                let requestID = UUID()
+                state.activeCategoryRequestID = requestID
                 state.isLoadingCategories = state.categories.isEmpty
                 state.errorMessage = nil
                 state.config = config
-                let existingPreferences = state.categoryPreferences
+                let profileScope = profileContextClient.snapshot()
+                let preferenceScope = CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config.playlistID)
+                let existingPreferences = state.categoryPreferenceScope == preferenceScope
+                    ? state.categoryPreferences
+                    : [:]
+                let profileContextClient = profileContextClient
+                let categoryNameRuleClient = categoryNameRuleClient
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
                     async let categoriesResult = Result { try await iptvClient.fetchVODCategories(config) }
-                    async let prefsResult = Result { try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.vod.rawValue) }
+                    async let prefsResult = Result {
+                        try await databaseClient.fetchCategoryPreferences(
+                            CategoryManagementFeature.State.CategoryType.vod.rawValue,
+                            preferenceScope
+                        )
+                    }
+                    async let nameRules: [CategoryNameRule] = {
+                        guard let playlistID = config.playlistID else { return [] }
+                        return await categoryNameRuleClient.load(profileScope.profileID, playlistID, CategoryManagementFeature.State.CategoryType.vod.rawValue)
+                    }()
 
                     let categories = try await categoriesResult.get()
                     // Retain the last applied category policy during a
                     // transient persistence read failure.
                     let prefs = await (try? prefsResult.get()) ?? Array(existingPreferences.values)
+                    let loadedNameRules = await nameRules
+                    guard profileContextClient.snapshot() == profileScope else { return }
 
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
@@ -196,9 +288,13 @@ public struct VODFeature {
 
                     let isKidsMode = UserDefaults.standard.bool(forKey: "currentProfileIsKidsMode")
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
+                    let ruleHiddenCategoryIDs = CategoryNameRuleMatcher.hiddenCategoryIDs(in: categories, rules: loadedNameRules)
 
                     var finalCategories = categories.enumerated().filter { _, category in
-                        if hideAdult, isAdultContent(category.name) {
+                        if ruleHiddenCategoryIDs.contains(category.id) {
+                            return false
+                        }
+                        if hideAdult, isAdultContent(category.name) || isAdultContent(category.sourceName) {
                             return false
                         }
 
@@ -207,7 +303,7 @@ public struct VODFeature {
                         }
 
                         if isKidsMode {
-                            let nameLower = category.name.lowercased()
+                            let nameLower = category.sourceName.lowercased()
                             return kidsKeywords.contains { nameLower.contains($0) }
                         }
 
@@ -224,22 +320,43 @@ public struct VODFeature {
                         }
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
+                    await send(.categoriesResponse(
+                        requestID: requestID,
+                        config: config,
+                        result: .success(finalCategories.map(\.element)),
+                        preferences: dict,
+                        preferenceScope: preferenceScope
+                    ))
                 } catch: { error, send in
-                    await send(.categoriesResponse(.failure(error), preferences: [:]))
+                    await send(.categoriesResponse(
+                        requestID: requestID,
+                        config: config,
+                        result: .failure(error),
+                        preferences: [:],
+                        preferenceScope: preferenceScope
+                    ))
                 }
+                .cancellable(id: "VODFeature.reloadCategories", cancelInFlight: true)
 
             case .reloadPreferences:
                 let currentCats = state.categories
+                let config = state.config
+                let profileScope = profileContextClient.snapshot()
+                let preferenceScope = CategoryPreferenceScope(profileID: profileScope.profileID, playlistID: config?.playlistID)
+                let profileContextClient = profileContextClient
                 let hideAdult = settingsClient.hideAdultContent()
                 let isAdultContent = settingsClient.isAdultContent
                 return .run { send in
                     let prefs: [CategoryPreferenceDTO]
                     do {
-                        prefs = try await databaseClient.fetchCategoryPreferences(CategoryManagementFeature.State.CategoryType.vod.rawValue)
+                        prefs = try await databaseClient.fetchCategoryPreferences(
+                            CategoryManagementFeature.State.CategoryType.vod.rawValue,
+                            preferenceScope
+                        )
                     } catch {
                         return
                     }
+                    guard profileContextClient.snapshot() == profileScope else { return }
                     var dict: [String: CategoryPreferenceDTO] = [:]
                     for pref in prefs {
                         dict[pref.categoryID] = pref
@@ -249,7 +366,7 @@ public struct VODFeature {
                     let kidsKeywords = ["kid", "çocuk", "child", "animat", "cartoon", "family", "aile"]
 
                     var finalCategories = currentCats.enumerated().filter { _, category in
-                        if hideAdult, isAdultContent(category.name) {
+                        if hideAdult, isAdultContent(category.name) || isAdultContent(category.sourceName) {
                             return false
                         }
 
@@ -258,7 +375,7 @@ public struct VODFeature {
                         }
 
                         if isKidsMode {
-                            let nameLower = category.name.lowercased()
+                            let nameLower = category.sourceName.lowercased()
                             return kidsKeywords.contains { nameLower.contains($0) }
                         }
 
@@ -275,7 +392,12 @@ public struct VODFeature {
                         }
                     }
 
-                    await send(.categoriesResponse(.success(finalCategories.map(\.element)), preferences: dict))
+                    await send(.categoriesPreferencesLoaded(
+                        config: config,
+                        categories: finalCategories.map(\.element),
+                        preferences: dict,
+                        preferenceScope: preferenceScope
+                    ))
                 }
 
             case .refreshContentTapped:
@@ -317,35 +439,68 @@ public struct VODFeature {
                 return .none
 
             case .applySortIfChanged:
-                let currentMethod = settingsClient.getVODSortMethod()
-                if state.lastSortMethod != currentMethod {
+                let profileID = profileContextClient.snapshot().profileID
+                let categorySortMethod = state.selectedCategoryID.flatMap { categoryID in
+                    CategoryContentSortPreference.load(
+                        profileID: profileID,
+                        playlistID: state.config?.playlistID,
+                        library: .movies,
+                        categoryID: categoryID
+                    )
+                }
+                let currentMethod = categorySortMethod ?? settingsClient.getVODSortMethod()
+                if state.lastSortMethod != currentMethod || state.isCategorySortOverridden != (categorySortMethod != nil) {
                     state.lastSortMethod = currentMethod
+                    state.isCategorySortOverridden = categorySortMethod != nil
                     state.rebuildDerivedData()
                 }
                 return .none
 
-            case let .categoriesResponse(.success(categories), preferences):
+            case let .categoriesResponse(requestID, config, .success(categories), preferences, preferenceScope):
+                guard state.activeCategoryRequestID == requestID,
+                      state.config == config,
+                      profileContextClient.snapshot().profileID == preferenceScope?.profileID
+                else { return .none }
+                state.activeCategoryRequestID = nil
                 state.isLoadingCategories = false
+                state.hasResolvedCategories = true
                 state.categoryPreferences = preferences
+                state.categoryPreferenceScope = preferenceScope
                 state.categories = categories
                 // Auto-select first category if current selection is invalid or nil
                 if let currentID = state.selectedCategoryID, let current = categories.first(where: { $0.id == currentID }) {
                     return .send(.categorySelected(current))
                 } else if let first = categories.first {
-                    state.selectedCategoryID = first.id
-                    state.rebuildDerivedData()
                     return .send(.categorySelected(first))
                 }
                 return .none
 
-            case let .categoriesResponse(.failure(error), _):
+            case let .categoriesResponse(requestID, config, .failure(error), _, _):
+                guard state.activeCategoryRequestID == requestID, state.config == config else { return .none }
+                state.activeCategoryRequestID = nil
                 state.isLoadingCategories = false
                 state.errorMessage = (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
                 return .none
 
+            case let .categoriesPreferencesLoaded(config, categories, preferences, preferenceScope):
+                guard let config,
+                      state.config == config,
+                      state.activeCategoryRequestID == nil,
+                      profileContextClient.snapshot().profileID == preferenceScope?.profileID
+                else { return .none }
+                state.categoryPreferences = preferences
+                state.categoryPreferenceScope = preferenceScope
+                state.categories = categories
+                if let currentID = state.selectedCategoryID, let current = categories.first(where: { $0.id == currentID }) {
+                    return .send(.categorySelected(current))
+                } else if let first = categories.first {
+                    return .send(.categorySelected(first))
+                }
+                return .none
+
             case let .categorySelected(category):
                 let isLocked = state.categoryPreferences[category.id]?.isLocked ?? false
-                let isAdult = settingsClient.isAdultContent(category.name)
+                let isAdult = settingsClient.isAdultContent(category.name) || settingsClient.isAdultContent(category.sourceName)
                 let requiresPIN = (isLocked || isAdult) && settingsClient.isParentalControlEnabled()
 
                 if requiresPIN, !state.unlockedCategoryIDs.contains(category.id) {
@@ -357,6 +512,14 @@ public struct VODFeature {
 
                 state.isLoadingVODs = false
                 state.selectedCategoryID = category.id
+                let categorySortMethod = CategoryContentSortPreference.load(
+                    profileID: profileContextClient.snapshot().profileID,
+                    playlistID: state.config?.playlistID,
+                    library: .movies,
+                    categoryID: category.id
+                )
+                state.isCategorySortOverridden = categorySortMethod != nil
+                state.lastSortMethod = categorySortMethod ?? settingsClient.getVODSortMethod()
                 state.rebuildDerivedData()
                 if !state.availableLanguageFilters.contains(state.selectedLanguageFilter) {
                     state.selectedLanguageFilter = .all
@@ -396,10 +559,30 @@ public struct VODFeature {
                 guard state.categoryContentRequestIDs[categoryID] == requestID,
                       state.config == config
                 else { return .none }
+                let profileScope = profileContextClient.snapshot()
                 return .run { send in
                     let result = await Result { try await iptvClient.fetchVODs(config, categoryID) }
-                    await send(.vodsResponse(requestID: requestID, config: config, categoryID: categoryID, result))
+                    guard case let .success(vods) = result, let playlistID = config.playlistID else {
+                        await send(.vodsResponse(requestID: requestID, config: config, categoryID: categoryID, result))
+                        return
+                    }
+                    let overrides = await mediaPresentationOverrideClient.load(profileScope.profileID, playlistID, .movie)
+                    guard profileContextClient.snapshot() == profileScope else { return }
+                    let resolved = vods.map { $0.replacingPresentationOverride(overrides[$0.id]) }
+                    await send(.vodsResponse(requestID: requestID, config: config, categoryID: categoryID, .success(resolved)))
                 }
+
+            case let .presentationOverridesLoaded(playlistID, profileScope, overrides):
+                guard state.config?.playlistID == playlistID,
+                      profileContextClient.snapshot() == profileScope
+                else { return .none }
+                for categoryID in Array(state.vodsByCategory.keys) {
+                    state.vodsByCategory[categoryID] = state.vodsByCategory[categoryID]?.map { item in
+                        item.replacingPresentationOverride(overrides[item.id])
+                    }
+                }
+                state.rebuildDerivedData()
+                return .none
 
             case let .setLanguageFilter(filter):
                 state.selectedLanguageFilter = filter
@@ -411,6 +594,34 @@ public struct VODFeature {
                 state.selectedOriginalLanguageCode = normalized
                 state.rebuildDerivedData()
                 OriginalLanguageFilterPreference.save(normalized, profileID: profileContextClient.snapshot().profileID, library: .movies)
+                return .run { _ in await hapticClient.selection() }
+
+            case let .setCategorySortMethod(method):
+                guard let categoryID = state.selectedCategoryID, let config = state.config else { return .none }
+                guard state.lastSortMethod != method || !state.isCategorySortOverridden else { return .none }
+                CategoryContentSortPreference.save(
+                    method,
+                    profileID: profileContextClient.snapshot().profileID,
+                    playlistID: config.playlistID,
+                    library: .movies,
+                    categoryID: categoryID
+                )
+                state.lastSortMethod = method
+                state.isCategorySortOverridden = true
+                state.rebuildDerivedData()
+                return .run { _ in await hapticClient.selection() }
+
+            case .resetCategorySortMethod:
+                guard let categoryID = state.selectedCategoryID, let config = state.config else { return .none }
+                CategoryContentSortPreference.reset(
+                    profileID: profileContextClient.snapshot().profileID,
+                    playlistID: config.playlistID,
+                    library: .movies,
+                    categoryID: categoryID
+                )
+                state.lastSortMethod = settingsClient.getVODSortMethod()
+                state.isCategorySortOverridden = false
+                state.rebuildDerivedData()
                 return .run { _ in await hapticClient.selection() }
 
             case let .vodsResponse(requestID, config, categoryID, .success(vods)):
@@ -449,6 +660,51 @@ public struct VODFeature {
             case let .favoritesLoaded(favIDs, scope):
                 guard profileContextClient.snapshot() == scope else { return .none }
                 state.favoriteIDs = favIDs
+                return .none
+
+            case let .hiddenMediaLoaded(entries, scope):
+                guard profileContextClient.snapshot() == scope else { return .none }
+                state.hiddenMediaEntries = entries
+                state.rebuildDerivedData()
+                return .none
+
+            case let .hideMedia(item):
+                guard item.type == .vod,
+                      let config = state.config
+                else { return .none }
+                let entry = HiddenMediaEntry(item: item, fallbackPlaylistID: config.playlistID)
+                guard state.pendingHiddenMediaRequestIDs[entry.id] == nil else { return .none }
+                let requestID = UUID()
+                let profileScope = profileContextClient.snapshot()
+                state.pendingHiddenMediaRequestIDs[entry.id] = requestID
+                return .run { send in
+                    do {
+                        let succeeded = try await databaseClient.setHiddenMediaItem(entry, true, profileScope)
+                        await send(.hiddenMediaSaveCompleted(requestID: requestID, entry: entry, profileScope: profileScope, .success(succeeded)))
+                    } catch {
+                        await send(.hiddenMediaSaveCompleted(requestID: requestID, entry: entry, profileScope: profileScope, .failure(error)))
+                    }
+                }
+
+            case let .hiddenMediaSaveCompleted(requestID, entry, scope, result):
+                guard state.pendingHiddenMediaRequestIDs[entry.id] == requestID else { return .none }
+                state.pendingHiddenMediaRequestIDs.removeValue(forKey: entry.id)
+                guard profileContextClient.snapshot() == scope else { return .none }
+                switch result {
+                case .success(true):
+                    state.hiddenMediaEntries.removeAll { $0.identity == entry.identity }
+                    state.hiddenMediaEntries.append(entry)
+                    if let selectedVOD = state.selectedVOD,
+                       HiddenMediaIdentity(item: selectedVOD, fallbackPlaylistID: state.config?.playlistID) == entry.identity
+                    {
+                        state.selectedVOD = nil
+                    }
+                    state.rebuildDerivedData()
+                case .success(false):
+                    state.errorMessage = AppStrings.Errors.hiddenMediaSaveFailed
+                case let .failure(error):
+                    state.errorMessage = String(format: AppStrings.Common.error, locale: Locale.current, arguments: [error.localizedDescription])
+                }
                 return .none
 
             case let .toggleFavorite(item):

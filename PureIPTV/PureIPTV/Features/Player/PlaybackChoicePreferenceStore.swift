@@ -24,7 +24,6 @@ enum RememberedPlaybackChoice: String, Equatable, Sendable {
         case .avPlayer: .inAppAVPlayer
         }
     }
-
 }
 
 struct PlaybackChoiceReminder: Equatable, Sendable {
@@ -38,7 +37,8 @@ enum PlaybackChoicePreferenceStore {
         let defaults = UserDefaults.standard
         let scopedPrefix = "\(keyPrefix)."
         for (key, value) in defaults.dictionaryRepresentation()
-        where key.hasPrefix(scopedPrefix) && (value as? String)?.hasPrefix("external:") == true {
+            where key.hasPrefix(scopedPrefix) && (value as? String)?.hasPrefix("external:") == true
+        {
             defaults.removeObject(forKey: key)
         }
     }()

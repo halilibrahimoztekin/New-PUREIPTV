@@ -378,6 +378,9 @@ private struct TVEQPresetButtonStyle: ButtonStyle {
                 }
                 .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
                 .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+            #if os(tvOS)
+                .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 14))
+            #endif
         }
     }
 }

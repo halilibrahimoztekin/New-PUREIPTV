@@ -284,6 +284,9 @@ public struct CatchupTimelineScrubberView: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 2)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     @ViewBuilder

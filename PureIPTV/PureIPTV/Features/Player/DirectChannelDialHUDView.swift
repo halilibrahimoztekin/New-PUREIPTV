@@ -234,6 +234,9 @@ public struct DirectChannelDialHUDView: View {
             }
             .padding(.horizontal, 2)
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     // MARK: - Keypad Grid View
@@ -355,6 +358,7 @@ public struct DirectChannelDialHUDView: View {
                         y: 0
                     )
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
             }
         }
     }

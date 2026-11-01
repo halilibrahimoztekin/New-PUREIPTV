@@ -59,6 +59,9 @@ public struct MovieVersionPickerView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 4)
+                    #if os(tvOS)
+                        .focusSection()
+                    #endif
                 }
             }
         )
