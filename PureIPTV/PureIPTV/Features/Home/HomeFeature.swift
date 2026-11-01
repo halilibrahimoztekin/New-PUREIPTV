@@ -73,9 +73,25 @@ public struct HomeFeature {
 
         public var visibleTabs: [HomeTab] {
             if liveTVOnlyNavigation {
-                return [.liveTV, .settings]
+                #if os(tvOS)
+                    return [.liveTV, .search, .settings]
+                #else
+                    #if os(tvOS)
+                        return [.liveTV, .search, .settings]
+                    #else
+                        return [.liveTV, .settings]
+                    #endif
+                #endif
             }
-            let navigationTabs = HomeTab.allCases.filter { $0 != .search }
+            #if os(tvOS)
+                let navigationTabs = HomeTab.allCases.filter { $0 != .downloads }
+            #else
+                #if os(tvOS)
+                    let navigationTabs = HomeTab.allCases.filter { $0 != .downloads }
+                #else
+                    let navigationTabs = HomeTab.allCases.filter { $0 != .search }
+                #endif
+            #endif
             guard settings.hideEmptyContentTabs else { return navigationTabs }
             return navigationTabs.filter { tab in
                 switch tab {

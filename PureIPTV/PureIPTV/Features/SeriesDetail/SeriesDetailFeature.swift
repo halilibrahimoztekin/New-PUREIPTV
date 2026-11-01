@@ -891,12 +891,23 @@ public struct SeriesDetailFeature {
                 return playEpisode(episode, playbackOrder: nil, state: &state)
 
             case .resumeTapped:
-                guard let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) else {
+                if state.isLoading || state.allEpisodes.isEmpty {
+                    state.autoPlayOnLoad = true
+                    return .none
+                }
+
+                guard let history = state.historyItem else {
                     return .send(.restartTapped)
                 }
 
-                // Locate episode in allEpisodes to resolve accurate season
-                let allEpsList = state.allEpisodes.values.flatMap(\.self)
+                // If episode was completed (>90%), automatically advance to next episode if available
+                let isFinished = history.duration > 0 && (history.progress / history.duration) >= 0.90
+                if isFinished, let nextEp = state.nextUpEpisode {
+                    return .send(.episodeSelected(nextEp))
+                }
+
+                // Locate episode in allEpisodes to resolve accurate season and stream metadata
+                let allEpsList = SeriesEpisodeCatalogNormalizer.sorted(state.allEpisodes.values.flatMap(\.self))
                 let matchingEpisode = allEpsList.first(where: { $0.id == history.id })
                 if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
                     state.selectedSeasonNumber = ep.season
@@ -906,13 +917,26 @@ public struct SeriesDetailFeature {
                 }
                 state.pendingEpisodeReveal = nil
 
+                var resolvedStreamURL = matchingEpisode?.streamURL ?? history.streamURL.flatMap { URL(string: $0) }
+                if resolvedStreamURL == nil,
+                   let serverURL = state.config.serverURL,
+                   let username = state.config.username,
+                   let password = state.config.password
+                {
+                    resolvedStreamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(history.id).mp4")
+                }
+
+                guard let streamURL = resolvedStreamURL else {
+                    return .send(.restartTapped)
+                }
+
                 let startPosition = history.duration > 0 ? (history.progress / history.duration) : 0.0
                 let playable = PlayerFeature.PlayableItem(
                     id: history.id,
-                    title: history.title,
+                    title: matchingEpisode?.title ?? history.title,
                     seriesTitle: state.series.title,
                     streamURL: streamURL,
-                    coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
+                    coverURL: history.coverURL.flatMap { URL(string: $0) } ?? matchingEpisode?.coverURL ?? state.series.coverURL,
                     seriesID: state.series.id,
                     seasonNumber: matchingEpisode?.season,
                     episodeNumber: matchingEpisode?.episodeNum,
@@ -938,8 +962,12 @@ public struct SeriesDetailFeature {
                 return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
 
             case .restartTapped:
-                if let history = state.historyItem, let streamString = history.streamURL, let streamURL = URL(string: streamString) {
-                    let allEpsList = state.allEpisodes.values.flatMap(\.self)
+                if state.isLoading || state.allEpisodes.isEmpty {
+                    return .none
+                }
+
+                if let history = state.historyItem {
+                    let allEpsList = SeriesEpisodeCatalogNormalizer.sorted(state.allEpisodes.values.flatMap(\.self))
                     let matchingEpisode = allEpsList.first(where: { $0.id == history.id })
                     if let ep = matchingEpisode, state.selectedSeasonNumber != ep.season {
                         state.selectedSeasonNumber = ep.season
@@ -949,34 +977,47 @@ public struct SeriesDetailFeature {
                     }
                     state.pendingEpisodeReveal = nil
 
-                    let playable = PlayerFeature.PlayableItem(
-                        id: history.id,
-                        title: history.title,
-                        seriesTitle: state.series.title,
-                        streamURL: streamURL,
-                        coverURL: history.coverURL.flatMap { URL(string: $0) } ?? state.series.coverURL,
-                        seriesID: state.series.id,
-                        seasonNumber: matchingEpisode?.season,
-                        episodeNumber: matchingEpisode?.episodeNum,
-                        startPosition: 0.0,
-                        config: state.config
-                    )
-                    let restartEpisodes = state.sequentialPlaylistEpisodes
-                    let playlist = restartEpisodes.isEmpty ? nil : restartEpisodes.map { ep in
-                        PlayerFeature.PlayableItem(
-                            id: ep.id,
-                            title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                    var resolvedStreamURL = matchingEpisode?.streamURL ?? history.streamURL.flatMap { URL(string: $0) }
+                    if resolvedStreamURL == nil,
+                       let serverURL = state.config.serverURL,
+                       let username = state.config.username,
+                       let password = state.config.password
+                    {
+                        resolvedStreamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(history.id).mp4")
+                    }
+
+                    if let streamURL = resolvedStreamURL {
+                        let playable = PlayerFeature.PlayableItem(
+                            id: history.id,
+                            title: matchingEpisode?.title ?? history.title,
                             seriesTitle: state.series.title,
-                            streamURL: ep.streamURL,
-                            coverURL: ep.coverURL ?? state.series.coverURL,
+                            streamURL: streamURL,
+                            coverURL: history.coverURL.flatMap { URL(string: $0) } ?? matchingEpisode?.coverURL ?? state.series.coverURL,
                             seriesID: state.series.id,
-                            seasonNumber: ep.season,
-                            episodeNumber: ep.episodeNum,
+                            seasonNumber: matchingEpisode?.season,
+                            episodeNumber: matchingEpisode?.episodeNum,
+                            startPosition: 0.0,
                             config: state.config
                         )
+                        let restartEpisodes = state.sequentialPlaylistEpisodes
+                        let playlist = restartEpisodes.isEmpty ? nil : restartEpisodes.map { ep in
+                            PlayerFeature.PlayableItem(
+                                id: ep.id,
+                                title: "\(state.series.title) - S\(String(format: "%02d", ep.season))E\(String(format: "%02d", ep.episodeNum))",
+                                seriesTitle: state.series.title,
+                                streamURL: ep.streamURL,
+                                coverURL: ep.coverURL ?? state.series.coverURL,
+                                seriesID: state.series.id,
+                                seasonNumber: ep.season,
+                                episodeNumber: ep.episodeNum,
+                                config: state.config
+                            )
+                        }
+                        return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
                     }
-                    return .send(.delegate(.didSelectEpisode(playable, playlist: playlist)))
-                } else if let firstEp = state.currentEpisodes.first ?? state.allEpisodes.values.first?.first {
+                }
+
+                if let firstEp = state.currentEpisodes.first ?? state.allEpisodes.values.first?.first {
                     return .send(.episodeSelected(firstEp))
                 }
                 return .none

@@ -6791,36 +6791,18 @@ public struct PlayerFeature {
             }
             #if os(tvOS)
                 guard state.isAFREnabledForCurrentItem, state.isMatchDynamicRangeEnabled else {
-                    let requestID = UUID()
-                    state.displayModeRequestID = requestID
-                    let result = DisplayMatchResult(
-                        matchedRate: 0,
-                        matchedRange: .unknown,
-                        message: AppStrings.Player.displayMatchPartialUnsupported,
-                        isJudderFree: false,
-                        status: .partialMatchingUnsupported
-                    )
+                    state.displayModeRequestID = UUID()
                     return .concatenate(
                         .cancel(id: CancelID.displayMode),
-                        .run { _ in await displayModeClient.resetDisplayMode() },
-                        .send(.displayModeRequestFinished(result, requestID: requestID))
+                        .run { _ in await displayModeClient.resetDisplayMode() }
                     )
                 }
 
                 guard state.playbackEngine == .avPlayer else {
-                    let requestID = UUID()
-                    state.displayModeRequestID = requestID
-                    let result = DisplayMatchResult(
-                        matchedRate: 0,
-                        matchedRange: .unknown,
-                        message: AppStrings.Player.displayMatchEngineUnsupported,
-                        isJudderFree: false,
-                        status: .unsupportedPlaybackEngine
-                    )
+                    state.displayModeRequestID = UUID()
                     return .concatenate(
                         .cancel(id: CancelID.displayMode),
-                        .run { _ in await displayModeClient.resetDisplayMode() },
-                        .send(.displayModeRequestFinished(result, requestID: requestID))
+                        .run { _ in await displayModeClient.resetDisplayMode() }
                     )
                 }
 

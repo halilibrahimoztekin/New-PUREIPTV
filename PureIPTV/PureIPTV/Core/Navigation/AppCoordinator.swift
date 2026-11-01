@@ -4348,6 +4348,14 @@ public struct AppCoordinator {
            let serverURL = config.serverURL, let username = config.username, let password = config.password
         {
             streamURL = serverURL.appendingPathComponent("movie/\(username)/\(password)/\(item.id).mp4")
+        } else if streamURL == nil, item.type == "episode",
+                  let serverURL = config.serverURL, let username = config.username, let password = config.password
+        {
+            streamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(item.id).mp4")
+        } else if streamURL == nil, item.type == "episode",
+                  let serverURL = config.serverURL, let username = config.username, let password = config.password
+        {
+            streamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(item.id).mp4")
         }
 
         guard let finalStreamURL = streamURL else { return .none }

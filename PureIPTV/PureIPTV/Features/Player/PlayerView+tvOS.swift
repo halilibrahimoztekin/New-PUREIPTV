@@ -35,6 +35,12 @@
         }
     }
 
+    fileprivate enum FocusableField: Hashable {
+        case play
+        case playPause
+        case scrubber
+    }
+
     // MARK: - tvOS Player View (KSPlayer Architecture)
 
     @available(tvOS 16.0, *)
@@ -51,11 +57,6 @@
         @State private var idleTimer: Timer?
         @State private var focusBeforeEPG: FocusableField?
         @State private var focusBeforeMediaServerSourcePicker: FocusableField?
-
-        fileprivate enum FocusableField: Hashable {
-            case play
-            case controller
-        }
 
         public init(store: StoreOf<PlayerFeature>) {
             self.store = store
@@ -699,7 +700,7 @@
 
         private func dismissUpNextAndRestoreFocus() {
             store.send(.dismissUpNext)
-            focusableField = isMaskShow ? .controller : .play
+            focusableField = isMaskShow ? .playPause : .play
             resetIdleTimer()
         }
 
@@ -739,6 +740,7 @@
                 if isMaskShow {
                     VideoControllerView(
                         store: store,
+                        focusedField: $focusableField,
                         onInteraction: { resetIdleTimer() },
                         onSubtitleSearch: { store.send(.subtitleSearchTapped) }
                     )
@@ -752,9 +754,13 @@
 
                 // Bottom part of controls: Interactive Fluid Scrubber + Time Display
                 if isMaskShow {
-                    VideoTimeShowView(store: store, onInteraction: {
-                        resetIdleTimer()
-                    })
+                    VideoTimeShowView(
+                        store: store,
+                        focusedField: $focusableField,
+                        onInteraction: {
+                            resetIdleTimer()
+                        }
+                    )
                     .padding(.horizontal, 80)
                     .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
                     .opacity(store.isDeepDimmed ? 0.35 : 1)
@@ -767,7 +773,6 @@
                         .opacity(store.isDeepDimmed ? 0.35 : 1)
                 }
             }
-            .focused($focusableField, equals: .controller)
             .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
         }
 
@@ -790,7 +795,7 @@
             withAnimation(.easeInOut(duration: 0.25)) {
                 isMaskShow = true
             }
-            focusableField = .controller
+            focusableField = .playPause
             resetIdleTimer()
         }
 
@@ -833,70 +838,80 @@
     @available(tvOS 16.0, *)
     private struct VideoControllerView: View {
         @Bindable var store: StoreOf<PlayerFeature>
+        @FocusState.Binding var focusedField: FocusableField?
         let onInteraction: () -> Void
         let onSubtitleSearch: () -> Void
 
         var body: some View {
-            HStack(alignment: .center, spacing: 16) {
-                // Title & Live Badge
-                HStack(spacing: 12) {
-                    Text(store.item.title)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .layoutPriority(3)
+            HStack(alignment: .center, spacing: 20) {
+                // Title, Series Subtitle & Live Badges
+                VStack(alignment: .leading, spacing: 4) {
+                    if let seriesTitle = store.item.seriesTitle, !seriesTitle.isEmpty {
+                        Text(seriesTitle)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .lineLimit(1)
+                    }
 
-                    if store.isPlayingCatchup {
-                        Button {
-                            onInteraction()
-                            store.send(.returnToLiveStream)
-                        } label: {
+                    HStack(spacing: 12) {
+                        Text(store.item.title)
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        if store.isPlayingCatchup {
+                            Button {
+                                onInteraction()
+                                store.send(.returnToLiveStream)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 8, height: 8)
+                                    Text(AppStrings.Player.returnToLive)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(Color.red.opacity(0.85))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(PlayerCapsuleButtonStyle())
+                        } else if store.item.isLive {
                             HStack(spacing: 6) {
                                 Circle()
                                     .fill(Color.red)
                                     .frame(width: 8, height: 8)
-                                Text(AppStrings.Player.returnToLive)
+                                Text(AppStrings.Player.liveLabel)
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.red)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.15))
                             .clipShape(Capsule())
                         }
-                        .buttonStyle(PlayerCapsuleButtonStyle())
-                    } else if store.item.isLive {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 8, height: 8)
-                            Text(AppStrings.Player.liveLabel)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.red)
+
+                        if store.playerState == .buffering {
+                            PureLoadingView(size: .small)
+                                .padding(.leading, 4)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Capsule())
+                    }
+
+                    if let recordingStatusMessage = store.recordingStatusMessage {
+                        Text(recordingStatusMessage)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#FF453A"))
+                            .accessibilityAddTraits(.updatesFrequently)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                if let recordingStatusMessage = store.recordingStatusMessage {
-                    Text(recordingStatusMessage)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
+                Spacer(minLength: 24)
 
-                if store.playerState == .buffering {
-                    PureLoadingView(size: .small)
-                        .padding(.leading, 8)
-                }
-
-                Spacer()
-                    .layoutPriority(2)
-
-                // Compact transport controls, track selection, and contextual menus.
+                // Sleek, fixed-size transport controls and contextual menus (No horizontal ScrollView!)
                 HStack(spacing: 18) {
                     if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
                         Button {
@@ -954,6 +969,7 @@
                             .font(.system(size: 28, weight: .bold))
                     }
                     .buttonStyle(PlayerCircleButtonStyle(size: 64))
+                    .focused($focusedField, equals: .playPause)
                     .accessibilityLabel(store.playerState == .playing ? AppStrings.Player.pausePlayback : AppStrings.Common.play)
 
                     if !store.item.isLive || store.isPlayingCatchup {
@@ -1338,19 +1354,9 @@
                     .buttonStyle(PlayerCircleButtonStyle(size: 56))
                     .accessibilityLabel(AppStrings.Common.more)
                 }
-                .modifier(HorizontalActionsScrollModifier())
+                .fixedSize(horizontal: true, vertical: false)
+                .focusSection()
             }
-        }
-    }
-
-    private struct HorizontalActionsScrollModifier: ViewModifier {
-        func body(content: Content) -> some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                content
-                    .padding(.horizontal, 8)
-            }
-            .frame(maxWidth: 1040, alignment: .trailing)
-            .focusSection()
         }
     }
 
@@ -1441,6 +1447,7 @@
     @available(tvOS 16.0, *)
     private struct VideoTimeShowView: View {
         @Bindable var store: StoreOf<PlayerFeature>
+        @FocusState.Binding var focusedField: FocusableField?
         let onInteraction: () -> Void
 
         @Environment(\.isFocused) private var isFocused
@@ -1579,6 +1586,7 @@
                 )
                 .scaleEffect(isFocused ? 1.02 : 1.0)
                 .focusable(true)
+                .focused($focusedField, equals: .scrubber)
                 .onMoveCommand { direction in
                     onInteraction()
                     handleMove(direction: direction, duration: durationDouble)

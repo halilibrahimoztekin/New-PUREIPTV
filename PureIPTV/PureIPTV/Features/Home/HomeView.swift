@@ -27,18 +27,12 @@ public struct HomeView: View {
                 }
             #endif
         }
+        #if !os(tvOS)
         .overlay(alignment: .topTrailing) {
-            #if os(tvOS)
-                let buttonSize: CGFloat = 56
-                let iconSize: CGFloat = 22
-                let topPadding: CGFloat = 20
-                let trailingPadding: CGFloat = 56
-            #else
-                let buttonSize: CGFloat = 44
-                let iconSize: CGFloat = 17
-                let topPadding: CGFloat = 8
-                let trailingPadding: CGFloat = 16
-            #endif
+            let buttonSize: CGFloat = 44
+            let iconSize: CGFloat = 17
+            let topPadding: CGFloat = 8
+            let trailingPadding: CGFloat = 16
             Button {
                 #if os(iOS)
                     HapticManager.shared.trigger(.light)
@@ -59,6 +53,8 @@ public struct HomeView: View {
             .accessibilityLabel(AppStrings.Search.searchPlaceholder) // [VERIFY] Confirm localized wording identifies the global search action.
             .padding(.top, topPadding)
             .padding(.trailing, trailingPadding)
+            .safeAreaPadding(.top)
         }
+        #endif
     }
 }
