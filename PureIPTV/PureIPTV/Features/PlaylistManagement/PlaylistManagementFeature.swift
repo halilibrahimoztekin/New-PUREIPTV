@@ -183,6 +183,7 @@ public struct PlaylistManagementFeature {
     @Dependency(\.playlistRefreshScheduleClient) var playlistRefreshScheduleClient
     @Dependency(\.cloudSyncClient) var cloudSyncClient
     @Dependency(\.playlistContentSourceClient) var playlistContentSourceClient
+    @Dependency(\.uuid) var uuid
 
     public init() {}
 
@@ -895,7 +896,7 @@ public struct PlaylistManagementFeature {
 
             case .addPlaylistButtonTapped:
                 guard !state.isUpdatingSources else { return .none }
-                return Self.beginAddPlaylist(state: &state)
+                return Self.beginAddPlaylist(state: &state, uuid: uuid)
 
             case let .closeAddPlaylistTapped(requestID):
                 guard state.startupUnlockPlaylistID == nil,
@@ -928,7 +929,7 @@ public struct PlaylistManagementFeature {
                 return .none
 
             case .delegate(.addPlaylistTapped):
-                return Self.beginAddPlaylist(state: &state)
+                return Self.beginAddPlaylist(state: &state, uuid: uuid)
 
             case .delegate:
                 return .none
@@ -939,14 +940,17 @@ public struct PlaylistManagementFeature {
         }
     }
 
-    private static func beginAddPlaylist(state: inout State) -> Effect<Action> {
+    private static func beginAddPlaylist(
+        state: inout State,
+        uuid: UUIDGenerator = UUIDGenerator { UUID() }
+    ) -> Effect<Action> {
         guard !state.isUpdatingSources,
               state.startupUnlockPlaylistID == nil,
               state.addPlaylist == nil,
               state.addPlaylistPresentationRequestID == nil
         else { return .none }
 
-        let requestID = UUID()
+        let requestID = uuid()
         state.addPlaylistPresentationRequestID = requestID
         state.addPlaylist = AddPlaylistFeature.State()
         return .send(.delegate(.presentAddPlaylist(requestID: requestID)))

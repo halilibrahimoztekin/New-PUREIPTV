@@ -76,21 +76,13 @@ public struct HomeFeature {
                 #if os(tvOS)
                     return [.liveTV, .search, .settings]
                 #else
-                    #if os(tvOS)
-                        return [.liveTV, .search, .settings]
-                    #else
-                        return [.liveTV, .settings]
-                    #endif
+                    return [.liveTV, .settings]
                 #endif
             }
             #if os(tvOS)
                 let navigationTabs = HomeTab.allCases.filter { $0 != .downloads }
             #else
-                #if os(tvOS)
-                    let navigationTabs = HomeTab.allCases.filter { $0 != .downloads }
-                #else
-                    let navigationTabs = HomeTab.allCases.filter { $0 != .search }
-                #endif
+                let navigationTabs = HomeTab.allCases.filter { $0 != .search }
             #endif
             guard settings.hideEmptyContentTabs else { return navigationTabs }
             return navigationTabs.filter { tab in

@@ -134,27 +134,22 @@ final class TopShelfEngineTests: XCTestCase {
 
     func testSettingsFeatureTopShelfStyleAction() async {
         var state = SettingsFeature.State()
-        state.topShelfStyle = .sectioned
+        state.topShelfStyle = TopShelfStyle.sectioned
 
         let store = TestStore(initialState: state) {
             SettingsFeature()
         } withDependencies: {
-            $0.topShelfClient = .init(
-                updateTopShelfData: { _, _, _ in },
-                loadTopShelfData: { nil },
-                getPreferredStyle: { .sectioned },
-                setPreferredStyle: { _ in }
-            )
+            $0.topShelfClient = TopShelfClient.testValue
         }
 
         // Switch to Carousel style
-        await store.send(.setTopShelfStyle(.carousel)) {
-            $0.topShelfStyle = .carousel
+        await store.send(.setTopShelfStyle(TopShelfStyle.carousel)) {
+            $0.topShelfStyle = TopShelfStyle.carousel
         }
 
         // Switch back to Sectioned style
-        await store.send(.setTopShelfStyle(.sectioned)) {
-            $0.topShelfStyle = .sectioned
+        await store.send(.setTopShelfStyle(TopShelfStyle.sectioned)) {
+            $0.topShelfStyle = TopShelfStyle.sectioned
         }
     }
 

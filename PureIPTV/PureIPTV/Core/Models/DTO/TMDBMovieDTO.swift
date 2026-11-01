@@ -6,6 +6,18 @@ public struct TMDBSearchResponseDTO: Codable, Equatable, Sendable {
     public let totalPages: Int?
     public let totalResults: Int?
 
+    public init(
+        page: Int? = 1,
+        results: [TMDBMovieSearchResultDTO]? = [],
+        totalPages: Int? = 1,
+        totalResults: Int? = 0
+    ) {
+        self.page = page
+        self.results = results
+        self.totalPages = totalPages
+        self.totalResults = totalResults
+    }
+
     private enum CodingKeys: String, CodingKey {
         case page, results
         case totalPages = "total_pages"

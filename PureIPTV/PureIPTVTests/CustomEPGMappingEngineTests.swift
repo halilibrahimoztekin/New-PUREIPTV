@@ -148,7 +148,7 @@ final class CustomEPGMappingEngineTests: XCTestCase {
         client.setGlobalTimeShift(2)
         XCTAssertEqual(client.getGlobalTimeShift(), 2)
 
-        let shiftedPrograms = client.applyTimeShift([program], "unknown-channel")
+        let shiftedPrograms = client.applyTimeShift([program], "unknown-channel", nil)
         XCTAssertEqual(shiftedPrograms.count, 1)
 
         let expectedStart = baseDate.addingTimeInterval(7200)
@@ -183,14 +183,14 @@ final class CustomEPGMappingEngineTests: XCTestCase {
             isPlayingNow: false
         )
 
-        let shifted = client.applyTimeShift([program], channelID)
+        let shifted = client.applyTimeShift([program], channelID, nil)
         XCTAssertEqual(shifted.count, 1)
         // Shifted by 5 hours = 18000s
         XCTAssertEqual(shifted[0].startTime.timeIntervalSince1970, baseDate.timeIntervalSince1970 + 18000, accuracy: 0.1)
 
         // Clean up
-        client.removeChannelMapping(channelID)
-        XCTAssertNil(client.getChannelMapping(channelID))
+        client.removeChannelMapping(channelID, nil)
+        XCTAssertNil(client.getChannelMapping(channelID, nil))
     }
 
     // MARK: - 6. SettingsFeature Custom EPG Reducer Tests

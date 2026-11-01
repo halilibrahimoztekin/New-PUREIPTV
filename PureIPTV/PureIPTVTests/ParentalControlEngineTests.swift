@@ -11,61 +11,60 @@ final class ParentalControlEngineTests: XCTestCase {
         let parentalPIN = LockIsolated("1234")
         let isEnabled = LockIsolated(true)
 
-        let client = ParentalControlClient(
-            isParentalControlEnabled: { isEnabled.value },
-            verifyPIN: { input in input == parentalPIN.value },
-            setParentalPIN: { pin, enabled in
-                if let pin {
-                    parentalPIN.setValue(pin)
+        var client = ParentalControlClient()
+        client.isParentalControlEnabled = { isEnabled.value }
+        client.verifyPIN = { input in input == parentalPIN.value }
+        client.setParentalPIN = { pin, enabled in
+            if let pin {
+                parentalPIN.setValue(pin)
+            }
+            isEnabled.setValue(enabled)
+        }
+        client.hasPIN = { !parentalPIN.value.isEmpty }
+        client.isAdultContent = { text in
+            text.lowercased().contains("adult") || text.lowercased().contains("xxx")
+        }
+        client.authenticateWithBiometrics = { _ in true }
+        client.hiddenChannelIDs = { Set(hiddenChannels.value.map(\.id)) }
+        client.hideChannel = { id, title in
+            hiddenChannels.withValue { items in
+                if !items.contains(where: { $0.id == id }) {
+                    items.append(HiddenItemDTO(id: id, title: title, type: .channel))
                 }
-                isEnabled.setValue(enabled)
-            },
-            hasPIN: { !parentalPIN.value.isEmpty },
-            isAdultContent: { text in
-                text.lowercased().contains("adult") || text.lowercased().contains("xxx")
-            },
-            authenticateWithBiometrics: { _ in true },
-            hiddenChannelIDs: { Set(hiddenChannels.value.map(\.id)) },
-            hideChannel: { id, title in
-                hiddenChannels.withValue { items in
-                    if !items.contains(where: { $0.id == id }) {
-                        items.append(HiddenItemDTO(id: id, title: title, type: .channel))
-                    }
+            }
+        }
+        client.unhideChannel = { id in
+            hiddenChannels.withValue { items in
+                items.removeAll { $0.id == id }
+            }
+        }
+        client.unhideAllChannels = {
+            hiddenChannels.setValue([])
+        }
+        client.isChannelHidden = { id in
+            hiddenChannels.value.contains(where: { $0.id == id })
+        }
+        client.blacklistedCategoryIDs = { Set(blacklistedCats.value.map(\.id)) }
+        client.blacklistCategory = { id, title in
+            blacklistedCats.withValue { items in
+                if !items.contains(where: { $0.id == id }) {
+                    items.append(HiddenItemDTO(id: id, title: title, type: .category))
                 }
-            },
-            unhideChannel: { id in
-                hiddenChannels.withValue { items in
-                    items.removeAll { $0.id == id }
-                }
-            },
-            unhideAllChannels: {
-                hiddenChannels.setValue([])
-            },
-            isChannelHidden: { id in
-                hiddenChannels.value.contains(where: { $0.id == id })
-            },
-            blacklistedCategoryIDs: { Set(blacklistedCats.value.map(\.id)) },
-            blacklistCategory: { id, title in
-                blacklistedCats.withValue { items in
-                    if !items.contains(where: { $0.id == id }) {
-                        items.append(HiddenItemDTO(id: id, title: title, type: .category))
-                    }
-                }
-            },
-            unblacklistCategory: { id in
-                blacklistedCats.withValue { items in
-                    items.removeAll { $0.id == id }
-                }
-            },
-            unblacklistAllCategories: {
-                blacklistedCats.setValue([])
-            },
-            isCategoryBlacklisted: { id in
-                blacklistedCats.value.contains(where: { $0.id == id })
-            },
-            fetchHiddenChannels: { hiddenChannels.value },
-            fetchBlacklistedCategories: { blacklistedCats.value }
-        )
+            }
+        }
+        client.unblacklistCategory = { id in
+            blacklistedCats.withValue { items in
+                items.removeAll { $0.id == id }
+            }
+        }
+        client.unblacklistAllCategories = {
+            blacklistedCats.setValue([])
+        }
+        client.isCategoryBlacklisted = { id in
+            blacklistedCats.value.contains(where: { $0.id == id })
+        }
+        client.fetchHiddenChannels = { hiddenChannels.value }
+        client.fetchBlacklistedCategories = { blacklistedCats.value }
 
         // 1. Initial State
         XCTAssertTrue(client.isParentalControlEnabled())

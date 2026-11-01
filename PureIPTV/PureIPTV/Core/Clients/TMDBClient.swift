@@ -208,6 +208,9 @@ extension TMDBClient: DependencyKey {
 
     public static let testValue: TMDBClient = {
         var client = TMDBClient()
+        client.searchMovie = { _ in TMDBSearchResponseDTO(results: []) }
+        client.searchTV = { _ in TMDBSearchResponseDTO(results: []) }
+        client.discoverMovies = { _, _, _ in TMDBMovieDiscoveryResponseDTO(results: []) }
         client.searchPeople = { _ in TMDBPersonSearchResponseDTO(results: []) }
         client.validateAPIKey = { _ in }
         client.fetchMovieWatchProviders = { movieID in TMDBWatchProvidersResponseDTO(id: movieID) }

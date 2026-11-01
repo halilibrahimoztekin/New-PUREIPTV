@@ -6,15 +6,21 @@ import XCTest
 @MainActor
 final class PlaylistManagementFeatureTests: XCTestCase {
     func testAddPlaylistSheetToggles() async {
+        let expectedID = UUID(0)
         let store = TestStore(initialState: PlaylistManagementFeature.State()) {
             PlaylistManagementFeature()
+        } withDependencies: {
+            $0.uuid = .constant(expectedID)
         }
 
         await store.send(.addPlaylistButtonTapped) {
+            $0.addPlaylistPresentationRequestID = expectedID
             $0.addPlaylist = AddPlaylistFeature.State()
         }
+        await store.receive(\.delegate.presentAddPlaylist)
 
-        await store.send(.closeAddPlaylistTapped) {
+        await store.send(.closeAddPlaylistTapped(requestID: expectedID)) {
+            $0.addPlaylistPresentationRequestID = nil
             $0.addPlaylist = nil
         }
     }

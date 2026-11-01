@@ -1,0 +1,136 @@
+# PureIPTV Bugfix & Stabilization Report
+
+This document records all identified issues, their root causes, and the exact architectural fixes implemented in the PureIPTV tvOS codebase.
+
+---
+
+### Bug 1: Stack Overflow Crash on tvOS (`AppCoordinator.core`)
+- **Severity:** Critical (App Crash on Launch / First Action)
+- **Symptom:** Fatal crash `EXC_BAD_ACCESS (code=2, address=0x16d713ff8)` at `___chkstk_darwin` inside `AppCoordinator.core(state:inout State, action: Action)`.
+- **Root Cause:** The monolithic 7,000+ line reducer in `AppCoordinator.swift` contained nested pattern matching, dozens of large state mutations, and local scope variables. LLVM compiler inlined and coalesced these into a single stack frame exceeding the default stack limit allocated to tvOS threads.
+- **Fix:** Decoupled `AppCoordinator.core` into modular, domain-specific reducer methods (`reduceRouteAction`, `reduceLifecycleAndHandoff`, `reducePlayerEvents`, `reduceSettingsActions`, etc.) annotated with `@inline(never)` to prevent compiler stack coalescing.
+
+---
+
+### Bug 2: Missing Key-Value Storage (KVS) Entitlement
+- **Severity:** High (Console Failure / CloudSync Failure)
+- **Symptom:** `BUG IN CLIENT OF KVS: Trying to initialize NSUbiquitousKeyValueStore without a store identifier. Please specify your store identifier in the 'com.apple.developer.ubiquity-kvstore-identifier' entitlement.`
+- **Root Cause:** `NSUbiquitousKeyValueStore` was initialized for iCloud preferences synchronization without declaring the requisite entitlement in the Xcode target.
+- **Fix:** Added `com.apple.developer.ubiquity-kvstore-identifier` set to `$(TeamIdentifierPrefix)$(CFBundleIdentifier)` in `PureIPTV.entitlements`.
+
+---
+
+### Bug 3: Aggressive Paywall Interruptions
+- **Severity:** High (Hostile UX / App Store Guideline 3.1.2)
+- **Symptom:** The premium subscription paywall popped up repeatedly on every launch, during tab changes, and blocked users from even viewing movie or series details.
+- **Root Cause:** `subscriptionStatusResponse` in `AppCoordinator.swift` unconditionally dispatched `.presentPaywall` whenever `isPremium == false` or on network error. In addition, catalog navigation delegates (`didSelectVOD`, `didSelectSeries`) intercepted clicks and presented the paywall before users could browse content info.
+- **Fix:**
+  1. Overhauled `subscriptionStatusResponse` to present the initial promotional paywall **ONLY ONCE** upon first entry, guarded by `UserDefaults` (`com.pureiptv.hasShownInitialPaywallPromo`).
+  2. Removed paywall gates from catalog item browsing (`didSelectVOD`, `didSelectSeries`), allowing users to browse posters, summaries, cast, and episode lists freely.
+  3. Enforced an **Action-Based Paywall**: Only prompted with upgrade requirements when the user explicitly triggers playback (`didSelectPlay` in `VODDetail`, `didSelectEpisode` in `SeriesDetail`, and history playback).
+
+---
+
+### Bug 4: Non-Existent AVPlayer Playback Option in Settings & OSD
+- **Severity:** Medium (Broken Feature / User Confusion)
+- **Symptom:** Settings and Player OSD menus showed an "AVPlayer" option, but IPTV stream playback with AVPlayer failed or was unsupported.
+- **Root Cause:** Legacy placeholder UI for AVPlayer selection remained after migrating playback to SwiftVLC with hardware acceleration.
+- **Fix:** Standardized playback strictly on SwiftVLC. Removed AVPlayer selection rows, settings toggles, and OSD options across `SettingsView`, `SettingsFeature`, and `PlayerView+tvOS`.
+
+---
+
+### Bug 5: Competitor Brand Mentions
+- **Severity:** Medium (Branding / App Store Review Risk)
+- **Symptom:** Mentions of third-party competitor "TiviMate" were present in network headers and user-agent configurations.
+- **Root Cause:** Hardcoded user-agent string copied from third-party client templates.
+- **Fix:** Sanitized `UserAgentManager.swift` to remove all competitor names and replace them with clean, neutral media player user agents.
+
+---
+
+### Bug 6: Unsupported Trakt.tv Integration
+- **Severity:** Medium (Dead Code & Error Spams)
+- **Symptom:** Trakt.tv scrobbling and watchlist synchronization resulted in network errors and scrobble failure HUD toasts because backend infrastructure was absent.
+- **Root Cause:** Incomplete third-party Trakt integration scattered throughout `PlayerFeature`, `SettingsFeature`, and `AppCoordinator`.
+- **Fix:** Completely excised Trakt.tv:
+  - Deleted `PureIPTV/Features/Trakt/`, `TraktScrobbleHUDView.swift`, `TraktClient.swift`, `TraktModels.swift`, and `TraktMediaParser.swift`.
+  - Removed all Trakt actions, scrobble handlers, and `@Dependency(\.traktClient)` from `PlayerFeature.swift`, `SettingsFeature.swift`, and `AppCoordinator.swift`.
+
+---
+
+### Bug 7: Video Player Controls Focus Loss & Cramped Layout on tvOS
+- **Severity:** High (Broken Siri Remote Navigation / Poor UX)
+- **Symptom:** Transport controls were compressed inside a horizontal `ScrollView`, causing focus to get lost or trapped. Buttons were tiny and unintuitive on the Siri Remote.
+- **Root Cause:** Improper layout container (`ScrollView`) for tvOS 10-foot UI, missing `@FocusState` bindings, and lack of a default focus anchor.
+- **Fix:** Redesigned `VideoControllerView` in `PlayerView+tvOS.swift` according to the Cinematic Obsidian design system:
+  - Eliminated the horizontal `ScrollView` in favor of a fixed-width, spacious `HStack`.
+  - Added dedicated focus fields in `FocusableField` (`restart`, `backward`, `replayWithSubtitles`, `playPause`, `forward`, `skipMarkers`, `liveChannelsMenu`, `audioSubtitleMenu`, `displayModeMenu`).
+  - Added `.defaultFocus($focusableField, .playPause)` and `.focusSection()` so Siri Remote focus naturally lands on Play/Pause and navigates smoothly.
+
+---
+
+### Bug 8: Series Playback Resume Failure in Continue Watching
+- **Severity:** Medium (Playback Broken)
+- **Symptom:** Selecting a previously watched series episode from "Continue Watching" failed to play or started from the wrong position.
+- **Root Cause:** In `AppCoordinator.swift` (`playHistoryItem`), fallback stream URL construction for series episodes failed when username/password credentials were missing or improperly extracted from the playlist config.
+- **Fix:** Ensured stream URL resolution uses the active playlist's credentials and correctly passes the episode extension and resume timestamp to `PlayerFeature`.
+
+---
+
+### Bug 9: False VLC Aspect Ratio / Screen Size Error Toast
+- **Severity:** Low (Annoying Error Banner)
+- **Symptom:** An 8-second toast complaining "VLC cannot provide display criteria" was presented whenever a video started.
+- **Root Cause:** `DisplayModeClient` returned `.criteriaUnavailable` when VLC handled rendering directly without AVPlayer match criteria, which `PlayerFeature` mistakenly treated as an error toast condition.
+- **Fix:** Filtered out `.criteriaUnavailable` and `.systemMatchingDisabled` in `PlayerFeature.swift`, suppressing false error banners.
+
+---
+
+### Bug 10: Player State High-Frequency Update Overhead
+- **Severity:** Medium (CPU Spikes & UI Stutter)
+- **Symptom:** Player controls and progress bar caused UI micro-stutters and high CPU usage during active playback.
+- **Root Cause:** SwiftVLC player emitted `timeChanged` and `positionChanged` updates up to 60 times per second, triggering heavy TCA state derivations on every frame.
+- **Fix:**
+  - Throttled `.timeChanged`: mutations are skipped if the elapsed whole second has not changed.
+  - Throttled `.positionChanged`: mutations are skipped if the position delta is less than 0.5% (`0.005`).
+
+---
+
+### Bug 11: Outdated Test Suite Signatures & Missing `@CasePathable`
+- **Severity:** Medium (CI / Test Target Compilation Failure)
+- **Symptom:** Test build failed in `PlaylistManagementFeatureTests`, `CustomEPGMappingEngineTests`, `ParentalControlEngineTests`, `TopShelfEngineTests`, and `LiveEPGPreviewEngineTests`.
+- **Root Cause:**
+  - `PlaylistManagementFeature.closeAddPlaylistTapped` required `requestID: UUID`.
+  - `CustomEPGMappingClient.applyTimeShift` required `playlistID: UUID?`.
+  - `ParentalControlClient` had additional closure parameters not supplied by memberwise init in tests.
+  - `EPGGuideFeature.Action` lacked `@CasePathable`, breaking key-path matching in test stores.
+- **Fix:**
+  - Added `@Dependency(\.uuid)` in `PlaylistManagementFeature` and updated tests with deterministic UUIDs.
+  - Provided `playlistID: nil` in `CustomEPGMappingEngineTests`.
+  - Switched `ParentalControlEngineTests` to mutate test client closures on default instance.
+  - Added `@CasePathable` to `EPGGuideFeature.Action` and fixed `fetchShortEPG` mock argument count.
+  - Built comprehensive mock snapshot tests with realistic content in `ViewSnapshotTests.swift`.
+
+---
+
+### Bug 12: Non-Deterministic Dynamic Mesh Colors Causing Snapshot Test Inconsistency
+- **Severity:** Low (Test Inconsistency & Rendering Jitter)
+- **Symptom:** `DynamicMeshBackgroundView` generated slightly different colors on consecutive process launches for the same seed title.
+- **Root Cause:** In `DynamicMeshBackgroundView.swift`, `fromSeed(_ seed: String)` computed color hues using `seed.hashValue`. In the Swift standard library, `String.hashValue` uses SipHash with a randomized seed initialized per-process, preventing deterministic snapshot testing.
+- **Fix:** Replaced `seed.hashValue` with a deterministic djb2 hash algorithm:
+  ```swift
+  let hash = abs(seed.utf8.reduce(5381) { (($0 << 5) &+ $0) &+ Int($1) })
+  ```
+  ensuring true color stability across all simulator launches and snapshot runs.
+
+---
+
+### Bug 13: Unimplemented TMDBClient in Test Environment Causing Snapshot Failure
+- **Severity:** Medium (Snapshot Test Failure on Host App)
+- **Symptom:** `ViewSnapshotTests.testDashboardView_tvOS()` failed with:
+  `Unimplemented: 'TMDBClient.searchMovie'`
+- **Root Cause:** When `DashboardView_tvOS` mounts `DashboardHeroArtworkView`, an asynchronous `.task` triggers a lookup via `@Dependency(\.tmdbClient)`. Because `TMDBClient.testValue` lacked stubs for `searchMovie`, `searchTV`, and `discoverMovies`, Swift-Dependencies reported an unhandled dependency call. In addition, `TMDBSearchResponseDTO` lacked a public initializer.
+- **Fix:**
+  - Added a `public init` to `TMDBSearchResponseDTO` with safe default parameters.
+  - Implemented mock stubs returning empty search/discovery results in `TMDBClient.testValue` for `searchMovie`, `searchTV`, and `discoverMovies`.
+
+
+

@@ -78,6 +78,7 @@ public struct EPGGuideFeature {
         }
     }
 
+    @CasePathable
     public enum Action {
         case onAppear
         case onDisappear

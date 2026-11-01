@@ -275,7 +275,7 @@ struct LiveEPGPreviewEngineTests {
         } withDependencies: {
             $0.continuousClock = clock
             $0.previewPlayerClient = .testValue
-            $0.iptvClient.fetchShortEPG = { _, _, _ in [] }
+            $0.iptvClient.fetchShortEPG = { _, _, _, _ in [] }
         }
 
         await store.send(.channelFocused(channel))

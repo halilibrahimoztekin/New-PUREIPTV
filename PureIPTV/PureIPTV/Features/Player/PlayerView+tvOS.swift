@@ -37,7 +37,15 @@
 
     fileprivate enum FocusableField: Hashable {
         case play
+        case restart
+        case backward
+        case replayWithSubtitles
         case playPause
+        case forward
+        case skipMarkers
+        case liveChannelsMenu
+        case audioSubtitleMenu
+        case displayModeMenu
         case scrubber
     }
 

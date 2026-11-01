@@ -35,7 +35,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
 
     /// Deterministic fallback palette from string (e.g. channel or movie title)
     public nonisolated static func fromSeed(_ seed: String) -> DynamicMeshPalette {
-        let hash = abs(seed.hashValue)
+        let hash = abs(seed.utf8.reduce(5381) { (($0 << 5) &+ $0) &+ Int($1) })
         let hue1 = Double(hash % 360) / 360.0
         let hue2 = Double((hash / 360) % 360) / 360.0
         let hue3 = Double((hash / 720) % 360) / 360.0
