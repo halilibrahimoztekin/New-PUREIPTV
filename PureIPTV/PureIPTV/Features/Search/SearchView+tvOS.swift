@@ -60,13 +60,13 @@
                 VStack(spacing: 28) {
                     // Search Bar
                     searchBar
-                        .padding(.horizontal, 60)
+                        .padding(.horizontal, 80)
                         .padding(.top, 40)
 
                     // Multi-Playlist Filter Bar (if multiple playlists exist)
                     if store.savedPlaylists.count > 1, store.filter != .downloads {
                         playlistFilterBar
-                            .padding(.horizontal, 60)
+                            .padding(.horizontal, 80)
                     }
 
                     if store.filter != .downloads {

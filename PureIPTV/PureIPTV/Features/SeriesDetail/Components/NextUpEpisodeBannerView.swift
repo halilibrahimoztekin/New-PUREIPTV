@@ -73,26 +73,45 @@ public struct NextUpEpisodeBannerView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     // Header Badge & Season/Episode Tag
                     HStack {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Image(systemName: "sparkles")
+                            #if os(tvOS)
+                                .font(.system(size: 14, weight: .bold))
+                            #else
                                 .font(.system(size: 11, weight: .bold))
+                            #endif
                                 .foregroundColor(Color(hex: "#00F5D4"))
                             Text(AppStrings.SeriesDetail.nextEpisode.uppercased())
+                            #if os(tvOS)
+                                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            #else
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
+                            #endif
                                 .foregroundColor(Color(hex: "#00F5D4"))
                         }
+                        #if os(tvOS)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        #else
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
+                        #endif
                         .background(Color(hex: "#00F5D4").opacity(0.18), in: Capsule())
                         .overlay(Capsule().stroke(Color(hex: "#00F5D4").opacity(0.4), lineWidth: 1))
 
                         Spacer()
 
                         Text("S\(String(format: "%02d", episode.season)) · E\(String(format: "%02d", episode.episodeNum))")
+                        #if os(tvOS)
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                        #else
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.85))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
+                        #endif
+                            .foregroundColor(.white.opacity(0.85))
                             .background(.ultraThinMaterial, in: Capsule())
                     }
 
@@ -101,13 +120,21 @@ public struct NextUpEpisodeBannerView: View {
                     // Episode Title & Synopsis
                     VStack(alignment: .leading, spacing: 4) {
                         Text(episode.title)
+                        #if os(tvOS)
+                            .font(.system(size: 26, weight: .bold))
+                        #else
                             .font(.system(size: 18, weight: .bold))
+                        #endif
                             .foregroundColor(.white)
                             .lineLimit(1)
 
                         if let plot = episode.plot, !plot.isEmpty {
                             Text(plot)
+                            #if os(tvOS)
+                                .font(.system(size: 16))
+                            #else
                                 .font(.system(size: 12.5))
+                            #endif
                                 .foregroundColor(.white.opacity(0.75))
                                 .lineLimit(2)
                                 .lineSpacing(2)
@@ -120,7 +147,7 @@ public struct NextUpEpisodeBannerView: View {
                             ZStack(alignment: .leading) {
                                 Capsule()
                                     .fill(Color.white.opacity(0.2))
-                                    .frame(height: 3.5)
+                                    .frame(height: 4)
 
                                 Capsule()
                                     .fill(
@@ -130,54 +157,75 @@ public struct NextUpEpisodeBannerView: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                    .frame(width: proxy.size.width * CGFloat(ratio), height: 3.5)
+                                    .frame(width: proxy.size.width * CGFloat(ratio), height: 4)
                             }
                         }
-                        .frame(height: 3.5)
+                        .frame(height: 4)
                     }
 
                     // CTA Play Button Row
                     HStack(spacing: 12) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             if isInProgress {
                                 CircularProgressRing(
                                     progress: ratio,
                                     lineWidth: 2.5,
-                                    size: 18,
+                                    size: 20,
                                     gradientColors: [Color(hex: "#00F5D4"), Color.white],
                                     trackColor: Color.white.opacity(0.3)
                                 ) {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 7, weight: .bold))
+                                        .font(.system(size: 8, weight: .bold))
                                         .foregroundColor(.white)
                                 }
                             } else {
                                 Image(systemName: "play.fill")
+                                #if os(tvOS)
+                                    .font(.system(size: 15, weight: .bold))
+                                #else
                                     .font(.system(size: 12, weight: .bold))
+                                #endif
                             }
 
                             Text(isInProgress ? "\(AppStrings.SeriesDetail.continueWatching) (%\(percent))" : AppStrings.SeriesDetail.playNextEpisode)
+                            #if os(tvOS)
+                                .font(.system(size: 18, weight: .bold))
+                            #else
                                 .font(.system(size: 13.5, weight: .bold))
+                            #endif
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                        #if os(tvOS)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                        #else
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        #endif
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .clipShape(Capsule())
-                        .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 6, y: 2)
+                            .clipShape(Capsule())
+                            .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 6, y: 2)
 
                         if let duration = episode.duration {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
+                                #if os(tvOS)
+                                    .font(.system(size: 14))
+                                #else
                                     .font(.system(size: 11))
+                                #endif
                                 Text(duration)
+                                #if os(tvOS)
+                                    .font(.system(size: 15, weight: .medium))
+                                #else
                                     .font(.system(size: 12, weight: .medium))
+                                #endif
                             }
                             .foregroundColor(.white.opacity(0.7))
                         }
@@ -185,26 +233,34 @@ public struct NextUpEpisodeBannerView: View {
                         Spacer()
                     }
                 }
+                #if os(tvOS)
+                .padding(22)
+                #else
                 .padding(14)
+                #endif
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 185)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: "#00F5D4").opacity(0.4), Color.white.opacity(0.15)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.2
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.45), radius: 10, y: 4)
+            #if os(tvOS)
+                .frame(height: 240)
+            #else
+                .frame(height: 185)
+            #endif
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(hex: "#00F5D4").opacity(0.4), Color.white.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.45), radius: 10, y: 4)
         }
         #if os(tvOS)
-        .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
+        .buttonStyle(TVGridCardButtonStyle(cornerRadius: 18))
         #else
         .buttonStyle(.fluidScale)
         #endif

@@ -76,10 +76,16 @@ public struct ResumeWatchingCardView: View {
                         HStack {
                             // Type Pill (Film / Dizi)
                             Text(item.type == "episode" ? "DİZİ" : "FİLM")
+                            #if os(tvOS)
+                                .font(.system(size: 12, weight: .bold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                            #else
                                 .font(.system(size: 9.5, weight: .bold))
-                                .foregroundColor(.white)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
+                            #endif
+                                .foregroundColor(.white)
                                 .background(Color.black.opacity(0.55), in: Capsule())
                                 .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
 
@@ -89,16 +95,29 @@ public struct ResumeWatchingCardView: View {
                             if !remainingText.isEmpty {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.fill")
+                                    #if os(tvOS)
+                                        .font(.system(size: 11))
+                                    #else
                                         .font(.system(size: 8.5))
+                                    #endif
                                     Text(remainingText)
+                                    #if os(tvOS)
+                                        .font(.system(size: 13, weight: .semibold))
+                                    #else
                                         .font(.system(size: 10, weight: .semibold))
+                                    #endif
                                 }
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-                                .shadow(color: Color.black.opacity(0.4), radius: 4)
+                                #if os(tvOS)
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 5)
+                                #else
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                #endif
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                                    .shadow(color: Color.black.opacity(0.4), radius: 4)
                             }
                         }
                         .padding(10)
@@ -163,16 +182,20 @@ public struct ResumeWatchingCardView: View {
                 #else
                 .frame(width: 220, height: 124)
                 #endif
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
 
                 // Metadata Section
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
+                    #if os(tvOS)
+                        .font(.system(size: 18, weight: .bold))
+                    #else
                         .font(.system(size: 14, weight: .semibold))
+                    #endif
                         .foregroundColor(.white)
                         .lineLimit(1)
                     #if os(tvOS)
@@ -184,7 +207,11 @@ public struct ResumeWatchingCardView: View {
                     HStack(spacing: 6) {
                         if let seriesTitle = item.seriesTitle, !seriesTitle.isEmpty {
                             Text(seriesTitle)
+                            #if os(tvOS)
+                                .font(.system(size: 14, weight: .medium))
+                            #else
                                 .font(.system(size: 11.5, weight: .medium))
+                            #endif
                                 .foregroundColor(Color(hex: "#00F5D4"))
                                 .lineLimit(1)
 
@@ -194,7 +221,11 @@ public struct ResumeWatchingCardView: View {
                         }
 
                         Text("%\(percent)")
+                        #if os(tvOS)
+                            .font(.system(size: 14, weight: .bold))
+                        #else
                             .font(.system(size: 11, weight: .bold))
+                        #endif
                             .foregroundColor(Color(hex: "#0A84FF"))
 
                         Text("•")
@@ -202,7 +233,11 @@ public struct ResumeWatchingCardView: View {
                             .foregroundColor(.white.opacity(0.4))
 
                         Text(relativeTime)
+                        #if os(tvOS)
+                            .font(.system(size: 14))
+                        #else
                             .font(.system(size: 11))
+                        #endif
                             .foregroundColor(.white.opacity(0.55))
                             .lineLimit(1)
                     }
@@ -215,7 +250,7 @@ public struct ResumeWatchingCardView: View {
             }
         }
         #if os(tvOS)
-        .tvFocusEffect()
+        .buttonStyle(TVGridCardButtonStyle(cornerRadius: 16))
         #else
         .buttonStyle(.fluidScale)
         #endif

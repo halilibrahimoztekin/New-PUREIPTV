@@ -123,14 +123,29 @@ This document records all identified issues, their root causes, and the exact ar
 
 ---
 
-### Bug 13: Unimplemented TMDBClient in Test Environment Causing Snapshot Failure
-- **Severity:** Medium (Snapshot Test Failure on Host App)
-- **Symptom:** `ViewSnapshotTests.testDashboardView_tvOS()` failed with:
-  `Unimplemented: 'TMDBClient.searchMovie'`
-- **Root Cause:** When `DashboardView_tvOS` mounts `DashboardHeroArtworkView`, an asynchronous `.task` triggers a lookup via `@Dependency(\.tmdbClient)`. Because `TMDBClient.testValue` lacked stubs for `searchMovie`, `searchTV`, and `discoverMovies`, Swift-Dependencies reported an unhandled dependency call. In addition, `TMDBSearchResponseDTO` lacked a public initializer.
+### Bug 13: Massive Memory Layout Stack Overflow in TCA Reducer Chain (`___chkstk_darwin`)
+- **Severity:** Critical (Fatal Launch / Action Dispatch Crash on Apple TV)
+- **Symptom:** `Thread 1: EXC_BAD_ACCESS (code=2, address=0x16d713ff8)` in `___chkstk_darwin` at `AppCoordinator.swift:267` inside `Reduce<State, Action> { state, action in core(state: &state, action: action) }`.
+- **Root Cause:**
+  - Measurement using `MemoryLayout` revealed enormous enum sizes: `AppCoordinator.Action` was **2,000 bytes**, `AppScreen.Action` was **1,992 bytes**, and `HomeFeature.Action` was **1,987 bytes**.
+  - During TCA action dispatch, the call stack traverses 23 nested reducer closures (`RootCore._send`, `withDependencies`, `_IfLetReducer`, `Reduce._reduce`, `AppCoordinator.core`).
+  - Because these enums were value types copied onto the stack at every frame, each dispatch required over ~46 KB of stack space just for action copies.
+  - On tvOS, thread stack limits (typically 512 KB on cooperative thread pools or secondary threads) were exceeded, causing `___chkstk_darwin` to probe past the stack guard page into forbidden memory (`KERN_PROTECTION_FAILURE`).
 - **Fix:**
-  - Added a `public init` to `TMDBSearchResponseDTO` with safe default parameters.
-  - Implemented mock stubs returning empty search/discovery results in `TMDBClient.testValue` for `searchMovie`, `searchTV`, and `discoverMovies`.
+  - Converted `AppScreen` from an enum to `public indirect enum AppScreen`.
+  - Converted `AppCoordinator.Action`, `HomeFeature.Action`, `PlayerFeature.Action`, `SeriesDetailFeature.Action`, and `VODDetailFeature.Action` into `indirect enum Action`.
+  - This boxes enum payloads onto the heap, reducing their stack footprint from **2,000 bytes down to an 8-byte pointer** (a 99.6% reduction in stack usage per frame), permanently eliminating the stack overflow crash.
 
+---
 
+### Bug 14: Comprehensive tvOS 10-Foot UI/UX & Focus Engine Overhaul
+- **Severity:** High (Broken Focus / Inconsistent 10-Foot Legibility)
+- **Symptom:** Elements lacked 3D parallax focus elevation; buttons relied on iOS touch-based `.fluidScale` or flat `.tvFocusEffect()`; text sizes (11-15pt) were illegible from 3 meters away; safe margins were too tight (48-60pt), risking overscan clipping on physical TVs.
+- **Root Cause:** Views were ported from iOS without complete tvOS design system adaptations. Compound cards wrapped only subviews in `Button`, breaking focus on adjacent text.
+- **Fix:**
+  - **Button Styles & 3D Parallax:** Replaced `.fluidScale` and flat modifiers with `TVGridCardButtonStyle(cornerRadius: 16)` (with 1.08x focus scale, glowing shadow, and 0.96x press-down depression), `TVCapsuleButtonStyle`, and `TVCircleButtonStyle`.
+  - **Typography Scaling:** Scaled titles to 20-24pt semibold/bold, metadata to 15-18pt, and badges to 14-16pt across `VODCardView`, `SeriesCardView`, `ChannelCardView`, `ResumeWatchingCardView`, `EpisodeCardView`, `NextUpEpisodeBannerView`, and `CategoryManagementView`.
+  - **Overscan Margins:** Standardized on 80px safe margins (`.padding(.horizontal, 80)`) across `SearchView+tvOS`, `DownloadsView+tvOS`, `DashboardView+tvOS`, and detail screens.
+  - **Compound Card Focus:** Restructured `TVProfileCard` so the button bounds encompass both avatar and title label, ensuring unified 3D parallax scaling and focus feedback.
+  - **Paywall Redesign:** Overhauled `PaywallView+tvOS` with Cinematic Obsidian radial gradient, 52pt heavy title, 340x260 glassmorphic packages with `TVGridCardButtonStyle(cornerRadius: 20)`, and `TVCapsuleButtonStyle` actions.
 

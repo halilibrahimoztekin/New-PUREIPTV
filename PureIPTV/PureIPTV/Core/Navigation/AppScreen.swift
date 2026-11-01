@@ -1406,13 +1406,13 @@ public struct HiddenMediaManagementRouteFeature {
 }
 
 @Reducer
-public enum AppScreen {
+public indirect enum AppScreen {
     case splash(SplashFeature)
     case onboarding(OnboardingFeature)
     case addPlaylist(AddPlaylistFeature)
     case profileSelection(ProfileSelectionFeature)
     case profileAddProfile(ProfileAddProfileRouteFeature)
-    indirect case home(HomeFeature)
+    case home(HomeFeature)
     case globalSearch(GlobalSearchRouteFeature)
     case hiddenMediaManagement(HiddenMediaManagementRouteFeature)
     case player(PlayerFeature)

@@ -97,7 +97,11 @@ public struct EpisodeCardView: View {
                             Color(hex: "#1A1A24")
                         }
                     }
+                    #if os(tvOS)
+                    .frame(width: 240, height: 135)
+                    #else
                     .frame(width: 135, height: 76)
+                    #endif
                     .clipped()
 
                     // Dark gradient scrim
@@ -111,53 +115,80 @@ public struct EpisodeCardView: View {
                     if isWatched {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
+                            #if os(tvOS)
+                                .font(.system(size: 14))
+                            #else
                                 .font(.system(size: 10))
+                            #endif
                             Text(AppStrings.SeriesDetail.watched)
+                            #if os(tvOS)
+                                .font(.system(size: 13, weight: .bold))
+                            #else
                                 .font(.system(size: 9.5, weight: .bold))
+                            #endif
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2.5)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                         .background(Color(hex: "#00BA88"), in: Capsule())
-                        .padding(6)
+                        .padding(8)
                     } else if isInProgress {
                         GeometryReader { proxy in
                             ZStack(alignment: .leading) {
                                 Capsule()
                                     .fill(Color.white.opacity(0.3))
-                                    .frame(height: 3)
+                                    .frame(height: 4)
                                 Capsule()
                                     .fill(Color(hex: "#00F5D4"))
-                                    .frame(width: proxy.size.width * CGFloat(ratio), height: 3)
+                                    .frame(width: proxy.size.width * CGFloat(ratio), height: 4)
                             }
                         }
-                        .frame(height: 3)
-                        .padding(.horizontal, 6)
-                        .padding(.bottom, 6)
+                        .frame(height: 4)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
                     }
                 }
+                #if os(tvOS)
+                .frame(width: 240, height: 135)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                #else
                 .frame(width: 135, height: 76)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                 )
+                #endif
 
                 // Episode Details
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .top) {
                         Text(episode.title)
+                        #if os(tvOS)
+                            .font(.system(size: 22, weight: .semibold))
+                        #else
                             .font(.system(size: 15, weight: .semibold))
+                        #endif
                             .foregroundColor(.white)
                             .lineLimit(1)
 
                         Spacer()
 
                         Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
+                        #if os(tvOS)
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                        #else
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(hex: "#0A84FF"))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
+                        #endif
+                            .foregroundColor(Color(hex: "#0A84FF"))
                             .background(Color(hex: "#0A84FF").opacity(0.15), in: Capsule())
                     }
 
@@ -165,10 +196,18 @@ public struct EpisodeCardView: View {
                         if let rating = episode.rating, rating > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "star.fill")
+                                #if os(tvOS)
+                                    .font(.system(size: 13))
+                                #else
                                     .font(.system(size: 10))
+                                #endif
                                     .foregroundColor(.yellow)
                                 Text(String(format: "%.1f", rating))
+                                #if os(tvOS)
+                                    .font(.system(size: 15, weight: .semibold))
+                                #else
                                     .font(.system(size: 12, weight: .semibold))
+                                #endif
                                     .foregroundColor(.white)
                             }
                         }
@@ -176,23 +215,39 @@ public struct EpisodeCardView: View {
                         if let duration = episode.duration {
                             HStack(spacing: 3) {
                                 Image(systemName: "clock")
+                                #if os(tvOS)
+                                    .font(.system(size: 13))
+                                #else
                                     .font(.system(size: 10))
+                                #endif
                                 Text(duration)
+                                #if os(tvOS)
+                                    .font(.system(size: 15))
+                                #else
                                     .font(.system(size: 12))
+                                #endif
                             }
                             .foregroundColor(.white.opacity(0.6))
                         }
 
                         if isInProgress {
                             Text("%\(percent) izlendi")
+                            #if os(tvOS)
+                                .font(.system(size: 14, weight: .semibold))
+                            #else
                                 .font(.system(size: 11, weight: .semibold))
+                            #endif
                                 .foregroundColor(Color(hex: "#00F5D4"))
                         }
                     }
 
                     if let plot = episode.plot, !plot.isEmpty {
                         Text(plot)
+                        #if os(tvOS)
+                            .font(.system(size: 15))
+                        #else
                             .font(.system(size: 12))
+                        #endif
                             .foregroundColor(.white.opacity(0.65))
                             .lineLimit(2)
                             .lineSpacing(2)
@@ -203,24 +258,37 @@ public struct EpisodeCardView: View {
             // Action Bar: Play & Download
             HStack {
                 Button(action: onPlay) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "play.fill")
+                        #if os(tvOS)
+                            .font(.system(size: 14, weight: .bold))
+                        #else
                             .font(.system(size: 10, weight: .bold))
+                        #endif
                         Text(isInProgress ? AppStrings.SeriesDetail.continueWatching : AppStrings.SeriesDetail.watch)
+                        #if os(tvOS)
+                            .font(.system(size: 16, weight: .bold))
+                        #else
                             .font(.system(size: 12, weight: .bold))
+                        #endif
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(
-                        isInProgress
-                            ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")], startPoint: .leading, endPoint: .trailing))
-                            : AnyShapeStyle(Color.white.opacity(0.18))
-                    )
-                    .clipShape(Capsule())
+                    #if os(tvOS)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                    #else
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                    #endif
+                        .background(
+                            isInProgress
+                                ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")], startPoint: .leading, endPoint: .trailing))
+                                : AnyShapeStyle(Color.white.opacity(0.18))
+                        )
+                        .clipShape(Capsule())
                 }
                 #if os(tvOS)
-                .tvFocusEffect()
+                .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
                 #else
                 .buttonStyle(.fluidScale)
                 #endif

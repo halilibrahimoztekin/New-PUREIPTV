@@ -147,7 +147,7 @@ public struct HomeFeature {
         }
     }
 
-    public enum Action {
+    public indirect enum Action {
         case tabSelected(HomeTab)
         case dashboard(DashboardFeature.Action)
         case liveTV(LiveTVFeature.Action)

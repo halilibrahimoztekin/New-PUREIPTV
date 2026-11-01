@@ -70,7 +70,7 @@ public struct AppCoordinator {
         }
     }
 
-    public enum Action {
+    public indirect enum Action {
         case router(IndexedRouterActionOf<AppScreen>)
         case miniPlayer(PlayerFeature.Action)
 

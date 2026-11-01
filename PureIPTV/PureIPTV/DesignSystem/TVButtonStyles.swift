@@ -106,14 +106,19 @@
     // MARK: - TV Grid Card Button Style (For Media Posters, Channels, VODs, Series)
 
     public struct TVGridCardButtonStyle: ButtonStyle {
-        public init() {}
+        public let cornerRadius: CGFloat
+
+        public init(cornerRadius: CGFloat = 16) {
+            self.cornerRadius = cornerRadius
+        }
 
         public func makeBody(configuration: Configuration) -> some View {
-            TVGridCardButtonBody(configuration: configuration)
+            TVGridCardButtonBody(configuration: configuration, cornerRadius: cornerRadius)
         }
 
         private struct TVGridCardButtonBody: View {
             let configuration: Configuration
+            let cornerRadius: CGFloat
             @Environment(\.isFocused) private var isFocused
 
             private var scale: CGFloat {
@@ -146,7 +151,7 @@
                 configuration.label
                     .scaleEffect(scale)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(strokeColor, lineWidth: 3)
                     )
                     .shadow(
@@ -157,8 +162,18 @@
                     )
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
+                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: cornerRadius))
             }
+        }
+    }
+
+    public extension ButtonStyle where Self == TVGridCardButtonStyle {
+        static var tvGridCard: TVGridCardButtonStyle {
+            TVGridCardButtonStyle()
+        }
+
+        static func tvGridCard(cornerRadius: CGFloat) -> TVGridCardButtonStyle {
+            TVGridCardButtonStyle(cornerRadius: cornerRadius)
         }
     }
 
@@ -432,12 +447,6 @@
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
                     .tvHighContrastFocusOutline(isFocused: isFocused, shape: .circle)
             }
-        }
-    }
-
-    public extension ButtonStyle where Self == TVGridCardButtonStyle {
-        static var tvGridCard: TVGridCardButtonStyle {
-            TVGridCardButtonStyle()
         }
     }
 

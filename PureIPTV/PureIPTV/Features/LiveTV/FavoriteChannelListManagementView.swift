@@ -30,12 +30,13 @@ struct FavoriteChannelListSwitcher: View {
                 .accessibilityLabel(AppStrings.Common.favorites)
                 .accessibilityAddTraits(isDefaultSelected ? .isSelected : [])
                 #if os(tvOS)
-                    .tvFocusEffect(shape: .capsule)
+                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isDefaultSelected))
                 #else
                     .buttonStyle(.plain)
                 #endif
 
                 ForEach(store.favoriteLists) { list in
+                    let isSelected = store.selectedFavoriteListID == list.id && store.isFavoriteListMode
                     Button {
                         store.send(.favoriteListSelected(list.id))
                     } label: {
@@ -46,11 +47,11 @@ struct FavoriteChannelListSwitcher: View {
                         #if os(tvOS)
                             .frame(minHeight: 44)
                         #endif
-                            .background(store.selectedFavoriteListID == list.id && store.isFavoriteListMode ? Color.accentColor : Color.white.opacity(0.1), in: Capsule())
+                            .background(isSelected ? Color.accentColor : Color.white.opacity(0.1), in: Capsule())
                     }
-                    .accessibilityAddTraits(store.selectedFavoriteListID == list.id && store.isFavoriteListMode ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                     #if os(tvOS)
-                        .tvFocusEffect(shape: .capsule)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
                     #else
                         .buttonStyle(.plain)
                     #endif
@@ -92,7 +93,7 @@ struct FavoriteChannelListSwitcher: View {
                 }
                 .accessibilityHint(AppStrings.LiveTV.manageFavoriteListsHint)
                 #if os(tvOS)
-                    .tvFocusEffect(shape: .capsule)
+                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                 #else
                     .buttonStyle(.plain)
                 #endif

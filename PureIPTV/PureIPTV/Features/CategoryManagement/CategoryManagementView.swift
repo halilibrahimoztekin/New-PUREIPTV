@@ -324,11 +324,27 @@ public struct CategoryManagementView: View {
                 HStack(spacing: 12) {
                     // Category icon & name
                     Image(systemName: isLocked ? "lock.fill" : (isHidden ? "folder.badge.minus" : "folder.fill"))
-                        .font(.system(size: 15))
+                    #if os(tvOS)
+                        .font(.system(size: 22))
+                    #else
+                        #if os(tvOS)
+                            .font(.system(size: 22))
+                        #else
+                            .font(.system(size: 15))
+                        #endif
+                    #endif
                         .foregroundColor(isLocked ? .orange : (isHidden ? .secondary.opacity(0.5) : Color.accentColor))
 
                     Text(category.name)
-                        .font(.system(size: 15, weight: isHidden ? .regular : .semibold))
+                    #if os(tvOS)
+                        .font(.system(size: 22, weight: isHidden ? .regular : .semibold))
+                    #else
+                        #if os(tvOS)
+                            .font(.system(size: 22, weight: isHidden ? .regular : .semibold))
+                        #else
+                            .font(.system(size: 15, weight: isHidden ? .regular : .semibold))
+                        #endif
+                    #endif
                         .foregroundColor(isHidden ? .secondary : .white)
 
                     Button {

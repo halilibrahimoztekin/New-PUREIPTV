@@ -12,75 +12,125 @@
 
         public var body: some View {
             ZStack {
-                // Background
-                Color.black.edgesIgnoringSafeArea(.all)
+                // Background: OLED Black + Ambient Glow
+                Color.black.ignoresSafeArea()
+
+                RadialGradient(
+                    colors: [
+                        Color(hex: "#BF5AF2").opacity(0.12),
+                        Color(hex: "#0A84FF").opacity(0.08),
+                        Color.clear,
+                    ],
+                    center: .center,
+                    startRadius: 100,
+                    endRadius: 700
+                )
+                .ignoresSafeArea()
 
                 // Content
-                VStack(spacing: 40) {
-                    Text(AppStrings.Paywall.unlockPremium)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+                VStack(spacing: 36) {
+                    Spacer().frame(height: 10)
 
-                    Text(AppStrings.Paywall.fullAccessDescription)
-                        .font(.headline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 100)
+                    VStack(spacing: 12) {
+                        Text(AppStrings.Paywall.unlockPremium)
+                            .font(.system(size: 52, weight: .heavy))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.white, Color(hex: "#E4E1E7")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 12, y: 4)
+
+                        Text(AppStrings.Paywall.fullAccessDescription)
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 100)
+                    }
 
                     if store.isLoading {
                         PureLoadingView(size: .large, text: AppStrings.Common.loading)
+                            .frame(maxHeight: 280)
                     } else if let error = store.errorMessage {
                         Text(error)
+                            .font(.system(size: 22, weight: .medium))
                             .foregroundColor(.red)
+                            .frame(maxHeight: 280)
                     } else {
                         HStack(spacing: 40) {
                             ForEach(store.packages, id: \.identifier) { package in
                                 Button(action: {
                                     store.send(.purchasePackage(package))
                                 }) {
-                                    VStack(spacing: 20) {
+                                    VStack(spacing: 16) {
                                         Text(package.storeProduct.localizedTitle)
-                                            .font(.headline)
+                                            .font(.system(size: 24, weight: .bold))
                                             .foregroundColor(.white)
 
                                         Text(package.localizedPriceString)
-                                            .font(.title2)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.green)
+                                            .font(.system(size: 34, weight: .heavy))
+                                            .foregroundColor(Color(hex: "#BF5AF2"))
+                                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 8)
 
                                         Text(package.storeProduct.localizedDescription)
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
+                                            .font(.system(size: 16))
+                                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
                                             .multilineTextAlignment(.center)
+                                            .lineLimit(3)
                                     }
-                                    .frame(width: 300, height: 250)
-                                    .padding()
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(16)
+                                    .frame(width: 340, height: 260)
+                                    .padding(24)
+                                    .background(.ultraThinMaterial)
+                                    .background(Color(hex: "#1F1F23").opacity(0.8))
+                                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color(hex: "#BF5AF2").opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1.5
+                                            )
+                                    )
                                 }
-                                .buttonStyle(CardButtonStyle())
+                                .buttonStyle(TVGridCardButtonStyle(cornerRadius: 20))
                             }
                         }
-                        .padding(.top, 40)
+                        .padding(.top, 20)
+                        .focusSection()
                     }
 
                     Spacer()
 
-                    HStack(spacing: 40) {
-                        Button(AppStrings.Paywall.restorePurchases) {
+                    HStack(spacing: 32) {
+                        Button {
                             store.send(.restorePurchases)
+                        } label: {
+                            Label(AppStrings.Paywall.restorePurchases, systemImage: "arrow.clockwise")
+                                .font(.system(size: 20, weight: .semibold))
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
                         }
-                        .foregroundColor(.gray)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
 
-                        Button(AppStrings.Common.cancel) {
+                        Button {
                             store.send(.closeButtonTapped)
+                        } label: {
+                            Text(AppStrings.Common.cancel)
+                                .font(.system(size: 20, weight: .semibold))
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
                         }
-                        .foregroundColor(.gray)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                     }
-                    .padding()
+                    .padding(.bottom, 20)
                 }
-                .padding(60)
+                .padding(.horizontal, 80)
+                .padding(.vertical, 40)
 
                 // Top-Right Close Button
                 VStack {
@@ -89,12 +139,13 @@
                         Button {
                             store.send(.closeButtonTapped)
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundStyle(Color.white.opacity(0.7))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Color.white.opacity(0.8))
+                                .frame(width: 52, height: 52)
                         }
                         .buttonStyle(TVCircleButtonStyle())
-                        .padding(40)
+                        .padding(50)
                     }
                     Spacer()
                 }

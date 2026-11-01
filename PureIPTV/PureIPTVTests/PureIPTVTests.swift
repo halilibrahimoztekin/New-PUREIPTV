@@ -18,13 +18,11 @@ final class PureIPTVTests: XCTestCase {
     }
 
     func testExample() {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-        // XCTest Documentation
-        // https://developer.apple.com/documentation/xctest
+        XCTAssertEqual(MemoryLayout<AppCoordinator.Action>.size, 8, "AppCoordinator.Action must be an indirect enum (8 bytes) to avoid stack overflow")
+        XCTAssertEqual(MemoryLayout<HomeFeature.Action>.size, 8, "HomeFeature.Action must be an indirect enum (8 bytes) to avoid stack overflow")
+        XCTAssertEqual(MemoryLayout<PlayerFeature.Action>.size, 8, "PlayerFeature.Action must be an indirect enum (8 bytes) to avoid stack overflow")
+        XCTAssertEqual(MemoryLayout<SeriesDetailFeature.Action>.size, 8, "SeriesDetailFeature.Action must be an indirect enum (8 bytes) to avoid stack overflow")
+        XCTAssertEqual(MemoryLayout<VODDetailFeature.Action>.size, 8, "VODDetailFeature.Action must be an indirect enum (8 bytes) to avoid stack overflow")
     }
 
     func testPerformanceExample() {

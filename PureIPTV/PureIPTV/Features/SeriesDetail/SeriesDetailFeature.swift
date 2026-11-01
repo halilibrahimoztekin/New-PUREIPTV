@@ -194,7 +194,7 @@ public struct SeriesDetailFeature {
         }
     }
 
-    public enum Action {
+    public indirect enum Action {
         case onAppear
         case presentationOverrideLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, override: MediaPresentationOverride?)
         case editPresentationTapped

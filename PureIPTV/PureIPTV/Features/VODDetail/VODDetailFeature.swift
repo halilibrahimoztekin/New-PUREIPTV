@@ -113,7 +113,7 @@ public struct VODDetailFeature {
         }
     }
 
-    public enum Action {
+    public indirect enum Action {
         case onAppear
         case presentationOverridesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, overrides: [String: MediaPresentationOverride])
         case editPresentationTapped

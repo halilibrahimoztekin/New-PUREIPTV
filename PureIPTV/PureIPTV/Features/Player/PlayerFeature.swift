@@ -711,7 +711,7 @@ public struct PlayerFeature {
         }
     }
 
-    public enum Action {
+    public indirect enum Action {
         case onAppear
         case startSelectedChannel(id: String)
         case onDisappear

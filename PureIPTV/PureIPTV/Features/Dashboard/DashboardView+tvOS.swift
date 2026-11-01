@@ -924,14 +924,14 @@
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 320, height: 180)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         } else {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(Color(hex: "#1F1F23"))
                                 .frame(width: 320, height: 180)
                         }
 
-                        // Progress bar
+                        // Progress bar with Electric Blue
                         let progressPercent = item.duration > 0 ? max(0, min(1, item.progress / item.duration)) : 0
                         VStack {
                             Spacer()
@@ -941,7 +941,7 @@
                                     .frame(height: 4)
                                     .overlay(alignment: .leading) {
                                         Rectangle()
-                                            .fill(Color.red)
+                                            .fill(Color(hex: "#0A84FF"))
                                             .frame(width: proxy.size.width * CGFloat(progressPercent), height: 4)
                                     }
                             }
@@ -952,21 +952,21 @@
                     }
 
                     Text(item.title)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .frame(width: 320, alignment: .leading)
 
                     if let seriesTitle = item.seriesTitle {
                         Text(seriesTitle)
-                            .font(.system(size: 16))
+                            .font(.system(size: 18))
                             .foregroundStyle(Color.white.opacity(0.6))
                             .lineLimit(1)
                             .frame(width: 320, alignment: .leading)
                     }
                 }
             }
-            .tvFocusEffect()
+            .buttonStyle(TVGridCardButtonStyle(cornerRadius: 16))
         }
     }
 

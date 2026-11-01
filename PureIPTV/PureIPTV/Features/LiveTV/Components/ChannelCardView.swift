@@ -89,15 +89,31 @@ public struct ChannelCardView: View {
                     HStack(spacing: 5) {
                         if let presentationNumber {
                             Text(String(presentationNumber))
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                            #if os(tvOS)
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                            #else
+                                #if os(tvOS)
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                #else
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                #endif
+                            #endif
                                 .foregroundStyle(Color(hex: "#64D2FF"))
                         }
                         Text(presentationName ?? channel.cleanTitle)
                     }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    #if os(tvOS)
+                    .font(.system(size: 18, weight: .semibold))
+                    #else
+                        #if os(tvOS)
+                            .font(.system(size: 18, weight: .semibold))
+                        #else
+                            .font(.system(size: 13, weight: .semibold))
+                        #endif
+                    #endif
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
 
                     Spacer(minLength: 4)
 
@@ -107,12 +123,22 @@ public struct ChannelCardView: View {
 
                     LiveBadge()
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
+                #if os(tvOS)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+                #else
+                    #if os(tvOS)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                    #else
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 10)
+                    #endif
+                #endif
             }
             .aspectRatio(16 / 9, contentMode: .fill)
             #if os(tvOS)
-                .buttonStyle(TVGridCardButtonStyle())
+                .buttonStyle(TVGridCardButtonStyle(cornerRadius: 16))
             #else
                 .buttonStyle(.plain)
             #endif

@@ -1572,6 +1572,7 @@ public struct VODDetailView: View {
                                         .padding(.horizontal, 32)
                                         .padding(.vertical, 16)
                                     }
+                                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
                                     .focused($isPlayButtonFocused)
                                     .defaultFocus($isPlayButtonFocused, true, priority: .userInitiated)
 
@@ -1586,6 +1587,8 @@ public struct VODDetailView: View {
                                         .padding(.horizontal, 28)
                                         .padding(.vertical, 16)
                                     }
+                                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+
                                     if history.progress / history.duration >= 0.90 {
                                         Button {
                                             store.send(.markUnwatched)
@@ -1594,6 +1597,7 @@ public struct VODDetailView: View {
                                                 .padding(.horizontal, 20)
                                                 .padding(.vertical, 16)
                                         }
+                                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                                     }
                                 } else {
                                     Button {
@@ -1607,6 +1611,7 @@ public struct VODDetailView: View {
                                         .padding(.horizontal, 32)
                                         .padding(.vertical, 16)
                                     }
+                                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
                                     .focused($isPlayButtonFocused)
                                     .defaultFocus($isPlayButtonFocused, true, priority: .userInitiated)
                                 }
@@ -1616,8 +1621,9 @@ public struct VODDetailView: View {
                                 } label: {
                                     Image(systemName: store.isFavorite ? "heart.fill" : "heart")
                                         .foregroundColor(store.isFavorite ? .red : .white)
-                                        .padding()
+                                        .padding(14)
                                 }
+                                .buttonStyle(TVCircleButtonStyle(isFavorite: store.isFavorite))
                             }
 
                             // Cast Row on tvOS

@@ -167,28 +167,17 @@
         }
 
         var body: some View {
-            VStack(spacing: 18) {
-                if isEditing {
+            if isEditing {
+                VStack(spacing: 18) {
                     profileArtwork
-                } else {
-                    Button(action: onSelect) {
-                        profileArtwork
-                    }
-                    .buttonStyle(.tvGridCard)
-                    .accessibilityLabel(profile.name)
-                }
 
-                HStack(spacing: 8) {
-                    Text(profile.name)
-                        .font(.system(size: isEditing ? 20 : 24, weight: isFocused ? .bold : .medium))
-                        .foregroundStyle(nameColor)
-                        .scaleEffect(nameScale)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .frame(maxWidth: .infinity, alignment: isEditing ? .leading : .center)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
+                    HStack(spacing: 8) {
+                        Text(profile.name)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if isEditing {
                         Button(action: onDelete) {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 18, weight: .bold))
@@ -199,8 +188,23 @@
                         .accessibilityLabel("\(AppStrings.Common.delete): \(profile.name)")
                         .accessibilityHint(AppStrings.Profile.deleteInstruction)
                     }
+                    .frame(width: 190)
                 }
-                .frame(width: 190)
+            } else {
+                Button(action: onSelect) {
+                    VStack(spacing: 18) {
+                        profileArtwork
+
+                        Text(profile.name)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(Color(hex: "#E4E1E7"))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .frame(width: 190, alignment: .center)
+                    }
+                }
+                .buttonStyle(TVGridCardButtonStyle(cornerRadius: 26))
+                .accessibilityLabel(profile.name)
             }
         }
 
@@ -281,39 +285,30 @@
         }
 
         var body: some View {
-            VStack(spacing: 18) {
-                Button(action: action) {
+            Button(action: action) {
+                VStack(spacing: 18) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(fillColor)
+                            .fill(Color.white.opacity(0.06))
                             .frame(width: 190, height: 190)
 
                         Image(systemName: "plus")
                             .font(.system(size: 48, weight: .light))
-                            .foregroundStyle(iconColor)
+                            .foregroundStyle(Color.white.opacity(0.6))
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(strokeColor, style: strokeStyle)
+                            .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     )
-                    .shadow(
-                        color: shadowColor,
-                        radius: shadowRadius,
-                        x: 0,
-                        y: isFocused ? 8 : 0
-                    )
-                    .scaleEffect(cardScale)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
-                }
-                .buttonStyle(.tvGridCard)
 
-                Text(AppStrings.Profile.addProfile)
-                    .font(.system(size: 24, weight: isFocused ? .bold : .medium))
-                    .foregroundStyle(labelColor)
-                    .scaleEffect(labelScale)
-                    .lineLimit(1)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
+                    Text(AppStrings.Profile.addProfile)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                        .lineLimit(1)
+                        .frame(width: 190, alignment: .center)
+                }
             }
+            .buttonStyle(TVGridCardButtonStyle(cornerRadius: 26))
         }
     }
 

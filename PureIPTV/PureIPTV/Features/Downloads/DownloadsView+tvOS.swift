@@ -75,7 +75,8 @@ import SwiftUI
                         completedDownloadsSection
                     }
                 }
-                .padding(48)
+                .padding(.horizontal, 80)
+                .padding(.vertical, 40)
                 .focusSection()
             }
         }

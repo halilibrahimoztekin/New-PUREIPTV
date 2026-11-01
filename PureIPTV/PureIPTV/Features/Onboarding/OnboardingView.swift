@@ -85,20 +85,23 @@ public struct OnboardingView: View {
                                 store.send(.startTapped)
                             } label: {
                                 Text(AppStrings.Onboarding.startNow)
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.system(size: 22, weight: .bold))
                                     .foregroundColor(.white)
+                                #if os(iOS)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                #if os(iOS)
                                     .background(Color.accentColor)
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                #else
+                                    .padding(.horizontal, 32)
+                                    .padding(.vertical, 14)
                                 #endif
                             }
                             #if os(iOS)
                             .buttonStyle(FluidScaleButtonStyle())
                             .padding(.horizontal, 40)
                             #else
-                            .tvFocusEffect()
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
                             .frame(width: 400)
                             #endif
                         }
