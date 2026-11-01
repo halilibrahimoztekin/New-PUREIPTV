@@ -5594,7 +5594,7 @@ public struct PlayerFeature {
                 }
 
                 // If within the same second and total duration is already known, avoid CPU churn
-                if isSameSecond && state.totalTime.components.seconds > 0 && state.subtitleReplaySession == nil {
+                if isSameSecond, state.totalTime.components.seconds > 0, state.subtitleReplaySession == nil {
                     return .none
                 }
 
@@ -5680,7 +5680,7 @@ public struct PlayerFeature {
                     state.totalTime = Duration.seconds(totalSecs)
                 }
 
-                if delta < 0.005 && state.totalTime.components.seconds > 0 {
+                if delta < 0.005, state.totalTime.components.seconds > 0 {
                     return .none
                 }
 

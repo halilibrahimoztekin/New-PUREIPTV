@@ -36,15 +36,8 @@
     }
 
     fileprivate enum FocusableField: Hashable {
-        case restart
-        case backward
-        case replayWithSubtitles
+        case play
         case playPause
-        case forward
-        case skipMarkers
-        case liveChannelsMenu
-        case audioSubtitleMenu
-        case displayModeMenu
         case scrubber
     }
 
@@ -687,7 +680,7 @@
 
         private func dismissUpNextAndRestoreFocus() {
             store.send(.dismissUpNext)
-            focusableField = isMaskShow ? .playPause : nil
+            focusableField = isMaskShow ? .playPause : .play
             resetIdleTimer()
         }
 
@@ -760,7 +753,6 @@
                         .opacity(store.isDeepDimmed ? 0.35 : 1)
                 }
             }
-            .defaultFocus($focusableField, .playPause)
             .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
         }
 
@@ -791,7 +783,7 @@
             withAnimation(.easeInOut(duration: 0.25)) {
                 isMaskShow = false
             }
-            focusableField = nil
+            focusableField = .play
             idleTimer?.invalidate()
         }
 
@@ -899,7 +891,7 @@
 
                 Spacer(minLength: 24)
 
-                // Sleek, fixed-size transport controls and contextual menus
+                // Sleek, fixed-size transport controls and contextual menus (No horizontal ScrollView!)
                 HStack(spacing: 18) {
                     if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
                         Button {
@@ -910,7 +902,6 @@
                                 .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .restart)
                     }
 
                     if !store.item.isLive || store.isPlayingCatchup {
@@ -926,7 +917,6 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .backward)
                         .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
                     }
 
@@ -943,7 +933,6 @@
                             .font(.system(size: 20, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .replayWithSubtitles)
                         .accessibilityLabel(AppStrings.Player.replayWithSubtitles)
                         .accessibilityHint(AppStrings.Player.replayWithSubtitlesHint)
                     }
@@ -976,7 +965,6 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .forward)
                         .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
                     }
 
@@ -1048,6 +1036,7 @@
                                 .font(.system(size: 24))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .liveChannelsMenu)
                         .accessibilityLabel(AppStrings.LiveTV.title)
                     }
 
@@ -1153,6 +1142,7 @@
                                 .font(.system(size: 26))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .audioSubtitleMenu)
                         .accessibilityLabel(AppStrings.Player.tracks)
                     }
 
@@ -1187,52 +1177,6 @@
                                             Image(systemName: "checkmark")
                                         }
                                     }
-                                }
-                            }
-                        }
-
-                        if store.canSwitchPlaybackEngine {
-                            Section(AppStrings.Player.playbackEngine) {
-                                ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                    Button {
-                                        guard !store.isSwitchingPlaybackEngine, engine != store.playbackEngine else { return }
-                                        onInteraction()
-                                        store.send(.switchPlaybackEngine(engine))
-                                    } label: {
-                                        if engine == store.playbackEngine {
-                                            Label(engine.title, systemImage: "checkmark")
-                                        } else {
-                                            Text(engine.title)
-                                        }
-                                    }
-                                    .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
-                                }
-                            }
-                        }
-
-                        if store.canManagePlaybackEnginePreference {
-                            Section(AppStrings.Player.itemPlaybackEnginePreference) {
-                                if let preference = store.itemSpecificPlaybackEnginePreference {
-                                    Label(
-                                        AppStrings.Player.itemPlaybackEnginePreferenceValue(preference.title),
-                                        systemImage: "checkmark"
-                                    )
-                                }
-                                if store.canSwitchPlaybackEngine,
-                                   store.itemSpecificPlaybackEnginePreference != store.playbackEngine
-                                {
-                                    Button(AppStrings.Player.saveCurrentPlaybackEngineForItem) {
-                                        onInteraction()
-                                        store.send(.saveCurrentPlaybackEnginePreference)
-                                    }
-                                    .disabled(store.isSwitchingPlaybackEngine)
-                                }
-                                if store.itemSpecificPlaybackEnginePreference != nil {
-                                    Button(AppStrings.Player.useGeneralPlaybackEnginePreference) {
-                                        onInteraction()
-                                        store.send(.clearCurrentPlaybackEnginePreference)
-                                    }
-                                    .disabled(store.isSwitchingPlaybackEngine)
                                 }
                             }
                         }
@@ -1344,6 +1288,7 @@
                             .font(.system(size: 24, weight: .semibold))
                     }
                     .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                    .focused($focusedField, equals: .displayModeMenu)
                     .accessibilityLabel(AppStrings.Common.more)
                 }
                 .fixedSize(horizontal: true, vertical: false)
