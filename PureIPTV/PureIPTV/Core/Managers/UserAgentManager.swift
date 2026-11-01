@@ -4,7 +4,6 @@ import Foundation
 public enum UserAgentPreset: String, CaseIterable, Identifiable, Sendable {
     case standard = "Varsayılan (PureIPTV)"
     case vlc = "VLC 3.0 (Tavsiye Edilen)"
-    case tiviMate = "TiviMate 4.7"
     case appleCoreMedia = "AppleCoreMedia (tvOS Native)"
     case exoPlayer = "ExoPlayer (Android TV)"
     case custom = "Özel (Manuel Giriş)"
@@ -23,8 +22,6 @@ public enum UserAgentPreset: String, CaseIterable, Identifiable, Sendable {
             #endif
         case .vlc:
             return "VLC/3.0.18 LibVLC/3.0.18"
-        case .tiviMate:
-            return "TiviMate/4.7.0 (Android TV)"
         case .appleCoreMedia:
             return "AppleCoreMedia/1.0.0.21J354 (Apple TV; U; CPU OS 17_0 like Mac OS X)"
         case .exoPlayer:

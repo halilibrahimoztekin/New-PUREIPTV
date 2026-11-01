@@ -1028,26 +1028,6 @@
                     .zIndex(85)
                 }
 
-                // Trakt.tv Scrobble Toast HUD (Madde #17)
-                if store.isTraktScrobbleHUDVisible {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            TraktScrobbleHUDView(
-                                message: store.traktScrobbleHUDMessage,
-                                isSuccess: true,
-                                progressPercent: store.traktScrobbleHUDPercent
-                            )
-                            .padding(.top, 40)
-                            .padding(.trailing, 20)
-                        }
-                        Spacer()
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isTraktScrobbleHUDVisible)
-                    .zIndex(95)
-                }
-
                 // Dynamic Range Indicator HUD (HDR / Dolby Vision / SDR) (Madde #20)
                 if store.isDynamicRangeHUDVisible, let drInfo = store.dynamicRangeInfo {
                     VStack {

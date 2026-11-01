@@ -36,8 +36,15 @@
     }
 
     fileprivate enum FocusableField: Hashable {
-        case play
+        case restart
+        case backward
+        case replayWithSubtitles
         case playPause
+        case forward
+        case skipMarkers
+        case liveChannelsMenu
+        case audioSubtitleMenu
+        case displayModeMenu
         case scrubber
     }
 
@@ -202,26 +209,6 @@
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: store.isAspectFeedbackVisible)
                         .zIndex(90)
-                    }
-
-                    // Trakt.tv Scrobble Toast HUD (Madde #17)
-                    if store.isTraktScrobbleHUDVisible {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                TraktScrobbleHUDView(
-                                    message: store.traktScrobbleHUDMessage,
-                                    isSuccess: true,
-                                    progressPercent: store.traktScrobbleHUDPercent
-                                )
-                                .padding(.top, 48)
-                                .padding(.trailing, 60)
-                            }
-                            Spacer()
-                        }
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: store.isTraktScrobbleHUDVisible)
-                        .zIndex(95)
                     }
 
                     // Dynamic Range Indicator HUD (HDR / Dolby Vision / SDR) (Madde #20)
@@ -700,7 +687,7 @@
 
         private func dismissUpNextAndRestoreFocus() {
             store.send(.dismissUpNext)
-            focusableField = isMaskShow ? .playPause : .play
+            focusableField = isMaskShow ? .playPause : nil
             resetIdleTimer()
         }
 
@@ -773,6 +760,7 @@
                         .opacity(store.isDeepDimmed ? 0.35 : 1)
                 }
             }
+            .defaultFocus($focusableField, .playPause)
             .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
         }
 
@@ -803,7 +791,7 @@
             withAnimation(.easeInOut(duration: 0.25)) {
                 isMaskShow = false
             }
-            focusableField = .play
+            focusableField = nil
             idleTimer?.invalidate()
         }
 
@@ -911,7 +899,7 @@
 
                 Spacer(minLength: 24)
 
-                // Sleek, fixed-size transport controls and contextual menus (No horizontal ScrollView!)
+                // Sleek, fixed-size transport controls and contextual menus
                 HStack(spacing: 18) {
                     if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
                         Button {
@@ -922,6 +910,7 @@
                                 .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .restart)
                     }
 
                     if !store.item.isLive || store.isPlayingCatchup {
@@ -937,6 +926,7 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .backward)
                         .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
                     }
 
@@ -953,6 +943,7 @@
                             .font(.system(size: 20, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .replayWithSubtitles)
                         .accessibilityLabel(AppStrings.Player.replayWithSubtitles)
                         .accessibilityHint(AppStrings.Player.replayWithSubtitlesHint)
                     }
@@ -985,6 +976,7 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .forward)
                         .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
                     }
 

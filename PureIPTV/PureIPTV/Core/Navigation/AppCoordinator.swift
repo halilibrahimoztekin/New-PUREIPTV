@@ -138,16 +138,6 @@ public struct AppCoordinator {
             homeRouteIndex: Int,
             requestID: UUID
         )
-        case settingsTraktAuthRouteDidDisappear(
-            presentationID: UUID,
-            homeRouteIndex: Int,
-            requestID: UUID
-        )
-        case settingsTraktWatchlistRouteDidDisappear(
-            presentationID: UUID,
-            homeRouteIndex: Int,
-            requestID: UUID
-        )
         case settingsHiddenContentRouteDidDisappear(
             presentationID: UUID,
             homeRouteIndex: Int,
@@ -342,7 +332,7 @@ public struct AppCoordinator {
             reducePlayerRoute(state: &state, action: action)
         case .home:
             reduceHome(state: &state, action: action)
-        case .settingsSpeedTest, .settingsPINSetup, .settingsTraktAuth, .settingsTraktWatchlist, .settingsHiddenContent, .settingsDiagnosticReport, .settingsBackupPreview:
+        case .settingsSpeedTest, .settingsPINSetup, .settingsHiddenContent, .settingsDiagnosticReport, .settingsBackupPreview:
             reduceSettingsModals(state: &state, action: action)
         case .globalSearch:
             reduceGlobalSearch(state: &state, action: action)
@@ -1552,6 +1542,7 @@ public struct AppCoordinator {
 
         switch action {
         case let .router(.routeAction(_, .seriesDetail(.delegate(.didSelectEpisode(playable, playlist))))):
+            guard state.isPremium else { return .send(.presentPaywall) }
             let playerState = PlayerFeature.State(item: playable, playlist: playlist)
             state.isPlayerMini = false
             state.miniPlayer = nil
@@ -1623,6 +1614,7 @@ public struct AppCoordinator {
 
         switch action {
         case let .router(.routeAction(_, .vodDetail(.delegate(.didSelectPlay(playable))))):
+            guard state.isPremium else { return .send(.presentPaywall) }
             let playerState = PlayerFeature.State(item: playable)
             state.isPlayerMini = false
             state.miniPlayer = nil
@@ -1630,9 +1622,6 @@ public struct AppCoordinator {
             return .none
 
         case let .router(.routeAction(detailRouteIndex, .vodDetail(.delegate(.didSelectVOD(vod))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
             guard state.routes.indices.contains(detailRouteIndex),
                   case let .vodDetail(detailState) = state.routes[detailRouteIndex].screen
             else { return .none }
@@ -2136,38 +2125,6 @@ public struct AppCoordinator {
             ))
             return .none
 
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktAuth(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.traktAuthPresentationRequestID == requestID,
-                  homeState.settings.isTraktAuthSheetPresented
-            else { return .none }
-            state.routes.presentSheet(.settingsTraktAuth(
-                SettingsTraktAuthRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
-        case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentTraktWatchlist(requestID)))))):
-            guard state.routes.indices.contains(homeRouteIndex),
-                  homeRouteIndex == state.routes.count - 1,
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.selectedTab == .settings,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID,
-                  homeState.settings.isTraktWatchlistPresented
-            else { return .none }
-            state.routes.presentSheet(.settingsTraktWatchlist(
-                SettingsTraktWatchlistRouteFeature.State(
-                    homeRouteIndex: homeRouteIndex,
-                    requestID: requestID
-                )
-            ))
-            return .none
-
         case let .router(.routeAction(homeRouteIndex, .home(.settings(.delegate(.presentHiddenContentManagement(requestID)))))):
             guard state.routes.indices.contains(homeRouteIndex),
                   homeRouteIndex == state.routes.count - 1,
@@ -2584,17 +2541,11 @@ public struct AppCoordinator {
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.didSelectVOD(vod))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
             guard let config = detailConfig(for: vod, activeConfig: state.activeConfig) else { return .none }
             state.routes.push(.vodDetail(VODDetailFeature.State(vod: vod, config: config)))
             return .none
 
         case let .router(.routeAction(_, .home(.delegate(.didSelectSeries(series))))):
-            if !state.isPremium {
-                return .send(.presentPaywall)
-            }
             guard let config = detailConfig(for: series, activeConfig: state.activeConfig) else { return .none }
             state.routes.push(.seriesDetail(SeriesDetailFeature.State(series: series, config: config)))
             return .none
@@ -2672,48 +2623,6 @@ public struct AppCoordinator {
             return .send(.router(.routeAction(
                 id: routeState.homeRouteIndex,
                 action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsTraktAuth(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsTraktAuth(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.traktAuthPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
-            )))
-
-        case let .router(.routeAction(
-            routeIndex,
-            .settingsTraktWatchlist(.delegate(.close(presentationID, requestID)))
-        )):
-            guard state.routes.indices.contains(routeIndex),
-                  routeIndex == state.routes.count - 1,
-                  case let .settingsTraktWatchlist(routeState) = state.routes[routeIndex].screen,
-                  routeState.presentationID == presentationID,
-                  routeState.requestID == requestID
-            else { return .none }
-            state.routes.dismiss()
-
-            guard state.routes.indices.contains(routeState.homeRouteIndex),
-                  case let .home(homeState) = state.routes[routeState.homeRouteIndex].screen,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: routeState.homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
             )))
 
         case let .router(.routeAction(
@@ -2913,14 +2822,20 @@ public struct AppCoordinator {
 
         case let .subscriptionStatusResponse(.success(info)):
             state.isPremium = !info.entitlements.active.isEmpty
-            if !state.isPremium {
+            // Show promotional paywall ONLY ONCE upon initial entry
+            if !state.isPremium, !UserDefaults.standard.bool(forKey: "com.pureiptv.hasShownInitialPaywallPromo") {
+                UserDefaults.standard.set(true, forKey: "com.pureiptv.hasShownInitialPaywallPromo")
                 return .send(.presentPaywall)
             }
             return .none
 
         case .subscriptionStatusResponse(.failure):
             state.isPremium = false
-            return .send(.presentPaywall)
+            if !UserDefaults.standard.bool(forKey: "com.pureiptv.hasShownInitialPaywallPromo") {
+                UserDefaults.standard.set(true, forKey: "com.pureiptv.hasShownInitialPaywallPromo")
+                return .send(.presentPaywall)
+            }
+            return .none
 
         case .presentPaywall:
             state.routes.presentSheet(.paywall(PaywallFeature.State()))
@@ -3927,48 +3842,6 @@ public struct AppCoordinator {
                 action: .home(.settings(.coordinatorDismissPINSetup(requestID: requestID)))
             )))
 
-        case let .settingsTraktAuthRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let traktAuthRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsTraktAuth(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let traktAuthRouteIndex {
-                guard traktAuthRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.traktAuthPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktAuth(requestID: requestID)))
-            )))
-
-        case let .settingsTraktWatchlistRouteDidDisappear(presentationID, homeRouteIndex, requestID):
-            let traktWatchlistRouteIndex = state.routes.indices.last(where: { index in
-                if case let .settingsTraktWatchlist(routeState) = state.routes[index].screen {
-                    return routeState.presentationID == presentationID && routeState.requestID == requestID
-                }
-                return false
-            })
-            if let traktWatchlistRouteIndex {
-                guard traktWatchlistRouteIndex == state.routes.count - 1 else { return .none }
-                state.routes.dismiss()
-            }
-
-            guard state.routes.indices.contains(homeRouteIndex),
-                  case let .home(homeState) = state.routes[homeRouteIndex].screen,
-                  homeState.settings.traktWatchlistPresentationRequestID == requestID
-            else { return .none }
-            return .send(.router(.routeAction(
-                id: homeRouteIndex,
-                action: .home(.settings(.coordinatorDismissTraktWatchlist(requestID: requestID)))
-            )))
-
         case let .settingsHiddenContentRouteDidDisappear(presentationID, homeRouteIndex, requestID):
             let hiddenContentRouteIndex = state.routes.indices.last(where: { index in
                 if case let .settingsHiddenContent(routeState) = state.routes[index].screen {
@@ -4344,15 +4217,11 @@ public struct AppCoordinator {
         guard let config = state.activeConfig else { return .none }
 
         var streamURL: URL? = item.streamURL.flatMap { URL(string: $0) }
-        if streamURL == nil, item.type == "vod",
+        if streamURL == nil, item.type == "vod" || (item.seriesTitle == nil && item.seriesID == nil),
            let serverURL = config.serverURL, let username = config.username, let password = config.password
         {
             streamURL = serverURL.appendingPathComponent("movie/\(username)/\(password)/\(item.id).mp4")
-        } else if streamURL == nil, item.type == "episode",
-                  let serverURL = config.serverURL, let username = config.username, let password = config.password
-        {
-            streamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(item.id).mp4")
-        } else if streamURL == nil, item.type == "episode",
+        } else if streamURL == nil, (item.type == "episode" || item.type == "series" || item.seriesID != nil || item.seriesTitle != nil),
                   let serverURL = config.serverURL, let username = config.username, let password = config.password
         {
             streamURL = serverURL.appendingPathComponent("series/\(username)/\(password)/\(item.id).mp4")
@@ -4596,16 +4465,6 @@ public struct AppCoordinatorView: View {
                 )
             case let .settingsPINSetup(screenStore):
                 SettingsPINSetupRouteView(
-                    coordinatorStore: store,
-                    routeStore: screenStore
-                )
-            case let .settingsTraktAuth(screenStore):
-                SettingsTraktAuthRouteView(
-                    coordinatorStore: store,
-                    routeStore: screenStore
-                )
-            case let .settingsTraktWatchlist(screenStore):
-                SettingsTraktWatchlistRouteView(
                     coordinatorStore: store,
                     routeStore: screenStore
                 )
@@ -6429,165 +6288,6 @@ private struct SettingsPINSetupRouteView: View {
 
     private func notifyRouteDidDisappear() {
         coordinatorStore.send(.settingsPINSetupRouteDidDisappear(
-            presentationID: routeStore.presentationID,
-            homeRouteIndex: routeStore.homeRouteIndex,
-            requestID: routeStore.requestID
-        ))
-    }
-}
-
-private struct SettingsTraktAuthRouteView: View {
-    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
-    let routeStore: StoreOf<SettingsTraktAuthRouteFeature>
-
-    var body: some View {
-        Group {
-            if isCurrentPresentation {
-                TraktAuthView(store: traktStore, onClose: close)
-            }
-        }
-        .onAppear(perform: closeIfStale)
-        .onChange(of: isCurrentPresentation) { _, isCurrent in
-            if !isCurrent {
-                closeIfStale()
-            }
-        }
-        .onDisappear(perform: notifyRouteDidDisappear)
-    }
-
-    private var homeState: HomeFeature.State? {
-        let homeRouteIndex = routeStore.homeRouteIndex
-        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
-              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
-        else { return nil }
-        return state
-    }
-
-    private var traktStore: StoreOf<TraktFeature> {
-        let homeRouteIndex = routeStore.homeRouteIndex
-        return coordinatorStore.scope(
-            state: { coordinatorState in
-                guard coordinatorState.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen
-                else { return TraktFeature.State() }
-                return homeState.settings.traktState
-            },
-            action: { action in
-                .router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.settings(.traktAction(action)))
-                ))
-            }
-        )
-    }
-
-    private var isCurrentPresentation: Bool {
-        homeState?.selectedTab == .settings
-            && homeState?.settings.isTraktAuthSheetPresented == true
-            && homeState?.settings.traktAuthPresentationRequestID == routeStore.requestID
-    }
-
-    private var isRouteActive: Bool {
-        guard case let .settingsTraktAuth(state) = coordinatorStore.routes.last?.screen
-        else { return false }
-        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
-    }
-
-    private func close() {
-        routeStore.send(.closeTapped)
-    }
-
-    private func closeIfStale() {
-        guard !isCurrentPresentation, isRouteActive else { return }
-        close()
-    }
-
-    private func notifyRouteDidDisappear() {
-        coordinatorStore.send(.settingsTraktAuthRouteDidDisappear(
-            presentationID: routeStore.presentationID,
-            homeRouteIndex: routeStore.homeRouteIndex,
-            requestID: routeStore.requestID
-        ))
-    }
-}
-
-private struct SettingsTraktWatchlistRouteView: View {
-    @Bindable var coordinatorStore: StoreOf<AppCoordinator>
-    let routeStore: StoreOf<SettingsTraktWatchlistRouteFeature>
-
-    var body: some View {
-        Group {
-            if isCurrentPresentation {
-                NavigationStack {
-                    TraktWatchlistView(store: traktStore)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(AppStrings.Common.close) {
-                                    close()
-                                }
-                            }
-                        }
-                }
-            }
-        }
-        .onAppear(perform: closeIfStale)
-        .onChange(of: isCurrentPresentation) { _, isCurrent in
-            if !isCurrent {
-                closeIfStale()
-            }
-        }
-        .onDisappear(perform: notifyRouteDidDisappear)
-    }
-
-    private var homeState: HomeFeature.State? {
-        let homeRouteIndex = routeStore.homeRouteIndex
-        guard coordinatorStore.routes.indices.contains(homeRouteIndex),
-              case let .home(state) = coordinatorStore.routes[homeRouteIndex].screen
-        else { return nil }
-        return state
-    }
-
-    private var traktStore: StoreOf<TraktFeature> {
-        let homeRouteIndex = routeStore.homeRouteIndex
-        return coordinatorStore.scope(
-            state: { coordinatorState in
-                guard coordinatorState.routes.indices.contains(homeRouteIndex),
-                      case let .home(homeState) = coordinatorState.routes[homeRouteIndex].screen
-                else { return TraktFeature.State() }
-                return homeState.settings.traktState
-            },
-            action: { action in
-                .router(.routeAction(
-                    id: homeRouteIndex,
-                    action: .home(.settings(.traktAction(action)))
-                ))
-            }
-        )
-    }
-
-    private var isCurrentPresentation: Bool {
-        homeState?.selectedTab == .settings
-            && homeState?.settings.isTraktWatchlistPresented == true
-            && homeState?.settings.traktWatchlistPresentationRequestID == routeStore.requestID
-    }
-
-    private var isRouteActive: Bool {
-        guard case let .settingsTraktWatchlist(state) = coordinatorStore.routes.last?.screen
-        else { return false }
-        return state.presentationID == routeStore.presentationID && state.requestID == routeStore.requestID
-    }
-
-    private func close() {
-        routeStore.send(.closeTapped)
-    }
-
-    private func closeIfStale() {
-        guard !isCurrentPresentation, isRouteActive else { return }
-        close()
-    }
-
-    private func notifyRouteDidDisappear() {
-        coordinatorStore.send(.settingsTraktWatchlistRouteDidDisappear(
             presentationID: routeStore.presentationID,
             homeRouteIndex: routeStore.homeRouteIndex,
             requestID: routeStore.requestID

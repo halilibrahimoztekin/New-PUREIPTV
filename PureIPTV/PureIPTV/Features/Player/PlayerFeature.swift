@@ -39,7 +39,6 @@ public struct PlayerFeature {
         public static let recentChannelsHUD = "PlayerFeature.recentChannelsHUD"
         public static let recallHUD = "PlayerFeature.recallHUD"
         public static let dialerAutoSubmit = "PlayerFeature.dialerAutoSubmit"
-        public static let traktScrobbleHUD = "PlayerFeature.traktScrobbleHUD"
         public static let dynamicRangeHUD = "PlayerFeature.dynamicRangeHUD"
         public static let afrToast = "PlayerFeature.afrToast"
         public static let displayMode = "PlayerFeature.displayMode"
@@ -504,13 +503,6 @@ public struct PlayerFeature {
         public var isChannelNameCleaningEnabled: Bool = true
         public var autoSelectFirstAlternativeSource: Bool = false
         public var reverseChannelZappingDirection: Bool = false
-
-        /// Trakt.tv Watchlist & Scrobble Sync Engine (Madde #17)
-        public var isTraktScrobbleStarted: Bool = false
-        public var lastTraktScrobbleProgress: Double = 0.0
-        public var isTraktScrobbleHUDVisible: Bool = false
-        public var traktScrobbleHUDMessage: String = ""
-        public var traktScrobbleHUDPercent: Double?
 
         /// Zapping & Last Channel Recall
         public var previousChannel: PlayableItem?
@@ -1014,13 +1006,6 @@ public struct PlayerFeature {
             profileScope: ProfileContextSnapshot
         )
 
-        // Trakt.tv Scrobbler (Madde #17)
-        case traktScrobbleStart
-        case traktScrobblePause
-        case traktScrobbleStop
-        case showTraktScrobbleHUD(message: String, progress: Double?)
-        case dismissTraktScrobbleHUD
-
         // Channel Hide & Category Blacklist (Madde #19)
         case loadHiddenContentPreferences
         case hideChannel(id: String, title: String)
@@ -1063,7 +1048,6 @@ public struct PlayerFeature {
     @Dependency(\.downloadClient) var downloadClient
     @Dependency(\.recentChannelsClient) var recentChannelsClient
     @Dependency(\.streamHealthClient) var streamHealthClient
-    @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
@@ -1293,7 +1277,6 @@ public struct PlayerFeature {
         let downloadClient = downloadClient
         let recentChannelsClient = recentChannelsClient
         let streamHealthClient = streamHealthClient
-        let traktClient = traktClient
         let pipClient = pipClient
         let parentalControlClient = parentalControlClient
         let displayModeClient = displayModeClient
@@ -1304,7 +1287,7 @@ public struct PlayerFeature {
         let nowPlayingClient = nowPlayingClient
 
         Reduce { state, action in
-            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, downloadClient: downloadClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, traktClient: traktClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, playlistRepository: playlistRepository, profileContextClient: profileContextClient, viewingStatisticsClient: viewingStatisticsClient, nowPlayingClient: nowPlayingClient)
+            Self.reduceHelper(state: &state, action: action, playerClient: playerClient, databaseClient: databaseClient, iptvClient: iptvClient, mediaServerClient: mediaServerClient, settingsClient: settingsClient, downloadClient: downloadClient, recentChannelsClient: recentChannelsClient, streamHealthClient: streamHealthClient, pipClient: pipClient, parentalControlClient: parentalControlClient, displayModeClient: displayModeClient, customEPGMappingClient: customEPGMappingClient, playbackSkipMarkerClient: playbackSkipMarkerClient, playlistRepository: playlistRepository, profileContextClient: profileContextClient, viewingStatisticsClient: viewingStatisticsClient, nowPlayingClient: nowPlayingClient)
         }
     }
 
@@ -1576,7 +1559,7 @@ public struct PlayerFeature {
                 : nil)
     }
 
-    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, downloadClient: DownloadClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, traktClient: TraktClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient, viewingStatisticsClient: ViewingStatisticsClient, nowPlayingClient: NowPlayingClient) -> Effect<Action> {
+    static func reduceHelper(state: inout State, action: Action, playerClient: PlayerClient, databaseClient: DatabaseClient, iptvClient: IPTVClient, mediaServerClient: MediaServerClient, settingsClient: SettingsClient, downloadClient: DownloadClient, recentChannelsClient: RecentChannelsClient, streamHealthClient: StreamHealthClient, pipClient: PiPClient, parentalControlClient: ParentalControlClient, displayModeClient: DisplayModeClient, customEPGMappingClient: CustomEPGMappingClient, playbackSkipMarkerClient: PlaybackSkipMarkerClient, playlistRepository: PlaylistRepository, profileContextClient: ProfileContextClient, viewingStatisticsClient: ViewingStatisticsClient, nowPlayingClient: NowPlayingClient) -> Effect<Action> {
         switch action {
         case .onAppear:
             if let config = state.item.config,
@@ -1919,7 +1902,6 @@ public struct PlayerFeature {
                 downloadClient: downloadClient,
                 recentChannelsClient: recentChannelsClient,
                 streamHealthClient: streamHealthClient,
-                traktClient: traktClient,
                 pipClient: pipClient,
                 parentalControlClient: parentalControlClient,
                 displayModeClient: displayModeClient,
@@ -2084,14 +2066,6 @@ public struct PlayerFeature {
                         // an explicit mark-as-unwatched action. Continue
                         // Watching surfaces filter completed entries.
                         try? await databaseClient.saveWatchProgress(historyItem, profileScope)
-
-                        // Trakt.tv scrobble stop on close (Madde #17)
-                        if !item.isLive {
-                            let pct = totalSecs > 0 ? (currentSecs / totalSecs) * 100.0 : 0.0
-                            if let payload = TraktMediaParser.makePayload(title: item.title, seriesTitle: item.seriesTitle, isLive: item.isLive, progress: pct) {
-                                _ = try? await traktClient.scrobbleStop(payload)
-                            }
-                        }
                     }
 
                     if !isPiPActive {
@@ -2375,8 +2349,7 @@ public struct PlayerFeature {
                 .run { _ in
                     try await playerClient.resume(playbackRate)
                 },
-                updateNowPlaying(state: state, client: nowPlayingClient),
-                state.isTraktScrobbleStarted ? .send(.traktScrobbleStart) : .none
+                updateNowPlaying(state: state, client: nowPlayingClient)
             )
 
         case .pause:
@@ -2397,8 +2370,7 @@ public struct PlayerFeature {
                 .run { _ in
                     try await playerClient.pause()
                 },
-                updateNowPlaying(state: state, client: nowPlayingClient),
-                .send(.traktScrobblePause)
+                updateNowPlaying(state: state, client: nowPlayingClient)
             )
 
         case .stop:
@@ -2443,8 +2415,7 @@ public struct PlayerFeature {
                     }
                     try await playerClient.stop()
                     await MediaServerStreamProxy.shared.closeSession(for: mediaServerProxyURL)
-                },
-                .send(.traktScrobbleStop)
+                }
             )
 
         case .requestXtreamLiveOutputFormats:
@@ -3202,78 +3173,6 @@ public struct PlayerFeature {
             return .run { _ in
                 settingsClient.setIsChannelNameCleaningEnabled(enabled)
             }
-
-        // Trakt.tv Scrobbler (Madde #17)
-        case .traktScrobbleStart:
-            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
-                return .none
-            }
-            let item = state.item
-            let percent = state.position * 100.0
-            guard let payload = TraktMediaParser.makePayload(
-                title: item.title,
-                seriesTitle: item.seriesTitle,
-                isLive: item.isLive,
-                progress: percent
-            ) else { return .none }
-
-            return .run { send in
-                if let resp = try? await traktClient.scrobbleStart(payload) {
-                    await send(.showTraktScrobbleHUD(message: "Trakt: Scrobble Başlatıldı", progress: resp.progress))
-                }
-            }
-
-        case .traktScrobblePause:
-            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
-                return .none
-            }
-            let item = state.item
-            let percent = state.position * 100.0
-            guard let payload = TraktMediaParser.makePayload(
-                title: item.title,
-                seriesTitle: item.seriesTitle,
-                isLive: item.isLive,
-                progress: percent
-            ) else { return .none }
-
-            return .run { _ in
-                _ = try? await traktClient.scrobblePause(payload)
-            }
-
-        case .traktScrobbleStop:
-            guard !state.item.isLive, traktClient.isAuthenticated(), traktClient.isAutoScrobbleEnabled() else {
-                return .none
-            }
-            let item = state.item
-            let percent = state.position * 100.0
-            guard let payload = TraktMediaParser.makePayload(
-                title: item.title,
-                seriesTitle: item.seriesTitle,
-                isLive: item.isLive,
-                progress: percent
-            ) else { return .none }
-
-            return .run { send in
-                if let resp = try? await traktClient.scrobbleStop(payload) {
-                    if resp.action == "scrobble" || percent >= 80.0 {
-                        await send(.showTraktScrobbleHUD(message: "Trakt: İzlendi Olarak İşaretlendi", progress: resp.progress))
-                    }
-                }
-            }
-
-        case let .showTraktScrobbleHUD(message, progress):
-            state.traktScrobbleHUDMessage = message
-            state.traktScrobbleHUDPercent = progress
-            state.isTraktScrobbleHUDVisible = true
-            return .run { send in
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                await send(.dismissTraktScrobbleHUD)
-            }
-            .cancellable(id: CancelID.traktScrobbleHUD, cancelInFlight: true)
-
-        case .dismissTraktScrobbleHUD:
-            state.isTraktScrobbleHUDVisible = false
-            return .cancel(id: CancelID.traktScrobbleHUD)
 
         case let .dragGestureChanged(translation, screenWidth, _, startLocation):
             state.lastDragTranslation = translation
@@ -5687,11 +5586,18 @@ public struct PlayerFeature {
                 state.isTransitioningEpisode = false
                 return .send(.initiateAutoReconnect)
             case let .timeChanged(time):
+                let isSameSecond = time.components.seconds == state.currentTime.components.seconds
                 state.currentTime = time
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, state.position > 0.001, time.components.seconds > 0 {
                     let totalSecs = Double(time.components.seconds) / state.position
                     state.totalTime = Duration.seconds(totalSecs)
                 }
+
+                // If within the same second and total duration is already known, avoid CPU churn
+                if isSameSecond && state.totalTime.components.seconds > 0 && state.subtitleReplaySession == nil {
+                    return .none
+                }
+
                 var effects: [Effect<Action>] = []
                 if let session = state.subtitleReplaySession,
                    let temporaryTrackID = session.temporarySubtitleTrackID,
@@ -5767,31 +5673,22 @@ public struct PlayerFeature {
                     Self.updateNowPlaying(state: state, client: nowPlayingClient)
                 )
             case let .positionChanged(pos):
+                let delta = abs(pos - state.position)
                 state.position = pos
                 if state.item.epgChannelID == nil, state.totalTime.components.seconds == 0, pos > 0.001, state.currentTime.components.seconds > 0 {
                     let totalSecs = Double(state.currentTime.components.seconds) / pos
                     state.totalTime = Duration.seconds(totalSecs)
                 }
 
-                var effects: [Effect<Action>] = [
+                if delta < 0.005 && state.totalTime.components.seconds > 0 {
+                    return .none
+                }
+
+                let effects: [Effect<Action>] = [
                     updateUpNextState(state: &state, settingsClient: settingsClient),
                     reloadSkipMarkersAfterProfileChange(state: &state, profileContextClient: profileContextClient),
                     reloadRememberedPlaybackChoiceAfterProfileChange(state: &state, profileContextClient: profileContextClient),
                 ]
-
-                // Trakt.tv VOD scrobble progress detection (Madde #17)
-                if !state.item.isLive {
-                    let curSecs = Double(state.currentTime.components.seconds)
-                    let pct = pos * 100.0
-                    if curSecs >= 10, !state.isTraktScrobbleStarted {
-                        state.isTraktScrobbleStarted = true
-                        state.lastTraktScrobbleProgress = pct
-                        effects.append(.send(.traktScrobbleStart))
-                    } else if pct >= 80.0, state.lastTraktScrobbleProgress < 80.0 {
-                        state.lastTraktScrobbleProgress = pct
-                        effects.append(.send(.traktScrobbleStop))
-                    }
-                }
 
                 return .merge(effects)
             default:
@@ -6254,14 +6151,6 @@ public struct PlayerFeature {
                         // Retain completed progress as the watched marker;
                         // detail screens can then let the user reset it.
                         try? await databaseClient.saveWatchProgress(historyItem, profileScope)
-
-                        // Trakt.tv scrobble stop on close (Madde #17)
-                        if !item.isLive {
-                            let pct = totalSecs > 0 ? (currentSecs / totalSecs) * 100.0 : 0.0
-                            if let payload = TraktMediaParser.makePayload(title: item.title, seriesTitle: item.seriesTitle, isLive: item.isLive, progress: pct) {
-                                _ = try? await traktClient.scrobbleStop(payload)
-                            }
-                        }
                     }
 
                     if !isPiPActive {
@@ -6833,14 +6722,20 @@ public struct PlayerFeature {
 
         case let .displayModeRequestFinished(result, requestID):
             guard state.displayModeRequestID == requestID else { return .none }
+            guard result.status != .criteriaUnavailable, result.status != .systemMatchingDisabled else {
+                return .none
+            }
             state.afrMatchResult = result
             state.isAFRToastVisible = true
             return .run { send in
-                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await send(.hideAFRToast)
             }.cancellable(id: CancelID.afrToast, cancelInFlight: true)
 
         case let .showAFRToast(result):
+            guard result.status != .criteriaUnavailable, result.status != .systemMatchingDisabled else {
+                return .none
+            }
             state.afrMatchResult = result
             state.isAFRToastVisible = true
             return .run { send in

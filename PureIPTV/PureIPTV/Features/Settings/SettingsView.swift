@@ -510,47 +510,34 @@ public struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if store.selectedPlaybackContentKind == .vod {
-                    Picker("Varsayılan Oynatıcı", selection: Binding(
-                        get: { selectedPlaybackDefaults.preferredEngine },
-                        set: { store.send(.updatePlaybackDefaults(.preferredEngine($0))) }
-                    )) {
-                        ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                            Text(engine.title).tag(engine)
-                        }
-                    }
-                    Text("AVPlayer uyumsuz akışlarda otomatik olarak VLC kullanılır.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Bu içerik türünde şu anda VLC oynatıcısı kullanılır.")
-                        .font(.caption)
+                HStack {
+                    Text("Oynatıcı Motoru")
+                    Spacer()
+                    Text("VLC (Donanım Hızlandırmalı)")
                         .foregroundStyle(.secondary)
                 }
 
-                if store.selectedPlaybackContentKind != .vod || selectedPlaybackDefaults.preferredEngine == .vlc {
-                    Picker("Arabellek", selection: Binding(
-                        get: { selectedPlaybackDefaults.bufferChoice },
-                        set: { store.send(.updatePlaybackDefaults(.bufferChoice($0))) }
-                    )) {
-                        ForEach(PlaybackBufferChoice.allCases) { choice in
-                            Text(choice.title).tag(choice)
-                        }
+                Picker("Arabellek", selection: Binding(
+                    get: { selectedPlaybackDefaults.bufferChoice },
+                    set: { store.send(.updatePlaybackDefaults(.bufferChoice($0))) }
+                )) {
+                    ForEach(PlaybackBufferChoice.allCases) { choice in
+                        Text(choice.title).tag(choice)
                     }
-                    Text("Otomatik, VOD için eski arabellek ayarını; Canlı ve Arşiv için motorun varsayılanını kullanır.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Daha büyük arabellek ilk görüntüyü geciktirir ve daha fazla bellek kullanır; kesintili bağlantılarda oynatımı daha dayanıklı kılabilir.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                }
+                Text("Otomatik, VOD için eski arabellek ayarını; Canlı ve Arşiv için motorun varsayılanını kullanır.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Daha büyük arabellek ilk görüntüyü geciktirir ve daha fazla bellek kullanır; kesintili bağlantılarda oynatımı daha dayanıklı kılabilir.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                    Picker("Deinterlace", selection: Binding(
-                        get: { selectedPlaybackDefaults.deinterlaceMode },
-                        set: { store.send(.updatePlaybackDefaults(.deinterlaceMode($0))) }
-                    )) {
-                        ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+                Picker("Deinterlace", selection: Binding(
+                    get: { selectedPlaybackDefaults.deinterlaceMode },
+                    set: { store.send(.updatePlaybackDefaults(.deinterlaceMode($0))) }
+                )) {
+                    ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
                     }
                 }
 
@@ -970,69 +957,6 @@ public struct SettingsView: View {
                         Text(msg)
                             .font(.caption2)
                             .foregroundStyle(store.cloudSyncMessage?.contains("hata") == true ? Color.red : Color(hex: "#30D158"))
-                    }
-                }
-            }
-
-            // Trakt.tv Integration (Madde #17)
-            Section(
-                header: Text("Trakt.tv Senkronizasyonu"),
-                footer: Text("VOD film ve dizi ilerlemelerinizi Trakt.tv ile gerçek zamanlı eşitleyin.")
-            ) {
-                if store.isTraktAuthenticated {
-                    HStack {
-                        Image(systemName: "tv.badge.wifi")
-                            .foregroundColor(Color(hex: "#ED1C24"))
-                        Text("Bağlı Hesap")
-                        Spacer()
-                        Text(store.traktUsername ?? "Kullanıcı")
-                            .foregroundColor(Color(hex: "#ED1C24"))
-                            .bold()
-                    }
-
-                    Toggle("Otomatik Scrobble", isOn: Binding(
-                        get: { store.isTraktAutoScrobbleEnabled },
-                        set: { store.send(.toggleTraktAutoScrobble($0)) }
-                    ))
-                    .tint(Color(hex: "#ED1C24"))
-
-                    Button {
-                        store.send(.openTraktWatchlist)
-                    } label: {
-                        HStack {
-                            Image(systemName: "bookmark.fill")
-                                .foregroundColor(Color(hex: "#ED1C24"))
-                            Text("İzleme Listesi & Devam Edenler")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
-                                .font(.caption)
-                        }
-                    }
-                    .foregroundColor(.primary)
-
-                    Button(role: .destructive) {
-                        store.send(.traktLogout)
-                    } label: {
-                        HStack {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("Trakt Hesabından Çıkış Yap")
-                        }
-                    }
-                } else {
-                    Button {
-                        store.send(.setTraktAuthSheetPresented(true))
-                    } label: {
-                        HStack {
-                            Image(systemName: "tv.badge.wifi")
-                                .foregroundColor(Color(hex: "#ED1C24"))
-                            Text("Trakt.tv ile Bağlan")
-                                .fontWeight(.semibold)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
-                                .font(.caption)
-                        }
                     }
                 }
             }

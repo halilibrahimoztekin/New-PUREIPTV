@@ -117,16 +117,6 @@ public struct SettingsFeature {
         public var backupPreviewDismissedWhileRestoring = false
         public var backupPreviewPresentationRequestID: UUID?
 
-        // Trakt.tv Integration (Madde #17)
-        public var isTraktAuthenticated: Bool = false
-        public var traktUsername: String?
-        public var isTraktAutoScrobbleEnabled: Bool = true
-        public var isTraktAuthSheetPresented: Bool = false
-        public var traktAuthPresentationRequestID: UUID?
-        public var isTraktWatchlistPresented: Bool = false
-        public var traktWatchlistPresentationRequestID: UUID?
-        public var traktState: TraktFeature.State = .init()
-
         // Hidden Content & Category Blacklist (Madde #19)
         public var hiddenChannelsCount: Int = 0
         public var blacklistedCategoriesCount: Int = 0
@@ -217,8 +207,6 @@ public struct SettingsFeature {
             case presentCustomEPGSettings(requestID: UUID)
             case presentCustomEPGSourceAdd(requestID: UUID)
             case presentPINSetup(requestID: UUID)
-            case presentTraktAuth(requestID: UUID)
-            case presentTraktWatchlist(requestID: UUID)
             case presentHiddenContentManagement(requestID: UUID)
             case presentDiagnosticReport(requestID: UUID)
             case presentBackupPreview(requestID: UUID)
@@ -303,11 +291,6 @@ public struct SettingsFeature {
         case updatePremiumStatus(Bool)
         case switchProfileTapped
 
-        // Trakt.tv Actions (Madde #17)
-        case setTraktAuthSheetPresented(Bool)
-        case coordinatorDismissTraktAuth(requestID: UUID)
-        case openTraktWatchlist
-        case coordinatorDismissTraktWatchlist(requestID: UUID)
         case presentDiagnosticReport(URL)
         case coordinatorDismissDiagnosticReport(requestID: UUID)
         case presentBackupPreview(url: URL, preview: PureIPTVBackupPreview)
@@ -320,9 +303,6 @@ public struct SettingsFeature {
         case backupExportAlertDismissed
         case restorePendingBackup(requestID: UUID)
         case backupRestoreResponse(requestID: UUID, errorMessage: String?)
-        case traktAction(TraktFeature.Action)
-        case toggleTraktAutoScrobble(Bool)
-        case traktLogout
 
         // PiP & Background Playback Actions (Madde #18)
         case setAutoPiPEnabled(Bool)
@@ -378,7 +358,6 @@ public struct SettingsFeature {
     @Dependency(\.databaseClient) var databaseClient
     @Dependency(\.playerClient) var playerClient
     @Dependency(\.purchases) var purchases
-    @Dependency(\.traktClient) var traktClient
     @Dependency(\.pipClient) var pipClient
     @Dependency(\.parentalControlClient) var parentalControlClient
     @Dependency(\.displayModeClient) var displayModeClient
@@ -420,9 +399,6 @@ public struct SettingsFeature {
 
     public var body: some Reducer<State, Action> {
         BindingReducer()
-        Scope(state: \.traktState, action: \.traktAction) {
-            TraktFeature()
-        }
         Reduce { state, action in
             switch action {
             case .onAppear:
@@ -464,11 +440,6 @@ public struct SettingsFeature {
                 state.subtitleAppearanceProfile = settingsClient.subtitleAppearanceProfile()
                 state.rememberMediaTrackPreferences = settingsClient.rememberMediaTrackPreferences()
                 state.isICloudSyncEnabled = settingsClient.isICloudSyncEnabled()
-
-                // Trakt State (Madde #17)
-                state.isTraktAuthenticated = traktClient.isAuthenticated()
-                state.traktUsername = traktClient.currentUser()?.username
-                state.isTraktAutoScrobbleEnabled = traktClient.isAutoScrobbleEnabled()
 
                 // PiP & Background Playback (Madde #18)
                 state.isAutoPiPEnabled = pipClient.isAutoPiPEnabled()
@@ -1229,42 +1200,6 @@ public struct SettingsFeature {
                 state.isPremium = isPremium
                 return .none
 
-            // Trakt.tv Reducer Handlers (Madde #17)
-            case let .setTraktAuthSheetPresented(presented):
-                if !presented {
-                    state.isTraktAuthSheetPresented = false
-                    state.traktAuthPresentationRequestID = nil
-                    state.isTraktAuthenticated = traktClient.isAuthenticated()
-                    state.traktUsername = traktClient.currentUser()?.username
-                    return .none
-                }
-                guard state.traktAuthPresentationRequestID == nil else { return .none }
-                let requestID = UUID()
-                state.isTraktAuthSheetPresented = true
-                state.traktAuthPresentationRequestID = requestID
-                return .send(.delegate(.presentTraktAuth(requestID: requestID)))
-
-            case let .coordinatorDismissTraktAuth(requestID):
-                guard state.traktAuthPresentationRequestID == requestID else { return .none }
-                state.isTraktAuthSheetPresented = false
-                state.traktAuthPresentationRequestID = nil
-                state.isTraktAuthenticated = traktClient.isAuthenticated()
-                state.traktUsername = traktClient.currentUser()?.username
-                return .none
-
-            case .openTraktWatchlist:
-                guard state.traktWatchlistPresentationRequestID == nil else { return .none }
-                let requestID = UUID()
-                state.isTraktWatchlistPresented = true
-                state.traktWatchlistPresentationRequestID = requestID
-                return .send(.delegate(.presentTraktWatchlist(requestID: requestID)))
-
-            case let .coordinatorDismissTraktWatchlist(requestID):
-                guard state.traktWatchlistPresentationRequestID == requestID else { return .none }
-                state.isTraktWatchlistPresented = false
-                state.traktWatchlistPresentationRequestID = nil
-                return .none
-
             case let .presentDiagnosticReport(url):
                 guard state.diagnosticReportPresentationRequestID == nil else {
                     guard state.diagnosticReportURL != url else { return .none }
@@ -1372,25 +1307,6 @@ public struct SettingsFeature {
                 state.backupPreviewPresentationRequestID = nil
                 guard let backupURL else { return .none }
                 return .run { _ in try? FileManager.default.removeItem(at: backupURL) }
-
-            case let .toggleTraktAutoScrobble(enabled):
-                state.isTraktAutoScrobbleEnabled = enabled
-                traktClient.setAutoScrobbleEnabled(enabled)
-                return .none
-
-            case .traktLogout:
-                traktClient.logout()
-                state.isTraktAuthenticated = false
-                state.traktUsername = nil
-                return .send(.traktAction(.logout))
-
-            case .traktAction(.pollTokenResponse(.success(.some))):
-                state.isTraktAuthenticated = true
-                state.traktUsername = traktClient.currentUser()?.username
-                return .none
-
-            case .traktAction:
-                return .none
 
             // ── Hidden Content & Category Blacklist (Madde #19) ──
             case .openHiddenContentManagement:
