@@ -1685,6 +1685,7 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let itemTitle = state.item.title
             let selectedMediaServerPlaybackSourceID = state.selectedMediaServerPlaybackSourceID
             let playbackRequestID = state.playbackRequestID
             let needsPlaylist = (seriesID != nil && config != nil && (state.playlist == nil || state.playlist?.isEmpty == true))
@@ -1850,6 +1851,10 @@ public struct PlayerFeature {
                                         playbackURL = url
                                         activeURL = url
                                     }
+                                    PlayerLogger.shared.info(
+                                        category: "Playback",
+                                        message: "Starting stream: \"\(itemTitle)\" [ID: \(itemID), Type: \(isLive ? "Live" : "VOD"), Engine: \(playbackEngine.rawValue), URL: \(activeURL.absoluteString)]"
+                                    )
                                     let playbackResult = try await playerClient.play(
                                         playbackURL,
                                         userAgentOverride,
@@ -1868,6 +1873,10 @@ public struct PlayerFeature {
                                     }
 
                                 } catch {
+                                    PlayerLogger.shared.error(
+                                        category: "Playback",
+                                        message: "Playback start failed for \"\(itemTitle)\": \(error.localizedDescription) [URL: \(url.absoluteString)]"
+                                    )
                                     print("Player error: \(error)")
                                     await send(.playbackEngineStartFailed(
                                         engine: playerClient.activeEngine(),
@@ -2618,6 +2627,7 @@ public struct PlayerFeature {
             let deinterlaceMode = state.deinterlaceMode
             let deinterlaceModeRevision = state.deinterlaceModeRevision
             let itemID = state.item.id
+            let itemTitle = state.item.title
             let selectedMediaServerPlaybackSourceID = state.selectedMediaServerPlaybackSourceID
             state.playbackPositionRecoveryRequestID = shouldRestorePosition && position > 0 ? playbackRequestID : nil
             let categoryID = state.item.categoryID
@@ -2807,6 +2817,10 @@ public struct PlayerFeature {
             return .send(.showGestureFeedback(feedback))
 
         case .streamStalled:
+            PlayerLogger.shared.warning(
+                category: "Stream",
+                message: "Stream playback stalled / buffering watchdog fired for \"\(state.item.title)\""
+            )
             guard !state.isUserPaused, !state.isMinimized else { return .none }
             if state.playerState == .buffering || state.playerState == .opening {
                 return .send(.initiateAutoReconnect)
@@ -2831,6 +2845,11 @@ public struct PlayerFeature {
                 let backoffDelay = min(exponential + jitter, 12.0)
                 let delayNanoseconds = UInt64(backoffDelay * 1_000_000_000)
 
+                PlayerLogger.shared.warning(
+                    category: "Reconnect",
+                    message: "Auto reconnecting \"\(state.item.title)\" (Attempt \(attempt)/\(state.maxReconnectAttempts), delay: \(String(format: "%.2f", backoffDelay))s)"
+                )
+
                 return .concatenate(
                     .cancel(id: CancelID.stallWatchdog),
                     .run { send in
@@ -2845,6 +2864,10 @@ public struct PlayerFeature {
 
                 // Automatic failover source search (Feature #8)
                 if let failoverItem = state.backupStreamItem {
+                    PlayerLogger.shared.warning(
+                        category: "Reconnect",
+                        message: "Retries exhausted for \"\(state.item.title)\". Switching to backup channel \"\(failoverItem.title)\""
+                    )
                     state.retryCount = 0
                     state.isReconnecting = true
                     state.isFallbackSwitching = true
@@ -2858,6 +2881,10 @@ public struct PlayerFeature {
                     )
                 } else {
                     // No alternate backup sources available in playlist
+                    PlayerLogger.shared.error(
+                        category: "Reconnect",
+                        message: "All reconnect attempts failed for \"\(state.item.title)\". No backup source available."
+                    )
                     state.isReconnecting = false
                     state.isFallbackSwitching = false
                     state.fallbackStreamName = nil
@@ -5404,6 +5431,10 @@ public struct PlayerFeature {
                 }
                 return .send(.recordingFinalized(filePath))
             case let .stateChanged(newState):
+                PlayerLogger.shared.info(
+                    category: "State",
+                    message: "Player state changed to: \(newState) for \"\(state.item.title)\""
+                )
                 state.playerState = newState
                 state.viewingStatisticsLastPlaybackSeconds = nil
                 state.viewingStatisticsLastWallTime = nil
@@ -5570,11 +5601,19 @@ public struct PlayerFeature {
                         reconnectEffect
                     )
                 } else if newState == .error {
+                    PlayerLogger.shared.error(
+                        category: "VLC",
+                        message: "VLC state changed to .error for \"\(state.item.title)\""
+                    )
                     state.isTransitioningEpisode = false
                     return .merge(viewingStatisticsStateEffect, liveVideoMonitorCancellation, nowPlayingUpdate, .send(.initiateAutoReconnect))
                 }
                 return .merge(viewingStatisticsStateEffect, liveVideoMonitorCancellation, nowPlayingUpdate)
             case .endReached:
+                PlayerLogger.shared.info(
+                    category: "VLC",
+                    message: "Stream end reached for \"\(state.item.title)\" (Live: \(state.item.isLive))"
+                )
                 if state.item.isLive, !state.isUserPaused, !state.isMinimized {
                     return .send(.initiateAutoReconnect)
                 } else if !state.item.isLive {
@@ -5583,6 +5622,10 @@ public struct PlayerFeature {
                     }
                 }
             case .encounteredError:
+                PlayerLogger.shared.error(
+                    category: "VLC",
+                    message: "VLC encountered playback error on \"\(state.item.title)\""
+                )
                 state.isTransitioningEpisode = false
                 return .send(.initiateAutoReconnect)
             case let .timeChanged(time):

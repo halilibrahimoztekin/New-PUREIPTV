@@ -1089,10 +1089,12 @@ extension PlayerClient: DependencyKey {
                 return box.getPlayer().selectedSubtitleTrack
             },
             setAudioTrack: { track in
+                PlayerLogger.shared.info(category: "Audio", message: "Client setting audio track: \(track?.name ?? "nil") [ID: \(track?.id ?? "nil")]")
                 guard box.playbackEngine == .vlc else { return }
                 box.getPlayer().selectedAudioTrack = track
             },
             setSubtitleTrack: { track in
+                PlayerLogger.shared.info(category: "Subtitle", message: "Client setting subtitle track: \(track?.name ?? "Off") [ID: \(track?.id ?? "nil")]")
                 guard box.playbackEngine == .vlc else { return }
                 box.getPlayer().selectedSubtitleTrack = track
             },

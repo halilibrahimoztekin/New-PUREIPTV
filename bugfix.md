@@ -149,3 +149,33 @@ This document records all identified issues, their root causes, and the exact ar
   - **Compound Card Focus:** Restructured `TVProfileCard` so the button bounds encompass both avatar and title label, ensuring unified 3D parallax scaling and focus feedback.
   - **Paywall Redesign:** Overhauled `PaywallView+tvOS` with Cinematic Obsidian radial gradient, 52pt heavy title, 340x260 glassmorphic packages with `TVGridCardButtonStyle(cornerRadius: 20)`, and `TVCapsuleButtonStyle` actions.
 
+---
+
+### Bug 16: Video Player Controller Auto-Hide Interruption During Active Navigation
+- **Severity:** High (Broken User Experience / Remote Frustration)
+- **Symptom:** When attempting to adjust audio tracks, switch subtitles, or inspect options from the video player controller on Apple TV, the controller abruptly closed after 5 seconds, cutting off user navigation midway.
+- **Root Cause:**
+  1. The idle countdown timer was hardcoded to 5.0 seconds and only reset upon initial mask appearance or click events.
+  2. tvOS Siri Remote directional focus transitions (`@FocusState private var focusableField`) were not monitored, meaning moving focus between buttons failed to reset the countdown timer.
+  3. Scrubber dragging/seeking (`isScrubbing`) was stored locally in `VideoTimeShowView` without propagation to `keepsControllerVisibleWhileOpen`, allowing the overlay to dismiss while scrubbing.
+  4. Transport buttons (`restart`, `jumpBackward`, `replayWithSubtitles`, `jumpForward`) were missing `.focused($focusedField, equals: ...)` bindings.
+- **Fix:**
+  - Extended baseline timeout from 5.0s to 9.0s (`resetIdleTimer(duration: 9.0)`).
+  - Added `.onChange(of: focusableField)` to reset and extend the countdown timer on every focus transition across controller elements.
+  - Bound `.focused($focusedField, equals: ...)` to all transport buttons.
+  - Bound `@State private var isScrubbing` from `PlayerView_tvOS` into `VideoTimeShowView` and added it to `keepsControllerVisibleWhileOpen`.
+
+---
+
+### Bug 17: Filterable Structured Video Player Observability & Logging Subsystem
+- **Severity:** Medium (Diagnostics & Error Reporting)
+- **Symptom:** Developers and QA had no centralized, filterable log output to diagnose VLC playback errors, stream stalls, auto-reconnect backoffs, or track switching issues in Xcode Console or Terminal.
+- **Root Cause:** Scattered `print` statements without unified category tags, level severity, or sensitive credential redaction.
+- **Fix:**
+  - Implemented `PlayerLogger.swift` utilizing `os.Logger(subsystem: "com.pureiptv.app", category: "VideoPlayer")` combined with structured standard output.
+  - Formatted each entry with high-visibility filterable prefix: `HH:mm:ss.SSS [PureIPTV:Player] 🔴 [ERROR] [VLC] <message>`.
+  - Added instant filtering capability in Xcode Console filter bar via `[PureIPTV:Player]`, `[ERROR]`, `[WARN]`, `[STREAM]`, `[VLC]`, or `[RECONNECT]`.
+  - Built-in regex sanitization that automatically redacts Xtream passwords, user credentials, and authentication tokens from stream URLs and query strings.
+  - Integrated hooks across `PlayerFeature.swift` and `PlayerClient.swift` covering stream start, VLC state transitions, buffer watchdog stalls, auto-reconnects, and audio/subtitle selection.
+
+

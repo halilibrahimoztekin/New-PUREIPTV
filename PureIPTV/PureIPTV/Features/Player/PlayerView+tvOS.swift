@@ -63,6 +63,7 @@
         @FocusState private var focusableField: FocusableField?
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
+        @State private var isScrubbing: Bool = false
         @State private var focusBeforeEPG: FocusableField?
         @State private var focusBeforeMediaServerSourcePicker: FocusableField?
 
@@ -622,6 +623,10 @@
                     self.focusBeforeMediaServerSourcePicker = nil
                 }
             }
+            .onChange(of: focusableField) { _, newField in
+                guard newField != nil, newField != .play else { return }
+                resetIdleTimer()
+            }
             .onDisappear {
                 idleTimer?.invalidate()
             }
@@ -745,6 +750,7 @@
                     VideoTimeShowView(
                         store: store,
                         focusedField: $focusableField,
+                        isScrubbing: $isScrubbing,
                         onInteraction: {
                             resetIdleTimer()
                         }
@@ -795,10 +801,10 @@
             idleTimer?.invalidate()
         }
 
-        private func resetIdleTimer() {
+        private func resetIdleTimer(duration: TimeInterval = 9.0) {
             store.send(.userInteracted)
             idleTimer?.invalidate()
-            idleTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            idleTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in
                 Task { @MainActor in
                     if !keepsControllerVisibleWhileOpen {
                         hideMask()
@@ -808,7 +814,8 @@
         }
 
         private var keepsControllerVisibleWhileOpen: Bool {
-            store.isUpNextVisible
+            isScrubbing
+                || store.isUpNextVisible
                 || store.isChannelDialerVisible
                 || store.isAudioEQHUDVisible
                 || store.isCatchupTimelineVisible
@@ -818,6 +825,7 @@
                 || store.isShowingStats
                 || store.isChannelListVisible
                 || store.isEPGVisible
+                || store.isMediaServerPlaybackOptionsPresented
         }
     }
 
@@ -910,6 +918,7 @@
                                 .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .restart)
                     }
 
                     if !store.item.isLive || store.isPlayingCatchup {
@@ -925,6 +934,7 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .backward)
                         .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
                     }
 
@@ -941,6 +951,7 @@
                             .font(.system(size: 20, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .replayWithSubtitles)
                         .accessibilityLabel(AppStrings.Player.replayWithSubtitles)
                         .accessibilityHint(AppStrings.Player.replayWithSubtitlesHint)
                     }
@@ -973,6 +984,7 @@
                             .font(.system(size: 22, weight: .semibold))
                         }
                         .buttonStyle(PlayerCircleButtonStyle(size: 56))
+                        .focused($focusedField, equals: .forward)
                         .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
                     }
 
@@ -1393,10 +1405,10 @@
     private struct VideoTimeShowView: View {
         @Bindable var store: StoreOf<PlayerFeature>
         @FocusState.Binding var focusedField: FocusableField?
+        @Binding var isScrubbing: Bool
         let onInteraction: () -> Void
 
         @Environment(\.isFocused) private var isFocused
-        @State private var isScrubbing: Bool = false
         @State private var scrubValue: Double = 0.0
         @State private var lastMoveTime: Date = .init()
         @State private var consecutiveMoveCount: Int = 0
