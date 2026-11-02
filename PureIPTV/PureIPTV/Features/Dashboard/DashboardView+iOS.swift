@@ -6,15 +6,18 @@
     public struct DashboardView_iOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let config: PlaylistConfig
+        let onSearch: (() -> Void)?
         @State private var isShowingFollowedSportsEvents = false
 
-        public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig) {
+        public init(store: StoreOf<DashboardFeature>, config: PlaylistConfig, onSearch: (() -> Void)? = nil) {
             self.store = store
             self.config = config
+            self.onSearch = onSearch
         }
 
-        public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String) {
+        public init(store: StoreOf<DashboardFeature>, serverURL: String, username: String, password: String, onSearch: (() -> Void)? = nil) {
             self.store = store
+            self.onSearch = onSearch
             if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
                 config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
             } else {
@@ -28,95 +31,108 @@
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Top Switcher Bar
-                        HStack(spacing: 8) {
-                            Text(AppStrings.Dashboard.title)
-                                .font(.title2.bold())
-                                .foregroundStyle(.white)
+                        // Top Header & Switcher Bar
+                        VStack(spacing: 10) {
+                            // Row 1: Title + Action Icons
+                            HStack(spacing: 8) {
+                                Text(AppStrings.Dashboard.title)
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
 
-                            Spacer()
+                                Spacer()
 
-                            VPNStatusBadge(compact: true)
-
-                            Button {
-                                store.send(.refreshTapped)
-                            } label: {
-                                Label {
-                                    if let refreshedAt = store.lastRemoteRefreshAt {
-                                        Text(refreshedAt, style: .relative)
-                                    } else {
-                                        Text(AppStrings.Common.retry)
-                                    }
-                                } icon: {
-                                    if store.activeRefreshID != nil {
-                                        ProgressView()
-                                            .tint(Color(hex: "#0A84FF"))
-                                    } else {
+                                Button {
+                                    store.send(.refreshTapped)
+                                } label: {
+                                    HStack(spacing: 4) {
                                         Image(systemName: "arrow.clockwise")
+                                        if store.autoRefreshCountdown > 0 {
+                                            Text("\(store.autoRefreshCountdown) sn")
+                                        }
                                     }
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(Color(hex: "#1F1F23"), in: Capsule())
                                 }
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(Color(hex: "#1F1F23"), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(store.activeRefreshID != nil)
-                            .accessibilityLabel(AppStrings.Common.retry)
+                                .buttonStyle(.plain)
+                                .disabled(store.activeRefreshID != nil)
+                                .accessibilityLabel(AppStrings.Common.retry)
 
-                            Button {
-                                store.send(.delegate(.presentHomeCategoryPinManagement(
-                                    playlistID: store.activePlaylistID,
-                                    profileScope: store.activeProfileScope
-                                )))
-                            } label: {
-                                Image(systemName: "pin")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
-                                    .frame(width: 44, height: 44)
-                                    .background(Color(hex: "#1F1F23"), in: Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(AppStrings.Dashboard.manageHomeCategories)
-                            .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
-
-                            Button {
-                                store.send(.delegate(.presentHomeSettings(config)))
-                            } label: {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
-                                    .frame(width: 44, height: 44)
-                                    .background(Color(hex: "#1F1F23"), in: Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Ana Ekranı Düzenle")
-
-                            Button {
-                                store.send(.openManagePlaylistsTapped)
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 8, height: 8)
-                                    Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
+                                Button {
+                                    store.send(.delegate(.presentHomeCategoryPinManagement(
+                                        playlistID: store.activePlaylistID,
+                                        profileScope: store.activeProfileScope
+                                    )))
+                                } label: {
+                                    Image(systemName: "pin")
                                         .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.caption2)
                                         .foregroundStyle(Color(hex: "#0A84FF"))
+                                        .frame(width: 36, height: 36)
+                                        .background(Color(hex: "#1F1F23"), in: Circle())
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: "#1F1F23"))
-                                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
-                                )
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(AppStrings.Dashboard.manageHomeCategories)
+                                .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
+
+                                Button {
+                                    store.send(.delegate(.presentHomeSettings(config)))
+                                } label: {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Color(hex: "#0A84FF"))
+                                        .frame(width: 36, height: 36)
+                                        .background(Color(hex: "#1F1F23"), in: Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Ana Ekranı Düzenle")
+
+                                if let onSearch {
+                                    Button(action: onSearch) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                            .frame(width: 36, height: 36)
+                                            .background(Color(hex: "#1F1F23"), in: Circle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                                }
                             }
-                            .buttonStyle(.plain)
+
+                            // Row 2: Active Playlist Switcher Pill & VPN Status
+                            HStack(spacing: 8) {
+                                Button {
+                                    store.send(.openManagePlaylistsTapped)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                        Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                            .lineLimit(1)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.caption2)
+                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(hex: "#1F1F23"))
+                                            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                Spacer()
+
+                                VPNStatusBadge(compact: true)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 8)

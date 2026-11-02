@@ -2724,7 +2724,8 @@ public struct PlayerFeature {
                                 await send(.deinterlaceModePlaybackResolved(requested: deinterlaceMode, applied: playbackResult.deinterlaceMode, engine: playbackResult.engine, revision: deinterlaceModeRevision, itemID: itemID, streamURL: activeURL))
                                 if shouldRestorePosition, position > 0 {
                                     var reachedPlayingState = false
-                                    for _ in 0 ..< 200 {
+                                    let maxChecks = isLive ? 200 : 800
+                                    for _ in 0 ..< maxChecks {
                                         try Task.checkCancellation()
                                         let isPlaying = await MainActor.run { playerClient.isPlaying() }
                                         if isPlaying {
@@ -2822,6 +2823,13 @@ public struct PlayerFeature {
                 message: "Stream playback stalled / buffering watchdog fired for \"\(state.item.title)\""
             )
             guard !state.isUserPaused, !state.isMinimized else { return .none }
+            if (state.activeVODSeekRequestID != nil || state.playbackPositionRecoveryRequestID != nil) && !state.item.isLive {
+                PlayerLogger.shared.info(
+                    category: "Stream",
+                    message: "Ignoring streamStalled during initial position recovery or seek for \"\(state.item.title)\""
+                )
+                return .none
+            }
             if state.playerState == .buffering || state.playerState == .opening {
                 return .send(.initiateAutoReconnect)
             }
@@ -5576,12 +5584,13 @@ public struct PlayerFeature {
                     return .merge(actions)
                 } else if newState == .buffering || newState == .opening {
                     if !state.isUserPaused {
+                        let stallDuration: UInt64 = state.item.isLive ? 15_000_000_000 : 45_000_000_000
                         return .merge(
                             viewingStatisticsStateEffect,
                             liveVideoMonitorCancellation,
                             nowPlayingUpdate,
                             .run { send in
-                                try await Task.sleep(nanoseconds: 12_000_000_000)
+                                try await Task.sleep(nanoseconds: stallDuration)
                                 await send(.streamStalled)
                             }
                             .cancellable(id: CancelID.stallWatchdog, cancelInFlight: true)

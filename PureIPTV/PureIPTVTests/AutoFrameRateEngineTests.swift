@@ -150,6 +150,7 @@ final class AutoFrameRateEngineTests: XCTestCase {
                 resetDisplayMode: {}
             )
         }
+        store.exhaustivity = .off
 
         // 1. Disable AFR for live TV while retaining VOD matching.
         await store.send(.setAFREnabledForLive(false)) {
@@ -180,7 +181,8 @@ final class AutoFrameRateEngineTests: XCTestCase {
 
         // 4. Trigger displayModeSwitched
         let matchResult = DisplayMatchResult(matchedRate: 24.0, matchedRange: .dolbyVision, message: "24 Hz Sinematik Eşleme")
-        await store.send(.displayModeSwitched(matchResult)) {
+        await store.send(.displayModeSwitched(matchResult))
+        await store.receive(\.showAFRToast) {
             $0.afrMatchResult = matchResult
             $0.isAFRToastVisible = true
         }

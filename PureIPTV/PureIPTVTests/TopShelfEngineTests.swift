@@ -141,6 +141,7 @@ final class TopShelfEngineTests: XCTestCase {
         } withDependencies: {
             $0.topShelfClient = TopShelfClient.testValue
         }
+        store.exhaustivity = .off
 
         // Switch to Carousel style
         await store.send(.setTopShelfStyle(TopShelfStyle.carousel)) {

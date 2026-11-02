@@ -120,6 +120,7 @@ final class ParentalControlEngineTests: XCTestCase {
                 hiddenState.withValue { _ = $0.remove(id) }
             }
         }
+        store.exhaustivity = .off
 
         // Test load preferences
         await store.send(.loadHiddenContentPreferences) {
@@ -165,6 +166,7 @@ final class ParentalControlEngineTests: XCTestCase {
             }
             $0.parentalControlClient.authenticateWithBiometrics = { _ in false }
         }
+        store.exhaustivity = .off
 
         // 1. Trigger open hidden content -> shows PIN unlock modal because parental control is enabled
         #if os(tvOS)

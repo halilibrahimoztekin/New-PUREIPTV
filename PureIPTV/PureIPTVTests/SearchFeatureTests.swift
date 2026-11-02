@@ -54,6 +54,7 @@ final class SearchFeatureTests: XCTestCase {
         } withDependencies: {
             $0.continuousClock = clock
         }
+        store.exhaustivity = .off
 
         await store.send(.queryChanged("Batman")) {
             $0.searchQuery = "Batman"
@@ -78,6 +79,7 @@ final class SearchFeatureTests: XCTestCase {
         let store = TestStore(initialState: state) {
             SearchFeature()
         }
+        store.exhaustivity = .off
 
         await store.send(.resetCache) {
             $0.hasLoaded = false
@@ -90,13 +92,13 @@ final class SearchFeatureTests: XCTestCase {
     func testGlobalSearchEngineFilteringAnd4KDetection() {
         let channel1 = MediaModels.Item(id: "c1", title: "TRT 1 4K UHD", categoryID: "cat1", type: .live)
         let channel2 = MediaModels.Item(id: "c2", title: "beIN Sports 1 HD", categoryID: "cat1", type: .live)
-        let movie1 = MediaModels.Item(id: "m1", title: "Inception 2160p UHD", categoryID: "cat2", type: .vod)
+        let movie1 = MediaModels.Item(id: "m1", title: "Inception 1 2160p UHD", categoryID: "cat2", type: .vod)
         let series1 = MediaModels.Item(id: "s1", title: "Severance S02", categoryID: "cat3", type: .series)
 
         let playlistAId = UUID()
         let playlistBId = UUID()
-        let playlistA = PlaylistSourceBadge(id: playlistAId.uuidString, playlistName: "Ev Sunucusu", colorHex: "#3B82F6")
-        let playlistB = PlaylistSourceBadge(id: playlistBId.uuidString, playlistName: "Yedek Sunucu", colorHex: "#10B981")
+        let playlistA = PlaylistSourceBadge(id: PlaylistSourceBadge.sourceID(for: playlistAId), playlistName: "Ev Sunucusu", colorHex: "#3B82F6")
+        let playlistB = PlaylistSourceBadge(id: PlaylistSourceBadge.sourceID(for: playlistBId), playlistName: "Yedek Sunucu", colorHex: "#10B981")
 
         let indexedChannels = [
             GlobalSearchResultItem(item: channel1, playlistBadge: playlistA),

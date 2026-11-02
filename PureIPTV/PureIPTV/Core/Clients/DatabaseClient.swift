@@ -325,8 +325,20 @@ private func watchHistory(in context: ModelContext, profileID: UUID?) throws -> 
     }
     let shadowed = Set(owned.map(historyScopeKey))
     let visibleLegacy = legacyRows.filter { !shadowed.contains(historyScopeKey($0)) }
-    return (owned + visibleLegacy).filter { $0.removedAt == nil }
+    let rawList = (owned + visibleLegacy).filter { $0.removedAt == nil }
         .sorted { $0.lastWatchedAt > $1.lastWatchedAt }
+
+    // Deduplicate duplicate rows by historyScopeKey, preserving the newest entry
+    var seenScopeKeys = Set<String>()
+    var deduplicated: [WatchHistoryItem] = []
+    for item in rawList {
+        let key = historyScopeKey(item)
+        if !seenScopeKeys.contains(key) {
+            seenScopeKeys.insert(key)
+            deduplicated.append(item)
+        }
+    }
+    return deduplicated
 }
 
 extension DatabaseClient: DependencyKey {
@@ -407,16 +419,20 @@ extension DatabaseClient: DependencyKey {
                 let context = try ModelContext(SharedDatabaseConfig.shared)
                 let allItems = try watchHistory(in: context, profileID: profileID)
                 var seenSeriesIDs = Set<String>()
+                var seenItemIDs = Set<String>()
                 var deduplicatedItems: [WatchHistoryItem] = []
 
                 for item in allItems {
+                    guard !seenItemIDs.contains(item.id) else { continue }
                     if let seriesID = item.seriesID, !seriesID.isEmpty {
                         let key = "\(seriesID)|\(item.playlistID?.uuidString ?? "")"
                         if !seenSeriesIDs.contains(key) {
                             seenSeriesIDs.insert(key)
+                            seenItemIDs.insert(item.id)
                             deduplicatedItems.append(item)
                         }
                     } else {
+                        seenItemIDs.insert(item.id)
                         deduplicatedItems.append(item)
                     }
                 }

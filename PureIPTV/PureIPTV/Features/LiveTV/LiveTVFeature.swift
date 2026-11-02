@@ -1345,10 +1345,13 @@ public struct LiveTVFeature {
                 }.cancellable(id: "LiveTVFeature.refreshContent", cancelInFlight: true)
 
             case .cancelRefreshForBackground:
-                return .merge(
+                var effects: [Effect<Action>] = [
                     .send(.cancelContentRefresh),
-                    .send(.epgTimeline(.presented(.cancelEPGSync)))
-                )
+                ]
+                if state.epgTimeline != nil {
+                    effects.append(.send(.epgTimeline(.presented(.cancelEPGSync))))
+                }
+                return .merge(effects)
 
             case .cancelContentRefresh:
                 guard state.isRefreshingContent, state.refreshStage?.canCancel == true else { return .none }

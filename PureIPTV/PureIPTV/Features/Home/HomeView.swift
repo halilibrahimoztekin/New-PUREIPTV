@@ -15,46 +15,15 @@ public struct HomeView: View {
     }
 
     public var body: some View {
-        Group {
-            #if os(tvOS)
-                HomeView_tvOS(store: store)
-            #else
-                // Detect iPhone vs iPad at runtime
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    HomeView_iPad(store: store)
-                } else {
-                    HomeView_iOS(store: store)
-                }
-            #endif
-        }
-        #if !os(tvOS)
-        .overlay(alignment: .topTrailing) {
-            let buttonSize: CGFloat = 44
-            let iconSize: CGFloat = 17
-            let topPadding: CGFloat = 8
-            let trailingPadding: CGFloat = 16
-            Button {
-                #if os(iOS)
-                    HapticManager.shared.trigger(.light)
-                #endif
-                store.send(.delegate(.presentSearch))
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
-                    .frame(width: buttonSize, height: buttonSize)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay {
-                        Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    }
+        #if os(tvOS)
+            HomeView_tvOS(store: store)
+        #else
+            // Detect iPhone vs iPad at runtime
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                HomeView_iPad(store: store)
+            } else {
+                HomeView_iOS(store: store)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(AppStrings.Search.searchPlaceholder) // [VERIFY] Confirm localized wording identifies the global search action.
-            .padding(.top, topPadding)
-            .padding(.trailing, trailingPadding)
-            .safeAreaPadding(.top)
-        }
         #endif
     }
 }

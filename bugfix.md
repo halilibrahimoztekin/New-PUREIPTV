@@ -178,4 +178,64 @@ This document records all identified issues, their root causes, and the exact ar
   - Built-in regex sanitization that automatically redacts Xtream passwords, user credentials, and authentication tokens from stream URLs and query strings.
   - Integrated hooks across `PlayerFeature.swift` and `PlayerClient.swift` covering stream start, VLC state transitions, buffer watchdog stalls, auto-reconnects, and audio/subtitle selection.
 
+---
+
+### Bug 18: iPhone Top Bar Navigation Collision & "Keşfe \n t" Word Wrap
+- **Severity:** High (UI Glitches & Broken iPhone Ergonomics)
+- **Symptom:** On iOS devices, a floating global search button in `HomeView.swift` hovered over screen-specific controls (colliding with `ellipsis.circle` in Live TV, and colliding with the playlist switcher and VPN pill in Dashboard). In Dashboard, the header title "Keşfet" was forced to wrap onto two lines ("Keşfe \n t") due to overcrowded horizontal items.
+- **Root Cause:**
+  1. `HomeView.swift` rendered a floating overlay `Button(action: { store.send(.delegate(.presentSearch)) })` at `.topTrailing` across all tabs.
+  2. `DashboardView+iOS.swift` placed title, VPN status, refresh countdown, pin, settings, and search in a single overcrowded `HStack`.
+- **Fix:**
+  - Removed floating overlay search button from `HomeView.swift`.
+  - Added dedicated, integrated header search buttons in `DashboardView+iOS`, `LiveTVView+iOS`, `VODView+iOS`, and `SeriesView+iOS`.
+  - Restructured `DashboardView+iOS` header into 2 neat rows (Row 1: Title with `.lineLimit(1)` + Action buttons; Row 2: Playlist pill + VPN badge), guaranteeing zero word-wrap.
+  - Positioned Search adjacent to `ellipsis.circle` in `LiveTVView+iOS` with 44x44 pt tap targets, eliminating touch collision.
+
+---
+
+### Bug 19: Audio Equalizer & Audio Sync HUD Overflow in iPhone Landscape
+- **Severity:** Medium (UI Clipping in Landscape)
+- **Symptom:** Opening Audio EQ HUD or Audio Sync HUD in player landscape mode on iPhone resulted in modal contents exceeding the physical screen height, cutting off presets and making dismissal difficult.
+- **Root Cause:** Fixed modal heights and multi-row vertical grids designed for portrait or iPad screens without landscape size class adaptation.
+- **Fix:**
+  - Adapted `AudioEQHUDView` and `AudioSyncHUDView` for compact vertical size class (`verticalSizeClass == .compact`).
+  - Switched EQ preset tiles from 2 columns to 3 columns (reducing height from 4 rows to 2 rows), scaled visualizer bars, and pinned header with an explicit close button.
+  - Wrapped body in a bounded `ScrollView` with max height constraint.
+  - Wrapped all player HUD overlays in `PlayerView+iOS.swift` in a dismissible backdrop (`.onTapGesture` dismiss).
+
+---
+
+### Bug 20: TCA Parent-Child Reducer Lifecycle Race Assertions (`ifCaseLet` & `ifLet`)
+- **Severity:** High (TCA Assertion Failures in Production/Debug)
+- **Symptom:**
+  1. `An "ifCaseLet" at "PureIPTV/AppScreen.swift:1409" received a child action when child state was set to a different case. Action: AppScreen.Action.profileSelection(.onDisappear) State: AppScreen.State.home(...)`.
+  2. `An "ifLet" at "PureIPTV/LiveTVFeature.swift:3440" received a presentation action when destination state was absent. Action: LiveTVFeature.Action.epgTimeline(.presented(.cancelEPGSync))`.
+- **Root Cause:**
+  1. `ProfileSelectionView.swift` dispatched `.onDisappear` after `AppCoordinator` had already replaced root routes with `.home(...)`.
+  2. `LiveTVFeature.cancelRefreshForBackground` unconditionally dispatched `.presented(.cancelEPGSync)` even when `state.epgTimeline` was `nil`.
+- **Fix:**
+  1. Removed redundant `.onDisappear { store.send(.onDisappear) }` from `ProfileSelectionView.swift`.
+  2. Added presence check `if state.epgTimeline != nil` before dispatching presentation cancellation in `LiveTVFeature.swift`.
+
+---
+
+### Bug 21: Duplicate ID Warning, Stalling Watchdog & Broken Series Resume
+- **Severity:** Critical (Playback Stalling Loop & Undefined Collection State)
+- **Symptom:**
+  1. `ForEach<Array<WatchHistoryItem>, String, ResumeWatchingCardView>: the ID 100420 occurs multiple times within the collection, this will give undefined results!`.
+  2. Choosing a series episode from "Continue Watching" stalled on opening, triggered watchdog timeout (`Stream playback stalled / buffering watchdog fired`), initiated auto-reconnect, and failed to resume playback.
+  3. `onChange(of: Array<Route<State>>) action tried to update multiple times per frame.`
+- **Root Cause:**
+  1. `DatabaseClient.swift` and `DashboardFeature.continueWatchingItems` did not deduplicate history items by ID or collapse series episodes to the single latest watched episode.
+  2. `PlayerFeature.swift` armed a fixed 12-second stall watchdog on `.opening` and `.buffering`. Remote MKV series/VOD streams take longer to read EBML headers and HTTP byte ranges, firing the watchdog prematurely and triggering auto-reconnect loops.
+  3. `AppCoordinator.swift` route views synchronously sent `.closeTapped` during SwiftUI `onChange(of: isCurrentPresentation)` view evaluations, modifying navigation state twice within the same frame.
+- **Fix:**
+  1. Deduplicated `DatabaseClient.swift` (`watchHistory` and `fetchWatchHistory`) and `DashboardFeature.continueWatchingItems` by `item.id` and series key.
+  2. Differentiated stall watchdog: 15s for live TV, 45s for VOD/Series.
+  3. Ignored `streamStalled` when initial position recovery or seek is active (`state.playbackPositionRecoveryRequestID != nil`).
+  4. Extended `reachedPlayingState` wait timeout in `retryPlayback` from 10s to 40s for VOD/Series.
+  5. Dispatched route dismissal in `closeIfStale()` and `closeIfContextChanged()` via `Task { @MainActor in routeStore.send(.closeTapped) }` to eliminate re-entrant route updates.
+
+
 

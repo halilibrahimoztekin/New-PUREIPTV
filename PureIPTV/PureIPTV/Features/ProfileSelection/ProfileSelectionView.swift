@@ -84,9 +84,6 @@ public struct ProfileSelectionView: View {
             guard !Task.isCancelled else { return }
             await store.send(.onAppear).finish()
         }
-        .onDisappear {
-            store.send(.onDisappear)
-        }
         .onChange(of: store.errorMessage) { _, message in
             if message != nil {
                 retryButtonFocused = true

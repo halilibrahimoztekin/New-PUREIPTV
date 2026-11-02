@@ -7,6 +7,7 @@
     public struct SeriesView_iOS: View {
         @Bindable var store: StoreOf<SeriesFeature>
         let config: PlaylistConfig
+        let onSearch: (() -> Void)?
 
         /// For Series, we usually show 3 columns on iPhone
         private let columns: [GridItem] = [
@@ -15,13 +16,15 @@
         @State private var categorySearchQuery = ""
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-        public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig) {
+        public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig, onSearch: (() -> Void)? = nil) {
             self.store = store
             self.config = config
+            self.onSearch = onSearch
         }
 
-        public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String) {
+        public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String, onSearch: (() -> Void)? = nil) {
             self.store = store
+            self.onSearch = onSearch
             if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
                 config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
             } else {
@@ -71,6 +74,18 @@
                                     .foregroundStyle(Color.white.opacity(0.9))
                                     .frame(width: 36, height: 36)
                                     .background(Circle().fill(Color(hex: "#1F1F23")))
+                            }
+
+                            if let onSearch {
+                                Button(action: onSearch) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.9))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(AppStrings.Search.searchPlaceholder)
                             }
                         }
                     }

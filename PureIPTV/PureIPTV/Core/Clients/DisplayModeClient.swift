@@ -364,7 +364,36 @@ extension DisplayModeClient: DependencyKey {
         return client
     }()
 
-    public static let testValue = DisplayModeClient()
+    public static let testValue: DisplayModeClient = {
+        var client = DisplayModeClient()
+        client.isAFREnabledForLive = { true }
+        client.setAFREnabledForLive = { _ in }
+        client.isAFREnabledForVOD = { true }
+        client.setAFREnabledForVOD = { _ in }
+        client.isMatchDynamicRangeEnabled = { true }
+        client.setMatchDynamicRangeEnabled = { _ in }
+        client.currentDisplayRefreshRate = { 60.0 }
+        client.availableRefreshRates = { [24.0, 50.0, 60.0] }
+        client.switchDisplayMode = { rate, range in
+            DisplayMatchResult(
+                matchedRate: rate,
+                matchedRange: range,
+                message: "\(Int(rate)) Hz • Eşlendi"
+            )
+        }
+        #if os(tvOS)
+            client.applyPreferredDisplayCriteria = { _ in
+                DisplayMatchResult(
+                    matchedRate: 0,
+                    matchedRange: .unknown,
+                    message: "OK",
+                    status: .requestSubmitted
+                )
+            }
+        #endif
+        client.resetDisplayMode = {}
+        return client
+    }()
 }
 
 public extension DependencyValues {

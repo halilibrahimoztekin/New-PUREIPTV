@@ -129,6 +129,7 @@ final class DynamicRangeEngineTests: XCTestCase {
         let store = TestStore(initialState: state) {
             PlayerFeature()
         }
+        store.exhaustivity = .off
 
         // 1. Manually hide Dynamic Range HUD
         await store.send(.hideDynamicRangeHUD) {

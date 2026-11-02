@@ -1128,13 +1128,21 @@
 
                 // Recent Channels Carousel HUD (Quick-Zap Dock)
                 if store.isRecentChannelsHUDVisible {
-                    VStack {
-                        Spacer()
-                        RecentChannelsHUDView(store: store) {
-                            store.send(.setRecentChannelsHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                store.send(.setRecentChannelsHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+
+                        VStack {
+                            Spacer()
+                            RecentChannelsHUDView(store: store) {
+                                store.send(.setRecentChannelsHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isRecentChannelsHUDVisible)
@@ -1143,46 +1151,62 @@
 
                 // Lip-Sync & Subtitle Sync HUD
                 if store.isAudioSyncHUDVisible {
-                    VStack {
-                        Spacer()
+                    ZStack {
+                        Color.black.opacity(0.35)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                store.send(.setAudioSyncHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+
                         AudioSyncHUDView(store: store) {
                             store.send(.setAudioSyncHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioSyncHUDVisible)
                     .zIndex(99)
                 }
 
                 // Live Stream Audio Equalizer & Dialogue Enhancer HUD (Madde #14)
                 if store.isAudioEQHUDVisible {
-                    VStack {
-                        Spacer()
+                    ZStack {
+                        Color.black.opacity(0.35)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                            }
+
                         AudioEQHUDView(store: store) {
                             store.send(.setAudioEQHUDVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isAudioEQHUDVisible)
                     .zIndex(100)
                 }
 
                 // Catchup / Archive Timeline Visual Scrubber Overlay (Feature #4)
                 if store.isCatchupTimelineVisible {
-                    VStack {
-                        Spacer()
-                        CatchupTimelineScrubberView(
-                            store: store,
-                            onClose: {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
                                 store.send(.setCatchupTimelineVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
                             }
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 24)
+
+                        VStack {
+                            Spacer()
+                            CatchupTimelineScrubberView(
+                                store: store,
+                                onClose: {
+                                    store.send(.setCatchupTimelineVisible(false), animation: .spring(response: 0.35, dampingFraction: 0.8))
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
+                        }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: store.isCatchupTimelineVisible)

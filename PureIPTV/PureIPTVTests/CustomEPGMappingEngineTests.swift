@@ -207,6 +207,7 @@ final class CustomEPGMappingEngineTests: XCTestCase {
             $0.customEPGMappingClient.getGlobalTimeShift = { 0 }
             $0.customEPGMappingClient.setGlobalTimeShift = { _ in }
         }
+        store.exhaustivity = .off
 
         // Open sheet
         await store.send(.setCustomEPGSheetPresented(true)) {

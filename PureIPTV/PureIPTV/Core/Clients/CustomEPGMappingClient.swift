@@ -619,7 +619,31 @@ extension CustomEPGMappingClient: DependencyKey {
         )
     }()
 
-    public static let testValue = CustomEPGMappingClient()
+    public static let testValue: CustomEPGMappingClient = {
+        var client = CustomEPGMappingClient()
+        client.getSources = { [] }
+        client.addSource = { name, url in CustomEPGSource(name: name, url: url) }
+        client.removeSource = { _ in }
+        client.toggleSource = { _, _ in }
+        client.refreshSource = { _ in CustomEPGSource(name: "Test", url: URL(string: "https://example.com")!) }
+        client.refreshAllSources = { _ in .init() }
+        client.getChannelMapping = { _, _ in nil }
+        client.setChannelMapping = { _ in }
+        client.removeChannelMapping = { _, _ in }
+        client.getAllMappings = { [:] }
+        client.getChannelTimeShift = { _ in 0 }
+        client.setChannelTimeShift = { _, _ in }
+        client.getCatchupTimeShift = { _, _ in 0 }
+        client.setCatchupTimeShift = { _, _, _ in }
+        client.getGlobalTimeShift = { 0 }
+        client.setGlobalTimeShift = { _ in }
+        client.getAvailableEPGChannels = { [] }
+        client.getAvailableEPGChannelOptions = { [] }
+        client.searchCachedPrograms = { _, _, _ in [] }
+        client.fetchProgramsForChannel = { _, _, _, _ in [] }
+        client.applyTimeShift = { programs, _, _ in programs }
+        return client
+    }()
 }
 
 public extension DependencyValues {

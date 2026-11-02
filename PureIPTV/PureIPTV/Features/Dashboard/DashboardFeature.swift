@@ -577,7 +577,12 @@ public struct DashboardFeature {
         }
 
         public var continueWatchingItems: [WatchHistoryItem] {
-            watchHistoryItems.filter { item in
+            var seenItemIDs = Set<String>()
+            var seenSeriesKeys = Set<String>()
+            var deduplicated: [WatchHistoryItem] = []
+
+            let sorted = watchHistoryItems.sorted { $0.lastWatchedAt > $1.lastWatchedAt }
+            for item in sorted {
                 let type = item.type.lowercased()
                 let hiddenIdentity: HiddenMediaIdentity? = if type == "vod" {
                     HiddenMediaIdentity(type: "vod", playlistID: item.playlistID, mediaID: item.id)
@@ -587,11 +592,23 @@ public struct DashboardFeature {
                     nil
                 }
                 if let hiddenIdentity, hiddenMediaEntries.contains(where: { $0.identity == hiddenIdentity }) {
-                    return false
+                    continue
                 }
-                guard item.duration > 0 else { return true }
-                return item.progress / item.duration < 0.90
+                if item.duration > 0, item.progress / item.duration >= 0.90 {
+                    continue
+                }
+                guard !seenItemIDs.contains(item.id) else { continue }
+
+                if let seriesID = item.seriesID, !seriesID.isEmpty {
+                    let seriesKey = "\(seriesID)|\(item.playlistID?.uuidString ?? "")"
+                    guard !seenSeriesKeys.contains(seriesKey) else { continue }
+                    seenSeriesKeys.insert(seriesKey)
+                }
+
+                seenItemIDs.insert(item.id)
+                deduplicated.append(item)
             }
+            return deduplicated
         }
 
         public var isLoadingPersonalizedContent: Bool {

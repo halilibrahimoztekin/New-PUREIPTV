@@ -462,7 +462,18 @@ public final class TopShelfService: @unchecked Sendable {
             )
         }()
 
-        public static let testValue = TopShelfClient()
+        public static let testValue: TopShelfClient = {
+            var client = TopShelfClient()
+            client.updateTopShelfData = { _, _, _ in }
+            client.loadTopShelfData = { nil }
+            client.getPreferredStyle = { .sectioned }
+            client.setPreferredStyle = { _ in }
+            client.getSectionOrder = { TopShelfContentSection.defaultOrder }
+            client.setSectionOrder = { _ in }
+            client.getContentSelection = { TopShelfContentSelection() }
+            client.setContentSelection = { _ in }
+            return client
+        }()
     }
 
     public extension DependencyValues {

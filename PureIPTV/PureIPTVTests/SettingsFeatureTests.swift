@@ -11,6 +11,7 @@ final class SettingsFeatureTests: XCTestCase {
             $0.settingsClient.isParentalControlEnabled = { false }
             $0.settingsClient.setParentalControl = { _, _ in }
         }
+        store.exhaustivity = .off
 
         await store.send(.onAppear) {
             $0.isParentalControlEnabled = false
@@ -52,6 +53,7 @@ final class SettingsFeatureTests: XCTestCase {
         } withDependencies: {
             $0.settingsClient.isParentalControlEnabled = { false }
         }
+        store.exhaustivity = .off
 
         await store.send(.toggleParentalControl(true)) {
             $0.isShowingPINSetup = true

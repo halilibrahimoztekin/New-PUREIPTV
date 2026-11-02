@@ -26,6 +26,15 @@ public struct AudioSyncHUDView: View {
     @State private var syncMode: SyncMode = .audio
     @FocusState private var focusedField: FocusField?
     @State private var idleTimer: DispatchWorkItem?
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private var isLandscapeCompact: Bool {
+        #if os(tvOS)
+            return false
+        #else
+            return verticalSizeClass == .compact
+        #endif
+    }
 
     private enum FocusField: Hashable {
         case modePicker(SyncMode)
@@ -48,26 +57,31 @@ public struct AudioSyncHUDView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 18) {
-            // Header bar
+        VStack(spacing: isLandscapeCompact ? 8 : 18) {
+            // Header bar (pinned)
             headerBar
 
-            // Mode Picker Tabs (Ses vs Altyazı)
-            modePickerView
-
-            // Main Display Card (Large readout, status pill, waveform)
-            mainDisplayCard
-
-            // Micro-Stepper Stepper Row (-250, -50, Reset, +50, +250)
-            stepperRowView
-
-            #if os(iOS)
-                // Interactive Slider (-2000ms ... +2000ms)
-                sliderControlView
-            #endif
-
-            // Channel Memory Persistence Checkbox
-            rememberChannelRow
+            if isLandscapeCompact {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        modePickerView
+                        mainDisplayCard
+                        stepperRowView
+                        #if os(iOS)
+                            sliderControlView
+                        #endif
+                        rememberChannelRow
+                    }
+                }
+            } else {
+                modePickerView
+                mainDisplayCard
+                stepperRowView
+                #if os(iOS)
+                    sliderControlView
+                #endif
+                rememberChannelRow
+            }
         }
         #if os(tvOS)
         .padding(32)
@@ -90,8 +104,9 @@ public struct AudioSyncHUDView: View {
             onClose()
         }
         #else
-        .padding(20)
-        .frame(maxWidth: min(420, UIScreen.main.bounds.width - 32))
+        .padding(isLandscapeCompact ? 14 : 20)
+        .frame(maxWidth: isLandscapeCompact ? 480 : min(420, UIScreen.main.bounds.width - 32))
+        .frame(maxHeight: isLandscapeCompact ? min(UIScreen.main.bounds.height - 20, 340) : nil)
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)

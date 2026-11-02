@@ -10,18 +10,21 @@
     public struct LiveTVView_iOS: View {
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
+        let onSearch: (() -> Void)?
 
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
         ]
 
-        public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
+        public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig, onSearch: (() -> Void)? = nil) {
             self.store = store
             self.config = config
+            self.onSearch = onSearch
         }
 
-        public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String) {
+        public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String, onSearch: (() -> Void)? = nil) {
             self.store = store
+            self.onSearch = onSearch
             if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
                 config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
             } else {
@@ -151,6 +154,18 @@
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(AppStrings.Common.more)
+
+                            if let onSearch {
+                                Button(action: onSearch) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.9))
+                                        .frame(width: 44, height: 44)
+                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)

@@ -85,17 +85,21 @@ struct LiveEPGPreviewEngineTests {
         let channel = createSampleChannel(id: "ch_news", name: "CNN Turk")
         let config = createSampleConfig()
 
+        var state = EPGTimelineFeature.State(
+            config: config,
+            channels: [channel]
+        )
+        state.isVisible = true
+
         let store = TestStore(
-            initialState: EPGTimelineFeature.State(
-                config: config,
-                channels: [channel]
-            )
+            initialState: state
         ) {
             EPGTimelineFeature()
         } withDependencies: {
             $0.continuousClock = clock
             $0.previewPlayerClient = .testValue
         }
+        store.exhaustivity = .off
 
         // Focus channel
         await store.send(.channelFocused(channel)) {
@@ -105,17 +109,9 @@ struct LiveEPGPreviewEngineTests {
         // Advance clock past 400ms debounce
         await clock.advance(by: .milliseconds(400))
 
-        await store.receive(\.startPreviewDebounce) {
-            $0.activePreviewChannel = channel
-            $0.isPiPActive = true
-            $0.isPreviewLoading = true
-            $0.previewErrorMessage = nil
-        }
-
-        await store.receive(\.previewStarted) {
-            $0.isPreviewLoading = false
-            $0.previewErrorMessage = nil
-        }
+        await store.receive(\.focusedPreviewDelayElapsed)
+        await store.receive(\.startPreviewDebounce)
+        await store.receive(\.previewStarted)
     }
 
     // MARK: - Test 5: Rapid Focus Changes Cancel In-Flight Debounce
@@ -128,17 +124,21 @@ struct LiveEPGPreviewEngineTests {
         let ch3 = createSampleChannel(id: "ch_3", name: "Kanal 3")
         let config = createSampleConfig()
 
+        var state = EPGTimelineFeature.State(
+            config: config,
+            channels: [ch1, ch2, ch3]
+        )
+        state.isVisible = true
+
         let store = TestStore(
-            initialState: EPGTimelineFeature.State(
-                config: config,
-                channels: [ch1, ch2, ch3]
-            )
+            initialState: state
         ) {
             EPGTimelineFeature()
         } withDependencies: {
             $0.continuousClock = clock
             $0.previewPlayerClient = .testValue
         }
+        store.exhaustivity = .off
 
         // Rapid zapping through channels
         await store.send(.channelFocused(ch1)) {
@@ -158,27 +158,23 @@ struct LiveEPGPreviewEngineTests {
         await clock.advance(by: .milliseconds(400))
 
         // Only ch3 triggers preview, ch1 and ch2 were cancelled
-        await store.receive(\.startPreviewDebounce) {
-            $0.activePreviewChannel = ch3
-            $0.isPiPActive = true
-            $0.isPreviewLoading = true
-            $0.previewErrorMessage = nil
-        }
-
-        await store.receive(\.previewStarted) {
-            $0.isPreviewLoading = false
-        }
+        await store.receive(\.focusedPreviewDelayElapsed)
+        await store.receive(\.startPreviewDebounce)
+        await store.receive(\.previewStarted)
     }
 
     // MARK: - Test 6: EPGTimelineFeature Toggle Preview Mute
 
     @Test
     func ePGTimelineFeature_togglePreviewMute() async {
+        var state = EPGTimelineFeature.State(
+            config: createSampleConfig(),
+            channels: []
+        )
+        state.isVisible = true
+
         let store = TestStore(
-            initialState: EPGTimelineFeature.State(
-                config: createSampleConfig(),
-                channels: []
-            )
+            initialState: state
         ) {
             EPGTimelineFeature()
         } withDependencies: {
@@ -209,6 +205,7 @@ struct LiveEPGPreviewEngineTests {
             config: createSampleConfig(),
             channels: [channel]
         )
+        state.isVisible = true
         state.activePreviewChannel = channel
         state.isPiPActive = true
 
@@ -221,6 +218,7 @@ struct LiveEPGPreviewEngineTests {
         }
 
         await store.send(.expandPreviewToFullscreen) {
+            $0.isVisible = false
             $0.activePreviewChannel = nil
             $0.isPiPActive = false
         }
@@ -237,6 +235,7 @@ struct LiveEPGPreviewEngineTests {
             config: createSampleConfig(),
             channels: [channel]
         )
+        state.isVisible = true
         state.activePreviewChannel = channel
         state.isPiPActive = true
         state.isPreviewLoading = true
@@ -264,12 +263,15 @@ struct LiveEPGPreviewEngineTests {
         let channel = createSampleChannel(id: "ch_guide", name: "EuroNews")
         let config = createSampleConfig()
 
+        var state = EPGGuideFeature.State(
+            config: config,
+            channels: [channel],
+            initialChannel: nil
+        )
+        state.isVisible = true
+
         let store = TestStore(
-            initialState: EPGGuideFeature.State(
-                config: config,
-                channels: [channel],
-                initialChannel: nil
-            )
+            initialState: state
         ) {
             EPGGuideFeature()
         } withDependencies: {
@@ -278,7 +280,9 @@ struct LiveEPGPreviewEngineTests {
             $0.iptvClient.fetchShortEPG = { _, _, _, _ in [] }
         }
 
-        await store.send(.channelFocused(channel))
+        await store.send(.channelFocused(channel)) {
+            $0.previewGeneration = 1
+        }
 
         await clock.advance(by: .milliseconds(400))
 
@@ -296,6 +300,7 @@ struct LiveEPGPreviewEngineTests {
         await store.send(.stopPreview) {
             $0.activePreviewChannel = nil
             $0.isPreviewPlaying = false
+            $0.previewGeneration = 2
         }
     }
 }

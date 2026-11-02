@@ -166,6 +166,7 @@ final class CloudSyncEngineTests: XCTestCase {
             $0.cloudSyncClient.getSyncStatus = { .success(now) }
             $0.cloudSyncClient.observeRemoteChanges = { AsyncStream { $0.finish() } }
         }
+        store.exhaustivity = .off
 
         // Tap Sync Now
         await store.send(.syncNowTapped) {
@@ -200,6 +201,7 @@ final class CloudSyncEngineTests: XCTestCase {
             $0.cloudSyncClient.getSyncStatus = { .idle }
             $0.cloudSyncClient.observeRemoteChanges = { AsyncStream { $0.finish() } }
         }
+        store.exhaustivity = .off
 
         await store.send(.syncNowTapped) {
             $0.isCloudSyncing = true
@@ -221,6 +223,7 @@ final class CloudSyncEngineTests: XCTestCase {
             $0.cloudSyncClient.setSyncEnabled = { _ in }
             $0.settingsClient.setIsICloudSyncEnabled = { _ in }
         }
+        store.exhaustivity = .off
 
         await store.send(.setICloudSyncEnabled(false)) {
             $0.isICloudSyncEnabled = false

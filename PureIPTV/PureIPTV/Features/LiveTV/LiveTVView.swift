@@ -6,14 +6,17 @@ import SwiftUI
 public struct LiveTVView: View {
     let store: StoreOf<LiveTVFeature>
     let config: PlaylistConfig
+    let onSearch: (() -> Void)?
 
-    public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig) {
+    public init(store: StoreOf<LiveTVFeature>, config: PlaylistConfig, onSearch: (() -> Void)? = nil) {
         self.store = store
         self.config = config
+        self.onSearch = onSearch
     }
 
-    public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String) {
+    public init(store: StoreOf<LiveTVFeature>, serverURL: String, username: String, password: String, onSearch: (() -> Void)? = nil) {
         self.store = store
+        self.onSearch = onSearch
         if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
             config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
         } else {
@@ -25,7 +28,7 @@ public struct LiveTVView: View {
         #if os(tvOS)
             LiveTVView_tvOS(store: store, config: config)
         #else
-            LiveTVView_iOS(store: store, config: config)
+            LiveTVView_iOS(store: store, config: config, onSearch: onSearch)
         #endif
     }
 }

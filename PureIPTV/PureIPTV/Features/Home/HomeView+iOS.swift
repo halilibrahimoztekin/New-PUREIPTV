@@ -50,22 +50,26 @@
             case .dashboard:
                 DashboardView_iOS(
                     store: store.scope(state: \.dashboard, action: \.dashboard),
-                    config: store.config
+                    config: store.config,
+                    onSearch: { store.send(.delegate(.presentSearch)) }
                 )
             case .liveTV:
                 LiveTVView(
                     store: store.scope(state: \.liveTV, action: \.liveTV),
-                    config: store.liveTVSourceConfig
+                    config: store.liveTVSourceConfig,
+                    onSearch: { store.send(.delegate(.presentSearch)) }
                 )
             case .movies:
                 VODView(
                     store: store.scope(state: \.vod, action: \.vod),
-                    config: store.moviesSourceConfig
+                    config: store.moviesSourceConfig,
+                    onSearch: { store.send(.delegate(.presentSearch)) }
                 )
             case .series:
                 SeriesView(
                     store: store.scope(state: \.series, action: \.series),
-                    config: store.seriesSourceConfig
+                    config: store.seriesSourceConfig,
+                    onSearch: { store.send(.delegate(.presentSearch)) }
                 )
             case .search:
                 SearchView(

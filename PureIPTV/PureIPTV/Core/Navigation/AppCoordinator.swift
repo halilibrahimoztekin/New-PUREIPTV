@@ -5242,7 +5242,9 @@ private struct FavoriteChannelListManagementRouteView: View {
     private func closeIfStale() {
         guard isCurrentPresentation else {
             guard isRouteActive else { return }
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -5310,7 +5312,9 @@ private struct AddPlaylistQRTransferRouteView: View {
 
     private func closeIfStale() {
         guard !isParentCurrent, isRouteActive else { return }
-        routeStore.send(.closeTapped)
+        Task { @MainActor in
+            routeStore.send(.closeTapped)
+        }
     }
 }
 
@@ -5374,7 +5378,9 @@ private struct ChannelPresentationEditorRouteView: View {
 
     private func closeIfContextChanged() {
         guard let liveTVState, isCurrentContext(liveTVState) else {
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -5480,7 +5486,9 @@ private struct ProfileAddProfileRouteView: View {
 
     private func closeIfContextChanged() {
         guard !isCurrentContext, isRouteActive else { return }
-        routeStore.send(.closeTapped)
+        Task { @MainActor in
+            routeStore.send(.closeTapped)
+        }
     }
 
     private func close() {
@@ -5559,7 +5567,9 @@ private struct EPGTimelineProgramDetailRouteView: View {
 
     private func closeIfContextChanged() {
         guard isCurrentContext else {
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -5630,7 +5640,12 @@ private struct EPGTimelineChannelLogoEditorRouteView: View {
     }
 
     private func closeIfContextChanged() {
-        guard isCurrentContext else { close(); return }
+        guard isCurrentContext else {
+            Task { @MainActor in
+                close()
+            }
+            return
+        }
     }
 
     private func saveOverride(_ rawValue: String?) {
@@ -5842,7 +5857,9 @@ private struct PlaylistManagementSettingsRouteView: View {
 
     private func closeIfContextChanged() {
         guard playlist != nil else {
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -6004,7 +6021,9 @@ private struct PlaylistManagementAddPlaylistRouteView: View {
     private func closeIfStale() {
         guard isCurrentPresentation else {
             guard isRouteActive else { return }
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -6064,7 +6083,9 @@ private struct PlayerSpeedTestRouteView: View {
     private func closeIfStale() {
         guard isCurrentPresentation else {
             guard isRouteActive else { return }
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -6147,7 +6168,9 @@ private struct PlayerSubtitleSearchRouteView: View {
     private func closeIfStale() {
         guard isCurrentPresentation else {
             guard isRouteActive else { return }
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -6207,7 +6230,9 @@ private struct SettingsSpeedTestRouteView: View {
     private func closeIfStale() {
         guard isCurrentPresentation else {
             guard isRouteActive else { return }
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }
@@ -6283,7 +6308,9 @@ private struct SettingsPINSetupRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        routeStore.send(.closeTapped)
+        Task { @MainActor in
+            routeStore.send(.closeTapped)
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6354,7 +6381,9 @@ private struct SettingsHiddenContentRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        routeStore.send(.closeTapped)
+        Task { @MainActor in
+            routeStore.send(.closeTapped)
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6411,7 +6440,9 @@ private struct SettingsDiagnosticReportRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6533,7 +6564,9 @@ private struct SettingsBackupPreviewRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6664,7 +6697,9 @@ private struct DetailSynopsisRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentParent, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6727,7 +6762,9 @@ private struct DetailActorBiographyRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentParent, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6824,7 +6861,9 @@ private struct DetailTrailerRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentParent, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -6883,7 +6922,9 @@ private struct DetailUnmatchedMovieRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentParent, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -7115,7 +7156,9 @@ private struct CustomEPGSettingsRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -7206,7 +7249,9 @@ private struct CustomEPGSourceAddRouteView: View {
 
     private func closeIfStale() {
         guard !isCurrentPresentation, isRouteActive else { return }
-        close()
+        Task { @MainActor in
+            close()
+        }
     }
 
     private func notifyRouteDidDisappear() {
@@ -7282,7 +7327,9 @@ private struct DashboardPresentationRouteView: View {
 
     private func closeIfContextChanged() {
         guard let homeState, isCurrentContext(homeState) else {
-            routeStore.send(.closeTapped)
+            Task { @MainActor in
+                routeStore.send(.closeTapped)
+            }
             return
         }
     }

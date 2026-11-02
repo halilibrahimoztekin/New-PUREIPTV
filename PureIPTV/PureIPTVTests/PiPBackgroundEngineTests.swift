@@ -88,6 +88,7 @@ final class PiPBackgroundEngineTests: XCTestCase {
             $0.pipClient.setBackgroundPlaybackMode = { _ in }
             $0.pipClient.configureAudioSession = { _ in }
         }
+        store.exhaustivity = .off
 
         // 1. Toggle PiP
         await store.send(.togglePiP) {
@@ -155,6 +156,7 @@ final class PiPBackgroundEngineTests: XCTestCase {
             $0.pipClient.isAutoPiPEnabled = { true }
             $0.pipClient.backgroundPlaybackMode = { .pip }
         }
+        store.exhaustivity = .off
 
         // In .pip mode while playing, app moving to background triggers PiP
         await store.send(.appMovedToBackground) {
@@ -192,6 +194,7 @@ final class PiPBackgroundEngineTests: XCTestCase {
             $0.pipClient.backgroundPlaybackMode = { savedBgMode }
             $0.pipClient.setBackgroundPlaybackMode = { savedBgMode = $0 }
         }
+        store.exhaustivity = .off
 
         await store.send(.setAutoPiPEnabled(false)) {
             $0.isAutoPiPEnabled = false

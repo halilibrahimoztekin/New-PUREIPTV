@@ -4,14 +4,17 @@ import SwiftUI
 public struct SeriesView: View {
     let store: StoreOf<SeriesFeature>
     let config: PlaylistConfig
+    let onSearch: (() -> Void)?
 
-    public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig) {
+    public init(store: StoreOf<SeriesFeature>, config: PlaylistConfig, onSearch: (() -> Void)? = nil) {
         self.store = store
         self.config = config
+        self.onSearch = onSearch
     }
 
-    public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String) {
+    public init(store: StoreOf<SeriesFeature>, serverURL: String, username: String, password: String, onSearch: (() -> Void)? = nil) {
         self.store = store
+        self.onSearch = onSearch
         if (username.isEmpty && password.isEmpty) || serverURL.lowercased().contains(".m3u") {
             config = PlaylistConfig(type: .m3u, m3uURL: URL(string: serverURL))
         } else {
@@ -23,7 +26,7 @@ public struct SeriesView: View {
         #if os(tvOS)
             SeriesView_tvOS(store: store, config: config)
         #else
-            SeriesView_iOS(store: store, config: config)
+            SeriesView_iOS(store: store, config: config, onSearch: onSearch)
         #endif
     }
 }

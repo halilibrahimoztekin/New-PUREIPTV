@@ -1036,7 +1036,27 @@ extension CloudSyncClient: DependencyKey {
         return client
     }()
 
-    public static let testValue: CloudSyncClient = .init()
+    public static let testValue: CloudSyncClient = {
+        var client = CloudSyncClient()
+        client.isSyncEnabled = { true }
+        client.setSyncEnabled = { _ in }
+        client.isPlaylistSyncEnabled = { _ in true }
+        client.setPlaylistSyncEnabled = { _, _ in }
+        client.syncFavorites = { _ in }
+        client.pullFavorites = { [] }
+        client.syncHiddenItems = { _ in }
+        client.pullHiddenItems = { [] }
+        client.syncPresentationPreferences = { [] }
+        client.loadSportsFollows = { _ in [] }
+        client.setSportsFollow = { _, _, _, _ in [] }
+        client.observeSportsFollows = { _ in AsyncStream { $0.finish() } }
+        client.observePresentationPreferenceChanges = { AsyncStream { $0.finish() } }
+        client.performFullSync = { CloudSyncSummary() }
+        client.observeRemoteChanges = { AsyncStream { $0.finish() } }
+        client.lastSyncDate = { nil }
+        client.getSyncStatus = { .idle }
+        return client
+    }()
 }
 
 // MARK: - DependencyValues Registration

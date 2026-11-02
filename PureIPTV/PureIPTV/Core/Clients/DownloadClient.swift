@@ -185,6 +185,8 @@ extension DownloadClient: DependencyKey {
             await DownloadManager.shared.setConcurrencyLimit(value)
         }
     )
+
+    public static let testValue = DownloadClient()
 }
 
 public extension DependencyValues {
