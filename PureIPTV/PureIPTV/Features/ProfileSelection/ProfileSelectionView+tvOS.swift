@@ -35,8 +35,8 @@
                     VStack(spacing: 12) {
                         Text(store.isEditing ? AppStrings.Profile.manageProfiles : AppStrings.Profile.whoIsWatching)
                             .font(AppFonts.displayLarge)
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .shadow(color: AppColors.oledBlack.opacity(0.4), radius: 8, x: 0, y: 4)
 
                         Text(store.isEditing ? AppStrings.Profile.deleteInstruction : AppStrings.Profile.personalizeDesc)
                             .font(AppFonts.titleSmall)
@@ -80,9 +80,9 @@
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: store.isEditing ? "checkmark" : "pencil")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(AppFonts.titleSmall.weight(.bold))
                             Text(store.isEditing ? AppStrings.Common.done : AppStrings.Profile.manageProfiles)
-                                .font(.system(size: 20, weight: .semibold))
+                                .font(AppFonts.titleMedium)
                         }
                         .padding(.horizontal, 28)
                         .padding(.vertical, 14)
@@ -135,7 +135,7 @@
         }
 
         private var strokeColor: Color {
-            isFocused ? Color.white : Color.white.opacity(0.12)
+            isFocused ? AppColors.textPrimary : AppColors.borderMedium
         }
 
         private var strokeWidth: CGFloat {
@@ -143,7 +143,7 @@
         }
 
         private var shadowColor: Color {
-            isFocused ? glowColor.opacity(0.7) : Color.black.opacity(0.4)
+            isFocused ? glowColor.opacity(0.7) : AppColors.oledBlack.opacity(0.4)
         }
 
         private var shadowRadius: CGFloat {
@@ -159,7 +159,7 @@
         }
 
         private var nameColor: Color {
-            isFocused ? Color.white : AppColors.onSurfaceVariant.opacity(0.75)
+            isFocused ? AppColors.textPrimary : AppColors.onSurfaceVariant.opacity(0.75)
         }
 
         private var nameScale: CGFloat {
@@ -173,15 +173,15 @@
 
                     HStack(spacing: 8) {
                         Text(profile.name)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(Color.white)
+                            .font(AppFonts.titleMedium.weight(.bold))
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         Button(action: onDelete) {
                             Image(systemName: "trash.fill")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(Color.white)
+                                .font(AppFonts.titleSmall.weight(.bold))
+                                .foregroundStyle(AppColors.textPrimary)
                                 .frame(width: 44, height: 44)
                         }
                         .buttonStyle(TVCircleButtonStyle(isFavorite: true))
@@ -215,18 +215,18 @@
                     .frame(width: 190, height: 190)
 
                 Image(systemName: profile.avatarIcon.isEmpty ? "person.crop.circle.fill" : profile.avatarIcon)
-                    .font(.system(size: 78))
-                    .foregroundStyle(Color.white)
-                    .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    .font(AppFonts.custom(size: 78, weight: .regular))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .shadow(color: AppColors.oledBlack.opacity(0.25), radius: 6, x: 0, y: 3)
                     .frame(width: 190, height: 190)
 
                 if profile.isKidsMode {
                     Text(AppStrings.Profile.kidsBadge)
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundStyle(Color.white)
+                        .font(AppFonts.captionBold)
+                        .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.black.opacity(0.45))
+                        .background(AppColors.oledBlack.opacity(0.45))
                         .clipShape(Capsule())
                         .padding(12)
                 }
@@ -249,11 +249,11 @@
         @Environment(\.isFocused) private var isFocused
 
         private var fillColor: Color {
-            isFocused ? Color.white.opacity(0.18) : Color.white.opacity(0.06)
+            isFocused ? AppColors.borderStrong : AppColors.surfaceElevated
         }
 
         private var strokeColor: Color {
-            isFocused ? Color.white : Color.white.opacity(0.2)
+            isFocused ? AppColors.textPrimary : AppColors.borderStrong
         }
 
         private var strokeStyle: StrokeStyle {
@@ -261,7 +261,7 @@
         }
 
         private var iconColor: Color {
-            isFocused ? Color.white : Color.white.opacity(0.5)
+            isFocused ? AppColors.textPrimary : AppColors.textSecondary
         }
 
         private var shadowColor: Color {
@@ -277,7 +277,7 @@
         }
 
         private var labelColor: Color {
-            isFocused ? Color.white : AppColors.onSurfaceVariant.opacity(0.6)
+            isFocused ? AppColors.textPrimary : AppColors.onSurfaceVariant.opacity(0.6)
         }
 
         private var labelScale: CGFloat {
@@ -289,16 +289,16 @@
                 VStack(spacing: 18) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
+                            .fill(AppColors.surfaceElevated)
                             .frame(width: 190, height: 190)
 
                         Image(systemName: "plus")
-                            .font(.system(size: 48, weight: .light))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.custom(size: 48, weight: .light))
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                            .stroke(AppColors.borderStrong, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     )
 
                     Text(AppStrings.Profile.addProfile)
@@ -328,11 +328,11 @@
 
             private var fillColor: Color {
                 if isFocused {
-                    Color.white
+                    AppColors.textPrimary
                 } else if isEditing {
-                    Color.red.opacity(0.25)
+                    AppColors.destructive.opacity(0.25)
                 } else {
-                    Color.white.opacity(0.08)
+                    AppColors.surfaceElevated
                 }
             }
 
@@ -340,19 +340,19 @@
                 if isFocused {
                     Color.clear
                 } else if isEditing {
-                    Color.red.opacity(0.8)
+                    AppColors.destructive.opacity(0.8)
                 } else {
-                    Color.white.opacity(0.2)
+                    AppColors.borderStrong
                 }
             }
 
             private var foregroundColor: Color {
                 if isFocused {
-                    Color.black
+                    AppColors.oledBlack
                 } else if isEditing {
-                    Color.red
+                    AppColors.destructive
                 } else {
-                    Color.white.opacity(0.85)
+                    AppColors.textPrimary
                 }
             }
 
@@ -367,7 +367,7 @@
             }
 
             private var shadowColor: Color {
-                isFocused ? Color.white.opacity(0.35) : Color.clear
+                isFocused ? AppColors.borderStrong : Color.clear
             }
 
             var body: some View {

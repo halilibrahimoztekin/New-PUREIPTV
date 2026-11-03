@@ -47,7 +47,7 @@ public struct ChannelInfoOSDView: View {
                 HStack(alignment: .center, spacing: 10) {
                     if let index = channelIndex {
                         Text(String(format: "#%02d", index + 1))
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .font(AppFonts.bodySmall.weight(.bold).monospaced())
                             .foregroundStyle(AppColors.primary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -56,28 +56,28 @@ public struct ChannelInfoOSDView: View {
 
                     Text(isCleaningEnabled ? item.cleanTitle : item.title)
                     #if os(tvOS)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(AppFonts.headline)
                     #else
-                        .font(.system(size: 17, weight: .bold))
+                        .font(AppFonts.bodyBold)
                     #endif
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
                     // Live Badge
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(Color.red)
+                            .fill(AppColors.live)
                             .frame(width: 7, height: 7)
                             .scaleEffect(isLivePulsing ? 1.25 : 0.85)
                             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isLivePulsing)
 
                         Text(AppStrings.Player.liveLabel)
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundStyle(.red)
+                            .font(AppFonts.captionSmall.weight(.heavy))
+                            .foregroundStyle(AppColors.live)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.red.opacity(0.18), in: Capsule())
+                    .background(AppColors.live.opacity(0.18), in: Capsule())
 
                     // Quality Badge
                     qualityBadgeView
@@ -100,8 +100,8 @@ public struct ChannelInfoOSDView: View {
                         Text("\(AppStrings.Search.playlistSource) \(playlistName)")
                             .lineLimit(1)
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .font(AppFonts.captionMedium)
+                    .foregroundStyle(AppColors.textSecondary)
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -111,11 +111,11 @@ public struct ChannelInfoOSDView: View {
         .background(
             ZStack {
                 #if os(tvOS)
-                    Color.black.opacity(0.82)
+                    AppColors.oledBlack.opacity(0.82)
                 #else
                     Rectangle()
                         .fill(.ultraThinMaterial)
-                    Color.black.opacity(0.35)
+                    AppColors.oledBlack.opacity(0.35)
                 #endif
             }
         )
@@ -124,14 +124,14 @@ public struct ChannelInfoOSDView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.3), Color.white.opacity(0.08)],
+                        colors: [AppColors.borderStrong, AppColors.borderSubtle],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
-        .shadow(color: .black.opacity(0.55), radius: 24, x: 0, y: 12)
+        .shadow(color: AppColors.oledBlack.opacity(0.55), radius: 24, x: 0, y: 12)
         .frame(maxWidth: 720)
         .onAppear {
             isLivePulsing = true
@@ -166,22 +166,18 @@ public struct ChannelInfoOSDView: View {
         #else
         .frame(width: 48, height: 48)
         #endif
-        .background(Color.white.opacity(0.06))
+        .background(AppColors.glassPlate)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                .stroke(AppColors.borderStrong, lineWidth: 0.8)
         )
     }
 
     private var fallbackLogo: some View {
         Image(systemName: "tv")
-        #if os(tvOS)
-            .font(.system(size: 26))
-        #else
-            .font(.system(size: 20))
-        #endif
-            .foregroundStyle(.white.opacity(0.55))
+            .font(AppFonts.titleSmall)
+            .foregroundStyle(AppColors.textSecondary)
     }
 
     // MARK: - Quality Badge
@@ -205,15 +201,15 @@ public struct ChannelInfoOSDView: View {
         return HStack(spacing: 5) {
             if let country = meta.detectedCountry {
                 Text(country)
-                    .font(.system(size: 9, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .font(AppFonts.captionSmall.weight(.heavy))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                    .background(AppColors.borderMedium, in: RoundedRectangle(cornerRadius: 4))
             }
 
             Text(badgeText)
-                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .font(AppFonts.captionSmall.weight(.heavy))
                 .foregroundStyle(badgeColor)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -221,7 +217,7 @@ public struct ChannelInfoOSDView: View {
 
             if meta.isHEVC, meta.detectedQuality != nil {
                 Text("HEVC")
-                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .font(AppFonts.captionSmall.weight(.heavy))
                     .foregroundStyle(AppColors.premium)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
@@ -230,7 +226,7 @@ public struct ChannelInfoOSDView: View {
 
             if meta.isBackup {
                 Text("YEDEK")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(AppFonts.captionSmall.weight(.bold))
                     .foregroundStyle(AppColors.warning)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)

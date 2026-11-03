@@ -24,12 +24,12 @@ public struct TouchLockOverlayView: View {
                     // Pulsing Lock Icon
                     ZStack {
                         Circle()
-                            .fill(Color.orange.opacity(0.25))
+                            .fill(AppColors.amber.opacity(0.25))
                             .frame(width: 38, height: 38)
 
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.orange)
+                            .font(AppFonts.titleSmall.weight(.bold))
+                            .foregroundStyle(AppColors.amber)
                             .scaleEffect(pulseIcon ? 1.15 : 1.0)
                             .animation(
                                 .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
@@ -40,12 +40,12 @@ public struct TouchLockOverlayView: View {
                     // Text Info
                     VStack(alignment: .leading, spacing: 2) {
                         Text(AppStrings.Player.screenLocked)
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
+                            .font(AppFonts.bodyMedium.weight(.bold))
+                            .foregroundStyle(AppColors.textPrimary)
 
                         Text(AppStrings.Player.tapToUnlock)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.7))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     Spacer(minLength: 8)
@@ -57,14 +57,14 @@ public struct TouchLockOverlayView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "lock.open.fill")
-                                .font(.system(size: 13, weight: .bold))
+                                .font(AppFonts.captionBold)
                             Text(AppStrings.Player.unlock)
-                                .font(.caption.bold())
+                                .font(AppFonts.captionBold)
                         }
-                        .foregroundColor(.black)
+                        .foregroundStyle(AppColors.background)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(Color.white, in: Capsule())
+                        .background(AppColors.textPrimary, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -77,14 +77,14 @@ public struct TouchLockOverlayView: View {
                             RoundedRectangle(cornerRadius: 22, style: .continuous)
                                 .stroke(
                                     LinearGradient(
-                                        colors: [Color.orange.opacity(0.6), Color.white.opacity(0.15)],
+                                        colors: [AppColors.amber.opacity(0.6), AppColors.borderSubtle],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ),
                                     lineWidth: 1.5
                                 )
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
+                        .shadow(color: AppColors.background.opacity(0.5), radius: 20, x: 0, y: 10)
                 )
                 .frame(maxWidth: 380)
                 .padding(.top, 40)

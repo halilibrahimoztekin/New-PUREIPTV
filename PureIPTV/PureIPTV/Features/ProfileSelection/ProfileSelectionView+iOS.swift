@@ -13,13 +13,12 @@
 
         public var body: some View {
             ZStack {
-                Color.black.ignoresSafeArea()
+                AppColors.oledBlack.ignoresSafeArea()
 
                 VStack(spacing: 40) {
                     Text(AppStrings.Profile.whoIsWatching)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .font(AppFonts.displayLarge)
+                        .foregroundStyle(AppColors.textPrimary)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 32) {
                         ForEach(store.profiles) { profile in
@@ -34,12 +33,12 @@
                                             .resizable()
                                             .aspectRatio(contentMode: .fit)
                                             .frame(width: 90, height: 90)
-                                            .foregroundColor(profile.isKidsMode ? .orange : .blue)
-                                            .background(Color.white.opacity(0.1))
+                                            .foregroundStyle(profile.isKidsMode ? AppColors.warning : AppColors.primary)
+                                            .background(AppColors.surfaceElevated)
                                             .clipShape(RoundedRectangle(cornerRadius: 18))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 18)
-                                                    .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                                                    .stroke(AppColors.borderStrong, lineWidth: 2)
                                             )
 
                                         if store.isEditing {
@@ -47,9 +46,9 @@
                                                 store.send(.deleteProfile(profile))
                                             } label: {
                                                 Image(systemName: "minus.circle.fill")
-                                                    .foregroundColor(.red)
-                                                    .background(Color.white.clipShape(Circle()))
-                                                    .font(.title2)
+                                                    .foregroundStyle(AppColors.destructive)
+                                                    .background(AppColors.textPrimary.clipShape(Circle()))
+                                                    .font(AppFonts.titleMedium)
                                             }
                                             .offset(x: 10, y: -10)
                                         }
@@ -58,8 +57,8 @@
                                 .buttonStyle(.plain)
 
                                 Text(profile.name)
-                                    .font(.headline)
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .font(AppFonts.headline)
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
                         }
 
@@ -74,19 +73,19 @@
                                         .aspectRatio(contentMode: .fit)
                                         .frame(width: 36, height: 36)
                                         .frame(width: 90, height: 90)
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .background(Color.white.opacity(0.08))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                        .background(AppColors.surfaceSecondary)
                                         .clipShape(RoundedRectangle(cornerRadius: 18))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 18)
-                                                .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                                                .stroke(AppColors.borderStrong, lineWidth: 2)
                                         )
                                 }
                                 .buttonStyle(.plain)
 
                                 Text(AppStrings.Common.add)
-                                    .font(.headline)
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .font(AppFonts.headline)
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
                         }
                     }
@@ -96,11 +95,11 @@
                         store.send(.toggleEditMode)
                     } label: {
                         Text(store.isEditing ? AppStrings.Common.done : AppStrings.Profile.editProfiles)
-                            .font(.headline)
-                            .foregroundColor(.white.opacity(0.9))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.vertical, 10)
                             .padding(.horizontal, 24)
-                            .background(Color.white.opacity(0.12))
+                            .background(AppColors.surfaceElevated)
                             .clipShape(Capsule())
                     }
                     .padding(.top, 20)

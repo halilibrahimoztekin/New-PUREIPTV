@@ -32,7 +32,7 @@ import SwiftVLC
 
                 // ── Center: Vertical Divider ────────────────────────────
                 Rectangle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(AppColors.borderSubtle)
                     .frame(width: 2)
                     .frame(width: 32)
 
@@ -47,7 +47,7 @@ import SwiftVLC
                     LinearGradient(
                         colors: [
                             AppColors.primary.opacity(0.08),
-                            Color.clear,
+                            AppColors.background.opacity(0),
                             AppColors.purpleAccent.opacity(0.05),
                         ],
                         startPoint: .topLeading,
@@ -160,7 +160,7 @@ import SwiftVLC
                         }
                     }
                     .frame(width: 52, height: 52)
-                    .background(Color.white.opacity(0.06))
+                    .background(AppColors.glassPlate)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     // Details
@@ -209,12 +209,12 @@ import SwiftVLC
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
-                            isFocused ? AppColors.textPrimary : (isSelected ? AppColors.primary.opacity(0.5) : Color.clear),
+                            isFocused ? AppColors.textPrimary : (isSelected ? AppColors.primary.opacity(0.5) : AppColors.background.opacity(0)),
                             lineWidth: isFocused ? 2.5 : 1
                         )
                 )
                 .scaleEffect(isFocused ? 1.04 : 1.0)
-                .shadow(color: isFocused ? Color.white.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                .shadow(color: isFocused ? AppColors.textPrimary.opacity(0.3) : AppColors.background.opacity(0), radius: 8, x: 0, y: 4)
                 .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
             }
             .buttonStyle(.plain)
@@ -228,8 +228,8 @@ import SwiftVLC
 
         private var fallbackLogo: some View {
             Image(systemName: "tv")
-                .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.45))
+                .font(AppFonts.titleSmall)
+                .foregroundStyle(AppColors.textTertiary)
         }
 
         private func qualityBadge(for title: String) -> some View {
@@ -248,11 +248,11 @@ import SwiftVLC
             }()
 
             return Text(badgeText)
-                .font(.system(size: 9, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white.opacity(0.6))
+                .font(AppFonts.captionSmall.weight(.heavy))
+                .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+                .background(AppColors.borderSubtle, in: RoundedRectangle(cornerRadius: 3))
         }
 
         // MARK: - Right: EPG Schedule Area
@@ -262,7 +262,7 @@ import SwiftVLC
                 // Top Channel Info & Actions Bar
                 channelDetailHeader
 
-                Divider().background(Color.white.opacity(0.08))
+                Divider().background(AppColors.borderSubtle)
 
                 // Schedule Body
                 if store.isLoadingEPG {
@@ -273,11 +273,11 @@ import SwiftVLC
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.yellow)
+                            .font(AppFonts.displayMedium)
+                            .foregroundStyle(AppColors.warning)
                         Text("\(AppStrings.EPG.error)\(error)")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
+                            .font(AppFonts.bodyMedium)
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.75))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
                         retryEPGButton
@@ -287,11 +287,11 @@ import SwiftVLC
                     Spacer()
                     VStack(spacing: 14) {
                         Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.25))
+                            .font(AppFonts.displayLarge)
+                            .foregroundStyle(AppColors.textTertiary)
                         Text(AppStrings.EPG.noData)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .font(AppFonts.bodyLarge)
+                            .foregroundStyle(AppColors.textSecondary)
                         retryEPGButton
                     }
                     Spacer()
@@ -347,10 +347,10 @@ import SwiftVLC
                                 store.send(.togglePreviewMute)
                             } label: {
                                 Image(systemName: store.isPreviewMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .frame(width: 44, height: 44)
-                                    .background(Color.black.opacity(0.6), in: Circle())
+                                    .background(AppColors.oledBlack.opacity(0.6), in: Circle())
                             }
                             .buttonStyle(TVCircleButtonStyle())
                             .accessibilityLabel(store.isPreviewMuted ? AppStrings.EPG.unmutePreview : AppStrings.EPG.mutePreview)
@@ -377,46 +377,46 @@ import SwiftVLC
                             }
                         }
                         .frame(width: 72, height: 72)
-                        .background(Color.white.opacity(0.06))
+                        .background(AppColors.glassPlate)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                .stroke(AppColors.borderMedium, lineWidth: 1)
                         )
                     }
 
                     // Title & Badges
                     VStack(alignment: .leading, spacing: 6) {
                         Text(selected.title)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displayMedium)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
 
                         HStack(spacing: 8) {
                             if selected.tvArchive == 1 {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                     Text("7 Günlük Tekrar İzle / Catch-Up Aktif".localized)
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                 }
-                                .foregroundStyle(Color.purple)
+                                .foregroundStyle(AppColors.premium)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.purple.opacity(0.18), in: Capsule())
+                                .background(AppColors.premium.opacity(0.18), in: Capsule())
                             }
 
                             Text("Canlı Yayın Akışı".localized)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .font(AppFonts.captionSemibold)
+                                .foregroundStyle(AppColors.textSecondary)
                         }
                         Text(store.epgFreshnessLabel)
-                            .font(.caption)
-                            .foregroundStyle(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.55))
+                            .font(AppFonts.caption)
+                            .foregroundStyle(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? AppColors.warning : AppColors.textSecondary)
                         if let source = store.epgSourceIdentity {
                             Text(source.displayLabel)
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.45))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.textTertiary)
                                 .lineLimit(1)
                         }
                     }
@@ -456,13 +456,13 @@ import SwiftVLC
             }
             .padding(.horizontal, 40)
             .padding(.vertical, 24)
-            .background(Color.white.opacity(0.02))
+            .background(AppColors.glassPlate.opacity(0.3))
         }
 
         private var fallbackHeaderLogo: some View {
             Image(systemName: "tv")
-                .font(.system(size: 28))
-                .foregroundStyle(.white.opacity(0.4))
+                .font(AppFonts.titleLarge)
+                .foregroundStyle(AppColors.textTertiary)
         }
 
         // MARK: - Program Scroll View
@@ -534,10 +534,10 @@ import SwiftVLC
                                     image.resizable().aspectRatio(contentMode: .fill)
                                 } else {
                                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.white.opacity(0.06))
+                                        .fill(AppColors.glassPlate)
                                         .overlay {
                                             Image(systemName: "film")
-                                                .foregroundStyle(.white.opacity(0.35))
+                                                .foregroundStyle(AppColors.textTertiary)
                                         }
                                 }
                             }
@@ -550,40 +550,40 @@ import SwiftVLC
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text(program.title)
-                                    .font(.system(size: 20, weight: isCurrentProgram ? .bold : .semibold))
-                                    .foregroundStyle(isFocused ? .white : (isCurrentProgram ? .white : .white.opacity(0.9)))
+                                    .font(AppFonts.bodyLarge.weight(isCurrentProgram ? .bold : .semibold))
+                                    .foregroundStyle(isFocused ? AppColors.textPrimary : (isCurrentProgram ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.9)))
                                     .lineLimit(1)
 
                                 // Live Badge
                                 if isCurrentProgram {
                                     HStack(spacing: 4) {
                                         Circle()
-                                            .fill(Color.red)
+                                            .fill(AppColors.live)
                                             .frame(width: 7, height: 7)
                                             .scaleEffect(isLivePulsing ? 1.25 : 0.85)
                                             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isLivePulsing)
 
                                         Text(AppStrings.Player.nowPlaying)
-                                            .font(.system(size: 10, weight: .heavy))
-                                            .foregroundStyle(.red)
+                                            .font(AppFonts.captionSmall.weight(.heavy))
+                                            .foregroundStyle(AppColors.live)
                                     }
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Color.red.opacity(0.18), in: Capsule())
+                                    .background(AppColors.live.opacity(0.18), in: Capsule())
                                 }
 
                                 // Catch-Up / Replay Pill
                                 if hasArchive, isPast {
                                     HStack(spacing: 4) {
                                         Image(systemName: "clock.arrow.circlepath")
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(AppFonts.captionSmall.weight(.bold))
                                         Text(AppStrings.Player.watchCatchUp)
-                                            .font(.system(size: 10, weight: .heavy))
+                                            .font(AppFonts.captionSmall.weight(.heavy))
                                     }
-                                    .foregroundStyle(Color.purple)
+                                    .foregroundStyle(AppColors.premium)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Color.purple.opacity(0.22), in: Capsule())
+                                    .background(AppColors.premium.opacity(0.22), in: Capsule())
                                 }
 
                                 Spacer(minLength: 0)
@@ -591,15 +591,15 @@ import SwiftVLC
                                 // Duration pill
                                 let durationMins = max(1, Int(program.endTime.timeIntervalSince(program.startTime) / 60))
                                 Text("\(durationMins) dk")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textTertiary)
                             }
 
                             // Description if present
                             if !program.description.isEmpty {
                                 Text(program.description)
-                                    .font(.system(size: 13, weight: .regular))
-                                    .foregroundStyle(.white.opacity(0.6))
+                                    .font(AppFonts.bodySmall)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(isFocused ? 3 : 1)
                             }
                         }
@@ -644,12 +644,12 @@ import SwiftVLC
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
-                            isFocused ? AppColors.textPrimary : (isCurrentProgram ? AppColors.primary.opacity(0.4) : Color.clear),
+                            isFocused ? AppColors.textPrimary : (isCurrentProgram ? AppColors.primary.opacity(0.4) : AppColors.background.opacity(0)),
                             lineWidth: isFocused ? 2.5 : 1
                         )
                 )
                 .scaleEffect(isFocused ? 1.02 : 1.0)
-                .shadow(color: isFocused ? Color.white.opacity(0.25) : .clear, radius: 8, x: 0, y: 4)
+                .shadow(color: isFocused ? AppColors.textPrimary.opacity(0.25) : AppColors.background.opacity(0), radius: 8, x: 0, y: 4)
                 .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
             }
             .buttonStyle(.plain)

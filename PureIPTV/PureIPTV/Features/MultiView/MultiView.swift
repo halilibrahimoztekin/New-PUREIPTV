@@ -383,8 +383,8 @@ public struct MultiView: View {
                 store.send(.delegate(.close))
             }) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                    .font(AppFonts.displayMedium)
+                    .foregroundStyle(AppColors.textSecondary)
             }
             #if os(tvOS)
             .buttonStyle(TVCircleButtonStyle())
@@ -410,7 +410,7 @@ public struct MultiView: View {
 
                     Text(channel.title)
                         .font(AppFonts.captionSmall.weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 12)
@@ -432,8 +432,8 @@ public struct MultiView: View {
                 store.send(.togglePiP, animation: .spring(response: 0.3, dampingFraction: 0.7))
             }) {
                 Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
-                    .font(.system(size: 22))
-                    .foregroundStyle(store.isPiPActive ? AppColors.primary : Color.white.opacity(0.85))
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(store.isPiPActive ? AppColors.primary : AppColors.textSecondary)
             }
             #if os(tvOS)
             .buttonStyle(TVCircleButtonStyle())
@@ -470,20 +470,20 @@ public struct MultiView: View {
                         Text(mode.title)
                             .font(AppFonts.caption.weight((isSelected || isFocused) ? .bold : .medium))
                     }
-                    .foregroundColor((isSelected || isFocused) ? .white : .white.opacity(0.6))
+                    .foregroundColor((isSelected || isFocused) ? AppColors.textPrimary : AppColors.textSecondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
                         isFocused
                             ? AppColors.primary
-                            : (isSelected ? AppColors.primary.opacity(0.35) : Color.white.opacity(0.08)),
+                            : (isSelected ? AppColors.primary.opacity(0.35) : AppColors.surfaceElevated),
                         in: Capsule()
                     )
                     .overlay(
                         Capsule()
                             .stroke(
                                 isFocused
-                                    ? Color.white
+                                    ? AppColors.textPrimary
                                     : (isSelected ? AppColors.primary.opacity(0.7) : Color.clear),
                                 lineWidth: isFocused ? 2 : 1
                             )
@@ -676,21 +676,21 @@ public struct MultiView: View {
                             } label: {
                                 HStack(spacing: 5) {
                                     Image(systemName: isAudioActive ? "speaker.wave.3.fill" : "speaker.slash.fill")
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                     Text(isAudioActive ? AppStrings.MultiView.audioActive : AppStrings.MultiView.audioMuted)
                                         .font(AppFonts.captionSmall.weight(.bold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundStyle(AppColors.textPrimary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
-                                    isAudioActive ? AppColors.primary.opacity(0.85) : Color.black.opacity(0.6),
+                                    isAudioActive ? AppColors.primary.opacity(0.85) : AppColors.oledBlack.opacity(0.6),
                                     in: Capsule()
                                 )
                                 #if os(tvOS)
                                 .overlay {
                                     Capsule()
-                                        .stroke(focusedSlotControl == .audio(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                        .stroke(focusedSlotControl == .audio(slot.id) ? AppColors.textPrimary : Color.clear, lineWidth: 2)
                                 }
                                 .scaleEffect(focusedSlotControl == .audio(slot.id) ? 1.08 : 1)
                                 .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .audio(slot.id))
@@ -715,10 +715,10 @@ public struct MultiView: View {
                                 }
                             } label: {
                                 Image(systemName: slot.aspectRatioMode.systemIcon)
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .padding(7)
-                                    .background(Color.black.opacity(0.68), in: Circle())
+                                    .background(AppColors.oledBlack.opacity(0.68), in: Circle())
                             }
                             .accessibilityLabel(AppStrings.MultiView.aspectRatioControl)
                             .accessibilityValue(aspectRatioTitle(for: slot.aspectRatioMode))
@@ -738,14 +738,14 @@ public struct MultiView: View {
                                 store.send(.removeChannelTapped(slotID: slot.id))
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(.white.opacity(0.8))
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .padding(6)
                                 #if os(tvOS)
-                                    .background(focusedSlotControl == .remove(slot.id) ? Color.white.opacity(0.18) : .clear, in: Circle())
+                                    .background(focusedSlotControl == .remove(slot.id) ? AppColors.surfaceElevated : Color.clear, in: Circle())
                                     .overlay {
                                         Circle()
-                                            .stroke(focusedSlotControl == .remove(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                            .stroke(focusedSlotControl == .remove(slot.id) ? AppColors.textPrimary : Color.clear, lineWidth: 2)
                                     }
                                     .scaleEffect(focusedSlotControl == .remove(slot.id) ? 1.12 : 1)
                                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .remove(slot.id))
@@ -766,23 +766,23 @@ public struct MultiView: View {
                                     store.send(.setAudioActive(slotID: slot.id), animation: .spring(response: 0.28, dampingFraction: 0.75))
                                 } label: {
                                     Text(item.title)
-                                        .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                        .font(isCompanion ? AppFonts.captionSmall.weight(.semibold) : AppFonts.bodySmall.weight(.semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .lineLimit(1)
                                         .padding(.horizontal, 12)
                                         .frame(minHeight: 44)
-                                        .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+                                        .background(AppColors.oledBlack.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
                                 }
                                 .buttonStyle(.plain)
                                 .focused($focusedSlotControl, equals: .channelTitle(slot.id))
                             #else
                                 Text(item.title)
-                                    .font(.system(size: isCompanion ? 11 : 13, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .font(isCompanion ? AppFonts.captionSmall.weight(.semibold) : AppFonts.bodySmall.weight(.semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .lineLimit(1)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+                                    .background(AppColors.oledBlack.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
                             #endif
 
                             Spacer()
@@ -796,11 +796,11 @@ public struct MultiView: View {
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(AppFonts.captionSmall.weight(.bold))
                                         Text(AppStrings.MultiView.swapToPrimary)
                                             .font(AppFonts.captionSmall.weight(.bold))
                                     }
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(AppColors.premium.opacity(0.85), in: Capsule())
@@ -808,7 +808,7 @@ public struct MultiView: View {
                                     #if os(tvOS)
                                         .overlay {
                                             Capsule()
-                                                .stroke(focusedSlotControl == .companionSwap(slot.id) ? Color.white : .clear, lineWidth: 2)
+                                                .stroke(focusedSlotControl == .companionSwap(slot.id) ? AppColors.textPrimary : Color.clear, lineWidth: 2)
                                         }
                                         .scaleEffect(focusedSlotControl == .companionSwap(slot.id) ? 1.08 : 1)
                                         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: focusedSlotControl == .companionSwap(slot.id))
@@ -842,11 +842,11 @@ public struct MultiView: View {
                 }) {
                     VStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: isCompanion ? 28 : 42))
+                            .font(isCompanion ? AppFonts.displaySmall : AppFonts.displayLarge)
                             .foregroundStyle(AppColors.primary.opacity(0.7))
                         Text(AppStrings.MultiView.addChannel)
                             .font(AppFonts.caption.weight(.medium))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(AppColors.surface)
@@ -863,13 +863,13 @@ public struct MultiView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(
                         isFocused
-                            ? Color.white
-                            : (isAudioActive ? AppColors.primary : Color.white.opacity(0.12)),
+                            ? AppColors.textPrimary
+                            : (isAudioActive ? AppColors.primary : AppColors.borderMedium),
                         lineWidth: isFocused ? 3.5 : (isAudioActive ? 2.5 : 1.0)
                     )
                     .shadow(
                         color: isFocused
-                            ? Color.white.opacity(0.6)
+                            ? AppColors.textPrimary.opacity(0.6)
                             : (isAudioActive ? AppColors.primary.opacity(0.6) : Color.clear),
                         radius: isFocused ? 8 : (isAudioActive ? 6 : 0)
                     )
@@ -880,7 +880,7 @@ public struct MultiView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(
-                        isAudioActive ? AppColors.primary : Color.white.opacity(0.12),
+                        isAudioActive ? AppColors.primary : AppColors.borderMedium,
                         lineWidth: isAudioActive ? 2.5 : 1.0
                     )
                     .shadow(
@@ -981,8 +981,8 @@ struct ChannelSelectionSheet: View {
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(channel.title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.primary)
+                                        .font(AppFonts.bodySmall.weight(.semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
                                 }
                             }
                         }
@@ -1042,14 +1042,14 @@ private struct MultiViewPlayer: View {
             if session.status == .failed {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.orange)
+                        .font(AppFonts.headline)
+                        .foregroundStyle(AppColors.warning)
                         .accessibilityHidden(true)
                     Button(AppStrings.Common.retry, action: onRetry)
                         .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
+                .background(AppColors.oledBlack)
             } else if let client = session.playerClient {
                 #if os(iOS)
                     PiPVideoView(client.vlcPlayer(), controller: $pipController)
@@ -1061,24 +1061,24 @@ private struct MultiViewPlayer: View {
                         .clipped()
                 #endif
             } else {
-                Color.black
+                AppColors.oledBlack
             }
 
             if session.status == .starting || session.status == .buffering {
                 VStack(spacing: 6) {
                     ProgressView()
-                        .tint(.white)
+                        .tint(AppColors.textPrimary)
                     Text(AppStrings.Common.loading)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .font(AppFonts.captionSmall.weight(.medium))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
                 .padding(10)
-                .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                .background(AppColors.oledBlack.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
                 .accessibilityElement(children: .combine)
             } else if session.status == .ready {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.green)
+                    .font(AppFonts.bodyMedium.weight(.semibold))
+                    .foregroundStyle(AppColors.success)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(8)
                     .accessibilityHidden(true)

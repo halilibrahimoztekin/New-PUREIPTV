@@ -63,11 +63,11 @@ public struct NerdStatsHUDView: View {
                 // ── Header Bar ───────────────────────────────────────────
                 HStack(alignment: .center, spacing: 10) {
                     Image(systemName: "terminal.fill")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppFonts.titleSmall)
                         .foregroundStyle(AppColors.neonTeal)
 
                     Text(AppStrings.Player.nerdStats)
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .font(AppFonts.captionBold.monospaced())
                         .foregroundStyle(AppColors.textPrimary)
 
                     Spacer()
@@ -78,7 +78,7 @@ public struct NerdStatsHUDView: View {
                     // Close Button
                     Button(action: onClose) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
+                            .font(AppFonts.titleMedium)
                             .foregroundStyle(AppColors.textPrimary.opacity(0.85))
                     }
                     .buttonStyle(.plain)
@@ -91,7 +91,7 @@ public struct NerdStatsHUDView: View {
                 .padding(.bottom, 4)
 
                 Divider()
-                    .overlay(Color.white.opacity(0.15))
+                    .overlay(AppColors.divider)
 
                 #if !os(tvOS)
                     ScrollView(.vertical, showsIndicators: false) {
@@ -125,7 +125,7 @@ public struct NerdStatsHUDView: View {
                     icon: "tv.fill",
                     title: AppStrings.Player.resolution,
                     value: resolutionString,
-                    accentColor: Color.cyan
+                    accentColor: AppColors.cyan
                 )
 
                 // Video Codec
@@ -150,14 +150,14 @@ public struct NerdStatsHUDView: View {
                     title: AppStrings.Player.networkThroughput,
                     value: streamHealthMetrics?.networkThroughputMbps.map { "\(String(format: "%.1f", $0)) Mbps" }
                         ?? AppStrings.Player.sampleUnavailable,
-                    accentColor: Color.yellow
+                    accentColor: AppColors.warningGold
                 )
 
                 StatCard(
                     icon: "speedometer",
                     title: AppStrings.Player.streamBitrate,
                     value: streamHealthMetrics?.streamBitrateMbps.map { "\(String(format: "%.1f", $0)) Mbps" } ?? bitrateString,
-                    accentColor: Color.orange
+                    accentColor: AppColors.warning
                 )
 
                 StatCard(
@@ -177,8 +177,8 @@ public struct NerdStatsHUDView: View {
                             let jitter = metrics.networkJitterMs.map { " (±\($0)ms)" } ?? ""
                             return "\(latency) ms\(jitter)"
                         } ?? AppStrings.Player.sampleUnavailable,
-                        accentColor: metrics.networkLatencyMs.map { $0 < 80 ? AppColors.neonTeal : Color.orange }
-                            ?? Color.white.opacity(0.55)
+                        accentColor: metrics.networkLatencyMs.map { $0 < 80 ? AppColors.neonTeal : AppColors.warning }
+                            ?? AppColors.textSecondary
                     )
 
                     // Frame Drops
@@ -186,7 +186,7 @@ public struct NerdStatsHUDView: View {
                         icon: metrics.droppedFrames == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                         title: AppStrings.Player.droppedFramesTitle,
                         value: "\(metrics.droppedFrames) Drop (\(metrics.decodedFrames)f)",
-                        accentColor: metrics.droppedFrames == 0 ? Color.green : Color.red
+                        accentColor: metrics.droppedFrames == 0 ? AppColors.success : AppColors.destructive
                     )
                 }
 
@@ -195,7 +195,7 @@ public struct NerdStatsHUDView: View {
                     icon: aspectRatioMode.systemIcon,
                     title: "En-Boy / Hız",
                     value: "\(aspectRatioMode.title) • \(String(format: "%.2gx", playbackRate))",
-                    accentColor: Color.green
+                    accentColor: AppColors.success
                 )
 
                 // Audio Delay Sync
@@ -203,7 +203,7 @@ public struct NerdStatsHUDView: View {
                     icon: "clock.arrow.circlepath",
                     title: AppStrings.Player.audioSync,
                     value: audioDelay == 0 ? "Senkronize (0 ms)" : "\(audioDelay > 0 ? "+" : "")\(audioDelay) ms",
-                    accentColor: audioDelay == 0 ? Color.white.opacity(0.8) : Color.orange
+                    accentColor: audioDelay == 0 ? AppColors.textSecondary : AppColors.warning
                 )
 
                 // Audio Output Route
@@ -238,7 +238,7 @@ public struct NerdStatsHUDView: View {
                     value: VPNMonitor.shared.hasVPNLikeInterfaceEvidence
                         ? "VPN benzeri arayüz olası"
                         : "VPN benzeri arayüz saptanmadı",
-                    accentColor: VPNMonitor.shared.hasVPNLikeInterfaceEvidence ? Color.orange : Color.white.opacity(0.7)
+                    accentColor: VPNMonitor.shared.hasVPNLikeInterfaceEvidence ? AppColors.warning : AppColors.textSecondary
                 )
 
                 // Stream Type / Live Mode
@@ -254,16 +254,16 @@ public struct NerdStatsHUDView: View {
             if !playerStats.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("NATIVE BUFFER METRICS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .font(AppFonts.captionSmall.monospaced().weight(.bold))
+                        .foregroundStyle(AppColors.textSecondary)
 
                     Text(playerStats)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .font(AppFonts.captionSmall.monospaced())
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(3)
                 }
                 .padding(8)
-                .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+                .background(AppColors.oledBlack.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
             }
         }
     }
@@ -277,7 +277,7 @@ public struct NerdStatsHUDView: View {
                 .frame(width: 8, height: 8)
 
             Text(stateText)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(AppFonts.captionBold.monospaced())
                 .foregroundStyle(stateColor)
         }
         .padding(.horizontal, 8)
@@ -287,10 +287,10 @@ public struct NerdStatsHUDView: View {
 
     private var stateColor: Color {
         switch playerState {
-        case .playing: Color.green
-        case .buffering, .opening: Color.orange
-        case .error: Color.red
-        default: Color.white.opacity(0.7)
+        case .playing: AppColors.success
+        case .buffering, .opening: AppColors.warning
+        case .error: AppColors.destructive
+        default: AppColors.textSecondary
         }
     }
 
@@ -391,24 +391,24 @@ private struct StatCard: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppFonts.captionSmall.weight(.semibold))
                     .foregroundStyle(accentColor)
 
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.65))
+                    .font(AppFonts.captionSmall.weight(.semibold))
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
             Text(value)
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
+                .font(AppFonts.bodySmall.monospaced().weight(.bold))
+                .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
     }
 }

@@ -69,10 +69,24 @@
                     )
 
                     if isMaskShow || isUpNextCardVisible {
-                        controllerView(playerHeight: proxy.size.height)
-                            .ignoresSafeArea()
-                            .transition(.opacity)
-                            .zIndex(isUpNextCardVisible ? 96 : 0)
+                        PlayerControlsOverlayView_tvOS(
+                            store: store,
+                            focusableField: $focusableField,
+                            isScrubbing: $isScrubbing,
+                            isMaskShow: isMaskShow,
+                            isUpNextCardVisible: isUpNextCardVisible,
+                            playerHeight: proxy.size.height,
+                            onInteraction: { resetIdleTimer() },
+                            onSubtitleSearch: { store.send(.subtitleSearchTapped) },
+                            onDismissUpNext: { dismissUpNextAndRestoreFocus() },
+                            onPlayUpNext: {
+                                store.send(.playNextEpisode)
+                                resetIdleTimer()
+                            }
+                        )
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .zIndex(isUpNextCardVisible ? 96 : 0)
                     }
 
                     // Buffering Indicator
@@ -95,12 +109,12 @@
                                     .foregroundStyle(AppColors.neonTeal)
                                 Text(AppStrings.Player.switchingToBackup(store.fallbackStreamName ?? ""))
                                     .font(AppFonts.titleSmall.weight(.semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(AppColors.textPrimary)
                             } else {
                                 PureLoadingView(size: .small)
                                 Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
                                     .font(AppFonts.titleSmall.weight(.semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
                         }
                         .padding(.horizontal, 28)
@@ -108,9 +122,9 @@
                         .background(.ultraThinMaterial, in: Capsule())
                         .overlay(
                             Capsule()
-                                .strokeBorder(store.isFallbackSwitching ? AppColors.neonTeal.opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1.5)
+                                .strokeBorder(store.isFallbackSwitching ? AppColors.neonTeal.opacity(0.4) : AppColors.borderSubtle, lineWidth: 1.5)
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 6)
+                        .shadow(color: AppColors.background.opacity(0.5), radius: 16, x: 0, y: 6)
                         .padding(.top, 40)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .zIndex(99)
@@ -126,7 +140,7 @@
                         let positionRecoveryHint = (!store.item.isLive || store.activeCatchupProgram != nil)
                             ? AppStrings.Player.playbackPositionMayBeRestored
                             : nil
-                        Color.black.opacity(0.72)
+                        AppColors.background.opacity(0.72)
                             .ignoresSafeArea()
                             .accessibilityHidden(true)
 
@@ -376,8 +390,8 @@
                     if let message = store.catchupSeekFailureMessage {
                         VStack {
                             Text(message)
-                                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .font(AppFonts.titleSmall.weight(.semibold))
+                                .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 16)
@@ -621,7 +635,7 @@
         // MARK: - Play View (Captures Remote Navigation & Clicks when controls are hidden)
 
         private var playView: some View {
-            Color.black.opacity(0.001)
+            AppColors.background.opacity(0.001)
                 .ignoresSafeArea()
                 .focusable(!isMaskShow)
                 .focused($focusableField, equals: .play)
@@ -686,87 +700,6 @@
         private var isUpNextCardVisible: Bool {
             !store.item.isLive && store.isUpNextVisible && store.nextEpisodeItem != nil
         }
-
-        @ViewBuilder
-        private var upNextCountdownCard: some View {
-            if isUpNextCardVisible, let nextItem = store.nextEpisodeItem {
-                UpNextCountdownOverlayView(
-                    item: nextItem,
-                    countdownSeconds: store.upNextCountdownSeconds,
-                    totalSeconds: store.upNextInitialSeconds,
-                    onPlayNow: {
-                        store.send(.playNextEpisode)
-                        resetIdleTimer()
-                    },
-                    onDismiss: {
-                        dismissUpNextAndRestoreFocus()
-                    }
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 60)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(96)
-            }
-        }
-
-        // MARK: - Controller View (KSPlayer Layout)
-
-        private func controllerView(playerHeight: CGFloat) -> some View {
-            VStack(spacing: 16) {
-                Spacer()
-
-                // Top part of controls: Title + Action Buttons
-                if isMaskShow {
-                    PlayerControlsTopBar_tvOS(
-                        store: store,
-                        focusedField: $focusableField,
-                        onInteraction: { resetIdleTimer() },
-                        onSubtitleSearch: { store.send(.subtitleSearchTapped) }
-                    )
-                    .padding(.horizontal, 80)
-                    .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
-                    .opacity(store.isDeepDimmed ? 0.35 : 1)
-                }
-
-                // Keep Up Next in the controls stack so it sits above the scrubber.
-                upNextCountdownCard
-
-                // Bottom part of controls: Interactive Fluid Scrubber + Time Display
-                if isMaskShow {
-                    PlayerControlsScrubber_tvOS(
-                        store: store,
-                        focusedField: $focusableField,
-                        isScrubbing: $isScrubbing,
-                        onInteraction: {
-                            resetIdleTimer()
-                        }
-                    )
-                    .padding(.horizontal, 80)
-                    .accessibilityHidden(store.errorMessage != nil && !store.isReconnecting)
-                    .opacity(store.isDeepDimmed ? 0.35 : 1)
-                }
-            }
-            .padding(.bottom, isMaskShow ? 60 : max(180, playerHeight * 0.2))
-            .background {
-                if isMaskShow {
-                    overlayGradient
-                        .opacity(store.isDeepDimmed ? 0.35 : 1)
-                }
-            }
-            .animation(.easeInOut(duration: 0.35), value: store.isDeepDimmed)
-        }
-
-        // MARK: - Overlay Gradient (KSPlayer Design)
-
-        private let overlayGradient = LinearGradient(
-            stops: [
-                Gradient.Stop(color: .black.opacity(0), location: 0.0),
-                Gradient.Stop(color: .black.opacity(0.4), location: 0.3),
-                Gradient.Stop(color: .black.opacity(0.85), location: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
 
         // MARK: - Timer & Visibility Helpers
 

@@ -39,40 +39,25 @@ public struct AspectScaleHUDView: View {
     public var body: some View {
         HStack(spacing: 10) {
             Image(systemName: mode.systemIcon)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .font(AppFonts.titleSmall)
+                .foregroundStyle(AppColors.textPrimary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(mode.title)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(AppFonts.bodyMedium.weight(.bold))
+                    .foregroundStyle(AppColors.textPrimary)
 
                 if mode == .zoom, scale > 1.05 {
                     Text(String(format: "%.1fx Yakınlaştırıldı", scale))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(AppFonts.caption)
+                        .foregroundStyle(AppColors.textSecondary)
                 }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(
-            ZStack {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            }
-        )
-        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
+        .liquidGlass(shape: .capsule, tint: AppColors.primary, isInteractive: false)
+        .shadow(color: AppColors.oledBlack.opacity(0.4), radius: 12, x: 0, y: 6)
         .allowsHitTesting(false)
     }
 }

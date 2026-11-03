@@ -63,18 +63,18 @@ public struct NowNextEPGPeekView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(program.title)
                     #if os(tvOS)
-                        .font(.system(size: isCompact ? 17 : 20, weight: .bold))
+                        .font(isCompact ? AppFonts.titleSmall : AppFonts.headline)
                     #else
-                        .font(.system(size: isCompact ? 14 : 16, weight: .bold))
+                        .font(AppFonts.bodyBold)
                     #endif
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
                     Text(program.formattedTimeRange(locale: locale))
-                        .font(.system(size: isCompact ? 11 : 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font((isCompact ? AppFonts.captionSmall : AppFonts.caption).weight(.semibold).monospaced())
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 // Gradient Progress Bar & Remaining Time Pill
@@ -82,7 +82,7 @@ public struct NowNextEPGPeekView: View {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.white.opacity(0.12))
+                                .fill(AppColors.borderMedium)
                                 .frame(height: isCompact ? 3.5 : 4.5)
 
                             Capsule()
@@ -101,7 +101,7 @@ public struct NowNextEPGPeekView: View {
 
                     if remainingMins > 0 {
                         Text(AppStrings.Player.minutesRemaining(remainingMins))
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(AppFonts.captionSmall.weight(.bold))
                             .foregroundStyle(AppColors.neonTeal)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1.5)
@@ -121,7 +121,7 @@ public struct NowNextEPGPeekView: View {
         return ZStack {
             // Track
             Circle()
-                .stroke(Color.white.opacity(0.12), lineWidth: strokeWidth)
+                .stroke(AppColors.borderMedium, lineWidth: strokeWidth)
 
             // Progress Fill
             Circle()
@@ -139,7 +139,7 @@ public struct NowNextEPGPeekView: View {
 
             // Center Percentage
             Text("\(percent)%")
-                .font(.system(size: isCompact ? 8 : 10, weight: .heavy, design: .monospaced))
+                .font(AppFonts.captionSmall.weight(.heavy).monospaced())
                 .foregroundStyle(AppColors.neonTeal)
         }
         .frame(width: size, height: size)
@@ -151,19 +151,19 @@ public struct NowNextEPGPeekView: View {
         HStack(alignment: .center, spacing: 6) {
             // "SONRAKİ" Badge
             Text(AppStrings.Player.nextLabel)
-                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .font(AppFonts.captionSmall.weight(.heavy))
                 .foregroundStyle(AppColors.premium)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(AppColors.premium.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
 
             Text(program.formattedStartTime(locale: locale))
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(AppFonts.captionSmall.weight(.bold).monospaced())
                 .foregroundStyle(AppColors.premium.opacity(0.9))
 
             Text(program.title)
-                .font(.system(size: isCompact ? 12 : 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.75))
+                .font(AppFonts.bodySmall)
+                .foregroundStyle(AppColors.textPrimary.opacity(0.75))
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -176,14 +176,14 @@ public struct NowNextEPGPeekView: View {
     private var fallbackNoEPGView: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color.red)
+                .fill(AppColors.live)
                 .frame(width: 7, height: 7)
                 .scaleEffect(pulseLiveBadge ? 1.25 : 0.8)
                 .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseLiveBadge)
 
             Text(AppStrings.Player.liveBroadcast)
-                .font(.system(size: isCompact ? 12 : 14, weight: .medium))
-                .foregroundStyle(.white.opacity(0.7))
+                .font(AppFonts.bodySmall)
+                .foregroundStyle(AppColors.textSecondary)
 
             Spacer(minLength: 0)
         }

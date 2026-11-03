@@ -66,8 +66,8 @@ import SwiftUI
             VStack(spacing: 12) {
                 // Icon with dynamic symbol
                 Image(systemName: osdType.systemImageName)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(AppFonts.titleSmall.weight(.bold))
+                    .foregroundStyle(AppColors.textPrimary)
                     .frame(width: 28, height: 28)
                     .contentTransition(.symbolEffect(.replace))
 
@@ -104,7 +104,7 @@ import SwiftUI
                 Text("\(osdType.percentage)%")
                     .font(AppFonts.captionBold.monospacedDigit())
                     .monospacedDigit()
-                    .foregroundColor(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 10)
@@ -117,7 +117,7 @@ import SwiftUI
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                                colors: [AppColors.borderSubtle.opacity(0.8), AppColors.borderSubtle.opacity(0.2)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -125,7 +125,7 @@ import SwiftUI
                         )
                 }
             )
-            .shadow(color: .black.opacity(0.4), radius: 14, x: 0, y: 6)
+            .shadow(color: AppColors.background.opacity(0.4), radius: 14, x: 0, y: 6)
             .allowsHitTesting(false)
         }
     }

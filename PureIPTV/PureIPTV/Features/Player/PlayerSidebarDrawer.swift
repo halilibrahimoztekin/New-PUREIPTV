@@ -33,11 +33,11 @@ public struct PlayerSidebarDrawer: View {
                 .background(
                     ZStack {
                         #if os(tvOS)
-                            Color.black.opacity(0.88)
+                            AppColors.oledBlack.opacity(0.88)
                         #else
                             Rectangle()
                                 .fill(.ultraThinMaterial)
-                            Color.black.opacity(0.55)
+                            AppColors.oledBlack.opacity(0.55)
                         #endif
                     }
                 )
@@ -52,7 +52,7 @@ public struct PlayerSidebarDrawer: View {
             #endif
 
             // Tap-outside overlay to dismiss
-            Color.black.opacity(0.001)
+            AppColors.oledBlack.opacity(0.001)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -135,66 +135,37 @@ public struct PlayerSidebarDrawer: View {
     // MARK: - Channels List
 
     private func channelsListView(channels: [PlayerFeature.PlayableItem]) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(Array(channels.enumerated()), id: \.element.id) { index, item in
-                        let isCurrent = item.id == store.item.id
-                        let isPrevious = item.id == store.previousChannel?.id
-                        PlayerDrawerChannelRow(
-                            item: item,
-                            index: index + 1,
-                            isCurrent: isCurrent,
-                            isPrevious: isPrevious,
-                            isCleaningEnabled: store.isChannelNameCleaningEnabled,
-                            channelSortOption: store.channelSortOption,
-                            watchCount: store.channelWatchCounts[item.id],
-                            showTwoLineTitles: {
-                                #if os(tvOS)
-                                    return showTwoLineChannelTitles
-                                #else
-                                    return false
-                                #endif
-                            }(),
-                            onSelect: {
-                                #if !os(tvOS)
-                                    HapticManager.shared.trigger(.medium)
-                                #endif
-                                store.send(.selectChannel(item))
-                            },
-                            onHide: {
-                                #if !os(tvOS)
-                                    HapticManager.shared.trigger(.warning)
-                                #endif
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    store.send(.hideChannel(id: item.id, title: item.title))
-                                }
-                            }
-                        )
-                        .focused($focusedItemID, equals: item.id)
-                        .id(item.id)
-                    }
-                }
+        PlayerDrawerContentList(
+            channels: channels,
+            currentItemID: store.item.id,
+            previousChannelID: store.previousChannel?.id,
+            isCleaningEnabled: store.isChannelNameCleaningEnabled,
+            channelSortOption: store.channelSortOption,
+            channelWatchCounts: store.channelWatchCounts,
+            showTwoLineTitles: {
                 #if os(tvOS)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
+                    return showTwoLineChannelTitles
                 #else
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                    return false
                 #endif
-            }
-            .onAppear {
-                guard let restorationID = preferredChannelFocusID else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    guard focusedItemID == restorationID,
-                          channels.contains(where: { $0.id == restorationID })
-                    else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(restorationID, anchor: .center)
-                    }
+            }(),
+            preferredFocusID: preferredChannelFocusID,
+            focusedItemID: $focusedItemID,
+            onSelect: { item in
+                #if !os(tvOS)
+                    HapticManager.shared.trigger(.medium)
+                #endif
+                store.send(.selectChannel(item))
+            },
+            onHide: { id, title in
+                #if !os(tvOS)
+                    HapticManager.shared.trigger(.warning)
+                #endif
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    store.send(.hideChannel(id: id, title: title))
                 }
             }
-        }
+        )
     }
 
     // MARK: - Empty State View
@@ -209,7 +180,7 @@ public struct PlayerSidebarDrawer: View {
                     .frame(width: 72, height: 72)
 
                 Image(systemName: "sparkle.magnifyingglass")
-                    .font(.system(size: 32, weight: .medium))
+                    .font(AppFonts.displayMedium)
                     .foregroundStyle(selectedFilter.accentColor)
             }
 

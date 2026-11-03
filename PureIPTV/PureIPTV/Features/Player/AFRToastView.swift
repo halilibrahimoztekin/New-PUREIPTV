@@ -14,14 +14,14 @@ public struct AFRToastView: View {
     public var body: some View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
-                .font(.system(size: 18, weight: .bold))
+                .font(AppFonts.titleSmall.weight(.bold))
                 .foregroundStyle(tintGradient)
                 .frame(width: 40, height: 40)
                 .background(tintColor.opacity(0.18), in: Circle())
 
             Text(result.message)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(AppFonts.captionBold)
+                .foregroundStyle(AppColors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)

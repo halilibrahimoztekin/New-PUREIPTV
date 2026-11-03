@@ -106,24 +106,24 @@ import SwiftUI
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {
-                                Image(systemName: "tv").foregroundColor(.gray)
+                                Image(systemName: "tv").foregroundColor(AppColors.textSecondary)
                             }
                         }
                         .frame(width: 40, height: 40)
-                        .background(Color.black.opacity(0.3))
+                        .background(AppColors.oledBlack.opacity(0.3))
                         .cornerRadius(8)
                     } else {
                         Image(systemName: "tv")
                             .frame(width: 40, height: 40)
-                            .background(Color.black.opacity(0.3))
+                            .background(AppColors.oledBlack.opacity(0.3))
                             .cornerRadius(8)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.textSecondary)
                     }
 
                     Text(channel.title)
-                        .font(.subheadline)
+                        .font(AppFonts.bodySmall)
                         .fontWeight(isSelected ? .semibold : .regular)
-                        .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+                        .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
@@ -131,7 +131,7 @@ import SwiftUI
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .background(isSelected ? AppColors.primary.opacity(0.2) : AppColors.background.opacity(0))
                 .cornerRadius(8)
                 .padding(.horizontal, 8)
             }
@@ -149,30 +149,30 @@ import SwiftUI
                             if let image = phase.image {
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } else {
-                                Image(systemName: "tv").foregroundColor(.gray)
+                                Image(systemName: "tv").foregroundColor(AppColors.textSecondary)
                             }
                         }
                         .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.3))
+                        .background(AppColors.oledBlack.opacity(0.3))
                         .cornerRadius(10)
                     } else {
                         Image(systemName: "tv")
-                            .font(.system(size: 20))
+                            .font(AppFonts.titleSmall)
                             .frame(width: 50, height: 50)
-                            .background(Color.black.opacity(0.3))
+                            .background(AppColors.oledBlack.opacity(0.3))
                             .cornerRadius(10)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppColors.textSecondary)
                     }
 
                     Text(channel.title)
-                        .font(.caption)
+                        .font(AppFonts.caption)
                         .fontWeight(isSelected ? .semibold : .regular)
-                        .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+                        .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                         .lineLimit(1)
                         .frame(width: 70)
                 }
                 .padding(8)
-                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .background(isSelected ? AppColors.primary.opacity(0.2) : AppColors.background.opacity(0))
                 .cornerRadius(12)
             }
             .buttonStyle(.plain)
@@ -197,17 +197,17 @@ import SwiftUI
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(selected.title)
-                                .font(.headline)
+                                .font(AppFonts.headline)
                             Text(AppStrings.EPG.guide)
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.6))
+                                .font(AppFonts.bodySmall)
+                                .foregroundColor(AppColors.textSecondary)
                             Text(store.epgFreshnessLabel)
-                                .font(.caption2)
-                                .foregroundColor(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? .orange : .white.opacity(0.5))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(store.lastEPGRefreshFailureDate.map { $0 >= (store.lastEPGRefreshDate ?? .distantPast) } == true ? AppColors.warning : AppColors.textTertiary)
                             if let source = store.epgSourceIdentity {
                                 Text(source.displayLabel)
-                                    .font(.caption2)
-                                    .foregroundStyle(.white.opacity(0.45))
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundStyle(AppColors.textTertiary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                             }
@@ -220,8 +220,8 @@ import SwiftUI
                                 Image(systemName: "play.fill")
                                 Text(AppStrings.EPG.watch)
                             }
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
+                            .font(AppFonts.bodyBold)
+                            .foregroundColor(AppColors.textPrimary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(AppColors.primary)
@@ -242,7 +242,7 @@ import SwiftUI
                     Spacer()
                     VStack(spacing: 12) {
                         Text("\(AppStrings.EPG.error)\(error)")
-                            .foregroundColor(.red)
+                            .foregroundColor(AppColors.destructive)
                             .multilineTextAlignment(.center)
                             .padding()
                         retryEPGButton
@@ -252,10 +252,10 @@ import SwiftUI
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 40))
-                            .foregroundColor(.white.opacity(0.3))
+                            .font(AppFonts.displayMedium)
+                            .foregroundColor(AppColors.textTertiary)
                         Text(AppStrings.EPG.noData)
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(AppColors.textSecondary)
                         retryEPGButton
                     }
                     Spacer()
@@ -278,7 +278,7 @@ import SwiftUI
                                         }
                                     )
                                     .id(program.id)
-                                    Divider().background(Color.white.opacity(0.05))
+                                    Divider().background(AppColors.glassPlate)
                                 }
                             }
                             .padding(.vertical, 8)
@@ -332,11 +332,11 @@ import SwiftUI
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatTime(program.startTime))
-                        .font(.system(size: 15, weight: program.isPlayingNow ? .bold : .medium))
-                        .foregroundColor(program.isPlayingNow ? .accentColor : .white.opacity(0.8))
+                        .font(AppFonts.bodyMedium.weight(program.isPlayingNow ? .bold : .medium))
+                        .foregroundColor(program.isPlayingNow ? AppColors.primary : AppColors.textPrimary.opacity(0.8))
                     Text(formatTime(program.endTime))
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(AppFonts.bodySmall)
+                        .foregroundColor(AppColors.textTertiary)
                 }
                 .frame(width: 50, alignment: .leading)
 
@@ -353,7 +353,7 @@ import SwiftUI
                             image.resizable().aspectRatio(contentMode: .fill)
                         } else {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.white.opacity(0.06))
+                                .fill(AppColors.glassPlate)
                         }
                     }
                     .frame(width: 80, height: 45)
@@ -364,17 +364,17 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(program.title)
-                            .font(.system(size: 15, weight: program.isPlayingNow ? .semibold : .regular))
-                            .foregroundColor(program.isPlayingNow ? .white : .white.opacity(0.9))
+                            .font(AppFonts.bodyMedium.weight(program.isPlayingNow ? .semibold : .regular))
+                            .foregroundColor(program.isPlayingNow ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.9))
 
                         if program.isPlayingNow {
                             Spacer()
                             Text(AppStrings.Player.nowPlaying)
-                                .font(.system(size: 10, weight: .bold))
+                                .font(AppFonts.captionSmall.weight(.bold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.2))
-                                .foregroundColor(.accentColor)
+                                .background(AppColors.primary.opacity(0.2))
+                                .foregroundColor(AppColors.primary)
                                 .cornerRadius(4)
                         } else if hasArchive, program.endTime < Date() {
                             Spacer()
@@ -383,14 +383,14 @@ import SwiftUI
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                     Text(AppStrings.Player.watchCatchUp)
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.purple.opacity(0.2), in: Capsule())
-                                .foregroundColor(.purple)
+                                .background(AppColors.premium.opacity(0.2), in: Capsule())
+                                .foregroundColor(AppColors.premium)
                             }
                             .buttonStyle(.plain)
                         }
@@ -398,8 +398,8 @@ import SwiftUI
 
                     if !program.description.isEmpty {
                         Text(program.description)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.5))
+                            .font(AppFonts.bodySmall)
+                            .foregroundColor(AppColors.textSecondary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -408,7 +408,7 @@ import SwiftUI
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(program.isPlayingNow ? Color.accentColor.opacity(0.05) : Color.clear)
+            .background(program.isPlayingNow ? AppColors.primary.opacity(0.05) : AppColors.background.opacity(0))
         }
 
         private func formatTime(_ date: Date) -> String {

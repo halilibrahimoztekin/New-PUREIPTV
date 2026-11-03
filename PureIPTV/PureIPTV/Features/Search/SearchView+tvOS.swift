@@ -59,7 +59,7 @@
 
         public var body: some View {
             ZStack(alignment: .top) {
-                Color.black.ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 28) {
                     // Search Bar
@@ -735,12 +735,12 @@
                         } label: {
                             HStack(spacing: 20) {
                                 Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 42, weight: .medium))
+                                    .font(AppFonts.displayMedium)
                                     .foregroundStyle(AppColors.success)
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(item.title)
                                         .font(AppFonts.headline)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .lineLimit(2)
                                     if let episode = item.episodeMetadata {
                                         Text("\(episode.seriesTitle) · S\(episode.seasonNumber) E\(episode.episodeNumber)")
@@ -786,12 +786,12 @@
                 VStack(alignment: .leading, spacing: 18) {
                     HStack {
                         Label(AppStrings.Search.myCollection, systemImage: "rectangle.stack.fill")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displaySmall)
+                            .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         Text("\(results.count + unavailable.count)")
-                            .font(.system(size: 22, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(AppFonts.headline.monospacedDigit())
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -835,7 +835,7 @@
             return VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppColors.warning)
                     Spacer()
                     Button {
                         store.send(.removeCuratedPlaylistItem(entry.id))
@@ -846,12 +846,12 @@
                     .accessibilityLabel(AppStrings.Common.delete)
                 }
                 Text(entry.titleSnapshot)
-                    .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(AppFonts.headline)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(2)
                 Text(sourceDetails)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .font(AppFonts.bodyMedium)
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
@@ -877,64 +877,13 @@
 
         // MARK: - Discovery & Empty Views
 
-        private var pinnedSearchesSection: some View {
-            VStack(alignment: .leading, spacing: 24) {
-                Label(AppStrings.Search.pinnedSearches, systemImage: "pin.fill")
-                    .font(AppFonts.headline)
-                    .foregroundColor(.white)
-                Text(AppStrings.Search.pinnedSearchesDescription)
-                    .font(AppFonts.caption)
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 14) {
-                    ForEach(store.pinnedSearchQueries, id: \.self) { query in
-                        HStack(spacing: 16) {
-                            Button {
-                                store.send(.recentSearchTapped(query))
-                            } label: {
-                                HStack(spacing: 20) {
-                                    Image(systemName: "pin.fill")
-                                        .font(AppFonts.title)
-                                        .foregroundColor(AppColors.primary)
-                                    Text(query)
-                                        .font(AppFonts.displayMedium)
-                                        .foregroundColor(.white)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(AppFonts.titleSmall.weight(.semibold))
-                                        .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
-                                }
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 18)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(TVCapsuleButtonStyle())
-                            .accessibilityHint(AppStrings.Search.runPinnedSearchHint)
-
-                            Button {
-                                store.send(.togglePinnedSearch(query))
-                            } label: {
-                                Image(systemName: "pin.slash")
-                                    .font(AppFonts.titleSmall.weight(.semibold))
-                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.75))
-                                    .frame(width: 56, height: 56)
-                            }
-                            .buttonStyle(TVCircleButtonStyle())
-                            .accessibilityLabel(AppStrings.Search.unpinSearch)
-                        }
-                    }
-                }
-            }
-        }
-
         private var allCategoriesDiscoverySection: some View {
             let categories = store.scopedDiscoveryCategories
             return VStack(alignment: .leading, spacing: 28) {
                 HStack {
                     Label(AppStrings.Search.allCategories, systemImage: "folder.fill")
                         .font(AppFonts.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Text("\(categories.count)")
                         .font(AppFonts.title.monospacedDigit())
@@ -972,104 +921,7 @@
                     } else {
                         curatedPlaylistSection
 
-                        if !store.pinnedSearchQueries.isEmpty {
-                            pinnedSearchesSection
-                        }
-
-                        // Recent Searches (if available)
-                        if !store.recentSearches.isEmpty {
-                            VStack(alignment: .leading, spacing: 24) {
-                                HStack {
-                                    Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
-                                        .font(AppFonts.headline)
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    Button {
-                                        store.send(.clearHistoryTapped)
-                                    } label: {
-                                        Text(AppStrings.Search.clear)
-                                            .font(AppFonts.titleSmall.weight(.semibold))
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 8)
-                                    }
-                                    .buttonStyle(TVCapsuleButtonStyle())
-                                }
-
-                                VStack(spacing: 0) {
-                                    ForEach(store.recentSearches.prefix(5), id: \.id) { item in
-                                        Button {
-                                            store.send(.recentSearchTapped(item.query))
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: "clock")
-                                                    .font(AppFonts.title)
-                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
-                                                Text(item.query)
-                                                    .font(AppFonts.displayMedium)
-                                                    .foregroundColor(AppColors.onSurface)
-                                                Spacer()
-                                                Image(systemName: "chevron.right")
-                                                    .font(AppFonts.title)
-                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
-                                            }
-                                            .padding(.horizontal, 30)
-                                            .padding(.vertical, 20)
-                                            .background(AppColors.surfaceSecondary.opacity(0.5))
-                                        }
-                                        .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
-
-                                        if item.id != store.recentSearches.prefix(5).last?.id {
-                                            Divider()
-                                                .background(Color.white.opacity(0.05))
-                                                .padding(.leading, 70)
-                                        }
-                                    }
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(AppColors.surfaceSecondary)
-                                )
-                            }
-                        }
-
-                        // Quick Discovery Categories & Tags
-                        VStack(alignment: .leading, spacing: 28) {
-                            Label(AppStrings.Search.quickTags, systemImage: "sparkles")
-                                .font(AppFonts.headline)
-                                .foregroundColor(.white)
-
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 30)], spacing: 30) {
-                                ForEach(store.quickTags) { tag in
-                                    Button {
-                                        store.send(.tagSelected(tag))
-                                    } label: {
-                                        HStack(spacing: 20) {
-                                            ZStack {
-                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                    .fill(tag.color.opacity(0.2))
-                                                    .frame(width: 56, height: 56)
-                                                Image(systemName: tag.icon)
-                                                    .font(AppFonts.displayMedium.weight(.semibold))
-                                                    .foregroundColor(tag.color)
-                                            }
-
-                                            Text(tag.title)
-                                                .font(AppFonts.title.weight(.semibold))
-                                                .foregroundColor(AppColors.textPrimary)
-
-                                            Spacer()
-
-                                            Image(systemName: "chevron.right")
-                                                .font(AppFonts.titleSmall.weight(.semibold))
-                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
-                                        }
-                                        .padding(.horizontal, 24)
-                                        .padding(.vertical, 20)
-                                    }
-                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: tag.color, isSelected: false))
-                                }
-                            }
-                        }
+                        SearchRecentSearchesShelf_tvOS(store: store)
                     }
                 }
                 .padding(.horizontal, 60)
@@ -1207,7 +1059,7 @@
             VStack(spacing: 24) {
                 Spacer()
                 Image(systemName: icon)
-                    .font(.system(size: 80))
+                    .font(AppFonts.displayLarge)
                     .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
                 Text(message)
                     .font(AppFonts.headline)
@@ -1239,8 +1091,8 @@
             VStack(spacing: 24) {
                 Spacer()
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.red.opacity(0.7))
+                    .font(AppFonts.displayLarge)
+                    .foregroundStyle(AppColors.destructive.opacity(0.7))
                 Text(error)
                     .font(AppFonts.displayMedium)
                     .multilineTextAlignment(.center)

@@ -36,7 +36,7 @@ public struct DockedMiniPlayerView: View {
             .clipped()
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    .stroke(AppColors.borderSubtle, lineWidth: 1)
             )
 
             // Metadata Info
@@ -44,27 +44,27 @@ public struct DockedMiniPlayerView: View {
                 HStack(spacing: 6) {
                     if store.item.isLive {
                         Circle()
-                            .fill(Color.red)
+                            .fill(AppColors.live)
                             .frame(width: 6, height: 6)
                         Text(AppStrings.Player.liveLabel)
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundColor(.red)
+                            .font(AppFonts.captionSmall.weight(.heavy))
+                            .foregroundStyle(AppColors.live)
                     } else {
                         Text(AppStrings.Player.miniPlayer.uppercased())
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundColor(.accentColor)
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.primary)
                     }
                 }
 
                 Text(store.item.title)
-                    .font(.subheadline.bold())
-                    .foregroundColor(.white)
+                    .font(AppFonts.bodyMedium.weight(.bold))
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
 
                 if let subtitle = store.item.seriesTitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.7))
+                        .font(AppFonts.captionSmall)
+                        .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
                 }
             }
@@ -85,13 +85,13 @@ public struct DockedMiniPlayerView: View {
                     if store.isReconnecting {
                         PureLoadingView(size: .small)
                             .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                            .background(AppColors.surfaceSecondary, in: Circle())
                     } else {
                         Image(systemName: store.playerState == .playing ? "pause.fill" : "play.fill")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                            .font(AppFonts.titleSmall.weight(.bold))
+                            .foregroundStyle(AppColors.textPrimary)
                             .frame(width: 36, height: 36)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                            .background(AppColors.surfaceSecondary, in: Circle())
                     }
                 }
                 .buttonStyle(.plain)
@@ -102,10 +102,10 @@ public struct DockedMiniPlayerView: View {
                     onClose()
                 }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(AppFonts.captionBold)
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                         .frame(width: 32, height: 32)
-                        .background(Color.white.opacity(0.08), in: Circle())
+                        .background(AppColors.surfaceSecondary.opacity(0.6), in: Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -119,14 +119,14 @@ public struct DockedMiniPlayerView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.3), Color.white.opacity(0.08)],
+                                colors: [AppColors.borderSubtle.opacity(0.8), AppColors.borderSubtle.opacity(0.2)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.4), radius: 16, x: 0, y: 8)
+                .shadow(color: AppColors.background.opacity(0.4), radius: 16, x: 0, y: 8)
         )
         .offset(dragOffset)
         #if os(iOS)

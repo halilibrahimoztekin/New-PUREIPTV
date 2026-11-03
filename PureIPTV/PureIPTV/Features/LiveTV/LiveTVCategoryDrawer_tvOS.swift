@@ -328,7 +328,7 @@
                     if isLocked {
                         Image(systemName: "lock.fill")
                             .font(AppFonts.caption)
-                            .foregroundColor(AppColors.warning)
+                            .foregroundStyle(AppColors.warning)
                     }
                 }
             }

@@ -40,7 +40,7 @@ public struct HiddenContentManagementView: View {
                         Button("Kapat") {
                             store.send(.closeHiddenContentManagement)
                         }
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(AppColors.textPrimary.opacity(0.8))
                     }
 
                     if !store.isUnlockingHiddenContent {
@@ -163,19 +163,19 @@ public struct HiddenContentManagementView: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppFonts.titleSmall)
                     .foregroundStyle(accentColor)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .font(AppFonts.bodyBold)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
 
                 Text("Gizlenme Tarihi: \(formattedDate(item.hiddenAt))")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(AppFonts.caption)
+                    .foregroundStyle(AppColors.textSecondary)
             }
 
             Spacer()
@@ -190,18 +190,18 @@ public struct HiddenContentManagementView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "eye.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                     Text("Görünür Yap")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.green.opacity(0.18))
-                .foregroundStyle(Color.green)
+                .background(AppColors.success.opacity(0.18))
+                .foregroundStyle(AppColors.success)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.green.opacity(0.4), lineWidth: 1)
+                        .stroke(AppColors.success.opacity(0.4), lineWidth: 1)
                 )
             }
             #if os(tvOS)
@@ -211,7 +211,7 @@ public struct HiddenContentManagementView: View {
             #endif
         }
         .padding(.vertical, 4)
-        .listRowBackground(Color.white.opacity(0.04))
+        .listRowBackground(AppColors.glassPlate)
     }
 
     // MARK: - Empty State
@@ -222,22 +222,22 @@ public struct HiddenContentManagementView: View {
 
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.06))
+                    .fill(AppColors.surfaceElevated)
                     .frame(width: 80, height: 80)
 
                 Image(systemName: icon)
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(AppFonts.displayMedium)
+                    .foregroundStyle(AppColors.textSecondary)
             }
 
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(AppColors.textPrimary)
 
                 Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(AppFonts.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 36)
             }
@@ -253,17 +253,17 @@ public struct HiddenContentManagementView: View {
             Spacer(minLength: 20)
 
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 52, weight: .bold))
-                .foregroundColor(.red)
+                .font(AppFonts.displayLarge)
+                .foregroundColor(AppColors.destructive)
 
             VStack(spacing: 6) {
                 Text("Ebeveyn Kodu Gerekli")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(.white)
+                    .font(AppFonts.title)
+                    .foregroundColor(AppColors.textPrimary)
 
                 Text("Gizlenen kanal ve kategorileri yönetmek için 4 haneli PIN kodunuzu girin.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.bodySmall)
+                    .foregroundColor(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -291,11 +291,11 @@ public struct HiddenContentManagementView: View {
             if let error = store.hiddenContentUnlockError {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.footnote)
+                        .font(AppFonts.footnote)
                     Text(error)
-                        .font(.footnote.weight(.semibold))
+                        .font(AppFonts.footnote.weight(.semibold))
                 }
-                .foregroundColor(.red)
+                .foregroundColor(AppColors.destructive)
             }
 
             #if os(tvOS)
@@ -318,7 +318,7 @@ public struct HiddenContentManagementView: View {
                 store.send(.cancelHiddenContentUnlock)
                 store.send(.closeHiddenContentManagement)
             }
-            .foregroundColor(.secondary)
+            .foregroundColor(AppColors.textSecondary)
             .padding(.top, 8)
 
             Spacer(minLength: 20)
@@ -362,17 +362,17 @@ public struct HiddenContentManagementView: View {
             return Button(action: action) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(focusedKeypadButton == key ? Color.white : Color.white.opacity(0.12))
+                        .fill(focusedKeypadButton == key ? AppColors.textPrimary : AppColors.borderMedium)
                         .frame(width: 72, height: 48)
 
                     if let label {
                         Text(label)
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(focusedKeypadButton == key ? .black : .white)
+                            .font(AppFonts.titleSmall)
+                            .foregroundColor(focusedKeypadButton == key ? AppColors.oledBlack : AppColors.textPrimary)
                     } else if let icon {
                         Image(systemName: icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(focusedKeypadButton == key ? .black : .white)
+                            .font(AppFonts.titleSmall)
+                            .foregroundColor(focusedKeypadButton == key ? AppColors.oledBlack : AppColors.textPrimary)
                     }
                 }
             }

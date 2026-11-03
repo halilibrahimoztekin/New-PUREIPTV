@@ -20,20 +20,20 @@ public struct CategoryManagementView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .progressViewStyle(.circular)
-                            .tint(Color.accentColor)
+                            .tint(AppColors.primary)
                             .scaleEffect(1.2)
                         Text(AppStrings.Common.loading)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                 } else if store.categories.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "folder.badge.questionmark")
-                            .font(.system(size: 44))
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.custom(size: 44, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
                         Text(AppStrings.CategoryMgmt.noCategoriesFound)
-                            .font(.headline)
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                 } else {
                     mainContentView
@@ -48,15 +48,15 @@ public struct CategoryManagementView: View {
                         Button(AppStrings.Common.cancel) {
                             store.send(.closeTapped)
                         }
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(AppColors.textSecondary)
                     }
 
                     ToolbarItem(placement: .confirmationAction) {
                         Button(AppStrings.Common.save) {
                             store.send(.saveTapped)
                         }
-                        .fontWeight(.bold)
-                        .foregroundColor(store.hasUnsavedChanges ? Color.accentColor : .secondary)
+                        .font(AppFonts.button)
+                        .foregroundStyle(store.hasUnsavedChanges ? AppColors.primary : AppColors.textSecondary)
                         .disabled(!store.hasUnsavedChanges)
                     }
                 }
@@ -94,7 +94,7 @@ public struct CategoryManagementView: View {
             headerControlsSection
 
             Divider()
-                .overlay(Color.white.opacity(0.08))
+                .overlay(AppColors.divider)
 
             // Categories List
             categoryListView
@@ -131,12 +131,12 @@ public struct CategoryManagementView: View {
                 // Search Bar (iOS)
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 15))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .font(AppFonts.bodyMedium)
 
                     TextField(AppStrings.CategoryMgmt.searchPlaceholder, text: $store.searchQuery.sending(\.setSearchQuery))
-                        .font(.system(size: 15))
-                        .foregroundColor(.white)
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(AppColors.textPrimary)
                         .autocorrectionDisabled()
 
                     if !store.searchQuery.isEmpty {
@@ -144,14 +144,14 @@ public struct CategoryManagementView: View {
                             store.send(.setSearchQuery(""))
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 14))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .font(AppFonts.caption)
                         }
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .padding(.horizontal, 16)
             #endif
 
@@ -159,8 +159,8 @@ public struct CategoryManagementView: View {
             HStack {
                 // Active count badge
                 Text(AppStrings.CategoryMgmt.visibleCountInfo(visible: store.visibleCount, total: store.totalCount))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 Spacer()
 
@@ -175,12 +175,12 @@ public struct CategoryManagementView: View {
                             store.send(.setFilterMode(mode))
                         } label: {
                             Text(modeTitleWithBadge(mode))
-                                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                                .foregroundColor(isSelected ? .white : .secondary)
+                                .font(isSelected ? AppFonts.captionBold : AppFonts.captionMedium)
+                                .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
-                                    isSelected ? Color.accentColor : Color.white.opacity(0.08),
+                                    isSelected ? AppColors.primary : AppColors.surfaceElevated,
                                     in: Capsule()
                                 )
                         }
@@ -204,11 +204,11 @@ public struct CategoryManagementView: View {
                     store.send(.showAllTapped)
                 } label: {
                     Label(AppStrings.CategoryMgmt.showAll, systemImage: "eye.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundStyle(AppColors.success)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.green.opacity(0.14), in: Capsule())
+                        .background(AppColors.success.opacity(0.14), in: Capsule())
                 }
                 #if os(tvOS)
                 .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
@@ -224,11 +224,11 @@ public struct CategoryManagementView: View {
                     store.send(.hideAllTapped)
                 } label: {
                     Label(AppStrings.CategoryMgmt.hideAll, systemImage: "eye.slash.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.red)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundStyle(AppColors.destructive)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.14), in: Capsule())
+                        .background(AppColors.destructive.opacity(0.14), in: Capsule())
                 }
                 #if os(tvOS)
                 .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
@@ -244,11 +244,11 @@ public struct CategoryManagementView: View {
                     store.send(.invertVisibilityTapped)
                 } label: {
                     Label(AppStrings.CategoryMgmt.invert, systemImage: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.orange)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundStyle(AppColors.warning)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.14), in: Capsule())
+                        .background(AppColors.warning.opacity(0.14), in: Capsule())
                 }
                 #if os(tvOS)
                 .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
@@ -263,11 +263,11 @@ public struct CategoryManagementView: View {
                     }
                 } label: {
                     Label("Hızlı Ülke Filtresi", systemImage: "globe")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.cyan)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundStyle(AppColors.cyan)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.cyan.opacity(0.14), in: Capsule())
+                        .background(AppColors.cyan.opacity(0.14), in: Capsule())
                 }
                 #if os(tvOS)
                 .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
@@ -285,10 +285,10 @@ public struct CategoryManagementView: View {
                     store.send(.resetOrderTapped)
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundStyle(AppColors.textSecondary)
                         .padding(6)
-                        .background(Color.white.opacity(0.08), in: Circle())
+                        .background(AppColors.surfaceElevated, in: Circle())
                 }
                 #if os(tvOS)
                 .buttonStyle(TVCircleButtonStyle())
@@ -324,37 +324,21 @@ public struct CategoryManagementView: View {
                 HStack(spacing: 12) {
                     // Category icon & name
                     Image(systemName: isLocked ? "lock.fill" : (isHidden ? "folder.badge.minus" : "folder.fill"))
-                    #if os(tvOS)
-                        .font(.system(size: 22))
-                    #else
-                        #if os(tvOS)
-                            .font(.system(size: 22))
-                        #else
-                            .font(.system(size: 15))
-                        #endif
-                    #endif
-                        .foregroundColor(isLocked ? .orange : (isHidden ? .secondary.opacity(0.5) : Color.accentColor))
+                        .font(AppFonts.titleSmall)
+                        .foregroundStyle(isLocked ? AppColors.warning : (isHidden ? AppColors.textTertiary : AppColors.primary))
 
                     Text(category.name)
-                    #if os(tvOS)
-                        .font(.system(size: 22, weight: isHidden ? .regular : .semibold))
-                    #else
-                        #if os(tvOS)
-                            .font(.system(size: 22, weight: isHidden ? .regular : .semibold))
-                        #else
-                            .font(.system(size: 15, weight: isHidden ? .regular : .semibold))
-                        #endif
-                    #endif
-                        .foregroundColor(isHidden ? .secondary : .white)
+                        .font(isHidden ? AppFonts.bodySmall : AppFonts.bodyMedium)
+                        .foregroundStyle(isHidden ? AppColors.textSecondary : AppColors.textPrimary)
 
                     Button {
                         editingCategory = category
                     } label: {
                         Image(systemName: "pencil")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .font(AppFonts.captionSemibold)
+                            .foregroundStyle(AppColors.textSecondary)
                             .padding(6)
-                            .background(Color.white.opacity(0.08), in: Circle())
+                            .background(AppColors.surfaceElevated, in: Circle())
                     }
                     #if os(tvOS)
                     .buttonStyle(TVCircleButtonStyle())
@@ -373,11 +357,11 @@ public struct CategoryManagementView: View {
                         store.send(.toggleLock(categoryID: category.id))
                     } label: {
                         Image(systemName: isLocked ? "lock.fill" : "lock.open")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(isLocked ? .orange : .secondary.opacity(0.7))
+                            .font(AppFonts.captionSemibold)
+                            .foregroundStyle(isLocked ? AppColors.warning : AppColors.textSecondary)
                             .padding(6)
                             .background(
-                                (isLocked ? Color.orange : Color.white).opacity(0.12),
+                                (isLocked ? AppColors.warning : AppColors.surfaceElevated).opacity(0.12),
                                 in: Circle()
                             )
                     }
@@ -397,20 +381,20 @@ public struct CategoryManagementView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: isHidden ? "eye.slash.fill" : "eye.fill")
-                                .font(.system(size: 14))
+                                .font(AppFonts.caption)
                             Text(isHidden ? AppStrings.CategoryMgmt.filterHidden : AppStrings.CategoryMgmt.filterVisible)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(AppFonts.captionSemibold)
                         }
-                        .foregroundColor(isHidden ? .red : .green)
+                        .foregroundStyle(isHidden ? AppColors.destructive : AppColors.success)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(
-                            (isHidden ? Color.red : Color.green).opacity(0.12),
+                            (isHidden ? AppColors.destructive : AppColors.success).opacity(0.12),
                             in: Capsule()
                         )
                         .overlay(
                             Capsule()
-                                .stroke((isHidden ? Color.red : Color.green).opacity(0.3), lineWidth: 1)
+                                .stroke((isHidden ? AppColors.destructive : AppColors.success).opacity(0.3), lineWidth: 1)
                         )
                     }
                     #if os(tvOS)

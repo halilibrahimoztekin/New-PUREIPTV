@@ -58,7 +58,7 @@
                                         Image(systemName: "arrow.clockwise")
                                     }
                                 }
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(AppFonts.captionBold)
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                             .accessibilityLabel(AppStrings.Common.retry)
@@ -70,14 +70,14 @@
                                 )))
                             } label: {
                                 Label(AppStrings.Dashboard.manageHomeCategories, systemImage: "pin")
-                                    .font(.system(size: 20, weight: .semibold))
+                                    .font(AppFonts.button)
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                             Button {
                                 store.send(.delegate(.presentHomeSettings(config)))
                             } label: {
                                 Label("Ana Ekranı Düzenle", systemImage: "slider.horizontal.3")
-                                    .font(.system(size: 20, weight: .semibold))
+                                    .font(AppFonts.button)
                             }
                             .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
                             Button {
@@ -88,10 +88,10 @@
                                         .fill(AppColors.success)
                                         .frame(width: 12, height: 12)
                                     Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
-                                        .font(.system(size: 22, weight: .semibold))
+                                        .font(AppFonts.titleSmall)
                                         .foregroundStyle(AppColors.textPrimary)
                                     Image(systemName: "arrow.triangle.2.circlepath")
-                                        .font(.system(size: 18))
+                                        .font(AppFonts.bodyMedium)
                                         .foregroundStyle(AppColors.primary)
                                 }
                                 .padding(.horizontal, 24)
@@ -117,10 +117,10 @@
                         if let error = store.errorMessage {
                             HStack(spacing: 18) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(AppColors.warning)
                                 Text(error)
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Button {
                                     store.send(.refreshTapped)
@@ -156,128 +156,6 @@
             }
         }
 
-        private func favoriteShelf(
-            _ items: [FavoriteItem],
-            title: String,
-            cardWidth: CGFloat,
-            moveAvailability: [FavoriteIdentity: Set<Int>]
-        ) -> some View {
-            TVShelfSection(title: title) {
-                ForEach(items, id: \.scopedIdentity) { item in
-                    favoriteMediaCard(item, cardWidth: cardWidth, moveOffsets: moveAvailability[item.scopedIdentity] ?? [])
-                }
-            }
-        }
-
-        private func favoriteSeriesShelf(
-            _ items: [FavoriteItem],
-            moveAvailability: [FavoriteIdentity: Set<Int>]
-        ) -> some View {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .center, spacing: 28) {
-                    Text(AppStrings.Dashboard.favoriteSeries)
-                        .font(.system(size: 38, weight: .bold))
-                        .foregroundStyle(.white)
-                    Spacer(minLength: 12)
-                    favoriteSeriesSortMenu
-                }
-                .padding(.horizontal, 60)
-
-                if store.favoriteSeriesSortDidFail {
-                    Text(AppStrings.Dashboard.favoriteSeriesDatesLoadFailed)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 60)
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 40) {
-                        ForEach(items, id: \.scopedIdentity) { item in
-                            favoriteMediaCard(item, cardWidth: 220, moveOffsets: moveAvailability[item.scopedIdentity] ?? [])
-                        }
-                    }
-                    .padding(.horizontal, 60)
-                    .padding(.vertical, 40)
-                }
-                .focusSection()
-            }
-        }
-
-        private var favoriteSeriesSortMenu: some View {
-            Menu {
-                Button {
-                    store.send(.setFavoriteSeriesSort(.newestEpisode))
-                } label: {
-                    Label(
-                        AppStrings.Dashboard.newestEpisodeDate,
-                        systemImage: store.favoriteSeriesSortMode == .newestEpisode ? "checkmark" : "calendar"
-                    )
-                }
-                Button {
-                    store.send(.setFavoriteSeriesSort(.existingOrder))
-                } label: {
-                    Label(
-                        AppStrings.Dashboard.existingFavoriteOrder,
-                        systemImage: store.favoriteSeriesSortMode == .existingOrder ? "checkmark" : "list.number"
-                    )
-                }
-            } label: {
-                Label(
-                    store.isLoadingFavoriteSeriesSortDates
-                        ? AppStrings.Dashboard.loadingFavoriteSeriesDates
-                        : AppStrings.Dashboard.sortFavoriteSeries,
-                    systemImage: store.isLoadingFavoriteSeriesSortDates ? "hourglass" : "arrow.up.arrow.down"
-                )
-                .font(.system(size: 22, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel(
-                store.isLoadingFavoriteSeriesSortDates
-                    ? AppStrings.Dashboard.loadingFavoriteSeriesDates
-                    : AppStrings.Dashboard.sortFavoriteSeries
-            )
-            .accessibilityValue(
-                store.favoriteSeriesSortMode == .newestEpisode
-                    ? AppStrings.Dashboard.newestEpisodeDate
-                    : AppStrings.Dashboard.existingFavoriteOrder
-            )
-        }
-
-        private func favoriteMediaCard(_ item: FavoriteItem, cardWidth: CGFloat, moveOffsets: Set<Int>) -> some View {
-            let mediaType = item.type.lowercased()
-            let canReorder = mediaType == "vod"
-                || (mediaType == "series" && store.favoriteSeriesSortMode != .newestEpisode)
-            return TVFavoriteMediaCard(
-                item: item,
-                userAgentOverride: config.userAgentOverride,
-                unwatchedEpisodeCount: item.playlistID == store.activePlaylistID
-                    ? store.favoriteSeriesUnwatchedEpisodeCounts[item.id]
-                    : nil
-            ) {
-                store.send(.favoriteSelected(item))
-            }
-            .frame(width: cardWidth)
-            .contextMenu {
-                if canReorder, item.playlistID != nil {
-                    Button { store.send(.moveFavorite(item, offset: -1)) } label: {
-                        Label(AppStrings.Favorites.moveUp, systemImage: "arrow.left")
-                    }
-                    .disabled(!moveOffsets.contains(-1))
-
-                    Button { store.send(.moveFavorite(item, offset: 1)) } label: {
-                        Label(AppStrings.Favorites.moveDown, systemImage: "arrow.right")
-                    }
-                    .disabled(!moveOffsets.contains(1))
-                }
-                Button { store.send(.favoriteSelected(item)) } label: {
-                    Label(AppStrings.Common.watchNow, systemImage: "play.fill")
-                }
-                Button(role: .destructive) { store.send(.deleteFavorite(item)) } label: {
-                    Label(AppStrings.Common.removeFromFavorites, systemImage: "trash")
-                }
-            }
-        }
-
         @ViewBuilder
         private func homeSectionView(
             _ section: HomeSectionConfig,
@@ -288,7 +166,7 @@
             switch section.type {
             case .hero:
                 if let heroVOD = store.featuredVODs.first {
-                    TVHeroBanner(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
+                    DashboardHeroBannerView_tvOS(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
                         .focusSection()
                 }
             case .continueWatching:
@@ -304,22 +182,7 @@
                     }
                 }
             case .favorites:
-                let favorites = store.favoriteItemsByType
-                let availability = store.favoriteMoveAvailability
-                if let items = favorites["live"], !items.isEmpty {
-                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteLiveTV, cardWidth: 340, moveAvailability: availability)
-                }
-                if let items = favorites["vod"], !items.isEmpty {
-                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteMovies, cardWidth: 220, moveAvailability: availability)
-                }
-                if let items = favorites["series"], !items.isEmpty {
-                    favoriteSeriesShelf(items, moveAvailability: availability)
-                }
-                let categorizedTypes = Set(["live", "vod", "series"])
-                let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
-                if !otherFavorites.isEmpty {
-                    favoriteShelf(otherFavorites, title: AppStrings.Dashboard.myFavorites, cardWidth: 220, moveAvailability: availability)
-                }
+                DashboardFavoritesShelf_tvOS(store: store, config: config)
             case .featuredLiveTV:
                 if !store.featuredChannels.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.featuredLiveTV) {
@@ -393,7 +256,10 @@
                 }
             case .sportsHub:
                 if store.isSportsHubVisible, !store.sportsHubEvents.isEmpty {
-                    sportsHubSection
+                    DashboardSportsHubShelf_tvOS(
+                        store: store,
+                        isShowingFollowedSportsEvents: $isShowingFollowedSportsEvents
+                    )
                 }
             case .recommendations:
                 if !store.newEpisodeSeries.isEmpty {
@@ -408,8 +274,8 @@
                                             entry.latestSeason,
                                             entry.latestEpisodeNumber,
                                             entry.newEpisodeCount))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.white.opacity(0.76))
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(1)
                                     .frame(width: 220, alignment: .leading)
                             }
@@ -425,8 +291,8 @@
                                 }
                                 .frame(width: 220)
                                 Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.white.opacity(0.76))
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(1)
                                     .frame(width: 220, alignment: .leading)
                             }
@@ -442,8 +308,8 @@
                                 }
                                 .frame(width: 220)
                                 Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.white.opacity(0.76))
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(1)
                                     .frame(width: 220, alignment: .leading)
                             }
@@ -456,7 +322,9 @@
                             VStack(alignment: .leading, spacing: 8) {
                                 TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
                                 Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
-                                    .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .lineLimit(1)
                             }
                         }
                     }
@@ -467,7 +335,9 @@
                             VStack(alignment: .leading, spacing: 8) {
                                 TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
                                 Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
-                                    .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.76)).lineLimit(1)
+                                    .font(AppFonts.captionMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .lineLimit(1)
                             }
                         }
                     }
@@ -486,17 +356,17 @@
                                         image.resizable().scaledToFill()
                                     } placeholder: {
                                         Text(String(actor.name.prefix(1)))
-                                            .font(.largeTitle.bold())
-                                            .foregroundStyle(.white)
+                                            .font(AppFonts.titleLarge)
+                                            .foregroundStyle(AppColors.textPrimary)
                                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                            .background(Color.white.opacity(0.14))
+                                            .background(AppColors.surfaceElevated)
                                     }
                                     .frame(width: 132, height: 132)
                                     .clipShape(Circle())
 
                                     Text(actor.name)
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundStyle(.white)
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .multilineTextAlignment(.center)
                                         .lineLimit(2)
                                         .frame(width: 160, height: 48, alignment: .top)
@@ -510,13 +380,13 @@
                 }
                 if store.isLoadingActorFilmography {
                     ProgressView(AppStrings.Common.loading)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 40)
                 }
                 if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
                     Text(AppStrings.Dashboard.actorFilmographyUnavailable)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.72))
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(AppColors.textSecondary)
                         .padding(.horizontal, 40)
                 }
                 if !store.recommendedVODs.isEmpty {
@@ -539,8 +409,8 @@
                                     }
                                 if let reason = store.recommendationReasons[vod.id] {
                                     Text(reason.title)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.78))
+                                        .font(AppFonts.caption)
+                                        .foregroundStyle(AppColors.textSecondary)
                                         .lineLimit(1)
                                 }
                             }
@@ -551,14 +421,14 @@
                 if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
                     if store.isLoadingPersonalizedContent {
                         ProgressView(AppStrings.Common.loading)
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.titleSmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 40)
                     } else if store.hasLoadedRemoteData {
                         HStack(spacing: 22) {
                             Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.82))
+                                .font(AppFonts.headline)
+                                .foregroundStyle(AppColors.textSecondary)
                             Button {
                                 store.send(.refreshTapped)
                             } label: {
@@ -656,7 +526,7 @@
                 )
             case .discoverCollections:
                 ForEach(store.visibleExploreCollections) { collection in
-                    homeCategorySection(collection)
+                    DashboardQuickCategoriesShelf_tvOS(collection: collection, store: store)
                 }
             }
         }
@@ -675,215 +545,15 @@
                 .frame(height: 300)
             } else if !hasContent, store.activeRefreshID != nil, !store.isLoading {
                 ProgressView(AppStrings.Common.loading)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white)
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(AppColors.textPrimary)
                     .padding(.horizontal, 40)
-            }
-        }
-
-        private func homeCategorySection(_ collection: DashboardFeature.ExploreCollection) -> some View {
-            let isPinned = store.pinnedHomeCategoryIDs.contains(collection.id)
-            let canPin = collection.id.hasPrefix("live-category:") || collection.id.hasPrefix("movie-category:") || collection.id.hasPrefix("series-category:")
-            return VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 18) {
-                    Text(collection.title)
-                        .font(.system(size: 38, weight: .bold))
-                        .foregroundStyle(.white)
-                    if canPin {
-                        Button {
-                            store.send(.toggleHomeCategoryPin(collection.id))
-                        } label: {
-                            Label(
-                                isPinned ? AppStrings.Dashboard.unpinHomeCategory : AppStrings.Dashboard.pinHomeCategory,
-                                systemImage: isPinned ? "pin.slash.fill" : "pin.fill"
-                            )
-                        }
-                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                        .accessibilityHint(AppStrings.Dashboard.pinnedCategoryHint)
-                        .contextMenu {
-                            if isPinned, let index = store.pinnedHomeCategoryIDs.firstIndex(of: collection.id) {
-                                if index > 0 {
-                                    Button {
-                                        store.send(.moveHomeCategoryPin(collection.id, -1))
-                                    } label: {
-                                        Label(AppStrings.Dashboard.movePinnedCategoryUp, systemImage: "arrow.up")
-                                    }
-                                }
-                                if index + 1 < store.pinnedHomeCategoryIDs.count {
-                                    Button {
-                                        store.send(.moveHomeCategoryPin(collection.id, 1))
-                                    } label: {
-                                        Label(AppStrings.Dashboard.movePinnedCategoryDown, systemImage: "arrow.down")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 60)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 40) {
-                        ForEach(collection.items) { item in
-                            if item.type == .live {
-                                TVChannelCard(channel: item, isSelected: false) { store.send(.channelSelected(item)) }
-                                    .frame(width: 340)
-                            } else if item.type == .series {
-                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                    .frame(width: 220)
-                            } else {
-                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                    .frame(width: 220)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 60)
-                    .padding(.vertical, 40)
-                }
-                .focusSection()
             }
         }
 
         private var tvLoadingView: some View {
             PureLoadingView(size: .large, text: AppStrings.Common.loadingAlt)
                 .transition(.opacity)
-        }
-
-        private var sportsHubEventGroupsForDisplay: [DashboardFeature.SportsHubEventGroup] {
-            isShowingFollowedSportsEvents ? store.followedSportsHubEventGroups : store.sportsHubEventGroups
-        }
-
-        private var sportsHubSection: some View {
-            let eventGroups = sportsHubEventGroupsForDisplay
-            return VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 16) {
-                    Text(AppStrings.Dashboard.epgPrograms)
-                        .font(.system(size: 38, weight: .bold))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    if !store.followedSportsIDs.isEmpty || isShowingFollowedSportsEvents {
-                        Button {
-                            isShowingFollowedSportsEvents.toggle()
-                        } label: {
-                            Label(
-                                isShowingFollowedSportsEvents
-                                    ? AppStrings.Dashboard.showAllSportsEvents
-                                    : AppStrings.Dashboard.showFollowedSportsEvents,
-                                systemImage: isShowingFollowedSportsEvents ? "line.3.horizontal.decrease.circle.fill" : "star"
-                            )
-                        }
-                        .font(.title3)
-                        .frame(minHeight: 52)
-                        .tvFocusEffect(shape: .capsule)
-                    }
-                }
-                .padding(.horizontal, 60)
-
-                if eventGroups.isEmpty {
-                    Text(AppStrings.Dashboard.noFollowedSportsEvents)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 60)
-                        .padding(.vertical, 24)
-                } else {
-                    VStack(alignment: .leading, spacing: 28) {
-                        ForEach(eventGroups) { group in
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(group.title ?? AppStrings.Dashboard.otherSportsMatches)
-                                    .font(.system(size: 26, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.8))
-                                    .accessibilityAddTraits(.isHeader)
-                                    .padding(.horizontal, 60)
-
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    LazyHStack(spacing: 40) {
-                                        ForEach(group.events) { event in
-                                            DashboardEPGEventCard(
-                                                event: event,
-                                                followedSportsIDs: store.followedSportsIDs,
-                                                pendingSportsFollowIDs: Set(store.pendingSportsFollowIDs.keys),
-                                                onToggleSportsFollow: { kind, name in
-                                                    store.send(.toggleSportsFollow(kind: kind, displayName: name))
-                                                },
-                                                onSelectChannel: { store.send(.channelSelected($0)) },
-                                                onChooseChannel: {
-                                                    guard let playlistID = store.activePlaylistID else { return }
-                                                    store.send(.delegate(.presentEPGChannelPicker(playlistID: playlistID, event: event)))
-                                                }
-                                            )
-                                            .frame(width: 380)
-                                        }
-                                    }
-                                    .padding(.horizontal, 60)
-                                    .padding(.vertical, 24)
-                                }
-                                .focusSection()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - TV Hero Banner
-
-    private struct TVHeroBanner: View {
-        let vod: MediaModels.Item
-        let onTap: () -> Void
-
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            Button(action: onTap) {
-                ZStack(alignment: .bottomLeading) {
-                    DashboardHeroArtworkView(vod: vod, height: 600)
-
-                    // Premium Gradient
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black.opacity(0.0), location: 0.0),
-                            .init(color: .black.opacity(0.5), location: 0.6),
-                            .init(color: .black.opacity(0.95), location: 1.0),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-
-                    // Content
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(vod.title)
-                            .font(.system(size: 52, weight: .bold))
-                            .tracking(-1.0) // Optical sizing fix for tvOS large text
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 4)
-
-                        if let rating = vod.rating, rating > 0 {
-                            HStack(spacing: 8) {
-                                Image(systemName: "star.fill").foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                            }
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                        }
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
-                            Text(AppStrings.Common.watchNow)
-                        }
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial)
-                        .background(Color.black.opacity(0.4))
-                        .clipShape(Capsule())
-                    }
-                    .padding(60)
-                }
-            }
-            .tvFocusEffect()
         }
     }
 
@@ -896,8 +566,8 @@
         var body: some View {
             VStack(alignment: .leading, spacing: 20) {
                 Text(title)
-                    .font(.system(size: 38, weight: .bold)) // 10-foot UI size
-                    .foregroundStyle(.white)
+                    .font(AppFonts.displayMedium)
+                    .foregroundStyle(AppColors.textPrimary)
                     .padding(.horizontal, 60)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -909,75 +579,6 @@
                 }
                 .focusSection()
             }
-        }
-    }
-
-    // MARK: - TV Watch History Card
-
-    private struct TVWatchHistoryCard: View {
-        let item: WatchHistoryItem
-        let userAgentOverride: String?
-        let onTap: () -> Void
-
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 12) {
-                    ZStack(alignment: .bottomLeading) {
-                        if let urlString = item.coverURL, let url = URL(string: urlString) {
-                            KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID))
-                                .requestModifier { request in
-                                    PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: item.playlistID)
-                                }
-                                .downsampling(size: CGSize(width: 320, height: 180))
-                                .cancelOnDisappear(true)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 320, height: 180)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        } else {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(AppColors.surfaceSecondary)
-                                .frame(width: 320, height: 180)
-                        }
-
-                        // Progress bar with Electric Blue
-                        let progressPercent = item.duration > 0 ? max(0, min(1, item.progress / item.duration)) : 0
-                        VStack {
-                            Spacer()
-                            GeometryReader { proxy in
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.3))
-                                    .frame(height: 4)
-                                    .overlay(alignment: .leading) {
-                                        Rectangle()
-                                            .fill(AppColors.primary)
-                                            .frame(width: proxy.size.width * CGFloat(progressPercent), height: 4)
-                                    }
-                            }
-                            .frame(height: 4)
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 12)
-                        }
-                    }
-
-                    Text(item.title)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .frame(width: 320, alignment: .leading)
-
-                    if let seriesTitle = item.seriesTitle {
-                        Text(seriesTitle)
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                            .lineLimit(1)
-                            .frame(width: 320, alignment: .leading)
-                    }
-                }
-            }
-            .buttonStyle(TVGridCardButtonStyle(cornerRadius: 16))
         }
     }
 

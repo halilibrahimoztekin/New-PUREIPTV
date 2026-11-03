@@ -80,7 +80,7 @@ public struct CatchupTimelineScrubberView: View {
                     lineWidth: 1.5
                 )
         )
-        .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
+        .shadow(color: AppColors.background.opacity(0.7), radius: 30, x: 0, y: 15)
         .focusSection()
         .onExitCommand {
             onClose()
@@ -99,14 +99,14 @@ public struct CatchupTimelineScrubberView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [AppColors.premium.opacity(0.5), Color.white.opacity(0.12)],
+                        colors: [AppColors.premium.opacity(0.5), AppColors.borderMedium],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1.2
                 )
         )
-        .shadow(color: .black.opacity(0.65), radius: 24, x: 0, y: 10)
+        .shadow(color: AppColors.background.opacity(0.65), radius: 24, x: 0, y: 10)
         #endif
     }
 
@@ -126,15 +126,15 @@ public struct CatchupTimelineScrubberView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(AppStrings.Player.catchupTimelineTitle)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(AppFonts.bodyBold)
+                        .foregroundColor(AppColors.textPrimary)
 
                     CatchUpBadge(isCompact: true)
                 }
 
                 Text(store.item.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.captionMedium)
+                    .foregroundColor(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
@@ -147,10 +147,10 @@ public struct CatchupTimelineScrubberView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.textPrimary.opacity(0.8))
                     .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.12), in: Circle())
+                    .background(AppColors.borderMedium, in: Circle())
             }
             .buttonStyle(.plain)
             #if os(tvOS)
@@ -175,11 +175,11 @@ public struct CatchupTimelineScrubberView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Arşiv saat düzeltmesi".localized)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(AppFonts.bodySmall.weight(.semibold))
+                    .foregroundStyle(AppColors.textPrimary)
                 Text("Yalnızca bu kanalın catch-up başlangıç saatini değiştirir.".localized)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
@@ -189,13 +189,13 @@ public struct CatchupTimelineScrubberView: View {
                 store.send(.setCatchupTimeShiftHours(store.catchupTimeShiftHours - 1))
             } label: {
                 Image(systemName: "minus.circle.fill")
-                    .font(.title3)
+                    .font(AppFonts.titleSmall)
             }
             .accessibilityLabel("Arşiv saatini bir saat geri al".localized)
 
             Text(String(format: "%+d sa", store.catchupTimeShiftHours))
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
+                .font(AppFonts.bodySmall.weight(.bold).monospaced())
+                .foregroundStyle(AppColors.textPrimary)
                 .frame(minWidth: 56)
                 .accessibilityLabel("Arşiv düzeltmesi %@".localized(String(format: "%+d saat", store.catchupTimeShiftHours)))
 
@@ -203,14 +203,14 @@ public struct CatchupTimelineScrubberView: View {
                 store.send(.setCatchupTimeShiftHours(store.catchupTimeShiftHours + 1))
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                    .font(AppFonts.titleSmall)
             }
             .accessibilityLabel("Arşiv saatini bir saat ileri al".localized)
         }
         .foregroundStyle(AppColors.premium)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppColors.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder
@@ -232,21 +232,21 @@ public struct CatchupTimelineScrubberView: View {
         } label: {
             Text(title)
                 .font(AppFonts.caption.weight((isSelected || isFocused) ? .bold : .medium))
-                .foregroundColor((isSelected || isFocused) ? .white : .white.opacity(0.6))
+                .foregroundColor((isSelected || isFocused) ? AppColors.textPrimary : AppColors.textSecondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 7)
                 .background(
                     isFocused
                         ? AppColors.premium
-                        : (isSelected ? AppColors.premium.opacity(0.35) : Color.white.opacity(0.08)),
+                        : (isSelected ? AppColors.premium.opacity(0.35) : AppColors.surfaceSecondary),
                     in: Capsule()
                 )
                 .overlay(
                     Capsule()
                         .stroke(
                             isFocused
-                                ? Color.white
-                                : (isSelected ? AppColors.premium.opacity(0.7) : Color.clear),
+                                ? AppColors.textPrimary
+                                : (isSelected ? AppColors.premium.opacity(0.7) : AppColors.background.opacity(0)),
                             lineWidth: isFocused ? 2 : 1
                         )
                 )
@@ -267,14 +267,14 @@ public struct CatchupTimelineScrubberView: View {
                 if filteredPrograms.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "tv.slash")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white.opacity(0.3))
+                            .font(AppFonts.titleMedium)
+                            .foregroundColor(AppColors.textTertiary)
                         Text(AppStrings.Player.epgNotFound)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.5))
+                            .font(AppFonts.bodySmall.weight(.medium))
+                            .foregroundColor(AppColors.textSecondary)
                     }
                     .frame(width: 320, height: 140)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+                    .background(AppColors.glassPlate, in: RoundedRectangle(cornerRadius: 14))
                 } else {
                     ForEach(filteredPrograms) { program in
                         programBookmarkCard(program: program)
@@ -338,14 +338,14 @@ public struct CatchupTimelineScrubberView: View {
                     } else {
                         Text("\(durationMinutes) dk")
                             .font(AppFonts.captionSmall.weight(.semibold))
-                            .foregroundColor(.white.opacity(0.45))
+                            .foregroundColor(AppColors.textTertiary)
                     }
                 }
 
                 // Program Title
                 Text(program.title)
                     .font(AppFonts.bodySmall.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
@@ -353,7 +353,7 @@ public struct CatchupTimelineScrubberView: View {
                 if !program.description.isEmpty {
                     Text(program.description)
                         .font(AppFonts.captionSmall)
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppColors.textSecondary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
@@ -381,7 +381,7 @@ public struct CatchupTimelineScrubberView: View {
                     .fill(
                         isCurrentArchive
                             ? AppColors.premium.opacity(0.2)
-                            : (isLiveNow ? AppColors.neonTeal.opacity(0.12) : Color.white.opacity(0.06))
+                            : (isLiveNow ? AppColors.neonTeal.opacity(0.12) : AppColors.surfaceSecondary)
                     )
             )
             .overlay(
@@ -389,7 +389,7 @@ public struct CatchupTimelineScrubberView: View {
                     .stroke(
                         isCurrentArchive
                             ? AppColors.premium.opacity(0.7)
-                            : (isLiveNow ? AppColors.neonTeal.opacity(0.5) : Color.white.opacity(0.1)),
+                            : (isLiveNow ? AppColors.neonTeal.opacity(0.5) : AppColors.borderSubtle),
                         lineWidth: isCurrentArchive ? 1.8 : 1.0
                     )
             )
@@ -407,10 +407,10 @@ public struct CatchupTimelineScrubberView: View {
     private var returnToLiveBar: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
-                Circle().fill(Color.purple).frame(width: 8, height: 8)
+                Circle().fill(AppColors.premium).frame(width: 8, height: 8)
                 Text(AppStrings.Player.playingArchiveBanner)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.textPrimary)
             }
 
             Spacer()
@@ -422,15 +422,15 @@ public struct CatchupTimelineScrubberView: View {
                 store.send(.returnToLiveStream)
             } label: {
                 HStack(spacing: 6) {
-                    Circle().fill(Color.red).frame(width: 7, height: 7)
+                    Circle().fill(AppColors.live).frame(width: 7, height: 7)
                     Text(AppStrings.Player.returnToLive)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.textPrimary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(Color.red.opacity(0.85), in: Capsule())
-                .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 3)
+                .background(AppColors.live.opacity(0.85), in: Capsule())
+                .shadow(color: AppColors.live.opacity(0.4), radius: 8, x: 0, y: 3)
             }
             .buttonStyle(.plain)
             #if os(tvOS)
@@ -439,7 +439,7 @@ public struct CatchupTimelineScrubberView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func formatTime(_ date: Date) -> String {

@@ -40,7 +40,7 @@
 
         public var body: some View {
             ZStack(alignment: .top) {
-                Color.black.ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     // Search Bar
@@ -291,11 +291,11 @@
                                     .fill(isSelected ? filter.badgeColor : AppColors.surfaceSecondary)
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.white.opacity(isSelected ? 0.25 : 0.08), lineWidth: 1)
+                                            .stroke(isSelected ? AppColors.borderStrong : AppColors.borderSubtle, lineWidth: 1)
                                     )
                             )
                             .shadow(
-                                color: isSelected ? filter.badgeColor.opacity(0.4) : .clear,
+                                color: isSelected ? filter.badgeColor.opacity(0.4) : AppColors.background.opacity(0),
                                 radius: 6,
                                 x: 0,
                                 y: 2
@@ -342,11 +342,11 @@
                         .fill(isSelected ? color : AppColors.surfaceSecondary)
                         .overlay(
                             Capsule()
-                                .stroke(Color.white.opacity(isSelected ? 0.25 : 0.08), lineWidth: 1)
+                                .stroke(isSelected ? AppColors.borderStrong : AppColors.borderSubtle, lineWidth: 1)
                         )
                 )
                 .shadow(
-                    color: isSelected ? color.opacity(0.35) : .clear,
+                    color: isSelected ? color.opacity(0.35) : AppColors.background.opacity(0),
                     radius: 5,
                     x: 0,
                     y: 2
@@ -380,7 +380,7 @@
                                     .fill(isSelected ? AppColors.primary.opacity(0.28) : AppColors.surfaceSecondary)
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.white.opacity(isSelected ? 0.25 : 0.08), lineWidth: 1)
+                                            .stroke(isSelected ? AppColors.borderStrong : AppColors.borderSubtle, lineWidth: 1)
                                     )
                             )
                         }
@@ -675,12 +675,12 @@
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 26, weight: .medium))
+                                    .font(AppFonts.headline)
                                     .foregroundStyle(AppColors.success)
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(item.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
+                                        .font(AppFonts.bodyBold)
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .lineLimit(2)
                                     if let episode = item.episodeMetadata {
                                         Text("\(episode.seriesTitle) · S\(episode.seasonNumber) E\(episode.episodeNumber)")
@@ -717,12 +717,12 @@
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label(AppStrings.Search.myCollection, systemImage: "rectangle.stack.fill")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.bodyBold)
+                            .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         Text("\(results.count + unavailable.count)")
-                            .font(.caption.weight(.semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(AppFonts.captionMedium.monospacedDigit())
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -807,77 +807,13 @@
 
         // MARK: - Discovery & Empty Views
 
-        private var pinnedSearchesSection: some View {
-            VStack(alignment: .leading, spacing: 14) {
-                Label(AppStrings.Search.pinnedSearches, systemImage: "pin.fill")
-                    .font(AppFonts.bodyLarge.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text(AppStrings.Search.pinnedSearchesDescription)
-                    .font(AppFonts.caption)
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 0) {
-                    ForEach(store.pinnedSearchQueries, id: \.self) { query in
-                        HStack(spacing: 8) {
-                            Button {
-                                HapticManager.shared.trigger(.light)
-                                store.send(.recentSearchTapped(query))
-                            } label: {
-                                HStack {
-                                    Image(systemName: "pin.fill")
-                                        .foregroundColor(AppColors.primary)
-                                        .font(AppFonts.caption.weight(.semibold))
-                                    Text(query)
-                                        .font(AppFonts.bodyMedium)
-                                        .foregroundColor(AppColors.onSurface)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(AppFonts.captionSmall)
-                                        .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityHint(AppStrings.Search.runPinnedSearchHint)
-
-                            Button {
-                                store.send(.togglePinnedSearch(query))
-                            } label: {
-                                Image(systemName: "pin.slash")
-                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.7))
-                                    .frame(width: 40, height: 40)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(AppStrings.Search.unpinSearch)
-                        }
-
-                        if query != store.pinnedSearchQueries.last {
-                            Divider()
-                                .background(Color.white.opacity(0.05))
-                                .padding(.leading, 16)
-                        }
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppColors.surfaceSecondary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                        )
-                )
-            }
-        }
-
         private var allCategoriesDiscoverySection: some View {
             let categories = store.scopedDiscoveryCategories
             return VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Label(AppStrings.Search.allCategories, systemImage: "folder.fill")
                         .font(AppFonts.bodyLarge.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                     Spacer()
                     Text("\(categories.count)")
                         .font(AppFonts.captionMedium.monospacedDigit())
@@ -906,117 +842,9 @@
                     } else {
                         curatedPlaylistSection
 
-                        if !store.pinnedSearchQueries.isEmpty {
-                            pinnedSearchesSection
-                        }
+                        SearchHistorySectionView_iOS(store: store)
 
-                        // Recent Searches Section
-                        if !store.recentSearches.isEmpty {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack {
-                                    Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
-                                        .font(AppFonts.bodyLarge.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                    Spacer()
-                                    Button {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.clearHistoryTapped)
-                                    } label: {
-                                        Text(AppStrings.Search.clear)
-                                            .font(AppFonts.bodySmall.weight(.medium))
-                                            .foregroundColor(AppColors.primary)
-                                    }
-                                }
-
-                                VStack(spacing: 0) {
-                                    ForEach(store.recentSearches.prefix(6), id: \.id) { item in
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.recentSearchTapped(item.query))
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: "clock")
-                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
-                                                    .font(AppFonts.caption.weight(.semibold))
-                                                Text(item.query)
-                                                    .font(AppFonts.bodyMedium)
-                                                    .foregroundColor(AppColors.onSurface)
-                                                Spacer()
-                                                Image(systemName: "chevron.right")
-                                                    .font(AppFonts.captionSmall)
-                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 12)
-                                            .background(AppColors.surfaceSecondary.opacity(0.5))
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        if item.id != store.recentSearches.prefix(6).last?.id {
-                                            Divider()
-                                                .background(Color.white.opacity(0.05))
-                                                .padding(.leading, 40)
-                                        }
-                                    }
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(AppColors.surfaceSecondary)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                                        )
-                                )
-                            }
-                        }
-
-                        // Quick Discovery Categories & Tags
-                        VStack(alignment: .leading, spacing: 14) {
-                            Label(AppStrings.Search.quickTags, systemImage: "sparkles")
-                                .font(AppFonts.bodyLarge.weight(.semibold))
-                                .foregroundStyle(.white)
-
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12)], spacing: 12) {
-                                ForEach(store.quickTags) { tag in
-                                    Button {
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.tagSelected(tag))
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            ZStack {
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .fill(tag.color.opacity(0.18))
-                                                    .frame(width: 36, height: 36)
-                                                Image(systemName: tag.icon)
-                                                    .font(AppFonts.bodyMedium.weight(.semibold))
-                                                    .foregroundStyle(tag.color)
-                                            }
-
-                                            Text(tag.title)
-                                                .font(AppFonts.bodySmall.weight(.semibold))
-                                                .foregroundStyle(AppColors.textPrimary)
-
-                                            Spacer()
-
-                                            Image(systemName: "chevron.right")
-                                                .font(AppFonts.captionSmall.weight(.semibold))
-                                                .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .fill(AppColors.surfaceContainer)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                                                )
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        SearchQuickTagsSectionView_iOS(store: store)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -1063,7 +891,7 @@
             VStack(spacing: 12) {
                 Spacer()
                 Image(systemName: icon)
-                    .font(.system(size: 44))
+                    .font(AppFonts.displayMedium)
                     .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
                 Text(message)
                     .font(AppFonts.bodyLarge)
@@ -1095,8 +923,8 @@
             VStack(spacing: 12) {
                 Spacer()
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.red.opacity(0.7))
+                    .font(AppFonts.displayMedium)
+                    .foregroundStyle(AppColors.destructive.opacity(0.7))
                 Text(error)
                     .font(AppFonts.bodySmall)
                     .multilineTextAlignment(.center)

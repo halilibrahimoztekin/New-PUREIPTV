@@ -61,4 +61,35 @@ final class LiquidGlassTests: XCTestCase {
         XCTAssertEqual(card.tint, AppColors.accent)
         XCTAssertTrue(card.isInteractive)
     }
+
+    struct MockItem: Identifiable, Hashable {
+        let id: String
+        let title: String
+    }
+
+    func testLiquidGlassSegmentedPicker() {
+        let items = [
+            MockItem(id: "all", title: "Tümü"),
+            MockItem(id: "live", title: "Canlı TV"),
+        ]
+        var selectedItem = items[0]
+        let binding = Binding<MockItem>(
+            get: { selectedItem },
+            set: { selectedItem = $0 }
+        )
+
+        let picker = LiquidGlassSegmentedPicker(items: items, selection: binding) { item, _ in
+            Text(item.title)
+        }
+
+        XCTAssertEqual(picker.items.count, 2)
+        XCTAssertEqual(picker.items.first?.id, "all")
+    }
+
+    #if os(iOS) || os(tvOS)
+        func testLiquidGlassVisualEffectBlur() {
+            let blur = LiquidGlassVisualEffectBlur(style: .dark)
+            XCTAssertEqual(blur.style, .dark)
+        }
+    #endif
 }

@@ -79,7 +79,7 @@ import SwiftUI
                     .scaleEffect(isFocused ? 1.08 : 1.0)
                     .brightness(isFocused ? 0.25 : 0.0)
                     .shadow(
-                        color: isFocused ? (isActive ? AppColors.warningGold.opacity(0.8) : Color.white.opacity(0.5)) : .clear,
+                        color: isFocused ? (isActive ? AppColors.warningGold.opacity(0.8) : AppColors.borderStrong) : .clear,
                         radius: isFocused ? 10 : 0,
                         x: 0,
                         y: 0

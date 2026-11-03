@@ -562,3 +562,155 @@ public struct LiquidGlassHUDCard<Content: View>: View {
             .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 12)
     }
 }
+
+// MARK: - Liquid Glass Visual Effect Blur (Performance-Tuned UIKit Fallback)
+
+#if os(iOS) || os(tvOS)
+    import UIKit
+
+    /// High-performance blur effect wrapper utilizing UIKit's `UIVisualEffectView`
+    /// to eliminate SwiftUI shader compilation overhead on older OS versions.
+    public struct LiquidGlassVisualEffectBlur: UIViewRepresentable {
+        public let style: UIBlurEffect.Style
+
+        #if os(tvOS)
+            public init(style: UIBlurEffect.Style = .dark) {
+                self.style = style
+            }
+        #else
+            public init(style: UIBlurEffect.Style = .systemThinMaterialDark) {
+                self.style = style
+            }
+        #endif
+
+        public func makeUIView(context _: Context) -> UIVisualEffectView {
+            let view = UIVisualEffectView(effect: UIBlurEffect(style: style))
+            view.backgroundColor = .clear
+            return view
+        }
+
+        public func updateUIView(_ uiView: UIVisualEffectView, context _: Context) {
+            uiView.effect = UIBlurEffect(style: style)
+        }
+    }
+#endif
+
+// MARK: - Liquid Glass Segmented Picker
+
+/// A fluid, glassmorphic segmented picker for categories, media types, and filter modes.
+/// Merges items inside a `LiquidGlassContainer` with high-contrast active item pill.
+public struct LiquidGlassSegmentedPicker<Item: Hashable & Identifiable, Content: View>: View {
+    public let items: [Item]
+    @Binding public var selection: Item
+    public let content: (Item, Bool) -> Content
+
+    @Namespace private var pickerNamespace
+
+    public init(
+        items: [Item],
+        selection: Binding<Item>,
+        @ViewBuilder content: @escaping (Item, Bool) -> Content
+    ) {
+        self.items = items
+        _selection = selection
+        self.content = content
+    }
+
+    public var body: some View {
+        LiquidGlassContainer(spacing: 4) {
+            HStack(spacing: 4) {
+                ForEach(items) { item in
+                    let isSelected = item == selection
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            selection = item
+                        }
+                    } label: {
+                        content(item, isSelected)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background {
+                                if isSelected {
+                                    Capsule()
+                                        .fill(AppColors.primary)
+                                        .matchedGeometryEffect(id: "activePickerPill", in: pickerNamespace)
+                                } else {
+                                    Capsule()
+                                        .fill(Color.clear)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.onSurfaceVariant)
+                }
+            }
+            .padding(4)
+            .liquidGlass(shape: .capsule, surfaceColor: AppColors.surfaceContainer)
+        }
+    }
+}
+
+// MARK: - Liquid Glass Floating Overlay
+
+/// Universal dismissable overlay container for Player HUDs, quick actions, and detail popovers.
+public struct LiquidGlassFloatingOverlay<OverlayContent: View>: ViewModifier {
+    @Binding public var isPresented: Bool
+    public let alignment: Alignment
+    public let onDismiss: (() -> Void)?
+    public let overlayContent: () -> OverlayContent
+
+    public init(
+        isPresented: Binding<Bool>,
+        alignment: Alignment = .center,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder overlayContent: @escaping () -> OverlayContent
+    ) {
+        _isPresented = isPresented
+        self.alignment = alignment
+        self.onDismiss = onDismiss
+        self.overlayContent = overlayContent
+    }
+
+    public func body(content: Content) -> some View {
+        ZStack(alignment: alignment) {
+            content
+
+            if isPresented {
+                AppColors.background.opacity(0.55)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            isPresented = false
+                            onDismiss?()
+                        }
+                    }
+
+                overlayContent()
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.94).combined(with: .opacity),
+                        removal: .scale(scale: 0.96).combined(with: .opacity)
+                    ))
+                    .zIndex(100)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isPresented)
+    }
+}
+
+public extension View {
+    /// Presents a dismissable modal/HUD floating overlay wrapped in Liquid Glass aesthetics.
+    func liquidGlassFloatingOverlay(
+        isPresented: Binding<Bool>,
+        alignment: Alignment = .center,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> some View
+    ) -> some View {
+        modifier(LiquidGlassFloatingOverlay(
+            isPresented: isPresented,
+            alignment: alignment,
+            onDismiss: onDismiss,
+            overlayContent: content
+        ))
+    }
+}

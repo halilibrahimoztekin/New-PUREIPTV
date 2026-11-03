@@ -115,7 +115,7 @@
                 }
             } label: {
                 Label(store.episodeSortOrder.title, systemImage: "arrow.up.arrow.down")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppFonts.titleSmall)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             }
@@ -177,46 +177,46 @@
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 240, height: 360)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: .black.opacity(0.6), radius: 20, x: 0, y: 10)
+                            .shadow(color: AppColors.oledBlack.opacity(0.6), radius: 20, x: 0, y: 10)
                     }
 
                     // Info
                     VStack(alignment: .leading, spacing: 20) {
                         Text(store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title)
-                            .font(.system(size: 48, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displayLarge)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(2)
 
                         // Rating + Status
                         HStack(spacing: 16) {
                             if let year = store.series.presentationOverride?.year {
                                 Text(String(year))
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.75))
+                                    .font(AppFonts.bodyBold)
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.75))
                             } else if let releaseDate = store.tmdbTV?.firstAirDate ?? store.info?.releaseDate ?? store.series.releaseDate, !releaseDate.isEmpty {
                                 Text(String(releaseDate.prefix(4)))
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.75))
+                                    .font(AppFonts.bodyBold)
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.75))
                             }
 
                             if let rating = store.tmdbTV?.voteAverage ?? store.info?.rating, rating > 0 {
                                 HStack(spacing: 6) {
                                     Image(systemName: "star.fill")
-                                        .foregroundStyle(.yellow)
-                                        .font(.system(size: 18))
+                                        .foregroundStyle(AppColors.warningGold)
+                                        .font(AppFonts.titleSmall)
                                     Text(String(format: "%.1f", rating))
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundStyle(.white)
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.textPrimary)
                                 }
                             }
 
                             if let status = store.tmdbTV?.status ?? store.info?.status {
                                 Text(status)
-                                    .font(.system(size: 16, weight: .bold))
+                                    .font(AppFonts.bodyMedium.weight(.bold))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 4)
-                                    .background(Color.white.opacity(0.15))
-                                    .foregroundStyle(.white)
+                                    .background(AppColors.borderStrong)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .clipShape(Capsule())
                             }
 
@@ -225,8 +225,8 @@
                                     Text("\(store.seasons.count)")
                                     Text(AppStrings.Common.season)
                                 }
-                                .font(.system(size: 18))
-                                .foregroundStyle(Color.white.opacity(0.7))
+                                .font(AppFonts.bodyLarge)
+                                .foregroundStyle(AppColors.textSecondary)
                             }
                         }
 
@@ -245,15 +245,15 @@
                                             lineWidth: 3.5,
                                             size: 26,
                                             gradientColors: [AppColors.neonTeal, AppColors.textPrimary],
-                                            trackColor: Color.white.opacity(0.3)
+                                            trackColor: AppColors.textPrimary.opacity(0.3)
                                         ) {
                                             Image(systemName: "play.fill")
-                                                .font(.system(size: 11, weight: .bold))
-                                                .foregroundStyle(.white)
+                                                .font(AppFonts.captionSmall.weight(.bold))
+                                                .foregroundStyle(AppColors.textPrimary)
                                         }
 
                                         Text("\(AppStrings.SeriesDetail.continueWatching) (%\(percent))")
-                                            .font(.system(size: 22, weight: .bold))
+                                            .font(AppFonts.titleSmall)
                                     }
                                     .padding(.horizontal, 32)
                                     .padding(.vertical, 14)
@@ -304,7 +304,7 @@
                 if let plotText = plot, !plotText.isEmpty {
                     ExpandableSynopsisView(
                         text: plotText,
-                        font: .system(size: 22),
+                        font: AppFonts.titleSmall,
                         lineLimit: 4,
                         onPresent: { onPresentSynopsis(plotText) }
                     )
@@ -312,13 +312,13 @@
                 } else if store.isLoading || store.isTMDBLoading {
                     VStack(alignment: .leading, spacing: 10) {
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(AppColors.borderMedium)
                             .frame(maxWidth: .infinity, maxHeight: 20)
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(AppColors.borderMedium)
                             .frame(maxWidth: .infinity, maxHeight: 20)
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(AppColors.borderMedium)
                             .frame(width: 400, height: 20)
                     }
                     .padding(.horizontal, 80)
@@ -345,8 +345,8 @@
                 if let nextEp = store.nextUpEpisode {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(AppStrings.SeriesDetail.nextEpisode)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displaySmall)
+                            .foregroundStyle(AppColors.textPrimary)
 
                         NextUpEpisodeBannerView(
                             episode: nextEp,
@@ -370,8 +370,8 @@
                 if !store.seasons.isEmpty {
                     VStack(alignment: .leading, spacing: 20) {
                         Text(AppStrings.SeriesDetail.seasons)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displaySmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 80)
 
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -395,14 +395,14 @@
                 } else if store.isLoading {
                     VStack(alignment: .leading, spacing: 20) {
                         Text(AppStrings.SeriesDetail.seasons)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displaySmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 80)
 
                         HStack(spacing: 16) {
                             ForEach(0 ..< 4, id: \.self) { _ in
                                 Capsule()
-                                    .fill(Color.white.opacity(0.12))
+                                    .fill(AppColors.borderMedium)
                                     .frame(width: 140, height: 50)
                             }
                         }
@@ -416,8 +416,8 @@
                     VStack(alignment: .leading, spacing: 24) {
                         HStack {
                             Text(AppStrings.SeriesDetail.episodes)
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundStyle(.white)
+                                .font(AppFonts.displaySmall)
+                                .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             HStack(spacing: 20) {
                                 if !store.currentEpisodes.isEmpty {
@@ -425,8 +425,8 @@
                                         Text("\(store.currentEpisodes.count)")
                                         Text(AppStrings.SeriesDetail.episodeCount)
                                     }
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .font(AppFonts.bodyLarge)
+                                    .foregroundStyle(AppColors.textSecondary)
 
                                     episodeSortMenu
                                 }
@@ -450,7 +450,7 @@
                                         }
                                     } label: {
                                         Label(AppStrings.SeriesDetail.shuffleEpisodes, systemImage: "shuffle")
-                                            .font(.system(size: 18, weight: .semibold))
+                                            .font(AppFonts.titleSmall)
                                             .padding(.horizontal, 18)
                                             .padding(.vertical, 10)
                                     }
@@ -465,7 +465,7 @@
                                             Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "list.bullet")
                                             Text(store.episodeLayoutMode == .list ? AppStrings.SeriesDetail.gridView : AppStrings.SeriesDetail.listView)
                                         }
-                                        .font(.system(size: 18, weight: .semibold))
+                                        .font(AppFonts.titleSmall)
                                         .padding(.horizontal, 18)
                                         .padding(.vertical, 10)
                                     }
@@ -518,25 +518,25 @@
                 } else if store.isLoading {
                     VStack(alignment: .leading, spacing: 24) {
                         Text(AppStrings.SeriesDetail.episodes)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.displaySmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 80)
 
                         LazyVStack(spacing: 20) {
                             ForEach(0 ..< 3, id: \.self) { _ in
                                 HStack(spacing: 28) {
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.12))
+                                        .fill(AppColors.borderMedium)
                                         .frame(width: 260, height: 150)
                                     VStack(alignment: .leading, spacing: 12) {
                                         RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.12))
+                                            .fill(AppColors.borderMedium)
                                             .frame(width: 280, height: 24)
                                         RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.12))
+                                            .fill(AppColors.borderMedium)
                                             .frame(width: 140, height: 18)
                                         RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.white.opacity(0.12))
+                                            .fill(AppColors.borderMedium)
                                             .frame(maxWidth: .infinity, maxHeight: 18)
                                     }
                                     Spacer()
@@ -608,7 +608,7 @@
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                         LinearGradient(
-                            colors: [.clear, .black.opacity(0.8)],
+                            colors: [AppColors.background.opacity(0), AppColors.background.opacity(0.8)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -616,11 +616,11 @@
                         if isWatched {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
+                                    .font(AppFonts.caption)
                                 Text(AppStrings.SeriesDetail.watched)
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(AppFonts.captionBold)
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(AppColors.success, in: Capsule())
@@ -628,7 +628,7 @@
                         } else if isInProgress {
                             GeometryReader { proxy in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
+                                    Capsule().fill(AppColors.textPrimary.opacity(0.3)).frame(height: 5)
                                     Capsule().fill(AppColors.neonTeal).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
                                 }
                             }
@@ -644,30 +644,30 @@
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text(episode.title)
-                                .font(.system(size: 26, weight: .semibold))
-                                .foregroundStyle(Color.white)
+                                .font(AppFonts.titleMedium)
+                                .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(2)
 
                             Spacer()
 
                             if isInProgress {
                                 Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(AppFonts.titleSmall)
                                     .foregroundStyle(AppColors.neonTeal)
                             }
                         }
 
                         HStack(spacing: 18) {
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
-                                .font(.system(size: 20, weight: .bold))
+                                .font(AppFonts.titleSmall)
                                 .foregroundStyle(AppColors.primary)
 
                             if let rating = episode.rating, rating > 0 {
                                 HStack(spacing: 5) {
-                                    Image(systemName: "star.fill").foregroundStyle(.yellow)
-                                    Text(String(format: "%.1f", rating)).foregroundStyle(.white)
+                                    Image(systemName: "star.fill").foregroundStyle(AppColors.warningGold)
+                                    Text(String(format: "%.1f", rating)).foregroundStyle(AppColors.textPrimary)
                                 }
-                                .font(.system(size: 18))
+                                .font(AppFonts.titleSmall)
                             }
 
                             if let duration = episode.duration {
@@ -675,15 +675,15 @@
                                     Image(systemName: "clock")
                                     Text(duration)
                                 }
-                                .font(.system(size: 18))
-                                .foregroundStyle(Color.white.opacity(0.6))
+                                .font(AppFonts.titleSmall)
+                                .foregroundStyle(AppColors.textSecondary)
                             }
                         }
 
                         if let plot = episode.plot, !plot.isEmpty {
                             Text(plot)
-                                .font(.system(size: 20))
-                                .foregroundStyle(Color.white.opacity(0.7))
+                                .font(AppFonts.bodyLarge)
+                                .foregroundStyle(AppColors.textSecondary)
                                 .lineLimit(3)
                                 .lineSpacing(4)
                         }
@@ -759,7 +759,7 @@
                         .clipped()
 
                         LinearGradient(
-                            colors: [.clear, .black.opacity(0.8)],
+                            colors: [AppColors.background.opacity(0), AppColors.background.opacity(0.8)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -767,11 +767,11 @@
                         if isWatched {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 13))
+                                    .font(AppFonts.caption)
                                 Text(AppStrings.SeriesDetail.watched)
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(AppFonts.captionBold)
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(AppColors.success, in: Capsule())
@@ -779,7 +779,7 @@
                         } else if isInProgress {
                             GeometryReader { proxy in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
+                                    Capsule().fill(AppColors.textPrimary.opacity(0.3)).frame(height: 5)
                                     Capsule().fill(AppColors.neonTeal).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
                                 }
                             }
@@ -794,26 +794,26 @@
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(episode.title)
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .font(AppFonts.titleSmall)
+                                .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(1)
                             Spacer()
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(AppFonts.bodyMedium.weight(.bold))
                                 .foregroundStyle(AppColors.primary)
                         }
 
                         if isInProgress {
                             Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(AppFonts.bodyMedium)
                                 .foregroundStyle(AppColors.neonTeal)
                         } else if let duration = episode.duration {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
                                 Text(duration)
                             }
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.bodyMedium)
+                            .foregroundStyle(AppColors.textSecondary)
                         }
                     }
                     .padding(.horizontal, 4)
@@ -844,10 +844,10 @@
             Button(action: action) {
                 HStack(spacing: 8) {
                     Text(season.name)
-                        .font(.system(size: 22, weight: isSelected ? .bold : .semibold))
+                        .font(AppFonts.titleSmall)
                     Text("(\(episodeCount))")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .font(AppFonts.bodyLarge.weight(.medium))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
@@ -870,7 +870,7 @@
                     Image(systemName: icon)
                     Text(title)
                 }
-                .font(.system(size: 22, weight: .bold))
+                .font(AppFonts.titleSmall)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 14)
             }
@@ -887,9 +887,9 @@
         var body: some View {
             Button(action: action) {
                 Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 26))
+                    .font(AppFonts.titleMedium)
                     .padding(14)
-                    .foregroundStyle(isFavorite ? Color.red : Color.white)
+                    .foregroundStyle(isFavorite ? AppColors.destructive : AppColors.textPrimary)
             }
             .buttonStyle(TVCircleButtonStyle(isFavorite: isFavorite))
         }

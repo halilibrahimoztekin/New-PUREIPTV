@@ -27,7 +27,7 @@ public struct StreamHealthHUDView: View {
     }
 
     private var statusTint: Color {
-        store.streamHealthMetrics?.healthGrade?.color ?? Color.white.opacity(0.65)
+        store.streamHealthMetrics?.healthGrade?.color ?? AppColors.textSecondary
     }
 
     public var body: some View {
@@ -117,15 +117,15 @@ public struct StreamHealthHUDView: View {
     private var waitingForSampleCard: some View {
         HStack(spacing: 12) {
             ProgressView()
-                .tint(.white.opacity(0.8))
+                .tint(AppColors.textSecondary)
             Text(AppStrings.Player.sampleUnavailable)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white.opacity(0.75))
+                .font(AppFonts.bodySmall)
+                .foregroundStyle(AppColors.textSecondary)
             Spacer(minLength: 0)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(AppStrings.Player.sampleUnavailable)
     }
@@ -137,18 +137,18 @@ public struct StreamHealthHUDView: View {
                     .fill(statusTint.opacity(0.18))
                     .frame(width: 36, height: 36)
                 Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(statusTint)
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(statusTint)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppStrings.Player.streamHealthTitle)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(AppColors.textPrimary)
 
                 Text(store.item.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.caption)
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
@@ -161,10 +161,10 @@ public struct StreamHealthHUDView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(AppFonts.captionBold)
+                    .foregroundStyle(AppColors.textPrimary)
                     .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.12), in: Circle())
+                    .background(AppColors.surfaceElevated, in: Circle())
             }
             .buttonStyle(.plain)
             #if os(tvOS)
@@ -182,25 +182,25 @@ public struct StreamHealthHUDView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text("\(score)")
-                                .font(.system(size: 38, weight: .heavy, design: .rounded))
-                                .foregroundColor(.white)
+                                .font(AppFonts.displayMedium)
+                                .foregroundStyle(AppColors.textPrimary)
                             Text("/100")
-                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.5))
+                                .font(AppFonts.bodyMedium)
+                                .foregroundStyle(AppColors.textSecondary)
                         }
                         Text("Genel Sağlık Skoru")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.55))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 6) {
                         HStack(spacing: 6) {
                             Image(systemName: grade.systemIcon)
-                                .font(.system(size: 13, weight: .bold))
+                                .font(AppFonts.captionBold)
                             Text(grade.rawValue)
-                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                                .font(AppFonts.captionBold)
                         }
-                        .foregroundColor(grade.color)
+                        .foregroundStyle(grade.color)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(grade.color.opacity(0.16), in: Capsule())
@@ -209,18 +209,18 @@ public struct StreamHealthHUDView: View {
                                 .fill(grade.color)
                                 .frame(width: 6, height: 6)
                             Text(metrics.connectionStability ?? AppStrings.Player.sampleUnavailable)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.textPrimary)
                         }
                     }
                 }
             } else {
                 HStack(spacing: 10) {
                     Image(systemName: "waveform.path.ecg")
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundStyle(AppColors.textSecondary)
                     Text(AppStrings.Player.sampleUnavailable)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .font(AppFonts.bodySmall)
+                        .foregroundStyle(AppColors.textSecondary)
                     Spacer(minLength: 0)
                 }
             }
@@ -228,7 +228,7 @@ public struct StreamHealthHUDView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
-            Color.white.opacity(0.06),
+            AppColors.surfaceElevated,
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
     }
@@ -247,7 +247,7 @@ public struct StreamHealthHUDView: View {
                 } ?? AppStrings.Player.sampleUnavailable,
                 tintColor: metrics.networkLatencyMs.map {
                     $0 < 60 ? AppColors.neonTeal : ($0 < 150 ? AppColors.primary : AppColors.destructive)
-                } ?? Color.white.opacity(0.55)
+                } ?? AppColors.textSecondary
             )
 
             // Jitter
@@ -258,7 +258,7 @@ public struct StreamHealthHUDView: View {
                 subtitle: metrics.networkJitterMs.map { $0 < 8 ? "Çok Kararlı" : "Dalgalanma Var" }
                     ?? AppStrings.Player.sampleUnavailable,
                 tintColor: metrics.networkJitterMs.map { $0 < 8 ? AppColors.neonTeal : AppColors.warningGold }
-                    ?? Color.white.opacity(0.55)
+                    ?? AppColors.textSecondary
             )
 
             // Measured network throughput
@@ -311,28 +311,28 @@ public struct StreamHealthHUDView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(tintColor)
+                    .font(AppFonts.captionBold)
+                    .foregroundStyle(tintColor)
 
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .font(AppFonts.titleSmall)
+                .foregroundStyle(AppColors.textPrimary)
 
             Text(subtitle)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.45))
+                .font(AppFonts.captionSmall)
+                .foregroundStyle(AppColors.textTertiary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(
-            Color.white.opacity(0.05),
+            AppColors.surfaceSecondary,
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
     }
@@ -350,14 +350,14 @@ public struct StreamHealthHUDView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "terminal.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                     Text(AppStrings.Player.nerdStatsShort)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                 }
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(AppColors.surfaceElevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
             #if os(tvOS)

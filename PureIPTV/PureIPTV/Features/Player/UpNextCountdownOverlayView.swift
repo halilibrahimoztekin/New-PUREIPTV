@@ -41,15 +41,15 @@ public struct UpNextCountdownOverlayView: View {
                     .fill(.ultraThinMaterial)
 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.black.opacity(0.45))
+                    .fill(AppColors.background.opacity(0.45))
 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
                         LinearGradient(
                             stops: [
-                                .init(color: Color.white.opacity(0.35), location: 0.0),
-                                .init(color: Color.white.opacity(0.08), location: 0.5),
-                                .init(color: Color.accentColor.opacity(0.3), location: 1.0),
+                                .init(color: AppColors.borderSubtle.opacity(0.8), location: 0.0),
+                                .init(color: AppColors.borderSubtle.opacity(0.2), location: 0.5),
+                                .init(color: AppColors.primary.opacity(0.3), location: 1.0),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -58,7 +58,7 @@ public struct UpNextCountdownOverlayView: View {
                     )
             }
         )
-        .shadow(color: Color.black.opacity(0.55), radius: 24, x: 0, y: 12)
+        .shadow(color: AppColors.background.opacity(0.55), radius: 24, x: 0, y: 12)
         .onAppear {
             #if os(tvOS)
                 isPlayButtonFocused = true
@@ -95,31 +95,31 @@ public struct UpNextCountdownOverlayView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(AppStrings.Player.upNext.uppercased())
-                    .font(.caption.weight(.heavy))
-                    .foregroundColor(Color.accentColor)
+                    .font(AppFonts.captionBold)
+                    .foregroundStyle(AppColors.primary)
 
                 Text("•")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 Text(AppStrings.Player.upNextPlayingInSeconds(countdownSeconds))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(AppFonts.captionMedium)
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
 
             Text(item.title)
-                .font(.headline.weight(.bold))
-                .foregroundColor(.white)
+                .font(AppFonts.headline)
+                .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .minimumScaleFactor(0.75)
 
             if let series = item.seriesTitle, !series.isEmpty {
                 Text(series)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.white.opacity(0.65))
+                    .font(AppFonts.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
@@ -136,12 +136,12 @@ public struct UpNextCountdownOverlayView: View {
                 onDismiss()
             }) {
                 Text(AppStrings.Player.cancel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.75))
+                    .font(AppFonts.captionBold)
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.75))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .frame(minHeight: 44)
-                    .background(Color.white.opacity(0.12), in: Capsule())
+                    .background(AppColors.surfaceSecondary, in: Capsule())
             }
             .buttonStyle(.plain)
             .focused($isDismissButtonFocused)
@@ -156,11 +156,11 @@ public struct UpNextCountdownOverlayView: View {
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppFonts.captionBold)
                     Text(AppStrings.Player.playNow)
                         .font(AppFonts.captionBold)
                 }
-                .foregroundColor(AppColors.textPrimary)
+                .foregroundStyle(AppColors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .frame(minHeight: 44)
@@ -219,7 +219,7 @@ public struct UpNextCountdownOverlayView: View {
 
                         Text("\(countdownSeconds)")
                             .font(AppFonts.captionBold)
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(AppColors.textPrimary)
                             .monospacedDigit()
                     }
                     .frame(width: 26, height: 26)
@@ -241,7 +241,7 @@ public struct UpNextCountdownOverlayView: View {
             AppColors.surfaceSecondary
             Image(systemName: "tv.fill")
                 .font(AppFonts.titleMedium)
-                .foregroundColor(AppColors.textSecondary)
+                .foregroundStyle(AppColors.textSecondary)
         }
     }
 }

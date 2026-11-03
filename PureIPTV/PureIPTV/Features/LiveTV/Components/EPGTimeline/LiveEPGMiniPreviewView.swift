@@ -41,15 +41,15 @@ public struct LiveEPGMiniPreviewView: View {
                 // Live Indicator
                 HStack(spacing: 5) {
                     Circle()
-                        .fill(Color.red)
+                        .fill(AppColors.live)
                         .frame(width: 7, height: 7)
                         .scaleEffect(isPulsing ? 1.25 : 0.85)
                         .opacity(isPulsing ? 1.0 : 0.6)
                         .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: isPulsing)
 
                     Text("CANLI ÖNİZLEME")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.red)
+                        .font(AppFonts.captionSmall.weight(.heavy))
+                        .foregroundStyle(AppColors.live)
                 }
 
                 // Audio Status Pill
@@ -95,10 +95,10 @@ public struct LiveEPGMiniPreviewView: View {
                     // Close Button
                     Button(action: onClose) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                             .frame(width: 26, height: 26)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                            .background(AppColors.borderMedium, in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -109,7 +109,7 @@ public struct LiveEPGMiniPreviewView: View {
 
             // Video Screen Area (16:9)
             ZStack {
-                Color.black
+                AppColors.oledBlack
 
                 #if os(iOS)
                     if let player = previewPlayerClient.vlcPlayer() {
@@ -127,21 +127,21 @@ public struct LiveEPGMiniPreviewView: View {
 
                 if isLoading {
                     ZStack {
-                        Color.black.opacity(0.4)
+                        AppColors.oledBlack.opacity(0.4)
                         PureLoadingView(size: .small, text: "Yükleniyor...")
                     }
                 }
 
                 if let error = errorMessage {
                     ZStack {
-                        Color.black.opacity(0.7)
+                        AppColors.oledBlack.opacity(0.7)
                         VStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(Color.yellow)
+                                .font(AppFonts.titleSmall)
+                                .foregroundStyle(AppColors.warning)
                             Text(error)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.85))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.textPrimary.opacity(0.85))
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .padding(.horizontal, 8)
@@ -153,7 +153,7 @@ public struct LiveEPGMiniPreviewView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    .stroke(AppColors.borderStrong, lineWidth: 1)
             )
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
@@ -176,19 +176,19 @@ public struct LiveEPGMiniPreviewView: View {
                     }
                 }
                 .frame(width: 26, height: 26)
-                .background(Color.white.opacity(0.08))
+                .background(AppColors.glassPlate)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 // Title
                 VStack(alignment: .leading, spacing: 1) {
                     Text(channel.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(AppFonts.bodySmall.weight(.bold))
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
                     Text("Hızlı Geçiş İçin Dokunun")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(AppFonts.captionSmall)
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Spacer(minLength: 0)

@@ -26,8 +26,8 @@ public struct OnboardingView: View {
                         store.send(.skipTapped)
                     } label: {
                         Text(AppStrings.Onboarding.skip)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
+                            .font(AppFonts.bodyMedium.weight(.semibold))
+                            .foregroundColor(AppColors.textSecondary)
                             .padding()
                     }
                     #if os(tvOS)
@@ -64,19 +64,19 @@ public struct OnboardingView: View {
                     } else {
                         VStack(spacing: 24) {
                             Image(systemName: "list.bullet.rectangle.fill")
-                                .font(.system(size: 80))
-                                .foregroundColor(.accentColor)
+                                .font(AppFonts.custom(size: 80))
+                                .foregroundColor(AppColors.primary)
                                 .padding(.bottom, 16)
                                 .symbolEffect(.bounce, options: .repeating)
 
                             Text(AppStrings.Onboarding.howToUse)
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.textPrimary)
                                 .multilineTextAlignment(.center)
 
                             Text(AppStrings.Onboarding.description)
-                                .font(.system(size: 18))
-                                .foregroundColor(.white.opacity(0.8))
+                                .font(AppFonts.bodyLarge)
+                                .foregroundColor(AppColors.textPrimary.opacity(0.8))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
                                 .padding(.bottom, 32)
@@ -85,12 +85,12 @@ public struct OnboardingView: View {
                                 store.send(.startTapped)
                             } label: {
                                 Text(AppStrings.Onboarding.startNow)
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundColor(AppColors.textPrimary)
                                 #if os(iOS)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color.accentColor)
+                                    .background(AppColors.primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 #else
                                     .padding(.horizontal, 32)
@@ -116,19 +116,19 @@ public struct OnboardingView: View {
     private func onboardingPage(icon: String, title: String, description: String, tag: Int) -> some View {
         VStack(spacing: 24) {
             Image(systemName: icon)
-                .font(.system(size: 100))
-                .foregroundColor(.accentColor)
+                .font(AppFonts.custom(size: 100))
+                .foregroundColor(AppColors.primary)
                 .padding(.bottom, 16)
                 .symbolEffect(.pulse)
 
             Text(title)
-                .font(.system(size: 32, weight: .bold))
-                .foregroundColor(.white)
+                .font(AppFonts.headline)
+                .foregroundColor(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(description)
-                .font(.system(size: 18))
-                .foregroundColor(.white.opacity(0.8))
+                .font(AppFonts.bodyLarge)
+                .foregroundColor(AppColors.textPrimary.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -137,12 +137,12 @@ public struct OnboardingView: View {
                     store.send(.nextPage, animation: .spring())
                 } label: {
                     Text(AppStrings.Onboarding.next)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(AppFonts.bodyLarge.weight(.semibold))
+                        .foregroundColor(AppColors.textPrimary)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 12)
                     #if os(iOS)
-                        .background(Color.white.opacity(0.2))
+                        .background(AppColors.borderStrong)
                         .clipShape(Capsule())
                     #endif
                 }

@@ -137,7 +137,7 @@ public struct EPGTimelineView: View {
             let availableGridWidth = max(100, geo.size.width - channelColumnWidth)
 
             ZStack(alignment: .bottomTrailing) {
-                Color.black.ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     epgHeaderBar
@@ -172,7 +172,7 @@ public struct EPGTimelineView: View {
                     headerRow(availableWidth: availableGridWidth)
                         .zIndex(10)
 
-                    Divider().background(Color.white.opacity(0.12))
+                    Divider().background(AppColors.borderMedium)
 
                     // Virtualized Dual-Axis Grid Body
                     if displayedChannels.isEmpty {
@@ -393,7 +393,7 @@ public struct EPGTimelineView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.black.opacity(0.85))
+        .background(AppColors.background.opacity(0.85))
     }
 
     // MARK: - Search Bar
@@ -402,29 +402,29 @@ public struct EPGTimelineView: View {
         private var searchBarView: some View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.white.opacity(0.5))
-                    .font(.caption)
+                    .foregroundColor(AppColors.textTertiary)
+                    .font(AppFonts.caption)
 
                 TextField(AppStrings.Player.searchChannelOrProgram, text: Binding(
                     get: { store.searchQuery },
                     set: { store.send(.updateSearchQuery($0)) }
                 ))
-                .font(.caption)
-                .foregroundColor(.white)
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.textPrimary)
 
                 if !store.searchQuery.isEmpty {
                     Button {
                         store.send(.updateSearchQuery(""))
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.white.opacity(0.5))
-                            .font(.caption)
+                            .foregroundColor(AppColors.textTertiary)
+                            .font(AppFonts.caption)
                     }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 16)
         }
     #endif
@@ -441,22 +441,22 @@ public struct EPGTimelineView: View {
                         : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
                             ? "clock.fill" : "checkmark.circle.fill")))
                     .foregroundColor(store.lastSyncFailureTimestamp.map { $0 >= (store.lastSyncTimestamp ?? .distantPast) } == true
-                        ? .orange
+                        ? AppColors.warning
                         : (store.epgSourceIdentity == nil || store.lastSyncTimestamp == nil
-                            ? .white.opacity(0.55)
+                            ? AppColors.textTertiary
                             : (store.lastSyncTimestamp.map { store.currentTime.timeIntervalSince($0) >= 86400 } == true
-                                ? .yellow : .green)))
+                                ? AppColors.warningGold : AppColors.success)))
                 Text(store.epgFreshnessLabel)
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.textSecondary)
                 if store.isSyncingEPG {
-                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .cyan)).scaleEffect(0.6)
+                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: AppColors.cyan)).scaleEffect(0.6)
                 }
                 Button {
                     showingEPGDiagnostics = true
                 } label: {
                     Image(systemName: "info.circle")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(AppFonts.bodyMedium)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -466,8 +466,8 @@ public struct EPGTimelineView: View {
 
             if let retryAt = store.providerCooldownFormatted {
                 Label(AppStrings.Player.epgProviderCooldownUntil(retryAt), systemImage: "clock.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.orange)
+                    .font(AppFonts.captionMedium)
+                    .foregroundStyle(AppColors.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -480,32 +480,32 @@ public struct EPGTimelineView: View {
         HStack(spacing: 6) {
             if store.isSyncingEPG {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .cyan))
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppColors.cyan))
                     .scaleEffect(0.65)
             } else if store.isProviderRateLimited {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .font(.caption2)
+                    .foregroundColor(AppColors.warning)
+                    .font(AppFonts.captionSmall)
             } else {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .font(.caption2)
+                    .foregroundColor(AppColors.success)
+                    .font(AppFonts.captionSmall)
             }
 
             Text(message)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white)
+                .font(AppFonts.captionMedium)
+                .foregroundColor(AppColors.textPrimary)
 
             if let lastSync = store.lastSyncFormatted, !store.isSyncingEPG {
                 Text("• \(AppStrings.Player.lastSynced(lastSync))")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.captionSmall)
+                    .foregroundColor(AppColors.textSecondary)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(Color.white.opacity(0.1), in: Capsule())
-        .overlay(Capsule().stroke(Color.cyan.opacity(0.25), lineWidth: 0.8))
+        .background(AppColors.surfaceSecondary, in: Capsule())
+        .overlay(Capsule().stroke(AppColors.cyan.opacity(0.25), lineWidth: 0.8))
         .padding(.vertical, 2)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
@@ -546,27 +546,27 @@ public struct EPGTimelineView: View {
                         HStack(spacing: 5) {
                             if !isToday {
                                 Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 8.5, weight: .bold))
-                                    .foregroundColor(isSelected ? .white : .purple)
+                                    .font(AppFonts.captionSmall.weight(.bold))
+                                    .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.purpleAccent)
                             } else {
                                 Circle()
-                                    .fill(isSelected ? Color.white : Color.accentColor)
+                                    .fill(isSelected ? AppColors.textPrimary : AppColors.accent)
                                     .frame(width: 5, height: 5)
                             }
 
                             Text(title)
-                                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                                .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+                                .font(isSelected ? AppFonts.captionBold : AppFonts.captionMedium)
+                                .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(isSelected ? (isToday ? Color.accentColor : Color.purple) : Color.white.opacity(0.08))
+                                .fill(isSelected ? (isToday ? AppColors.accent : AppColors.purpleAccent) : AppColors.surfaceSecondary)
                         )
                         .overlay(
                             Capsule()
-                                .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
+                                .stroke(isSelected ? AppColors.borderStrong : AppColors.borderSubtle, lineWidth: 1)
                         )
                     }
                     .buttonStyle(.plain)
@@ -682,14 +682,14 @@ public struct EPGTimelineView: View {
             store.send(.selectProgramCategory(selection))
         } label: {
             Text(title)
-                .font(.caption.weight(isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.75))
+                .font(isSelected ? AppFonts.captionBold : AppFonts.captionMedium)
+                .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(isSelected ? Color.purple : Color.white.opacity(0.08)))
+                .background(Capsule().fill(isSelected ? AppColors.purpleAccent : AppColors.surfaceSecondary))
                 .overlay(
                     Capsule().stroke(
-                        isFocused ? Color.white : (isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.06)),
+                        isFocused ? AppColors.textPrimary : (isSelected ? AppColors.borderStrong : AppColors.borderSubtle),
                         lineWidth: isFocused ? 2 : 1
                     )
                 )
@@ -710,17 +710,17 @@ public struct EPGTimelineView: View {
             onTap()
         } label: {
             Text(title)
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.7))
+                .font(isSelected ? AppFonts.captionBold : AppFonts.captionMedium)
+                .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.accentColor : Color.white.opacity(0.08))
+                        .fill(isSelected ? AppColors.accent : AppColors.surfaceSecondary)
                 )
                 .overlay(
                     Capsule()
-                        .stroke(isSelected ? Color.white.opacity(0.3) : Color.white.opacity(0.06), lineWidth: 1)
+                        .stroke(isSelected ? AppColors.borderStrong : AppColors.borderSubtle, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -733,11 +733,11 @@ public struct EPGTimelineView: View {
             // Pinned Top-Left Corner
             HStack(spacing: 6) {
                 Image(systemName: "tv.fill")
-                    .font(.caption.bold())
-                    .foregroundColor(.accentColor)
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.accent)
                 Text(AppStrings.Common.channels)
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.textPrimary)
             }
             .frame(width: channelColumnWidth, height: timeHeaderHeight)
             .background(AppColors.surfaceSecondary)
@@ -756,13 +756,13 @@ public struct EPGTimelineView: View {
                         HStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(formatTime(hourDate))
-                                    .font(.caption2.monospacedDigit())
+                                    .font(AppFonts.captionSmall.monospacedDigit())
                                     .fontWeight(.bold)
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .foregroundColor(AppColors.textSecondary)
 
                                 Text(formatDay(hourDate))
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.white.opacity(0.4))
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundColor(AppColors.textTertiary)
                             }
                             .padding(.leading, 8)
 
@@ -770,13 +770,13 @@ public struct EPGTimelineView: View {
 
                             // Half-hour tick
                             Rectangle()
-                                .fill(Color.white.opacity(0.15))
+                                .fill(AppColors.borderMedium)
                                 .frame(width: 1, height: 12)
                                 .offset(x: -hourWidth / 2)
 
                             // Hour divider line
                             Rectangle()
-                                .fill(Color.white.opacity(0.25))
+                                .fill(AppColors.borderStrong)
                                 .frame(width: 1, height: timeHeaderHeight)
                         }
                         .frame(width: hourWidth, height: timeHeaderHeight)
@@ -919,24 +919,24 @@ public struct EPGTimelineView: View {
                     HStack(spacing: 3) {
                         if isFav {
                             Image(systemName: "star.fill")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.yellow)
+                                .font(AppFonts.captionSmall.weight(.bold))
+                                .foregroundColor(AppColors.warningGold)
                         }
 
                         if store.epgLoadFailures.contains(channel.id) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.orange)
+                                .font(AppFonts.captionSmall.weight(.bold))
+                                .foregroundStyle(AppColors.warning)
                                 .accessibilityLabel(AppStrings.Player.epgRefreshFailed)
                         }
 
                         Text(channel.title)
                         #if os(tvOS)
-                            .font(.system(size: isCompactMode ? 13 : 15, weight: .bold))
+                            .font(isCompactMode ? AppFonts.captionBold : AppFonts.bodyBold)
                         #else
-                            .font(.caption2.bold())
+                            .font(AppFonts.captionBold)
                         #endif
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                             .lineLimit(isCompactMode ? 1 : 2)
                             .truncationMode(.tail)
                     }
@@ -944,27 +944,15 @@ public struct EPGTimelineView: View {
                     if channel.tvArchive == 1 {
                         HStack(spacing: 3) {
                             Image(systemName: "clock.arrow.circlepath")
-                            #if os(tvOS)
-                                .font(.system(size: 11, weight: .bold))
-                            #else
-                                .font(.system(size: 8, weight: .bold))
-                            #endif
+                                .font(AppFonts.captionSmall.weight(.bold))
                             Text(AppStrings.Player.catchUp)
-                            #if os(tvOS)
-                                .font(.system(size: 11, weight: .bold))
-                            #else
-                                .font(.system(size: 8, weight: .bold))
-                            #endif
+                                .font(AppFonts.captionSmall.weight(.bold))
                             if let days = channel.tvArchiveDuration, days > 0 {
                                 Text(AppStrings.Player.catchUpArchiveDays(days))
-                                #if os(tvOS)
-                                    .font(.system(size: 12, weight: .bold))
-                                #else
-                                    .font(.system(size: 10, weight: .bold))
-                                #endif
+                                    .font(AppFonts.captionSmall.weight(.bold))
                             }
                         }
-                        .foregroundColor(.purple)
+                        .foregroundColor(AppColors.purpleAccent)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(
                             AppStrings.Player.catchUpDescription(archiveDays: channel.tvArchiveDuration)
@@ -1083,6 +1071,8 @@ public struct EPGTimelineView: View {
                 shimmerLoadingRow
             } else {
                 let programs = resolvedPrograms(for: channel)
+                let minVisibleX = Double(horizontalOffset) - 300
+                let maxVisibleX = Double(horizontalOffset + viewportWidth) + 300
                 ForEach(programs) { program in
                     let startOffset = program.startTime.timeIntervalSince(timelineStart)
                     let duration = program.endTime.timeIntervalSince(program.startTime)
@@ -1090,8 +1080,14 @@ public struct EPGTimelineView: View {
                     let width = max(30, (duration / 3600.0) * Double(hourWidth))
                     let xPos = (startOffset / 3600.0) * Double(hourWidth)
 
-                    // Render only within reasonable bounds around total timeline
-                    if width > 0, xPos + width > 0, xPos < Double(totalTimelineWidth) {
+                    #if os(tvOS)
+                        let isProgramFocused = focusedProgramId == program.id
+                    #else
+                        let isProgramFocused = false
+                    #endif
+
+                    // Virtualize horizontally: Only render items within the visible viewport buffer (or if focused on tvOS)
+                    if width > 0, (xPos + width >= minVisibleX && xPos <= maxVisibleX) || isProgramFocused {
                         programBlock(program: program, channel: channel, width: CGFloat(width), viewportWidth: viewportWidth)
                             .offset(x: CGFloat(xPos))
                     }
@@ -1104,12 +1100,12 @@ public struct EPGTimelineView: View {
     private func epgLoadFailureRow(_ channel: MediaModels.Item) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColors.warning)
                 .accessibilityHidden(true)
 
             Text(AppStrings.Player.epgRefreshFailed)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
+                .font(AppFonts.captionSemibold)
+                .foregroundStyle(AppColors.textPrimary)
 
             Button(AppStrings.Common.retry) {
                 store.send(.refreshEPG(streamID: channel.id))
@@ -1133,18 +1129,18 @@ public struct EPGTimelineView: View {
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(AppColors.glassPlate)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                                .stroke(AppColors.borderSubtle, lineWidth: 0.8)
                         )
 
                     GeometryReader { g in
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.0),
-                                Color.white.opacity(0.12),
-                                Color.white.opacity(0.0),
+                                AppColors.glassPlate.opacity(0.0),
+                                AppColors.glassPlate.opacity(0.12),
+                                AppColors.glassPlate.opacity(0.0),
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -1264,60 +1260,57 @@ public struct EPGTimelineView: View {
 
         let genre = genrePastelColor(for: program)
         var cardBackgroundColor: Color = if isSearchMatch {
-            .cyan.opacity(0.18)
+            AppColors.cyan.opacity(0.18)
         } else if isNow {
-            Color.accentColor.opacity(0.22)
+            AppColors.accent.opacity(0.22)
         } else if isCatchUp {
-            .purple.opacity(0.15)
+            AppColors.purpleAccent.opacity(0.15)
         } else if isScheduled {
-            .yellow.opacity(0.12)
+            AppColors.warningGold.opacity(0.12)
         } else if isFallback {
-            .white.opacity(0.035)
+            AppColors.glassPlate
         } else {
             genre.background
         }
 
         var cardBorderColor: Color = if isSearchMatch {
-            .cyan
+            AppColors.cyan
         } else if isNow {
-            Color.accentColor.opacity(0.8)
+            AppColors.accent.opacity(0.8)
         } else if isCatchUp {
-            .purple.opacity(0.4)
+            AppColors.purpleAccent.opacity(0.4)
         } else if isScheduled {
-            .yellow.opacity(0.5)
+            AppColors.warningGold.opacity(0.5)
         } else if isFallback {
-            .white.opacity(0.04)
+            AppColors.borderSubtle
         } else {
-            .white.opacity(0.08)
+            AppColors.borderMedium
         }
         var cardBorderLineWidth: CGFloat = (isSearchMatch || isNow) ? 1.5 : 1
-        let titleFontSize: CGFloat
-        let titleFontWeight: Font.Weight
-        let timeFontSize: CGFloat
-        let badgeFontSize: CGFloat
-        let statusFontSize: CGFloat
+        let titleFont: Font
+        let timeFont: Font
+        let badgeFont: Font
+        let statusFont: Font
         #if os(tvOS)
             let isFocused = focusedProgramId == program.id
-            titleFontSize = if isFocused {
-                width >= 180 ? 18 : (width >= 100 ? 16 : 14)
+            titleFont = if isFocused {
+                width >= 180 ? AppFonts.titleLarge : (width >= 100 ? AppFonts.titleMedium : AppFonts.titleSmall)
             } else {
-                width >= 220 ? 16 : (width >= 120 ? 14 : 12)
+                width >= 220 ? AppFonts.titleMedium : (width >= 120 ? AppFonts.titleSmall : AppFonts.bodyMedium)
             }
-            titleFontWeight = isFocused || isNow || isSearchMatch ? .bold : .medium
-            timeFontSize = width >= 140 ? 12 : 10
-            badgeFontSize = 11
-            statusFontSize = 12
+            timeFont = width >= 140 ? AppFonts.captionMedium : AppFonts.captionSmall
+            badgeFont = AppFonts.captionBold
+            statusFont = AppFonts.captionBold
             if isFocused {
-                cardBackgroundColor = .white.opacity(0.22)
-                cardBorderColor = .white
+                cardBackgroundColor = AppColors.surfaceElevated
+                cardBorderColor = AppColors.textPrimary
                 cardBorderLineWidth = 3
             }
         #else
-            titleFontSize = isCompactMode ? 10 : 11
-            titleFontWeight = isNow || isSearchMatch ? .bold : .medium
-            timeFontSize = 9.5
-            badgeFontSize = 7
-            statusFontSize = 8
+            titleFont = isCompactMode ? AppFonts.captionSmall.weight(.bold) : (isNow || isSearchMatch ? AppFonts.captionBold : AppFonts.captionMedium)
+            timeFont = AppFonts.captionSmall
+            badgeFont = AppFonts.captionSmall.weight(.bold)
+            statusFont = AppFonts.captionSmall.weight(.heavy)
         #endif
 
         return Button {
@@ -1346,7 +1339,7 @@ public struct EPGTimelineView: View {
                     let progressFraction = elapsed / totalSecs
 
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.accentColor.opacity(0.35))
+                        .fill(AppColors.accent.opacity(0.35))
                         .frame(width: max(0, width * CGFloat(progressFraction)))
                 }
 
@@ -1355,7 +1348,7 @@ public struct EPGTimelineView: View {
                     HStack(spacing: 4) {
                         if let badge = genre.badgeText {
                             Text(badge)
-                                .font(.system(size: badgeFontSize, weight: .bold))
+                                .font(badgeFont)
                                 .foregroundColor(genre.border)
                                 .padding(.horizontal, 3)
                                 .padding(.vertical, 1)
@@ -1364,45 +1357,45 @@ public struct EPGTimelineView: View {
 
                         if isNow {
                             Circle()
-                                .fill(Color.red)
+                                .fill(AppColors.live)
                                 .frame(width: 6, height: 6)
                             Text(AppStrings.Player.liveLabel)
-                                .font(.system(size: statusFontSize, weight: .heavy))
-                                .foregroundColor(.red)
+                                .font(statusFont)
+                                .foregroundColor(AppColors.live)
                         } else if isCatchUp {
                             Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: badgeFontSize, weight: .bold))
-                                .foregroundColor(.purple)
+                                .font(badgeFont)
+                                .foregroundColor(AppColors.purpleAccent)
                         }
 
                         if isScheduled {
                             Image(systemName: "bell.fill")
-                                .font(.system(size: badgeFontSize, weight: .bold))
-                                .foregroundColor(.yellow)
+                                .font(badgeFont)
+                                .foregroundColor(AppColors.warningGold)
                         }
 
                         if isSearchMatch {
                             Image(systemName: "magnifyingglass")
-                                .font(.system(size: badgeFontSize, weight: .bold))
-                                .foregroundColor(.cyan)
+                                .font(badgeFont)
+                                .foregroundColor(AppColors.cyan)
                         }
 
                         if isFallback, !isNow {
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: badgeFontSize, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.45))
+                                .font(badgeFont)
+                                .foregroundColor(AppColors.textTertiary)
                         }
 
                         Text(program.title)
-                            .font(.system(size: titleFontSize, weight: titleFontWeight))
-                            .foregroundColor(isSearchMatch ? .cyan : .white)
+                            .font(titleFont)
+                            .foregroundColor(isSearchMatch ? AppColors.cyan : AppColors.textPrimary)
                             .lineLimit(1)
                     }
 
                     if !isCompactMode {
                         Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
-                            .font(.system(size: timeFontSize).monospacedDigit())
-                            .foregroundColor(.white.opacity(0.6))
+                            .font(timeFont.monospacedDigit())
+                            .foregroundColor(AppColors.textSecondary)
                             .lineLimit(1)
                     }
 
@@ -1589,15 +1582,15 @@ public struct EPGTimelineView: View {
                     .foregroundColor(.white)
                 Text(AppStrings.Player.jumpToNow)
                     .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(Color.accentColor)
-                    .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
-                    .shadow(color: Color.accentColor.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .fill(AppColors.accent)
+                    .overlay(Capsule().stroke(AppColors.borderStrong, lineWidth: 1))
+                    .shadow(color: AppColors.accent.opacity(0.5), radius: 10, x: 0, y: 4)
             )
         }
         .buttonStyle(.plain)
@@ -1619,19 +1612,19 @@ public struct EPGTimelineView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.counterclockwise.circle.fill")
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.textPrimary)
                 Text(AppStrings.Player.returnToToday)
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.textPrimary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(Color.purple)
-                    .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
-                    .shadow(color: Color.purple.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .fill(AppColors.purpleAccent)
+                    .overlay(Capsule().stroke(AppColors.borderStrong, lineWidth: 1))
+                    .shadow(color: AppColors.purpleAccent.opacity(0.5), radius: 10, x: 0, y: 4)
             )
         }
         .buttonStyle(.plain)
@@ -1668,19 +1661,19 @@ public struct EPGTimelineView: View {
                         }
                         .frame(width: 32, height: 32)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 6))
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(channel.title)
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
+                            .font(AppFonts.headline)
+                            .foregroundColor(AppColors.textPrimary)
                             .lineLimit(1)
 
                         if !channel.categoryID.isEmpty {
                             Text(channel.categoryID)
-                                .font(.caption2)
-                                .foregroundColor(.accentColor)
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.accent)
                                 .lineLimit(1)
                         }
                     }
@@ -1692,8 +1685,8 @@ public struct EPGTimelineView: View {
                     store.send(.dismissProgramDetails)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.6))
+                        .font(AppFonts.titleLarge)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -1709,34 +1702,34 @@ public struct EPGTimelineView: View {
                     // Title & Status Badges
                     VStack(alignment: .leading, spacing: 8) {
                         Text(program.title)
-                            .font(.title3.bold())
-                            .foregroundColor(.white)
+                            .font(AppFonts.titleLarge)
+                            .foregroundColor(AppColors.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         HStack(spacing: 8) {
                             Label("\(formatTime(program.startTime)) - \(formatTime(program.endTime))", systemImage: "clock")
-                                .font(.caption.bold())
-                                .foregroundColor(.white.opacity(0.85))
+                                .font(AppFonts.captionBold)
+                                .foregroundColor(AppColors.textSecondary)
 
                             let durationMins = Int(totalSecs / 60)
                             Label("\(durationMins) \(AppStrings.Common.minAbbr)", systemImage: "hourglass")
-                                .font(.caption.bold())
-                                .foregroundColor(.white.opacity(0.85))
+                                .font(AppFonts.captionBold)
+                                .foregroundColor(AppColors.textSecondary)
 
                             if isNow {
                                 Text("%\(percentInt) \(AppStrings.Player.completed)")
-                                    .font(.caption2.bold())
-                                    .foregroundColor(.accentColor)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundColor(AppColors.accent)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.accentColor.opacity(0.18), in: Capsule())
+                                    .background(AppColors.accent.opacity(0.18), in: Capsule())
                             } else if isCatchUp {
                                 Label(AppStrings.Player.catchUp, systemImage: "clock.arrow.circlepath")
-                                    .font(.caption2.bold())
-                                    .foregroundColor(.purple)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundColor(AppColors.purpleAccent)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.purple.opacity(0.18), in: Capsule())
+                                    .background(AppColors.purpleAccent.opacity(0.18), in: Capsule())
                             }
                         }
                     }
@@ -1747,10 +1740,10 @@ public struct EPGTimelineView: View {
                             GeometryReader { pGeo in
                                 ZStack(alignment: .leading) {
                                     Capsule()
-                                        .fill(Color.white.opacity(0.12))
+                                        .fill(AppColors.borderMedium)
                                         .frame(height: 5)
                                     Capsule()
-                                        .fill(LinearGradient(colors: [.accentColor, .cyan], startPoint: .leading, endPoint: .trailing))
+                                        .fill(LinearGradient(colors: [AppColors.accent, AppColors.cyan], startPoint: .leading, endPoint: .trailing))
                                         .frame(width: max(0, pGeo.size.width * CGFloat(progressFraction)), height: 5)
                                 }
                             }
@@ -1761,16 +1754,16 @@ public struct EPGTimelineView: View {
                                 Spacer()
                                 Text(formatTime(program.endTime))
                             }
-                            .font(.system(size: 10).monospacedDigit())
-                            .foregroundColor(.white.opacity(0.45))
+                            .font(AppFonts.captionSmall.monospacedDigit())
+                            .foregroundColor(AppColors.textTertiary)
                         }
                     }
 
                     // Program Description
                     if !program.description.isEmpty {
                         Text(program.description)
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
+                            .font(AppFonts.bodyMedium)
+                            .foregroundColor(AppColors.textSecondary)
                             .lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -1810,7 +1803,7 @@ public struct EPGTimelineView: View {
             ZStack {
                 // Glass Gradient Backdrop
                 LinearGradient(
-                    colors: isNow ? [Color.accentColor.opacity(0.3), Color.black.opacity(0.8)] : (isCatchUp ? [Color.purple.opacity(0.3), Color.black.opacity(0.8)] : [Color.white.opacity(0.08), Color.black.opacity(0.8)]),
+                    colors: isNow ? [AppColors.accent.opacity(0.3), AppColors.background.opacity(0.8)] : (isCatchUp ? [AppColors.purpleAccent.opacity(0.3), AppColors.background.opacity(0.8)] : [AppColors.surfaceSecondary, AppColors.background.opacity(0.8)]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -1842,20 +1835,20 @@ public struct EPGTimelineView: View {
                         .frame(width: 54, height: 54)
                         .overlay(
                             Image(systemName: isNow ? "play.fill" : "clock.arrow.circlepath")
-                                .font(.title3.bold())
-                                .foregroundColor(.white)
+                                .font(AppFonts.titleLarge)
+                                .foregroundColor(AppColors.textPrimary)
                         )
-                        .shadow(color: Color.black.opacity(0.4), radius: 8)
+                        .shadow(color: AppColors.background.opacity(0.4), radius: 8)
                 } else {
                     Circle()
                         .fill(.ultraThinMaterial)
                         .frame(width: 54, height: 54)
                         .overlay(
                             Image(systemName: "calendar.badge.clock")
-                                .font(.title3.bold())
-                                .foregroundColor(.yellow)
+                                .font(AppFonts.titleLarge)
+                                .foregroundColor(AppColors.warningGold)
                         )
-                        .shadow(color: Color.black.opacity(0.4), radius: 8)
+                        .shadow(color: AppColors.background.opacity(0.4), radius: 8)
                 }
 
                 // Top Floating Status Pill
@@ -1863,37 +1856,37 @@ public struct EPGTimelineView: View {
                     HStack {
                         if isNow {
                             HStack(spacing: 5) {
-                                Circle().fill(Color.red).frame(width: 6, height: 6)
+                                Circle().fill(AppColors.live).frame(width: 6, height: 6)
                                 Text(AppStrings.Player.liveLabel)
-                                    .font(.system(size: 9, weight: .heavy))
-                                    .foregroundColor(.red)
+                                    .font(AppFonts.captionSmall.weight(.heavy))
+                                    .foregroundColor(AppColors.live)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6), in: Capsule())
-                            .overlay(Capsule().stroke(Color.red.opacity(0.4), lineWidth: 1))
+                            .background(AppColors.background.opacity(0.6), in: Capsule())
+                            .overlay(Capsule().stroke(AppColors.live.opacity(0.4), lineWidth: 1))
                         } else if isCatchUp {
                             HStack(spacing: 5) {
                                 Image(systemName: "clock.arrow.circlepath")
                                 Text(AppStrings.Player.catchUp)
                             }
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.purple)
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundColor(AppColors.purpleAccent)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6), in: Capsule())
-                            .overlay(Capsule().stroke(Color.purple.opacity(0.4), lineWidth: 1))
+                            .background(AppColors.background.opacity(0.6), in: Capsule())
+                            .overlay(Capsule().stroke(AppColors.purpleAccent.opacity(0.4), lineWidth: 1))
                         }
 
                         Spacer()
 
                         // Stream Quality Tag
                         Text("1080p HD")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white.opacity(0.75))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundColor(AppColors.textSecondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
-                            .background(Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
+                            .background(AppColors.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(12)
 
@@ -1903,8 +1896,8 @@ public struct EPGTimelineView: View {
                     if isNow {
                         GeometryReader { g in
                             ZStack(alignment: .leading) {
-                                Rectangle().fill(Color.white.opacity(0.15))
-                                Rectangle().fill(Color.accentColor).frame(width: max(0, g.size.width * CGFloat(progressFraction)))
+                                Rectangle().fill(AppColors.borderMedium)
+                                Rectangle().fill(AppColors.accent).frame(width: max(0, g.size.width * CGFloat(progressFraction)))
                             }
                         }
                         .frame(height: 3)
@@ -1915,7 +1908,7 @@ public struct EPGTimelineView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    .stroke(AppColors.borderMedium, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -1942,11 +1935,11 @@ public struct EPGTimelineView: View {
                             Image(systemName: "play.fill")
                             Text(AppStrings.Player.liveBroadcast)
                         }
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
+                        .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 12))
                     }
                 } else if isCatchUp {
                     Button {
@@ -1958,11 +1951,11 @@ public struct EPGTimelineView: View {
                             Image(systemName: "clock.arrow.circlepath")
                             Text(AppStrings.Player.watchCatchUp)
                         }
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Color.purple, in: RoundedRectangle(cornerRadius: 12))
+                        .background(AppColors.purpleAccent, in: RoundedRectangle(cornerRadius: 12))
                     }
                 } else {
                     #if os(iOS)
@@ -1977,11 +1970,11 @@ public struct EPGTimelineView: View {
                                         ? AppStrings.Player.reminderScheduling
                                         : (isScheduled ? AppStrings.Player.removeReminder : AppStrings.Player.setReminder))
                                 }
-                                .font(.headline)
-                                .foregroundColor(isScheduled ? .white : .black)
+                                .font(AppFonts.headline)
+                                .foregroundColor(isScheduled ? AppColors.textPrimary : AppColors.background)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(isScheduled ? Color.red.opacity(0.85) : Color.yellow, in: RoundedRectangle(cornerRadius: 12))
+                                .background(isScheduled ? AppColors.live.opacity(0.85) : AppColors.warningGold, in: RoundedRectangle(cornerRadius: 12))
                             }
                             .disabled(isReminderPending)
                         }
@@ -2001,11 +1994,11 @@ public struct EPGTimelineView: View {
                             Image(systemName: "tv")
                             Text(AppStrings.Player.openChannel)
                         }
-                        .font(.subheadline.bold())
-                        .foregroundColor(.white.opacity(0.9))
+                        .font(AppFonts.bodyBold)
+                        .foregroundColor(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
 
@@ -2015,11 +2008,11 @@ public struct EPGTimelineView: View {
                             Image(systemName: "square.and.arrow.up")
                             Text(AppStrings.Player.share)
                         }
-                        .font(.subheadline.bold())
-                        .foregroundColor(.white.opacity(0.9))
+                        .font(AppFonts.bodyBold)
+                        .foregroundColor(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                     }
                 #endif
 
@@ -2031,7 +2024,7 @@ public struct EPGTimelineView: View {
                             Image(systemName: "xmark")
                             Text(AppStrings.Common.close)
                         }
-                        .font(.subheadline.bold())
+                        .font(AppFonts.bodyBold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
@@ -2047,8 +2040,8 @@ public struct EPGTimelineView: View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "tv.slash")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.3))
+                .font(AppFonts.displayLarge)
+                .foregroundColor(AppColors.textTertiary)
             Text(store.filteredChannels.isEmpty ? AppStrings.LiveTV.noChannels : AppStrings.EPG.noData)
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.6))
@@ -2129,7 +2122,7 @@ public struct EPGTimelineView: View {
             }
         }
         .padding(8)
-        .background(Color.black.opacity(0.72), in: Capsule())
+        .background(AppColors.backgroundSubtle.opacity(0.85), in: Capsule())
         #if os(tvOS)
             .focusSection()
         #endif
@@ -2285,15 +2278,15 @@ public struct EPGTimelineView: View {
     private func genrePastelColor(for program: EPGProgram) -> (background: Color, border: Color, badgeText: String?) {
         let text = (program.title + " " + program.description).lowercased()
         if text.contains("spor") || text.contains("sport") || text.contains("futbol") || text.contains("basket") || text.contains("lig") || text.contains("match") {
-            return (Color.orange.opacity(0.18), Color.orange.opacity(0.5), "SPOR")
+            return (AppColors.amber.opacity(0.18), AppColors.amber.opacity(0.5), "SPOR")
         } else if text.contains("haber") || text.contains("news") || text.contains("bülten") || text.contains("gündem") {
-            return (Color.blue.opacity(0.18), Color.blue.opacity(0.5), "HABER")
+            return (AppColors.primary.opacity(0.18), AppColors.primary.opacity(0.5), "HABER")
         } else if text.contains("sinema") || text.contains("film") || text.contains("movie") || text.contains("dizi") || text.contains("cinema") {
-            return (Color.purple.opacity(0.18), Color.purple.opacity(0.5), "SİNEMA")
+            return (AppColors.purpleAccent.opacity(0.18), AppColors.purpleAccent.opacity(0.5), "SİNEMA")
         } else if text.contains("çocuk") || text.contains("cocuk") || text.contains("cartoon") || text.contains("animasyon") || text.contains("kids") {
-            return (Color.yellow.opacity(0.18), Color.yellow.opacity(0.5), "ÇOCUK")
+            return (AppColors.warningGold.opacity(0.18), AppColors.warningGold.opacity(0.5), "ÇOCUK")
         } else {
-            return (Color.white.opacity(0.06), Color.white.opacity(0.12), nil)
+            return (AppColors.surfaceSecondary, AppColors.borderSubtle, nil)
         }
     }
 

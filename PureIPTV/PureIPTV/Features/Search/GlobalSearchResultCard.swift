@@ -88,9 +88,9 @@ public struct GlobalSearchResultCard: View {
                 // Gradient Vignette
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.1),
+                        AppColors.oledBlack.opacity(0.1),
                         Color.clear,
-                        Color.black.opacity(0.88),
+                        AppColors.oledBlack.opacity(0.88),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -125,14 +125,14 @@ public struct GlobalSearchResultCard: View {
             #if os(tvOS)
                 .scaleEffect(isFocused ? 1.06 : 1.0)
                 .shadow(
-                    color: isFocused ? result.contentTypeColor.opacity(0.6) : Color.black.opacity(0.4),
+                    color: isFocused ? result.contentTypeColor.opacity(0.6) : AppColors.oledBlack.opacity(0.4),
                     radius: isFocused ? 20 : 8,
                     x: 0,
                     y: isFocused ? 8 : 4
                 )
                 .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
             #else
-                .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 3)
+                .shadow(color: AppColors.oledBlack.opacity(0.35), radius: 6, x: 0, y: 3)
             #endif
         }
         .buttonStyle(.plain)
@@ -167,7 +167,7 @@ public struct GlobalSearchResultCard: View {
         ZStack {
             AppColors.surfaceSecondary
             Image(systemName: result.contentTypeIcon)
-                .font(.system(size: isChannel ? 28 : 36, weight: .light))
+                .font(isChannel ? AppFonts.displaySmall : AppFonts.displayMedium)
                 .foregroundStyle(AppColors.textSecondary.opacity(0.2))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -176,9 +176,9 @@ public struct GlobalSearchResultCard: View {
     private var contentTypeBadge: some View {
         HStack(spacing: 4) {
             Image(systemName: result.contentTypeIcon)
-                .font(.system(size: badgeIconSize, weight: .semibold))
+                .font(AppFonts.captionSmall.weight(.semibold))
             Text(result.contentTypeTitle)
-                .font(.system(size: badgeFontSize, weight: .bold))
+                .font(AppFonts.captionSmall.weight(.bold))
         }
         .foregroundStyle(AppColors.textPrimary)
         .padding(.horizontal, 7)
@@ -197,9 +197,9 @@ public struct GlobalSearchResultCard: View {
     private var uhdBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: "sparkles.tv.fill")
-                .font(.system(size: badgeIconSize, weight: .bold))
+                .font(AppFonts.captionSmall.weight(.bold))
             Text("4K UHD")
-                .font(.system(size: badgeFontSize, weight: .black))
+                .font(AppFonts.captionSmall.weight(.black))
         }
         .foregroundStyle(AppColors.surfaceDark)
         .padding(.horizontal, 6)
@@ -223,18 +223,18 @@ public struct GlobalSearchResultCard: View {
                 .fill(result.playlistBadge.color)
                 .frame(width: 5, height: 5)
             Text(result.playlistBadge.playlistName)
-                .font(.system(size: badgeFontSize, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(AppFonts.captionSmall.weight(.medium))
+                .foregroundStyle(AppColors.textPrimary.opacity(0.9))
                 .lineLimit(1)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3.5)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.65))
+                .fill(AppColors.oledBlack.opacity(0.65))
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                        .stroke(AppColors.borderMedium, lineWidth: 0.8)
                 )
         )
     }
@@ -251,15 +251,15 @@ public struct GlobalSearchResultCard: View {
                     Text(result.item.displayTitle)
                 }
             }
-            .font(.system(size: titleFontSize, weight: .semibold))
-            .foregroundStyle(.white)
+            .font(AppFonts.captionBold)
+            .foregroundStyle(AppColors.textPrimary)
             .lineLimit(isChannel ? 1 : 2)
-            .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+            .shadow(color: AppColors.oledBlack.opacity(0.8), radius: 2, x: 0, y: 1)
 
             if let searchMatch = result.searchMatch {
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(AppFonts.captionSmall.weight(.bold))
                     Text(searchMatch.field.localizedTitle)
                         .fontWeight(.semibold)
                     Text("·")
@@ -323,18 +323,18 @@ public struct GlobalSearchResultCard: View {
 
                     if let year = result.item.presentationOverride?.year {
                         Text(String(year))
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     } else if let year = result.item.releaseDate, !year.isEmpty {
                         Text(year.prefix(4))
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     if let duration = result.item.duration, !duration.isEmpty {
                         Text(duration)
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                 }
             }
@@ -483,7 +483,7 @@ public struct ProgramSearchResultCard: View {
             .background(AppColors.surfaceContainer, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(AppColors.borderSubtle, lineWidth: 1)
             }
         }
         #if os(tvOS)

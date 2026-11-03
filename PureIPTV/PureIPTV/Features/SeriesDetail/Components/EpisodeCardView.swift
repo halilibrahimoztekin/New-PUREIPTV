@@ -106,7 +106,7 @@ public struct EpisodeCardView: View {
 
                     // Dark gradient scrim
                     LinearGradient(
-                        colors: [.clear, .black.opacity(0.8)],
+                        colors: [AppColors.background.opacity(0), AppColors.background.opacity(0.8)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -145,14 +145,14 @@ public struct EpisodeCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.borderMedium, lineWidth: 1)
                 )
                 #else
                 .frame(width: 135, height: 76)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.borderMedium, lineWidth: 1)
                 )
                 #endif
 
@@ -161,11 +161,11 @@ public struct EpisodeCardView: View {
                     HStack(alignment: .top) {
                         Text(episode.title)
                         #if os(tvOS)
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(AppFonts.titleSmall)
                         #else
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(AppFonts.bodyBold)
                         #endif
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                             .lineLimit(1)
 
                         Spacer()
@@ -210,11 +210,11 @@ public struct EpisodeCardView: View {
                     if let plot = episode.plot, !plot.isEmpty {
                         Text(plot)
                         #if os(tvOS)
-                            .font(.system(size: 15))
+                            .font(AppFonts.bodySmall)
                         #else
-                            .font(.system(size: 12))
+                            .font(AppFonts.caption)
                         #endif
-                            .foregroundColor(.white.opacity(0.65))
+                            .foregroundColor(AppColors.textSecondary)
                             .lineLimit(2)
                             .lineSpacing(2)
                     }
@@ -227,18 +227,18 @@ public struct EpisodeCardView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "play.fill")
                         #if os(tvOS)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(AppFonts.captionBold)
                         #else
-                            .font(.system(size: 10, weight: .bold))
+                            .font(AppFonts.captionSmall)
                         #endif
                         Text(isInProgress ? AppStrings.SeriesDetail.continueWatching : AppStrings.SeriesDetail.watch)
                         #if os(tvOS)
-                            .font(.system(size: 16, weight: .bold))
+                            .font(AppFonts.bodyBold)
                         #else
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppFonts.captionBold)
                         #endif
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
                     #if os(tvOS)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
@@ -249,7 +249,7 @@ public struct EpisodeCardView: View {
                         .background(
                             isInProgress
                                 ? AnyShapeStyle(LinearGradient(colors: [AppColors.neonTeal, AppColors.primary], startPoint: .leading, endPoint: .trailing))
-                                : AnyShapeStyle(Color.white.opacity(0.18))
+                                : AnyShapeStyle(AppColors.surfaceElevated)
                         )
                         .clipShape(Capsule())
                 }
@@ -269,12 +269,12 @@ public struct EpisodeCardView: View {
                                 .tint(AppColors.neonTeal)
                         } else {
                             Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                .font(.system(size: 15))
+                                .font(AppFonts.body)
                                 .foregroundColor(isDownloaded ? AppColors.neonTeal : AppColors.textPrimary.opacity(0.7))
                         }
                     }
                     .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.1), in: Circle())
+                    .background(AppColors.surfaceElevated, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(isDeleting)
@@ -287,7 +287,7 @@ public struct EpisodeCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(AppColors.borderSubtle, lineWidth: 1)
         )
     }
 
@@ -317,7 +317,7 @@ public struct EpisodeCardView: View {
 
                     // Gradient Scrim
                     LinearGradient(
-                        colors: [.clear, .black.opacity(0.85)],
+                        colors: [AppColors.background.opacity(0), AppColors.background.opacity(0.85)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -330,7 +330,7 @@ public struct EpisodeCardView: View {
                                 .foregroundColor(AppColors.textPrimary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.black.opacity(0.65), in: Capsule())
+                                .background(AppColors.surfaceDark.opacity(0.65), in: Capsule())
 
                             Spacer()
 
@@ -339,14 +339,14 @@ public struct EpisodeCardView: View {
                                     .font(AppFonts.captionSmall)
                                     .foregroundColor(AppColors.success)
                                     .padding(4)
-                                    .background(Color.black.opacity(0.65), in: Circle())
+                                    .background(AppColors.surfaceDark.opacity(0.65), in: Circle())
                             } else if let dur = episode.duration {
                                 Text(dur)
                                     .font(AppFonts.captionSmall)
                                     .foregroundColor(AppColors.textPrimary.opacity(0.85))
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
-                                    .background(Color.black.opacity(0.65), in: Capsule())
+                                    .background(AppColors.surfaceDark.opacity(0.65), in: Capsule())
                             }
                         }
                         .padding(6)
@@ -355,7 +355,7 @@ public struct EpisodeCardView: View {
 
                         // Center Play Icon
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 26))
+                            .font(AppFonts.titleMedium)
                             .foregroundColor(AppColors.textPrimary.opacity(0.9))
                             .shadow(radius: 4)
 
@@ -422,12 +422,12 @@ public struct EpisodeCardView: View {
                                 .tint(AppColors.neonTeal)
                         } else {
                             Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                .font(.system(size: 15))
+                                .font(AppFonts.body)
                                 .foregroundColor(isDownloaded ? AppColors.neonTeal : AppColors.textPrimary.opacity(0.7))
                         }
                     }
                     .frame(width: 44, height: 44)
-                    .background(Color.white.opacity(0.1), in: Circle())
+                    .background(AppColors.surfaceElevated, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(isDeleting)
@@ -440,7 +440,7 @@ public struct EpisodeCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(AppColors.borderSubtle, lineWidth: 1)
         )
     }
 }

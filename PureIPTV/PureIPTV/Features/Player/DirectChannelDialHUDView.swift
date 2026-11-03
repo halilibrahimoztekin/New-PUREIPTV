@@ -38,7 +38,7 @@ public struct DirectChannelDialHUDView: View {
     public var body: some View {
         ZStack {
             // Tap-outside overlay to dismiss
-            Color.black.opacity(0.65)
+            AppColors.background.opacity(0.65)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -93,11 +93,11 @@ public struct DirectChannelDialHUDView: View {
             .background(
                 ZStack {
                     #if os(tvOS)
-                        Color.black.opacity(0.92)
+                        AppColors.background.opacity(0.92)
                     #else
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .fill(.ultraThinMaterial)
-                        Color.black.opacity(0.65)
+                        AppColors.background.opacity(0.65)
                     #endif
                 }
             )
@@ -117,7 +117,7 @@ public struct DirectChannelDialHUDView: View {
                     )
             )
             .shadow(color: AppColors.primary.opacity(0.3), radius: 24, x: 0, y: 10)
-            .shadow(color: Color.black.opacity(0.8), radius: 20, x: 0, y: 12)
+            .shadow(color: AppColors.background.opacity(0.8), radius: 20, x: 0, y: 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -147,8 +147,8 @@ public struct DirectChannelDialHUDView: View {
                     .foregroundStyle(AppColors.textPrimary)
 
                 Text(AppStrings.LiveTV.channelDialerHint)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.55))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.textSecondary)
             }
 
             Spacer()
@@ -156,11 +156,11 @@ public struct DirectChannelDialHUDView: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark.circle.fill")
                 #if os(tvOS)
-                    .font(.system(size: 26))
+                    .font(AppFonts.titleMedium)
                 #else
-                    .font(.title3)
+                    .font(AppFonts.titleSmall)
                 #endif
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(AppColors.textSecondary)
             }
             #if os(tvOS)
             .buttonStyle(TVCircleButtonStyle())
@@ -176,7 +176,7 @@ public struct DirectChannelDialHUDView: View {
         VStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                    .fill(AppColors.surfaceSecondary.opacity(0.5))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
@@ -185,11 +185,11 @@ public struct DirectChannelDialHUDView: View {
                 HStack(spacing: 8) {
                     if store.dialedChannelNumber.isEmpty {
                         Text("_ _ _")
-                            .font(.system(size: 38, weight: .black, design: .monospaced))
+                            .font(AppFonts.displayLarge.monospacedDigit())
                             .foregroundStyle(AppColors.textTertiary)
                     } else {
                         Text(store.dialedChannelNumber)
-                            .font(.system(size: 40, weight: .black, design: .monospaced))
+                            .font(AppFonts.displayLarge.monospacedDigit())
                             .foregroundStyle(AppColors.primary)
                             .shadow(color: AppColors.primary.opacity(0.5), radius: 8, x: 0, y: 0)
                     }
@@ -232,10 +232,10 @@ public struct DirectChannelDialHUDView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 10))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                .stroke(AppColors.borderSubtle, lineWidth: 1)
                         )
                     }
                     #if os(tvOS)
@@ -287,18 +287,18 @@ public struct DirectChannelDialHUDView: View {
                 case let .digit(d):
                     Text(d)
                     #if os(tvOS)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(AppFonts.titleMedium.weight(.bold))
                     #else
-                        .font(.title2.weight(.bold))
+                        .font(AppFonts.titleSmall.weight(.bold))
                     #endif
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
 
                 case .delete:
                     Image(systemName: "delete.left.fill")
                     #if os(tvOS)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(AppFonts.bodyLarge.weight(.bold))
                     #else
-                        .font(.body.weight(.bold))
+                        .font(AppFonts.bodyMedium.weight(.bold))
                     #endif
                         .foregroundStyle(AppColors.live)
 
@@ -306,9 +306,9 @@ public struct DirectChannelDialHUDView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.right.circle.fill")
                         #if os(tvOS)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(AppFonts.bodyLarge.weight(.bold))
                         #else
-                            .font(.body.weight(.bold))
+                            .font(AppFonts.bodyMedium.weight(.bold))
                         #endif
                     }
                     .foregroundStyle(AppColors.success)
@@ -322,7 +322,7 @@ public struct DirectChannelDialHUDView: View {
             #endif
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(item == .submit ? 0.16 : 0.08))
+                        .fill(item == .submit ? AppColors.surfaceElevated : AppColors.surfaceSecondary)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
