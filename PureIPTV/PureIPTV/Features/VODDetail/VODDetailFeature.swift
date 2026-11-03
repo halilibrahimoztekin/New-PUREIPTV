@@ -468,7 +468,7 @@ public struct VODDetailFeature {
                     return .none
                 }
                 state.watchAvailability = nil
-                guard let normalizedCode, let mediaID = state.tmdbMovie?.id else { return .none }
+                guard normalizedCode != nil, let mediaID = state.tmdbMovie?.id else { return .none }
                 return .send(.loadWatchAvailability(mediaID: mediaID))
 
             case let .loadWatchAvailability(mediaID):

@@ -85,86 +85,88 @@
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(1)
+                            .layoutPriority(2)
 
                         Spacer()
 
-                        HStack(spacing: 6) {
-                            if config.type == .m3u {
-                                Button {
-                                    store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
-                                } label: {
-                                    if store.isRefreshingContent, store.refreshStage?.canCancel != true {
-                                        ProgressView()
-                                            .frame(width: 36, height: 36)
-                                    } else {
-                                        Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
-                                            .font(AppFonts.bodySmall)
-                                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                                            .frame(width: 36, height: 36)
-                                            .background(Circle().fill(AppColors.surfaceSecondary))
+                        LiquidGlassContainer(spacing: 6) {
+                            HStack(spacing: 6) {
+                                if config.type == .m3u {
+                                    Button {
+                                        store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
+                                    } label: {
+                                        if store.isRefreshingContent, store.refreshStage?.canCancel != true {
+                                            ProgressView()
+                                                .frame(width: 34, height: 34)
+                                        } else {
+                                            Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
+                                                .font(AppFonts.bodySmall)
+                                                .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                                .frame(width: 34, height: 34)
+                                        }
                                     }
+                                    .liquidGlass(shape: .circle, isInteractive: true)
+                                    .buttonStyle(.plain)
+                                    .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
+                                    .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
                                 }
+
+                                Button {
+                                    store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
+                                } label: {
+                                    Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
+                                        .font(AppFonts.bodySmall)
+                                        .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                        .frame(width: 34, height: 34)
+                                }
+                                .liquidGlass(shape: .circle, isInteractive: true)
                                 .buttonStyle(.plain)
-                                .disabled((store.isRefreshingContent && store.refreshStage?.canCancel != true) || store.isLoadingCategories || store.isChannelSelectionMode || store.isFavoriteListMode || store.selectedSmartGroupID != nil)
-                                .accessibilityLabel(store.isRefreshingContent ? "Yenilemeyi iptal et" : "Canlı kanalları yenile")
-                            }
+                                .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
 
-                            Button {
-                                store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
-                            } label: {
-                                Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
-                                    .font(AppFonts.bodySmall)
-                                    .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(AppColors.surfaceSecondary))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
+                                LiveTVChannelSortMenu(store: store)
 
-                            LiveTVChannelSortMenu(store: store)
+                                Menu {
+                                    Button {
+                                        store.send(.smartGroupManagerTapped)
+                                    } label: {
+                                        Label(AppStrings.LiveTV.smartGroups, systemImage: "square.stack.3d.up")
+                                    }
+                                    .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
 
-                            Menu {
-                                Button {
-                                    store.send(.smartGroupManagerTapped)
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.openMultiViewTapped)
+                                    } label: {
+                                        Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.split.2x2.fill")
+                                    }
+
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.editCategoriesTapped)
+                                    } label: {
+                                        Label(AppStrings.CategoryMgmt.manageTitle(for: AppStrings.LiveTV.categories), systemImage: "slider.horizontal.3")
+                                    }
                                 } label: {
-                                    Label(AppStrings.LiveTV.smartGroups, systemImage: "square.stack.3d.up")
-                                }
-                                .accessibilityHint(AppStrings.LiveTV.smartGroupPrivacyHint)
-
-                                Button {
-                                    HapticManager.shared.trigger(.light)
-                                    store.send(.openMultiViewTapped)
-                                } label: {
-                                    Label(AppStrings.LiveTV.sendToMultiView, systemImage: "square.split.2x2.fill")
-                                }
-
-                                Button {
-                                    HapticManager.shared.trigger(.light)
-                                    store.send(.editCategoriesTapped)
-                                } label: {
-                                    Label(AppStrings.CategoryMgmt.manageTitle(for: AppStrings.LiveTV.categories), systemImage: "slider.horizontal.3")
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .font(AppFonts.titleSmall)
-                                    .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(AppColors.surfaceSecondary))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(AppStrings.Common.more)
-
-                            if let onSearch {
-                                Button(action: onSearch) {
-                                    Image(systemName: "magnifyingglass")
+                                    Image(systemName: "ellipsis.circle")
                                         .font(AppFonts.titleSmall)
                                         .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(AppColors.surfaceSecondary))
+                                        .frame(width: 34, height: 34)
                                 }
+                                .liquidGlass(shape: .circle, isInteractive: true)
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                                .accessibilityLabel(AppStrings.Common.more)
+
+                                if let onSearch {
+                                    Button(action: onSearch) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(AppFonts.titleSmall)
+                                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                            .frame(width: 34, height: 34)
+                                    }
+                                    .liquidGlass(shape: .circle, isInteractive: true)
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                                }
                             }
                         }
                     }
@@ -214,10 +216,10 @@
                         } else {
                             VStack(spacing: 12) {
                                 ProgressView()
-                                    .tint(Color(hex: "#0A84FF"))
+                                    .tint(AppColors.primary)
                                 Text(AppStrings.Player.syncing)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .font(AppFonts.caption)
+                                    .foregroundStyle(AppColors.textSecondary)
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .onAppear {
@@ -368,10 +370,10 @@
                         VStack(spacing: 12) {
                             Image(systemName: "tv.slash")
                                 .font(.system(size: 36))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.3))
                             Text(AppStrings.LiveTV.emptyCategoryLive)
-                                .font(.system(size: 15))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                                .font(AppFonts.bodyMedium)
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.4))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 80)
@@ -503,7 +505,7 @@
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 120)
                 }
             }
         }
@@ -552,26 +554,14 @@
         let action: () -> Void
 
         var body: some View {
-            Button {
+            LiquidGlassPill(
+                title: name,
+                isSelected: isSelected,
+                tint: AppColors.primary
+            ) {
                 HapticManager.shared.trigger(.light)
                 action()
-            } label: {
-                Text(name)
-                    .font(isSelected ? AppFonts.bodySmall : AppFonts.caption)
-                    .foregroundStyle(isSelected ? AppColors.surfaceSecondary : AppColors.textSecondary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(isSelected ? AppColors.primary : Color.white.opacity(0.05))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(Color.white.opacity(isSelected ? 0 : 0.08), lineWidth: 1)
-                            )
-                    )
             }
-            .buttonStyle(.plain)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
     }
 

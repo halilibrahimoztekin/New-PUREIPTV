@@ -29,52 +29,33 @@ public struct AudioEQHUDView: View {
         GeometryReader { geometry in
             let isCompact = isLandscapeLayout(for: geometry.size)
 
-            VStack(spacing: isCompact ? 8 : 16) {
-                // Header Bar (Pinned, always visible)
-                headerBar(isCompact: isCompact)
+            LiquidGlassHUDCard(cornerRadius: 24, tint: store.audioEQPreset.accentColor, isInteractive: true) {
+                VStack(spacing: isCompact ? 8 : 16) {
+                    // Header Bar (Pinned, always visible)
+                    headerBar(isCompact: isCompact)
 
-                if isCompact {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 8) {
-                            eqFrequencyVisualizer(isCompact: isCompact)
-                            presetsGrid(isCompact: isCompact)
-                            footerInfoBar
+                    if isCompact {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 8) {
+                                eqFrequencyVisualizer(isCompact: isCompact)
+                                presetsGrid(isCompact: isCompact)
+                                footerInfoBar
+                            }
+                            .padding(.horizontal, 2)
                         }
-                        .padding(.horizontal, 2)
+                    } else {
+                        eqFrequencyVisualizer(isCompact: isCompact)
+                        presetsGrid(isCompact: isCompact)
+                        footerInfoBar
                     }
-                } else {
-                    eqFrequencyVisualizer(isCompact: isCompact)
-                    presetsGrid(isCompact: isCompact)
-                    footerInfoBar
                 }
+                .padding(isCompact ? 14 : 24)
             }
-            .padding(isCompact ? 12 : 24)
-            .frame(maxWidth: isCompact ? min(680, geometry.size.width - 32) : containerMaxWidth)
+            .simultaneousGesture(TapGesture().onEnded { resetIdleTimer() })
+            .frame(maxWidth: isCompact ? min(720, geometry.size.width - 32) : containerMaxWidth)
             #if !os(tvOS)
-                .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 350) : nil)
+                .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 380) : nil)
             #endif
-                .background {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(AppColors.surface.opacity(0.95))
-                        .background(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [
-                                            store.audioEQPreset.accentColor.opacity(0.6),
-                                            Color.white.opacity(0.12),
-                                            Color.white.opacity(0.04),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
-                                )
-                        }
-                        .shadow(color: store.audioEQPreset.accentColor.opacity(0.25), radius: 30, x: 0, y: 15)
-                        .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
-                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         #if os(tvOS)
@@ -220,20 +201,12 @@ public struct AudioEQHUDView: View {
     // MARK: - Presets Grid
 
     private func presetsGrid(isCompact: Bool) -> some View {
-        let columns: [GridItem] = if isCompact {
-            [
-                GridItem(.flexible(), spacing: 6),
-                GridItem(.flexible(), spacing: 6),
-                GridItem(.flexible(), spacing: 6),
-            ]
-        } else {
-            [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12),
-            ]
-        }
+        let columns: [GridItem] = [
+            GridItem(.flexible(), spacing: isCompact ? 8 : 12),
+            GridItem(.flexible(), spacing: isCompact ? 8 : 12),
+        ]
 
-        return LazyVGrid(columns: columns, spacing: isCompact ? 6 : 12) {
+        return LazyVGrid(columns: columns, spacing: isCompact ? 8 : 12) {
             ForEach(AudioEQPreset.allCases) { preset in
                 presetCard(preset, isCompact: isCompact)
             }
@@ -250,41 +223,44 @@ public struct AudioEQHUDView: View {
             resetIdleTimer()
             store.send(.selectAudioEQPreset(preset))
         } label: {
-            HStack(spacing: isCompact ? 6 : 12) {
+            HStack(spacing: isCompact ? 8 : 12) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? preset.accentColor.opacity(0.25) : Color.white.opacity(0.06))
-                        .frame(width: isCompact ? 24 : 38, height: isCompact ? 24 : 38)
+                        .frame(width: isCompact ? 28 : 38, height: isCompact ? 28 : 38)
 
                     Image(systemName: preset.icon)
-                        .font(.system(size: isCompact ? 11 : 16, weight: .semibold))
+                        .font(.system(size: isCompact ? 13 : 16, weight: .semibold))
                         .foregroundColor(isSelected ? preset.accentColor : AppColors.textPrimary.opacity(0.85))
                 }
 
-                VStack(alignment: .leading, spacing: isCompact ? 1 : 3) {
+                VStack(alignment: .leading, spacing: isCompact ? 2 : 3) {
                     HStack(spacing: 4) {
                         Text(preset.title)
-                            .font(.system(size: isCompact ? 10.5 : 14, weight: isSelected ? .bold : .semibold))
-                            .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.88))
+                            .font(isCompact ? AppFonts.captionSemibold : AppFonts.bodySmall.weight(.bold))
+                            .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.92))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
 
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: isCompact ? 9 : 12, weight: .bold))
+                                .font(.system(size: isCompact ? 10 : 12, weight: .bold))
                                 .foregroundColor(preset.accentColor)
                         }
                     }
 
                     Text(preset.subtitle)
-                        .font(.system(size: isCompact ? 8.5 : 11, weight: .regular))
-                        .foregroundColor(AppColors.textSecondary.opacity(0.65))
-                        .lineLimit(1)
+                        .font(isCompact ? AppFonts.captionSmall : AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary.opacity(0.75))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, isCompact ? 8 : 14)
-            .padding(.vertical, isCompact ? 6 : 12)
+            .padding(.horizontal, isCompact ? 10 : 14)
+            .padding(.vertical, isCompact ? 8 : 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -324,13 +300,13 @@ public struct AudioEQHUDView: View {
 
     // MARK: - Idle Timer
 
-    private func resetIdleTimer() {
+    private func resetIdleTimer(duration: TimeInterval = 25.0) {
         idleTimer?.cancel()
         let item = DispatchWorkItem { [onClose] in
             onClose()
         }
         idleTimer = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: item)
     }
 
     private func cancelIdleTimer() {

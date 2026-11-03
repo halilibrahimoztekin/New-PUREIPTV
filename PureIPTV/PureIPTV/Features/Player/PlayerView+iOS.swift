@@ -35,6 +35,7 @@
         // Aspect Ratio & Zoom State (Madde #14)
         @State private var pinchStartScale: CGFloat? = nil
         @State private var aspectDismissWorkItem: DispatchWorkItem? = nil
+        @State private var controlsDismissWorkItem: DispatchWorkItem? = nil
         // Channel Zapping State (Madde #16 & #10)
         @State private var interactiveZappingDirection: ZappingDirection? = nil
         @State private var hasTriggeredZappingThresholdHaptic: Bool = false
@@ -859,6 +860,11 @@
                         .allowsHitTesting(!isAnyHUDOrOverlayVisible)
                         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
                     }
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            resetControlsDismissTimer()
+                        }
+                    )
                     .background(
                         Color.black.opacity(0.4)
                             .onTapGesture {
@@ -1438,6 +1444,25 @@
             }
             .allowsHitTesting(!store.isMinimized)
             .modifier(MediaServerPlaybackOptionsDialog(store: store))
+            .onAppear {
+                if store.isControlsVisible {
+                    resetControlsDismissTimer()
+                }
+            }
+            .onChange(of: store.isControlsVisible) { _, isVisible in
+                if isVisible {
+                    resetControlsDismissTimer()
+                } else {
+                    cancelControlsDismissTimer()
+                }
+            }
+            .onChange(of: isDraggingSlider) { _, isDragging in
+                if isDragging {
+                    cancelControlsDismissTimer()
+                } else {
+                    resetControlsDismissTimer()
+                }
+            }
             .onDisappear {
                 cancelAllPendingWorkItems()
             }
@@ -2175,7 +2200,29 @@
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
         }
 
+        private func resetControlsDismissTimer(duration: TimeInterval = 8.0) {
+            controlsDismissWorkItem?.cancel()
+            guard store.isControlsVisible, !isDraggingSlider, !isAnyHUDOrOverlayVisible else {
+                controlsDismissWorkItem = nil
+                return
+            }
+            let work = DispatchWorkItem {
+                guard !isDraggingSlider, !isAnyHUDOrOverlayVisible, store.playerState == .playing else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    store.send(.hideControls)
+                }
+            }
+            controlsDismissWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
+        }
+
+        private func cancelControlsDismissTimer() {
+            controlsDismissWorkItem?.cancel()
+            controlsDismissWorkItem = nil
+        }
+
         private func cancelAllPendingWorkItems() {
+            cancelControlsDismissTimer()
             singleTapWorkItem?.cancel()
             singleTapWorkItem = nil
             seekDismissWorkItem?.cancel()

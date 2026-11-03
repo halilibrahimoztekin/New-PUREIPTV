@@ -823,24 +823,24 @@ public struct SettingsFeature {
 
             case let .setAutoSwitchOnEPGReminder(val):
                 state.autoSwitchOnEPGReminder = val
-                return .run { _ in settingsClient.setAutoSwitchOnEPGReminder(val) }
+                return .run { [settingsClient] _ in settingsClient.setAutoSwitchOnEPGReminder(val) }
 
             case let .setHideAdultContent(val):
                 state.hideAdultContent = val
-                return .run { _ in settingsClient.setHideAdultContent(val) }
+                return .run { [settingsClient] _ in settingsClient.setHideAdultContent(val) }
 
             case let .setDefaultStartupTab(val):
                 state.defaultStartupTab = val
                 let profileID = profileContextClient.snapshot().profileID
-                return .run { _ in settingsClient.setDefaultStartupTabForProfile(profileID, val) }
+                return .run { [settingsClient] _ in settingsClient.setDefaultStartupTabForProfile(profileID, val) }
 
             case let .setHideEmptyContentTabs(val):
                 state.hideEmptyContentTabs = val
-                return .run { _ in settingsClient.setHideEmptyContentTabs(val) }
+                return .run { [settingsClient] _ in settingsClient.setHideEmptyContentTabs(val) }
 
             case let .setLiveTVOnlyNavigation(val):
                 state.liveTVOnlyNavigation = val
-                return .run { _ in settingsClient.setLiveTVOnlyNavigation(val) }
+                return .run { [settingsClient] _ in settingsClient.setLiveTVOnlyNavigation(val) }
 
             case let .setSearchHistorySavingEnabled(enabled):
                 state.isSearchHistorySavingEnabled = enabled
@@ -1022,11 +1022,11 @@ public struct SettingsFeature {
 
             case let .setAutoPiPEnabled(enabled):
                 state.isAutoPiPEnabled = enabled
-                return .run { _ in pipClient.setAutoPiPEnabled(enabled) }
+                return .run { _ in await pipClient.setAutoPiPEnabled(enabled) }
 
             case let .setBackgroundPlaybackMode(mode):
                 state.backgroundPlaybackMode = mode
-                return .run { _ in pipClient.setBackgroundPlaybackMode(mode) }
+                return .run { _ in await pipClient.setBackgroundPlaybackMode(mode) }
 
             case .calculateCacheSize:
                 return .run { send in
@@ -1774,7 +1774,7 @@ public struct SettingsFeature {
 
             case .startCloudSyncObservation:
                 return .run { send in
-                    for await summary in cloudSyncClient.observeRemoteChanges() {
+                    for await summary in await cloudSyncClient.observeRemoteChanges() {
                         await send(.cloudSyncSummaryUpdated(summary))
                     }
                 }

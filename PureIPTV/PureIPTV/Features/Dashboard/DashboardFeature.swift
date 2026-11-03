@@ -2006,7 +2006,8 @@ public struct DashboardFeature {
                     guard let playlistID = favorite.playlistID else { continue }
                     seriesIDsByPlaylist[playlistID, default: []].insert(favorite.id)
                 }
-                let playlistIDs = seriesIDsByPlaylist.keys.sorted { $0.uuidString < $1.uuidString }
+                let immutableSeriesIDsByPlaylist = seriesIDsByPlaylist
+                let playlistIDs = immutableSeriesIDsByPlaylist.keys.sorted { $0.uuidString < $1.uuidString }
                 let configsByPlaylist = playlistRepository.getPlaylists().reduce(
                     into: [UUID: PlaylistConfig]()
                 ) { result, savedPlaylist in
@@ -2030,7 +2031,7 @@ public struct DashboardFeature {
                         }
                         var caches: [UUID: [String: FavoriteSeriesEpisodeDateCacheEntry]] = [:]
                         for await (playlistID, entries) in group {
-                            let favoriteIDs = seriesIDsByPlaylist[playlistID] ?? []
+                            let favoriteIDs = immutableSeriesIDsByPlaylist[playlistID] ?? []
                             caches[playlistID] = entries.filter { favoriteIDs.contains($0.key) }
                         }
                         return caches
@@ -2039,7 +2040,7 @@ public struct DashboardFeature {
                     var jobs: [FavoriteSeriesDateJob] = []
                     for playlistID in playlistIDs {
                         let cache = episodeDates[playlistID] ?? [:]
-                        for seriesID in (seriesIDsByPlaylist[playlistID] ?? []).sorted() {
+                        for seriesID in (immutableSeriesIDsByPlaylist[playlistID] ?? []).sorted() {
                             let cachedEntry = cache[seriesID]
                             let isFresh = cachedEntry.map {
                                 $0.resolvedAt <= now && now.timeIntervalSince($0.resolvedAt) < cacheLifetime

@@ -85,14 +85,14 @@
                             } label: {
                                 HStack(spacing: 12) {
                                     Circle()
-                                        .fill(Color.green)
+                                        .fill(AppColors.success)
                                         .frame(width: 12, height: 12)
                                     Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
                                         .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppColors.textPrimary)
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                         .font(.system(size: 18))
-                                        .foregroundStyle(Color(hex: "#0A84FF"))
+                                        .foregroundStyle(AppColors.primary)
                                 }
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
@@ -362,8 +362,8 @@
                                 .accessibilityHint(AppStrings.Common.watchNow)
 
                                 Text(entry.playlistName)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.82))
+                                    .font(AppFonts.caption)
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.82))
                                     .lineLimit(1)
                                     .padding(.horizontal, 4)
                                     .accessibilityHidden(true)
@@ -938,7 +938,7 @@
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         } else {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(hex: "#1F1F23"))
+                                .fill(AppColors.surfaceSecondary)
                                 .frame(width: 320, height: 180)
                         }
 
@@ -952,7 +952,7 @@
                                     .frame(height: 4)
                                     .overlay(alignment: .leading) {
                                         Rectangle()
-                                            .fill(Color(hex: "#0A84FF"))
+                                            .fill(AppColors.primary)
                                             .frame(width: proxy.size.width * CGFloat(progressPercent), height: 4)
                                     }
                             }

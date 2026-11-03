@@ -69,17 +69,17 @@ public enum AudioEQPreset: String, CaseIterable, Identifiable, Codable, Sendable
     public var accentColor: Color {
         switch self {
         case .flat:
-            Color(hex: "#0A84FF")
+            AppColors.primary
         case .dialogueEnhancer:
-            Color(hex: "#30D158")
+            AppColors.success
         case .stadium:
-            Color(hex: "#FF9F0A")
+            AppColors.warning
         case .nightMode:
-            Color(hex: "#BF5AF2")
+            AppColors.premium
         case .bassBoost:
-            Color(hex: "#FF375F")
+            AppColors.destructive
         case .acoustic:
-            Color(hex: "#64D2FF")
+            AppColors.sky
         }
     }
 

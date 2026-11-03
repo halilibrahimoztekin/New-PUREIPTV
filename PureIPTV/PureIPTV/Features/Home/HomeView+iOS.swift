@@ -33,7 +33,7 @@
                 let appearance = UITabBarAppearance()
                 appearance.configureWithTransparentBackground()
                 appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-                appearance.backgroundColor = UIColor(Color.black.opacity(0.3))
+                appearance.backgroundColor = UIColor(AppColors.surface.opacity(0.85))
 
                 // Separator line
                 let separatorColor = UIColor(Color.white.opacity(0.08))

@@ -31,89 +31,53 @@ public struct StreamHealthHUDView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 14) {
-            headerBar
+        LiquidGlassHUDCard(cornerRadius: 24, tint: statusTint, isInteractive: true) {
+            VStack(spacing: 14) {
+                headerBar
 
-            #if !os(tvOS)
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 12) {
-                        if store.isLiveVideoStallDetected {
-                            liveVideoStallCard
+                #if !os(tvOS)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 12) {
+                            if store.isLiveVideoStallDetected {
+                                liveVideoStallCard
+                            }
+                            if store.streamHealthMetrics == nil {
+                                waitingForSampleCard
+                            } else {
+                                healthScoreCard
+                                diagnosticsGrid
+                            }
+                            footerActions
                         }
-                        if store.streamHealthMetrics == nil {
-                            waitingForSampleCard
-                        } else {
-                            healthScoreCard
-                            diagnosticsGrid
-                        }
-                        footerActions
+                        .padding(.horizontal, 2)
                     }
-                    .padding(.horizontal, 2)
-                }
-                .frame(maxHeight: 280)
+                    .frame(maxHeight: 280)
+                #else
+                    if store.isLiveVideoStallDetected {
+                        liveVideoStallCard
+                    }
+                    if store.streamHealthMetrics == nil {
+                        waitingForSampleCard
+                    } else {
+                        healthScoreCard
+                        diagnosticsGrid
+                    }
+                    footerActions
+                #endif
+            }
+            #if os(tvOS)
+            .padding(32)
+            .frame(width: 620)
             #else
-                if store.isLiveVideoStallDetected {
-                    liveVideoStallCard
-                }
-                if store.streamHealthMetrics == nil {
-                    waitingForSampleCard
-                } else {
-                    healthScoreCard
-                    diagnosticsGrid
-                }
-                footerActions
+            .padding(18)
+            .frame(maxWidth: min(440, UIScreen.main.bounds.width - 32))
             #endif
         }
         #if os(tvOS)
-        .padding(32)
-        .frame(width: 620)
-        .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                AppColors.surfaceDark.opacity(0.94)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [statusTint.opacity(0.6), AppColors.primary.opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-        )
-        .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
-        .shadow(color: statusTint.opacity(0.15), radius: 20, x: 0, y: 8)
         .focusSection()
         .onExitCommand {
             onClose()
         }
-        #else
-        .padding(18)
-        .frame(maxWidth: min(440, UIScreen.main.bounds.width - 32))
-        .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                AppColors.surfaceDark.opacity(0.95)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [statusTint.opacity(0.5), Color.white.opacity(0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.2
-                )
-        )
-        .shadow(color: .black.opacity(0.65), radius: 24, x: 0, y: 12)
-        .shadow(color: statusTint.opacity(0.12), radius: 18, x: 0, y: 6)
         #endif
     }
 

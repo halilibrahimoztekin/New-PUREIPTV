@@ -60,66 +60,44 @@ public struct AudioSyncHUDView: View {
         GeometryReader { geometry in
             let isCompact = isLandscapeLayout(for: geometry.size)
 
-            VStack(spacing: isCompact ? 8 : 16) {
-                // Header bar (pinned)
-                headerBar(isCompact: isCompact)
+            LiquidGlassHUDCard(cornerRadius: 24, tint: syncMode == .audio ? AppColors.primary : AppColors.premium, isInteractive: true) {
+                VStack(spacing: isCompact ? 8 : 16) {
+                    // Header bar (pinned)
+                    headerBar(isCompact: isCompact)
 
-                if isCompact {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 8) {
-                            modePickerView
-                            mainDisplayCard(isCompact: isCompact)
-                            stepperRowView(isCompact: isCompact)
-                            #if os(iOS)
-                                sliderControlView
-                            #endif
-                            rememberChannelRow
+                    if isCompact {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 8) {
+                                modePickerView
+                                mainDisplayCard(isCompact: isCompact)
+                                stepperRowView(isCompact: isCompact)
+                                #if os(iOS)
+                                    sliderControlView
+                                #endif
+                                rememberChannelRow
+                            }
+                            .padding(.horizontal, 2)
                         }
-                        .padding(.horizontal, 2)
+                    } else {
+                        modePickerView
+                        mainDisplayCard(isCompact: isCompact)
+                        stepperRowView(isCompact: isCompact)
+                        #if os(iOS)
+                            sliderControlView
+                        #endif
+                        rememberChannelRow
                     }
-                } else {
-                    modePickerView
-                    mainDisplayCard(isCompact: isCompact)
-                    stepperRowView(isCompact: isCompact)
-                    #if os(iOS)
-                        sliderControlView
-                    #endif
-                    rememberChannelRow
                 }
+                .padding(isCompact ? 14 : 24)
             }
+            .simultaneousGesture(TapGesture().onEnded { resetIdleTimer() })
             #if os(tvOS)
-            .padding(32)
-            .frame(width: 640)
-            .background(
-                ZStack {
-                    Rectangle().fill(.ultraThinMaterial)
-                    AppColors.surface.opacity(0.92)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(AppColors.borderMedium, lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
+                .frame(width: 640)
             #else
-            .padding(isCompact ? 12 : 20)
-            .frame(maxWidth: isCompact ? min(520, geometry.size.width - 32) : min(420, UIScreen.main.bounds.width - 32))
-            .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 340) : nil)
-            .background(
-                ZStack {
-                    Rectangle().fill(.ultraThinMaterial)
-                    AppColors.surface.opacity(0.94)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppColors.borderMedium, lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.6), radius: 24, x: 0, y: 10)
+                .frame(maxWidth: isCompact ? min(540, geometry.size.width - 32) : min(440, UIScreen.main.bounds.width - 32))
+                .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 360) : nil)
             #endif
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         #if os(tvOS)
         .focusSection()
@@ -408,13 +386,13 @@ public struct AudioSyncHUDView: View {
 
     // MARK: - Idle Timer
 
-    private func resetIdleTimer() {
+    private func resetIdleTimer(duration: TimeInterval = 25.0) {
         idleTimer?.cancel()
         let item = DispatchWorkItem { [onClose] in
             onClose()
         }
         idleTimer = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: item)
     }
 
     private func cancelIdleTimer() {

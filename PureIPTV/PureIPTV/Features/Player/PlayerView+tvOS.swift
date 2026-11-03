@@ -801,7 +801,7 @@
             idleTimer?.invalidate()
         }
 
-        private func resetIdleTimer(duration: TimeInterval = 9.0) {
+        private func resetIdleTimer(duration: TimeInterval = 18.0) {
             store.send(.userInteracted)
             idleTimer?.invalidate()
             idleTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in

@@ -164,25 +164,25 @@ final class AVPlayerPlaybackSession {
             emitCurrentState()
 
             playerObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] _, _ in
-                Task { @MainActor in
-                    guard let self, self.eventGeneration == generation else { return }
-                    self.emitCurrentState()
+                Task { @MainActor [weak self] in
+                    guard let self, eventGeneration == generation else { return }
+                    emitCurrentState()
                 }
             }
 
             if let item = player.currentItem {
                 itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                    Task { @MainActor in
-                        guard let self, self.eventGeneration == generation else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self, eventGeneration == generation else { return }
                         switch item.status {
                         case .readyToPlay:
                             let seconds = item.duration.seconds
                             if seconds.isFinite, seconds > 0 {
-                                self.eventContinuation?.yield(.lengthChanged(.seconds(seconds)))
+                                eventContinuation?.yield(.lengthChanged(.seconds(seconds)))
                             }
-                            self.eventContinuation?.yield(.tracksChanged)
+                            eventContinuation?.yield(.tracksChanged)
                         case .failed:
-                            self.eventContinuation?.yield(.encounteredError)
+                            eventContinuation?.yield(.encounteredError)
                         case .unknown:
                             break
                         @unknown default:
@@ -196,10 +196,10 @@ final class AVPlayerPlaybackSession {
                     object: item,
                     queue: .main
                 ) { [weak self] _ in
-                    Task { @MainActor in
-                        guard let self, self.eventGeneration == generation else { return }
-                        self.eventContinuation?.yield(.endReached)
-                        self.eventContinuation?.yield(.stateChanged(.stopped))
+                    Task { @MainActor [weak self] in
+                        guard let self, eventGeneration == generation else { return }
+                        eventContinuation?.yield(.endReached)
+                        eventContinuation?.yield(.stateChanged(.stopped))
                     }
                 }
             }
@@ -208,16 +208,16 @@ final class AVPlayerPlaybackSession {
                 forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
                 queue: .main
             ) { [weak self] time in
-                Task { @MainActor in
-                    guard let self, self.eventGeneration == generation else { return }
-                    self.emitTime(time)
+                Task { @MainActor [weak self] in
+                    guard let self, eventGeneration == generation else { return }
+                    emitTime(time)
                 }
             }
 
             continuation.onTermination = { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, self.eventGeneration == generation else { return }
-                    self.removeObservers()
+                Task { @MainActor [weak self] in
+                    guard let self, eventGeneration == generation else { return }
+                    removeObservers()
                 }
             }
         }

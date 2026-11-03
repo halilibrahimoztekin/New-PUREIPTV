@@ -102,8 +102,8 @@
                     VStack(spacing: 6) {
                         HStack {
                             Text(AppStrings.Series.title)
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundStyle(Color(hex: "#E4E1E7"))
+                                .font(AppFonts.displayMedium)
+                                .foregroundStyle(AppColors.onSurface)
                             Spacer()
                             if [PlaylistType.m3u, .plex, .emby].contains(config.type) {
                                 Button {
@@ -188,7 +188,7 @@
                     }
                     .padding(.bottom, 48)
                 }
-                .background(Color(hex: "#0C0C10"))
+                .background(AppColors.surface)
                 .onChange(of: store.selectedCategoryID) { _, newCatID in
                     if let newCatID {
                         if !filteredCategories.contains(where: { $0.id == newCatID }) {
@@ -281,17 +281,17 @@
                             if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
                                 Image(systemName: "line.3.horizontal.decrease.circle")
                                     .font(.system(size: 64))
-                                    .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                                    .foregroundStyle(AppColors.primary.opacity(0.8))
                                 Text(AppStrings.MediaFilter.noMatchingResults)
-                                    .font(.system(size: 26))
-                                    .foregroundStyle(Color.white.opacity(0.8))
+                                    .font(AppFonts.title)
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.8))
 
                                 Button {
                                     store.send(.setLanguageFilter(.all))
                                     store.send(.setOriginalLanguageFilter(nil))
                                 } label: {
                                     Text(AppStrings.MediaFilter.all)
-                                        .font(.system(size: 20, weight: .bold))
+                                        .font(AppFonts.titleSmall)
                                         .padding(.horizontal, 28)
                                         .padding(.vertical, 12)
                                 }
@@ -300,10 +300,10 @@
                             } else {
                                 Image(systemName: "tv")
                                     .font(.system(size: 60))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                                 Text(AppStrings.Series.noSeries)
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                                    .font(AppFonts.displayMedium)
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.4))
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -465,12 +465,12 @@
             Button(action: action) {
                 HStack(spacing: 14) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(isSelected ? Color(hex: "#30D158") : Color.clear)
+                        .fill(isSelected ? AppColors.success : Color.clear)
                         .frame(width: 4, height: 26)
 
                     Text(category.name)
-                        .font(.system(size: 22, weight: isSelected ? .bold : .regular))
-                        .foregroundStyle(isSelected ? Color.white : Color(hex: "#C0C6D6").opacity(0.7))
+                        .font(AppFonts.titleSmall)
+                        .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary.opacity(0.7))
                         .lineLimit(1)
 
                     Spacer()
@@ -478,11 +478,11 @@
                     if isLocked {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(.orange.opacity(0.85))
+                            .foregroundColor(AppColors.warning.opacity(0.85))
                     }
                 }
             }
-            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#30D158"), isSelected: isSelected))
+            .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.success, isSelected: isSelected))
         }
     }
 

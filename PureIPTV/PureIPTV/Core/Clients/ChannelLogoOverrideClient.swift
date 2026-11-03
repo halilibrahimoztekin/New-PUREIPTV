@@ -2,7 +2,7 @@ import ComposableArchitecture
 import CryptoKit
 import Foundation
 
-public enum ChannelLogoOverrideURL {
+public nonisolated enum ChannelLogoOverrideURL: Sendable {
     public static let maximumLength = 2048
 
     public static func validatedURL(from rawValue: String) -> URL? {

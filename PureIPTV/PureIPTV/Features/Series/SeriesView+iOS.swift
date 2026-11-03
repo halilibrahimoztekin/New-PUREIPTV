@@ -40,52 +40,59 @@
                     // ── Header Actions ─────────────────────────────────
                     HStack {
                         Text(AppStrings.Series.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(2)
 
                         Spacer()
 
-                        HStack(spacing: 10) {
-                            if [PlaylistType.m3u, .plex, .emby].contains(config.type) {
-                                Button {
-                                    store.send(.refreshContentTapped)
-                                } label: {
-                                    if store.isRefreshingContent {
-                                        ProgressView()
-                                            .frame(width: 36, height: 36)
-                                    } else {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(Color.white.opacity(0.9))
-                                            .frame(width: 36, height: 36)
-                                            .background(Circle().fill(Color(hex: "#1F1F23")))
+                        LiquidGlassContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                if [PlaylistType.m3u, .plex, .emby].contains(config.type) {
+                                    Button {
+                                        store.send(.refreshContentTapped)
+                                    } label: {
+                                        if store.isRefreshingContent {
+                                            ProgressView()
+                                                .frame(width: 34, height: 34)
+                                        } else {
+                                            Image(systemName: "arrow.clockwise")
+                                                .font(AppFonts.bodySmall)
+                                                .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                                .frame(width: 34, height: 34)
+                                        }
                                     }
+                                    .liquidGlass(shape: .circle, isInteractive: true)
+                                    .buttonStyle(.plain)
+                                    .disabled(store.isRefreshingContent || store.isLoadingCategories)
+                                    .accessibilityLabel("Dizileri yenile")
                                 }
-                                .disabled(store.isRefreshingContent || store.isLoadingCategories)
-                                .accessibilityLabel("Dizileri yenile")
-                            }
 
-                            Button {
-                                store.send(.editCategoriesTapped)
-                            } label: {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
-                            }
-
-                            if let onSearch {
-                                Button(action: onSearch) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.9))
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                Button {
+                                    store.send(.editCategoriesTapped)
+                                } label: {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                        .frame(width: 34, height: 34)
                                 }
+                                .liquidGlass(shape: .circle, isInteractive: true)
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                                .accessibilityLabel(AppStrings.CategoryMgmt.manageTitle(for: AppStrings.Series.title))
+
+                                if let onSearch {
+                                    Button(action: onSearch) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(AppFonts.titleSmall)
+                                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                            .frame(width: 34, height: 34)
+                                    }
+                                    .liquidGlass(shape: .circle, isInteractive: true)
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(AppStrings.Search.searchPlaceholder)
+                                }
                             }
                         }
                     }
@@ -248,10 +255,10 @@
                             if !store.rawSeries.isEmpty, store.selectedLanguageFilter != .all || store.selectedOriginalLanguageCode != nil {
                                 Image(systemName: "line.3.horizontal.decrease.circle")
                                     .font(.system(size: 38))
-                                    .foregroundStyle(Color(hex: "#0A84FF").opacity(0.8))
+                                    .foregroundStyle(AppColors.primary.opacity(0.8))
                                 Text(AppStrings.MediaFilter.noMatchingResults)
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(Color.white.opacity(0.7))
+                                    .font(AppFonts.bodyMedium)
+                                    .foregroundStyle(AppColors.textSecondary)
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 32)
                                 Button {
@@ -259,20 +266,20 @@
                                     store.send(.setOriginalLanguageFilter(nil))
                                 } label: {
                                     Text(AppStrings.MediaFilter.all)
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                         .padding(.horizontal, 18)
                                         .padding(.vertical, 8)
-                                        .background(Color(hex: "#0A84FF"), in: Capsule())
-                                        .foregroundColor(.white)
+                                        .background(AppColors.primary, in: Capsule())
+                                        .foregroundColor(AppColors.textPrimary)
                                 }
                                 .padding(.top, 4)
                             } else {
                                 Image(systemName: "rectangle.stack")
                                     .font(.system(size: 36))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.3))
                                 Text(AppStrings.Series.emptyCategorySeries)
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.4))
+                                    .font(AppFonts.bodyMedium)
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.4))
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -319,7 +326,7 @@
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 120)
                 }
             }
         }
@@ -350,10 +357,10 @@
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack.badge.minus")
                         .font(.system(size: 40))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.3))
                     Text(AppStrings.Common.categoryNotFound)
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -368,26 +375,14 @@
         let action: () -> Void
 
         var body: some View {
-            Button {
+            LiquidGlassPill(
+                title: name,
+                isSelected: isSelected,
+                tint: AppColors.primary
+            ) {
                 HapticManager.shared.trigger(.light)
                 action()
-            } label: {
-                Text(name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .white : Color(hex: "#C0C6D6").opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(
-                        Capsule()
-                            .fill(isSelected ? Color(hex: "#0A84FF") : Color(hex: "#1F1F23"))
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.white.opacity(isSelected ? 0 : 0.08), lineWidth: 1)
-                            )
-                    )
             }
-            .buttonStyle(.plain)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
     }
 #endif

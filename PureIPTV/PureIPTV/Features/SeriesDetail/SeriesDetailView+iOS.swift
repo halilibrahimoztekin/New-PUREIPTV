@@ -16,7 +16,7 @@
 
         public var body: some View {
             ZStack(alignment: .top) {
-                Color(hex: "#0F0F13").ignoresSafeArea()
+                AppColors.surfaceDark.ignoresSafeArea()
 
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -53,20 +53,20 @@
                     if store.canManageTMDBMatch {
                         Button { store.send(.showTMDBMatchPicker) } label: {
                             Label(AppStrings.TMDBMatchPicker.title, systemImage: "film")
-                                .font(.caption.weight(.semibold))
+                                .font(AppFonts.caption.weight(.semibold))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 9)
-                                .background(.ultraThinMaterial, in: Capsule())
+                                .liquidGlass(shape: .capsule, isInteractive: true)
                         }
                     }
 
                     if store.canManagePresentation {
                         Button { store.send(.editPresentationTapped) } label: {
                             Label(AppStrings.MediaPresentation.edit, systemImage: "pencil")
-                                .font(.caption.weight(.semibold))
+                                .font(AppFonts.caption.weight(.semibold))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 9)
-                                .background(.ultraThinMaterial, in: Capsule())
+                                .liquidGlass(shape: .capsule, isInteractive: true)
                         }
                         .disabled(!store.isPresentationOverrideLoaded)
                         .accessibilityHint(AppStrings.MediaPresentation.localOnlyDescription)
@@ -86,10 +86,10 @@
                         store.send(.closeTapped)
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.bodyMedium.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(8)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .liquidGlass(shape: .circle, isInteractive: true)
                     }
                 }
 
@@ -98,8 +98,10 @@
                         // Reload or Sync Action
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.bodyMedium.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(8)
+                            .liquidGlass(shape: .circle, isInteractive: true)
                     }
                 }
             }
@@ -130,11 +132,10 @@
                 }
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(AppFonts.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.9))
                     .frame(width: 34, height: 34)
-                    .background(Color(hex: "#1A1A24"), in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .liquidGlass(shape: .circle, isInteractive: true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(AppStrings.Settings.contentSorting)
@@ -156,7 +157,7 @@
                             case let .success(image):
                                 image.resizable().scaledToFill()
                             default:
-                                Rectangle().fill(Color(hex: "#1A1A24"))
+                                Rectangle().fill(AppColors.surfaceTertiary)
                             }
                         }
                         .frame(width: proxy.size.width, height: proxy.size.height)
@@ -164,7 +165,7 @@
                         .blur(radius: 40)
                         .opacity(0.4)
                     } else {
-                        Rectangle().fill(Color(hex: "#1A1A24"))
+                        Rectangle().fill(AppColors.surfaceTertiary)
                     }
                 }
 
@@ -172,7 +173,7 @@
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: Color(hex: "#0F0F13"), location: 1),
+                        .init(color: AppColors.surfaceDark, location: 1),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -191,19 +192,19 @@
                                 case let .success(image):
                                     image.resizable().scaledToFill()
                                 case .empty:
-                                    Rectangle().fill(Color(hex: "#2A2A30")).shimmeringPlaceholder(isLoading: true)
+                                    Rectangle().fill(AppColors.surfaceElevated).shimmeringPlaceholder(isLoading: true)
                                 case .failure:
-                                    Rectangle().fill(Color(hex: "#2A2A30"))
+                                    Rectangle().fill(AppColors.surfaceElevated)
                                 @unknown default:
-                                    Rectangle().fill(Color(hex: "#2A2A30"))
+                                    Rectangle().fill(AppColors.surfaceElevated)
                                 }
                             }
                             .frame(width: 120, height: 180)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
+                            .shadow(color: AppColors.oledBlack.opacity(0.5), radius: 10, x: 0, y: 5)
                         } else if store.isTMDBLoading {
                             Rectangle()
-                                .fill(Color(hex: "#2A2A30"))
+                                .fill(AppColors.surfaceElevated)
                                 .frame(width: 120, height: 180)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .shimmeringPlaceholder(isLoading: true)
@@ -283,36 +284,36 @@
                                 progress: WatchProgressFormatter.progressRatio(progress: history.progress, duration: history.duration),
                                 lineWidth: 2.5,
                                 size: 22,
-                                gradientColors: [Color(hex: "#00F5D4"), Color.white],
-                                trackColor: Color.white.opacity(0.3)
+                                gradientColors: [AppColors.neonTeal, AppColors.textPrimary],
+                                trackColor: AppColors.borderStrong
                             ) {
                                 Image(systemName: "play.fill")
                                     .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
 
                             Text(AppStrings.SeriesDetail.continueWatching)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(AppFonts.bodyLarge.weight(.semibold))
 
                             let percent = WatchProgressFormatter.percentage(progress: history.progress, duration: history.duration)
                             Text("%\(percent)")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(AppFonts.caption.bold())
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
-                                .background(Color.white.opacity(0.2), in: Capsule())
+                                .background(AppColors.borderStrong, in: Capsule())
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                colors: [AppColors.primary, AppColors.primary.opacity(0.75)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                        .shadow(color: AppColors.primary.opacity(0.35), radius: 8, y: 3)
                     }
                 } else {
                     Button {
@@ -323,27 +324,27 @@
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "play.fill")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(AppFonts.bodyLarge.bold())
                             Text(AppStrings.SeriesDetail.watch)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(AppFonts.bodyLarge.weight(.semibold))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0055B3")],
+                                colors: [AppColors.primary, AppColors.primary.opacity(0.75)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .shadow(color: Color(hex: "#0A84FF").opacity(0.35), radius: 8, y: 3)
+                        .shadow(color: AppColors.primary.opacity(0.35), radius: 8, y: 3)
                     }
                 }
 
                 // 2. Secondary Symmetrical Action Row (Zero-Scroll Above-the-Fold)
-                HStack(spacing: 8) {
+                LiquidGlassContainer(spacing: 8) {
                     if store.currentEpisodeRevealTarget != nil {
                         Button {
                             HapticManager.shared.trigger(.light)
@@ -353,15 +354,14 @@
                                 Image(systemName: "dot.scope")
                                     .font(.system(size: 16, weight: .medium))
                                 Text(AppStrings.SeriesDetail.currentEpisode)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(AppFonts.caption)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
-                            .foregroundStyle(.white)
+                            .liquidGlass(shape: .roundedRectangle(cornerRadius: 10), isInteractive: true)
+                            .foregroundStyle(AppColors.textPrimary)
                         }
                     }
 
@@ -374,13 +374,12 @@
                                 Image(systemName: "arrow.counterclockwise")
                                     .font(.system(size: 16, weight: .medium))
                                 Text(AppStrings.SeriesDetail.restart)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(AppFonts.caption)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
-                            .foregroundStyle(.white)
+                            .liquidGlass(shape: .roundedRectangle(cornerRadius: 10), isInteractive: true)
+                            .foregroundStyle(AppColors.textPrimary)
                         }
                     }
 
@@ -393,13 +392,12 @@
                                 Image(systemName: "film.fill")
                                     .font(.system(size: 16, weight: .medium))
                                 Text(AppStrings.VODDetail.trailer)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(AppFonts.caption)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.8))
-                            .foregroundStyle(.white)
+                            .liquidGlass(shape: .roundedRectangle(cornerRadius: 10), isInteractive: true)
+                            .foregroundStyle(AppColors.textPrimary)
                         }
                     }
 
@@ -410,18 +408,14 @@
                         VStack(spacing: 4) {
                             Image(systemName: store.isFavorite ? "heart.fill" : "heart")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                                .foregroundStyle(store.isFavorite ? AppColors.destructive : AppColors.textPrimary)
                             Text(store.isFavorite ? AppStrings.Common.favorited : AppStrings.Common.favorite)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(store.isFavorite ? Color.red : Color.white)
+                                .font(AppFonts.caption)
+                                .foregroundStyle(store.isFavorite ? AppColors.destructive : AppColors.textPrimary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(
-                            store.isFavorite ? Color.red.opacity(0.15) : Color.white.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(store.isFavorite ? Color.red.opacity(0.3) : Color.white.opacity(0.15), lineWidth: 0.8))
+                        .liquidGlass(shape: .roundedRectangle(cornerRadius: 10), tint: store.isFavorite ? AppColors.destructive.opacity(0.15) : nil, isInteractive: true)
                     }
                 }
             }
@@ -561,11 +555,10 @@
                                     }
                                 } label: {
                                     Image(systemName: "shuffle")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
+                                        .font(AppFonts.caption.weight(.semibold))
+                                        .foregroundColor(AppColors.textPrimary)
                                         .padding(8)
-                                        .background(Color(hex: "#1A1A24"), in: Circle())
-                                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                        .liquidGlass(shape: .circle, isInteractive: true)
                                 }
                                 .accessibilityLabel(AppStrings.SeriesDetail.shuffleEpisodes)
                             }
@@ -577,11 +570,10 @@
                                     store.send(.toggleLayoutMode)
                                 } label: {
                                     Image(systemName: store.episodeLayoutMode == .list ? "square.grid.2x2" : "rectangle.grid.1x2")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
+                                        .font(AppFonts.caption.weight(.semibold))
+                                        .foregroundColor(AppColors.textPrimary)
                                         .padding(8)
-                                        .background(Color(hex: "#1A1A24"), in: Circle())
-                                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                        .liquidGlass(shape: .circle, isInteractive: true)
                                 }
                             }
                         }
@@ -665,7 +657,7 @@
                                     Spacer()
                                 }
                                 .padding(10)
-                                .background(Color(hex: "#1A1A24"), in: RoundedRectangle(cornerRadius: 14))
+                                .background(AppColors.surfaceTertiary, in: RoundedRectangle(cornerRadius: 14))
                                 .shimmeringPlaceholder(isLoading: true)
                             }
                         }

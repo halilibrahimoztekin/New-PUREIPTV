@@ -20,7 +20,7 @@
 
         public var body: some View {
             ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
+                AppColors.surfaceDark.ignoresSafeArea()
 
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -147,7 +147,7 @@
                         .opacity(0.35)
                 } else {
                     Rectangle()
-                        .fill(Color(hex: "#1A1A24"))
+                        .fill(AppColors.surfaceTertiary)
                         .frame(height: 650)
                 }
 
@@ -155,7 +155,7 @@
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: Color(hex: "#0F0F13"), location: 1),
+                        .init(color: AppColors.surfaceDark, location: 1),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -244,7 +244,7 @@
                                             progress: ratio,
                                             lineWidth: 3.5,
                                             size: 26,
-                                            gradientColors: [Color(hex: "#00F5D4"), Color.white],
+                                            gradientColors: [AppColors.neonTeal, AppColors.textPrimary],
                                             trackColor: Color.white.opacity(0.3)
                                         ) {
                                             Image(systemName: "play.fill")
@@ -601,7 +601,7 @@
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {
-                                Rectangle().fill(Color(hex: "#2A2A30"))
+                                Rectangle().fill(AppColors.surfaceElevated)
                             }
                         }
                         .frame(width: 260, height: 150)
@@ -623,13 +623,13 @@
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(Color(hex: "#00BA88"), in: Capsule())
+                            .background(AppColors.success, in: Capsule())
                             .padding(10)
                         } else if isInProgress {
                             GeometryReader { proxy in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
-                                    Capsule().fill(Color(hex: "#00F5D4")).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
+                                    Capsule().fill(AppColors.neonTeal).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
                                 }
                             }
                             .frame(height: 5)
@@ -653,14 +653,14 @@
                             if isInProgress {
                                 Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(Color(hex: "#00F5D4"))
+                                    .foregroundStyle(AppColors.neonTeal)
                             }
                         }
 
                         HStack(spacing: 18) {
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .foregroundStyle(AppColors.primary)
 
                             if let rating = episode.rating, rating > 0 {
                                 HStack(spacing: 5) {
@@ -751,7 +751,7 @@
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {
-                                Rectangle().fill(Color(hex: "#2A2A30"))
+                                Rectangle().fill(AppColors.surfaceElevated)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -774,13 +774,13 @@
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(Color(hex: "#00BA88"), in: Capsule())
+                            .background(AppColors.success, in: Capsule())
                             .padding(12)
                         } else if isInProgress {
                             GeometryReader { proxy in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(Color.white.opacity(0.3)).frame(height: 5)
-                                    Capsule().fill(Color(hex: "#00F5D4")).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
+                                    Capsule().fill(AppColors.neonTeal).frame(width: proxy.size.width * CGFloat(ratio), height: 5)
                                 }
                             }
                             .frame(height: 5)
@@ -800,13 +800,13 @@
                             Spacer()
                             Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .foregroundStyle(AppColors.primary)
                         }
 
                         if isInProgress {
                             Text("%\(percent) \(AppStrings.SeriesDetail.watched.lowercased())")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                .foregroundStyle(AppColors.neonTeal)
                         } else if let duration = episode.duration {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")

@@ -268,16 +268,16 @@ public struct PlayerSidebarDrawer: View {
             HStack(spacing: 5) {
                 Image(systemName: store.isChannelNameCleaningEnabled ? "wand.and.stars" : "wand.and.stars.inverse")
                 #if os(tvOS)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(AppFonts.caption.bold())
                 #else
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppFonts.caption.bold())
                 #endif
-                    .foregroundStyle(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A") : .white.opacity(0.5))
+                    .foregroundStyle(store.isChannelNameCleaningEnabled ? AppColors.warningGold : AppColors.textSecondary.opacity(0.5))
 
                 #if !os(tvOS)
                     Text(store.isChannelNameCleaningEnabled ? "Sade" : "Ham")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A") : .white.opacity(0.6))
+                        .font(AppFonts.caption.bold())
+                        .foregroundStyle(store.isChannelNameCleaningEnabled ? AppColors.warningGold : AppColors.textSecondary.opacity(0.6))
                 #endif
             }
             #if os(tvOS)
@@ -289,11 +289,11 @@ public struct PlayerSidebarDrawer: View {
             #endif
             .background(
                 Capsule()
-                    .fill(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A").opacity(0.15) : Color.white.opacity(0.08))
+                    .fill(store.isChannelNameCleaningEnabled ? AppColors.warningGold.opacity(0.15) : AppColors.borderSubtle)
             )
             .overlay(
                 Capsule()
-                    .stroke(store.isChannelNameCleaningEnabled ? Color(hex: "#FFD60A").opacity(0.4) : Color.white.opacity(0.12), lineWidth: 1)
+                    .stroke(store.isChannelNameCleaningEnabled ? AppColors.warningGold.opacity(0.4) : AppColors.borderMedium, lineWidth: 1)
             )
         }
         #if os(tvOS)
@@ -574,7 +574,7 @@ public struct PlayerSidebarDrawer: View {
                     #else
                         .font(.subheadline.weight(isCurrent ? .bold : .regular))
                     #endif
-                        .foregroundStyle(isCurrent ? Color(hex: "#0A84FF") : .white)
+                        .foregroundStyle(isCurrent ? AppColors.primary : AppColors.textPrimary)
                     #if os(tvOS)
                         .lineLimit(showTwoLineChannelTitles ? 2 : 1)
                     #else
@@ -586,12 +586,12 @@ public struct PlayerSidebarDrawer: View {
                         if let cat = item.categoryID, !cat.isEmpty {
                             Text(cat)
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.5))
                                 .lineLimit(1)
                         } else if let epgID = item.epgChannelID {
                             Text(epgID)
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.4))
                                 .lineLimit(1)
                         }
 
@@ -599,10 +599,10 @@ public struct PlayerSidebarDrawer: View {
                         if let country = metadata.detectedCountry {
                             Text(country)
                                 .font(.system(size: 8, weight: .black, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color.white.opacity(0.14))
+                                .background(AppColors.borderMedium)
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
 
@@ -621,10 +621,10 @@ public struct PlayerSidebarDrawer: View {
                         if metadata.isHEVC {
                             Text("HEVC")
                                 .font(.system(size: 8, weight: .black, design: .rounded))
-                                .foregroundStyle(Color(hex: "#BF5AF2"))
+                                .foregroundStyle(AppColors.premium)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color(hex: "#BF5AF2").opacity(0.18))
+                                .background(AppColors.premium.opacity(0.18))
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
 
@@ -636,10 +636,10 @@ public struct PlayerSidebarDrawer: View {
                                 Text("ARŞİV")
                                     .font(.system(size: 8, weight: .bold))
                             }
-                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .foregroundStyle(AppColors.warningGold)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(Color(hex: "#FFD60A").opacity(0.16))
+                            .background(AppColors.warningGold.opacity(0.16))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
 
@@ -651,10 +651,10 @@ public struct PlayerSidebarDrawer: View {
                                 Text("\(count)x")
                                     .font(.system(size: 8, weight: .bold))
                             }
-                            .foregroundStyle(Color(hex: "#FF9F0A"))
+                            .foregroundStyle(AppColors.warning)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(Color(hex: "#FF9F0A").opacity(0.18))
+                            .background(AppColors.warning.opacity(0.18))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
                     }
@@ -666,15 +666,15 @@ public struct PlayerSidebarDrawer: View {
                 if isCurrent {
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(AppColors.success)
                             .frame(width: 7, height: 7)
                         Text(AppStrings.Player.liveLabel)
                             .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColors.success)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.green.opacity(0.18))
+                    .background(AppColors.success.opacity(0.18))
                     .clipShape(Capsule())
                 } else if isPrevious {
                     HStack(spacing: 4) {
@@ -685,8 +685,8 @@ public struct PlayerSidebarDrawer: View {
                     }
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .foregroundStyle(.orange)
-                    .background(Color.orange.opacity(0.18))
+                    .foregroundStyle(AppColors.warning)
+                    .background(AppColors.warning.opacity(0.18))
                     .clipShape(Capsule())
                 }
             }
@@ -699,12 +699,12 @@ public struct PlayerSidebarDrawer: View {
             #endif
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isCurrent ? Color(hex: "#0A84FF").opacity(0.18) : Color.white.opacity(0.04))
+                    .fill(isCurrent ? AppColors.primary.opacity(0.18) : AppColors.borderSubtle)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isCurrent ? Color(hex: "#0A84FF").opacity(0.6) : Color.white.opacity(0.06),
+                        isCurrent ? AppColors.primary.opacity(0.6) : AppColors.divider,
                         lineWidth: 1
                     )
             )
@@ -1009,7 +1009,7 @@ public struct PlayerSidebarDrawer: View {
                     .scaleEffect(isFocused ? 1.08 : 1.0)
                     .brightness(isFocused ? 0.25 : 0.0)
                     .shadow(
-                        color: isFocused ? (isActive ? Color(hex: "#FFD60A").opacity(0.8) : Color.white.opacity(0.5)) : .clear,
+                        color: isFocused ? (isActive ? AppColors.warningGold.opacity(0.8) : Color.white.opacity(0.5)) : .clear,
                         radius: isFocused ? 10 : 0,
                         x: 0,
                         y: 0

@@ -70,6 +70,7 @@ public struct RecentChannelsHUDView: View {
         )
         .shadow(color: .black.opacity(0.6), radius: 20, x: 0, y: 10)
         #endif
+        .simultaneousGesture(TapGesture().onEnded { resetDismissTimer() })
         .onAppear {
             setupInitialFocus()
             resetDismissTimer()
@@ -377,7 +378,7 @@ public struct RecentChannelsHUDView: View {
         }
     }
 
-    private func resetDismissTimer() {
+    private func resetDismissTimer(duration: TimeInterval = 20.0) {
         cancelDismissTimer()
         let work = DispatchWorkItem {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -385,7 +386,7 @@ public struct RecentChannelsHUDView: View {
             }
         }
         dismissWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 
     private func cancelDismissTimer() {

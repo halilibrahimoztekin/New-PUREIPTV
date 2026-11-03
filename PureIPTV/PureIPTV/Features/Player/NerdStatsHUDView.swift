@@ -58,81 +58,62 @@ public struct NerdStatsHUDView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // ── Header Bar ───────────────────────────────────────────
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "terminal.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(AppColors.neonTeal)
+        LiquidGlassHUDCard(cornerRadius: 18, tint: AppColors.neonTeal, isInteractive: true) {
+            VStack(alignment: .leading, spacing: 14) {
+                // ── Header Bar ───────────────────────────────────────────
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppColors.neonTeal)
 
-                Text(AppStrings.Player.nerdStats)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AppColors.textPrimary)
+                    Text(AppStrings.Player.nerdStats)
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppColors.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                // State indicator pulse
-                stateBadge
+                    // State indicator pulse
+                    stateBadge
 
-                // Close Button
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.85))
+                    // Close Button
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.85))
+                    }
+                    .buttonStyle(.plain)
+                    #if os(tvOS)
+                        .focused($isCloseFocused)
+                        .scaleEffect(isCloseFocused ? 1.25 : 1.0)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isCloseFocused)
+                    #endif
                 }
-                .buttonStyle(.plain)
-                #if os(tvOS)
-                    .focused($isCloseFocused)
-                    .scaleEffect(isCloseFocused ? 1.25 : 1.0)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isCloseFocused)
+                .padding(.bottom, 4)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.15))
+
+                #if !os(tvOS)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        metricsAndRawStats
+                            .padding(.horizontal, 2)
+                    }
+                    .frame(maxHeight: 280)
+                #else
+                    metricsAndRawStats
                 #endif
             }
-            .padding(.bottom, 4)
-
-            Divider()
-                .overlay(Color.white.opacity(0.15))
-
-            #if !os(tvOS)
-                ScrollView(.vertical, showsIndicators: false) {
-                    metricsAndRawStats
-                        .padding(.horizontal, 2)
-                }
-                .frame(maxHeight: 280)
+            .padding(20)
+            #if os(tvOS)
+                .frame(width: 580)
             #else
-                metricsAndRawStats
+                .frame(maxWidth: 380)
             #endif
         }
-        .padding(20)
         #if os(tvOS)
-            .frame(width: 580)
-        #else
-            .frame(maxWidth: 380)
-        #endif
-            .background(
-                ZStack {
-                    Color.black.opacity(0.82)
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        LinearGradient(
-                            colors: [AppColors.neonTeal.opacity(0.6), AppColors.primary.opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.7), radius: 24, x: 0, y: 12)
-            .shadow(color: AppColors.neonTeal.opacity(0.18), radius: 18, x: 0, y: 6)
-        #if os(tvOS)
-            .onExitCommand {
-                onClose()
-            }
+        .onExitCommand {
+            onClose()
+        }
         #endif
     }
 
