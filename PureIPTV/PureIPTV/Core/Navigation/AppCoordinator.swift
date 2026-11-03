@@ -2748,6 +2748,19 @@ public struct AppCoordinator {
                 action: .home(.delegate(.didSelectSeries(series)))
             )))
 
+        case let .router(.routeAction(searchRouteIndex, .globalSearch(.delegate(.didSelectCategory(category, type, playlistID))))):
+            guard state.routes.indices.contains(searchRouteIndex),
+                  searchRouteIndex == state.routes.count - 1,
+                  case let .globalSearch(searchState) = state.routes[searchRouteIndex].screen,
+                  state.routes.indices.contains(searchState.homeRouteIndex),
+                  case .home = state.routes[searchState.homeRouteIndex].screen
+            else { return .none }
+            state.routes.dismiss()
+            return .send(.router(.routeAction(
+                id: searchState.homeRouteIndex,
+                action: .home(.selectCategory(category: category, type: type, playlistID: playlistID))
+            )))
+
         default:
             return .none
         }

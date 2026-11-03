@@ -18,6 +18,9 @@
         private let personColumns: [GridItem] = [
             GridItem(.adaptive(minimum: 190, maximum: 300), spacing: 12),
         ]
+        private let categoryColumns: [GridItem] = [
+            GridItem(.adaptive(minimum: 165, maximum: 280), spacing: 12),
+        ]
 
         public init(store: StoreOf<SearchFeature>, config: PlaylistConfig, onClose: (() -> Void)? = nil) {
             self.store = store
@@ -346,6 +349,41 @@
                     } else {
                         if store.searchQuery.isEmpty || store.searchContentScope == .all {
                             curatedPlaylistSection
+                        }
+
+                        // 0. Categories Section
+                        if store.filter == .all || store.filter == .categories, !store.categoryResults.isEmpty {
+                            resultSection(title: AppStrings.Search.categories, count: store.categoryResults.count) {
+                                if store.filter == .all {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        LazyHStack(spacing: 12) {
+                                            ForEach(store.categoryResults) { result in
+                                                CategorySearchResultCard(
+                                                    result: result,
+                                                    queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),
+                                                    showPlaylistBadge: store.savedPlaylists.count > 1
+                                                ) {
+                                                    store.send(.categorySelected(result))
+                                                }
+                                                .frame(width: 220)
+                                            }
+                                        }
+                                        .padding(.vertical, 2)
+                                    }
+                                } else {
+                                    LazyVGrid(columns: categoryColumns, spacing: 12) {
+                                        ForEach(store.categoryResults) { result in
+                                            CategorySearchResultCard(
+                                                result: result,
+                                                queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),
+                                                showPlaylistBadge: store.savedPlaylists.count > 1
+                                            ) {
+                                                store.send(.categorySelected(result))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // 1. Live Channels Section
@@ -780,119 +818,150 @@
             }
         }
 
+        private var allCategoriesDiscoverySection: some View {
+            let categories = store.scopedDiscoveryCategories
+            return VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label(AppStrings.Search.allCategories, systemImage: "folder.fill")
+                        .font(AppFonts.bodyLarge.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("\(categories.count)")
+                        .font(AppFonts.captionMedium.monospacedDigit())
+                        .foregroundStyle(AppColors.onSurfaceVariant)
+                }
+
+                LazyVGrid(columns: categoryColumns, spacing: 12) {
+                    ForEach(categories) { result in
+                        CategorySearchResultCard(
+                            result: result,
+                            queryTerms: [],
+                            showPlaylistBadge: store.savedPlaylists.count > 1
+                        ) {
+                            store.send(.categorySelected(result))
+                        }
+                    }
+                }
+            }
+        }
+
         private var emptySearchDiscoveryView: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    curatedPlaylistSection
+                    if store.filter == .categories {
+                        allCategoriesDiscoverySection
+                    } else {
+                        curatedPlaylistSection
 
-                    if !store.pinnedSearchQueries.isEmpty {
-                        pinnedSearchesSection
-                    }
+                        if !store.pinnedSearchQueries.isEmpty {
+                            pinnedSearchesSection
+                        }
 
-                    // Recent Searches Section
-                    if !store.recentSearches.isEmpty {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
-                                    .font(AppFonts.bodyLarge.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Spacer()
-                                Button {
-                                    HapticManager.shared.trigger(.light)
-                                    store.send(.clearHistoryTapped)
-                                } label: {
-                                    Text(AppStrings.Search.clear)
-                                        .font(AppFonts.bodySmall.weight(.medium))
-                                        .foregroundColor(AppColors.primary)
-                                }
-                            }
-
-                            VStack(spacing: 0) {
-                                ForEach(store.recentSearches.prefix(6), id: \.id) { item in
+                        // Recent Searches Section
+                        if !store.recentSearches.isEmpty {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
+                                        .font(AppFonts.bodyLarge.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Spacer()
                                     Button {
                                         HapticManager.shared.trigger(.light)
-                                        store.send(.recentSearchTapped(item.query))
+                                        store.send(.clearHistoryTapped)
                                     } label: {
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
-                                                .font(AppFonts.caption.weight(.semibold))
-                                            Text(item.query)
-                                                .font(AppFonts.bodyMedium)
-                                                .foregroundColor(AppColors.onSurface)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(AppFonts.captionSmall)
-                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
+                                        Text(AppStrings.Search.clear)
+                                            .font(AppFonts.bodySmall.weight(.medium))
+                                            .foregroundColor(AppColors.primary)
+                                    }
+                                }
+
+                                VStack(spacing: 0) {
+                                    ForEach(store.recentSearches.prefix(6), id: \.id) { item in
+                                        Button {
+                                            HapticManager.shared.trigger(.light)
+                                            store.send(.recentSearchTapped(item.query))
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "clock")
+                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
+                                                    .font(AppFonts.caption.weight(.semibold))
+                                                Text(item.query)
+                                                    .font(AppFonts.bodyMedium)
+                                                    .foregroundColor(AppColors.onSurface)
+                                                Spacer()
+                                                Image(systemName: "chevron.right")
+                                                    .font(AppFonts.captionSmall)
+                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                            .background(AppColors.surfaceSecondary.opacity(0.5))
                                         }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                        .background(AppColors.surfaceSecondary.opacity(0.5))
+                                        .buttonStyle(.plain)
+
+                                        if item.id != store.recentSearches.prefix(6).last?.id {
+                                            Divider()
+                                                .background(Color.white.opacity(0.05))
+                                                .padding(.leading, 40)
+                                        }
+                                    }
+                                }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(AppColors.surfaceSecondary)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                        )
+                                )
+                            }
+                        }
+
+                        // Quick Discovery Categories & Tags
+                        VStack(alignment: .leading, spacing: 14) {
+                            Label(AppStrings.Search.quickTags, systemImage: "sparkles")
+                                .font(AppFonts.bodyLarge.weight(.semibold))
+                                .foregroundStyle(.white)
+
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12)], spacing: 12) {
+                                ForEach(store.quickTags) { tag in
+                                    Button {
+                                        HapticManager.shared.trigger(.light)
+                                        store.send(.tagSelected(tag))
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(tag.color.opacity(0.18))
+                                                    .frame(width: 36, height: 36)
+                                                Image(systemName: tag.icon)
+                                                    .font(AppFonts.bodyMedium.weight(.semibold))
+                                                    .foregroundStyle(tag.color)
+                                            }
+
+                                            Text(tag.title)
+                                                .font(AppFonts.bodySmall.weight(.semibold))
+                                                .foregroundStyle(AppColors.textPrimary)
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.right")
+                                                .font(AppFonts.captionSmall.weight(.semibold))
+                                                .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .fill(AppColors.surfaceContainer)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                                )
+                                        )
                                     }
                                     .buttonStyle(.plain)
-
-                                    if item.id != store.recentSearches.prefix(6).last?.id {
-                                        Divider()
-                                            .background(Color.white.opacity(0.05))
-                                            .padding(.leading, 40)
-                                    }
                                 }
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(AppColors.surfaceSecondary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                                    )
-                            )
-                        }
-                    }
-
-                    // Quick Discovery Categories & Tags
-                    VStack(alignment: .leading, spacing: 14) {
-                        Label(AppStrings.Search.quickTags, systemImage: "sparkles")
-                            .font(AppFonts.bodyLarge.weight(.semibold))
-                            .foregroundStyle(.white)
-
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12)], spacing: 12) {
-                            ForEach(store.quickTags) { tag in
-                                Button {
-                                    HapticManager.shared.trigger(.light)
-                                    store.send(.tagSelected(tag))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .fill(tag.color.opacity(0.18))
-                                                .frame(width: 36, height: 36)
-                                            Image(systemName: tag.icon)
-                                                .font(AppFonts.bodyMedium.weight(.semibold))
-                                                .foregroundStyle(tag.color)
-                                        }
-
-                                        Text(tag.title)
-                                            .font(AppFonts.bodySmall.weight(.semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-
-                                        Spacer()
-
-                                        Image(systemName: "chevron.right")
-                                            .font(AppFonts.captionSmall.weight(.semibold))
-                                            .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(AppColors.surfaceContainer)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                                            )
-                                    )
-                                }
-                                .buttonStyle(.plain)
                             }
                         }
                     }

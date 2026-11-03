@@ -156,4 +156,58 @@ final class SearchFeatureTests: XCTestCase {
         XCTAssertEqual(pBOutput.live.count, 1)
         XCTAssertEqual(pBOutput.live.first?.item.id, "c2")
     }
+
+    func testGlobalSearchEngineCategorySearch() {
+        let cat1 = MediaModels.Category(id: "c_sports", name: "Spor Kanalları")
+        let cat2 = MediaModels.Category(id: "c_cinema", name: "Sinema Aksiyon")
+        let cat3 = MediaModels.Category(id: "c_kids", name: "Çocuk Dünyası")
+
+        let badge = PlaylistSourceBadge(id: "badge1", playlistName: "Ana Liste", colorHex: "#3B82F6")
+
+        let indexedCategories = [
+            CategorySearchResultItem(category: cat1, type: .live, playlistBadge: badge, itemCount: 25),
+            CategorySearchResultItem(category: cat2, type: .vod, playlistBadge: badge, itemCount: 110),
+            CategorySearchResultItem(category: cat3, type: .live, playlistBadge: badge, itemCount: 15),
+        ]
+
+        // 1. Search for "spor" in .all
+        let allOutput = GlobalSearchEngine.search(
+            query: "spor",
+            filter: .all,
+            selectedPlaylistID: nil,
+            channels: [],
+            vods: [],
+            series: [],
+            categories: indexedCategories
+        )
+        XCTAssertEqual(allOutput.categories.count, 1)
+        XCTAssertEqual(allOutput.categories.first?.category.id, "c_sports")
+        XCTAssertEqual(allOutput.counts[.categories], 1)
+
+        // 2. Search for "sinema" in .categories
+        let catOutput = GlobalSearchEngine.search(
+            query: "sinema",
+            filter: .categories,
+            selectedPlaylistID: nil,
+            channels: [],
+            vods: [],
+            series: [],
+            categories: indexedCategories
+        )
+        XCTAssertEqual(catOutput.categories.count, 1)
+        XCTAssertEqual(catOutput.categories.first?.category.id, "c_cinema")
+
+        // 3. Search with Turkish diacritics "cocuk" -> "Çocuk Dünyası"
+        let diacriticsOutput = GlobalSearchEngine.search(
+            query: "cocuk",
+            filter: .categories,
+            selectedPlaylistID: nil,
+            channels: [],
+            vods: [],
+            series: [],
+            categories: indexedCategories
+        )
+        XCTAssertEqual(diacriticsOutput.categories.count, 1)
+        XCTAssertEqual(diacriticsOutput.categories.first?.category.id, "c_kids")
+    }
 }

@@ -128,6 +128,7 @@ private nonisolated func orderedOfflineSearchEpisodeQueue(
 public struct SearchFeature: Sendable {
     public enum SearchFilter: String, CaseIterable, Equatable, Hashable, Sendable {
         case all = "Tümü"
+        case categories = "Kategoriler"
         case live = "Canlı TV"
         case vod = "Filmler"
         case series = "Diziler"
@@ -140,6 +141,7 @@ public struct SearchFeature: Sendable {
         public var title: String {
             switch self {
             case .all: AppStrings.Search.all
+            case .categories: AppStrings.Search.categories
             case .live: AppStrings.Search.liveTV
             case .vod: AppStrings.Search.movies
             case .series: AppStrings.Search.series
@@ -154,6 +156,7 @@ public struct SearchFeature: Sendable {
         public var icon: String {
             switch self {
             case .all: "square.grid.2x2.fill"
+            case .categories: "folder.fill"
             case .live: "tv.fill"
             case .vod: "film.fill"
             case .series: "play.tv.fill"
@@ -168,6 +171,7 @@ public struct SearchFeature: Sendable {
         public var badgeColorHex: String {
             switch self {
             case .all: "#0A84FF" // System Blue
+            case .categories: "#00D2FF" // Cyan
             case .live: "#0A84FF" // Electric Blue
             case .vod: "#BF5AF2" // Cinema Violet
             case .series: "#FF9F0A" // Sunset Amber
@@ -182,6 +186,7 @@ public struct SearchFeature: Sendable {
         public var badgeColor: Color {
             switch self {
             case .all, .live: AppColors.primary
+            case .categories: AppColors.cyan
             case .vod: AppColors.premium
             case .series: AppColors.amber
             case .uhd4k: AppColors.warningGold
@@ -306,6 +311,7 @@ public struct SearchFeature: Sendable {
         public var allChannels: [MediaModels.Item] = []
         public var allVODs: [MediaModels.Item] = []
         public var allSeries: [MediaModels.Item] = []
+        public var allCategories: [CategorySearchResultItem] = []
         public var hiddenMediaEntries: [HiddenMediaEntry] = []
         public var hiddenMediaScope: ProfileContextSnapshot?
         public var hiddenMediaLoadRequestID: UUID?
@@ -317,6 +323,7 @@ public struct SearchFeature: Sendable {
         public var indexedChannels: [GlobalSearchResultItem] = []
         public var indexedVODs: [GlobalSearchResultItem] = []
         public var indexedSeries: [GlobalSearchResultItem] = []
+        public var indexedCategories: [CategorySearchResultItem] = []
         public var curatedPlaylistEntries: [CuratedPlaylistEntry] = []
         public var curatedPlaylistResults: [GlobalSearchResultItem] = []
         public var curatedPlaylistRevision: UInt64 = 0
@@ -371,6 +378,7 @@ public struct SearchFeature: Sendable {
         public var liveResults: [MediaModels.Item] = []
         public var vodResults: [MediaModels.Item] = []
         public var seriesResults: [MediaModels.Item] = []
+        public var categoryResults: [CategorySearchResultItem] = []
         public var favoriteIDs: Set<FavoriteIdentity> = []
         public var scheduledReminderIDs: Set<String> = []
         public var pendingReminderRequestIDs: [String: UUID] = [:]
@@ -435,6 +443,7 @@ public struct SearchFeature: Sendable {
 
         public var visibleResultIDs: [String] {
             let fallbackBadge = fallbackSourceBadge
+            let categoryIDs = categoryResults.map(\.id)
             let liveIDs = enrichedLiveResults.isEmpty
                 ? liveResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
                 : enrichedLiveResults.map(\.id)
@@ -445,7 +454,8 @@ public struct SearchFeature: Sendable {
                 ? seriesResults.map { GlobalSearchResultItem(item: $0, playlistBadge: fallbackBadge).id }
                 : enrichedSeriesResults.map(\.id)
             return switch filter {
-            case .all: liveIDs + vodIDs + seriesIDs + peopleResults.map(\.id) + programResults.map(\.id)
+            case .all: categoryIDs + liveIDs + vodIDs + seriesIDs + peopleResults.map(\.id) + programResults.map(\.id)
+            case .categories: categoryIDs
             case .uhd4k: liveIDs + vodIDs + seriesIDs
             case .live, .epgMatches: liveIDs
             case .vod: vodIDs
@@ -482,6 +492,37 @@ public struct SearchFeature: Sendable {
                     fallbackPlaylistID: fallbackPlaylistID
                 )
             }
+        }
+
+        public func searchScopedCategories(_ categories: [CategorySearchResultItem]) -> [CategorySearchResultItem] {
+            let badgeIDs = playlistIDsByBadgeID
+            let fallbackPlaylistID = lastLoadedConfig?.playlistID
+            return categories.filter { cat in
+                switch searchContentScope {
+                case .all, .pinned:
+                    return true
+                case .myCategories:
+                    guard !cat.category.id.isEmpty else { return true }
+                    let playlistID = cat.playlistID
+                        ?? badgeIDs[cat.playlistBadge.id]
+                        ?? fallbackPlaylistID
+                    return !hiddenSearchCategoryPreferenceIDs.contains(
+                        searchCategoryPreferenceIdentity(
+                            type: cat.type.rawValue,
+                            playlistID: playlistID,
+                            categoryID: cat.category.id
+                        )
+                    )
+                }
+            }
+        }
+
+        public var scopedDiscoveryCategories: [CategorySearchResultItem] {
+            let raw = indexedCategories.isEmpty ? allCategories : indexedCategories
+            let scoped = searchScopedCategories(raw)
+            guard let selectedPlaylistID else { return scoped }
+            let sourceID = PlaylistSourceBadge.sourceID(for: selectedPlaylistID)
+            return scoped.filter { $0.playlistBadge.id == sourceID }
         }
 
         public mutating func invalidateFocusMemory() {
@@ -622,7 +663,8 @@ public struct SearchFeature: Sendable {
         }
 
         public mutating func updateAllResultsCount() {
-            filterCounts[.all] = baseAllResultsCount + peopleResults.count + programResults.count
+            filterCounts[.all] = baseAllResultsCount + categoryResults.count + peopleResults.count + programResults.count
+            filterCounts[.categories] = categoryResults.count
         }
 
         public mutating func clearSearchResults() {
@@ -630,6 +672,7 @@ public struct SearchFeature: Sendable {
             liveResults = []
             vodResults = []
             seriesResults = []
+            categoryResults = []
             enrichedLiveResults = []
             enrichedVODResults = []
             enrichedSeriesResults = []
@@ -644,6 +687,8 @@ public struct SearchFeature: Sendable {
 
         public var totalResultsCount: Int {
             switch filter {
+            case .categories:
+                return categoryResults.count
             case .people:
                 return peopleResults.count
             case .programs:
@@ -654,7 +699,7 @@ public struct SearchFeature: Sendable {
                 let liveCount = enrichedLiveResults.isEmpty ? liveResults.count : enrichedLiveResults.count
                 let vodCount = enrichedVODResults.isEmpty ? vodResults.count : enrichedVODResults.count
                 let seriesCount = enrichedSeriesResults.isEmpty ? seriesResults.count : enrichedSeriesResults.count
-                return liveCount + vodCount + seriesCount + peopleResults.count + programResults.count
+                return categoryResults.count + liveCount + vodCount + seriesCount + peopleResults.count + programResults.count
             default:
                 if !enrichedLiveResults.isEmpty || !enrichedVODResults.isEmpty || !enrichedSeriesResults.isEmpty {
                     return enrichedLiveResults.count + enrichedVODResults.count + enrichedSeriesResults.count
@@ -720,6 +765,7 @@ public struct SearchFeature: Sendable {
                 return !hiddenIdentities.contains(HiddenMediaIdentity(item: result.item, fallbackPlaylistID: playlistID))
             }
 
+            let catSource = !indexedCategories.isEmpty ? indexedCategories : allCategories
             let output = GlobalSearchEngine.search(
                 query: query,
                 filter: filter,
@@ -727,9 +773,11 @@ public struct SearchFeature: Sendable {
                 channels: chSource,
                 vods: voSource,
                 series: seSource,
+                categories: catSource,
                 limitPerCategory: 100
             )
 
+            categoryResults = output.categories
             enrichedLiveResults = output.live
             enrichedVODResults = output.vods
             enrichedSeriesResults = output.series
@@ -757,12 +805,12 @@ public struct SearchFeature: Sendable {
         case loadAllDataResponse(
             requestID: UUID,
             config: PlaylistConfig,
-            result: Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item]), Error>
+            result: Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], categories: [CategorySearchResultItem]), Error>
         )
         case loadPlaylistsDataResponse(
             requestID: UUID,
             config: PlaylistConfig,
-            list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])]
+            list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], categories: [CategorySearchResultItem])]
         )
         case queryChanged(String)
         case debouncedSearchFired(query: String, requestID: UUID)
@@ -780,6 +828,7 @@ public struct SearchFeature: Sendable {
         case channelSelected(MediaModels.Item)
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
+        case categorySelected(CategorySearchResultItem)
         case toggleCuratedPlaylistItem(GlobalSearchResultItem)
         case removeCuratedPlaylistItem(String)
         case focusedResultChanged(String)
@@ -806,6 +855,7 @@ public struct SearchFeature: Sendable {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
+            case didSelectCategory(category: MediaModels.Category, type: MediaModels.ItemType, playlistID: UUID?)
             case playOfflineMedia(OfflineMediaSnapshot, episodeQueue: [OfflineMediaSnapshot])
         }
     }
@@ -969,13 +1019,16 @@ public struct SearchFeature: Sendable {
                     state.allChannels = []
                     state.allVODs = []
                     state.allSeries = []
+                    state.allCategories = []
                     state.indexedChannels = []
                     state.indexedVODs = []
                     state.indexedSeries = []
+                    state.indexedCategories = []
                     state.curatedPlaylistResults = []
                     state.liveResults = []
                     state.vodResults = []
                     state.seriesResults = []
+                    state.categoryResults = []
                     state.enrichedLiveResults = []
                     state.enrichedVODResults = []
                     state.enrichedSeriesResults = []
@@ -1066,15 +1119,24 @@ public struct SearchFeature: Sendable {
                     async let channelsReq = try? iptvClient.fetchLiveChannels(config, nil)
                     let vods: [MediaModels.Item]?
                     let series: [MediaModels.Item]?
+                    let liveCats: [MediaModels.Category]?
+                    let vodCats: [MediaModels.Category]?
+                    let seriesCats: [MediaModels.Category]?
                     if config.type == .plex || config.type == .emby {
                         // Authenticated media servers are searched on demand instead of loading
                         // their entire libraries into the global search index.
                         vods = []
                         series = []
+                        liveCats = []
+                        vodCats = []
+                        seriesCats = []
                     } else {
                         async let vodsReq = try? iptvClient.fetchVODs(config, nil)
                         async let seriesReq = try? iptvClient.fetchSeries(config, nil)
-                        (vods, series) = await (vodsReq, seriesReq)
+                        async let liveCatsReq = try? iptvClient.fetchLiveCategories(config)
+                        async let vodCatsReq = try? iptvClient.fetchVODCategories(config)
+                        async let seriesCatsReq = try? iptvClient.fetchSeriesCategories(config)
+                        (vods, series, liveCats, vodCats, seriesCats) = await (vodsReq, seriesReq, liveCatsReq, vodCatsReq, seriesCatsReq)
                     }
                     let channels = await channelsReq
                     var resolvedVODs = vods ?? []
@@ -1086,6 +1148,40 @@ public struct SearchFeature: Sendable {
                         resolvedSeries = resolvedSeries.map { $0.replacingPresentationOverride(seriesOverrides[$0.id]) }
                     }
                     guard profileContextClient.snapshot() == profileScope else { return }
+
+                    let defaultBadge = searchSourceBadge(for: config)
+                    let chCounts = Dictionary(grouping: channels ?? [], by: \.categoryID).mapValues(\.count)
+                    let voCounts = Dictionary(grouping: resolvedVODs, by: \.categoryID).mapValues(\.count)
+                    let seCounts = Dictionary(grouping: resolvedSeries, by: \.categoryID).mapValues(\.count)
+
+                    var categoryItems: [CategorySearchResultItem] = []
+                    for cat in liveCats ?? [] {
+                        categoryItems.append(CategorySearchResultItem(
+                            category: cat,
+                            type: .live,
+                            playlistBadge: defaultBadge,
+                            playlistID: config.playlistID,
+                            itemCount: chCounts[cat.id] ?? 0
+                        ))
+                    }
+                    for cat in vodCats ?? [] {
+                        categoryItems.append(CategorySearchResultItem(
+                            category: cat,
+                            type: .vod,
+                            playlistBadge: defaultBadge,
+                            playlistID: config.playlistID,
+                            itemCount: voCounts[cat.id] ?? 0
+                        ))
+                    }
+                    for cat in seriesCats ?? [] {
+                        categoryItems.append(CategorySearchResultItem(
+                            category: cat,
+                            type: .series,
+                            playlistBadge: defaultBadge,
+                            playlistID: config.playlistID,
+                            itemCount: seCounts[cat.id] ?? 0
+                        ))
+                    }
 
                     if channels == nil, vods == nil, series == nil {
                         await send(.loadAllDataResponse(
@@ -1100,7 +1196,8 @@ public struct SearchFeature: Sendable {
                             result: .success((
                                 channels: channels ?? [],
                                 vods: resolvedVODs,
-                                series: resolvedSeries
+                                series: resolvedSeries,
+                                categories: categoryItems
                             ))
                         ))
                     }
@@ -1108,20 +1205,29 @@ public struct SearchFeature: Sendable {
 
                 let multiPlaylistFetch: Effect<Action> = if let multiPlaylistRequestID {
                     .run { send in
-                        var list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item])] = []
+                        var list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], categories: [CategorySearchResultItem])] = []
                         for (index, p) in playlists.enumerated() {
                             guard let pConfig = p.toPlaylistConfig() else { continue }
                             let badge = UnifiedPlaylistManager.shared.badge(for: pConfig, index: index)
                             async let channelsReq = try? iptvClient.fetchLiveChannels(pConfig, nil)
                             let vods: [MediaModels.Item]?
                             let series: [MediaModels.Item]?
+                            let liveCats: [MediaModels.Category]?
+                            let vodCats: [MediaModels.Category]?
+                            let seriesCats: [MediaModels.Category]?
                             if pConfig.type == .plex || pConfig.type == .emby {
                                 vods = []
                                 series = []
+                                liveCats = []
+                                vodCats = []
+                                seriesCats = []
                             } else {
                                 async let vodsReq = try? iptvClient.fetchVODs(pConfig, nil)
                                 async let seriesReq = try? iptvClient.fetchSeries(pConfig, nil)
-                                (vods, series) = await (vodsReq, seriesReq)
+                                async let liveCatsReq = try? iptvClient.fetchLiveCategories(pConfig)
+                                async let vodCatsReq = try? iptvClient.fetchVODCategories(pConfig)
+                                async let seriesCatsReq = try? iptvClient.fetchSeriesCategories(pConfig)
+                                (vods, series, liveCats, vodCats, seriesCats) = await (vodsReq, seriesReq, liveCatsReq, vodCatsReq, seriesCatsReq)
                             }
                             let channels = await channelsReq
                             var resolvedVODs = vods ?? []
@@ -1132,7 +1238,39 @@ public struct SearchFeature: Sendable {
                                 resolvedVODs = resolvedVODs.map { $0.replacingPresentationOverride(vodOverrides[$0.id]) }
                                 resolvedSeries = resolvedSeries.map { $0.replacingPresentationOverride(seriesOverrides[$0.id]) }
                             }
-                            list.append((badge: badge, channels: channels ?? [], vods: resolvedVODs, series: resolvedSeries))
+                            let chCounts = Dictionary(grouping: channels ?? [], by: \.categoryID).mapValues(\.count)
+                            let voCounts = Dictionary(grouping: resolvedVODs, by: \.categoryID).mapValues(\.count)
+                            let seCounts = Dictionary(grouping: resolvedSeries, by: \.categoryID).mapValues(\.count)
+
+                            var pCategories: [CategorySearchResultItem] = []
+                            for cat in liveCats ?? [] {
+                                pCategories.append(CategorySearchResultItem(
+                                    category: cat,
+                                    type: .live,
+                                    playlistBadge: badge,
+                                    playlistID: pConfig.playlistID,
+                                    itemCount: chCounts[cat.id] ?? 0
+                                ))
+                            }
+                            for cat in vodCats ?? [] {
+                                pCategories.append(CategorySearchResultItem(
+                                    category: cat,
+                                    type: .vod,
+                                    playlistBadge: badge,
+                                    playlistID: pConfig.playlistID,
+                                    itemCount: voCounts[cat.id] ?? 0
+                                ))
+                            }
+                            for cat in seriesCats ?? [] {
+                                pCategories.append(CategorySearchResultItem(
+                                    category: cat,
+                                    type: .series,
+                                    playlistBadge: badge,
+                                    playlistID: pConfig.playlistID,
+                                    itemCount: seCounts[cat.id] ?? 0
+                                ))
+                            }
+                            list.append((badge: badge, channels: channels ?? [], vods: resolvedVODs, series: resolvedSeries, categories: pCategories))
                         }
                         guard profileContextClient.snapshot() == profileScope else { return }
                         await send(.loadPlaylistsDataResponse(
@@ -1315,6 +1453,15 @@ public struct SearchFeature: Sendable {
                 }
                 state.allVODs = hideAdult ? data.vods.filter { !isAdult($0.title) } : data.vods
                 state.allSeries = hideAdult ? data.series.filter { !isAdult($0.title) } : data.series
+                state.allCategories = data.categories.filter { cat in
+                    if blacklistedCats.contains(cat.category.id) {
+                        return false
+                    }
+                    if hideAdult, isAdult(cat.category.name) || isAdult(cat.category.sourceName) {
+                        return false
+                    }
+                    return true
+                }
                 state.filterHiddenMediaFromCatalogs()
 
                 // Create initial default indexed items if no multi-playlist items yet
@@ -1323,6 +1470,7 @@ public struct SearchFeature: Sendable {
                     state.indexedChannels = state.allChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     state.indexedVODs = state.allVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     state.indexedSeries = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
+                    state.indexedCategories = state.allCategories
                 }
                 state.refreshCuratedPlaylistResults()
 
@@ -1357,6 +1505,7 @@ public struct SearchFeature: Sendable {
                 var allIndexedCh: [GlobalSearchResultItem] = []
                 var allIndexedVo: [GlobalSearchResultItem] = []
                 var allIndexedSe: [GlobalSearchResultItem] = []
+                var allIndexedCats: [CategorySearchResultItem] = []
 
                 for item in list {
                     let chs = item.channels.filter { ch in
@@ -1373,15 +1522,26 @@ public struct SearchFeature: Sendable {
                     }
                     let vos = hideAdult ? item.vods.filter { !isAdult($0.title) } : item.vods
                     let ses = hideAdult ? item.series.filter { !isAdult($0.title) } : item.series
+                    let cats = item.categories.filter { cat in
+                        if blacklistedCats.contains(cat.category.id) {
+                            return false
+                        }
+                        if hideAdult, isAdult(cat.category.name) || isAdult(cat.category.sourceName) {
+                            return false
+                        }
+                        return true
+                    }
 
                     allIndexedCh.append(contentsOf: chs.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
                     allIndexedVo.append(contentsOf: vos.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
                     allIndexedSe.append(contentsOf: ses.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
+                    allIndexedCats.append(contentsOf: cats)
                 }
 
                 state.indexedChannels = allIndexedCh
                 state.indexedVODs = allIndexedVo
                 state.indexedSeries = allIndexedSe
+                state.indexedCategories = allIndexedCats
                 state.filterHiddenMediaFromCatalogs()
                 state.refreshCuratedPlaylistResults()
 
@@ -1567,21 +1727,25 @@ public struct SearchFeature: Sendable {
                 let channels: [GlobalSearchResultItem]
                 let vods: [GlobalSearchResultItem]
                 let series: [GlobalSearchResultItem]
+                let categories: [CategorySearchResultItem]
 
-                if !state.indexedChannels.isEmpty || !state.indexedVODs.isEmpty || !state.indexedSeries.isEmpty {
+                if !state.indexedChannels.isEmpty || !state.indexedVODs.isEmpty || !state.indexedSeries.isEmpty || !state.indexedCategories.isEmpty {
                     channels = state.indexedChannels
                     vods = state.indexedVODs
                     series = state.indexedSeries
+                    categories = state.indexedCategories
                 } else {
                     let defaultBadge = searchSourceBadge(for: state.lastLoadedConfig)
                     channels = state.allChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     vods = state.allVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
                     series = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
+                    categories = state.allCategories
                 }
 
                 let searchChannels = state.searchScopedResults(channels)
                 let searchVODs = state.searchScopedResults(vods)
                 let searchSeries = state.searchScopedResults(series)
+                let searchCategories = state.searchScopedCategories(categories)
                 let searchContentScope = state.searchContentScope
                 let hiddenSearchCategoryPreferenceIDs = state.hiddenSearchCategoryPreferenceIDs
                 let curatedPlaylistEntryIDs = Set(state.curatedPlaylistEntries.map(\.id))
@@ -1676,6 +1840,7 @@ public struct SearchFeature: Sendable {
                         channels: searchChannels,
                         vods: searchVODs + remoteVODs,
                         series: searchSeries + remoteSeries,
+                        categories: searchCategories,
                         limitPerCategory: 100,
                         isCancelled: { Task.isCancelled }
                     )
@@ -1878,6 +2043,7 @@ public struct SearchFeature: Sendable {
                 }
                 state.activeSearchRequestID = nil
                 state.isSearching = false
+                state.categoryResults = output.categories
                 state.enrichedLiveResults = output.live
                 state.enrichedVODResults = output.vods.filter { !isHiddenMediaResult($0) }
                 state.enrichedSeriesResults = output.series.filter { !isHiddenMediaResult($0) }
@@ -1885,6 +2051,7 @@ public struct SearchFeature: Sendable {
                 state.filterCounts = output.counts
                 let removedVODCount = output.vods.count - state.enrichedVODResults.count
                 let removedSeriesCount = output.series.count - state.enrichedSeriesResults.count
+                state.filterCounts[.categories] = output.categories.count
                 state.filterCounts[.vod] = state.enrichedVODResults.count
                 state.filterCounts[.series] = state.enrichedSeriesResults.count
                 let uhdOutput = GlobalSearchEngine.search(
@@ -1894,6 +2061,7 @@ public struct SearchFeature: Sendable {
                     channels: output.live,
                     vods: state.enrichedVODResults,
                     series: state.enrichedSeriesResults,
+                    categories: [],
                     limitPerCategory: 100
                 )
                 state.filterCounts[.uhd4k] = uhdOutput.counts[.uhd4k, default: 0]
@@ -2301,6 +2469,27 @@ public struct SearchFeature: Sendable {
                         databaseClient: databaseClient
                     )
                     await send(.delegate(.didSelectSeries(series)))
+                }
+
+            case let .categorySelected(categoryResult):
+                let playlistID = categoryResult.playlistID
+                    ?? state.playlistIDsByBadgeID[categoryResult.playlistBadge.id]
+                    ?? state.lastLoadedConfig?.playlistID
+                let query = state.debouncedQuery
+                let historySavingEnabled = settingsClient.isSearchHistorySavingEnabled()
+                let historyRetention = settingsClient.searchHistoryRetention()
+                return .run { send in
+                    await Self.recordSearchHistoryIfEnabled(
+                        query,
+                        enabled: historySavingEnabled,
+                        retention: historyRetention,
+                        databaseClient: databaseClient
+                    )
+                    await send(.delegate(.didSelectCategory(
+                        category: categoryResult.category,
+                        type: categoryResult.type,
+                        playlistID: playlistID
+                    )))
                 }
 
             case let .personCreditSelected(personCredit):

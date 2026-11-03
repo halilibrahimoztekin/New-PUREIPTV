@@ -50,17 +50,20 @@ public nonisolated enum GlobalSearchEngine: Sendable {
     }
 
     public struct SearchResultOutput: Sendable {
+        public let categories: [CategorySearchResultItem]
         public let live: [GlobalSearchResultItem]
         public let vods: [GlobalSearchResultItem]
         public let series: [GlobalSearchResultItem]
         public let counts: [SearchFeature.SearchFilter: Int]
 
         public init(
+            categories: [CategorySearchResultItem] = [],
             live: [GlobalSearchResultItem],
             vods: [GlobalSearchResultItem],
             series: [GlobalSearchResultItem],
             counts: [SearchFeature.SearchFilter: Int]
         ) {
+            self.categories = categories
             self.live = live
             self.vods = vods
             self.series = series
@@ -76,12 +79,13 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         channels: [GlobalSearchResultItem],
         vods: [GlobalSearchResultItem],
         series: [GlobalSearchResultItem],
+        categories: [CategorySearchResultItem] = [],
         limitPerCategory: Int = 100,
         isCancelled: @Sendable () -> Bool = { false }
     ) -> SearchResultOutput {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+            return SearchResultOutput(categories: [], live: [], vods: [], series: [], counts: [:])
         }
 
         let intent = SearchIntent(query: trimmed)
@@ -100,12 +104,15 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         let scopedSeries = selectedPlaylistID == nil ? series : series.filter {
             $0.playlistBadge.id == selectedSourceID
         }
+        let scopedCategories = selectedPlaylistID == nil ? categories : categories.filter {
+            $0.playlistBadge.id == selectedSourceID
+        }
 
         // 2. Score and search Channels
         var matchedChannels: [GlobalSearchResultItem] = []
         for (index, ch) in scopedChannels.enumerated() {
             if index.isMultiple(of: 64), isCancelled() {
-                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+                return SearchResultOutput(categories: [], live: [], vods: [], series: [], counts: [:])
             }
             guard intent.itemType == nil || intent.itemType == .live else { continue }
             guard !intent.requires4K || ch.is4K else { continue }
@@ -172,7 +179,7 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         var matchedVODs: [GlobalSearchResultItem] = []
         for (index, v) in scopedVods.enumerated() {
             if index.isMultiple(of: 64), isCancelled() {
-                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+                return SearchResultOutput(categories: [], live: [], vods: [], series: [], counts: [:])
             }
             guard intent.itemType == nil || intent.itemType == .vod else { continue }
             guard !intent.requires4K || v.is4K else { continue }
@@ -215,7 +222,7 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         var matchedSeries: [GlobalSearchResultItem] = []
         for (index, s) in scopedSeries.enumerated() {
             if index.isMultiple(of: 64), isCancelled() {
-                return SearchResultOutput(live: [], vods: [], series: [], counts: [:])
+                return SearchResultOutput(categories: [], live: [], vods: [], series: [], counts: [:])
             }
             guard intent.itemType == nil || intent.itemType == .series else { continue }
             guard !intent.requires4K || s.is4K else { continue }
@@ -254,7 +261,48 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         }
         sortByRelevance(&matchedSeries)
 
-        // 5. Calculate 4K and EPG totals across all results
+        // 5. Score and search Categories
+        var matchedCategories: [CategorySearchResultItem] = []
+        for (index, cat) in scopedCategories.enumerated() {
+            if index.isMultiple(of: 64), isCancelled() {
+                return SearchResultOutput(categories: [], live: [], vods: [], series: [], counts: [:])
+            }
+            guard intent.itemType == nil || intent.itemType == cat.type else { continue }
+            let catName = cat.category.name
+            let normalizedName = FuzzySearchEngine.normalize(catName)
+            let baseScore: Int? = if hasTextQuery {
+                FuzzySearchEngine.score(query: normalizedQuery, target: normalizedName)
+            } else {
+                1
+            }
+            if let score = baseScore {
+                matchedCategories.append(
+                    CategorySearchResultItem(
+                        category: cat.category,
+                        type: cat.type,
+                        playlistBadge: cat.playlistBadge,
+                        playlistID: cat.playlistID,
+                        itemCount: cat.itemCount,
+                        score: score
+                    )
+                )
+            }
+        }
+        matchedCategories.sort { lhs, rhs in
+            if lhs.score != rhs.score {
+                return lhs.score > rhs.score
+            }
+            let nameOrder = lhs.category.name.localizedStandardCompare(rhs.category.name)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+            if lhs.playlistBadge.id != rhs.playlistBadge.id {
+                return lhs.playlistBadge.id < rhs.playlistBadge.id
+            }
+            return lhs.category.id < rhs.category.id
+        }
+
+        // 6. Calculate 4K and EPG totals across all results
         let uhdChannelsCount = matchedChannels.filter(\.is4K).prefix(limitPerCategory).count
         let uhdVodsCount = matchedVODs.filter(\.is4K).prefix(limitPerCategory).count
         let uhdSeriesCount = matchedSeries.filter(\.is4K).prefix(limitPerCategory).count
@@ -263,7 +311,8 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         let epgChannelsCount = matchedChannels.filter { $0.matchedEPGTitle != nil || $0.item.epgChannelID != nil }.prefix(limitPerCategory).count
 
         let counts: [SearchFeature.SearchFilter: Int] = [
-            .all: min(matchedChannels.count, limitPerCategory) + min(matchedVODs.count, limitPerCategory) + min(matchedSeries.count, limitPerCategory),
+            .all: min(matchedCategories.count, 20) + min(matchedChannels.count, limitPerCategory) + min(matchedVODs.count, limitPerCategory) + min(matchedSeries.count, limitPerCategory),
+            .categories: matchedCategories.count,
             .live: min(matchedChannels.count, limitPerCategory),
             .vod: min(matchedVODs.count, limitPerCategory),
             .series: min(matchedSeries.count, limitPerCategory),
@@ -274,49 +323,64 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             .downloads: 0,
         ]
 
-        // 6. Apply Filter Selection
+        // 7. Apply Filter Selection
+        let finalCategories: [CategorySearchResultItem]
         let finalLive: [GlobalSearchResultItem]
         let finalVODs: [GlobalSearchResultItem]
         let finalSeries: [GlobalSearchResultItem]
 
         switch filter {
         case .all:
+            finalCategories = Array(matchedCategories.prefix(20))
             finalLive = Array(matchedChannels.prefix(limitPerCategory))
             finalVODs = Array(matchedVODs.prefix(limitPerCategory))
             finalSeries = Array(matchedSeries.prefix(limitPerCategory))
 
+        case .categories:
+            finalCategories = matchedCategories
+            finalLive = []
+            finalVODs = []
+            finalSeries = []
+
         case .live:
+            finalCategories = []
             finalLive = Array(matchedChannels.prefix(limitPerCategory))
             finalVODs = []
             finalSeries = []
 
         case .vod:
+            finalCategories = []
             finalLive = []
             finalVODs = Array(matchedVODs.prefix(limitPerCategory))
             finalSeries = []
 
         case .series:
+            finalCategories = []
             finalLive = []
             finalVODs = []
             finalSeries = Array(matchedSeries.prefix(limitPerCategory))
 
         case .uhd4k:
+            finalCategories = []
             finalLive = Array(matchedChannels.filter(\.is4K).prefix(limitPerCategory))
             finalVODs = Array(matchedVODs.filter(\.is4K).prefix(limitPerCategory))
             finalSeries = Array(matchedSeries.filter(\.is4K).prefix(limitPerCategory))
 
         case .epgMatches:
+            finalCategories = []
             finalLive = Array(matchedChannels.filter { $0.matchedEPGTitle != nil || $0.item.epgChannelID != nil }.prefix(limitPerCategory))
             finalVODs = []
             finalSeries = []
 
         case .people, .programs, .downloads:
+            finalCategories = []
             finalLive = []
             finalVODs = []
             finalSeries = []
         }
 
         return SearchResultOutput(
+            categories: finalCategories,
             live: finalLive,
             vods: finalVODs,
             series: finalSeries,

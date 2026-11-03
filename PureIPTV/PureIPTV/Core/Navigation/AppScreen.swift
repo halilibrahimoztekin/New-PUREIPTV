@@ -1338,6 +1338,7 @@ public struct GlobalSearchRouteFeature {
             case didSelectChannel(MediaModels.Item, playlist: [MediaModels.Item]?)
             case didSelectVOD(MediaModels.Item)
             case didSelectSeries(MediaModels.Item)
+            case didSelectCategory(category: MediaModels.Category, type: MediaModels.ItemType, playlistID: UUID?)
         }
     }
 
@@ -1359,6 +1360,9 @@ public struct GlobalSearchRouteFeature {
 
             case let .search(.delegate(.didSelectSeries(series))):
                 .send(.delegate(.didSelectSeries(series)))
+
+            case let .search(.delegate(.didSelectCategory(category, type, playlistID))):
+                .send(.delegate(.didSelectCategory(category: category, type: type, playlistID: playlistID)))
 
             case .search, .delegate:
                 .none

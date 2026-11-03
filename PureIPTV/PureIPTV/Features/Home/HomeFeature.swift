@@ -157,6 +157,7 @@ public struct HomeFeature {
         case downloads(DownloadsFeature.Action)
         case settings(SettingsFeature.Action)
         case contentSourceConfigsUpdated(PlaylistContentSourceConfigs)
+        case selectCategory(category: MediaModels.Category, type: MediaModels.ItemType, playlistID: UUID?)
         case delegate(Delegate)
 
         public enum Delegate: Equatable {
@@ -403,6 +404,22 @@ public struct HomeFeature {
 
             case let .search(.delegate(.didSelectSeries(series))):
                 return .send(.delegate(.didSelectSeries(series)))
+
+            case let .search(.delegate(.didSelectCategory(category, type, playlistID))):
+                return .send(.selectCategory(category: category, type: type, playlistID: playlistID))
+
+            case let .selectCategory(category, type, _):
+                switch type {
+                case .live:
+                    state.selectedTab = .liveTV
+                    return .send(.liveTV(.categorySelected(category)))
+                case .vod:
+                    state.selectedTab = .movies
+                    return .send(.vod(.categorySelected(category)))
+                case .series:
+                    state.selectedTab = .series
+                    return .send(.series(.categorySelected(category)))
+                }
 
             case let .search(.delegate(.playOfflineMedia(item, episodeQueue))):
                 return .send(.delegate(.playOfflineMedia(item, episodeQueue: episodeQueue)))

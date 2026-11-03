@@ -841,8 +841,13 @@ public enum AppStrings {
         public static let noResults = "Sonuç Bulunamadı".localized
         public static let searchAllTypes = "Tüm İçerik Türlerini Ara".localized
         public static let searchAllPlaylists = "Tüm Çalma Listelerinde Ara".localized
-        public static let searchPlaceholder = "Kanal, film veya dizi ara...".localized
+        public static let searchPlaceholder = "Kanal, film, dizi veya kategori ara...".localized
         public static let channelSearchPlaceholder = "Kanal ara...".localized
+        public static let categories = "Kategoriler".localized
+        public static let allCategories = "Tüm Kategoriler".localized
+        public static let channelCountFormat = "%d Kanal".localized
+        public static let movieCountFormat = "%d Film".localized
+        public static let seriesCountFormat = "%d Dizi".localized
         public static let liveTV = "Canlı TV".localized
         public static let movies = "Filmler".localized
         public static let series = "Diziler".localized

@@ -36,6 +36,9 @@
         private let personColumns: [GridItem] = [
             GridItem(.adaptive(minimum: 360, maximum: 480), spacing: 40),
         ]
+        private let categoryColumns: [GridItem] = [
+            GridItem(.adaptive(minimum: 340, maximum: 480), spacing: 40),
+        ]
 
         public init(store: StoreOf<SearchFeature>, config: PlaylistConfig, onClose: (() -> Void)? = nil) {
             self.store = store
@@ -381,6 +384,33 @@
                     } else {
                         if store.searchQuery.isEmpty || store.searchContentScope == .all {
                             curatedPlaylistSection
+                        }
+
+                        // 0. Categories Section
+                        if store.filter == .all || store.filter == .categories, !store.categoryResults.isEmpty {
+                            resultSection(title: AppStrings.Search.categories, count: store.categoryResults.count) {
+                                LazyVGrid(columns: categoryColumns, spacing: 40) {
+                                    ForEach(store.categoryResults) { result in
+                                        CategorySearchResultCard(
+                                            result: result,
+                                            queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),
+                                            showPlaylistBadge: store.savedPlaylists.count > 1,
+                                            isSelected: false
+                                        ) {
+                                            store.send(.categorySelected(result))
+                                        }
+                                        .id(result.id)
+                                        .focused($focusedTarget, equals: .result(result.id))
+                                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                                        .onAppear {
+                                            renderedResultIDs.insert(result.id)
+                                            focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                                        }
+                                        .onDisappear { renderedResultIDs.remove(result.id) }
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
                         }
 
                         // 1. Live Channels Section
@@ -858,106 +888,146 @@
             }
         }
 
+        private var allCategoriesDiscoverySection: some View {
+            let categories = store.scopedDiscoveryCategories
+            return VStack(alignment: .leading, spacing: 28) {
+                HStack {
+                    Label(AppStrings.Search.allCategories, systemImage: "folder.fill")
+                        .font(AppFonts.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text("\(categories.count)")
+                        .font(AppFonts.title.monospacedDigit())
+                        .foregroundColor(AppColors.onSurfaceVariant)
+                }
+
+                LazyVGrid(columns: categoryColumns, spacing: 40) {
+                    ForEach(categories) { result in
+                        CategorySearchResultCard(
+                            result: result,
+                            queryTerms: [],
+                            showPlaylistBadge: store.savedPlaylists.count > 1,
+                            isSelected: false
+                        ) {
+                            store.send(.categorySelected(result))
+                        }
+                        .id(result.id)
+                        .focused($focusedTarget, equals: .result(result.id))
+                        .accessibilityFocused($accessibilityFocusedTarget, equals: .result(result.id))
+                        .onAppear {
+                            renderedResultIDs.insert(result.id)
+                            focusRenderedResultIfRequested(result.id, requestID: focusRequestSequence)
+                        }
+                        .onDisappear { renderedResultIDs.remove(result.id) }
+                    }
+                }
+            }
+        }
+
         private var emptySearchDiscoveryView: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 48) {
-                    curatedPlaylistSection
+                    if store.filter == .categories {
+                        allCategoriesDiscoverySection
+                    } else {
+                        curatedPlaylistSection
 
-                    if !store.pinnedSearchQueries.isEmpty {
-                        pinnedSearchesSection
-                    }
-
-                    // Recent Searches (if available)
-                    if !store.recentSearches.isEmpty {
-                        VStack(alignment: .leading, spacing: 24) {
-                            HStack {
-                                Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
-                                    .font(AppFonts.headline)
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Button {
-                                    store.send(.clearHistoryTapped)
-                                } label: {
-                                    Text(AppStrings.Search.clear)
-                                        .font(AppFonts.titleSmall.weight(.semibold))
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 8)
-                                }
-                                .buttonStyle(TVCapsuleButtonStyle())
-                            }
-
-                            VStack(spacing: 0) {
-                                ForEach(store.recentSearches.prefix(5), id: \.id) { item in
-                                    Button {
-                                        store.send(.recentSearchTapped(item.query))
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .font(AppFonts.title)
-                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
-                                            Text(item.query)
-                                                .font(AppFonts.displayMedium)
-                                                .foregroundColor(AppColors.onSurface)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(AppFonts.title)
-                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
-                                        }
-                                        .padding(.horizontal, 30)
-                                        .padding(.vertical, 20)
-                                        .background(AppColors.surfaceSecondary.opacity(0.5))
-                                    }
-                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
-
-                                    if item.id != store.recentSearches.prefix(5).last?.id {
-                                        Divider()
-                                            .background(Color.white.opacity(0.05))
-                                            .padding(.leading, 70)
-                                    }
-                                }
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(AppColors.surfaceSecondary)
-                            )
+                        if !store.pinnedSearchQueries.isEmpty {
+                            pinnedSearchesSection
                         }
-                    }
 
-                    // Quick Discovery Categories & Tags
-                    VStack(alignment: .leading, spacing: 28) {
-                        Label(AppStrings.Search.quickTags, systemImage: "sparkles")
-                            .font(AppFonts.headline)
-                            .foregroundColor(.white)
-
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 30)], spacing: 30) {
-                            ForEach(store.quickTags) { tag in
-                                Button {
-                                    store.send(.tagSelected(tag))
-                                } label: {
-                                    HStack(spacing: 20) {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .fill(tag.color.opacity(0.2))
-                                                .frame(width: 56, height: 56)
-                                            Image(systemName: tag.icon)
-                                                .font(AppFonts.displayMedium.weight(.semibold))
-                                                .foregroundColor(tag.color)
-                                        }
-
-                                        Text(tag.title)
-                                            .font(AppFonts.title.weight(.semibold))
-                                            .foregroundColor(AppColors.textPrimary)
-
-                                        Spacer()
-
-                                        Image(systemName: "chevron.right")
+                        // Recent Searches (if available)
+                        if !store.recentSearches.isEmpty {
+                            VStack(alignment: .leading, spacing: 24) {
+                                HStack {
+                                    Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
+                                        .font(AppFonts.headline)
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Button {
+                                        store.send(.clearHistoryTapped)
+                                    } label: {
+                                        Text(AppStrings.Search.clear)
                                             .font(AppFonts.titleSmall.weight(.semibold))
-                                            .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 8)
                                     }
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 20)
+                                    .buttonStyle(TVCapsuleButtonStyle())
                                 }
-                                .buttonStyle(TVCategoryRowButtonStyle(accentColor: tag.color, isSelected: false))
+
+                                VStack(spacing: 0) {
+                                    ForEach(store.recentSearches.prefix(5), id: \.id) { item in
+                                        Button {
+                                            store.send(.recentSearchTapped(item.query))
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "clock")
+                                                    .font(AppFonts.title)
+                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
+                                                Text(item.query)
+                                                    .font(AppFonts.displayMedium)
+                                                    .foregroundColor(AppColors.onSurface)
+                                                Spacer()
+                                                Image(systemName: "chevron.right")
+                                                    .font(AppFonts.title)
+                                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
+                                            }
+                                            .padding(.horizontal, 30)
+                                            .padding(.vertical, 20)
+                                            .background(AppColors.surfaceSecondary.opacity(0.5))
+                                        }
+                                        .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
+
+                                        if item.id != store.recentSearches.prefix(5).last?.id {
+                                            Divider()
+                                                .background(Color.white.opacity(0.05))
+                                                .padding(.leading, 70)
+                                        }
+                                    }
+                                }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(AppColors.surfaceSecondary)
+                                )
+                            }
+                        }
+
+                        // Quick Discovery Categories & Tags
+                        VStack(alignment: .leading, spacing: 28) {
+                            Label(AppStrings.Search.quickTags, systemImage: "sparkles")
+                                .font(AppFonts.headline)
+                                .foregroundColor(.white)
+
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 30)], spacing: 30) {
+                                ForEach(store.quickTags) { tag in
+                                    Button {
+                                        store.send(.tagSelected(tag))
+                                    } label: {
+                                        HStack(spacing: 20) {
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .fill(tag.color.opacity(0.2))
+                                                    .frame(width: 56, height: 56)
+                                                Image(systemName: tag.icon)
+                                                    .font(AppFonts.displayMedium.weight(.semibold))
+                                                    .foregroundColor(tag.color)
+                                            }
+
+                                            Text(tag.title)
+                                                .font(AppFonts.title.weight(.semibold))
+                                                .foregroundColor(AppColors.textPrimary)
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.right")
+                                                .font(AppFonts.titleSmall.weight(.semibold))
+                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
+                                        }
+                                        .padding(.horizontal, 24)
+                                        .padding(.vertical, 20)
+                                    }
+                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: tag.color, isSelected: false))
+                                }
                             }
                         }
                     }
