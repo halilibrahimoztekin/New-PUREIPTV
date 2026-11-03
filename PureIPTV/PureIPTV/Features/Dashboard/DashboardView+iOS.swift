@@ -46,9 +46,16 @@
                                     store.send(.refreshTapped)
                                 } label: {
                                     HStack(spacing: 4) {
-                                        Image(systemName: "arrow.clockwise")
-                                        if store.autoRefreshCountdown > 0 {
-                                            Text("\(store.autoRefreshCountdown) sn")
+                                        if store.activeRefreshID != nil {
+                                            ProgressView()
+                                                .tint(Color(hex: "#0A84FF"))
+                                        } else {
+                                            Image(systemName: "arrow.clockwise")
+                                        }
+                                        if let refreshedAt = store.lastRemoteRefreshAt {
+                                            Text(refreshedAt, style: .relative)
+                                        } else {
+                                            Text(AppStrings.Common.retry)
                                         }
                                     }
                                     .font(.caption.weight(.semibold))
