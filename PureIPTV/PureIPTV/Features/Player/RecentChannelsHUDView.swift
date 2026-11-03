@@ -39,13 +39,13 @@ public struct RecentChannelsHUDView: View {
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.88)
+                AppColors.surface.opacity(0.88)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                .stroke(AppColors.borderMedium, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
         .focusSection()
@@ -60,13 +60,13 @@ public struct RecentChannelsHUDView: View {
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.92)
+                AppColors.surface.opacity(0.92)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(AppColors.borderMedium, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.6), radius: 20, x: 0, y: 10)
         #endif
@@ -85,31 +85,31 @@ public struct RecentChannelsHUDView: View {
         HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#0A84FF").opacity(0.2))
+                    .fill(AppColors.primary.opacity(0.2))
                     .frame(width: 32, height: 32)
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(hex: "#0A84FF"))
+                    .font(AppFonts.captionBold)
+                    .foregroundColor(AppColors.primary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(AppStrings.LiveTV.recentChannels)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(AppFonts.titleSmall)
+                        .foregroundColor(AppColors.textPrimary)
 
                     Text("\(store.recentChannels.count)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: "#0A84FF"))
+                        .font(AppFonts.captionSmall)
+                        .foregroundColor(AppColors.primary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Color(hex: "#0A84FF").opacity(0.18), in: Capsule())
+                        .background(AppColors.primary.opacity(0.18), in: Capsule())
                 }
 
                 #if os(tvOS)
                     Text(AppStrings.LiveTV.quickZapHint)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.55))
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
                 #endif
             }
 
@@ -238,15 +238,15 @@ public struct RecentChannelsHUDView: View {
                         if isCurrent {
                             HStack(spacing: 3) {
                                 Circle()
-                                    .fill(Color(hex: "#0A84FF"))
+                                    .fill(AppColors.primary)
                                     .frame(width: 6, height: 6)
                                 Text(AppStrings.LiveTV.nowPlayingBadge)
-                                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                                    .font(AppFonts.captionSmall)
                                     .foregroundColor(.white)
                             }
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
-                            .background(Color(hex: "#0A84FF").opacity(0.85), in: Capsule())
+                            .background(AppColors.primary.opacity(0.85), in: Capsule())
                         } else {
                             LiveBadge()
                         }
@@ -263,16 +263,16 @@ public struct RecentChannelsHUDView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .center, spacing: 6) {
                         Text(channel.cleanTitle)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(isCurrent ? Color(hex: "#0A84FF") : .white)
+                            .font(AppFonts.captionBold)
+                            .foregroundColor(isCurrent ? AppColors.primary : .white)
                             .lineLimit(1)
 
                         Spacer(minLength: 0)
 
                         if channel.tvArchive == 1 {
                             Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(Color(hex: "#BF5AF2"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.premium)
                         }
                     }
 
@@ -280,15 +280,15 @@ public struct RecentChannelsHUDView: View {
                         let progress = prog.progress()
                         HStack(spacing: 6) {
                             Text(prog.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(AppFonts.caption)
+                                .foregroundStyle(AppColors.textSecondary)
                                 .lineLimit(1)
 
                             Spacer(minLength: 0)
 
                             Text("\(Int(progress * 100))%")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.neonTeal)
                         }
 
                         GeometryReader { geo in
@@ -299,7 +299,7 @@ public struct RecentChannelsHUDView: View {
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#00F5D4")],
+                                            colors: [AppColors.primary, AppColors.neonTeal],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -312,18 +312,18 @@ public struct RecentChannelsHUDView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color(hex: "#131317"))
+                .background(AppColors.backgroundSubtle)
             }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
-                        isFocused ? Color.white : (isCurrent ? Color(hex: "#0A84FF") : Color.white.opacity(0.12)),
+                        isFocused ? Color.white : (isCurrent ? AppColors.primary : AppColors.borderMedium),
                         lineWidth: isFocused ? 2.5 : (isCurrent ? 2 : 1)
                     )
             )
             .shadow(
-                color: isFocused ? Color(hex: "#0A84FF").opacity(0.4) : .clear,
+                color: isFocused ? AppColors.primary.opacity(0.4) : .clear,
                 radius: 12,
                 x: 0,
                 y: 4

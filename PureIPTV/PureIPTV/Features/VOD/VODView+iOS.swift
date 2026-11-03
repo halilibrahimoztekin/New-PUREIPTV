@@ -318,7 +318,7 @@
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 96)
                 }
             }
         }

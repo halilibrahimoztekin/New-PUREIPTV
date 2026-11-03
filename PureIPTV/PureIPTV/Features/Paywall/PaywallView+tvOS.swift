@@ -17,8 +17,8 @@
 
                 RadialGradient(
                     colors: [
-                        Color(hex: "#BF5AF2").opacity(0.12),
-                        Color(hex: "#0A84FF").opacity(0.08),
+                        AppColors.premium.opacity(0.12),
+                        AppColors.primary.opacity(0.08),
                         Color.clear,
                     ],
                     center: .center,
@@ -33,19 +33,19 @@
 
                     VStack(spacing: 12) {
                         Text(AppStrings.Paywall.unlockPremium)
-                            .font(.system(size: 52, weight: .heavy))
+                            .font(AppFonts.displayLarge)
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color.white, Color(hex: "#E4E1E7")],
+                                    colors: [AppColors.textPrimary, AppColors.onSurface],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 12, y: 4)
+                            .shadow(color: AppColors.premium.opacity(0.4), radius: 12, y: 4)
 
                         Text(AppStrings.Paywall.fullAccessDescription)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.8))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textSecondary.opacity(0.8))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 100)
                     }
@@ -55,8 +55,8 @@
                             .frame(maxHeight: 280)
                     } else if let error = store.errorMessage {
                         Text(error)
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundColor(.red)
+                            .font(AppFonts.title)
+                            .foregroundColor(AppColors.destructive)
                             .frame(maxHeight: 280)
                     } else {
                         HStack(spacing: 40) {
@@ -66,30 +66,30 @@
                                 }) {
                                     VStack(spacing: 16) {
                                         Text(package.storeProduct.localizedTitle)
-                                            .font(.system(size: 24, weight: .bold))
-                                            .foregroundColor(.white)
+                                            .font(AppFonts.title)
+                                            .foregroundColor(AppColors.textPrimary)
 
                                         Text(package.localizedPriceString)
-                                            .font(.system(size: 34, weight: .heavy))
-                                            .foregroundColor(Color(hex: "#BF5AF2"))
-                                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 8)
+                                            .font(AppFonts.displayMedium)
+                                            .foregroundColor(AppColors.premium)
+                                            .shadow(color: AppColors.premium.opacity(0.4), radius: 8)
 
                                         Text(package.storeProduct.localizedDescription)
-                                            .font(.system(size: 16))
-                                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                                            .font(AppFonts.bodyMedium)
+                                            .foregroundColor(AppColors.textSecondary.opacity(0.75))
                                             .multilineTextAlignment(.center)
                                             .lineLimit(3)
                                     }
                                     .frame(width: 340, height: 260)
                                     .padding(24)
                                     .background(.ultraThinMaterial)
-                                    .background(Color(hex: "#1F1F23").opacity(0.8))
+                                    .background(AppColors.surfaceSecondary.opacity(0.8))
                                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                                             .stroke(
                                                 LinearGradient(
-                                                    colors: [Color(hex: "#BF5AF2").opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
+                                                    colors: [AppColors.premium.opacity(0.6), AppColors.primary.opacity(0.3)],
                                                     startPoint: .topLeading,
                                                     endPoint: .bottomTrailing
                                                 ),

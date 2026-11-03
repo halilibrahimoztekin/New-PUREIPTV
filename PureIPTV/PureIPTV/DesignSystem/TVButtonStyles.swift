@@ -53,7 +53,7 @@
     extension View {
         func tvFocusEffect(
             shape: TVFocusShape = .roundedRectangle(cornerRadius: 14),
-            accentColor: Color = Color(hex: "#0A84FF")
+            accentColor: Color = AppColors.primary
         ) -> some View {
             buttonStyle(.plain)
                 .focusEffectDisabled()
@@ -136,7 +136,7 @@
             }
 
             private var shadowColor: Color {
-                isFocused ? Color(hex: "#0A84FF").opacity(0.6) : Color.black.opacity(0.4)
+                isFocused ? AppColors.primary.opacity(0.6) : Color.black.opacity(0.4)
             }
 
             private var shadowRadius: CGFloat {
@@ -274,11 +274,11 @@
             }
 
             private var fillColor: Color {
-                isFocused ? Color.white.opacity(0.18) : Color(hex: "#1A1A24")
+                isFocused ? Color.white.opacity(0.18) : AppColors.surfaceTertiary
             }
 
             private var strokeColor: Color {
-                isFocused ? Color.white.opacity(0.85) : Color.white.opacity(0.06)
+                isFocused ? Color.white.opacity(0.85) : AppColors.borderSubtle
             }
 
             private var strokeWidth: CGFloat {
@@ -286,7 +286,7 @@
             }
 
             private var shadowColor: Color {
-                isFocused ? Color(hex: "#0A84FF").opacity(0.4) : Color.black.opacity(0.3)
+                isFocused ? AppColors.primary.opacity(0.4) : Color.black.opacity(0.3)
             }
 
             var body: some View {
@@ -339,7 +339,7 @@
                 } else if isSelected || isPrimary {
                     Color.red
                 } else {
-                    Color(hex: "#1A1A24")
+                    AppColors.surfaceTertiary
                 }
             }
 

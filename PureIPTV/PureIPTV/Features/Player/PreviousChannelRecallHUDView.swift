@@ -20,11 +20,11 @@ public struct PreviousChannelRecallHUDView: View {
 
                     // Floating Utun Icon Badge
                     Circle()
-                        .fill(Color(hex: "#FF9F0A"))
+                        .fill(AppColors.warning)
                         .frame(width: 22, height: 22)
                         .overlay(
                             Image(systemName: "arrow.uturn.backward")
-                                .font(.system(size: 11, weight: .black))
+                                .font(AppFonts.captionSmall)
                                 .foregroundStyle(.black)
                         )
                         .offset(x: 16, y: 16)
@@ -34,29 +34,25 @@ public struct PreviousChannelRecallHUDView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(AppStrings.Player.recalledTitle.uppercased())
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(hex: "#FF9F0A"))
+                            .font(AppFonts.captionBold)
+                            .foregroundStyle(AppColors.warning)
 
                         Text("•")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textTertiary)
 
                         Text(AppStrings.Player.quickRecallBadge)
-                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .font(AppFonts.captionSmall)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1.5)
-                            .background(Color(hex: "#FF9F0A").opacity(0.2))
-                            .foregroundStyle(Color(hex: "#FF9F0A"))
+                            .background(AppColors.warning.opacity(0.2))
+                            .foregroundStyle(AppColors.warning)
                             .clipShape(Capsule())
                     }
 
                     Text(item.title)
-                    #if os(tvOS)
-                        .font(.system(size: 20, weight: .bold))
-                    #else
-                        .font(.subheadline.weight(.bold))
-                    #endif
-                        .foregroundStyle(.white)
+                        .font(AppFonts.titleSmall)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
                     if let cat = item.categoryID, !cat.isEmpty {

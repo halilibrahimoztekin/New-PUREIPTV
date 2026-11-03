@@ -31,18 +31,38 @@ public struct StreamHealthHUDView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             headerBar
-            if store.isLiveVideoStallDetected {
-                liveVideoStallCard
-            }
-            if store.streamHealthMetrics == nil {
-                waitingForSampleCard
-            } else {
-                healthScoreCard
-                diagnosticsGrid
-            }
-            footerActions
+
+            #if !os(tvOS)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        if store.isLiveVideoStallDetected {
+                            liveVideoStallCard
+                        }
+                        if store.streamHealthMetrics == nil {
+                            waitingForSampleCard
+                        } else {
+                            healthScoreCard
+                            diagnosticsGrid
+                        }
+                        footerActions
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .frame(maxHeight: 280)
+            #else
+                if store.isLiveVideoStallDetected {
+                    liveVideoStallCard
+                }
+                if store.streamHealthMetrics == nil {
+                    waitingForSampleCard
+                } else {
+                    healthScoreCard
+                    diagnosticsGrid
+                }
+                footerActions
+            #endif
         }
         #if os(tvOS)
         .padding(32)
@@ -50,7 +70,7 @@ public struct StreamHealthHUDView: View {
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.94)
+                AppColors.surfaceDark.opacity(0.94)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -58,7 +78,7 @@ public struct StreamHealthHUDView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [statusTint.opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
+                        colors: [statusTint.opacity(0.6), AppColors.primary.opacity(0.3)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -72,12 +92,12 @@ public struct StreamHealthHUDView: View {
             onClose()
         }
         #else
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: min(440, UIScreen.main.bounds.width - 32))
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.95)
+                AppColors.surfaceDark.opacity(0.95)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

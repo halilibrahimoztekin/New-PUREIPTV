@@ -28,11 +28,11 @@ public struct AudioSyncHUDView: View {
     @State private var idleTimer: DispatchWorkItem?
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    private var isLandscapeCompact: Bool {
+    private func isLandscapeLayout(for size: CGSize) -> Bool {
         #if os(tvOS)
             return false
         #else
-            return verticalSizeClass == .compact
+            return size.height < 520 || verticalSizeClass == .compact
         #endif
     }
 
@@ -57,68 +57,76 @@ public struct AudioSyncHUDView: View {
     }
 
     public var body: some View {
-        VStack(spacing: isLandscapeCompact ? 8 : 18) {
-            // Header bar (pinned)
-            headerBar
+        GeometryReader { geometry in
+            let isCompact = isLandscapeLayout(for: geometry.size)
 
-            if isLandscapeCompact {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 8) {
-                        modePickerView
-                        mainDisplayCard
-                        stepperRowView
-                        #if os(iOS)
-                            sliderControlView
-                        #endif
-                        rememberChannelRow
+            VStack(spacing: isCompact ? 8 : 16) {
+                // Header bar (pinned)
+                headerBar(isCompact: isCompact)
+
+                if isCompact {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            modePickerView
+                            mainDisplayCard(isCompact: isCompact)
+                            stepperRowView(isCompact: isCompact)
+                            #if os(iOS)
+                                sliderControlView
+                            #endif
+                            rememberChannelRow
+                        }
+                        .padding(.horizontal, 2)
                     }
+                } else {
+                    modePickerView
+                    mainDisplayCard(isCompact: isCompact)
+                    stepperRowView(isCompact: isCompact)
+                    #if os(iOS)
+                        sliderControlView
+                    #endif
+                    rememberChannelRow
                 }
-            } else {
-                modePickerView
-                mainDisplayCard
-                stepperRowView
-                #if os(iOS)
-                    sliderControlView
-                #endif
-                rememberChannelRow
             }
+            #if os(tvOS)
+            .padding(32)
+            .frame(width: 640)
+            .background(
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    AppColors.surface.opacity(0.92)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AppColors.borderMedium, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
+            #else
+            .padding(isCompact ? 12 : 20)
+            .frame(maxWidth: isCompact ? min(520, geometry.size.width - 32) : min(420, UIScreen.main.bounds.width - 32))
+            .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 340) : nil)
+            .background(
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    AppColors.surface.opacity(0.94)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppColors.borderMedium, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.6), radius: 24, x: 0, y: 10)
+            #endif
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         #if os(tvOS)
-        .padding(32)
-        .frame(width: 640)
-        .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.92)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.7), radius: 30, x: 0, y: 15)
         .focusSection()
         .onExitCommand {
             cancelIdleTimer()
             onClose()
         }
-        #else
-        .padding(isLandscapeCompact ? 14 : 20)
-        .frame(maxWidth: isLandscapeCompact ? 480 : min(420, UIScreen.main.bounds.width - 32))
-        .frame(maxHeight: isLandscapeCompact ? min(UIScreen.main.bounds.height - 20, 340) : nil)
-        .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.94)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.6), radius: 24, x: 0, y: 10)
         #endif
         .onAppear {
             resetIdleTimer()
@@ -130,25 +138,25 @@ public struct AudioSyncHUDView: View {
 
     // MARK: - Header Bar
 
-    private var headerBar: some View {
+    private func headerBar(isCompact: Bool) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#0A84FF").opacity(0.2))
-                    .frame(width: 34, height: 34)
+                    .fill(AppColors.primary.opacity(0.2))
+                    .frame(width: isCompact ? 30 : 34, height: isCompact ? 30 : 34)
                 Image(systemName: "slider.horizontal.2.square")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Color(hex: "#0A84FF"))
+                    .font(AppFonts.titleSmall)
+                    .foregroundColor(AppColors.primary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppStrings.Player.lipSyncAdjustment)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(isCompact ? AppFonts.bodySmall.weight(.bold) : AppFonts.titleSmall.weight(.bold))
+                    .foregroundColor(AppColors.textPrimary)
 
                 Text(AppStrings.Player.audioSyncSubtitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.captionSmall)
+                    .foregroundColor(AppColors.textSecondary)
                     .lineLimit(1)
             }
 
@@ -159,10 +167,10 @@ public struct AudioSyncHUDView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.75))
-                    .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.1), in: Circle())
+                    .font(.system(size: isCompact ? 11 : 12, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary.opacity(0.85))
+                    .frame(width: isCompact ? 28 : 32, height: isCompact ? 28 : 32)
+                    .background(AppColors.surfaceSecondary, in: Circle())
             }
             .buttonStyle(.plain)
             #if os(tvOS)
@@ -192,12 +200,12 @@ public struct AudioSyncHUDView: View {
                         Text(mode.rawValue)
                             .font(.system(size: 14, weight: isSelected ? .bold : .medium))
                     }
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                    .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textSecondary.opacity(0.6))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(
                         isSelected ?
-                            Color(hex: "#0A84FF").opacity(0.8) :
+                            AppColors.primary.opacity(0.8) :
                             Color.white.opacity(0.08),
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                     )
@@ -212,57 +220,57 @@ public struct AudioSyncHUDView: View {
 
     // MARK: - Main Readout Display Card
 
-    private var mainDisplayCard: some View {
-        VStack(spacing: 8) {
+    private func mainDisplayCard(isCompact: Bool) -> some View {
+        VStack(spacing: isCompact ? 4 : 8) {
             HStack {
                 Spacer()
                 // Status badge
                 if currentDelay == 0 {
                     HStack(spacing: 4) {
-                        Circle().fill(Color.green).frame(width: 6, height: 6)
+                        Circle().fill(AppColors.success).frame(width: 6, height: 6)
                         Text(AppStrings.Player.synchronizedBadge)
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundColor(.green)
+                            .font(AppFonts.captionSmall)
+                            .foregroundColor(AppColors.success)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.green.opacity(0.15), in: Capsule())
+                    .background(AppColors.success.opacity(0.15), in: Capsule())
                 } else {
                     HStack(spacing: 4) {
-                        Circle().fill(Color(hex: "#0A84FF")).frame(width: 6, height: 6)
+                        Circle().fill(AppColors.primary).frame(width: 6, height: 6)
                         Text(AppStrings.Player.adjustedBadge)
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundColor(Color(hex: "#0A84FF"))
+                            .font(AppFonts.captionSmall)
+                            .foregroundColor(AppColors.primary)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color(hex: "#0A84FF").opacity(0.18), in: Capsule())
+                    .background(AppColors.primary.opacity(0.18), in: Capsule())
                 }
             }
 
             // Big readout
             Text(currentDelay == 0 ? "0 ms" : "\(currentDelay > 0 ? "+" : "")\(currentDelay) ms")
-                .font(.system(size: 38, weight: .heavy, design: .monospaced))
-                .foregroundColor(currentDelay == 0 ? .white : Color(hex: "#0A84FF"))
+                .font(.system(size: isCompact ? 28 : 38, weight: .heavy, design: .monospaced))
+                .foregroundColor(currentDelay == 0 ? AppColors.textPrimary : AppColors.primary)
                 .contentTransition(.numericText(value: Double(currentDelay)))
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: currentDelay)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, isCompact ? 8 : 12)
         .frame(maxWidth: .infinity)
-        .background(Color(hex: "#000000").opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppColors.oledBlack.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(AppColors.borderSubtle, lineWidth: 1)
         )
     }
 
     // MARK: - Stepper Row View
 
-    private var stepperRowView: some View {
+    private func stepperRowView(isCompact: Bool) -> some View {
         HStack(spacing: 8) {
-            stepperButton(title: "-250", step: -250, focus: .stepMinus250)
-            stepperButton(title: "-50", step: -50, focus: .stepMinus50)
+            stepperButton(title: "-250", step: -250, focus: .stepMinus250, isCompact: isCompact)
+            stepperButton(title: "-50", step: -50, focus: .stepMinus50, isCompact: isCompact)
 
             // Reset Button
             Button {
@@ -273,10 +281,10 @@ public struct AudioSyncHUDView: View {
                 applyDelay(0)
             } label: {
                 Text(AppStrings.Player.resetSubtitleDelay)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: isCompact ? 11 : 12, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, isCompact ? 7 : 10)
                     .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -284,13 +292,13 @@ public struct AudioSyncHUDView: View {
                 .focused($focusedField, equals: .reset)
             #endif
 
-            stepperButton(title: "+50", step: 50, focus: .stepPlus50)
-            stepperButton(title: "+250", step: 250, focus: .stepPlus250)
+            stepperButton(title: "+50", step: 50, focus: .stepPlus50, isCompact: isCompact)
+            stepperButton(title: "+250", step: 250, focus: .stepPlus250, isCompact: isCompact)
         }
     }
 
     @ViewBuilder
-    private func stepperButton(title: String, step: Int, focus: FocusField) -> some View {
+    private func stepperButton(title: String, step: Int, focus: FocusField, isCompact: Bool) -> some View {
         Button {
             #if !os(tvOS)
                 HapticManager.shared.trigger(.light)
@@ -300,10 +308,10 @@ public struct AudioSyncHUDView: View {
             applyDelay(newDelay)
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.9))
+                .font(.system(size: isCompact ? 11 : 13, weight: .bold, design: .monospaced))
+                .foregroundColor(AppColors.textPrimary.opacity(0.9))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, isCompact ? 7 : 10)
                 .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -312,54 +320,53 @@ public struct AudioSyncHUDView: View {
         #endif
     }
 
+    // MARK: - Slider Control View (iOS / iPadOS Only)
+
     #if os(iOS)
-
-        // MARK: - Slider Control View
-
         private var sliderControlView: some View {
             VStack(spacing: 4) {
                 Slider(
-                    value: Binding(
+                    value: Binding<Double>(
                         get: { Double(currentDelay) },
-                        set: { newVal in
+                        set: { newValue in
                             resetIdleTimer()
-                            let rounded = (Int(newVal) / 50) * 50
-                            applyDelay(rounded)
+                            applyDelay(Int(newValue.rounded()))
                         }
                     ),
                     in: -2000 ... 2000,
-                    step: 50
+                    step: 25
                 )
-                .tint(Color(hex: "#0A84FF"))
+                .tint(AppColors.primary)
 
                 HStack {
                     Text("-2000 ms")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(AppFonts.captionSmall)
+                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
                     Spacer()
                     Text("0 ms")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(AppFonts.captionSmall)
+                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
                     Spacer()
                     Text("+2000 ms")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(AppFonts.captionSmall)
+                        .foregroundColor(AppColors.textSecondary.opacity(0.6))
                 }
             }
+            .padding(.horizontal, 4)
         }
     #endif
 
-    // MARK: - Channel Memory Persistence Row
+    // MARK: - Remember Channel Row
 
     private var rememberChannelRow: some View {
         HStack(spacing: 10) {
             Image(systemName: store.rememberDelayForChannel ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(store.rememberDelayForChannel ? Color(hex: "#0A84FF") : .white.opacity(0.4))
+                .font(AppFonts.bodySmall)
+                .foregroundColor(store.rememberDelayForChannel ? AppColors.primary : AppColors.textSecondary.opacity(0.4))
 
             Text(AppStrings.Player.rememberForChannel)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
+                .font(AppFonts.captionSmall)
+                .foregroundColor(AppColors.textPrimary.opacity(0.85))
 
             Spacer()
 
@@ -369,15 +376,15 @@ public struct AudioSyncHUDView: View {
                     set: { store.send(.setRememberDelayForChannel($0)) }
                 ))
                 .labelsHidden()
-                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#0A84FF")))
+                .toggleStyle(SwitchToggleStyle(tint: AppColors.primary))
             #else
                 Button {
                     resetIdleTimer()
                     store.send(.setRememberDelayForChannel(!store.rememberDelayForChannel))
                 } label: {
                     Text(store.rememberDelayForChannel ? "Aktif" : "Pasif")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(store.rememberDelayForChannel ? Color(hex: "#0A84FF") : .white.opacity(0.6))
+                        .font(AppFonts.captionBold)
+                        .foregroundColor(store.rememberDelayForChannel ? AppColors.primary : AppColors.textSecondary.opacity(0.6))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(Color.white.opacity(0.12), in: Capsule())
@@ -389,7 +396,7 @@ public struct AudioSyncHUDView: View {
         .padding(.horizontal, 4)
     }
 
-    // MARK: - Action Helpers
+    // MARK: - Delay Dispatch
 
     private func applyDelay(_ delay: Int) {
         if syncMode == .audio {
@@ -399,15 +406,15 @@ public struct AudioSyncHUDView: View {
         }
     }
 
+    // MARK: - Idle Timer
+
     private func resetIdleTimer() {
-        cancelIdleTimer()
-        let work = DispatchWorkItem {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                onClose()
-            }
+        idleTimer?.cancel()
+        let item = DispatchWorkItem { [onClose] in
+            onClose()
         }
-        idleTimer = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0, execute: work)
+        idleTimer = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: item)
     }
 
     private func cancelIdleTimer() {

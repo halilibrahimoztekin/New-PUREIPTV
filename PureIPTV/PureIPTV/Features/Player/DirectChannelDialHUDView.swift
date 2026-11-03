@@ -46,29 +46,50 @@ public struct DirectChannelDialHUDView: View {
                 }
 
             // Dial Pad Modal Card
-            VStack(spacing: 20) {
-                // Header Bar
-                headerView
+            Group {
+                #if !os(tvOS)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 12) {
+                            // Header Bar
+                            headerView
 
-                // Digital Number Display
-                numberDisplayView
+                            // Digital Number Display
+                            numberDisplayView
 
-                // Instant Channel Match Preview Cards
-                if !store.matchedDialedChannels.isEmpty {
-                    matchingChannelsPreviewStrip
-                }
+                            // Instant Channel Match Preview Cards
+                            if !store.matchedDialedChannels.isEmpty {
+                                matchingChannelsPreviewStrip
+                            }
 
-                // 10-Key Glass Keypad
-                keypadGridView
+                            // 10-Key Glass Keypad
+                            keypadGridView
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                    .frame(maxHeight: min(UIScreen.main.bounds.height - 24, 350))
+                    .padding(18)
+                    .frame(width: min(380, UIScreen.main.bounds.width * 0.92))
+                #else
+                    VStack(spacing: 20) {
+                        // Header Bar
+                        headerView
+
+                        // Digital Number Display
+                        numberDisplayView
+
+                        // Instant Channel Match Preview Cards
+                        if !store.matchedDialedChannels.isEmpty {
+                            matchingChannelsPreviewStrip
+                        }
+
+                        // 10-Key Glass Keypad
+                        keypadGridView
+                    }
+                    .padding(36)
+                    .frame(width: 560)
+                    .focusSection()
+                #endif
             }
-            #if os(tvOS)
-            .padding(36)
-            .frame(width: 560)
-            .focusSection()
-            #else
-            .padding(24)
-            .frame(width: min(380, UIScreen.main.bounds.width * 0.92))
-            #endif
             .background(
                 ZStack {
                     #if os(tvOS)
@@ -86,8 +107,8 @@ public struct DirectChannelDialHUDView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color(hex: "#0A84FF").opacity(0.6),
-                                Color.white.opacity(0.12),
+                                AppColors.primary.opacity(0.6),
+                                AppColors.borderMedium,
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -95,7 +116,7 @@ public struct DirectChannelDialHUDView: View {
                         lineWidth: 1.5
                     )
             )
-            .shadow(color: Color(hex: "#0A84FF").opacity(0.3), radius: 24, x: 0, y: 10)
+            .shadow(color: AppColors.primary.opacity(0.3), radius: 24, x: 0, y: 10)
             .shadow(color: Color.black.opacity(0.8), radius: 20, x: 0, y: 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -117,21 +138,13 @@ public struct DirectChannelDialHUDView: View {
     private var headerView: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "numbers.rectangle.fill")
-            #if os(tvOS)
-                .font(.system(size: 26, weight: .bold))
-            #else
-                .font(.title3.weight(.bold))
-            #endif
-                .foregroundStyle(Color(hex: "#0A84FF"))
+                .font(AppFonts.title)
+                .foregroundStyle(AppColors.primary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppStrings.LiveTV.channelDialerTitle)
-                #if os(tvOS)
-                    .font(.system(size: 22, weight: .bold))
-                #else
-                    .font(.headline.weight(.bold))
-                #endif
-                    .foregroundStyle(.white)
+                    .font(AppFonts.titleSmall)
+                    .foregroundStyle(AppColors.textPrimary)
 
                 Text(AppStrings.LiveTV.channelDialerHint)
                     .font(.caption2)
@@ -166,19 +179,19 @@ public struct DirectChannelDialHUDView: View {
                     .fill(Color.white.opacity(0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color(hex: "#0A84FF").opacity(0.3), lineWidth: 1)
+                            .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
                     )
 
                 HStack(spacing: 8) {
                     if store.dialedChannelNumber.isEmpty {
                         Text("_ _ _")
                             .font(.system(size: 38, weight: .black, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.25))
+                            .foregroundStyle(AppColors.textTertiary)
                     } else {
                         Text(store.dialedChannelNumber)
                             .font(.system(size: 40, weight: .black, design: .monospaced))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.5), radius: 8, x: 0, y: 0)
+                            .foregroundStyle(AppColors.primary)
+                            .shadow(color: AppColors.primary.opacity(0.5), radius: 8, x: 0, y: 0)
                     }
                 }
                 .padding(.vertical, 14)
@@ -206,15 +219,15 @@ public struct DirectChannelDialHUDView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Text("#\(match.index)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.primary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
-                                .background(Color(hex: "#0A84FF").opacity(0.2), in: Capsule())
+                                .background(AppColors.primary.opacity(0.2), in: Capsule())
 
                             Text(match.item.title)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.white)
+                                .font(AppFonts.captionSemibold)
+                                .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(1)
                         }
                         .padding(.horizontal, 10)
@@ -298,7 +311,7 @@ public struct DirectChannelDialHUDView: View {
                             .font(.body.weight(.bold))
                         #endif
                     }
-                    .foregroundStyle(Color(hex: "#30D158"))
+                    .foregroundStyle(AppColors.success)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -315,8 +328,8 @@ public struct DirectChannelDialHUDView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             item == .submit
-                                ? Color(hex: "#30D158").opacity(0.4)
-                                : Color.white.opacity(0.12),
+                                ? AppColors.success.opacity(0.4)
+                                : AppColors.borderMedium,
                             lineWidth: 1
                         )
                 )
@@ -351,7 +364,7 @@ public struct DirectChannelDialHUDView: View {
                     .brightness(isFocused ? 0.2 : 0.0)
                     .shadow(
                         color: isFocused
-                            ? (isSubmit ? Color(hex: "#30D158").opacity(0.8) : Color(hex: "#0A84FF").opacity(0.8))
+                            ? (isSubmit ? AppColors.success.opacity(0.8) : AppColors.primary.opacity(0.8))
                             : .clear,
                         radius: isFocused ? 12 : 0,
                         x: 0,

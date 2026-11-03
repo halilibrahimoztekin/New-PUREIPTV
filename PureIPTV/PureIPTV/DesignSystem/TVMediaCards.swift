@@ -105,12 +105,12 @@
                     isFocused: isFocused,
                     isSelected: isSelected,
                     cornerRadius: 16,
-                    accentColor: Color(hex: "#0A84FF")
+                    accentColor: AppColors.primary
                 ) {
                     // Katman 1: Arka Plan & Gradyan
                     ZStack {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(hex: "#1F1F23"))
+                            .fill(AppColors.surfaceSecondary)
 
                         LinearGradient(
                             colors: [.clear, .black.opacity(0.85)],
@@ -134,7 +134,7 @@
                                 } else {
                                     Image(systemName: "tv.fill")
                                         .font(.system(size: 34))
-                                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                        .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                                 }
                             }
                             .frame(maxWidth: 110, maxHeight: 72)
@@ -142,7 +142,7 @@
                         } else {
                             Image(systemName: "tv.fill")
                                 .font(.system(size: 34))
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
 
@@ -150,13 +150,13 @@
                             HStack(spacing: 6) {
                                 if let presentationNumber {
                                     Text(String(presentationNumber))
-                                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                                        .foregroundStyle(Color(hex: "#64D2FF"))
+                                        .font(AppFonts.captionBold)
+                                        .foregroundStyle(AppColors.sky)
                                 }
                                 Text(presentationName ?? channel.title)
                             }
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.titleSmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(showTwoLineTitles ? 2 : 1)
                             Spacer()
                             if channel.tvArchive == 1 {
@@ -217,7 +217,7 @@
                     isFocused: isFocused,
                     isSelected: isSelected,
                     cornerRadius: 16,
-                    accentColor: Color(hex: "#BF5AF2")
+                    accentColor: AppColors.premium
                 ) {
                     // Katman 1: Arka Plan Posteri
                     ZStack {
@@ -228,10 +228,10 @@
                                 }
                                 .placeholder {
                                     ZStack {
-                                        Color(hex: "#2C2C30")
+                                        AppColors.surfaceElevated
                                         Image(systemName: "film")
                                             .font(.system(size: 38))
-                                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                            .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                                     }
                                 }
                                 .downsampling(size: CGSize(width: 300, height: 450))
@@ -242,10 +242,10 @@
                                 .aspectRatio(contentMode: .fill)
                         } else {
                             ZStack {
-                                Color(hex: "#2C2C30")
+                                AppColors.surfaceElevated
                                 Image(systemName: "film")
                                     .font(.system(size: 38))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                             }
                         }
 
@@ -329,7 +329,7 @@
                     isFocused: isFocused,
                     isSelected: isSelected,
                     cornerRadius: 16,
-                    accentColor: Color(hex: "#30D158")
+                    accentColor: AppColors.success
                 ) {
                     // Katman 1: Arka Plan Posteri
                     ZStack {
@@ -340,10 +340,10 @@
                                 }
                                 .placeholder {
                                     ZStack {
-                                        Color(hex: "#2C2C30")
+                                        AppColors.surfaceElevated
                                         Image(systemName: "tv")
                                             .font(.system(size: 38))
-                                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                            .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                                     }
                                 }
                                 .downsampling(size: CGSize(width: 300, height: 450))
@@ -354,10 +354,10 @@
                                 .aspectRatio(contentMode: .fill)
                         } else {
                             ZStack {
-                                Color(hex: "#2C2C30")
+                                AppColors.surfaceElevated
                                 Image(systemName: "tv")
                                     .font(.system(size: 38))
-                                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                                    .foregroundStyle(AppColors.textSecondary.opacity(0.25))
                             }
                         }
 
@@ -437,7 +437,7 @@
                     isFocused: isFocused,
                     isSelected: false,
                     cornerRadius: 16,
-                    accentColor: Color(hex: "#FF375F")
+                    accentColor: AppColors.destructive
                 ) {
                     // Katman 1: Poster & Arka Plan
                     ZStack {
@@ -471,17 +471,17 @@
                                let unwatchedEpisodeCount, unwatchedEpisodeCount > 0
                             {
                                 Text("\(unwatchedEpisodeCount)")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 6)
-                                    .background(Color(hex: "#FF453A"), in: Capsule())
+                                    .background(AppColors.live, in: Capsule())
                                     .accessibilityLabel(Text(AppStrings.Dashboard.unwatchedEpisodeCount(unwatchedEpisodeCount)))
                             }
                             Spacer()
                             Image(systemName: "heart.fill")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(Color(hex: "#FF375F"))
+                                .font(AppFonts.titleSmall)
+                                .foregroundStyle(AppColors.destructive)
                                 .padding(8)
                                 .background(Color.black.opacity(0.65), in: Circle())
                                 .shadow(color: Color.black.opacity(0.5), radius: 4, y: 1)
@@ -490,8 +490,8 @@
 
                         Spacer()
                         Text(item.title)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.titleSmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(isLive ? 1 : 2)
                             .shadow(color: .black.opacity(0.8), radius: 6, x: 0, y: 2)
                             .padding(.horizontal, 14)
@@ -505,10 +505,10 @@
 
         private var placeholderBackground: some View {
             ZStack {
-                Color(hex: "#2C2C30")
+                AppColors.surfaceElevated
                 Image(systemName: isLive ? "tv" : "film")
                     .font(.system(size: 34))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.25))
             }
         }
     }

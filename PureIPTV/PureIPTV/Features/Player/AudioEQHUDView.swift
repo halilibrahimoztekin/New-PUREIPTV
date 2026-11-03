@@ -12,114 +12,120 @@ public struct AudioEQHUDView: View {
     @State private var idleTimer: DispatchWorkItem?
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    private var isLandscapeCompact: Bool {
-        #if os(tvOS)
-            return false
-        #else
-            return verticalSizeClass == .compact
-        #endif
-    }
-
     public init(store: StoreOf<PlayerFeature>, onClose: @escaping () -> Void) {
         self.store = store
         self.onClose = onClose
     }
 
-    public var body: some View {
-        VStack(spacing: isLandscapeCompact ? 8 : 18) {
-            // Header Bar (Pinned, always visible)
-            headerBar
-
-            if isLandscapeCompact {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 8) {
-                        eqFrequencyVisualizer
-                        presetsGrid
-                        footerInfoBar
-                    }
-                }
-            } else {
-                eqFrequencyVisualizer
-                presetsGrid
-                footerInfoBar
-            }
-        }
-        .padding(isLandscapeCompact ? 14 : 24)
-        .frame(maxWidth: containerMaxWidth)
-        #if os(iOS)
-            .frame(maxHeight: isLandscapeCompact ? min(UIScreen.main.bounds.height - 20, 350) : nil)
-        #endif
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(hex: "#0C0C10").opacity(0.94))
-                    .background(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        store.audioEQPreset.accentColor.opacity(0.6),
-                                        Color.white.opacity(0.12),
-                                        Color.white.opacity(0.04),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
-                    .shadow(color: store.audioEQPreset.accentColor.opacity(0.25), radius: 30, x: 0, y: 15)
-                    .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
-            }
+    private func isLandscapeLayout(for size: CGSize) -> Bool {
         #if os(tvOS)
-            .onExitCommand {
-                cancelIdleTimer()
-                onClose()
-            }
+            return false
+        #else
+            return size.height < 520 || verticalSizeClass == .compact
         #endif
-            .onAppear {
-                resetIdleTimer()
-                #if os(tvOS)
-                    focusedPreset = store.audioEQPreset
-                #endif
+    }
+
+    public var body: some View {
+        GeometryReader { geometry in
+            let isCompact = isLandscapeLayout(for: geometry.size)
+
+            VStack(spacing: isCompact ? 8 : 16) {
+                // Header Bar (Pinned, always visible)
+                headerBar(isCompact: isCompact)
+
+                if isCompact {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            eqFrequencyVisualizer(isCompact: isCompact)
+                            presetsGrid(isCompact: isCompact)
+                            footerInfoBar
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                } else {
+                    eqFrequencyVisualizer(isCompact: isCompact)
+                    presetsGrid(isCompact: isCompact)
+                    footerInfoBar
+                }
             }
-            .onDisappear {
-                cancelIdleTimer()
-            }
+            .padding(isCompact ? 12 : 24)
+            .frame(maxWidth: isCompact ? min(680, geometry.size.width - 32) : containerMaxWidth)
+            #if !os(tvOS)
+                .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 350) : nil)
+            #endif
+                .background {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(AppColors.surface.opacity(0.95))
+                        .background(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            store.audioEQPreset.accentColor.opacity(0.6),
+                                            Color.white.opacity(0.12),
+                                            Color.white.opacity(0.04),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        }
+                        .shadow(color: store.audioEQPreset.accentColor.opacity(0.25), radius: 30, x: 0, y: 15)
+                        .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+        #if os(tvOS)
+        .onExitCommand {
+            cancelIdleTimer()
+            onClose()
+        }
+        #endif
+        .onAppear {
+            resetIdleTimer()
+            #if os(tvOS)
+                focusedPreset = store.audioEQPreset
+            #endif
+        }
+        .onDisappear {
+            cancelIdleTimer()
+        }
     }
 
     // MARK: - Header Bar
 
-    private var headerBar: some View {
+    private func headerBar(isCompact: Bool) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(store.audioEQPreset.accentColor.opacity(0.18))
-                    .frame(width: isLandscapeCompact ? 32 : 42, height: isLandscapeCompact ? 32 : 42)
+                    .frame(width: isCompact ? 30 : 42, height: isCompact ? 30 : 42)
 
                 Image(systemName: "waveform.badge.magnifyingglass")
-                    .font(.system(size: isLandscapeCompact ? 15 : 19, weight: .semibold))
+                    .font(.system(size: isCompact ? 14 : 19, weight: .semibold))
                     .foregroundColor(store.audioEQPreset.accentColor)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("Ses Ekolayzer & Diyalog")
-                        .font(.system(size: isLandscapeCompact ? 15 : 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(isCompact ? AppFonts.bodySmall.weight(.bold) : AppFonts.titleSmall.weight(.bold))
+                        .foregroundColor(AppColors.textPrimary)
                         .lineLimit(1)
 
                     Text("PRO")
-                        .font(.system(size: 10, weight: .heavy, design: .rounded))
-                        .foregroundColor(.black)
+                        .font(AppFonts.captionSmall.weight(.heavy))
+                        .foregroundColor(AppColors.oledBlack)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(store.audioEQPreset.accentColor, in: Capsule())
                 }
 
                 Text("İçeriğe özel sinematik ses optimizasyonu")
-                    .font(.system(size: isLandscapeCompact ? 11 : 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(AppFonts.captionSmall)
+                    .foregroundColor(AppColors.textSecondary.opacity(0.65))
                     .lineLimit(1)
             }
 
@@ -130,10 +136,10 @@ public struct AudioEQHUDView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: isLandscapeCompact ? 11 : 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.75))
-                    .frame(width: isLandscapeCompact ? 28 : 32, height: isLandscapeCompact ? 28 : 32)
-                    .background(Color.white.opacity(0.08), in: Circle())
+                    .font(.system(size: isCompact ? 11 : 12, weight: .bold))
+                    .foregroundColor(AppColors.textPrimary.opacity(0.85))
+                    .frame(width: isCompact ? 28 : 34, height: isCompact ? 28 : 34)
+                    .background(AppColors.surfaceSecondary, in: Circle())
             }
             .buttonStyle(.plain)
             #if os(tvOS)
@@ -144,33 +150,23 @@ public struct AudioEQHUDView: View {
 
     // MARK: - 10-Band EQ Frequency Visualizer
 
-    private var eqFrequencyVisualizer: some View {
-        let barHeight: CGFloat = isLandscapeCompact ? 32 : 52
-        let maxNormalized: CGFloat = isLandscapeCompact ? 26 : 44
+    private func eqFrequencyVisualizer(isCompact: Bool) -> some View {
+        let barHeight: CGFloat = isCompact ? 28 : 52
+        let maxNormalized: CGFloat = isCompact ? 22 : 44
 
-        return VStack(spacing: isLandscapeCompact ? 6 : 10) {
-            // Visualizer Canvas
-            HStack(alignment: .bottom, spacing: visualizerBarSpacing) {
+        return VStack(spacing: isCompact ? 4 : 10) {
+            HStack(alignment: .bottom, spacing: isCompact ? 6 : visualizerBarSpacing) {
                 ForEach(0 ..< AudioEQPreset.bandFrequencies.count, id: \.self) { index in
                     let label = AudioEQPreset.bandFrequencies[index]
                     let gain = store.audioEQPreset.bandGains[index]
 
-                    VStack(spacing: isLandscapeCompact ? 2 : 4) {
-                        // dB readout
+                    VStack(spacing: isCompact ? 2 : 4) {
                         Text(String(format: "%+.0f", gain))
-                            .font(.system(size: isLandscapeCompact ? 8 : 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(gain == 0 ? .white.opacity(0.4) : store.audioEQPreset.accentColor)
-                            .frame(height: 12)
+                            .font(.system(size: isCompact ? 7.5 : bandLabelFontSize, weight: .bold, design: .monospaced))
+                            .foregroundColor(gain != 0 ? store.audioEQPreset.accentColor : AppColors.textSecondary.opacity(0.45))
 
-                        // Vertical Bar Container
-                        ZStack(alignment: .center) {
-                            // Center zero dB dotted guideline
-                            Rectangle()
-                                .fill(Color.white.opacity(0.15))
-                                .frame(height: 1)
-
-                            // Dynamic gain pill
-                            let normalizedHeight = max(4.0, CGFloat(abs(gain) / 20.0) * maxNormalized + 3.0)
+                        GeometryReader { _ in
+                            let normalizedHeight = max(2, min(maxNormalized, (CGFloat(abs(gain)) / 12.0) * maxNormalized))
                             let isPositive = gain >= 0
 
                             VStack(spacing: 0) {
@@ -178,18 +174,17 @@ public struct AudioEQHUDView: View {
                                     Spacer()
                                 }
 
-                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                RoundedRectangle(cornerRadius: isCompact ? 2 : 3, style: .continuous)
                                     .fill(
                                         LinearGradient(
-                                            colors: [
-                                                store.audioEQPreset.accentColor,
-                                                store.audioEQPreset.accentColor.opacity(0.4),
-                                            ],
-                                            startPoint: isPositive ? .top : .bottom,
-                                            endPoint: isPositive ? .bottom : .top
+                                            colors: isPositive
+                                                ? [store.audioEQPreset.accentColor, store.audioEQPreset.accentColor.opacity(0.6)]
+                                                : [Color.orange.opacity(0.6), Color.orange],
+                                            startPoint: .top,
+                                            endPoint: .bottom
                                         )
                                     )
-                                    .frame(width: visualizerBarWidth, height: normalizedHeight)
+                                    .frame(width: isCompact ? 8 : visualizerBarWidth, height: normalizedHeight)
                                     .shadow(color: store.audioEQPreset.accentColor.opacity(gain != 0 ? 0.4 : 0), radius: 4)
 
                                 if isPositive {
@@ -200,18 +195,17 @@ public struct AudioEQHUDView: View {
                         }
                         .frame(height: barHeight)
 
-                        // Band Label
                         Text(label)
-                            .font(.system(size: bandLabelFontSize, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.55))
+                            .font(.system(size: isCompact ? 7.5 : bandLabelFontSize, weight: .medium, design: .rounded))
+                            .foregroundColor(AppColors.textSecondary.opacity(0.55))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.vertical, isLandscapeCompact ? 8 : 12)
-            .padding(.horizontal, 14)
+            .padding(.vertical, isCompact ? 6 : 12)
+            .padding(.horizontal, isCompact ? 8 : 14)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.black.opacity(0.45))
@@ -225,12 +219,12 @@ public struct AudioEQHUDView: View {
 
     // MARK: - Presets Grid
 
-    private var presetsGrid: some View {
-        let columns: [GridItem] = if isLandscapeCompact {
+    private func presetsGrid(isCompact: Bool) -> some View {
+        let columns: [GridItem] = if isCompact {
             [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 6),
+                GridItem(.flexible(), spacing: 6),
+                GridItem(.flexible(), spacing: 6),
             ]
         } else {
             [
@@ -239,14 +233,14 @@ public struct AudioEQHUDView: View {
             ]
         }
 
-        return LazyVGrid(columns: columns, spacing: isLandscapeCompact ? 8 : 12) {
+        return LazyVGrid(columns: columns, spacing: isCompact ? 6 : 12) {
             ForEach(AudioEQPreset.allCases) { preset in
-                presetCard(preset)
+                presetCard(preset, isCompact: isCompact)
             }
         }
     }
 
-    private func presetCard(_ preset: AudioEQPreset) -> some View {
+    private func presetCard(_ preset: AudioEQPreset, isCompact: Bool) -> some View {
         let isSelected = store.audioEQPreset == preset
 
         return Button {
@@ -256,48 +250,47 @@ public struct AudioEQHUDView: View {
             resetIdleTimer()
             store.send(.selectAudioEQPreset(preset))
         } label: {
-            HStack(spacing: isLandscapeCompact ? 8 : 12) {
+            HStack(spacing: isCompact ? 6 : 12) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? preset.accentColor.opacity(0.25) : Color.white.opacity(0.06))
-                        .frame(width: isLandscapeCompact ? 28 : 38, height: isLandscapeCompact ? 28 : 38)
+                        .frame(width: isCompact ? 24 : 38, height: isCompact ? 24 : 38)
 
                     Image(systemName: preset.icon)
-                        .font(.system(size: isLandscapeCompact ? 13 : 16, weight: .semibold))
-                        .foregroundColor(isSelected ? preset.accentColor : .white.opacity(0.85))
+                        .font(.system(size: isCompact ? 11 : 16, weight: .semibold))
+                        .foregroundColor(isSelected ? preset.accentColor : AppColors.textPrimary.opacity(0.85))
                 }
 
-                VStack(alignment: .leading, spacing: isLandscapeCompact ? 1 : 3) {
+                VStack(alignment: .leading, spacing: isCompact ? 1 : 3) {
                     HStack(spacing: 4) {
                         Text(preset.title)
-                            .font(.system(size: isLandscapeCompact ? 12 : 14, weight: isSelected ? .bold : .semibold))
-                            .foregroundColor(isSelected ? .white : .white.opacity(0.88))
+                            .font(.system(size: isCompact ? 10.5 : 14, weight: isSelected ? .bold : .semibold))
+                            .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.88))
                             .lineLimit(1)
 
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: isLandscapeCompact ? 10 : 12, weight: .bold))
+                                .font(.system(size: isCompact ? 9 : 12, weight: .bold))
                                 .foregroundColor(preset.accentColor)
                         }
                     }
 
                     Text(preset.subtitle)
-                        .font(.system(size: isLandscapeCompact ? 10 : 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.55))
-                        .lineLimit(isLandscapeCompact ? 1 : 2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: isCompact ? 8.5 : 11, weight: .regular))
+                        .foregroundColor(AppColors.textSecondary.opacity(0.65))
+                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, isLandscapeCompact ? 10 : 14)
-            .padding(.vertical, isLandscapeCompact ? 8 : 12)
+            .padding(.horizontal, isCompact ? 8 : 14)
+            .padding(.vertical, isCompact ? 6 : 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(isSelected ? preset.accentColor.opacity(0.14) : Color.white.opacity(0.04))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(
                                 isSelected ? preset.accentColor.opacity(0.65) : Color.white.opacity(0.07),
                                 lineWidth: isSelected ? 1.5 : 1
@@ -320,8 +313,8 @@ public struct AudioEQHUDView: View {
                 .foregroundColor(store.audioEQPreset.accentColor)
 
             Text("Seçilen ses profili '\(store.item.title)' kanalı için otomatik hatırlanır.")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .font(AppFonts.captionSmall)
+                .foregroundColor(AppColors.textSecondary.opacity(0.7))
                 .lineLimit(1)
 
             Spacer()
@@ -351,7 +344,7 @@ public struct AudioEQHUDView: View {
         #if os(tvOS)
             880
         #else
-            isLandscapeCompact ? 640 : 480
+            640
         #endif
     }
 

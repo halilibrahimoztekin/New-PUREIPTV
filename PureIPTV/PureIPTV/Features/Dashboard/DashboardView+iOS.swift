@@ -34,11 +34,13 @@
                         // Top Header & Switcher Bar
                         VStack(spacing: 10) {
                             // Row 1: Title + Action Icons
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 Text(AppStrings.Dashboard.title)
-                                    .font(.title2.bold())
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.headline)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
 
                                 Spacer()
 
@@ -48,7 +50,7 @@
                                     HStack(spacing: 4) {
                                         if store.activeRefreshID != nil {
                                             ProgressView()
-                                                .tint(Color(hex: "#0A84FF"))
+                                                .tint(AppColors.primary)
                                         } else {
                                             Image(systemName: "arrow.clockwise")
                                         }
@@ -58,11 +60,11 @@
                                             Text(AppStrings.Common.retry)
                                         }
                                     }
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .font(AppFonts.captionSemibold)
+                                    .foregroundStyle(AppColors.primary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 6)
-                                    .background(Color(hex: "#1F1F23"), in: Capsule())
+                                    .background(AppColors.surfaceSecondary, in: Capsule())
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(store.activeRefreshID != nil)
@@ -75,10 +77,10 @@
                                     )))
                                 } label: {
                                     Image(systemName: "pin")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(Color(hex: "#0A84FF"))
-                                        .frame(width: 36, height: 36)
-                                        .background(Color(hex: "#1F1F23"), in: Circle())
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.primary)
+                                        .frame(width: 34, height: 34)
+                                        .background(AppColors.surfaceSecondary, in: Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(AppStrings.Dashboard.manageHomeCategories)
@@ -88,10 +90,10 @@
                                     store.send(.delegate(.presentHomeSettings(config)))
                                 } label: {
                                     Image(systemName: "slider.horizontal.3")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(Color(hex: "#0A84FF"))
-                                        .frame(width: 36, height: 36)
-                                        .background(Color(hex: "#1F1F23"), in: Circle())
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.primary)
+                                        .frame(width: 34, height: 34)
+                                        .background(AppColors.surfaceSecondary, in: Circle())
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Ana Ekranı Düzenle")
@@ -99,10 +101,10 @@
                                 if let onSearch {
                                     Button(action: onSearch) {
                                         Image(systemName: "magnifyingglass")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
-                                            .frame(width: 36, height: 36)
-                                            .background(Color(hex: "#1F1F23"), in: Circle())
+                                            .font(AppFonts.titleSmall)
+                                            .foregroundStyle(AppColors.primary)
+                                            .frame(width: 34, height: 34)
+                                            .background(AppColors.surfaceSecondary, in: Circle())
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(AppStrings.Search.searchPlaceholder)
@@ -116,22 +118,22 @@
                                 } label: {
                                     HStack(spacing: 6) {
                                         Circle()
-                                            .fill(Color.green)
+                                            .fill(AppColors.success)
                                             .frame(width: 8, height: 8)
                                         Text(store.activePlaylistName.isEmpty ? AppStrings.PlaylistMgmt.accountManagement : store.activePlaylistName)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.white)
+                                            .font(AppFonts.titleSmall)
+                                            .foregroundStyle(AppColors.textPrimary)
                                             .lineLimit(1)
                                         Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption2)
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                            .font(AppFonts.captionSmall)
+                                            .foregroundStyle(AppColors.primary)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(Color(hex: "#1F1F23"))
-                                            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                                            .fill(AppColors.surfaceSecondary)
+                                            .overlay(Capsule().stroke(AppColors.borderMedium, lineWidth: 1))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -177,7 +179,7 @@
                             homeSectionView(section)
                         }
                     }
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 96)
                 }
             }
             .onAppear {
@@ -249,8 +251,8 @@
                             .accessibilityLabel("\(entry.channel.title), \(entry.playlistName)")
                             .accessibilityHint(AppStrings.Common.watchNow)
                             Text(entry.playlistName)
-                                .font(.caption)
-                                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.8))
+                                .font(AppFonts.caption)
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.8))
                                 .lineLimit(1)
                                 .accessibilityHidden(true)
                         }
@@ -871,7 +873,7 @@
                         HStack(spacing: 16) {
                             ForEach(0 ..< 5, id: \.self) { _ in
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(hex: "#1F1F23"))
+                                    .fill(AppColors.surfaceSecondary)
                                     .frame(width: 140, height: 210)
                                     .shimmeringPlaceholder(isLoading: true)
                             }
@@ -925,7 +927,7 @@
                         HStack(spacing: 12) {
                             if let rating = vod.rating, rating > 0 {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "star.fill").foregroundColor(Color(hex: "#FFD700"))
+                                    Image(systemName: "star.fill").foregroundColor(AppColors.warningGold)
                                     Text(String(format: "%.1f", rating))
                                         .fontWeight(.bold)
                                 }
@@ -992,26 +994,26 @@
                             if let image = phase.image {
                                 image.resizable().scaledToFill()
                             } else {
-                                Rectangle().fill(Color(hex: "#1F1F23"))
+                                Rectangle().fill(AppColors.surfaceSecondary)
                             }
                         }
                         .frame(width: 140, height: item.type == "live" ? 90 : 210)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(alignment: .topTrailing) {
                             Image(systemName: "heart.fill")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(AppColors.destructive)
                                 .padding(8)
                         }
                     } else {
                         Rectangle()
-                            .fill(Color(hex: "#1F1F23"))
+                            .fill(AppColors.surfaceSecondary)
                             .frame(width: 140, height: item.type == "live" ? 90 : 210)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
 
                     Text(item.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(AppFonts.captionSemibold)
+                        .foregroundColor(AppColors.textPrimary)
                         .lineLimit(1)
                 }
                 .overlay(alignment: .topLeading) {
@@ -1019,11 +1021,11 @@
                        let unwatchedEpisodeCount, unwatchedEpisodeCount > 0
                     {
                         Text("\(unwatchedEpisodeCount)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
-                            .background(Color(hex: "#FF453A"), in: Capsule())
+                            .background(AppColors.live, in: Capsule())
                             .accessibilityLabel(Text(AppStrings.Dashboard.unwatchedEpisodeCount(unwatchedEpisodeCount)))
                     }
                 }
@@ -1046,14 +1048,14 @@
                                 if let image = phase.image {
                                     image.resizable().scaledToFill()
                                 } else {
-                                    Rectangle().fill(Color(hex: "#1F1F23"))
+                                    Rectangle().fill(AppColors.surfaceSecondary)
                                 }
                             }
                             .frame(width: 200, height: 110)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                         } else {
                             Rectangle()
-                                .fill(Color(hex: "#1F1F23"))
+                                .fill(AppColors.surfaceSecondary)
                                 .frame(width: 200, height: 110)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }

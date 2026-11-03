@@ -63,11 +63,11 @@ public struct NerdStatsHUDView: View {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "terminal.fill")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color(hex: "#00F5D4"))
+                    .foregroundStyle(AppColors.neonTeal)
 
                 Text(AppStrings.Player.nerdStats)
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
 
                 Spacer()
 
@@ -78,7 +78,7 @@ public struct NerdStatsHUDView: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.85))
                 }
                 .buttonStyle(.plain)
                 #if os(tvOS)
@@ -92,7 +92,52 @@ public struct NerdStatsHUDView: View {
             Divider()
                 .overlay(Color.white.opacity(0.15))
 
-            // ── Metrics Grid ─────────────────────────────────────────
+            #if !os(tvOS)
+                ScrollView(.vertical, showsIndicators: false) {
+                    metricsAndRawStats
+                        .padding(.horizontal, 2)
+                }
+                .frame(maxHeight: 280)
+            #else
+                metricsAndRawStats
+            #endif
+        }
+        .padding(20)
+        #if os(tvOS)
+            .frame(width: 580)
+        #else
+            .frame(maxWidth: 380)
+        #endif
+            .background(
+                ZStack {
+                    Color.black.opacity(0.82)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(
+                        LinearGradient(
+                            colors: [AppColors.neonTeal.opacity(0.6), AppColors.primary.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.7), radius: 24, x: 0, y: 12)
+            .shadow(color: AppColors.neonTeal.opacity(0.18), radius: 18, x: 0, y: 6)
+        #if os(tvOS)
+            .onExitCommand {
+                onClose()
+            }
+        #endif
+    }
+
+    private var metricsAndRawStats: some View {
+        VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 // Video Resolution
                 StatCard(
@@ -107,7 +152,7 @@ public struct NerdStatsHUDView: View {
                     icon: "video.fill",
                     title: AppStrings.Player.videoCodec,
                     value: videoCodecString,
-                    accentColor: Color(hex: "#00F5D4")
+                    accentColor: AppColors.neonTeal
                 )
 
                 // Audio Codec & Route
@@ -115,7 +160,7 @@ public struct NerdStatsHUDView: View {
                     icon: "waveform",
                     title: AppStrings.Player.audioCodec,
                     value: audioCodecString,
-                    accentColor: Color(hex: "#BF5AF2")
+                    accentColor: AppColors.premium
                 )
 
                 // Measured network throughput
@@ -139,7 +184,7 @@ public struct NerdStatsHUDView: View {
                     title: AppStrings.Player.renderedFPS,
                     value: streamHealthMetrics?.fps.map { "\(String(format: "%.1f", $0)) FPS" }
                         ?? AppStrings.Player.sampleUnavailable,
-                    accentColor: Color(hex: "#00F5D4")
+                    accentColor: AppColors.neonTeal
                 )
 
                 if let metrics = streamHealthMetrics {
@@ -151,7 +196,7 @@ public struct NerdStatsHUDView: View {
                             let jitter = metrics.networkJitterMs.map { " (±\($0)ms)" } ?? ""
                             return "\(latency) ms\(jitter)"
                         } ?? AppStrings.Player.sampleUnavailable,
-                        accentColor: metrics.networkLatencyMs.map { $0 < 80 ? Color(hex: "#00F5D4") : Color.orange }
+                        accentColor: metrics.networkLatencyMs.map { $0 < 80 ? AppColors.neonTeal : Color.orange }
                             ?? Color.white.opacity(0.55)
                     )
 
@@ -185,7 +230,7 @@ public struct NerdStatsHUDView: View {
                     icon: currentAudioRoute?.iconName ?? "speaker.wave.2.fill",
                     title: AppStrings.Player.audioRoute,
                     value: currentAudioRoute?.name ?? AppStrings.Player.speaker,
-                    accentColor: Color(hex: "#0A84FF")
+                    accentColor: AppColors.primary
                 )
 
                 // Stream Format / Protocol
@@ -193,7 +238,7 @@ public struct NerdStatsHUDView: View {
                     icon: "network",
                     title: AppStrings.Player.streamProtocol,
                     value: streamFormatString,
-                    accentColor: Color(hex: "#64D2FF")
+                    accentColor: AppColors.sky
                 )
 
                 if item.config?.type == .plex || item.config?.type == .emby {
@@ -201,7 +246,7 @@ public struct NerdStatsHUDView: View {
                         icon: "play.square.stack.fill",
                         title: AppStrings.Player.serverPlaybackMode,
                         value: serverPlaybackModeString,
-                        accentColor: Color(hex: "#00F5D4")
+                        accentColor: AppColors.neonTeal
                     )
                 }
 
@@ -220,7 +265,7 @@ public struct NerdStatsHUDView: View {
                     icon: item.isLive ? "antenna.radiowaves.left.and.right" : "film.fill",
                     title: "Yayın Tipi",
                     value: item.isLive ? "Canlı TV (Live)" : "İsteğe Bağlı (VOD)",
-                    accentColor: Color(hex: "#FFD60A")
+                    accentColor: AppColors.warningGold
                 )
             }
 
@@ -240,38 +285,6 @@ public struct NerdStatsHUDView: View {
                 .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
             }
         }
-        .padding(20)
-        #if os(tvOS)
-            .frame(width: 580)
-        #else
-            .frame(maxWidth: 380)
-        #endif
-            .background(
-                ZStack {
-                    Color.black.opacity(0.82)
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: "#00F5D4").opacity(0.6), Color(hex: "#0A84FF").opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.7), radius: 24, x: 0, y: 12)
-            .shadow(color: Color(hex: "#00F5D4").opacity(0.18), radius: 18, x: 0, y: 6)
-        #if os(tvOS)
-            .onExitCommand {
-                onClose()
-            }
-        #endif
     }
 
     // MARK: - State Badge

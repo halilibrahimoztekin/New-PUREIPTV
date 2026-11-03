@@ -81,28 +81,28 @@
                     // ── Header Actions ─────────────────────────────────
                     HStack(spacing: 8) {
                         Text(AppStrings.LiveTV.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(1)
 
                         Spacer()
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             if config.type == .m3u {
                                 Button {
                                     store.send(store.isRefreshingContent ? .cancelContentRefresh : .refreshContentTapped)
                                 } label: {
                                     if store.isRefreshingContent, store.refreshStage?.canCancel != true {
                                         ProgressView()
-                                            .frame(width: 44, height: 44)
+                                            .frame(width: 36, height: 36)
                                     } else {
                                         Image(systemName: store.isRefreshingContent ? "xmark" : "arrow.clockwise")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Color.white.opacity(0.9))
-                                            .frame(width: 44, height: 44)
-                                            .background(Circle().fill(Color(hex: "#1F1F23")))
+                                            .font(AppFonts.bodySmall)
+                                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                            .frame(width: 36, height: 36)
+                                            .background(Circle().fill(AppColors.surfaceSecondary))
                                     }
                                 }
                                 .buttonStyle(.plain)
@@ -114,10 +114,10 @@
                                 store.send(store.isChannelSelectionMode ? .exitChannelSelectionMode : .enterChannelSelectionMode)
                             } label: {
                                 Image(systemName: store.isChannelSelectionMode ? "xmark" : "checklist")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 44, height: 44)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                                    .font(AppFonts.bodySmall)
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(AppColors.surfaceSecondary))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(store.isChannelSelectionMode ? AppStrings.LiveTV.cancelChannelSelection : AppStrings.LiveTV.selectChannels)
@@ -147,10 +147,10 @@
                                 }
                             } label: {
                                 Image(systemName: "ellipsis.circle")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.9))
-                                    .frame(width: 44, height: 44)
-                                    .background(Circle().fill(Color(hex: "#1F1F23")))
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(AppColors.surfaceSecondary))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(AppStrings.Common.more)
@@ -158,10 +158,10 @@
                             if let onSearch {
                                 Button(action: onSearch) {
                                     Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.9))
-                                        .frame(width: 44, height: 44)
-                                        .background(Circle().fill(Color(hex: "#1F1F23")))
+                                        .font(AppFonts.titleSmall)
+                                        .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                                        .frame(width: 36, height: 36)
+                                        .background(Circle().fill(AppColors.surfaceSecondary))
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(AppStrings.Search.searchPlaceholder)
@@ -240,16 +240,16 @@
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: mode == .channels ? "tv" : "calendar.day.timeline.left")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(AppFonts.captionSemibold)
                             Text(mode.rawValue)
-                                .font(.system(size: 14, weight: store.selectedTabMode == mode ? .bold : .medium))
+                                .font(store.selectedTabMode == mode ? AppFonts.bodySmall : AppFonts.caption)
                         }
-                        .foregroundColor(store.selectedTabMode == mode ? .white : Color(hex: "#C0C6D6").opacity(0.7))
+                        .foregroundColor(store.selectedTabMode == mode ? AppColors.textPrimary : AppColors.textSecondary.opacity(0.7))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(store.selectedTabMode == mode ? Color(hex: "#0A84FF") : Color.clear)
+                                .fill(store.selectedTabMode == mode ? AppColors.primary : Color.clear)
                         )
                     }
                     .buttonStyle(.plain)
@@ -258,8 +258,8 @@
             .padding(4)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(hex: "#1F1F23").opacity(0.8))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                    .fill(AppColors.surfaceSecondary.opacity(0.8))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AppColors.borderSubtle, lineWidth: 1))
             )
         }
 
@@ -502,7 +502,7 @@
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 96)
                 }
             }
         }
@@ -533,10 +533,10 @@
                 VStack(spacing: 12) {
                     Image(systemName: "antenna.radiowaves.left.and.right.slash")
                         .font(.system(size: 40))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.3))
                     Text(AppStrings.Common.categoryNotFound)
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                        .font(AppFonts.bodyLarge)
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -556,13 +556,13 @@
                 action()
             } label: {
                 Text(name)
-                    .font(.system(size: 14, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? Color(hex: "#1F1F23") : Color(hex: "#C0C6D6"))
+                    .font(isSelected ? AppFonts.bodySmall : AppFonts.caption)
+                    .foregroundStyle(isSelected ? AppColors.surfaceSecondary : AppColors.textSecondary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(isSelected ? Color(hex: "#0A84FF") : Color.white.opacity(0.05))
+                            .fill(isSelected ? AppColors.primary : Color.white.opacity(0.05))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                                     .stroke(Color.white.opacity(isSelected ? 0 : 0.08), lineWidth: 1)

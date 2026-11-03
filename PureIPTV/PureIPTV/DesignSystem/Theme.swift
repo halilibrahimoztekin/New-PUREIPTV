@@ -1,22 +1,8 @@
 import SwiftUI
 
 public enum Theme {
-    public enum Colors {
-        // Core Backgrounds
-        public static let background = Color(hex: "#000000") // True Black
-        public static let surface = Color(hex: "#0C0C10") // Anthracite
-
-        // Accents
-        public static let primary = Color(hex: "#0A84FF") // Electric Blue
-        public static let premium = Color(hex: "#BF5AF2") // Neon Purple
-
-        /// Status
-        public static let liveIndicator = Color(hex: "#FF453A") // Live Red
-
-        // Text & Icons
-        public static let onSurface = Color(hex: "#E4E1E7")
-        public static let onSurfaceVariant = Color(hex: "#C0C6D6")
-    }
+    public typealias Colors = AppColors
+    public typealias Fonts = AppFonts
 
     public enum Layout {
         // Platform specific margins
