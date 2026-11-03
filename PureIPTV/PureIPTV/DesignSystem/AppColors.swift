@@ -35,16 +35,35 @@ public final class AppColors: Sendable {
 
     /// Electric Blue (#0A84FF) - Primary interactive color with maximum legibility.
     public static let primary = Color(hex: "#0A84FF")
+    /// Dark Electric Blue (#0060CC) - Used for primary gradients and button pressed states.
+    public static let primaryDark = Color(hex: "#0060CC")
     /// Primary interactive accent alias.
     public static let accent = Color(hex: "#0A84FF")
     /// Neon Purple (#BF5AF2) - Reserved for Premium, Paywall, and VIP highlights.
     public static let premium = Color(hex: "#BF5AF2")
+    /// Purple accent alias.
+    public static let purpleAccent = Color(hex: "#BF5AF2")
     /// Neon Teal / Mint (#00F5D4) - Used for Next Up badges, video scrubber, and stats.
     public static let neonTeal = Color(hex: "#00F5D4")
     /// Cyan (#00D2FF) - Used for media tags and technical indicators.
     public static let cyan = Color(hex: "#00D2FF")
     /// Sky Blue (#64D2FF) - Used for secondary info badges.
     public static let sky = Color(hex: "#64D2FF")
+    /// Amber (#E5A00D) - Used for warnings, sync alerts, and attention chips.
+    public static let amber = Color(hex: "#E5A00D")
+
+    // MARK: - Brand Logo Tokens
+
+    public static let logoGlowCyan = Color(hex: "#00D2FF")
+    public static let logoGlowPurple = Color(hex: "#9333EA")
+    public static let logoBaseDark = Color(hex: "#101626")
+    public static let logoBaseDeep = Color(hex: "#070B14")
+    public static let logoGlassTop = Color(hex: "#22314F")
+    public static let logoGlassBottom = Color(hex: "#121A2D")
+    public static let logoRibbonCyan = Color(hex: "#00E5FF")
+    public static let logoRibbonMagenta = Color(hex: "#E11D48")
+    public static let logoTriangleLight = Color(hex: "#38BDF8")
+    public static let logoTriangleDark = Color(hex: "#2563EB")
 
     // MARK: - Status & Alerts
 
@@ -52,8 +71,12 @@ public final class AppColors: Sendable {
     public static let live = Color(hex: "#FF453A")
     /// Live indicator alias.
     public static let liveIndicator = Color(hex: "#FF453A")
+    /// Live status alias.
+    public static let statusLive = Color(hex: "#FF453A")
     /// Destructive actions and error messages (#FF453A).
     public static let destructive = Color(hex: "#FF453A")
+    /// Error status alias.
+    public static let error = Color(hex: "#FF453A")
     /// Warning / Favorite Orange (#FF9F0A).
     public static let warning = Color(hex: "#FF9F0A")
     /// Gold / Rating Star / UHD 4K badge (#FFD60A).
@@ -82,6 +105,8 @@ public final class AppColors: Sendable {
     public static let borderSubtle = Color.white.opacity(0.08)
     /// Medium card border (white 12%).
     public static let borderMedium = Color.white.opacity(0.12)
+    /// Glassmorphic component outline border (white 12%).
+    public static let glassBorder = Color.white.opacity(0.12)
     /// Strong focused border (white 20%).
     public static let borderStrong = Color.white.opacity(0.20)
     /// Standard divider (white 10%).
@@ -133,6 +158,14 @@ public extension Color {
         AppColors.primary
     }
 
+    static var appPrimaryDark: Color {
+        AppColors.primaryDark
+    }
+
+    static var appAmber: Color {
+        AppColors.amber
+    }
+
     static var appAccent: Color {
         AppColors.accent
     }
@@ -157,8 +190,24 @@ public extension Color {
         AppColors.live
     }
 
+    static var appStatusLive: Color {
+        AppColors.statusLive
+    }
+
     static var appDestructive: Color {
         AppColors.destructive
+    }
+
+    static var appError: Color {
+        AppColors.error
+    }
+
+    static var appPurpleAccent: Color {
+        AppColors.purpleAccent
+    }
+
+    static var appGlassBorder: Color {
+        AppColors.glassBorder
     }
 
     static var appWarning: Color {

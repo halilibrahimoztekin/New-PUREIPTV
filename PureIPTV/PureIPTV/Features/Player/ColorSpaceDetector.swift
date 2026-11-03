@@ -95,6 +95,19 @@ public enum VideoDynamicRange: String, CaseIterable, Equatable, Hashable, Sendab
         }
     }
 
+    public var primaryColor: Color {
+        switch self {
+        case .dolbyVision:
+            AppColors.premium
+        case .hdr10Plus, .hdr10:
+            AppColors.warningGold
+        case .hlg:
+            AppColors.success
+        case .sdr, .unknown:
+            AppColors.onSurfaceVariant
+        }
+    }
+
     public var gradientHexes: [String] {
         switch self {
         case .dolbyVision:
@@ -105,6 +118,19 @@ public enum VideoDynamicRange: String, CaseIterable, Equatable, Hashable, Sendab
             ["#30D158", "#0A84FF"] // Green to Electric Blue
         case .sdr, .unknown:
             ["#636366", "#48484A"]
+        }
+    }
+
+    public var gradientColors: [Color] {
+        switch self {
+        case .dolbyVision:
+            [AppColors.premium, AppColors.amber]
+        case .hdr10Plus, .hdr10:
+            [AppColors.warningGold, AppColors.amber]
+        case .hlg:
+            [AppColors.success, AppColors.primary]
+        case .sdr, .unknown:
+            [AppColors.surfaceElevated, AppColors.surfaceSecondary]
         }
     }
 

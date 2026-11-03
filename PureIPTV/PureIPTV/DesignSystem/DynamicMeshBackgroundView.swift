@@ -18,7 +18,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
         primary: Color,
         secondary: Color,
         accent: Color,
-        background: Color = Color(hex: "#06060A")
+        background: Color = AppColors.background
     ) {
         self.primary = primary
         self.secondary = secondary
@@ -27,10 +27,10 @@ public struct DynamicMeshPalette: Equatable, Sendable {
     }
 
     public nonisolated static let `default` = DynamicMeshPalette(
-        primary: Color(hex: "#0A84FF").opacity(0.38),
-        secondary: Color(hex: "#5E5CE6").opacity(0.28),
-        accent: Color(hex: "#30D158").opacity(0.20),
-        background: Color(hex: "#06060A")
+        primary: AppColors.primary.opacity(0.38),
+        secondary: AppColors.purpleAccent.opacity(0.28),
+        accent: AppColors.success.opacity(0.20),
+        background: AppColors.background
     )
 
     /// Deterministic fallback palette from string (e.g. channel or movie title)
@@ -44,7 +44,7 @@ public struct DynamicMeshPalette: Equatable, Sendable {
             primary: Color(hue: hue1, saturation: 0.65, brightness: 0.45).opacity(0.4),
             secondary: Color(hue: hue2, saturation: 0.55, brightness: 0.35).opacity(0.3),
             accent: Color(hue: hue3, saturation: 0.70, brightness: 0.40).opacity(0.22),
-            background: Color(hex: "#06060A")
+            background: AppColors.background
         )
     }
 }
@@ -245,7 +245,7 @@ public actor DominantColorExtractor {
                 primary: Color(red: primaryC.r, green: primaryC.g, blue: primaryC.b).opacity(0.42),
                 secondary: Color(red: secondaryC.r, green: secondaryC.g, blue: secondaryC.b).opacity(0.32),
                 accent: Color(red: accentC.r, green: accentC.g, blue: accentC.b).opacity(0.24),
-                background: Color(hex: "#06060A")
+                background: AppColors.background
             )
         }
     #endif
@@ -289,7 +289,7 @@ public struct DynamicMeshBackgroundView: View {
     public var body: some View {
         ZStack {
             // True Black Base
-            Color(hex: "#06060A")
+            AppColors.background
                 .ignoresSafeArea()
 
             // Mesh or Gradient Layer

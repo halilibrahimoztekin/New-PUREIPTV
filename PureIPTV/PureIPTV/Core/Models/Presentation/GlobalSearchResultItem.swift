@@ -104,6 +104,10 @@ public struct GlobalSearchResultItem: Identifiable, Equatable, Sendable {
     }
 
     public nonisolated var contentTypeColor: Color {
-        Color(hex: contentTypeColorHex)
+        switch item.type {
+        case .live: AppColors.primary
+        case .vod: AppColors.premium
+        case .series: AppColors.amber
+        }
     }
 }

@@ -52,6 +52,12 @@ public struct AudioEQHUDView: View {
                 .padding(isCompact ? 14 : 24)
             }
             .simultaneousGesture(TapGesture().onEnded { resetIdleTimer() })
+            #if !os(tvOS)
+                .simultaneousGesture(DragGesture(minimumDistance: 5).onChanged { _ in resetIdleTimer() })
+            #endif
+            #if !os(tvOS)
+            .simultaneousGesture(DragGesture(minimumDistance: 5).onChanged { _ in resetIdleTimer() })
+            #endif
             .frame(maxWidth: isCompact ? min(720, geometry.size.width - 32) : containerMaxWidth)
             #if !os(tvOS)
                 .frame(maxHeight: isCompact ? min(geometry.size.height - 20, 380) : nil)
@@ -85,7 +91,7 @@ public struct AudioEQHUDView: View {
                     .frame(width: isCompact ? 30 : 42, height: isCompact ? 30 : 42)
 
                 Image(systemName: "waveform.badge.magnifyingglass")
-                    .font(.system(size: isCompact ? 14 : 19, weight: .semibold))
+                    .font(isCompact ? AppFonts.bodySmall.weight(.semibold) : AppFonts.titleSmall)
                     .foregroundColor(store.audioEQPreset.accentColor)
             }
 
@@ -117,7 +123,7 @@ public struct AudioEQHUDView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: isCompact ? 11 : 12, weight: .bold))
+                    .font(AppFonts.captionBold)
                     .foregroundColor(AppColors.textPrimary.opacity(0.85))
                     .frame(width: isCompact ? 28 : 34, height: isCompact ? 28 : 34)
                     .background(AppColors.surfaceSecondary, in: Circle())
@@ -143,7 +149,7 @@ public struct AudioEQHUDView: View {
 
                     VStack(spacing: isCompact ? 2 : 4) {
                         Text(String(format: "%+.0f", gain))
-                            .font(.system(size: isCompact ? 7.5 : bandLabelFontSize, weight: .bold, design: .monospaced))
+                            .font(AppFonts.captionSmall.weight(.bold).monospacedDigit())
                             .foregroundColor(gain != 0 ? store.audioEQPreset.accentColor : AppColors.textSecondary.opacity(0.45))
 
                         GeometryReader { _ in
@@ -160,7 +166,7 @@ public struct AudioEQHUDView: View {
                                         LinearGradient(
                                             colors: isPositive
                                                 ? [store.audioEQPreset.accentColor, store.audioEQPreset.accentColor.opacity(0.6)]
-                                                : [Color.orange.opacity(0.6), Color.orange],
+                                                : [AppColors.warning.opacity(0.6), AppColors.warning],
                                             startPoint: .top,
                                             endPoint: .bottom
                                         )
@@ -177,7 +183,7 @@ public struct AudioEQHUDView: View {
                         .frame(height: barHeight)
 
                         Text(label)
-                            .font(.system(size: isCompact ? 7.5 : bandLabelFontSize, weight: .medium, design: .rounded))
+                            .font(AppFonts.captionSmall)
                             .foregroundColor(AppColors.textSecondary.opacity(0.55))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -189,10 +195,10 @@ public struct AudioEQHUDView: View {
             .padding(.horizontal, isCompact ? 8 : 14)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black.opacity(0.45))
+                    .fill(AppColors.oledBlack.opacity(0.45))
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(AppColors.borderSubtle, lineWidth: 1)
                     }
             }
         }
@@ -226,11 +232,11 @@ public struct AudioEQHUDView: View {
             HStack(spacing: isCompact ? 8 : 12) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? preset.accentColor.opacity(0.25) : Color.white.opacity(0.06))
+                        .fill(isSelected ? preset.accentColor.opacity(0.25) : AppColors.glassPlate)
                         .frame(width: isCompact ? 28 : 38, height: isCompact ? 28 : 38)
 
                     Image(systemName: preset.icon)
-                        .font(.system(size: isCompact ? 13 : 16, weight: .semibold))
+                        .font(isCompact ? AppFonts.captionSemibold : AppFonts.bodySmall.weight(.semibold))
                         .foregroundColor(isSelected ? preset.accentColor : AppColors.textPrimary.opacity(0.85))
                 }
 
@@ -240,11 +246,11 @@ public struct AudioEQHUDView: View {
                             .font(isCompact ? AppFonts.captionSemibold : AppFonts.bodySmall.weight(.bold))
                             .foregroundColor(isSelected ? AppColors.textPrimary : AppColors.textPrimary.opacity(0.92))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.7)
 
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: isCompact ? 10 : 12, weight: .bold))
+                                .font(AppFonts.captionSmall.weight(.bold))
                                 .foregroundColor(preset.accentColor)
                         }
                     }
@@ -253,29 +259,29 @@ public struct AudioEQHUDView: View {
                         .font(isCompact ? AppFonts.captionSmall : AppFonts.caption)
                         .foregroundColor(AppColors.textSecondary.opacity(0.75))
                         .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, isCompact ? 10 : 14)
-            .padding(.vertical, isCompact ? 8 : 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(isCompact ? 8 : 12)
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? preset.accentColor.opacity(0.14) : Color.white.opacity(0.04))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? preset.accentColor.opacity(0.12) : AppColors.glassPlate.opacity(0.6))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .strokeBorder(
-                                isSelected ? preset.accentColor.opacity(0.65) : Color.white.opacity(0.07),
+                                isSelected ? preset.accentColor.opacity(0.8) : AppColors.borderSubtle,
                                 lineWidth: isSelected ? 1.5 : 1
                             )
                     }
             }
         }
-        .buttonStyle(TVEQPresetButtonStyle(isSelected: isSelected, accentColor: preset.accentColor))
+        .buttonStyle(.plain)
         #if os(tvOS)
+            .buttonStyle(TVEQPresetButtonStyle(isSelected: isSelected, accentColor: preset.accentColor))
             .focused($focusedPreset, equals: preset)
         #endif
     }
@@ -285,7 +291,7 @@ public struct AudioEQHUDView: View {
     private var footerInfoBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppFonts.captionSemibold)
                 .foregroundColor(store.audioEQPreset.accentColor)
 
             Text("Seçilen ses profili '\(store.item.title)' kanalı için otomatik hatırlanır.")
@@ -339,14 +345,6 @@ public struct AudioEQHUDView: View {
             12
         #endif
     }
-
-    private var bandLabelFontSize: CGFloat {
-        #if os(tvOS)
-            10
-        #else
-            8
-        #endif
-    }
 }
 
 // MARK: - tvOS Focusable Preset Button Style
@@ -375,7 +373,7 @@ private struct TVEQPresetButtonStyle: ButtonStyle {
                             .shadow(color: accentColor.opacity(0.6), radius: 10)
                     }
                 }
-                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
+                .animation(.spring(duration: 0.25, bounce: 0.2), value: isFocused)
                 .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
             #if os(tvOS)
                 .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 14))

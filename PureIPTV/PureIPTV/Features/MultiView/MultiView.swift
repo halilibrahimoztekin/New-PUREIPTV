@@ -329,7 +329,7 @@ public struct MultiView: View {
                 .padding(.bottom, 6)
             }
         }
-        .background(Color(hex: "#000000").ignoresSafeArea())
+        .background(AppColors.oledBlack.ignoresSafeArea())
         .onAppear { store.send(.onAppear) }
         .onDisappear {
             store.send(.onDisappear)
@@ -405,20 +405,20 @@ public struct MultiView: View {
             {
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.wave.3.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color(hex: "#0A84FF"))
+                        .font(AppFonts.captionSmall.weight(.bold))
+                        .foregroundStyle(AppColors.primary)
 
                     Text(channel.title)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(AppFonts.captionSmall.weight(.bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color(hex: "#0A84FF").opacity(0.18), in: Capsule())
+                .background(AppColors.primary.opacity(0.18), in: Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color(hex: "#0A84FF").opacity(0.5), lineWidth: 1)
+                        .stroke(AppColors.primary.opacity(0.5), lineWidth: 1)
                 )
                 .transition(.opacity)
                 .animation(.spring(response: 0.3, dampingFraction: 0.75), value: store.activeAudioSlotID)
@@ -433,7 +433,7 @@ public struct MultiView: View {
             }) {
                 Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
                     .font(.system(size: 22))
-                    .foregroundStyle(store.isPiPActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.85))
+                    .foregroundStyle(store.isPiPActive ? AppColors.primary : Color.white.opacity(0.85))
             }
             #if os(tvOS)
             .buttonStyle(TVCircleButtonStyle())
@@ -466,17 +466,17 @@ public struct MultiView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: mode.iconName)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(AppFonts.captionSmall.weight(.bold))
                         Text(mode.title)
-                            .font(.system(size: 13, weight: (isSelected || isFocused) ? .bold : .medium))
+                            .font(AppFonts.caption.weight((isSelected || isFocused) ? .bold : .medium))
                     }
                     .foregroundColor((isSelected || isFocused) ? .white : .white.opacity(0.6))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
                         isFocused
-                            ? Color(hex: "#0A84FF")
-                            : (isSelected ? Color(hex: "#0A84FF").opacity(0.35) : Color.white.opacity(0.08)),
+                            ? AppColors.primary
+                            : (isSelected ? AppColors.primary.opacity(0.35) : Color.white.opacity(0.08)),
                         in: Capsule()
                     )
                     .overlay(
@@ -484,7 +484,7 @@ public struct MultiView: View {
                             .stroke(
                                 isFocused
                                     ? Color.white
-                                    : (isSelected ? Color(hex: "#0A84FF").opacity(0.7) : Color.clear),
+                                    : (isSelected ? AppColors.primary.opacity(0.7) : Color.clear),
                                 lineWidth: isFocused ? 2 : 1
                             )
                     )
@@ -678,13 +678,13 @@ public struct MultiView: View {
                                     Image(systemName: isAudioActive ? "speaker.wave.3.fill" : "speaker.slash.fill")
                                         .font(.system(size: 11, weight: .bold))
                                     Text(isAudioActive ? AppStrings.MultiView.audioActive : AppStrings.MultiView.audioMuted)
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
-                                    isAudioActive ? Color(hex: "#0A84FF").opacity(0.85) : Color.black.opacity(0.6),
+                                    isAudioActive ? AppColors.primary.opacity(0.85) : Color.black.opacity(0.6),
                                     in: Capsule()
                                 )
                                 #if os(tvOS)
@@ -798,13 +798,13 @@ public struct MultiView: View {
                                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                                             .font(.system(size: 10, weight: .bold))
                                         Text(AppStrings.MultiView.swapToPrimary)
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(AppFonts.captionSmall.weight(.bold))
                                     }
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(Color(hex: "#BF5AF2").opacity(0.85), in: Capsule())
-                                    .shadow(color: Color(hex: "#BF5AF2").opacity(0.4), radius: 6)
+                                    .background(AppColors.premium.opacity(0.85), in: Capsule())
+                                    .shadow(color: AppColors.premium.opacity(0.4), radius: 6)
                                     #if os(tvOS)
                                         .overlay {
                                             Capsule()
@@ -843,13 +843,13 @@ public struct MultiView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: isCompanion ? 28 : 42))
-                            .foregroundStyle(Color(hex: "#0A84FF").opacity(0.7))
+                            .foregroundStyle(AppColors.primary.opacity(0.7))
                         Text(AppStrings.MultiView.addChannel)
-                            .font(.system(size: isCompanion ? 11 : 13, weight: .medium))
+                            .font(AppFonts.caption.weight(.medium))
                             .foregroundStyle(Color.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(hex: "#0C0C10"))
+                    .background(AppColors.surface)
                 }
                 .buttonStyle(.plain)
                 #if os(tvOS)
@@ -864,13 +864,13 @@ public struct MultiView: View {
                     .stroke(
                         isFocused
                             ? Color.white
-                            : (isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12)),
+                            : (isAudioActive ? AppColors.primary : Color.white.opacity(0.12)),
                         lineWidth: isFocused ? 3.5 : (isAudioActive ? 2.5 : 1.0)
                     )
                     .shadow(
                         color: isFocused
                             ? Color.white.opacity(0.6)
-                            : (isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear),
+                            : (isAudioActive ? AppColors.primary.opacity(0.6) : Color.clear),
                         radius: isFocused ? 8 : (isAudioActive ? 6 : 0)
                     )
             )
@@ -880,11 +880,11 @@ public struct MultiView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(
-                        isAudioActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.12),
+                        isAudioActive ? AppColors.primary : Color.white.opacity(0.12),
                         lineWidth: isAudioActive ? 2.5 : 1.0
                     )
                     .shadow(
-                        color: isAudioActive ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear,
+                        color: isAudioActive ? AppColors.primary.opacity(0.6) : Color.clear,
                         radius: isAudioActive ? 6 : 0
                     )
             )

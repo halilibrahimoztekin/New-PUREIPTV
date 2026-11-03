@@ -12,8 +12,8 @@ public struct CircularProgressRing<CenterContent: View>: View {
         progress: Double,
         lineWidth: CGFloat = 3.5,
         size: CGFloat = 36,
-        gradientColors: [Color] = [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
-        trackColor: Color = Color.white.opacity(0.18),
+        gradientColors: [Color] = [AppColors.cyan, AppColors.primary],
+        trackColor: Color = AppColors.glassBorder,
         @ViewBuilder centerContent: @escaping () -> CenterContent = { EmptyView() }
     ) {
         self.progress = max(0.0, min(1.0, progress))
@@ -58,9 +58,9 @@ public extension CircularProgressRing where CenterContent == Text {
         progress: Double,
         lineWidth: CGFloat = 3.5,
         size: CGFloat = 36,
-        gradientColors: [Color] = [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
-        trackColor: Color = Color.white.opacity(0.18),
-        percentageFontSize: CGFloat = 10
+        gradientColors: [Color] = [AppColors.cyan, AppColors.primary],
+        trackColor: Color = AppColors.glassBorder,
+        percentageFontSize _: CGFloat = 10
     ) {
         let percent = Int((max(0.0, min(1.0, progress)) * 100).rounded())
         self.init(
@@ -71,8 +71,8 @@ public extension CircularProgressRing where CenterContent == Text {
             trackColor: trackColor
         ) {
             Text("\(percent)%")
-                .font(.system(size: percentageFontSize, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .font(AppFonts.captionSmall.weight(.bold).monospacedDigit())
+                .foregroundColor(AppColors.textPrimary)
         }
     }
 }

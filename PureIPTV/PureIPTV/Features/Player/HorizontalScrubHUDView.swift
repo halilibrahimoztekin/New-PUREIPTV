@@ -55,31 +55,29 @@ import SwiftUI
                 HStack(spacing: 8) {
                     // Direction icon
                     Image(systemName: state.offsetSeconds >= 0 ? "goforward" : "gobackward")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(state.offsetSeconds >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
+                        .font(AppFonts.headline)
+                        .foregroundColor(state.offsetSeconds >= 0 ? AppColors.success : AppColors.amber)
 
                     // Target timestamp
                     Text(formatDuration(state.targetTime))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(.white)
+                        .font(AppFonts.titleLarge.monospacedDigit())
+                        .foregroundColor(AppColors.textPrimary)
 
                     // Total duration suffix
                     Text("/ \(formatDuration(state.totalTime))")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.65))
+                        .font(AppFonts.captionMedium)
+                        .foregroundColor(AppColors.textSecondary)
 
                     // Relative offset pill (+01:30 / -00:45)
                     HStack(spacing: 2) {
                         Text(state.offsetSeconds >= 0 ? "+\(formatSeconds(state.offsetSeconds))" : "-\(formatSeconds(abs(state.offsetSeconds)))")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundColor(state.offsetSeconds >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
+                            .font(AppFonts.captionBold.monospacedDigit())
+                            .foregroundColor(state.offsetSeconds >= 0 ? AppColors.success : AppColors.amber)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
-                        (state.offsetSeconds >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A")).opacity(0.18),
+                        (state.offsetSeconds >= 0 ? AppColors.success : AppColors.amber).opacity(0.18),
                         in: Capsule()
                     )
                 }
@@ -93,7 +91,7 @@ import SwiftUI
                     ZStack(alignment: .leading) {
                         // Base track
                         Capsule()
-                            .fill(Color.white.opacity(0.2))
+                            .fill(AppColors.glassBorder)
                             .frame(height: 5)
 
                         // Spanned seek highlight
@@ -101,7 +99,7 @@ import SwiftUI
                         let spanWidth = max(4, abs(targetX - initialX))
 
                         Capsule()
-                            .fill(state.offsetSeconds >= 0 ? Color(hex: "#30D158").opacity(0.6) : Color(hex: "#FF9F0A").opacity(0.6))
+                            .fill(state.offsetSeconds >= 0 ? AppColors.success.opacity(0.6) : AppColors.amber.opacity(0.6))
                             .frame(width: spanWidth, height: 5)
                             .offset(x: startX)
 

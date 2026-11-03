@@ -42,13 +42,13 @@ import SwiftVLC
             }
             .background(
                 ZStack {
-                    Color(hex: "#0E0E12").ignoresSafeArea()
+                    AppColors.background.ignoresSafeArea()
 
                     LinearGradient(
                         colors: [
-                            Color(hex: "#0A84FF").opacity(0.08),
+                            AppColors.primary.opacity(0.08),
                             Color.clear,
-                            Color(hex: "#5E5CE6").opacity(0.05),
+                            AppColors.purpleAccent.opacity(0.05),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -76,17 +76,17 @@ import SwiftVLC
                 // Header
                 HStack(spacing: 12) {
                     Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(Color(hex: "#0A84FF"))
+                        .font(AppFonts.titleLarge.weight(.bold))
+                        .foregroundStyle(AppColors.primary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(AppStrings.EPG.guide)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.titleLarge)
+                            .foregroundStyle(AppColors.textPrimary)
 
                         Text("\(store.channels.count) " + "Kanal".localized)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .font(AppFonts.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     Spacer()
@@ -166,22 +166,22 @@ import SwiftVLC
                     // Details
                     VStack(alignment: .leading, spacing: 4) {
                         Text(channel.title)
-                            .font(.system(size: 17, weight: isFocused || isSelected ? .bold : .medium))
-                            .foregroundStyle(isFocused ? .white : (isSelected ? Color(hex: "#0A84FF") : .white.opacity(0.85)))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(isFocused ? AppColors.textPrimary : (isSelected ? AppColors.primary : AppColors.textPrimary.opacity(0.85)))
                             .lineLimit(showTwoLineChannelTitles ? 2 : 1)
 
                         HStack(spacing: 6) {
                             if channel.tvArchive == 1 {
                                 HStack(spacing: 3) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(AppFonts.captionSmall.weight(.bold))
                                     Text("Catch-Up".localized)
-                                        .font(.system(size: 9, weight: .heavy))
+                                        .font(AppFonts.captionSmall.weight(.heavy))
                                 }
-                                .foregroundStyle(Color.purple)
+                                .foregroundStyle(AppColors.premium)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                                .background(AppColors.premium.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
                             }
 
                             qualityBadge(for: channel.title)
@@ -192,7 +192,7 @@ import SwiftVLC
 
                     if isSelected {
                         Circle()
-                            .fill(Color(hex: "#0A84FF"))
+                            .fill(AppColors.primary)
                             .frame(width: 8, height: 8)
                     }
                 }
@@ -202,14 +202,14 @@ import SwiftVLC
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(
                             isFocused
-                                ? Color.white.opacity(0.20)
-                                : (isSelected ? Color(hex: "#0A84FF").opacity(0.14) : Color.white.opacity(0.04))
+                                ? AppColors.glassPlate.opacity(2.5)
+                                : (isSelected ? AppColors.primary.opacity(0.14) : AppColors.glassPlate)
                         )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
-                            isFocused ? Color.white : (isSelected ? Color(hex: "#0A84FF").opacity(0.5) : Color.clear),
+                            isFocused ? AppColors.textPrimary : (isSelected ? AppColors.primary.opacity(0.5) : Color.clear),
                             lineWidth: isFocused ? 2.5 : 1
                         )
                 )
@@ -321,25 +321,25 @@ import SwiftVLC
                        let player = previewPlayerClient.vlcPlayer()
                     {
                         ZStack {
-                            Color.black
+                            AppColors.oledBlack
                             VideoView(player)
                         }
                         .frame(width: 140, height: 79)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color(hex: "#0A84FF"), lineWidth: 2)
+                                .stroke(AppColors.primary, lineWidth: 2)
                         )
                         .overlay(alignment: .topLeading) {
                             HStack(spacing: 3) {
-                                Circle().fill(Color.red).frame(width: 5, height: 5)
+                                Circle().fill(AppColors.live).frame(width: 5, height: 5)
                                 Text("CANLI")
-                                    .font(.system(size: 8, weight: .black))
-                                    .foregroundStyle(.white)
+                                    .font(AppFonts.captionSmall.weight(.black))
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(Color.black.opacity(0.65), in: Capsule())
+                            .background(AppColors.oledBlack.opacity(0.65), in: Capsule())
                             .padding(4)
                         }
                         .overlay(alignment: .bottomTrailing) {
@@ -429,14 +429,14 @@ import SwiftVLC
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "play.fill")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(AppFonts.headline)
                             Text(AppStrings.EPG.watch)
-                                .font(.system(size: 16, weight: .bold))
+                                .font(AppFonts.headline)
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Color(hex: "#0A84FF"), in: Capsule())
+                        .background(AppColors.primary, in: Capsule())
                     }
                     .tvFocusEffect(shape: .capsule)
                     .focused($isScheduleWatchButtonFocused)
@@ -446,8 +446,8 @@ import SwiftVLC
                         store.send(.closeTapped)
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                             .padding(12)
                     }
                     .buttonStyle(TVCircleButtonStyle())
@@ -511,12 +511,12 @@ import SwiftVLC
                         // Time Column
                         VStack(alignment: .leading, spacing: 2) {
                             Text(formatTime(program.startTime))
-                                .font(.system(size: 18, weight: isCurrentProgram ? .heavy : .bold, design: .monospaced))
-                                .foregroundStyle(isCurrentProgram ? Color(hex: "#0A84FF") : .white)
+                                .font(AppFonts.headline.monospacedDigit())
+                                .foregroundStyle(isCurrentProgram ? AppColors.primary : AppColors.textPrimary)
 
                             Text(formatTime(program.endTime))
-                                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .font(AppFonts.caption.monospacedDigit())
+                                .foregroundStyle(AppColors.textSecondary)
                         }
                         .frame(width: 70, alignment: .leading)
 
@@ -613,13 +613,13 @@ import SwiftVLC
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.12))
+                                    .fill(AppColors.glassBorder)
                                     .frame(height: 4)
 
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#64D2FF")],
+                                            colors: [AppColors.primary, AppColors.cyan],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -637,14 +637,14 @@ import SwiftVLC
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(
                             isFocused
-                                ? Color.white.opacity(0.20)
-                                : (isCurrentProgram ? Color(hex: "#0A84FF").opacity(0.08) : Color.white.opacity(0.03))
+                                ? AppColors.glassPlate.opacity(2.5)
+                                : (isCurrentProgram ? AppColors.primary.opacity(0.08) : AppColors.glassPlate)
                         )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
-                            isFocused ? Color.white : (isCurrentProgram ? Color(hex: "#0A84FF").opacity(0.4) : Color.clear),
+                            isFocused ? AppColors.textPrimary : (isCurrentProgram ? AppColors.primary.opacity(0.4) : Color.clear),
                             lineWidth: isFocused ? 2.5 : 1
                         )
                 )

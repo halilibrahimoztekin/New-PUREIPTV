@@ -13,7 +13,7 @@ public struct OnboardingView: View {
         ZStack {
             // Background
             LinearGradient(
-                colors: [Color(hex: "#0f0c29"), Color(hex: "#302b63"), Color(hex: "#24243e")],
+                colors: [AppColors.background, AppColors.surfaceElevated, AppColors.surfaceSecondary],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

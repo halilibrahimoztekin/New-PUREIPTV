@@ -73,12 +73,12 @@ struct DashboardHeroArtworkView: View {
     private var atmosphericFallback: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#273247"), Color(hex: "#0F0F13")],
+                colors: [AppColors.surfaceElevated, AppColors.background],
                 startPoint: .topTrailing,
                 endPoint: .bottomLeading
             )
             RadialGradient(
-                colors: [Color(hex: "#0A84FF").opacity(0.24), .clear],
+                colors: [AppColors.primary.opacity(0.24), .clear],
                 center: .topTrailing,
                 startRadius: 0,
                 endRadius: max(height, 1)

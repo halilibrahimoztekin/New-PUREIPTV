@@ -95,20 +95,20 @@
 
         var body: some View {
             ZStack {
-                Color.black.ignoresSafeArea()
+                AppColors.oledBlack.ignoresSafeArea()
 
                 VStack(spacing: 16) {
                     Image(systemName: icon)
-                        .font(.system(size: 44, weight: .semibold))
+                        .font(AppFonts.displayMedium.weight(.semibold))
                         .foregroundStyle(color)
 
                     Text(tab.rawValue)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color(hex: "#E4E1E7"))
+                        .font(AppFonts.titleMedium)
+                        .foregroundStyle(AppColors.textPrimary)
 
                     Text(AppStrings.Common.comingSoon)
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                 }
             }
             .navigationTitle(tab.rawValue)

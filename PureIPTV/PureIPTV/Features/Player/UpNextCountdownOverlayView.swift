@@ -158,21 +158,21 @@ public struct UpNextCountdownOverlayView: View {
                     Image(systemName: "play.fill")
                         .font(.system(size: 12, weight: .bold))
                     Text(AppStrings.Player.playNow)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(AppFonts.captionBold)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .frame(minHeight: 44)
                 .background(
                     LinearGradient(
-                        colors: [Color.accentColor, Color(hex: "#0A84FF")],
+                        colors: [AppColors.primary, AppColors.primaryDark],
                         startPoint: .leading,
                         endPoint: .trailing
                     ),
                     in: Capsule()
                 )
-                .shadow(color: Color.accentColor.opacity(0.4), radius: 6, x: 0, y: 3)
+                .shadow(color: AppColors.primary.opacity(0.4), radius: 6, x: 0, y: 3)
             }
             .buttonStyle(.plain)
             .focused($isPlayButtonFocused)
@@ -203,12 +203,12 @@ public struct UpNextCountdownOverlayView: View {
                     Spacer()
                     ZStack {
                         Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 3)
+                            .stroke(AppColors.borderSubtle, lineWidth: 3)
                         Circle()
                             .trim(from: 0, to: progressRatio)
                             .stroke(
                                 LinearGradient(
-                                    colors: [Color.accentColor, Color(hex: "#0A84FF")],
+                                    colors: [AppColors.primary, AppColors.primaryDark],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
@@ -218,8 +218,8 @@ public struct UpNextCountdownOverlayView: View {
                             .animation(.linear(duration: 1.0), value: countdownSeconds)
 
                         Text("\(countdownSeconds)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .font(AppFonts.captionBold)
+                            .foregroundColor(AppColors.textPrimary)
                             .monospacedDigit()
                     }
                     .frame(width: 26, height: 26)
@@ -232,16 +232,16 @@ public struct UpNextCountdownOverlayView: View {
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                .stroke(AppColors.borderSubtle, lineWidth: 0.5)
         )
     }
 
     private var fallbackThumbnail: some View {
         ZStack {
-            Color(hex: "#1A1A24")
+            AppColors.surfaceSecondary
             Image(systemName: "tv.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.white.opacity(0.3))
+                .font(AppFonts.titleMedium)
+                .foregroundColor(AppColors.textSecondary)
         }
     }
 }

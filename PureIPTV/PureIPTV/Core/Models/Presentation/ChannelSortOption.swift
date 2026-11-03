@@ -47,13 +47,13 @@ public enum ChannelSortOption: String, CaseIterable, Identifiable, Codable, Send
     public var accentColor: Color {
         switch self {
         case .defaultOrder:
-            Color(hex: "#0A84FF")
+            AppColors.primary
         case .nameAscending, .nameDescending:
-            Color(hex: "#30D158")
+            AppColors.success
         case .mostWatched:
-            Color(hex: "#FF9F0A")
+            AppColors.amber
         case .recentlyWatched:
-            Color(hex: "#BF5AF2")
+            AppColors.premium
         }
     }
 

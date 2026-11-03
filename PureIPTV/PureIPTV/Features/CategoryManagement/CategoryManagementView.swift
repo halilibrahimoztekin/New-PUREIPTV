@@ -14,7 +14,7 @@ public struct CategoryManagementView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 if store.isLoading {
                     VStack(spacing: 16) {
@@ -426,7 +426,7 @@ public struct CategoryManagementView: View {
                     .scaleEffect(focusedItemID == category.id ? 1.03 : 1.0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.7), value: focusedItemID)
                 #endif
-                    .listRowBackground(Color(hex: "#16161D"))
+                    .listRowBackground(AppColors.surfaceSecondary)
                 #if os(tvOS)
                     .contextMenu {
                         if store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,

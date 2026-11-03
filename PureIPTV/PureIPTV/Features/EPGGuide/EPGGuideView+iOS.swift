@@ -20,26 +20,26 @@ import SwiftUI
                         HStack(spacing: 0) {
                             channelsList
                                 .frame(width: 300)
-                                .background(Color(hex: "#1F1F23"))
+                                .background(AppColors.surfaceSecondary)
 
-                            Divider().background(Color.white.opacity(0.1))
+                            Divider().background(AppColors.borderSubtle)
 
                             epgList
                                 .frame(maxWidth: .infinity)
-                                .background(Color.black)
+                                .background(AppColors.oledBlack)
                         }
                     } else {
                         // iPhone Portrait
                         VStack(spacing: 0) {
                             channelsHorizontalList
                                 .frame(height: 100)
-                                .background(Color(hex: "#1F1F23"))
+                                .background(AppColors.surfaceSecondary)
 
-                            Divider().background(Color.white.opacity(0.1))
+                            Divider().background(AppColors.borderSubtle)
 
                             epgList
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(Color.black)
+                                .background(AppColors.oledBlack)
                         }
                     }
                 }
@@ -224,14 +224,14 @@ import SwiftUI
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color.accentColor)
+                            .background(AppColors.primary)
                             .clipShape(Capsule())
                         }
                     }
                     .padding(16)
-                    .background(Color(hex: "#121214"))
+                    .background(AppColors.surfaceSecondary)
 
-                    Divider().background(Color.white.opacity(0.1))
+                    Divider().background(AppColors.borderSubtle)
                 }
 
                 if store.isLoadingEPG {

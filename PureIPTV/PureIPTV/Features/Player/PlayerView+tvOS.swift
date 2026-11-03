@@ -35,20 +35,6 @@
         }
     }
 
-    fileprivate enum FocusableField: Hashable {
-        case play
-        case restart
-        case backward
-        case replayWithSubtitles
-        case playPause
-        case forward
-        case skipMarkers
-        case liveChannelsMenu
-        case audioSubtitleMenu
-        case displayModeMenu
-        case scrubber
-    }
-
     // MARK: - tvOS Player View (KSPlayer Architecture)
 
     @available(tvOS 16.0, *)
@@ -60,12 +46,12 @@
         @AppStorage("com.pureiptv.tvOSPlayerRemoteLeftAction") private var remoteLeftAction = TVPlayerRemoteAction.defaultLeftAction.rawValue
         @AppStorage("com.pureiptv.tvOSPlayerRemoteRightAction") private var remoteRightAction = TVPlayerRemoteAction.defaultRightAction.rawValue
 
-        @FocusState private var focusableField: FocusableField?
+        @FocusState private var focusableField: TVPlayerFocusableField?
         @State private var isMaskShow: Bool = true
         @State private var idleTimer: Timer?
         @State private var isScrubbing: Bool = false
-        @State private var focusBeforeEPG: FocusableField?
-        @State private var focusBeforeMediaServerSourcePicker: FocusableField?
+        @State private var focusBeforeEPG: TVPlayerFocusableField?
+        @State private var focusBeforeMediaServerSourcePicker: TVPlayerFocusableField?
 
         public init(store: StoreOf<PlayerFeature>) {
             self.store = store
@@ -96,7 +82,7 @@
                         }
                         .padding(36)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
-                        .shadow(color: Color(hex: "#00D2FF").opacity(0.2), radius: 20)
+                        .shadow(color: AppColors.cyan.opacity(0.2), radius: 20)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
@@ -105,15 +91,15 @@
                         HStack(spacing: 16) {
                             if store.isFallbackSwitching {
                                 Image(systemName: "arrow.triangle.swap")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(Color(hex: "#00F5D4"))
+                                    .font(AppFonts.titleSmall.weight(.bold))
+                                    .foregroundStyle(AppColors.neonTeal)
                                 Text(AppStrings.Player.switchingToBackup(store.fallbackStreamName ?? ""))
-                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .font(AppFonts.titleSmall.weight(.semibold))
                                     .foregroundColor(.white)
                             } else {
                                 PureLoadingView(size: .small)
                                 Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
-                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .font(AppFonts.titleSmall.weight(.semibold))
                                     .foregroundColor(.white)
                             }
                         }
@@ -122,7 +108,7 @@
                         .background(.ultraThinMaterial, in: Capsule())
                         .overlay(
                             Capsule()
-                                .strokeBorder(store.isFallbackSwitching ? Color(hex: "#00F5D4").opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1.5)
+                                .strokeBorder(store.isFallbackSwitching ? AppColors.neonTeal.opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1.5)
                         )
                         .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 6)
                         .padding(.top, 40)
@@ -492,22 +478,22 @@
                         VStack {
                             HStack(spacing: 12) {
                                 Image(systemName: "moon.stars.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(Color(hex: "#BF5AF2"))
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundStyle(AppColors.premium)
                                 Text(AppStrings.Player.sleepTimerFading)
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(AppFonts.titleSmall.weight(.semibold))
                                     .foregroundStyle(.white)
                             }
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
                             .background(.ultraThinMaterial)
-                            .background(Color(hex: "#0C0C10").opacity(0.85))
+                            .background(AppColors.surface.opacity(0.85))
                             .clipShape(Capsule())
                             .overlay(
                                 Capsule()
-                                    .stroke(Color(hex: "#BF5AF2").opacity(0.4), lineWidth: 1)
+                                    .stroke(AppColors.premium.opacity(0.4), lineWidth: 1)
                             )
-                            .shadow(color: Color(hex: "#BF5AF2").opacity(0.35), radius: 14, x: 0, y: 6)
+                            .shadow(color: AppColors.premium.opacity(0.35), radius: 14, x: 0, y: 6)
                             .padding(.top, 50)
 
                             Spacer()
@@ -731,7 +717,7 @@
 
                 // Top part of controls: Title + Action Buttons
                 if isMaskShow {
-                    VideoControllerView(
+                    PlayerControlsTopBar_tvOS(
                         store: store,
                         focusedField: $focusableField,
                         onInteraction: { resetIdleTimer() },
@@ -747,7 +733,7 @@
 
                 // Bottom part of controls: Interactive Fluid Scrubber + Time Display
                 if isMaskShow {
-                    VideoTimeShowView(
+                    PlayerControlsScrubber_tvOS(
                         store: store,
                         focusedField: $focusableField,
                         isScrubbing: $isScrubbing,
@@ -826,825 +812,6 @@
                 || store.isChannelListVisible
                 || store.isEPGVisible
                 || store.isMediaServerPlaybackOptionsPresented
-        }
-    }
-
-    // MARK: - Video Controller View (Header & Action Buttons)
-
-    @available(tvOS 16.0, *)
-    private struct VideoControllerView: View {
-        @Bindable var store: StoreOf<PlayerFeature>
-        @FocusState.Binding var focusedField: FocusableField?
-        let onInteraction: () -> Void
-        let onSubtitleSearch: () -> Void
-
-        var body: some View {
-            HStack(alignment: .center, spacing: 20) {
-                // Title, Series Subtitle & Live Badges
-                VStack(alignment: .leading, spacing: 4) {
-                    if let seriesTitle = store.item.seriesTitle, !seriesTitle.isEmpty {
-                        Text(seriesTitle)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
-                            .lineLimit(1)
-                    }
-
-                    HStack(spacing: 12) {
-                        Text(store.item.title)
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        if store.isPlayingCatchup {
-                            Button {
-                                onInteraction()
-                                store.send(.returnToLiveStream)
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(Color.red)
-                                        .frame(width: 8, height: 8)
-                                    Text(AppStrings.Player.returnToLive)
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 6)
-                                .background(Color.red.opacity(0.85))
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(PlayerCapsuleButtonStyle())
-                        } else if store.item.isLive {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 8, height: 8)
-                                Text(AppStrings.Player.liveLabel)
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.red)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Capsule())
-                        }
-
-                        if store.playerState == .buffering {
-                            PureLoadingView(size: .small)
-                                .padding(.leading, 4)
-                        }
-                    }
-
-                    if let recordingStatusMessage = store.recordingStatusMessage {
-                        Text(recordingStatusMessage)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#FF453A"))
-                            .accessibilityAddTraits(.updatesFrequently)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 24)
-
-                // Sleek, fixed-size transport controls and contextual menus (No horizontal ScrollView!)
-                HStack(spacing: 18) {
-                    if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
-                        Button {
-                            onInteraction()
-                            store.send(.restartPlayback)
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 22, weight: .semibold))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .restart)
-                    }
-
-                    if !store.item.isLive || store.isPlayingCatchup {
-                        Button {
-                            onInteraction()
-                            store.send(.jumpBackward)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "gobackward")
-                                Text(store.activeSkipInterval.compactTitle)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                            }
-                            .font(.system(size: 22, weight: .semibold))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .backward)
-                        .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
-                    }
-
-                    if store.canReplayWithSubtitles {
-                        Button {
-                            onInteraction()
-                            store.send(.replayWithSubtitles)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "gobackward.10")
-                                Image(systemName: "captions.bubble")
-                                    .font(.system(size: 15, weight: .semibold))
-                            }
-                            .font(.system(size: 20, weight: .semibold))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .replayWithSubtitles)
-                        .accessibilityLabel(AppStrings.Player.replayWithSubtitles)
-                        .accessibilityHint(AppStrings.Player.replayWithSubtitlesHint)
-                    }
-
-                    Button {
-                        onInteraction()
-                        if store.playerState == .playing {
-                            store.send(.pause)
-                        } else {
-                            store.send(.play)
-                        }
-                    } label: {
-                        Image(systemName: store.playerState == .error ? "play.slash.fill" : (store.playerState == .playing ? "pause.fill" : "play.fill"))
-                            .font(.system(size: 28, weight: .bold))
-                    }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 64))
-                    .focused($focusedField, equals: .playPause)
-                    .accessibilityLabel(store.playerState == .playing ? AppStrings.Player.pausePlayback : AppStrings.Common.play)
-
-                    if !store.item.isLive || store.isPlayingCatchup {
-                        Button {
-                            onInteraction()
-                            store.send(.jumpForward)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "goforward")
-                                Text(store.activeSkipInterval.compactTitle)
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                            }
-                            .font(.system(size: 22, weight: .semibold))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .forward)
-                        .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
-                    }
-
-                    if !store.item.isLive {
-                        PlayerSkipMarkersControls(store: store, onInteraction: onInteraction)
-                    }
-
-                    if store.item.isLive {
-                        Menu {
-                            if store.playerState == .playing {
-                                Button {
-                                    guard !store.isRecordingStartPending,
-                                          !store.isRecordingStopPending
-                                    else { return }
-                                    onInteraction()
-                                    store.send(.toggleRecordingTapped)
-                                } label: {
-                                    Label(
-                                        store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording,
-                                        systemImage: store.isRecording ? "stop.circle.fill" : "record.circle"
-                                    )
-                                }
-                            }
-
-                            if let previousChannel = store.previousChannel {
-                                Button {
-                                    onInteraction()
-                                    store.send(.recallLastChannel)
-                                } label: {
-                                    Label(previousChannel.title, systemImage: "arrow.uturn.backward.circle")
-                                }
-                            }
-
-                            if store.playlist != nil {
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleChannelList, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                                } label: {
-                                    Label(AppStrings.LiveTV.channelsTitle, systemImage: "sidebar.leading")
-                                }
-                            }
-
-                            if store.item.isLive {
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                } label: {
-                                    Label(AppStrings.LiveTV.channelGuide, systemImage: "list.bullet.rectangle")
-                                }
-                            }
-
-                            Button {
-                                onInteraction()
-                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                            } label: {
-                                Label(AppStrings.LiveTV.recentChannels, systemImage: "clock.arrow.circlepath")
-                            }
-
-                            if store.playlist != nil {
-                                Button {
-                                    onInteraction()
-                                    store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                } label: {
-                                    Label(AppStrings.LiveTV.channelDialerTitle, systemImage: "number.square.fill")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 24))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .liveChannelsMenu)
-                        .accessibilityLabel(AppStrings.LiveTV.title)
-                    }
-
-                    if !store.audioTracks.isEmpty || !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
-                        Menu {
-                            if !store.audioTracks.isEmpty {
-                                Section(AppStrings.Player.audioTracks) {
-                                    ForEach(store.audioTracks) { track in
-                                        let formatted = TrackLanguageFormatter.format(trackName: track.name, isSubtitle: false)
-                                        Button {
-                                            onInteraction()
-                                            store.send(.selectAudioTrack(track))
-                                        } label: {
-                                            HStack {
-                                                Text(formatted.titleWithFlag)
-                                                if store.selectedAudioTrack?.id == track.id {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            if !store.subtitleTracks.isEmpty || (!store.item.isLive && store.playbackEngine == .vlc) {
-                                Section(AppStrings.Player.subtitles) {
-                                    Button {
-                                        onInteraction()
-                                        store.send(.selectSubtitleTrack(nil))
-                                    } label: {
-                                        HStack {
-                                            Text(AppStrings.Player.off)
-                                            if store.selectedSubtitleTrack == nil {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                    .accessibilityAddTraits(store.selectedSubtitleTrack == nil ? .isSelected : [])
-
-                                    ForEach(store.subtitleTracks) { track in
-                                        let formatted = TrackLanguageFormatter.formatSubtitle(trackName: track.name, reportedLanguage: track.language)
-                                        let isSelected = store.selectedSubtitleTrack?.id == track.id
-                                        let trimmedTrackName = track.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        let trackName = trimmedTrackName.isEmpty
-                                            ? formatted.displayName
-                                            : trimmedTrackName
-                                        let source = store.externalSubtitleTrackIDs.contains(track.id)
-                                            ? AppStrings.Player.subtitleTrackExternalFile
-                                            : AppStrings.Player.subtitleTrackMediaStream
-                                        let reportedLanguage = track.language?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        let languageName: String? = if formatted.flag != nil {
-                                            formatted.languageName
-                                        } else if let reportedLanguage, !reportedLanguage.isEmpty, reportedLanguage.lowercased() != "und" {
-                                            reportedLanguage
-                                        } else {
-                                            nil
-                                        }
-                                        let sourceMetadata = "\(AppStrings.Player.subtitleTrackSourceLabel): \(source)"
-                                        let languageMetadata = languageName.map {
-                                            "\(AppStrings.Player.subtitleSearchLanguage): \($0)"
-                                        }
-                                        let formatMetadata = formatted.formatDetail.map {
-                                            "\(AppStrings.Player.subtitleSearchFormat): \($0)"
-                                        }
-                                        let metadataParts: [String?] = [sourceMetadata, languageMetadata, formatMetadata]
-                                        let metadata = metadataParts.compactMap(\.self).joined(separator: " · ")
-                                        Button {
-                                            onInteraction()
-                                            store.send(.selectSubtitleTrack(track))
-                                        } label: {
-                                            HStack(spacing: 12) {
-                                                if let flag = formatted.flag {
-                                                    Text(flag)
-                                                }
-                                                VStack(alignment: .leading, spacing: 3) {
-                                                    Text(trackName)
-                                                        .fixedSize(horizontal: false, vertical: true)
-                                                    Text(metadata)
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                        .lineLimit(2)
-                                                }
-                                                if isSelected {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
-                                            .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                        .accessibilityLabel("\(trackName), \(metadata)")
-                                        .accessibilityAddTraits(isSelected ? .isSelected : [])
-                                    }
-
-                                    if !store.item.isLive, store.playbackEngine == .vlc {
-                                        Button(AppStrings.Player.subtitleOnlineSearch) {
-                                            onInteraction()
-                                            onSubtitleSearch()
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "captions.bubble.fill")
-                                .font(.system(size: 26))
-                        }
-                        .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                        .focused($focusedField, equals: .audioSubtitleMenu)
-                        .accessibilityLabel(AppStrings.Player.tracks)
-                    }
-
-                    Menu {
-                        if store.canSetPlaybackRate {
-                            Section(AppStrings.Player.playbackSpeed) {
-                                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
-                                    Button {
-                                        onInteraction()
-                                        store.send(.setPlaybackRate(Float(speed)))
-                                    } label: {
-                                        HStack {
-                                            Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
-                                            if abs(Double(store.playbackRate) - speed) < 0.01 {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Section(AppStrings.MultiView.aspectRatioControl) {
-                            ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
-                                Button {
-                                    onInteraction()
-                                    store.send(.setVideoAspectRatioMode(mode))
-                                } label: {
-                                    HStack {
-                                        Text(mode.title)
-                                        if store.videoAspectRatioMode == mode {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if store.playbackEngine == .vlc {
-                            Section(AppStrings.Player.deinterlace) {
-                                ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
-                                    Button {
-                                        onInteraction()
-                                        store.send(.setDeinterlaceMode(mode))
-                                    } label: {
-                                        if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
-                                            Label(mode.title, systemImage: "checkmark")
-                                        } else {
-                                            Text(mode.title)
-                                        }
-                                    }
-                                }
-                            }
-
-                            Section("Ses") {
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                } label: {
-                                    Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
-                                }
-
-                                Button {
-                                    onInteraction()
-                                    store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                } label: {
-                                    Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
-                                }
-
-                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
-                                    Button {
-                                        onInteraction()
-                                        store.send(.setAudioDelay(adjustment == 0 ? 0 : store.audioDelay + adjustment))
-                                    } label: {
-                                        Text(adjustment == 0 ? AppStrings.Player.resetAudioDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
-                                    }
-                                }
-                            }
-
-                            Button {
-                                onInteraction()
-                                store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                            } label: {
-                                Label(AppStrings.Player.streamHealthTitle, systemImage: "waveform.path.ecg")
-                            }
-
-                            Button {
-                                onInteraction()
-                                store.send(.toggleStats, animation: .spring(response: 0.32, dampingFraction: 0.8))
-                            } label: {
-                                Label(AppStrings.Player.technicalDetails, systemImage: "chart.xyaxis.line")
-                            }
-
-                            Button {
-                                onInteraction()
-                                store.send(.togglePiP, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                            } label: {
-                                Label(AppStrings.Player.pictureInPicture, systemImage: store.isPiPActive || store.isMinimized ? "pip.exit" : "pip.enter")
-                            }
-                        }
-
-                        if store.selectedSubtitleTrack != nil {
-                            Section(AppStrings.Player.subtitleSync) {
-                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
-                                    Button {
-                                        onInteraction()
-                                        store.send(.setSubtitleDelay(adjustment == 0 ? 0 : store.subtitleDelay + adjustment))
-                                    } label: {
-                                        Text(adjustment == 0 ? AppStrings.Player.resetSubtitleDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
-                                    }
-                                }
-                            }
-                        }
-
-                        if store.playbackEngine == .vlc, store.item.tvArchive == 1 {
-                            Button {
-                                onInteraction()
-                                store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                            } label: {
-                                Label(AppStrings.Player.catchupTimelineTitle, systemImage: "calendar.badge.clock")
-                            }
-                        }
-
-                        Menu {
-                            Button(AppStrings.Player.sleepTimerDisabled) {
-                                onInteraction()
-                                store.send(.setSleepTimer(nil))
-                            }
-                            ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
-                                Button("\(mins) \(AppStrings.Common.minAbbr)") {
-                                    onInteraction()
-                                    store.send(.setSleepTimer(mins))
-                                }
-                            }
-                        } label: {
-                            Label(
-                                store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer,
-                                systemImage: "moon.stars"
-                            )
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 24, weight: .semibold))
-                    }
-                    .buttonStyle(PlayerCircleButtonStyle(size: 56))
-                    .focused($focusedField, equals: .displayModeMenu)
-                    .accessibilityLabel(AppStrings.Common.more)
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .focusSection()
-            }
-        }
-    }
-
-    // MARK: - Custom Glass Focus Button Style for tvOS
-
-    @available(tvOS 16.0, *)
-    private struct PlayerCircleButtonStyle: ButtonStyle {
-        var size: CGFloat = 56
-
-        func makeBody(configuration: Configuration) -> some View {
-            PlayerCircleButtonBody(configuration: configuration, size: size)
-        }
-
-        private struct PlayerCircleButtonBody: View {
-            let configuration: Configuration
-            let size: CGFloat
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                configuration.label
-                    .foregroundStyle(isFocused ? .white : Color.white.opacity(0.85))
-                    .frame(width: size, height: size)
-                    .background(
-                        Circle()
-                            .fill(isFocused ? Color.white.opacity(0.35) : Color.white.opacity(0.12))
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                isFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.15),
-                                lineWidth: isFocused ? 2.5 : 1
-                            )
-                    )
-                    .shadow(
-                        color: isFocused ? Color(hex: "#0A84FF").opacity(0.55) : Color.clear,
-                        radius: 12,
-                        x: 0,
-                        y: 0
-                    )
-                    .scaleEffect(isFocused ? 1.15 : (configuration.isPressed ? 0.94 : 1.0))
-                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
-                    .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .circle)
-            }
-        }
-    }
-
-    @available(tvOS 16.0, *)
-    private struct PlayerCapsuleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            PlayerCapsuleButtonBody(configuration: configuration)
-        }
-
-        private struct PlayerCapsuleButtonBody: View {
-            let configuration: Configuration
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                configuration.label
-                    .foregroundStyle(isFocused ? .white : Color.white.opacity(0.85))
-                    .background(
-                        Capsule()
-                            .fill(isFocused ? Color.white.opacity(0.35) : Color.white.opacity(0.12))
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                isFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.15),
-                                lineWidth: isFocused ? 2.5 : 1
-                            )
-                    )
-                    .shadow(
-                        color: isFocused ? Color(hex: "#0A84FF").opacity(0.55) : Color.clear,
-                        radius: 12,
-                        x: 0,
-                        y: 0
-                    )
-                    .scaleEffect(isFocused ? 1.08 : (configuration.isPressed ? 0.95 : 1.0))
-                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
-                    .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
-            }
-        }
-    }
-
-    // MARK: - Video Time Show View (Fluid Scrubber & Continuous Seeking)
-
-    @available(tvOS 16.0, *)
-    private struct VideoTimeShowView: View {
-        @Bindable var store: StoreOf<PlayerFeature>
-        @FocusState.Binding var focusedField: FocusableField?
-        @Binding var isScrubbing: Bool
-        let onInteraction: () -> Void
-
-        @Environment(\.isFocused) private var isFocused
-        @State private var scrubValue: Double = 0.0
-        @State private var lastMoveTime: Date = .init()
-        @State private var consecutiveMoveCount: Int = 0
-        @State private var commitTask: Task<Void, Never>?
-
-        var body: some View {
-            let durationDouble = Double(store.totalTime.components.seconds)
-            let isLive = store.item.isLive && !store.isPlayingCatchup
-
-            if isLive {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    Text(AppStrings.Player.liveBroadcast)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-            } else {
-                let currentDisplayPos = isScrubbing ? scrubValue : store.position
-                let clampedProgress = min(max(currentDisplayPos, 0), 1)
-                let currentDisplaySeconds = isScrubbing ? (durationDouble * clampedProgress) : Double(store.currentTime.components.seconds)
-
-                VStack(spacing: 8) {
-                    if isScrubbing, let data = store.scrubThumbnailData, let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 320, height: 180)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(.white.opacity(0.24), lineWidth: 1)
-                            }
-                            .accessibilityHidden(true)
-                    }
-                    // Scrubber Bar & Timestamps
-                    HStack(spacing: 16) {
-                        Text(formatTime(currentDisplaySeconds))
-                            .font(.system(size: isFocused ? 20 : 18, weight: (isFocused || isScrubbing) ? .bold : .medium, design: .monospaced))
-                            .foregroundStyle((isFocused || isScrubbing) ? Color(hex: "#5AC8FA") : .white.opacity(0.85))
-                            .scaleEffect(isScrubbing ? 1.05 : 1.0)
-                            .animation(.easeOut(duration: 0.15), value: isScrubbing)
-
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                // Track background
-                                RoundedRectangle(cornerRadius: isFocused ? 7 : 4)
-                                    .fill(isFocused ? Color.white.opacity(0.35) : Color.white.opacity(0.2))
-                                    .frame(height: isFocused ? 14 : 8)
-
-                                // Active progress fill
-                                RoundedRectangle(cornerRadius: isFocused ? 7 : 4)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "#0A84FF"), Color(hex: "#5AC8FA")],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: proxy.size.width * clampedProgress, height: isFocused ? 14 : 8)
-
-                                // Glowing thumb indicator
-                                if isFocused || isScrubbing {
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: isScrubbing ? 26 : 22, height: isScrubbing ? 26 : 22)
-                                        .shadow(color: Color(hex: "#0A84FF").opacity(0.9), radius: 10, x: 0, y: 0)
-                                        .position(x: proxy.size.width * clampedProgress, y: proxy.size.height / 2)
-                                }
-                            }
-                            .frame(height: isFocused ? 14 : 8)
-                            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                        }
-                        .frame(height: isFocused ? 24 : 12)
-
-                        Text(formatTime(durationDouble))
-                            .font(.system(size: isFocused ? 20 : 18, weight: isFocused ? .bold : .medium, design: .monospaced))
-                            .foregroundStyle(isFocused ? .white : Color.white.opacity(0.6))
-                    }
-
-                    // Scrubber Fluid Navigation Hint / Time Badge
-                    if isFocused {
-                        HStack(spacing: 12) {
-                            if isScrubbing {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "hand.tap.fill")
-                                    Text(AppStrings.Player.scrubInstruction)
-                                }
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Color(hex: "#5AC8FA"))
-                            } else {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                    Text(AppStrings.Common.back)
-                                }
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-
-                                Text("•")
-                                    .foregroundStyle(.white.opacity(0.4))
-
-                                Text(AppStrings.Player.scrubSwipe)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(Color(hex: "#5AC8FA"))
-
-                                Text("•")
-                                    .foregroundStyle(.white.opacity(0.4))
-
-                                HStack(spacing: 4) {
-                                    Text(AppStrings.Onboarding.next)
-                                    Image(systemName: "chevron.right")
-                                }
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-                            }
-                        }
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    }
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(isFocused ? Color.white.opacity(0.12) : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(isFocused ? Color.white.opacity(0.4) : Color.clear, lineWidth: 1.5)
-                )
-                .scaleEffect(isFocused ? 1.02 : 1.0)
-                .focusable(true)
-                .focused($focusedField, equals: .scrubber)
-                .onMoveCommand { direction in
-                    onInteraction()
-                    handleMove(direction: direction, duration: durationDouble)
-                }
-                .onTapGesture {
-                    onInteraction()
-                    commitSeek()
-                }
-                .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
-                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isScrubbing)
-                .onChange(of: isFocused) { _, focused in
-                    if !focused, isScrubbing {
-                        commitSeek()
-                    }
-                }
-            }
-        }
-
-        private func handleMove(direction: MoveCommandDirection, duration: Double) {
-            guard duration > 0 else { return }
-
-            let directionMultiplier: Double
-            switch direction {
-            case .left:
-                directionMultiplier = -1
-            case .right:
-                directionMultiplier = 1
-            case .up, .down:
-                // Vertical movement belongs to focus navigation, not the scrubber.
-                return
-            @unknown default:
-                return
-            }
-
-            let now = Date()
-            if now.timeIntervalSince(lastMoveTime) < 0.35 {
-                consecutiveMoveCount += 1
-            } else {
-                consecutiveMoveCount = 1
-            }
-            lastMoveTime = now
-
-            // Adaptive step calculation: starts fine (5s), dynamically accelerates on rapid movement
-            let baseStep: Double = duration > 3600 ? 10.0 : 5.0
-            let multiplier: Double = min(Double(consecutiveMoveCount), 8.0)
-            let stepSeconds = baseStep * multiplier
-            let stepFraction = stepSeconds / duration
-
-            if !isScrubbing {
-                isScrubbing = true
-                scrubValue = store.position
-            }
-
-            scrubValue = min(1.0, max(0.0, scrubValue + (stepFraction * directionMultiplier)))
-            store.send(.requestScrubThumbnail(.seconds(duration * scrubValue)))
-
-            // Debounce automatic seek after user pauses movement
-            commitTask?.cancel()
-            let shouldShowCatchupPreview = store.isPlayingCatchup
-            commitTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                guard !Task.isCancelled else { return }
-
-                if shouldShowCatchupPreview {
-                    let clock = ContinuousClock()
-                    let deadline = clock.now.advanced(by: .seconds(3.3))
-                    while store.scrubThumbnailRequestID != nil, clock.now < deadline {
-                        try? await Task.sleep(for: .milliseconds(50))
-                        guard !Task.isCancelled else { return }
-                    }
-
-                    if store.scrubThumbnailData != nil {
-                        try? await Task.sleep(for: .milliseconds(350))
-                        guard !Task.isCancelled else { return }
-                    }
-                }
-
-                commitSeek()
-            }
-        }
-
-        private func commitSeek() {
-            commitTask?.cancel()
-            commitTask = nil
-            if isScrubbing {
-                store.send(.seek(scrubValue))
-                store.send(.cancelScrubThumbnail)
-                isScrubbing = false
-                consecutiveMoveCount = 0
-            }
-        }
-
-        private func formatTime(_ seconds: Double) -> String {
-            guard seconds.isFinite, seconds >= 0 else { return "00:00" }
-            let hrs = Int(seconds) / 3600
-            let mins = (Int(seconds) % 3600) / 60
-            let secs = Int(seconds) % 60
-            if hrs > 0 {
-                return String(format: "%d:%02d:%02d", hrs, mins, secs)
-            }
-            return String(format: "%02d:%02d", mins, secs)
         }
     }
 

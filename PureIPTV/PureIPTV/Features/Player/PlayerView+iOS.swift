@@ -179,687 +179,45 @@
 
                 if store.isControlsVisible {
                     VStack {
-                        // Top Bar
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .center) {
-                                // Primary Window Controls (Close & Minimize)
-                                HStack(spacing: 10) {
-                                    Button(action: {
-                                        cancelAllPendingWorkItems()
-                                        HapticManager.shared.trigger(.light)
-                                        store.send(.closeTapped)
-                                    }) {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 40, height: 40)
-                                            .background(.ultraThinMaterial, in: Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                    }
-
-                                    Button(action: {
-                                        guard !store.isMinimized else { return }
-                                        cancelAllPendingWorkItems()
-                                        HapticManager.shared.trigger(.medium)
-                                        store.send(.minimizeTapped)
-                                    }) {
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 40, height: 40)
-                                            .background(.ultraThinMaterial, in: Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                    }
-                                    .disabled(store.isMinimized)
-                                }
-
-                                Spacer()
-
-                                // Primary Quick Actions + Consolidated Settings Menu
-                                HStack(spacing: 10) {
-                                    // Live Channels Drawer Button (Zapping)
-                                    if store.item.isLive, store.playlist != nil {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleChannelList, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        }) {
-                                            Image(systemName: "list.dash")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .frame(width: 38, height: 38)
-                                                .background(store.isChannelListVisible ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                        }
-                                    }
-
-                                    // EPG Quick Button (if program data is present)
-                                    if store.item.isLive, store.item.epgChannelID != nil, !store.epgListings.isEmpty {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleEPG, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        }) {
-                                            Image(systemName: "list.bullet.rectangle")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .frame(width: 38, height: 38)
-                                                .background(store.isEPGVisible ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                        }
-                                    }
-
-                                    // Audio and subtitle tracks are a primary playback control.
-                                    if !store.audioTracks.isEmpty || !store.subtitleTracks.isEmpty {
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleTracksMenu, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        } label: {
-                                            Image(systemName: "captions.bubble")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .frame(width: 38, height: 38)
-                                                .background(.ultraThinMaterial, in: Circle())
-                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                        }
-                                        .accessibilityLabel(AppStrings.Player.tracks)
-                                    }
-
-                                    // PiP Button
-                                    if store.playbackEngine == .vlc, pipController?.isPossible == true {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.light)
-                                            if store.isPiPActive {
-                                                pipController?.stop()
-                                            } else {
-                                                _ = pipController?.start()
-                                            }
-                                        }) {
-                                            Image(systemName: store.isPiPActive ? "pip.exit" : "pip.enter")
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .frame(width: 38, height: 38)
-                                                .background(store.isPiPActive ? AnyShapeStyle(Color.accentColor.opacity(0.85)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                        }
-                                    }
-
-                                    // Screen Lock Button (Prevent accidental touches)
-                                    Button(action: {
-                                        HapticManager.shared.trigger(.medium)
-                                        store.send(.toggleScreenLock)
-                                    }) {
-                                        Image(systemName: store.isScreenLocked ? "lock.fill" : "lock.open.fill")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 38, height: 38)
-                                            .background(store.isScreenLocked ? AnyShapeStyle(Color.accentColor.opacity(0.9)) : AnyShapeStyle(.ultraThinMaterial), in: Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                    }
-
-                                    // AirPlay Route Picker (Native Video Route Picker)
-                                    AirPlayButton(size: 38)
-
-                                    // Consolidated Player Settings Menu
-                                    Menu {
-                                        let castCoordinator = GoogleCastPlaybackCoordinator.shared
-                                        if castCoordinator.canCast(item: store.item, streamURL: store.activePlaybackURL) {
-                                            Button {
-                                                let castStore = store
-                                                let castItem = store.item
-                                                let canResumeLocally = store.playerState == .playing
-                                                let time = store.currentTime.components
-                                                let startingPosition = Double(time.seconds) + Double(time.attoseconds) / 1_000_000_000_000_000_000
-                                                castCoordinator.cast(
-                                                    item: castItem,
-                                                    streamURL: store.activePlaybackURL,
-                                                    startingPosition: startingPosition,
-                                                    onRemotePlaybackStarted: { [weak castStore] in
-                                                        guard castStore?.item.id == castItem.id else { return }
-                                                        castStore?.send(.pause)
-                                                    },
-                                                    onSessionEnded: { [weak castStore] in
-                                                        guard canResumeLocally,
-                                                              castStore?.item.id == castItem.id,
-                                                              castStore?.playerState == .paused
-                                                        else { return }
-                                                        castStore?.send(.play)
-                                                    }
-                                                )
-                                            } label: {
-                                                Label(AppStrings.VODDetail.cast, systemImage: "airplayvideo")
-                                            }
-                                        }
-
-                                        if store.canSwitchPlaybackEngine || store.canManagePlaybackEnginePreference {
-                                            Menu {
-                                                if store.canSwitchPlaybackEngine {
-                                                    ForEach(PlaybackEngine.allCases, id: \.self) { engine in
-                                                        Button {
-                                                            store.send(.switchPlaybackEngine(engine))
-                                                        } label: {
-                                                            if engine == store.playbackEngine {
-                                                                Label(engine.title, systemImage: "checkmark")
-                                                            } else {
-                                                                Text(engine.title)
-                                                            }
-                                                        }
-                                                        .disabled(store.isSwitchingPlaybackEngine || engine == store.playbackEngine)
-                                                    }
-                                                }
-                                                if store.canManagePlaybackEnginePreference {
-                                                    Section(AppStrings.Player.itemPlaybackEnginePreference) {
-                                                        if let preference = store.itemSpecificPlaybackEnginePreference {
-                                                            Label(
-                                                                AppStrings.Player.itemPlaybackEnginePreferenceValue(preference.title),
-                                                                systemImage: "checkmark"
-                                                            )
-                                                        }
-                                                        if store.canSwitchPlaybackEngine,
-                                                           store.itemSpecificPlaybackEnginePreference != store.playbackEngine
-                                                        {
-                                                            Button(AppStrings.Player.saveCurrentPlaybackEngineForItem) {
-                                                                store.send(.saveCurrentPlaybackEnginePreference)
-                                                            }
-                                                            .disabled(store.isSwitchingPlaybackEngine)
-                                                        }
-                                                        if store.itemSpecificPlaybackEnginePreference != nil {
-                                                            Button(AppStrings.Player.useGeneralPlaybackEnginePreference) {
-                                                                store.send(.clearCurrentPlaybackEnginePreference)
-                                                            }
-                                                            .disabled(store.isSwitchingPlaybackEngine)
-                                                        }
-                                                    }
-                                                }
-                                            } label: {
-                                                Label("\(AppStrings.Player.playbackEngine): \(store.playbackEngine.title)", systemImage: "cpu")
-                                            }
-                                        }
-
-                                        // 2. Playback Speed (VOD & Series)
-                                        if store.canSetPlaybackRate {
-                                            Menu {
-                                                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
-                                                    Button {
-                                                        HapticManager.shared.trigger(.light)
-                                                        store.send(.setPlaybackRate(Float(speed)))
-                                                    } label: {
-                                                        HStack {
-                                                            Text(speed == 1.0 ? AppStrings.Player.normalSpeed : String(format: "%.2fx", speed))
-                                                            if abs(Double(store.playbackRate) - speed) < 0.01 {
-                                                                Image(systemName: "checkmark")
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } label: {
-                                                Label("\(AppStrings.Player.playbackSpeed) (\(String(format: "%.2gx", store.playbackRate)))", systemImage: "gauge.with.dots.needle.50percent")
-                                            }
-                                        }
-
-                                        // 3. Aspect Ratio / Zoom Mode
-                                        Menu {
-                                            ForEach(VideoAspectRatioMode.allCases, id: \.self) { mode in
-                                                Button {
-                                                    HapticManager.shared.trigger(.light)
-                                                    store.send(.setVideoAspectRatioMode(mode))
-                                                    triggerAspectFeedback()
-                                                } label: {
-                                                    HStack {
-                                                        Text(mode.title)
-                                                        if store.videoAspectRatioMode == mode {
-                                                            Image(systemName: "checkmark")
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } label: {
-                                            Label(store.videoAspectRatioMode.title, systemImage: store.videoAspectRatioMode.systemIcon)
-                                        }
-
-                                        // 4. Sleep Timer
-                                        Menu {
-                                            Button(AppStrings.Player.sleepTimerDisabled) {
-                                                store.send(.setSleepTimer(nil))
-                                            }
-                                            ForEach([15, 30, 45, 60, 90], id: \.self) { mins in
-                                                Button("\(mins) \(AppStrings.Common.minAbbr)") {
-                                                    store.send(.setSleepTimer(mins))
-                                                }
-                                            }
-                                        } label: {
-                                            Label(store.sleepTimerSeconds != nil ? "\(store.sleepTimerSeconds! / 60) \(AppStrings.Common.minAbbr)" : AppStrings.Player.sleepTimer, systemImage: "moon.stars")
-                                        }
-
-                                        // 5. Share stream link
-                                        if store.item.config?.type != .plex, store.item.config?.type != .emby {
-                                            Menu {
-                                                ShareLink(
-                                                    item: store.item.streamURL,
-                                                    subject: Text(store.item.title),
-                                                    message: Text("PureIPTV: \(store.item.title)")
-                                                ) {
-                                                    Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
-                                                }
-
-                                                Button {
-                                                    UIPasteboard.general.string = store.item.streamURL.absoluteString
-                                                    HapticManager.shared.trigger(.success)
-                                                } label: {
-                                                    Label("Bağlantıyı Kopyala", systemImage: "doc.on.doc")
-                                                }
-                                            } label: {
-                                                Label(AppStrings.Player.share, systemImage: "square.and.arrow.up")
-                                            }
-                                        }
-
-                                        // 6. Recent Channels Quick Dock
-                                        if store.item.isLive {
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            } label: {
-                                                Label(AppStrings.LiveTV.recentChannels, systemImage: "clock.arrow.circlepath")
-                                            }
-
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            } label: {
-                                                Label(AppStrings.LiveTV.channelDialerTitle, systemImage: "number.square.fill")
-                                            }
-                                        }
-
-                                        // 7. Catchup / Timeshift TV Archive Timeline (Feature #4)
-                                        if store.item.tvArchive == 1 {
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.toggleCatchupTimeline, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            } label: {
-                                                Label(AppStrings.Player.catchupTimelineTitle, systemImage: "calendar.badge.clock")
-                                            }
-                                        }
-
-                                        // 8. Lip-Sync & Audio Delay Fine Adjustment
-                                        if store.playbackEngine == .vlc {
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.toggleAudioSyncHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            } label: {
-                                                Label(AppStrings.Player.lipSyncAdjustment, systemImage: "slider.horizontal.2.square")
-                                            }
-                                        }
-
-                                        // 9. Live Stream Audio Equalizer & Dialogue Enhancer (Madde #14)
-                                        if store.playbackEngine == .vlc {
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.toggleAudioEQHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            } label: {
-                                                Label("Ses Ekolayzer & Diyalog (\(store.audioEQPreset.title))", systemImage: "waveform.badge.magnifyingglass")
-                                            }
-                                        }
-
-                                        if store.playbackEngine == .vlc {
-                                            Section(AppStrings.Player.audioSettings) {
-                                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
-                                                    Button {
-                                                        HapticManager.shared.trigger(.light)
-                                                        store.send(.setAudioDelay(adjustment == 0 ? 0 : store.audioDelay + adjustment))
-                                                    } label: {
-                                                        Text(adjustment == 0 ? AppStrings.Player.resetAudioDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        if store.selectedSubtitleTrack != nil {
-                                            Section(AppStrings.Player.subtitleSync) {
-                                                ForEach([-500, -250, 0, 250, 500], id: \.self) { adjustment in
-                                                    Button {
-                                                        HapticManager.shared.trigger(.light)
-                                                        store.send(.setSubtitleDelay(adjustment == 0 ? 0 : store.subtitleDelay + adjustment))
-                                                    } label: {
-                                                        Text(adjustment == 0 ? AppStrings.Player.resetSubtitleDelay : (adjustment > 0 ? "+\(adjustment) ms" : "\(adjustment) ms"))
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        if store.playbackEngine == .vlc {
-                                            Menu {
-                                                ForEach(DeinterlaceMode.allCases, id: \.self) { mode in
-                                                    Button {
-                                                        HapticManager.shared.trigger(.light)
-                                                        store.send(.setDeinterlaceMode(mode))
-                                                    } label: {
-                                                        if store.isDeinterlaceModeKnown, mode == store.deinterlaceMode {
-                                                            Label(mode.title, systemImage: "checkmark")
-                                                        } else {
-                                                            Text(mode.title)
-                                                        }
-                                                    }
-                                                }
-                                            } label: {
-                                                Label(
-                                                    "\(AppStrings.Player.deinterlace) (\(store.isDeinterlaceModeKnown ? store.deinterlaceMode.title : AppStrings.Player.deinterlaceUnknownShort))",
-                                                    systemImage: "film.stack"
-                                                )
-                                            }
-                                        }
-
-                                        // 8. Stream Health & Buffer Diagnostics (Feature #3)
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleStreamHealthHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                        } label: {
-                                            Label(AppStrings.Player.streamHealthTitle, systemImage: "waveform.path.ecg")
-                                        }
-
-                                        // 9. Technical Diagnostics (Nerd Stats)
-                                        Button {
-                                            HapticManager.shared.trigger(.light)
-                                            store.send(.toggleInfo, animation: .spring(response: 0.3, dampingFraction: 0.7))
-                                        } label: {
-                                            Label(store.isInfoVisible ? AppStrings.Player.hideTechnicalDetails : AppStrings.Player.technicalDetails, systemImage: "info.circle")
-                                        }
-
-                                        // 10. SharePlay
-                                        if store.item.config?.type != .plex, store.item.config?.type != .emby {
-                                            Button {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.sharePlayTapped)
-                                            } label: {
-                                                Label("SharePlay", systemImage: "shareplay")
-                                            }
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 38, height: 38)
-                                            .background(.ultraThinMaterial, in: Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                                    }
-                                    .accessibilityLabel(AppStrings.Common.more)
-                                }
+                        // Top Bar Subview
+                        PlayerControlsTopBar_iOS(
+                            store: store,
+                            pipController: $pipController,
+                            onClose: {
+                                cancelAllPendingWorkItems()
+                                store.send(.closeTapped)
+                            },
+                            onMinimize: {
+                                cancelAllPendingWorkItems()
+                                store.send(.minimizeTapped)
+                            },
+                            onTriggerAspectFeedback: {
+                                triggerAspectFeedback()
                             }
-
-                            Text(store.item.title)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                                .truncationMode(.tail)
-                                .padding(.leading, 8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding()
+                        )
 
                         Spacer()
 
-                        // Center Controls
-                        HStack(spacing: 28) {
-                            // Restart Button (Baştan Başlat)
-                            if store.totalTime > .zero || store.position > 0 || !store.item.isLive {
-                                Button(action: {
-                                    HapticManager.shared.trigger(.medium)
-                                    store.send(.restartPlayback)
-                                }) {
-                                    Image(systemName: "arrow.counterclockwise")
-                                        .font(.system(size: 24, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .padding(14)
-                                        .background(.ultraThinMaterial, in: Circle())
-                                }
-                            }
+                        // Transport & Live TV Actions Subview
+                        PlayerControlsBottomBar_iOS(
+                            store: store,
+                            isAnyHUDOrOverlayVisible: isAnyHUDOrOverlayVisible
+                        )
 
-                            if !store.item.isLive || store.isPlayingCatchup {
-                                Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpBackward) }) {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "gobackward")
-                                            .font(.system(size: 24))
-                                        Text(store.activeSkipInterval.compactTitle)
-                                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(16)
-                                    .background(.ultraThinMaterial, in: Circle())
-                                }
-                                .accessibilityLabel(AppStrings.Player.skipBackwardBy(store.activeSkipInterval.compactTitle))
-                            }
-
-                            // Play/Pause
-                            Button(action: {
-                                if store.playerState == .playing {
-                                    store.send(.pause)
-                                } else {
-                                    store.send(.play)
-                                }
-                            }) {
-                                Image(systemName: store.playerState == .playing ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.white)
-                                    .padding(22)
-                                    .background(.ultraThinMaterial, in: Circle())
-                            }
-
-                            if !store.item.isLive || store.isPlayingCatchup {
-                                Button(action: { HapticManager.shared.trigger(.light); store.send(.jumpForward) }) {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "goforward")
-                                            .font(.system(size: 24))
-                                        Text(store.activeSkipInterval.compactTitle)
-                                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(16)
-                                    .background(.ultraThinMaterial, in: Circle())
-                                }
-                                .accessibilityLabel(AppStrings.Player.skipForwardBy(store.activeSkipInterval.compactTitle))
-                            }
+                        // Timeline Scrubber Subview (Isolated for high-frequency updates)
+                        if store.totalTime > .zero || !store.item.isLive {
+                            PlayerControlsScrubber_iOS(
+                                store: store,
+                                isDraggingSlider: $isDraggingSlider,
+                                sliderDragValue: $sliderDragValue
+                            )
                         }
-                        .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
-                        .allowsHitTesting(!isAnyHUDOrOverlayVisible)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
-
-                        Spacer()
-
-                        // Bottom Bar (Timeline or Live Controls)
-                        VStack {
-                            // Timeline (only show if total time is valid, meaning it's not a live stream)
-                            if store.totalTime > .zero || !store.item.isLive {
-                                HStack(spacing: 12) {
-                                    // Calculate the display time based on dragging status
-                                    let currentDisplayPosition = isDraggingSlider ? sliderDragValue : store.position
-                                    let currentDisplayDuration = isDraggingSlider
-                                        ? Duration.seconds(Double(store.totalTime.components.seconds) * currentDisplayPosition)
-                                        : store.currentTime
-
-                                    Text(formatDuration(currentDisplayDuration))
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundColor(.white)
-
-                                    Slider(
-                                        value: Binding(
-                                            get: { currentDisplayPosition },
-                                            set: { newValue in
-                                                sliderDragValue = newValue
-                                            }
-                                        ),
-                                        in: 0 ... 1,
-                                        onEditingChanged: { editing in
-                                            Task { @MainActor in
-                                                isDraggingSlider = editing
-                                                if !editing {
-                                                    store.send(.seek(sliderDragValue))
-                                                }
-                                            }
-                                        }
-                                    )
-                                    .tint(.accentColor)
-
-                                    Text(formatDuration(store.totalTime))
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundColor(.white)
-                                }
-                                .padding(.horizontal)
-
-                                PlayerSkipMarkersControls(store: store) {
-                                    HapticManager.shared.trigger(.light)
-                                }
-                                .frame(maxWidth: .infinity)
-                            } else if store.item.isLive {
-                                // Live TV Quick Zapping & Recall Bar
-                                HStack {
-                                    Button {
-                                        HapticManager.shared.trigger(.medium)
-                                        store.send(.toggleRecordingTapped)
-                                    } label: {
-                                        Image(systemName: store.isRecording ? "stop.circle.fill" : "record.circle")
-                                            .font(.title2)
-                                            .foregroundStyle(.red)
-                                    }
-                                    .accessibilityLabel(store.isRecording ? AppStrings.Player.stopRecording : AppStrings.Player.startRecording)
-                                    .disabled(store.playerState != .playing || store.isRecordingStartPending || store.isRecordingStopPending)
-
-                                    if store.isRecording {
-                                        Label(AppStrings.Player.recordingInProgress, systemImage: "record.circle.fill")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.red)
-                                    }
-
-                                    if store.isPlayingCatchup {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.medium)
-                                            store.send(.returnToLiveStream)
-                                        }) {
-                                            HStack(spacing: 6) {
-                                                Circle()
-                                                    .fill(Color.red)
-                                                    .frame(width: 8, height: 8)
-                                                Text(AppStrings.Player.returnToLive)
-                                                    .font(.subheadline.bold())
-                                                    .foregroundColor(.white)
-                                            }
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background(Color.red.opacity(0.85), in: Capsule())
-                                        }
-                                    } else if let prev = store.previousChannel {
-                                        Button(action: {
-                                            HapticManager.shared.trigger(.medium)
-                                            store.send(.recallLastChannel)
-                                        }) {
-                                            HStack(spacing: 8) {
-                                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                                    .font(.title3)
-                                                VStack(alignment: .leading, spacing: 1) {
-                                                    Text(AppStrings.Player.recallLastChannel)
-                                                        .font(.caption2)
-                                                        .foregroundColor(.white.opacity(0.8))
-                                                    Text(prev.title)
-                                                        .font(.subheadline.bold())
-                                                        .foregroundColor(.white)
-                                                        .lineLimit(1)
-                                                }
-                                            }
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background(.ultraThinMaterial, in: Capsule())
-                                        }
-                                    }
-
-                                    Spacer()
-
-                                    if let recordingStatusMessage = store.recordingStatusMessage {
-                                        Text(recordingStatusMessage)
-                                            .font(.caption)
-                                            .foregroundStyle(.white)
-                                            .accessibilityAddTraits(.updatesFrequently)
-                                    }
-
-                                    if store.playlist != nil {
-                                        HStack(spacing: 12) {
-                                            // Category Jump (Madde #97)
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.jumpToPreviousCategory)
-                                            }) {
-                                                Image(systemName: "chevron.left.2")
-                                                    .font(.subheadline.bold())
-                                                    .foregroundColor(.white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.previousChannel)
-                                            }) {
-                                                Image(systemName: "chevron.up")
-                                                    .font(.headline)
-                                                    .foregroundColor(.white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.nextChannel)
-                                            }) {
-                                                Image(systemName: "chevron.down")
-                                                    .font(.headline)
-                                                    .foregroundColor(.white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-
-                                            // Recent Channels Quick Dock Button
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.toggleRecentChannelsHUD, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            }) {
-                                                Image(systemName: "clock.arrow.circlepath")
-                                                    .font(.headline)
-                                                    .foregroundColor(store.isRecentChannelsHUDVisible ? Color(hex: "#0A84FF") : .white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-
-                                            // Channel Dialer Button (Madde #11)
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.openChannelDialer, animation: .spring(response: 0.35, dampingFraction: 0.8))
-                                            }) {
-                                                Image(systemName: "number.square.fill")
-                                                    .font(.headline)
-                                                    .foregroundColor(store.isChannelDialerVisible ? Color(hex: "#FFD60A") : .white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-
-                                            // Category Jump (Madde #97)
-                                            Button(action: {
-                                                HapticManager.shared.trigger(.light)
-                                                store.send(.jumpToNextCategory)
-                                            }) {
-                                                Image(systemName: "chevron.right.2")
-                                                    .font(.subheadline.bold())
-                                                    .foregroundColor(.white)
-                                                    .padding(10)
-                                                    .background(.ultraThinMaterial, in: Circle())
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                        .padding(.bottom, 24)
-                        .padding(.top, 8)
-                        .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
-                        .allowsHitTesting(!isAnyHUDOrOverlayVisible)
-                        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
                     }
+                    .padding(.bottom, 24)
+                    .padding(.top, 8)
+                    .opacity(isAnyHUDOrOverlayVisible ? 0 : 1)
+                    .allowsHitTesting(!isAnyHUDOrOverlayVisible)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.8), value: isAnyHUDOrOverlayVisible)
                     .simultaneousGesture(
                         TapGesture().onEnded {
                             resetControlsDismissTimer()
@@ -881,7 +239,7 @@
                     PureLoadingView(size: .medium)
                         .padding(20)
                         .background(.ultraThinMaterial, in: Circle())
-                        .shadow(color: Color(hex: "#00D2FF").opacity(0.25), radius: 16)
+                        .shadow(color: AppColors.cyan.opacity(0.25), radius: 16)
                 }
 
                 // Auto-Reconnecting Glass HUD Pill (Subtle, non-blocking notification pill)
@@ -889,15 +247,15 @@
                     HStack(spacing: 12) {
                         if store.isFallbackSwitching {
                             Image(systemName: "arrow.triangle.swap")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                .font(AppFonts.bodyMedium.weight(.bold))
+                                .foregroundStyle(AppColors.neonTeal)
                             Text(AppStrings.Player.switchingToBackup(store.fallbackStreamName ?? ""))
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(AppFonts.bodySmall.weight(.semibold))
                                 .foregroundColor(.white)
                         } else {
                             PureLoadingView(size: .small)
                             Text(AppStrings.Player.reconnecting(store.retryCount, max: store.maxReconnectAttempts))
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(AppFonts.bodySmall.weight(.semibold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -906,7 +264,7 @@
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(
                         Capsule()
-                            .strokeBorder(store.isFallbackSwitching ? Color(hex: "#00F5D4").opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1)
+                            .strokeBorder(store.isFallbackSwitching ? AppColors.neonTeal.opacity(0.4) : Color.white.opacity(0.2), lineWidth: 1)
                     )
                     .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -987,22 +345,22 @@
                     VStack {
                         HStack(spacing: 8) {
                             Image(systemName: "moon.stars.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(Color(hex: "#BF5AF2"))
+                                .font(AppFonts.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.premium)
                             Text(AppStrings.Player.sleepTimerFading)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(AppFonts.caption.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(.ultraThinMaterial)
-                        .background(Color(hex: "#0C0C10").opacity(0.85))
+                        .background(AppColors.surface.opacity(0.85))
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
-                                .stroke(Color(hex: "#BF5AF2").opacity(0.4), lineWidth: 1)
+                                .stroke(AppColors.premium.opacity(0.4), lineWidth: 1)
                         )
-                        .shadow(color: Color(hex: "#BF5AF2").opacity(0.3), radius: 8, x: 0, y: 3)
+                        .shadow(color: AppColors.premium.opacity(0.3), radius: 8, x: 0, y: 3)
                         .padding(.top, 40)
 
                         Spacer()
@@ -1635,7 +993,7 @@
                                                     Text(AppStrings.Player.lipSyncAdjustment)
                                                         .font(.caption2.bold())
                                                 }
-                                                .foregroundColor(Color(hex: "#0A84FF"))
+                                                .foregroundColor(AppColors.primary)
                                                 .padding(.top, 2)
                                             }
 

@@ -21,13 +21,13 @@ public struct SeriesCardView: View {
             ZStack(alignment: .bottomLeading) {
                 // Background
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#1F1F23"))
+                    .fill(AppColors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(
                                 isSelected
-                                    ? Color(hex: "#0A84FF").opacity(0.8)
-                                    : Color.white.opacity(0.1),
+                                    ? AppColors.primary.opacity(0.8)
+                                    : AppColors.borderSubtle,
                                 lineWidth: isSelected ? 2 : 1
                             )
                     )
@@ -67,9 +67,9 @@ public struct SeriesCardView: View {
                             Spacer()
                             HStack(spacing: 3) {
                                 Image(systemName: tag.systemIcon)
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(AppFonts.captionSmall)
                                 Text(tag.label)
-                                    .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+                                    .font(AppFonts.captionSmall)
                             }
                             .foregroundColor(tag.color)
                             .padding(.horizontal, 6)
@@ -86,30 +86,18 @@ public struct SeriesCardView: View {
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
                     Text(series.displayTitle)
-                    #if os(tvOS)
-                        .font(.system(size: 18, weight: .bold))
-                    #else
-                        .font(.system(size: 13, weight: .bold))
-                    #endif
-                        .foregroundStyle(Color.white)
+                        .font(AppFonts.bodyBold)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(2)
 
                     if let rating = series.rating, rating > 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "star.fill")
-                            #if os(tvOS)
-                                .font(.system(size: 13))
-                            #else
-                                .font(.system(size: 10))
-                            #endif
-                                .foregroundColor(.yellow)
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.warningGold)
                             Text(String(format: "%.1f", rating))
-                            #if os(tvOS)
-                                .font(.system(size: 15, weight: .semibold))
-                            #else
-                                .font(.system(size: 11, weight: .semibold))
-                            #endif
-                                .foregroundStyle(Color(hex: "#C0C6D6"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.textSecondary)
                         }
                     }
                 }
@@ -124,20 +112,20 @@ public struct SeriesCardView: View {
         .buttonStyle(.fluidScale)
         #endif
         .shadow(
-            color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear,
+            color: isSelected ? AppColors.primary.opacity(0.3) : .clear,
             radius: 8, x: 0, y: 2
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+        .animation(.spring(duration: 0.3, bounce: 0.2), value: isSelected)
     }
 }
 
 private struct SeriesPosterPlaceholder: View {
     var body: some View {
         ZStack {
-            Color(hex: "#2C2C30")
+            AppColors.surfaceElevated
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                .foregroundStyle(AppColors.textSecondary.opacity(0.25))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .shimmeringPlaceholder(isLoading: true)

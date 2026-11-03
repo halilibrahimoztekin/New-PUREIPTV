@@ -62,7 +62,7 @@ public struct MediaLanguageFilterBar: View {
                                 isSelected
                                     ? AnyShapeStyle(
                                         LinearGradient(
-                                            colors: [Color(hex: "#1F2333"), Color(hex: "#161824")],
+                                            colors: [AppColors.surfaceSecondary, AppColors.surface],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )

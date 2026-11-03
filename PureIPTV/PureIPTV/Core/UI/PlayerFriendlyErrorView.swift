@@ -192,7 +192,7 @@ public struct PlayerFriendlyErrorView: View {
                     .font(.body)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color(hex: "#0A84FF"))
+                    .background(AppColors.primary)
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
                 }
@@ -239,7 +239,7 @@ public struct PlayerFriendlyErrorView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color(hex: "#0A84FF"))
+                        .background(AppColors.primary)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                     }
@@ -325,7 +325,7 @@ public struct PlayerFriendlyErrorView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(Color(hex: "#0A84FF"))
+                                .background(AppColors.primary)
                                 .foregroundStyle(.white)
                                 .clipShape(Capsule())
                             }

@@ -740,15 +740,15 @@ public struct EPGTimelineView: View {
                     .foregroundColor(.white)
             }
             .frame(width: channelColumnWidth, height: timeHeaderHeight)
-            .background(Color(hex: "#161619"))
+            .background(AppColors.surfaceSecondary)
             .overlay(
                 Rectangle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                    .stroke(AppColors.borderSubtle, lineWidth: 0.5)
             )
 
             // Horizontally Synchronized Time Scale
             ZStack(alignment: .leading) {
-                Color(hex: "#1A1A1E")
+                AppColors.surfaceElevated
 
                 HStack(spacing: 0) {
                     ForEach(0 ..< totalHoursCount, id: \.self) { i in
@@ -797,7 +797,7 @@ public struct EPGTimelineView: View {
             .clipped()
         }
         .frame(height: timeHeaderHeight)
-        .background(Color(hex: "#121215"))
+        .background(AppColors.surfaceSecondary)
     }
 
     // MARK: - Virtualized Body
@@ -814,7 +814,7 @@ public struct EPGTimelineView: View {
 
                             // Synchronized Program Strip
                             ZStack(alignment: .leading) {
-                                Color(hex: "#101014")
+                                AppColors.surfaceSecondary
 
                                 programsRow(for: channel, viewportWidth: availableWidth)
                                     .offset(x: -horizontalOffset)
@@ -976,10 +976,10 @@ public struct EPGTimelineView: View {
             }
             .padding(.horizontal, 8)
             .frame(width: channelColumnWidth, height: rowHeight)
-            .background(Color(hex: "#151518"))
+            .background(AppColors.surfaceSecondary)
             .overlay(
                 Rectangle()
-                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    .stroke(AppColors.borderSubtle, lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -1790,7 +1790,7 @@ public struct EPGTimelineView: View {
                 .padding(.bottom, 28)
             }
         }
-        .background(Color(hex: "#141418").ignoresSafeArea())
+        .background(AppColors.surfaceSecondary.ignoresSafeArea())
         #if os(iOS)
             .presentationDetents([.fraction(0.58), .large])
             .presentationDragIndicator(.visible)

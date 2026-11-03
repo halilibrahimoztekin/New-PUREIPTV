@@ -261,7 +261,7 @@
             }
             .containerBackground(for: .widget) {
                 LinearGradient(
-                    colors: [Color(hex: "#141418"), Color(hex: "#0A0A0C")],
+                    colors: [AppColors.surfaceSecondary, AppColors.background],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -275,18 +275,18 @@
                 HStack {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles.tv.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.cyan)
                         Text("PURE IPTV")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall.weight(.heavy))
+                            .foregroundStyle(AppColors.cyan)
                     }
 
                     Spacer()
 
                     if entry.continueWatching != nil {
                         Circle()
-                            .fill(Color(hex: "#00F5D4"))
+                            .fill(AppColors.cyan)
                             .frame(width: 6, height: 6)
                     }
                 }
@@ -296,18 +296,18 @@
                 if let item = entry.continueWatching {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(AppStrings.Dashboard.continueWatching.uppercased())
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.textSecondary)
 
                         Text(item.title)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(2)
 
                         if let sub = item.subtitle {
                             Text(sub)
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.white.opacity(0.7))
+                                .font(AppFonts.caption)
+                                .foregroundStyle(AppColors.textSecondary)
                                 .lineLimit(1)
                         }
 
@@ -315,13 +315,13 @@
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.18))
+                                    .fill(AppColors.glassBorder)
                                     .frame(height: 4)
 
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
+                                            colors: [AppColors.cyan, AppColors.primary],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -335,16 +335,16 @@
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .font(AppFonts.titleLarge)
+                            .foregroundStyle(AppColors.cyan)
 
                         Text(AppStrings.Widget.startWatching)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
 
                         Text("Yayınları keşfetmeye başla")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.caption)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                 }
             }
@@ -359,25 +359,25 @@
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles.tv.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.cyan)
                         Text(AppStrings.Dashboard.continueWatching)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.cyan)
                     }
 
                     Spacer()
 
                     if let item = entry.continueWatching {
                         Text(item.title)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(2)
 
                         if let sub = item.subtitle {
                             Text(sub)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.white.opacity(0.7))
+                                .font(AppFonts.caption)
+                                .foregroundStyle(AppColors.textSecondary)
                                 .lineLimit(1)
                         }
 
@@ -385,13 +385,13 @@
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.18))
+                                    .fill(AppColors.glassBorder)
                                     .frame(height: 4)
 
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
+                                            colors: [AppColors.cyan, AppColors.primary],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -404,36 +404,36 @@
                         Link(destination: item.deepLinkURL) {
                             HStack(spacing: 4) {
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(AppFonts.captionSmall.weight(.bold))
                                 Text(AppStrings.Common.watchNow)
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(AppFonts.captionSmall.weight(.bold))
                             }
-                            .foregroundStyle(.black)
+                            .foregroundStyle(AppColors.oledBlack)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
-                            .background(Color(hex: "#00F5D4"), in: Capsule())
+                            .background(AppColors.cyan, in: Capsule())
                         }
                         .padding(.top, 2)
                     } else {
                         Text(AppStrings.Widget.startWatching)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.captionMedium)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Divider()
-                    .overlay(Color.white.opacity(0.15))
+                    .overlay(AppColors.borderSubtle)
 
                 // Right: Favorites Quick Access
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.red)
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.live)
                         Text(AppStrings.Dashboard.myFavorites)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.8))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                     }
 
                     if !entry.favorites.isEmpty {
@@ -442,20 +442,20 @@
                                 Link(destination: fav.deepLinkURL) {
                                     HStack(spacing: 6) {
                                         Image(systemName: fav.type.lowercased() == "live" ? "tv.fill" : "film.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                            .font(AppFonts.captionSmall)
+                                            .foregroundStyle(AppColors.primary)
                                             .frame(width: 14)
 
                                         Text(fav.title)
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundStyle(.white)
+                                            .font(AppFonts.captionMedium)
+                                            .foregroundStyle(AppColors.textPrimary)
                                             .lineLimit(1)
 
                                         Spacer()
 
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(Color.white.opacity(0.4))
+                                            .font(AppFonts.captionSmall.weight(.bold))
+                                            .foregroundStyle(AppColors.textSecondary)
                                     }
                                     .padding(.vertical, 3)
                                 }
@@ -483,18 +483,18 @@
                     HStack {
                         HStack(spacing: 5) {
                             Image(systemName: "sparkles.tv.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionBold)
+                                .foregroundStyle(AppColors.cyan)
                             Text("PURE IPTV")
-                                .font(.system(size: 11, weight: .black, design: .rounded))
-                                .foregroundStyle(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionSmall.weight(.heavy))
+                                .foregroundStyle(AppColors.cyan)
                         }
 
                         Spacer()
 
                         Text(AppStrings.Dashboard.continueWatching)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .font(AppFonts.captionBold)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
 
                     if let item = entry.continueWatching {
@@ -502,37 +502,37 @@
                             HStack(spacing: 12) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(hex: "#1F1F23"))
+                                        .fill(AppColors.surfaceElevated)
                                         .frame(width: 50, height: 70)
 
                                     Image(systemName: "play.circle.fill")
-                                        .font(.system(size: 26))
-                                        .foregroundStyle(Color(hex: "#00F5D4"))
+                                        .font(AppFonts.titleLarge)
+                                        .foregroundStyle(AppColors.cyan)
                                 }
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.title)
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(.white)
+                                        .font(AppFonts.headline)
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .lineLimit(2)
 
                                     if let sub = item.subtitle {
                                         Text(sub)
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(Color.white.opacity(0.7))
+                                            .font(AppFonts.caption)
+                                            .foregroundStyle(AppColors.textSecondary)
                                     }
 
                                     // Progress bar
                                     GeometryReader { geo in
                                         ZStack(alignment: .leading) {
                                             Capsule()
-                                                .fill(Color.white.opacity(0.18))
+                                                .fill(AppColors.glassBorder)
                                                 .frame(height: 5)
 
                                             Capsule()
                                                 .fill(
                                                     LinearGradient(
-                                                        colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
+                                                        colors: [AppColors.cyan, AppColors.primary],
                                                         startPoint: .leading,
                                                         endPoint: .trailing
                                                     )
@@ -545,23 +545,23 @@
                                 }
                             }
                             .padding(10)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                            .background(AppColors.glassPlate, in: RoundedRectangle(cornerRadius: 12))
                         }
                     }
                 }
 
                 Divider()
-                    .overlay(Color.white.opacity(0.12))
+                    .overlay(AppColors.borderSubtle)
 
                 // Bottom: Favorites Grid
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.red)
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.live)
                         Text(AppStrings.Dashboard.myFavorites)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.captionBold)
+                            .foregroundStyle(AppColors.textPrimary)
 
                         Spacer()
                     }
@@ -572,13 +572,13 @@
                                 Link(destination: fav.deepLinkURL) {
                                     HStack(spacing: 10) {
                                         Image(systemName: fav.type.lowercased() == "live" ? "tv.fill" : "film.fill")
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(Color(hex: "#00F5D4"))
+                                            .font(AppFonts.headline)
+                                            .foregroundStyle(AppColors.cyan)
                                             .frame(width: 20)
 
                                         Text(fav.title)
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundStyle(.white)
+                                            .font(AppFonts.captionMedium)
+                                            .foregroundStyle(AppColors.textPrimary)
                                             .lineLimit(1)
 
                                         Spacer()

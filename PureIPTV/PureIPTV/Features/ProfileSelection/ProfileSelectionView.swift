@@ -190,34 +190,34 @@ struct ProfileAddProfileRouteForm: View {
     #if os(tvOS)
         private var tvOSBody: some View {
             ZStack {
-                Color(hex: "#101016").ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 28) {
                     Text(AppStrings.Profile.createProfile)
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(AppFonts.displayMedium.weight(.bold))
+                        .foregroundStyle(AppColors.textPrimary)
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text(AppStrings.Profile.profileName)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.7))
+                            .font(AppFonts.titleMedium)
+                            .foregroundStyle(AppColors.textSecondary)
 
                         TextField(AppStrings.Profile.enterProfileName, text: $name)
-                            .font(.system(size: 22))
+                            .font(AppFonts.titleMedium)
                             .padding()
-                            .background(Color.white.opacity(0.1))
+                            .background(AppColors.glassPlate)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
 
                         Toggle(AppStrings.Profile.kidsProfileDesc, isOn: $isKids)
-                            .font(.system(size: 22))
+                            .font(AppFonts.titleMedium)
                             .padding(.vertical, 8)
                             .onChange(of: isKids) { _, newValue in
                                 resetDefaultAvatar(forKidsMode: newValue)
                             }
 
                         Text(AppStrings.Profile.profileAvatar)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.7))
+                            .font(AppFonts.titleMedium)
+                            .foregroundStyle(AppColors.textSecondary)
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             LazyHStack(spacing: 14) {
@@ -227,23 +227,23 @@ struct ProfileAddProfileRouteForm: View {
                                     } label: {
                                         VStack(spacing: 8) {
                                             Image(systemName: option.symbolName)
-                                                .font(.system(size: 30, weight: .semibold))
+                                                .font(AppFonts.displaySmall)
                                             Text(option.name)
-                                                .font(.system(size: 14, weight: .medium))
+                                                .font(AppFonts.captionMedium)
                                                 .lineLimit(1)
                                         }
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppColors.textPrimary)
                                         .frame(width: 96, height: 92)
                                         .background(
                                             avatarIcon == option.symbolName
-                                                ? Color(hex: "#0A84FF").opacity(0.85)
-                                                : Color.white.opacity(0.08),
+                                                ? AppColors.primary.opacity(0.85)
+                                                : AppColors.glassPlate,
                                             in: RoundedRectangle(cornerRadius: 16)
                                         )
                                         .overlay {
                                             RoundedRectangle(cornerRadius: 16)
                                                 .strokeBorder(
-                                                    avatarIcon == option.symbolName ? Color.white : Color.white.opacity(0.12),
+                                                    avatarIcon == option.symbolName ? AppColors.textPrimary : AppColors.borderSubtle,
                                                     lineWidth: avatarIcon == option.symbolName ? 2.5 : 1
                                                 )
                                         }

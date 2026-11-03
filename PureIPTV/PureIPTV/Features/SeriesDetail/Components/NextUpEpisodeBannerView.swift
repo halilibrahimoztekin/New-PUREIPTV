@@ -50,11 +50,11 @@ public struct NextUpEpisodeBannerView: View {
                                 img.resizable()
                                     .scaledToFill()
                             default:
-                                Color(hex: "#1A1A24")
+                                AppColors.surfaceTertiary
                             }
                         }
                     } else {
-                        Color(hex: "#1A1A24")
+                        AppColors.surfaceTertiary
                     }
 
                     // Multi-stop darkening gradient scrim
@@ -75,19 +75,11 @@ public struct NextUpEpisodeBannerView: View {
                     HStack {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                            #if os(tvOS)
-                                .font(.system(size: 14, weight: .bold))
-                            #else
-                                .font(.system(size: 11, weight: .bold))
-                            #endif
-                                .foregroundColor(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.neonTeal)
                             Text(AppStrings.SeriesDetail.nextEpisode.uppercased())
-                            #if os(tvOS)
-                                .font(.system(size: 14, weight: .heavy, design: .rounded))
-                            #else
-                                .font(.system(size: 11, weight: .heavy, design: .rounded))
-                            #endif
-                                .foregroundColor(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.neonTeal)
                         }
                         #if os(tvOS)
                         .padding(.horizontal, 14)
@@ -96,22 +88,16 @@ public struct NextUpEpisodeBannerView: View {
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         #endif
-                        .background(Color(hex: "#00F5D4").opacity(0.18), in: Capsule())
-                        .overlay(Capsule().stroke(Color(hex: "#00F5D4").opacity(0.4), lineWidth: 1))
+                        .background(AppColors.neonTeal.opacity(0.18), in: Capsule())
+                        .overlay(Capsule().stroke(AppColors.neonTeal.opacity(0.4), lineWidth: 1))
 
                         Spacer()
 
                         Text("S\(String(format: "%02d", episode.season)) · E\(String(format: "%02d", episode.episodeNum))")
-                        #if os(tvOS)
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                        #else
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .font(AppFonts.captionSmall)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                        #endif
-                            .foregroundColor(.white.opacity(0.85))
+                            .foregroundColor(AppColors.textPrimary.opacity(0.85))
                             .background(.ultraThinMaterial, in: Capsule())
                     }
 
@@ -120,22 +106,14 @@ public struct NextUpEpisodeBannerView: View {
                     // Episode Title & Synopsis
                     VStack(alignment: .leading, spacing: 4) {
                         Text(episode.title)
-                        #if os(tvOS)
-                            .font(.system(size: 26, weight: .bold))
-                        #else
-                            .font(.system(size: 18, weight: .bold))
-                        #endif
-                            .foregroundColor(.white)
+                            .font(AppFonts.title)
+                            .foregroundColor(AppColors.textPrimary)
                             .lineLimit(1)
 
                         if let plot = episode.plot, !plot.isEmpty {
                             Text(plot)
-                            #if os(tvOS)
-                                .font(.system(size: 16))
-                            #else
-                                .font(.system(size: 12.5))
-                            #endif
-                                .foregroundColor(.white.opacity(0.75))
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
                                 .lineLimit(2)
                                 .lineSpacing(2)
                         }
@@ -146,13 +124,13 @@ public struct NextUpEpisodeBannerView: View {
                         GeometryReader { proxy in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.2))
+                                    .fill(AppColors.textPrimary.opacity(0.2))
                                     .frame(height: 4)
 
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
+                                            colors: [AppColors.neonTeal, AppColors.primary],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -171,30 +149,22 @@ public struct NextUpEpisodeBannerView: View {
                                     progress: ratio,
                                     lineWidth: 2.5,
                                     size: 20,
-                                    gradientColors: [Color(hex: "#00F5D4"), Color.white],
-                                    trackColor: Color.white.opacity(0.3)
+                                    gradientColors: [AppColors.neonTeal, AppColors.textPrimary],
+                                    trackColor: AppColors.textPrimary.opacity(0.3)
                                 ) {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .font(AppFonts.captionSmall)
+                                        .foregroundColor(AppColors.textPrimary)
                                 }
                             } else {
                                 Image(systemName: "play.fill")
-                                #if os(tvOS)
-                                    .font(.system(size: 15, weight: .bold))
-                                #else
-                                    .font(.system(size: 12, weight: .bold))
-                                #endif
+                                    .font(AppFonts.bodyBold)
                             }
 
                             Text(isInProgress ? "\(AppStrings.SeriesDetail.continueWatching) (%\(percent))" : AppStrings.SeriesDetail.playNextEpisode)
-                            #if os(tvOS)
-                                .font(.system(size: 18, weight: .bold))
-                            #else
-                                .font(.system(size: 13.5, weight: .bold))
-                            #endif
+                                .font(AppFonts.bodyBold)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                         #if os(tvOS)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
@@ -204,30 +174,22 @@ public struct NextUpEpisodeBannerView: View {
                         #endif
                             .background(
                                 LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0066CC")],
+                                    colors: [AppColors.primary, AppColors.primary.opacity(0.8)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .clipShape(Capsule())
-                            .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 6, y: 2)
+                            .shadow(color: AppColors.primary.opacity(0.4), radius: 6, y: 2)
 
                         if let duration = episode.duration {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
-                                #if os(tvOS)
-                                    .font(.system(size: 14))
-                                #else
-                                    .font(.system(size: 11))
-                                #endif
+                                    .font(AppFonts.captionSmall)
                                 Text(duration)
-                                #if os(tvOS)
-                                    .font(.system(size: 15, weight: .medium))
-                                #else
-                                    .font(.system(size: 12, weight: .medium))
-                                #endif
+                                    .font(AppFonts.captionSmall)
                             }
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(AppColors.textSecondary)
                         }
 
                         Spacer()
@@ -250,7 +212,7 @@ public struct NextUpEpisodeBannerView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(
                             LinearGradient(
-                                colors: [Color(hex: "#00F5D4").opacity(0.4), Color.white.opacity(0.15)],
+                                colors: [AppColors.neonTeal.opacity(0.4), AppColors.borderMedium],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),

@@ -86,16 +86,16 @@ public struct StreamHealthHUDView: View {
     private var liveVideoStallCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color(hex: "#FFD60A"))
+                .font(AppFonts.bodyMedium.weight(.semibold))
+                .foregroundStyle(AppColors.warningGold)
                 .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(AppStrings.Player.liveVideoStallTitle)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(AppFonts.caption.weight(.bold))
                     .foregroundStyle(.white)
                 Text(AppStrings.Player.liveVideoStallMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AppFonts.captionSmall.weight(.medium))
                     .foregroundStyle(.white.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -103,10 +103,10 @@ public struct StreamHealthHUDView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: "#FFD60A").opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppColors.warningGold.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color(hex: "#FFD60A").opacity(0.22), lineWidth: 1)
+                .stroke(AppColors.warningGold.opacity(0.22), lineWidth: 1)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AppStrings.Player.liveVideoStallTitle)
@@ -246,7 +246,7 @@ public struct StreamHealthHUDView: View {
                     $0 < 60 ? "Ultra Hızlı" : ($0 < 150 ? "Normal" : "Yüksek Ping")
                 } ?? AppStrings.Player.sampleUnavailable,
                 tintColor: metrics.networkLatencyMs.map {
-                    $0 < 60 ? Color(hex: "#00F5D4") : ($0 < 150 ? Color(hex: "#0A84FF") : Color(hex: "#FF453A"))
+                    $0 < 60 ? AppColors.neonTeal : ($0 < 150 ? AppColors.primary : AppColors.destructive)
                 } ?? Color.white.opacity(0.55)
             )
 
@@ -257,7 +257,7 @@ public struct StreamHealthHUDView: View {
                 value: metrics.networkJitterMs.map { "±\($0) ms" } ?? AppStrings.Player.sampleUnavailable,
                 subtitle: metrics.networkJitterMs.map { $0 < 8 ? "Çok Kararlı" : "Dalgalanma Var" }
                     ?? AppStrings.Player.sampleUnavailable,
-                tintColor: metrics.networkJitterMs.map { $0 < 8 ? Color(hex: "#00F5D4") : Color(hex: "#FFD60A") }
+                tintColor: metrics.networkJitterMs.map { $0 < 8 ? AppColors.neonTeal : AppColors.warningGold }
                     ?? Color.white.opacity(0.55)
             )
 
@@ -268,7 +268,7 @@ public struct StreamHealthHUDView: View {
                 value: metrics.networkThroughputMbps.map { "\(String(format: "%.1f", $0)) Mbps" }
                     ?? AppStrings.Player.sampleUnavailable,
                 subtitle: AppStrings.Player.networkThroughput,
-                tintColor: Color(hex: "#64D2FF")
+                tintColor: AppColors.sky
             )
 
             metricTile(
@@ -277,7 +277,7 @@ public struct StreamHealthHUDView: View {
                 value: metrics.fps.map { "\(String(format: "%.1f", $0)) FPS" }
                     ?? AppStrings.Player.sampleUnavailable,
                 subtitle: AppStrings.Player.renderedFPS,
-                tintColor: Color(hex: "#00F5D4")
+                tintColor: AppColors.neonTeal
             )
 
             if let streamBitrateMbps = metrics.streamBitrateMbps {
@@ -286,7 +286,7 @@ public struct StreamHealthHUDView: View {
                     title: AppStrings.Player.streamBitrate,
                     value: "\(String(format: "%.1f", streamBitrateMbps)) Mbps",
                     subtitle: store.mediaInfo?.resolution ?? AppStrings.Player.videoCodec,
-                    tintColor: Color(hex: "#FFD60A")
+                    tintColor: AppColors.warningGold
                 )
             }
 
@@ -296,7 +296,7 @@ public struct StreamHealthHUDView: View {
                 title: AppStrings.Player.droppedFramesTitle,
                 value: "\(metrics.droppedFrames) Drop",
                 subtitle: "\(metrics.decodedFrames) kare çözüldü",
-                tintColor: metrics.droppedFrames == 0 ? Color(hex: "#00F5D4") : Color(hex: "#FF453A")
+                tintColor: metrics.droppedFrames == 0 ? AppColors.neonTeal : AppColors.destructive
             )
         }
     }

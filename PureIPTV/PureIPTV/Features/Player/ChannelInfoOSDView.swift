@@ -48,10 +48,10 @@ public struct ChannelInfoOSDView: View {
                     if let index = channelIndex {
                         Text(String(format: "#%02d", index + 1))
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
+                            .foregroundStyle(AppColors.primary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color(hex: "#0A84FF").opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
+                            .background(AppColors.primary.opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
                     }
 
                     Text(isCleaningEnabled ? item.cleanTitle : item.title)
@@ -193,13 +193,13 @@ public struct ChannelInfoOSDView: View {
 
         if let q = meta.detectedQuality {
             badgeText = q == .uhd4k ? "4K UHD" : (q == .fhd1080 ? "FHD 1080p" : q.rawValue)
-            badgeColor = Color(hex: q.badgeColorHex)
+            badgeColor = q.badgeColor
         } else if meta.isHEVC {
             badgeText = "HEVC"
-            badgeColor = Color(hex: "#30D158")
+            badgeColor = AppColors.success
         } else {
             badgeText = "HD"
-            badgeColor = Color.white.opacity(0.8)
+            badgeColor = AppColors.textPrimary.opacity(0.8)
         }
 
         return HStack(spacing: 5) {
@@ -222,19 +222,19 @@ public struct ChannelInfoOSDView: View {
             if meta.isHEVC, meta.detectedQuality != nil {
                 Text("HEVC")
                     .font(.system(size: 9, weight: .black, design: .rounded))
-                    .foregroundStyle(Color(hex: "#BF5AF2"))
+                    .foregroundStyle(AppColors.premium)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color(hex: "#BF5AF2").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                    .background(AppColors.premium.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
             }
 
             if meta.isBackup {
                 Text("YEDEK")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                    .foregroundStyle(AppColors.warning)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Color(hex: "#FF9F0A").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                    .background(AppColors.warning.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
             }
 
             // Dynamic Range Badge (HDR, Dolby Vision, HLG) (Madde #20)
@@ -242,19 +242,19 @@ public struct ChannelInfoOSDView: View {
             if detectedRange.isHDR {
                 HStack(spacing: 3) {
                     Image(systemName: detectedRange.iconName)
-                        .font(.system(size: 8, weight: .bold))
+                        .font(AppFonts.captionSmall.weight(.bold))
                     Text(detectedRange.badgeTitle)
-                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                        .font(AppFonts.captionSmall.weight(.heavy))
                 }
-                .foregroundStyle(Color(hex: detectedRange.primaryColorHex))
+                .foregroundStyle(detectedRange.primaryColor)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(Color(hex: detectedRange.primaryColorHex).opacity(0.18))
+                        .fill(detectedRange.primaryColor.opacity(0.18))
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .stroke(Color(hex: detectedRange.primaryColorHex).opacity(0.4), lineWidth: 0.8)
+                                .stroke(detectedRange.primaryColor.opacity(0.4), lineWidth: 0.8)
                         )
                 )
             }

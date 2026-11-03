@@ -81,7 +81,19 @@ public enum ChannelCategoryFilter: Hashable, Sendable, Identifiable {
     }
 
     public var accentColor: Color {
-        Color(hex: accentColorHex)
+        switch self {
+        case .all: AppColors.primary
+        case .sports: AppColors.success
+        case .news: AppColors.live
+        case .cinema: AppColors.premium
+        case .documentaries: AppColors.warningGold
+        case .kids: AppColors.amber
+        case .ultraHD4K: AppColors.cyan
+        case .music: AppColors.live
+        case .history: AppColors.purpleAccent
+        case .alternatives: AppColors.amber
+        case .custom: AppColors.primary
+        }
     }
 
     public func matches(title: String, categoryID: String?) -> Bool {

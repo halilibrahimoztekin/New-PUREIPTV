@@ -23,8 +23,8 @@
 
                 RadialGradient(
                     colors: [
-                        Color(hex: "#0A84FF").opacity(0.12),
-                        Color(hex: "#BF5AF2").opacity(0.06),
+                        AppColors.primary.opacity(0.12),
+                        AppColors.premium.opacity(0.06),
                         Color.clear,
                     ],
                     center: .init(x: 0.5, y: 0.25),
@@ -106,12 +106,12 @@
                 PureMaterialLogo(size: 72, showGlow: true)
 
                 Text(AppStrings.AddPlaylist.title)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                    .font(AppFonts.displayMedium)
+                    .foregroundStyle(AppColors.onSurface)
 
                 Text(AppStrings.AddPlaylist.connectWithIOS)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                    .font(AppFonts.bodyMedium)
+                    .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
@@ -127,18 +127,18 @@
                         store.send(.playlistTypeChanged(type))
                     } label: {
                         Text(type.displayName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(AppFonts.bodySmall.weight(.semibold))
                             .foregroundStyle(
                                 store.playlistType == type
                                     ? Color.white
-                                    : Color(hex: "#C0C6D6").opacity(0.6)
+                                    : AppColors.onSurfaceVariant.opacity(0.6)
                             )
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background {
                                 if store.playlistType == type {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color(hex: "#0A84FF"))
+                                        .fill(AppColors.primary)
                                         .matchedGeometryEffect(id: "pill", in: pickerNamespace)
                                 }
                             }
@@ -152,7 +152,7 @@
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(AppColors.borderSubtle, lineWidth: 1)
                     )
             )
         }
@@ -197,16 +197,16 @@
                 VStack(alignment: .leading, spacing: 12) {
                     if let pin = store.plexPIN {
                         Text("Go to plex.tv/link and enter this code")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                            .font(AppFonts.bodyMedium.weight(.medium))
+                            .foregroundStyle(AppColors.onSurfaceVariant)
                         Link(pin.code, destination: pin.signInURL)
                             .font(.system(size: 24, weight: .bold, design: .monospaced))
-                            .tint(Color(hex: "#E5A00D"))
+                            .tint(AppColors.amber)
                     }
                     if !store.discoveredPlexServers.isEmpty {
                         Text("Choose a Plex server")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                            .font(AppFonts.bodyMedium.weight(.semibold))
+                            .foregroundStyle(AppColors.onSurfaceVariant)
                         ForEach(store.discoveredPlexServers) { server in
                             Button {
                                 guard !store.isLoading else { return }
@@ -219,9 +219,9 @@
                                         Image(systemName: "checkmark.circle.fill")
                                     }
                                 }
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppColors.textPrimary)
                                 .padding(12)
-                                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                                .background(AppColors.borderSubtle, in: RoundedRectangle(cornerRadius: 10))
                             }
                             .buttonStyle(.plain)
                         }
@@ -254,12 +254,12 @@
         private func errorBanner(message: String) -> some View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(Color(hex: "#FF453A"))
-                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.destructive)
+                    .font(AppFonts.bodySmall.weight(.semibold))
 
                 Text(message)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                    .font(AppFonts.caption.weight(.medium))
+                    .foregroundStyle(AppColors.onSurface)
                     .multilineTextAlignment(.leading)
 
                 Spacer()
@@ -268,17 +268,17 @@
                     store.send(.dismissError)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
+                        .font(AppFonts.captionSmall.weight(.bold))
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.6))
                 }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: "#FF453A").opacity(0.12))
+                    .fill(AppColors.destructive.opacity(0.12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color(hex: "#FF453A").opacity(0.3), lineWidth: 1)
+                            .stroke(AppColors.destructive.opacity(0.3), lineWidth: 1)
                     )
             )
         }
@@ -299,9 +299,9 @@
                     } else {
                         HStack(spacing: 8) {
                             Image(systemName: "play.fill")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(AppFonts.caption.weight(.bold))
                             Text(AppStrings.AddPlaylist.connect)
-                                .font(.system(size: 17, weight: .bold))
+                                .font(AppFonts.bodyLarge.weight(.bold))
                         }
                     }
                 }
@@ -311,12 +311,12 @@
                     Group {
                         if store.canConnect, !store.isLoading {
                             LinearGradient(
-                                colors: [Color(hex: "#0A84FF"), Color(hex: "#0060CC")],
+                                colors: [AppColors.primary, AppColors.primaryDark],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         } else {
-                            Color(hex: "#1F1F23")
+                            AppColors.surfaceSecondary
                         }
                     }
                 )
@@ -353,17 +353,17 @@
         var body: some View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color(hex: "#0A84FF"))
+                    .font(AppFonts.bodyMedium.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
                     .frame(width: 22)
 
                 TextField(placeholder, text: $text)
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                    .font(AppFonts.bodyLarge)
+                    .foregroundStyle(AppColors.onSurface)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
                     .autocorrectionDisabled()
-                    .tint(Color(hex: "#0A84FF"))
+                    .tint(AppColors.primary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -372,7 +372,7 @@
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                            .stroke(AppColors.borderSubtle, lineWidth: 1)
                     )
             )
         }
@@ -390,28 +390,28 @@
         var body: some View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color(hex: "#0A84FF"))
+                    .font(AppFonts.bodyMedium.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
                     .frame(width: 22)
 
                 if isVisible {
                     TextField(placeholder, text: $text)
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color(hex: "#E4E1E7"))
+                        .font(AppFonts.bodyLarge)
+                        .foregroundStyle(AppColors.onSurface)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                        .tint(Color(hex: "#0A84FF"))
+                        .tint(AppColors.primary)
                 } else {
                     SecureField(placeholder, text: $text)
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color(hex: "#E4E1E7"))
-                        .tint(Color(hex: "#0A84FF"))
+                        .font(AppFonts.bodyLarge)
+                        .foregroundStyle(AppColors.onSurface)
+                        .tint(AppColors.primary)
                 }
 
                 Button(action: onToggle) {
                     Image(systemName: isVisible ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                        .font(AppFonts.bodySmall.weight(.medium))
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -422,7 +422,7 @@
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                            .stroke(AppColors.borderSubtle, lineWidth: 1)
                     )
             )
         }

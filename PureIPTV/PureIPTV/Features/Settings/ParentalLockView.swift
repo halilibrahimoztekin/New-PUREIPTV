@@ -13,7 +13,7 @@ public struct ParentalLockView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0F0F13").ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 20) {
                     Spacer(minLength: 10)

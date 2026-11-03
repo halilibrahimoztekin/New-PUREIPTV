@@ -120,7 +120,7 @@ private struct MovieVersionPillView: View {
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [Color.accentColor, Color(hex: "#0A84FF")],
+                        colors: [AppColors.primary, AppColors.primaryDark],
                         startPoint: .leading,
                         endPoint: .trailing
                     )

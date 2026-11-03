@@ -23,7 +23,7 @@ public struct HiddenContentManagementView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0C0C10").ignoresSafeArea()
+                AppColors.surface.ignoresSafeArea()
 
                 if store.isUnlockingHiddenContent {
                     pinUnlockOverlay
@@ -65,8 +65,8 @@ public struct HiddenContentManagementView: View {
                                 }
                             } label: {
                                 Image(systemName: "ellipsis.circle")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(Color(hex: "#0A84FF"))
+                                    .font(AppFonts.bodyLarge)
+                                    .foregroundColor(AppColors.primary)
                             }
                         }
                     }
@@ -111,7 +111,7 @@ public struct HiddenContentManagementView: View {
                     itemRow(
                         item: item,
                         icon: "tv.fill",
-                        accentColor: Color(hex: "#0A84FF"),
+                        accentColor: AppColors.primary,
                         onUnhide: {
                             store.send(.unhideChannelFromSettings(item.id))
                         }
@@ -140,7 +140,7 @@ public struct HiddenContentManagementView: View {
                     itemRow(
                         item: item,
                         icon: "folder.fill.badge.minus",
-                        accentColor: Color(hex: "#BF5AF2"),
+                        accentColor: AppColors.premium,
                         onUnhide: {
                             store.send(.unblacklistCategoryFromSettings(item.id))
                         }
@@ -274,12 +274,12 @@ public struct HiddenContentManagementView: View {
                     let isFilled = store.hiddenContentUnlockPIN.count > index
                     ZStack {
                         Circle()
-                            .stroke(isFilled ? Color(hex: "#0A84FF") : Color.white.opacity(0.25), lineWidth: 2)
+                            .stroke(isFilled ? AppColors.primary : AppColors.borderMedium, lineWidth: 2)
                             .frame(width: 20, height: 20)
 
                         if isFilled {
                             Circle()
-                                .fill(Color(hex: "#0A84FF"))
+                                .fill(AppColors.primary)
                                 .frame(width: 12, height: 12)
                         }
                     }

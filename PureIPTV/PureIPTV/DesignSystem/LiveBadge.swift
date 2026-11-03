@@ -8,19 +8,19 @@ public struct LiveBadge: View {
     public var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(Color(hex: "#FF453A"))
+                .fill(AppColors.live)
                 .frame(width: 6, height: 6)
 
             Text(AppStrings.Player.liveLabel)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white)
+                .font(AppFonts.captionSmall.weight(.bold))
+                .foregroundStyle(AppColors.textPrimary)
                 .tracking(0.5)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(
             Capsule()
-                .fill(Color(hex: "#FF453A").opacity(0.85))
+                .fill(AppColors.live.opacity(0.85))
         )
     }
 }
@@ -39,35 +39,35 @@ public struct CatchUpBadge: View {
     public var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: isCompact ? 8 : 9, weight: .bold))
+                .font(AppFonts.captionSmall.weight(.bold))
 
             if !isCompact {
                 Text(label)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(AppFonts.captionSmall.weight(.bold))
                     .tracking(0.3)
             } else if let archiveDays {
                 Text("\(archiveDays)d")
-                    .font(.system(size: 8, weight: .heavy, design: .rounded))
+                    .font(AppFonts.captionSmall.weight(.heavy))
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppColors.textPrimary)
         .padding(.horizontal, isCompact ? 5 : 6)
         .padding(.vertical, 3)
         .background(
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "#AF52DE"), Color(hex: "#5856D6")],
+                        colors: [AppColors.premium, AppColors.purpleAccent],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 0.6)
+                        .stroke(AppColors.borderSubtle, lineWidth: 0.6)
                 )
         )
-        .shadow(color: Color(hex: "#AF52DE").opacity(0.4), radius: 3)
+        .shadow(color: AppColors.premium.opacity(0.4), radius: 3)
         .accessibilityLabel(label)
     }
 

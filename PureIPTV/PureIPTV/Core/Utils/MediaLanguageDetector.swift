@@ -49,7 +49,12 @@ public enum MediaAudioLanguageTag: String, CaseIterable, Sendable, Equatable, Ha
     }
 
     public var color: Color {
-        Color(hex: hexColor)
+        switch self {
+        case .turkishDubbed: AppColors.cyan
+        case .turkishSubtitled: AppColors.warningGold
+        case .dualAudio: AppColors.purpleAccent
+        case .originalAudio: AppColors.primary
+        }
     }
 }
 
@@ -99,15 +104,15 @@ public enum MediaLanguageFilter: String, CaseIterable, Sendable, Equatable, Hash
     public var tintColor: Color {
         switch self {
         case .all:
-            Color.white
+            AppColors.textPrimary
         case .turkishDubbed:
-            Color(hex: "#00F5D4")
+            AppColors.cyan
         case .turkishSubtitled:
-            Color(hex: "#FFD166")
+            AppColors.warningGold
         case .dualAudio:
-            Color(hex: "#A78BFA")
+            AppColors.purpleAccent
         case .originalAudio:
-            Color(hex: "#0A84FF")
+            AppColors.primary
         }
     }
 }

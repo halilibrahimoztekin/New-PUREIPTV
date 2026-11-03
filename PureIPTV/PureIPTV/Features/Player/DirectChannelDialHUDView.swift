@@ -300,7 +300,7 @@ public struct DirectChannelDialHUDView: View {
                     #else
                         .font(.body.weight(.bold))
                     #endif
-                        .foregroundStyle(Color(hex: "#FF453A"))
+                        .foregroundStyle(AppColors.live)
 
                 case .submit:
                     HStack(spacing: 4) {

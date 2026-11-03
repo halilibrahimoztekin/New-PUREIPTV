@@ -65,7 +65,7 @@ public struct CatchupTimelineScrubberView: View {
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.94)
+                AppColors.surface.opacity(0.94)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -73,7 +73,7 @@ public struct CatchupTimelineScrubberView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: "#BF5AF2").opacity(0.6), Color(hex: "#0A84FF").opacity(0.3)],
+                        colors: [AppColors.premium.opacity(0.6), AppColors.primary.opacity(0.3)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -91,7 +91,7 @@ public struct CatchupTimelineScrubberView: View {
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
-                Color(hex: "#0C0C10").opacity(0.96)
+                AppColors.surface.opacity(0.96)
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -99,7 +99,7 @@ public struct CatchupTimelineScrubberView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: "#BF5AF2").opacity(0.5), Color.white.opacity(0.12)],
+                        colors: [AppColors.premium.opacity(0.5), Color.white.opacity(0.12)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -116,11 +116,11 @@ public struct CatchupTimelineScrubberView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#BF5AF2").opacity(0.2))
+                    .fill(AppColors.premium.opacity(0.2))
                     .frame(width: 36, height: 36)
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Color(hex: "#BF5AF2"))
+                    .font(AppFonts.caption.weight(.bold))
+                    .foregroundColor(AppColors.premium)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -207,7 +207,7 @@ public struct CatchupTimelineScrubberView: View {
             }
             .accessibilityLabel("Arşiv saatini bir saat ileri al".localized)
         }
-        .foregroundStyle(Color(hex: "#BF5AF2"))
+        .foregroundStyle(AppColors.premium)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
@@ -231,14 +231,14 @@ public struct CatchupTimelineScrubberView: View {
             }
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: (isSelected || isFocused) ? .bold : .medium))
+                .font(AppFonts.caption.weight((isSelected || isFocused) ? .bold : .medium))
                 .foregroundColor((isSelected || isFocused) ? .white : .white.opacity(0.6))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 7)
                 .background(
                     isFocused
-                        ? Color(hex: "#BF5AF2")
-                        : (isSelected ? Color(hex: "#BF5AF2").opacity(0.35) : Color.white.opacity(0.08)),
+                        ? AppColors.premium
+                        : (isSelected ? AppColors.premium.opacity(0.35) : Color.white.opacity(0.08)),
                     in: Capsule()
                 )
                 .overlay(
@@ -246,7 +246,7 @@ public struct CatchupTimelineScrubberView: View {
                         .stroke(
                             isFocused
                                 ? Color.white
-                                : (isSelected ? Color(hex: "#BF5AF2").opacity(0.7) : Color.clear),
+                                : (isSelected ? AppColors.premium.opacity(0.7) : Color.clear),
                             lineWidth: isFocused ? 2 : 1
                         )
                 )
@@ -309,42 +309,42 @@ public struct CatchupTimelineScrubberView: View {
                 // Time & Status Header
                 HStack(spacing: 6) {
                     Text("\(formatTime(program.startTime)) - \(formatTime(program.endTime))")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(isLiveNow ? Color(hex: "#00F5D4") : (isCurrentArchive ? Color(hex: "#BF5AF2") : .white.opacity(0.65)))
+                        .font(AppFonts.captionSmall.weight(.bold).monospaced())
+                        .foregroundColor(isLiveNow ? AppColors.neonTeal : (isCurrentArchive ? AppColors.premium : AppColors.textTertiary))
 
                     Spacer()
 
                     if isLiveNow {
                         HStack(spacing: 4) {
-                            Circle().fill(Color.red).frame(width: 5, height: 5)
+                            Circle().fill(AppColors.statusLive).frame(width: 5, height: 5)
                             Text("CANLI")
-                                .font(.system(size: 9, weight: .heavy))
-                                .foregroundColor(.red)
+                                .font(AppFonts.captionSmall.weight(.heavy))
+                                .foregroundColor(AppColors.statusLive)
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.red.opacity(0.18), in: Capsule())
+                        .background(AppColors.statusLive.opacity(0.18), in: Capsule())
                     } else if isCurrentArchive {
                         HStack(spacing: 4) {
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: 9))
+                                .font(AppFonts.captionSmall)
                             Text("OYNATILIYOR")
-                                .font(.system(size: 9, weight: .heavy))
+                                .font(AppFonts.captionSmall.weight(.heavy))
                         }
-                        .foregroundColor(Color(hex: "#BF5AF2"))
+                        .foregroundColor(AppColors.premium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color(hex: "#BF5AF2").opacity(0.2), in: Capsule())
+                        .background(AppColors.premium.opacity(0.2), in: Capsule())
                     } else {
                         Text("\(durationMinutes) dk")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(AppFonts.captionSmall.weight(.semibold))
                             .foregroundColor(.white.opacity(0.45))
                     }
                 }
 
                 // Program Title
                 Text(program.title)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppFonts.bodySmall.weight(.bold))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -352,7 +352,7 @@ public struct CatchupTimelineScrubberView: View {
                 // Description Preview
                 if !program.description.isEmpty {
                     Text(program.description)
-                        .font(.system(size: 10, weight: .regular))
+                        .font(AppFonts.captionSmall)
                         .foregroundColor(.white.opacity(0.5))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -364,12 +364,12 @@ public struct CatchupTimelineScrubberView: View {
                 HStack {
                     if isLiveNow {
                         Label(AppStrings.Player.jumpToNow, systemImage: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundColor(AppColors.neonTeal)
                     } else {
                         Label(AppStrings.Player.watchCatchUp, systemImage: "arrow.counterclockwise")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(isCurrentArchive ? Color(hex: "#BF5AF2") : Color(hex: "#64D2FF"))
+                            .font(AppFonts.captionSmall.weight(.bold))
+                            .foregroundColor(isCurrentArchive ? AppColors.premium : AppColors.sky)
                     }
                     Spacer()
                 }
@@ -380,16 +380,16 @@ public struct CatchupTimelineScrubberView: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(
                         isCurrentArchive
-                            ? Color(hex: "#BF5AF2").opacity(0.2)
-                            : (isLiveNow ? Color(hex: "#00F5D4").opacity(0.12) : Color.white.opacity(0.06))
+                            ? AppColors.premium.opacity(0.2)
+                            : (isLiveNow ? AppColors.neonTeal.opacity(0.12) : Color.white.opacity(0.06))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
                         isCurrentArchive
-                            ? Color(hex: "#BF5AF2").opacity(0.7)
-                            : (isLiveNow ? Color(hex: "#00F5D4").opacity(0.5) : Color.white.opacity(0.1)),
+                            ? AppColors.premium.opacity(0.7)
+                            : (isLiveNow ? AppColors.neonTeal.opacity(0.5) : Color.white.opacity(0.1)),
                         lineWidth: isCurrentArchive ? 1.8 : 1.0
                     )
             )

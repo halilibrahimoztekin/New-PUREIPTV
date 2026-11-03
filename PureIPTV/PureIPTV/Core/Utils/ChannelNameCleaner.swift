@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Channel Quality Badge
 
@@ -14,6 +15,15 @@ public enum ChannelQualityBadge: String, Equatable, Sendable, CaseIterable {
         case .fhd1080: "#0A84FF" // Electric Blue
         case .hd720: "#30D158" // Emerald Green
         case .sd: "#8E8E93" // System Grey
+        }
+    }
+
+    public var badgeColor: Color {
+        switch self {
+        case .uhd4k: AppColors.warningGold
+        case .fhd1080: AppColors.primary
+        case .hd720: AppColors.success
+        case .sd: AppColors.onSurfaceVariant
         }
     }
 }

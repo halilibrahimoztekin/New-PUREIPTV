@@ -105,28 +105,28 @@ public struct PlaylistManagementView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: updateSourceSymbol(source.kind))
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .foregroundStyle(AppColors.primary)
                                     .accessibilityHidden(true)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(source.title)
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(AppColors.textPrimary)
                                     Text(updateSourceKindTitle(source.kind))
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
+                                        .font(AppFonts.footnote)
+                                        .foregroundStyle(AppColors.textSecondary)
                                     if case let .updating(stage) = source.status {
                                         Text(stage)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .font(AppFonts.caption)
+                                            .foregroundStyle(AppColors.textSecondary)
                                             .lineLimit(1)
                                     } else if case .failed = source.status {
                                         Text(AppStrings.PlaylistMgmt.updateFailed)
-                                            .font(.caption)
-                                            .foregroundStyle(.red)
+                                            .font(AppFonts.caption)
+                                            .foregroundStyle(AppColors.error)
                                             .fixedSize(horizontal: false, vertical: true)
                                     } else if case .unavailable = source.status {
                                         Text(AppStrings.PlaylistMgmt.healthNotConfigured)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .font(AppFonts.caption)
+                                            .foregroundStyle(AppColors.textSecondary)
                                     }
                                 }
                                 Spacer(minLength: 8)
@@ -142,7 +142,7 @@ public struct PlaylistManagementView: View {
                         )
                         .accessibilityHint(store.isUpdatingSources ? AppStrings.Common.loading : AppStrings.PlaylistMgmt.refreshSource)
                         #if os(tvOS)
-                            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                            .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
                         #else
                             .buttonStyle(.plain)
                         #endif
@@ -160,18 +160,18 @@ public struct PlaylistManagementView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .font(AppFonts.titleLarge)
+                                .foregroundStyle(AppColors.primary)
                             Text(AppStrings.PlaylistMgmt.addAccount)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .font(AppFonts.headline)
+                                .foregroundStyle(AppColors.primary)
                             Spacer()
                         }
                         .padding(.vertical, 6)
                     }
                     .disabled(store.isUpdatingSources)
                     #if os(tvOS)
-                        .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                        .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
                     #else
                         .buttonStyle(.plain)
                     #endif
@@ -196,8 +196,8 @@ public struct PlaylistManagementView: View {
                                 Text(AppStrings.Common.cancel)
                             #else
                                 Image(systemName: "chevron.left")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.headline)
+                                    .foregroundColor(AppColors.textPrimary)
                                     .padding(8)
                                     .background(.ultraThinMaterial, in: Circle())
                             #endif
@@ -344,41 +344,41 @@ public struct PlaylistManagementView: View {
                 HStack(spacing: 16) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isActive ? Color(hex: "#0A84FF").opacity(0.2) : Color.white.opacity(0.08))
+                            .fill(isActive ? AppColors.primary.opacity(0.2) : AppColors.glassPlate)
                             .frame(width: 44, height: 44)
 
                         Image(systemName: playlist.type == .xtream ? "server.rack" : "doc.text")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(isActive ? Color(hex: "#0A84FF") : Color.white.opacity(0.6))
+                            .font(AppFonts.titleMedium)
+                            .foregroundStyle(isActive ? AppColors.primary : AppColors.textSecondary)
                             .accessibilityHidden(true)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(playlist.name)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(Color.white)
+                                .font(AppFonts.headline)
+                                .foregroundStyle(AppColors.textPrimary)
 
                             if isActive {
                                 Text("Aktif")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(Color.white)
+                                    .font(AppFonts.captionBold)
+                                    .foregroundStyle(AppColors.textPrimary)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Capsule().fill(Color.green))
+                                    .background(Capsule().fill(AppColors.success))
                             }
                         }
 
                         Text(displayAddress(for: playlist))
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.6))
+                            .font(AppFonts.caption)
+                            .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.6))
                             .lineLimit(1)
                     }
 
                     if store.lockedPlaylistIDs.contains(playlist.id) {
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.orange)
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.warning)
                             .accessibilityLabel("PIN ile kilitli")
                     }
 
@@ -386,8 +386,8 @@ public struct PlaylistManagementView: View {
 
                     if isActive {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(Color.green)
+                            .font(AppFonts.titleLarge)
+                            .foregroundStyle(AppColors.success)
                             .accessibilityLabel("Aktif playlist")
                     }
                 }
@@ -396,7 +396,7 @@ public struct PlaylistManagementView: View {
                 .contentShape(Rectangle())
             }
             #if os(tvOS)
-            .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: isActive))
+            .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: isActive))
             #else
             .buttonStyle(.plain)
             #endif
@@ -408,8 +408,8 @@ public struct PlaylistManagementView: View {
                     store.send(.editPlaylistSettings(playlist))
                 } label: {
                     Image(systemName: "text.badge.checkmark")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color(hex: "#0A84FF"))
+                        .font(AppFonts.titleMedium)
+                        .foregroundStyle(AppColors.primary)
                         .padding(8)
                 }
                 .buttonStyle(TVCircleButtonStyle())
@@ -421,8 +421,8 @@ public struct PlaylistManagementView: View {
                     store.send(.confirmDeletePlaylist(playlist))
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.red.opacity(0.8))
+                        .font(AppFonts.titleMedium)
+                        .foregroundStyle(AppColors.error.opacity(0.8))
                         .padding(8)
                 }
                 .buttonStyle(TVCircleButtonStyle())

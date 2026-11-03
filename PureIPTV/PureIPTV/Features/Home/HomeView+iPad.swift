@@ -34,7 +34,7 @@
         private var sidebar: some View {
             ZStack {
                 // Dark sidebar background
-                Color(hex: "#0C0C10").ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     // App brand header
@@ -45,7 +45,7 @@
 
                     // Divider
                     Rectangle()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(AppColors.borderSubtle)
                         .frame(height: 1)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
@@ -78,8 +78,8 @@
                 PureMaterialLogo(size: 36, showGlow: false)
 
                 Text(AppStrings.Common.appName)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                    .font(AppFonts.headline)
+                    .foregroundStyle(AppColors.textPrimary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -87,12 +87,12 @@
         private var sidebarFooter: some View {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(Color(hex: "#30D158"))
+                    .fill(AppColors.success)
                     .frame(width: 7, height: 7)
 
                 Text(store.serverURL)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -152,13 +152,13 @@
             Button(action: action) {
                 HStack(spacing: 12) {
                     Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
-                        .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(isSelected ? Color(hex: "#0A84FF") : Color(hex: "#C0C6D6").opacity(0.6))
+                        .font(AppFonts.headline)
+                        .foregroundStyle(isSelected ? AppColors.primary : AppColors.onSurfaceVariant.opacity(0.6))
                         .frame(width: 24)
 
                     Text(tab.rawValue)
-                        .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(isSelected ? Color(hex: "#E4E1E7") : Color(hex: "#C0C6D6").opacity(0.7))
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.onSurfaceVariant.opacity(0.7))
 
                     Spacer()
                 }
@@ -166,11 +166,11 @@
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isSelected ? Color(hex: "#0A84FF").opacity(0.12) : Color.clear)
+                        .fill(isSelected ? AppColors.primary.opacity(0.12) : Color.clear)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(isSelected ? Color(hex: "#0A84FF").opacity(0.2) : Color.clear, lineWidth: 1)
+                        .stroke(isSelected ? AppColors.primary.opacity(0.2) : Color.clear, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)

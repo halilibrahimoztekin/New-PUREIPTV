@@ -21,14 +21,14 @@
         public var body: some View {
             ZStack {
                 // ── OLED Black base ──────────────────────────────────────────
-                Color.black
+                AppColors.oledBlack
                     .ignoresSafeArea()
 
                 // ── Wide ambient glow (TV screens are wide) ──────────────────
                 EllipticalGradient(
                     colors: [
-                        Color(hex: "#0A84FF").opacity(0.12),
-                        Color(hex: "#BF5AF2").opacity(0.06),
+                        AppColors.primary.opacity(0.12),
+                        AppColors.premium.opacity(0.06),
                         Color.clear,
                     ],
                     center: .center,
@@ -59,10 +59,10 @@
 
                     // Wordmark — Display Large for TV
                     Text(AppStrings.Splash.appName)
-                        .font(.system(size: 72, weight: .heavy, design: .default))
+                        .font(AppFonts.displayLarge.weight(.heavy))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "#E4E1E7"), Color(hex: "#C0C6D6")],
+                                colors: [AppColors.textPrimary, AppColors.onSurfaceVariant],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -75,8 +75,8 @@
 
                     // Tagline
                     Text(AppStrings.Splash.tagline)
-                        .font(.system(size: 28, weight: .medium, design: .default))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.65))
+                        .font(AppFonts.titleLarge)
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.65))
                         .tracking(3)
                         .textCase(.uppercase)
                         .opacity(store.taglineOpacity)
@@ -126,7 +126,7 @@
             HStack(spacing: 14) {
                 ForEach(0 ..< 3, id: \.self) { index in
                     Circle()
-                        .fill(Color(hex: "#0A84FF"))
+                        .fill(AppColors.primary)
                         .frame(width: 12, height: 12)
                         .scaleEffect(isPulsing ? 1.0 : 0.4)
                         .opacity(isPulsing ? 1.0 : 0.25)

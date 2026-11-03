@@ -67,10 +67,10 @@ public struct ResumeWatchingCardView: View {
                     // Multi-stop cinematic gradient scrim
                     LinearGradient(
                         stops: [
-                            .init(color: Color.black.opacity(0.6), location: 0.0),
-                            .init(color: Color.black.opacity(0.0), location: 0.4),
-                            .init(color: Color.black.opacity(0.2), location: 0.65),
-                            .init(color: Color.black.opacity(0.85), location: 1.0),
+                            .init(color: AppColors.oledBlack.opacity(0.6), location: 0.0),
+                            .init(color: AppColors.oledBlack.opacity(0.0), location: 0.4),
+                            .init(color: AppColors.oledBlack.opacity(0.2), location: 0.65),
+                            .init(color: AppColors.oledBlack.opacity(0.85), location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -82,17 +82,17 @@ public struct ResumeWatchingCardView: View {
                             // Type Pill (Film / Dizi)
                             Text(item.type == "episode" ? "DİZİ" : "FİLM")
                             #if os(tvOS)
-                                .font(.system(size: 12, weight: .bold))
+                                .font(AppFonts.captionBold)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                             #else
-                                .font(.system(size: 9.5, weight: .bold))
+                                .font(AppFonts.captionSmall.weight(.bold))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
                             #endif
-                                .foregroundColor(.white)
-                                .background(Color.black.opacity(0.55), in: Capsule())
-                                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                                .foregroundColor(AppColors.textPrimary)
+                                .background(AppColors.oledBlack.opacity(0.55), in: Capsule())
+                                .overlay(Capsule().stroke(AppColors.borderSubtle, lineWidth: 0.8))
 
                             Spacer()
 
@@ -101,18 +101,18 @@ public struct ResumeWatchingCardView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "clock.fill")
                                     #if os(tvOS)
-                                        .font(.system(size: 11))
+                                        .font(AppFonts.caption)
                                     #else
-                                        .font(.system(size: 8.5))
+                                        .font(AppFonts.captionSmall)
                                     #endif
                                     Text(remainingText)
                                     #if os(tvOS)
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(AppFonts.bodySmall.weight(.semibold))
                                     #else
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(AppFonts.captionSemibold)
                                     #endif
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(AppColors.textPrimary)
                                 #if os(tvOS)
                                     .padding(.horizontal, 11)
                                     .padding(.vertical, 5)
@@ -121,8 +121,8 @@ public struct ResumeWatchingCardView: View {
                                     .padding(.vertical, 4)
                                 #endif
                                     .background(.ultraThinMaterial, in: Capsule())
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-                                    .shadow(color: Color.black.opacity(0.4), radius: 4)
+                                    .overlay(Capsule().stroke(AppColors.borderSubtle, lineWidth: 0.8))
+                                    .shadow(color: AppColors.oledBlack.opacity(0.4), radius: 4)
                             }
                         }
                         .padding(10)
@@ -135,19 +135,19 @@ public struct ResumeWatchingCardView: View {
                             Circle()
                                 .fill(.ultraThinMaterial)
                                 .frame(width: 44, height: 44)
-                                .shadow(color: Color.black.opacity(0.5), radius: 8, y: 3)
+                                .shadow(color: AppColors.oledBlack.opacity(0.5), radius: 8, y: 3)
 
                             // Glowing Progress Ring
                             CircularProgressRing(
                                 progress: ratio,
                                 lineWidth: 3.0,
                                 size: 44,
-                                gradientColors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
-                                trackColor: Color.white.opacity(0.2)
+                                gradientColors: [AppColors.cyan, AppColors.primary],
+                                trackColor: AppColors.glassBorder
                             ) {
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.headline)
+                                    .foregroundColor(AppColors.textPrimary)
                                     .offset(x: 1.5)
                             }
                         }
@@ -161,20 +161,20 @@ public struct ResumeWatchingCardView: View {
                             ZStack(alignment: .leading) {
                                 // Background track
                                 Capsule()
-                                    .fill(Color.white.opacity(0.25))
+                                    .fill(AppColors.glassBorder)
                                     .frame(height: 3.5)
 
                                 // Active progress fill with cyan/blue gradient
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")],
+                                            colors: [AppColors.cyan, AppColors.primary],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
                                     )
                                     .frame(width: proxy.size.width * CGFloat(ratio), height: 3.5)
-                                    .shadow(color: Color(hex: "#00F5D4").opacity(0.6), radius: 3)
+                                    .shadow(color: AppColors.cyan.opacity(0.6), radius: 3)
                             }
                         }
                         .frame(height: 3.5)
@@ -190,18 +190,18 @@ public struct ResumeWatchingCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(AppColors.borderSubtle, lineWidth: 1)
                 )
 
                 // Metadata Section
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                     #if os(tvOS)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(AppFonts.titleLarge)
                     #else
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppFonts.headline)
                     #endif
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                         .lineLimit(1)
                     #if os(tvOS)
                         .frame(width: 320, alignment: .leading)
@@ -213,37 +213,37 @@ public struct ResumeWatchingCardView: View {
                         if let seriesTitle = item.seriesTitle, !seriesTitle.isEmpty {
                             Text(seriesTitle)
                             #if os(tvOS)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(AppFonts.bodyMedium)
                             #else
-                                .font(.system(size: 11.5, weight: .medium))
+                                .font(AppFonts.captionMedium)
                             #endif
-                                .foregroundColor(Color(hex: "#00F5D4"))
+                                .foregroundColor(AppColors.cyan)
                                 .lineLimit(1)
 
                             Text("•")
-                                .font(.system(size: 10))
-                                .foregroundColor(.white.opacity(0.4))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.textSecondary.opacity(0.6))
                         }
 
                         Text("%\(percent)")
                         #if os(tvOS)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(AppFonts.bodySmall.weight(.bold))
                         #else
-                            .font(.system(size: 11, weight: .bold))
+                            .font(AppFonts.captionBold)
                         #endif
-                            .foregroundColor(Color(hex: "#0A84FF"))
+                            .foregroundColor(AppColors.primary)
 
                         Text("•")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.4))
+                            .font(AppFonts.captionSmall)
+                            .foregroundColor(AppColors.textSecondary.opacity(0.6))
 
                         Text(relativeTime)
                         #if os(tvOS)
-                            .font(.system(size: 14))
+                            .font(AppFonts.bodySmall)
                         #else
-                            .font(.system(size: 11))
+                            .font(AppFonts.caption)
                         #endif
-                            .foregroundColor(.white.opacity(0.55))
+                            .foregroundColor(AppColors.textSecondary)
                             .lineLimit(1)
                     }
                     #if os(tvOS)
@@ -293,10 +293,10 @@ public struct ResumeWatchingCardView: View {
 
     private var fallbackCover: some View {
         ZStack {
-            Color(hex: "#16161A")
+            AppColors.surfaceSecondary
             Image(systemName: "film")
-                .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.2))
+                .font(AppFonts.displayMedium)
+                .foregroundColor(AppColors.textSecondary.opacity(0.4))
         }
     }
 }

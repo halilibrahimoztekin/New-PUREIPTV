@@ -90,11 +90,11 @@ public struct EpisodeCardView: View {
                                 case let .success(img):
                                     img.resizable().scaledToFill()
                                 default:
-                                    Color(hex: "#1A1A24")
+                                    AppColors.surfaceTertiary
                                 }
                             }
                         } else {
-                            Color(hex: "#1A1A24")
+                            AppColors.surfaceTertiary
                         }
                     }
                     #if os(tvOS)
@@ -115,31 +115,23 @@ public struct EpisodeCardView: View {
                     if isWatched {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
-                            #if os(tvOS)
-                                .font(.system(size: 14))
-                            #else
-                                .font(.system(size: 10))
-                            #endif
+                                .font(AppFonts.captionSmall)
                             Text(AppStrings.SeriesDetail.watched)
-                            #if os(tvOS)
-                                .font(.system(size: 13, weight: .bold))
-                            #else
-                                .font(.system(size: 9.5, weight: .bold))
-                            #endif
+                                .font(AppFonts.captionSmall)
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color(hex: "#00BA88"), in: Capsule())
+                        .background(AppColors.success, in: Capsule())
                         .padding(8)
                     } else if isInProgress {
                         GeometryReader { proxy in
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.3))
+                                    .fill(AppColors.textPrimary.opacity(0.3))
                                     .frame(height: 4)
                                 Capsule()
-                                    .fill(Color(hex: "#00F5D4"))
+                                    .fill(AppColors.neonTeal)
                                     .frame(width: proxy.size.width * CGFloat(ratio), height: 4)
                             }
                         }
@@ -179,65 +171,39 @@ public struct EpisodeCardView: View {
                         Spacer()
 
                         Text("S\(String(format: "%02d", episode.season))E\(String(format: "%02d", episode.episodeNum))")
-                        #if os(tvOS)
-                            .font(.system(size: 15, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4)
-                        #else
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                        #endif
-                            .foregroundColor(Color(hex: "#0A84FF"))
-                            .background(Color(hex: "#0A84FF").opacity(0.15), in: Capsule())
+                            .font(AppFonts.captionSmall)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .foregroundColor(AppColors.primary)
+                            .background(AppColors.primary.opacity(0.15), in: Capsule())
                     }
 
                     HStack(spacing: 12) {
                         if let rating = episode.rating, rating > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "star.fill")
-                                #if os(tvOS)
-                                    .font(.system(size: 13))
-                                #else
-                                    .font(.system(size: 10))
-                                #endif
-                                    .foregroundColor(.yellow)
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundColor(AppColors.warningGold)
                                 Text(String(format: "%.1f", rating))
-                                #if os(tvOS)
-                                    .font(.system(size: 15, weight: .semibold))
-                                #else
-                                    .font(.system(size: 12, weight: .semibold))
-                                #endif
-                                    .foregroundColor(.white)
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundColor(AppColors.textPrimary)
                             }
                         }
 
                         if let duration = episode.duration {
                             HStack(spacing: 3) {
                                 Image(systemName: "clock")
-                                #if os(tvOS)
-                                    .font(.system(size: 13))
-                                #else
-                                    .font(.system(size: 10))
-                                #endif
+                                    .font(AppFonts.captionSmall)
                                 Text(duration)
-                                #if os(tvOS)
-                                    .font(.system(size: 15))
-                                #else
-                                    .font(.system(size: 12))
-                                #endif
+                                    .font(AppFonts.captionSmall)
                             }
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(AppColors.textSecondary)
                         }
 
                         if isInProgress {
                             Text("%\(percent) izlendi")
-                            #if os(tvOS)
-                                .font(.system(size: 14, weight: .semibold))
-                            #else
-                                .font(.system(size: 11, weight: .semibold))
-                            #endif
-                                .foregroundColor(Color(hex: "#00F5D4"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.neonTeal)
                         }
                     }
 
@@ -282,7 +248,7 @@ public struct EpisodeCardView: View {
                     #endif
                         .background(
                             isInProgress
-                                ? AnyShapeStyle(LinearGradient(colors: [Color(hex: "#00F5D4"), Color(hex: "#0A84FF")], startPoint: .leading, endPoint: .trailing))
+                                ? AnyShapeStyle(LinearGradient(colors: [AppColors.neonTeal, AppColors.primary], startPoint: .leading, endPoint: .trailing))
                                 : AnyShapeStyle(Color.white.opacity(0.18))
                         )
                         .clipShape(Capsule())
@@ -300,11 +266,11 @@ public struct EpisodeCardView: View {
                     Group {
                         if isDeleting {
                             ProgressView()
-                                .tint(Color(hex: "#00F5D4"))
+                                .tint(AppColors.neonTeal)
                         } else {
                             Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
                                 .font(.system(size: 15))
-                                .foregroundColor(isDownloaded ? Color(hex: "#00F5D4") : .white.opacity(0.7))
+                                .foregroundColor(isDownloaded ? AppColors.neonTeal : AppColors.textPrimary.opacity(0.7))
                         }
                     }
                     .frame(width: 44, height: 44)
@@ -317,7 +283,7 @@ public struct EpisodeCardView: View {
             }
         }
         .padding(12)
-        .background(Color(hex: "#16161D"))
+        .background(AppColors.surfaceSecondary)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -339,11 +305,11 @@ public struct EpisodeCardView: View {
                                 case let .success(img):
                                     img.resizable().scaledToFill()
                                 default:
-                                    Color(hex: "#1A1A24")
+                                    AppColors.surfaceTertiary
                                 }
                             }
                         } else {
-                            Color(hex: "#1A1A24")
+                            AppColors.surfaceTertiary
                         }
                     }
                     .frame(height: 100)
@@ -360,8 +326,8 @@ public struct EpisodeCardView: View {
                     VStack {
                         HStack {
                             Text("E\(String(format: "%02d", episode.episodeNum))")
-                                .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                                .foregroundColor(.white)
+                                .font(AppFonts.captionSmall)
+                                .foregroundColor(AppColors.textPrimary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.black.opacity(0.65), in: Capsule())
@@ -370,14 +336,14 @@ public struct EpisodeCardView: View {
 
                             if isWatched {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color(hex: "#00BA88"))
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundColor(AppColors.success)
                                     .padding(4)
                                     .background(Color.black.opacity(0.65), in: Circle())
                             } else if let dur = episode.duration {
                                 Text(dur)
-                                    .font(.system(size: 9.5, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .font(AppFonts.captionSmall)
+                                    .foregroundColor(AppColors.textPrimary.opacity(0.85))
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
                                     .background(Color.black.opacity(0.65), in: Capsule())
@@ -390,7 +356,7 @@ public struct EpisodeCardView: View {
                         // Center Play Icon
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 26))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(AppColors.textPrimary.opacity(0.9))
                             .shadow(radius: 4)
 
                         Spacer()
@@ -399,8 +365,8 @@ public struct EpisodeCardView: View {
                         if isInProgress {
                             GeometryReader { proxy in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.3)).frame(height: 3)
-                                    Capsule().fill(Color(hex: "#00F5D4")).frame(width: proxy.size.width * CGFloat(ratio), height: 3)
+                                    Capsule().fill(AppColors.textPrimary.opacity(0.3)).frame(height: 3)
+                                    Capsule().fill(AppColors.neonTeal).frame(width: proxy.size.width * CGFloat(ratio), height: 3)
                                 }
                             }
                             .frame(height: 3)
@@ -413,7 +379,7 @@ public struct EpisodeCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(AppColors.borderSubtle, lineWidth: 1)
                 )
             }
             #if os(tvOS)
@@ -427,22 +393,22 @@ public struct EpisodeCardView: View {
             HStack(spacing: 4) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(episode.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(AppFonts.bodyBold)
+                        .foregroundColor(AppColors.textPrimary)
                         .lineLimit(1)
 
                     if isInProgress {
                         Text("%\(percent) tamamlandı")
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(Color(hex: "#00F5D4"))
+                            .font(AppFonts.captionSmall)
+                            .foregroundColor(AppColors.neonTeal)
                     } else if isWatched {
                         Text(AppStrings.SeriesDetail.watched)
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundColor(Color(hex: "#00BA88"))
+                            .font(AppFonts.captionSmall)
+                            .foregroundColor(AppColors.success)
                     } else if let rating = episode.rating, rating > 0 {
                         HStack(spacing: 3) {
-                            Image(systemName: "star.fill").font(.system(size: 9)).foregroundColor(.yellow)
-                            Text(String(format: "%.1f", rating)).font(.system(size: 10.5)).foregroundColor(.white.opacity(0.6))
+                            Image(systemName: "star.fill").font(AppFonts.captionSmall).foregroundColor(AppColors.warningGold)
+                            Text(String(format: "%.1f", rating)).font(AppFonts.captionSmall).foregroundColor(AppColors.textSecondary)
                         }
                     }
                 }
@@ -453,11 +419,11 @@ public struct EpisodeCardView: View {
                     Group {
                         if isDeleting {
                             ProgressView()
-                                .tint(Color(hex: "#00F5D4"))
+                                .tint(AppColors.neonTeal)
                         } else {
                             Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
                                 .font(.system(size: 15))
-                                .foregroundColor(isDownloaded ? Color(hex: "#00F5D4") : .white.opacity(0.7))
+                                .foregroundColor(isDownloaded ? AppColors.neonTeal : AppColors.textPrimary.opacity(0.7))
                         }
                     }
                     .frame(width: 44, height: 44)
@@ -470,7 +436,7 @@ public struct EpisodeCardView: View {
             }
         }
         .padding(12)
-        .background(Color(hex: "#16161D"))
+        .background(AppColors.surfaceSecondary)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)

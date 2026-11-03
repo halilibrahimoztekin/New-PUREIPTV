@@ -45,7 +45,7 @@ struct DashboardEPGEventCard: View {
                             .font(.caption2)
                     }
                     Circle()
-                        .fill(event.program.isPlayingNow ? Color.red : Color(hex: "#0A84FF"))
+                        .fill(event.program.isPlayingNow ? AppColors.live : AppColors.primary)
                         .frame(width: 8, height: 8)
                     Text(event.program.isPlayingNow ? AppStrings.Dashboard.nowAiring : event.program.formattedStartTime(locale: locale))
                         .font(.caption.weight(.semibold))
@@ -54,29 +54,29 @@ struct DashboardEPGEventCard: View {
                     if event.isSportsFixture {
                         Image(systemName: isFollowedSportsMatch ? "star.fill" : "star")
                             .font(.caption2)
-                            .foregroundStyle(isFollowedSportsMatch ? Color.yellow : Color.white.opacity(0.78))
+                            .foregroundStyle(isFollowedSportsMatch ? AppColors.warningGold : AppColors.textPrimary.opacity(0.78))
                             .accessibilityHidden(true)
                     }
                     Image(systemName: "play.fill")
                         .font(.caption2)
                 }
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(AppColors.textPrimary.opacity(0.78))
 
                 Text(event.program.title)
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
 
                 Text(event.channel.title)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
 
                 Text(event.program.formattedTimeRange(locale: locale))
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.8))
             }
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 154, alignment: .leading)
@@ -84,14 +84,14 @@ struct DashboardEPGEventCard: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "#182438"), Color(hex: "#111116")],
+                            colors: [AppColors.surfaceSecondary, AppColors.surface],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                            .strokeBorder(AppColors.borderSubtle, lineWidth: 1)
                     }
             }
         }

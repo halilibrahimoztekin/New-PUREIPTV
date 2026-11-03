@@ -3,7 +3,7 @@ import SwiftUI
 func highlightedSearchText(
     _ source: String,
     queryTerms: [String],
-    highlightColor: Color = Color(hex: "#FFD60A")
+    highlightColor: Color = AppColors.warningGold
 ) -> Text {
     var attributed = AttributedString(source)
     let phrase = queryTerms.joined(separator: " ")
@@ -73,7 +73,7 @@ public struct GlobalSearchResultCard: View {
             ZStack(alignment: .bottomLeading) {
                 // Background & Border
                 RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                    .fill(Color(hex: "#16161A"))
+                    .fill(AppColors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                             .stroke(
@@ -165,10 +165,10 @@ public struct GlobalSearchResultCard: View {
 
     private var placeholderBackground: some View {
         ZStack {
-            Color(hex: "#1C1C20")
+            AppColors.surfaceSecondary
             Image(systemName: result.contentTypeIcon)
                 .font(.system(size: isChannel ? 28 : 36, weight: .light))
-                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.2))
+                .foregroundStyle(AppColors.textSecondary.opacity(0.2))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -180,7 +180,7 @@ public struct GlobalSearchResultCard: View {
             Text(result.contentTypeTitle)
                 .font(.system(size: badgeFontSize, weight: .bold))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppColors.textPrimary)
         .padding(.horizontal, 7)
         .padding(.vertical, 3.5)
         .background(
@@ -188,7 +188,7 @@ public struct GlobalSearchResultCard: View {
                 .fill(result.contentTypeColor.opacity(0.92))
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                        .stroke(AppColors.borderMedium, lineWidth: 0.8)
                 )
         )
         .shadow(color: result.contentTypeColor.opacity(0.4), radius: 4, x: 0, y: 2)
@@ -201,20 +201,20 @@ public struct GlobalSearchResultCard: View {
             Text("4K UHD")
                 .font(.system(size: badgeFontSize, weight: .black))
         }
-        .foregroundStyle(Color(hex: "#101014"))
+        .foregroundStyle(AppColors.surfaceDark)
         .padding(.horizontal, 6)
         .padding(.vertical, 3.5)
         .background(
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "#FFD60A"), Color(hex: "#FF9F0A")],
+                        colors: [AppColors.warningGold, AppColors.warning],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
         )
-        .shadow(color: Color(hex: "#FFD60A").opacity(0.4), radius: 5, x: 0, y: 2)
+        .shadow(color: AppColors.warningGold.opacity(0.4), radius: 5, x: 0, y: 2)
     }
 
     private var playlistSourceBadge: some View {
@@ -273,16 +273,16 @@ public struct GlobalSearchResultCard: View {
                         highlightedSearchText(searchMatch.sourceText, queryTerms: searchMatch.queryTerms)
                     }
                 }
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(Color(hex: "#FFD60A"))
+                .font(AppFonts.captionSmall)
+                .foregroundStyle(AppColors.warningGold)
                 .lineLimit(1)
             }
 
             if let epg = result.matchedEPGTitle {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.badge.checkmark.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color(hex: "#30D158"))
+                        .font(AppFonts.captionSmall)
+                        .foregroundStyle(AppColors.success)
                     Group {
                         if let searchMatch = result.searchMatch,
                            searchMatch.field == .program,
@@ -293,18 +293,18 @@ public struct GlobalSearchResultCard: View {
                             Text(epg)
                         }
                     }
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color(hex: "#30D158"))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.success)
                     .lineLimit(1)
                     if isReminderPending {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.warningGold)
                             .accessibilityLabel(AppStrings.Player.reminderScheduling)
                     } else if isReminderScheduled {
                         Image(systemName: "bell.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color(hex: "#FFD60A"))
+                            .font(AppFonts.captionSmall)
+                            .foregroundStyle(AppColors.warningGold)
                             .accessibilityLabel(AppStrings.Player.reminderSet)
                     }
                 }
@@ -313,11 +313,11 @@ public struct GlobalSearchResultCard: View {
                     if let rating = result.item.rating, rating > 0 {
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Color(hex: "#FFD60A"))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.warningGold)
                             Text(String(format: "%.1f", rating))
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
+                                .font(AppFonts.captionSmall)
+                                .foregroundStyle(AppColors.textPrimary.opacity(0.8))
                         }
                     }
 
@@ -398,9 +398,9 @@ public struct GlobalSearchResultCard: View {
             }
         #endif
         if isSelected {
-            return Color(hex: "#0A84FF")
+            return AppColors.primary
         }
-        return Color.white.opacity(0.08)
+        return AppColors.borderSubtle
     }
 
     private var activeBorderWidth: CGFloat {
@@ -445,7 +445,7 @@ public struct ProgramSearchResultCard: View {
                     }
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(program.isPlayingNow ? Color(hex: "#FF453A") : Color(hex: "#64D2FF"))
+                .foregroundStyle(program.isPlayingNow ? AppColors.statusLive : AppColors.sky)
 
                 if !queryTerms.isEmpty {
                     HStack(spacing: 4) {
@@ -456,31 +456,31 @@ public struct ProgramSearchResultCard: View {
                             .lineLimit(1)
                     }
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(Color(hex: "#FFD60A"))
+                    .foregroundStyle(AppColors.warningGold)
                 }
 
                 highlightedSearchText(program.title, queryTerms: queryTerms)
                     .font(titleFont)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
                 Label(channel.title, systemImage: "tv.fill")
                     .font(channelFont)
-                    .foregroundStyle(Color(hex: "#C0C6D6"))
+                    .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
 
                 if !program.description.isEmpty {
                     highlightedSearchText(program.description, queryTerms: queryTerms)
-                        .font(.caption)
-                        .foregroundStyle(Color(hex: "#9B9BA5"))
+                        .font(AppFonts.caption)
+                        .foregroundStyle(AppColors.textMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: cardMinimumHeight, alignment: .leading)
-            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(AppColors.surfaceContainer, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)

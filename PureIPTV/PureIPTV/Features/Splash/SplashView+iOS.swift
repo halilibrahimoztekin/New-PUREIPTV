@@ -14,13 +14,13 @@
         public var body: some View {
             ZStack {
                 // ── OLED Black base ──────────────────────────────────────────
-                Color.black
+                AppColors.oledBlack
                     .ignoresSafeArea()
 
                 // ── Ambient gradient glow behind logo ────────────────────────
                 RadialGradient(
                     colors: [
-                        Color(hex: "#0A84FF").opacity(0.15),
+                        AppColors.primary.opacity(0.15),
                         Color.clear,
                     ],
                     center: .center,
@@ -51,10 +51,10 @@
 
                     // Wordmark
                     Text(AppStrings.Splash.appName)
-                        .font(.system(size: 34, weight: .heavy, design: .default))
+                        .font(AppFonts.displayLarge.weight(.heavy))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "#E4E1E7"), Color(hex: "#C0C6D6")],
+                                colors: [AppColors.textPrimary, AppColors.onSurfaceVariant],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -67,8 +67,8 @@
 
                     // Tagline
                     Text(AppStrings.Splash.tagline)
-                        .font(.system(size: 15, weight: .medium, design: .default))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                        .font(AppFonts.bodyMedium)
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.7))
                         .tracking(1.5)
                         .textCase(.uppercase)
                         .opacity(store.taglineOpacity)
@@ -106,7 +106,7 @@
             HStack(spacing: 8) {
                 ForEach(0 ..< 3, id: \.self) { index in
                     Circle()
-                        .fill(Color(hex: "#0A84FF"))
+                        .fill(AppColors.primary)
                         .frame(width: 6, height: 6)
                         .scaleEffect(isPulsing ? 1.0 : 0.5)
                         .opacity(isPulsing ? 1.0 : 0.3)

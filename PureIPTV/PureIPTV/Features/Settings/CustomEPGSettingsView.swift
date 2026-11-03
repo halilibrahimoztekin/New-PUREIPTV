@@ -61,15 +61,15 @@ public struct CustomEPGSettingsView: View {
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .font(.title3)
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .foregroundStyle(AppColors.primary)
                             }
                             #if !os(tvOS)
                             .buttonStyle(.plain)
                             #endif
 
                             Text(timeShiftText(store.epgTimeShift))
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white)
+                                .font(AppFonts.bodyMedium.monospacedDigit().weight(.bold))
+                                .foregroundStyle(AppColors.textPrimary)
                                 .frame(minWidth: 70)
 
                             Button {
@@ -77,7 +77,7 @@ public struct CustomEPGSettingsView: View {
                             } label: {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.title3)
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .foregroundStyle(AppColors.primary)
                             }
                             #if !os(tvOS)
                             .buttonStyle(.plain)
@@ -138,11 +138,11 @@ public struct CustomEPGSettingsView: View {
                                 HStack(spacing: 12) {
                                     Label("\(source.channelCount) Kanal", systemImage: "tv")
                                         .font(.caption2)
-                                        .foregroundStyle(Color(hex: "#0A84FF"))
+                                        .foregroundStyle(AppColors.primary)
 
                                     Label("\(source.programmeCount) Program", systemImage: "calendar")
                                         .font(.caption2)
-                                        .foregroundStyle(Color(hex: "#30D158"))
+                                        .foregroundStyle(AppColors.success)
 
                                     if let last = source.lastFetched {
                                         Text(last, style: .time)
@@ -195,8 +195,8 @@ public struct CustomEPGSettingsView: View {
                         store.send(.setAddCustomEPGSourceSheetPresented(true))
                     } label: {
                         Label("Yeni XMLTV / GZ Kaynağı Ekle", systemImage: "plus.circle")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#0A84FF"))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.primary)
                     }
 
                     if !store.customEPGSources.isEmpty {
@@ -344,12 +344,12 @@ public struct CustomEPGSettingsView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(mapping.channelName)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                        .font(AppFonts.headline)
+                                        .foregroundStyle(AppColors.textPrimary)
                                     if let epgID = mapping.customEPGChannelID {
                                         Text("Eşleşen EPG ID: \(epgID)")
                                             .font(.caption2)
-                                            .foregroundStyle(Color(hex: "#0A84FF"))
+                                            .foregroundStyle(AppColors.primary)
                                     }
                                     if let sourceID = mapping.customSourceID,
                                        let source = store.customEPGSources.first(where: { $0.id == sourceID })
@@ -363,14 +363,14 @@ public struct CustomEPGSettingsView: View {
                                 Spacer()
 
                                 Text(timeShiftText(mapping.timeShiftHours))
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .font(AppFonts.captionBold.monospacedDigit())
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(
                                         Capsule()
-                                            .fill(mapping.timeShiftHours != 0 ? Color(hex: "#0A84FF").opacity(0.2) : Color.white.opacity(0.08))
+                                            .fill(mapping.timeShiftHours != 0 ? AppColors.primary.opacity(0.2) : AppColors.glassPlate)
                                     )
-                                    .foregroundStyle(mapping.timeShiftHours != 0 ? Color(hex: "#0A84FF") : .secondary)
+                                    .foregroundStyle(mapping.timeShiftHours != 0 ? AppColors.primary : .secondary)
                             }
                         }
                     } header: {

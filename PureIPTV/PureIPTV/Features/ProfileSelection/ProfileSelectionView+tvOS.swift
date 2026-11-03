@@ -14,12 +14,12 @@
         public var body: some View {
             ZStack {
                 // ── Cinematic Ambient Background ─────────────────────
-                Color(hex: "#07070A").ignoresSafeArea()
+                AppColors.background.ignoresSafeArea()
 
                 RadialGradient(
                     colors: [
-                        Color(hex: "#0A84FF").opacity(0.14),
-                        Color(hex: "#BF5AF2").opacity(0.06),
+                        AppColors.primary.opacity(0.14),
+                        AppColors.premium.opacity(0.06),
                         Color.clear,
                     ],
                     center: .center,
@@ -34,13 +34,13 @@
                     // ── Header Title ──────────────────────────────────
                     VStack(spacing: 12) {
                         Text(store.isEditing ? AppStrings.Profile.manageProfiles : AppStrings.Profile.whoIsWatching)
-                            .font(.system(size: 54, weight: .bold))
+                            .font(AppFonts.displayLarge)
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
 
                         Text(store.isEditing ? AppStrings.Profile.deleteInstruction : AppStrings.Profile.personalizeDesc)
-                            .font(.system(size: 22))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.65))
+                            .font(AppFonts.titleSmall)
+                            .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.65))
                     }
 
                     // ── Profiles Row ──────────────────────────────────
@@ -114,24 +114,24 @@
         private var gradient: LinearGradient {
             if profile.isKidsMode {
                 return LinearGradient(
-                    colors: [Color(hex: "#FF9500"), Color(hex: "#FF2D55")],
+                    colors: [AppColors.warning, AppColors.destructive],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             }
             let palettes: [[Color]] = [
-                [Color(hex: "#0A84FF"), Color(hex: "#5E5CE6")],
-                [Color(hex: "#BF5AF2"), Color(hex: "#AF52DE")],
-                [Color(hex: "#30D158"), Color(hex: "#00C7BE")],
-                [Color(hex: "#FF375F"), Color(hex: "#FF9F0A")],
-                [Color(hex: "#64D2FF"), Color(hex: "#0A84FF")],
+                [AppColors.primary, AppColors.primaryDark],
+                [AppColors.premium, AppColors.premium.opacity(0.8)],
+                [AppColors.success, AppColors.neonTeal],
+                [AppColors.destructive, AppColors.warning],
+                [AppColors.sky, AppColors.primary],
             ]
             let colors = palettes[index % palettes.count]
             return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
         }
 
         private var glowColor: Color {
-            profile.isKidsMode ? Color(hex: "#FF9500") : Color(hex: "#0A84FF")
+            profile.isKidsMode ? AppColors.warning : AppColors.primary
         }
 
         private var strokeColor: Color {
@@ -159,7 +159,7 @@
         }
 
         private var nameColor: Color {
-            isFocused ? Color.white : Color(hex: "#C0C6D6").opacity(0.75)
+            isFocused ? Color.white : AppColors.onSurfaceVariant.opacity(0.75)
         }
 
         private var nameScale: CGFloat {
@@ -196,8 +196,8 @@
                         profileArtwork
 
                         Text(profile.name)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(Color(hex: "#E4E1E7"))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.onSurface)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                             .frame(width: 190, alignment: .center)
@@ -265,7 +265,7 @@
         }
 
         private var shadowColor: Color {
-            isFocused ? Color(hex: "#0A84FF").opacity(0.6) : Color.clear
+            isFocused ? AppColors.primary.opacity(0.6) : Color.clear
         }
 
         private var shadowRadius: CGFloat {
@@ -277,7 +277,7 @@
         }
 
         private var labelColor: Color {
-            isFocused ? Color.white : Color(hex: "#C0C6D6").opacity(0.6)
+            isFocused ? Color.white : AppColors.onSurfaceVariant.opacity(0.6)
         }
 
         private var labelScale: CGFloat {
@@ -302,8 +302,8 @@
                     )
 
                     Text(AppStrings.Profile.addProfile)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                        .font(AppFonts.headline)
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.7))
                         .lineLimit(1)
                         .frame(width: 190, alignment: .center)
                 }

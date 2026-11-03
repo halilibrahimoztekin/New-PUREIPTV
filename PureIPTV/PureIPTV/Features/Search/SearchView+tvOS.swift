@@ -178,14 +178,14 @@
         private var searchBar: some View {
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
-                    .font(.system(size: 32))
+                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.6))
+                    .font(AppFonts.headline)
 
                 TextField(AppStrings.Search.searchPlaceholder, text: $store.searchQuery.sending(\.queryChanged))
                     .foregroundColor(.white)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                    .font(.system(size: 32))
+                    .font(AppFonts.headline)
                     .focused($focusedTarget, equals: .search)
                     .accessibilityFocused($accessibilityFocusedTarget, equals: .search)
                     .submitLabel(.search)
@@ -204,8 +204,8 @@
                         store.send(.queryChanged(""))
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
-                            .font(.system(size: 28))
+                            .foregroundColor(AppColors.onSurfaceVariant.opacity(0.6))
+                            .font(AppFonts.title)
                             .padding(6)
                     }
                     .buttonStyle(TVCircleButtonStyle())
@@ -218,8 +218,8 @@
                         store.send(.togglePinnedSearch(store.searchQuery))
                     } label: {
                         Image(systemName: store.isCurrentSearchPinned ? "pin.slash.fill" : "pin")
-                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
-                            .font(.system(size: 28))
+                            .foregroundColor(AppColors.onSurfaceVariant.opacity(0.75))
+                            .font(AppFonts.title)
                             .padding(6)
                     }
                     .buttonStyle(TVCircleButtonStyle())
@@ -232,8 +232,8 @@
                 if let onClose {
                     Button(action: onClose) {
                         Image(systemName: "xmark")
-                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
-                            .font(.system(size: 28))
+                            .foregroundColor(AppColors.onSurfaceVariant.opacity(0.75))
+                            .font(AppFonts.title)
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(TVCircleButtonStyle())
@@ -243,10 +243,10 @@
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#1F1F23"))
+                    .fill(AppColors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 2)
+                            .stroke(AppColors.borderSubtle, lineWidth: 2)
                     )
             )
         }
@@ -559,8 +559,8 @@
                                                         image.resizable().scaledToFill()
                                                     } else {
                                                         ZStack {
-                                                            Color(hex: "#25252B")
-                                                            Image(systemName: "person.fill").font(.system(size: 38)).foregroundStyle(Color(hex: "#9B9BA5"))
+                                                            AppColors.surfaceElevated
+                                                            Image(systemName: "person.fill").font(AppFonts.displayMedium).foregroundStyle(AppColors.textMuted)
                                                         }
                                                     }
                                                 }
@@ -568,25 +568,25 @@
                                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                                 VStack(alignment: .leading, spacing: 10) {
                                                     highlightedSearchText(credit.personName, queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init))
-                                                        .font(.system(size: 24, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
+                                                        .font(AppFonts.headline).foregroundStyle(.white).lineLimit(2)
                                                     Text("\(AppStrings.Search.people) · \(store.debouncedQuery)")
-                                                        .font(.system(size: 16, weight: .medium))
-                                                        .foregroundStyle(Color(hex: "#FFD60A"))
+                                                        .font(AppFonts.caption.weight(.medium))
+                                                        .foregroundStyle(AppColors.warningGold)
                                                         .lineLimit(1)
-                                                    Text(credit.result.item.displayTitle).font(.system(size: 20)).foregroundStyle(Color(hex: "#C0C6D6")).lineLimit(2)
+                                                    Text(credit.result.item.displayTitle).font(AppFonts.title).foregroundStyle(AppColors.onSurfaceVariant).lineLimit(2)
                                                     Text(credit.result.item.type == .series ? AppStrings.Search.series : AppStrings.Search.movies)
-                                                        .font(.system(size: 17, weight: .medium)).foregroundStyle(Color(hex: "#64D2FF"))
+                                                        .font(AppFonts.bodyLarge.weight(.medium)).foregroundStyle(AppColors.sky)
                                                     if store.selectedPlaylistID == nil, store.savedPlaylists.count > 1 {
                                                         Text(credit.result.playlistBadge.playlistName)
-                                                            .font(.system(size: 15)).foregroundStyle(Color(hex: "#9B9BA5")).lineLimit(1)
+                                                            .font(AppFonts.bodyMedium).foregroundStyle(AppColors.textMuted).lineLimit(1)
                                                     }
                                                 }
                                                 Spacer(minLength: 0)
-                                                Image(systemName: "play.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(Color(hex: "#0A84FF"))
+                                                Image(systemName: "play.fill").font(AppFonts.bodyBold).foregroundStyle(AppColors.primary)
                                             }
                                             .padding(18)
                                             .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                            .background(AppColors.surfaceContainer, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                         }
                                         .tvFocusEffect(shape: .roundedRectangle(cornerRadius: 18))
                                         .id(credit.id)
@@ -666,30 +666,30 @@
                             HStack(spacing: 20) {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 42, weight: .medium))
-                                    .foregroundStyle(Color(hex: "#30D158"))
+                                    .foregroundStyle(AppColors.success)
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(item.title)
-                                        .font(.system(size: 24, weight: .semibold))
+                                        .font(AppFonts.headline)
                                         .foregroundStyle(.white)
                                         .lineLimit(2)
                                     if let episode = item.episodeMetadata {
                                         Text("\(episode.seriesTitle) · S\(episode.seasonNumber) E\(episode.episodeNumber)")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(Color(hex: "#C0C6D6"))
+                                            .font(AppFonts.titleSmall)
+                                            .foregroundStyle(AppColors.onSurfaceVariant)
                                             .lineLimit(1)
                                     }
                                     Text(ByteCountFormatter.string(fromByteCount: item.fileSize, countStyle: .file))
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(Color(hex: "#9B9BA5"))
+                                        .font(AppFonts.caption)
+                                        .foregroundStyle(AppColors.textMuted)
                                 }
                                 Spacer(minLength: 0)
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(Color(hex: "#0A84FF"))
+                                    .font(AppFonts.bodyBold)
+                                    .foregroundStyle(AppColors.primary)
                             }
                             .padding(24)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .background(AppColors.surfaceContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .id(item.id)
@@ -787,7 +787,7 @@
             }
             .padding(20)
             .frame(width: 260, height: 210, alignment: .leading)
-            .background(Color(hex: "#18181D"), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(AppColors.surfaceContainer, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
 
         @ViewBuilder
@@ -810,10 +810,10 @@
         private var pinnedSearchesSection: some View {
             VStack(alignment: .leading, spacing: 24) {
                 Label(AppStrings.Search.pinnedSearches, systemImage: "pin.fill")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(AppFonts.headline)
                     .foregroundColor(.white)
                 Text(AppStrings.Search.pinnedSearchesDescription)
-                    .font(.caption)
+                    .font(AppFonts.caption)
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 14) {
@@ -824,16 +824,16 @@
                             } label: {
                                 HStack(spacing: 20) {
                                     Image(systemName: "pin.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(Color(hex: "#0A84FF"))
+                                        .font(AppFonts.title)
+                                        .foregroundColor(AppColors.primary)
                                     Text(query)
-                                        .font(.system(size: 28, weight: .semibold))
+                                        .font(AppFonts.displayMedium)
                                         .foregroundColor(.white)
                                         .lineLimit(1)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.4))
+                                        .font(AppFonts.titleSmall.weight(.semibold))
+                                        .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
                                 }
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 18)
@@ -846,8 +846,8 @@
                                 store.send(.togglePinnedSearch(query))
                             } label: {
                                 Image(systemName: "pin.slash")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundColor(Color(hex: "#C0C6D6").opacity(0.75))
+                                    .font(AppFonts.titleSmall.weight(.semibold))
+                                    .foregroundColor(AppColors.onSurfaceVariant.opacity(0.75))
                                     .frame(width: 56, height: 56)
                             }
                             .buttonStyle(TVCircleButtonStyle())
@@ -872,14 +872,14 @@
                         VStack(alignment: .leading, spacing: 24) {
                             HStack {
                                 Label(AppStrings.Search.recentSearches, systemImage: "clock.arrow.circlepath")
-                                    .font(.system(size: 32, weight: .bold))
+                                    .font(AppFonts.headline)
                                     .foregroundColor(.white)
                                 Spacer()
                                 Button {
                                     store.send(.clearHistoryTapped)
                                 } label: {
                                     Text(AppStrings.Search.clear)
-                                        .font(.system(size: 20, weight: .semibold))
+                                        .font(AppFonts.titleSmall.weight(.semibold))
                                         .padding(.horizontal, 20)
                                         .padding(.vertical, 8)
                                 }
@@ -893,21 +893,21 @@
                                     } label: {
                                         HStack {
                                             Image(systemName: "clock")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.5))
+                                                .font(AppFonts.title)
+                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.5))
                                             Text(item.query)
-                                                .font(.system(size: 28))
-                                                .foregroundColor(Color(hex: "#E4E1E7"))
+                                                .font(AppFonts.displayMedium)
+                                                .foregroundColor(AppColors.onSurface)
                                             Spacer()
                                             Image(systemName: "chevron.right")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(Color(hex: "#C0C6D6").opacity(0.3))
+                                                .font(AppFonts.title)
+                                                .foregroundColor(AppColors.onSurfaceVariant.opacity(0.3))
                                         }
                                         .padding(.horizontal, 30)
                                         .padding(.vertical, 20)
-                                        .background(Color(hex: "#1F1F23").opacity(0.5))
+                                        .background(AppColors.surfaceSecondary.opacity(0.5))
                                     }
-                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: "#0A84FF"), isSelected: false))
+                                    .buttonStyle(TVCategoryRowButtonStyle(accentColor: AppColors.primary, isSelected: false))
 
                                     if item.id != store.recentSearches.prefix(5).last?.id {
                                         Divider()
@@ -918,7 +918,7 @@
                             }
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color(hex: "#1F1F23"))
+                                    .fill(AppColors.surfaceSecondary)
                             )
                         }
                     }
@@ -926,7 +926,7 @@
                     // Quick Discovery Categories & Tags
                     VStack(alignment: .leading, spacing: 28) {
                         Label(AppStrings.Search.quickTags, systemImage: "sparkles")
-                            .font(.system(size: 32, weight: .bold))
+                            .font(AppFonts.headline)
                             .foregroundColor(.white)
 
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 30)], spacing: 30) {
@@ -937,27 +937,27 @@
                                     HStack(spacing: 20) {
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .fill(Color(hex: tag.hexColor).opacity(0.2))
+                                                .fill(tag.color.opacity(0.2))
                                                 .frame(width: 56, height: 56)
                                             Image(systemName: tag.icon)
-                                                .font(.system(size: 28, weight: .semibold))
-                                                .foregroundColor(Color(hex: tag.hexColor))
+                                                .font(AppFonts.displayMedium.weight(.semibold))
+                                                .foregroundColor(tag.color)
                                         }
 
                                         Text(tag.title)
-                                            .font(.system(size: 26, weight: .semibold))
-                                            .foregroundColor(.white)
+                                            .font(AppFonts.title.weight(.semibold))
+                                            .foregroundColor(AppColors.textPrimary)
 
                                         Spacer()
 
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundColor(Color(hex: "#C0C6D6").opacity(0.4))
+                                            .font(AppFonts.titleSmall.weight(.semibold))
+                                            .foregroundColor(AppColors.onSurfaceVariant.opacity(0.4))
                                     }
                                     .padding(.horizontal, 24)
                                     .padding(.vertical, 20)
                                 }
-                                .buttonStyle(TVCategoryRowButtonStyle(accentColor: Color(hex: tag.hexColor), isSelected: false))
+                                .buttonStyle(TVCategoryRowButtonStyle(accentColor: tag.color, isSelected: false))
                             }
                         }
                     }
@@ -971,11 +971,11 @@
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .bottom) {
                     Text(title)
-                        .font(.system(size: 38, weight: .bold))
+                        .font(AppFonts.displayMedium)
                         .foregroundColor(.white)
                     Text("\(count) \(AppStrings.Common.results)")
-                        .font(.system(size: 24))
-                        .foregroundColor(Color(hex: "#C0C6D6").opacity(0.6))
+                        .font(AppFonts.bodyLarge)
+                        .foregroundColor(AppColors.onSurfaceVariant.opacity(0.6))
                         .padding(.bottom, 4)
                 }
                 content()
@@ -1098,10 +1098,10 @@
                 Spacer()
                 Image(systemName: icon)
                     .font(.system(size: 80))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.3))
+                    .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.3))
                 Text(message)
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                    .font(AppFonts.headline)
+                    .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                 if let suggestion = store.searchRecoverySuggestion {
                     Button {
                         applySearchRecovery(suggestion)
@@ -1109,7 +1109,7 @@
                         Text(suggestion.title)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color(hex: "#0A84FF"))
+                    .tint(AppColors.primary)
                 }
                 Spacer()
             }
@@ -1132,9 +1132,9 @@
                     .font(.system(size: 80))
                     .foregroundStyle(.red.opacity(0.7))
                 Text(error)
-                    .font(.system(size: 28))
+                    .font(AppFonts.displayMedium)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                    .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.7))
                     .padding(.horizontal, 60)
                 Spacer()
             }

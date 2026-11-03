@@ -40,22 +40,22 @@
 
         var body: some View {
             ZStack {
-                Color.black.ignoresSafeArea()
+                AppColors.oledBlack.ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     Image(systemName: tab.selectedIcon)
-                        .font(.system(size: 80, weight: .semibold))
+                        .font(AppFonts.displayLarge.weight(.semibold))
                         .foregroundStyle(tabColor)
                         .scaleEffect(isFocused ? 1.08 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
 
                     Text(tab.rawValue)
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundStyle(Color(hex: "#E4E1E7"))
+                        .font(AppFonts.displayMedium.weight(.bold))
+                        .foregroundStyle(AppColors.textPrimary)
 
                     Text(AppStrings.Common.comingSoon)
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                        .font(AppFonts.titleLarge)
+                        .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                 }
                 .focusable()
                 .focused($isFocused)
@@ -64,13 +64,13 @@
 
         private var tabColor: Color {
             switch tab {
-            case .dashboard: Color(hex: "#FF9500")
-            case .liveTV: Color(hex: "#FF453A")
-            case .movies: Color(hex: "#BF5AF2")
-            case .series: Color(hex: "#30D158")
-            case .search: Color(hex: "#0A84FF")
-            case .downloads: Color(hex: "#5AC8FA") // Cyan for downloads
-            case .settings: Color(hex: "#C0C6D6")
+            case .dashboard: AppColors.amber
+            case .liveTV: AppColors.live
+            case .movies: AppColors.premium
+            case .series: AppColors.success
+            case .search: AppColors.primary
+            case .downloads: AppColors.cyan
+            case .settings: AppColors.onSurfaceVariant
             }
         }
     }

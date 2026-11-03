@@ -205,7 +205,7 @@ public struct RecentChannelsHUDView: View {
                 // Top area: Logo + Status Badges
                 ZStack(alignment: .topTrailing) {
                     // Card background
-                    Color(hex: "#000000").opacity(0.85)
+                    AppColors.oledBlack.opacity(0.85)
 
                     // Logo presentation
                     if let logoURL = channel.coverURL {

@@ -19,8 +19,8 @@ public struct PureMaterialLogo: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(hex: "#00D2FF").opacity(0.35),
-                                Color(hex: "#9333EA").opacity(0.18),
+                                AppColors.logoGlowCyan.opacity(0.35),
+                                AppColors.logoGlowPurple.opacity(0.18),
                                 Color.clear,
                             ],
                             center: .center,
@@ -37,8 +37,8 @@ public struct PureMaterialLogo: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(hex: "#101626"),
-                            Color(hex: "#070B14"),
+                            AppColors.logoBaseDark,
+                            AppColors.logoBaseDeep,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -53,8 +53,8 @@ public struct PureMaterialLogo: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(hex: "#22314F").opacity(0.7),
-                                Color(hex: "#121A2D").opacity(0.85),
+                                AppColors.logoGlassTop.opacity(0.7),
+                                AppColors.logoGlassBottom.opacity(0.85),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -67,7 +67,7 @@ public struct PureMaterialLogo: View {
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(0.4),
-                                Color(hex: "#00D2FF").opacity(0.3),
+                                AppColors.logoGlowCyan.opacity(0.3),
                                 Color.white.opacity(0.05),
                             ],
                             startPoint: .topLeading,
@@ -81,7 +81,7 @@ public struct PureMaterialLogo: View {
 
             // Material Layer 3: Iconic 'P' + Play Symbol Fusion (Konsept 2 Fusion)
             PurePPlayFusionSymbol(size: size * 0.52)
-                .shadow(color: Color(hex: "#00D2FF").opacity(0.45), radius: size * 0.08, x: 0, y: 0)
+                .shadow(color: AppColors.logoGlowCyan.opacity(0.45), radius: size * 0.08, x: 0, y: 0)
         }
         .frame(width: size, height: size)
     }
@@ -104,8 +104,8 @@ private struct PurePPlayFusionSymbol: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(hex: "#00E5FF"),
-                            Color(hex: "#0A84FF"),
+                            AppColors.logoRibbonCyan,
+                            AppColors.primary,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -118,8 +118,8 @@ private struct PurePPlayFusionSymbol: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(hex: "#9333EA"),
-                            Color(hex: "#E11D48"),
+                            AppColors.logoGlowPurple,
+                            AppColors.logoRibbonMagenta,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -134,8 +134,8 @@ private struct PurePPlayFusionSymbol: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(hex: "#38BDF8"),
-                            Color(hex: "#2563EB"),
+                            AppColors.logoTriangleLight,
+                            AppColors.logoTriangleDark,
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

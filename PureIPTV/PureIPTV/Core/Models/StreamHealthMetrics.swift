@@ -18,10 +18,10 @@ public enum HealthGrade: String, Equatable, Sendable, CaseIterable {
 
     public var color: Color {
         switch self {
-        case .excellent: Color(hex: "#00F5D4")
-        case .good: Color(hex: "#0A84FF")
-        case .fair: Color(hex: "#FFD60A")
-        case .critical: Color(hex: "#FF453A")
+        case .excellent: AppColors.cyan
+        case .good: AppColors.primary
+        case .fair: AppColors.warningGold
+        case .critical: AppColors.live
         }
     }
 }

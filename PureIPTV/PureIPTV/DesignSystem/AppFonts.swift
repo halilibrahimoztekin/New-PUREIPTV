@@ -35,6 +35,11 @@ public final class AppFonts: Sendable {
         #endif
     }
 
+    /// Small display title alias (32pt on tvOS, 24pt on iOS, Bold weight).
+    public static var displaySmall: Font {
+        headline
+    }
+
     // MARK: - Headlines & Section Titles
 
     /// Section headline (32pt on tvOS, 24pt on iOS, Bold weight).
@@ -46,6 +51,11 @@ public final class AppFonts: Sendable {
         #endif
     }
 
+    /// Secondary headline alias.
+    public static var headlineMedium: Font {
+        title
+    }
+
     /// Primary content title (26pt on tvOS, 20pt on iOS, Semibold weight).
     public static var title: Font {
         #if os(tvOS)
@@ -53,6 +63,16 @@ public final class AppFonts: Sendable {
         #else
             .system(size: 20, weight: .semibold, design: .default)
         #endif
+    }
+
+    /// Large title alias.
+    public static var titleLarge: Font {
+        headline
+    }
+
+    /// Medium title alias.
+    public static var titleMedium: Font {
+        title
     }
 
     /// Secondary small title (22pt on tvOS, 18pt on iOS, Semibold weight).
@@ -84,6 +104,20 @@ public final class AppFonts: Sendable {
         #endif
     }
 
+    /// Standard body alias.
+    public static var body: Font {
+        bodyMedium
+    }
+
+    /// Emphasized bold body text (20pt on tvOS, 15pt on iOS, Bold weight).
+    public static var bodyBold: Font {
+        #if os(tvOS)
+            .system(size: 20, weight: .bold, design: .default)
+        #else
+            .system(size: 15, weight: .bold, design: .default)
+        #endif
+    }
+
     /// Small body text (18pt on tvOS, 13pt on iOS, Regular weight).
     public static var bodySmall: Font {
         #if os(tvOS)
@@ -91,6 +125,11 @@ public final class AppFonts: Sendable {
         #else
             .system(size: 13, weight: .regular, design: .default)
         #endif
+    }
+
+    /// Footnote alias.
+    public static var footnote: Font {
+        bodySmall
     }
 
     // MARK: - Captions & Metadata
@@ -102,6 +141,11 @@ public final class AppFonts: Sendable {
         #else
             .system(size: 12, weight: .regular, design: .default)
         #endif
+    }
+
+    /// Medium weight caption.
+    public static var captionMedium: Font {
+        captionSemibold
     }
 
     /// Emphasized bold caption (16pt on tvOS, 12pt on iOS, Bold weight).
@@ -170,12 +214,24 @@ public extension Font {
         AppFonts.displayMedium
     }
 
+    static var appDisplaySmall: Font {
+        AppFonts.displaySmall
+    }
+
     static var appHeadline: Font {
         AppFonts.headline
     }
 
     static var appTitle: Font {
         AppFonts.title
+    }
+
+    static var appTitleLarge: Font {
+        AppFonts.titleLarge
+    }
+
+    static var appTitleMedium: Font {
+        AppFonts.titleMedium
     }
 
     static var appTitleSmall: Font {
@@ -194,8 +250,16 @@ public extension Font {
         AppFonts.bodySmall
     }
 
+    static var appFootnote: Font {
+        AppFonts.footnote
+    }
+
     static var appCaption: Font {
         AppFonts.caption
+    }
+
+    static var appCaptionMedium: Font {
+        AppFonts.captionMedium
     }
 
     static var appCaptionBold: Font {

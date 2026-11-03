@@ -161,7 +161,7 @@ public struct SettingsView: View {
                 } label: {
                     HStack {
                         Image(systemName: "shield.lefthalf.filled.badge.checkmark")
-                            .foregroundColor(Color(hex: "#0A84FF"))
+                            .foregroundColor(AppColors.primary)
                         Text("Gizlenen Kanallar & Kategoriler")
                             .foregroundColor(.primary)
                         Spacer()
@@ -171,7 +171,7 @@ public struct SettingsView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
-                                .background(Color(hex: "#0A84FF"), in: Capsule())
+                                .background(AppColors.primary, in: Capsule())
                         }
                         Image(systemName: "chevron.right")
                             .foregroundColor(.gray)
@@ -862,7 +862,7 @@ public struct SettingsView: View {
                         if !store.customEPGSources.isEmpty {
                             Text("\(store.customEPGSources.count) kaynak")
                                 .font(.caption)
-                                .foregroundStyle(Color(hex: "#0A84FF"))
+                                .foregroundStyle(AppColors.primary)
                         }
                         Image(systemName: "chevron.right")
                             .font(.caption2)
@@ -922,9 +922,9 @@ public struct SettingsView: View {
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color(hex: "#0A84FF").opacity(0.15))
+                                    .fill(AppColors.primary.opacity(0.15))
                             )
-                            .foregroundStyle(Color(hex: "#0A84FF"))
+                            .foregroundStyle(AppColors.primary)
                         }
                         .accessibilityLabel("Şimdi Eşitle")
                         .accessibilityValue(store.isCloudSyncing ? AppStrings.Player.syncing : "")
@@ -940,7 +940,7 @@ public struct SettingsView: View {
                         HStack(spacing: 12) {
                             Label("\(summary.favoritesCount) Favori", systemImage: "star.fill")
                                 .font(.caption2)
-                                .foregroundStyle(Color(hex: "#FFD60A"))
+                                .foregroundStyle(AppColors.warningGold)
 
                             Label("\(summary.hiddenChannelsCount) Gizli", systemImage: "eye.slash.fill")
                                 .font(.caption2)
@@ -948,7 +948,7 @@ public struct SettingsView: View {
 
                             Label("\(summary.watchProgressCount) İlerleme", systemImage: "play.circle.fill")
                                 .font(.caption2)
-                                .foregroundStyle(Color(hex: "#30D158"))
+                                .foregroundStyle(AppColors.success)
                         }
                         .padding(.vertical, 2)
                     }
@@ -956,7 +956,7 @@ public struct SettingsView: View {
                     if let msg = store.cloudSyncMessage {
                         Text(msg)
                             .font(.caption2)
-                            .foregroundStyle(store.cloudSyncMessage?.contains("hata") == true ? Color.red : Color(hex: "#30D158"))
+                            .foregroundStyle(store.cloudSyncMessage?.contains("hata") == true ? AppColors.error : AppColors.success)
                     }
                 }
             }

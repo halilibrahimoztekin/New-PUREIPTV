@@ -29,7 +29,7 @@ public struct DynamicRangeHUDView: View {
             .padding(.vertical, 5)
             .background(
                 Capsule()
-                    .fill(Color(hex: info.range.primaryColorHex).opacity(0.18))
+                    .fill(info.range.primaryColor.opacity(0.18))
                     .overlay(
                         Capsule()
                             .stroke(badgeGradient.opacity(0.45), lineWidth: 1)
@@ -40,25 +40,25 @@ public struct DynamicRangeHUDView: View {
             HStack(spacing: 6) {
                 if let res = info.detectedResolution {
                     Text(res)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .font(AppFonts.captionBold)
+                        .foregroundStyle(AppColors.textPrimary)
 
                     Text("•")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .font(AppFonts.captionMedium)
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Text("\(info.bitDepth)-Bit")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(AppFonts.captionSemibold.monospacedDigit())
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.85))
 
                 Text("•")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(AppFonts.captionMedium)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 Text(info.range.isHDR ? "BT.2020" : "BT.709")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(AppFonts.captionSemibold)
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.75))
             }
 
             Spacer(minLength: 0)
@@ -67,16 +67,16 @@ public struct DynamicRangeHUDView: View {
             if info.range.isHDR {
                 HStack(spacing: 4) {
                     Image(systemName: "sun.max")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppFonts.captionSmall.weight(.bold))
                     Text(info.range == .dolbyVision || info.range == .hdr10Plus ? "4000 nits" : "1000 nits")
-                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .font(AppFonts.captionSmall.weight(.heavy).monospacedDigit())
                 }
-                .foregroundStyle(Color(hex: info.range.primaryColorHex))
+                .foregroundStyle(info.range.primaryColor)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color(hex: info.range.primaryColorHex).opacity(0.12))
+                        .fill(info.range.primaryColor.opacity(0.12))
                 )
             }
         }
@@ -91,14 +91,14 @@ public struct DynamicRangeHUDView: View {
                 ZStack {
                     // OLED True Black Base
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(hex: "#0C0C10").opacity(0.92))
+                        .fill(AppColors.surface.opacity(0.92))
                         .background(.ultraThinMaterial)
 
                     // Cinematic Glowing Rim Border
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(
                             LinearGradient(
-                                colors: info.range.gradientHexes.map { Color(hex: $0).opacity(isGlowPulsing ? 0.65 : 0.3) },
+                                colors: info.range.gradientColors.map { $0.opacity(isGlowPulsing ? 0.65 : 0.3) },
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -107,7 +107,7 @@ public struct DynamicRangeHUDView: View {
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color(hex: info.range.primaryColorHex).opacity(info.range.isHDR ? 0.35 : 0.15), radius: 18, x: 0, y: 6)
+            .shadow(color: info.range.primaryColor.opacity(info.range.isHDR ? 0.35 : 0.15), radius: 18, x: 0, y: 6)
             .onAppear {
                 withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                     isGlowPulsing = true
@@ -117,7 +117,7 @@ public struct DynamicRangeHUDView: View {
 
     private var badgeGradient: LinearGradient {
         LinearGradient(
-            colors: info.range.gradientHexes.map { Color(hex: $0) },
+            colors: info.range.gradientColors,
             startPoint: .leading,
             endPoint: .trailing
         )

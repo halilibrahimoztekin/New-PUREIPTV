@@ -37,7 +37,7 @@ public struct AFRToastView: View {
                 ZStack {
                     // OLED True Black Base
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(hex: "#0C0C10").opacity(0.92))
+                        .fill(AppColors.background.opacity(0.92))
                         .background(.ultraThinMaterial)
 
                     // Glowing Rim Border
@@ -46,7 +46,7 @@ public struct AFRToastView: View {
                             LinearGradient(
                                 colors: [
                                     tintColor.opacity(isGlowPulsing ? 0.7 : 0.3),
-                                    Color(hex: "#BF5AF2").opacity(isGlowPulsing ? 0.4 : 0.15),
+                                    AppColors.premium.opacity(isGlowPulsing ? 0.4 : 0.15),
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -69,12 +69,12 @@ public struct AFRToastView: View {
     }
 
     private var tintColor: Color {
-        result.status == .requestSubmitted ? Color(hex: "#0A84FF") : Color(hex: "#FF9F0A")
+        result.status == .requestSubmitted ? AppColors.primary : AppColors.amber
     }
 
     private var tintGradient: LinearGradient {
         LinearGradient(
-            colors: [tintColor, Color(hex: "#0A84FF")],
+            colors: [tintColor, AppColors.primary],
             startPoint: .leading,
             endPoint: .trailing
         )

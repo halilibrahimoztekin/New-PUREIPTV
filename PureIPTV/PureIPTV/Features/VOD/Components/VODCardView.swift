@@ -21,13 +21,13 @@ public struct VODCardView: View {
             ZStack(alignment: .bottomLeading) {
                 // Background
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#1F1F23"))
+                    .fill(AppColors.surfaceSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(
                                 isSelected
-                                    ? Color(hex: "#0A84FF").opacity(0.8)
-                                    : Color.white.opacity(0.1),
+                                    ? AppColors.primary.opacity(0.8)
+                                    : AppColors.borderSubtle,
                                 lineWidth: isSelected ? 2 : 1
                             )
                     )
@@ -54,7 +54,7 @@ public struct VODCardView: View {
 
                 // Bottom gradient overlay
                 LinearGradient(
-                    colors: [Color.clear, Color.black.opacity(0.85)],
+                    colors: [Color.clear, AppColors.oledBlack.opacity(0.85)],
                     startPoint: .center,
                     endPoint: .bottom
                 )
@@ -67,16 +67,16 @@ public struct VODCardView: View {
                             Spacer()
                             HStack(spacing: 3) {
                                 Image(systemName: tag.systemIcon)
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(AppFonts.captionSmall.weight(.bold))
                                 Text(tag.label)
-                                    .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+                                    .font(AppFonts.captionSmall.weight(.heavy))
                             }
                             .foregroundColor(tag.color)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
-                            .background(Color.black.opacity(0.75), in: Capsule())
+                            .background(AppColors.oledBlack.opacity(0.75), in: Capsule())
                             .overlay(Capsule().stroke(tag.color.opacity(0.6), lineWidth: 0.8))
-                            .shadow(color: Color.black.opacity(0.5), radius: 3, y: 1)
+                            .shadow(color: AppColors.oledBlack.opacity(0.5), radius: 3, y: 1)
                             .padding(8)
                         }
                         Spacer()
@@ -87,29 +87,29 @@ public struct VODCardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(vod.displayTitle)
                     #if os(tvOS)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(AppFonts.titleLarge)
                     #else
-                        .font(.system(size: 13, weight: .bold))
+                        .font(AppFonts.headline)
                     #endif
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(2)
 
                     if let rating = vod.rating, rating > 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "star.fill")
                             #if os(tvOS)
-                                .font(.system(size: 13))
+                                .font(AppFonts.caption)
                             #else
-                                .font(.system(size: 10))
+                                .font(AppFonts.captionSmall)
                             #endif
-                                .foregroundColor(.yellow)
+                                .foregroundColor(AppColors.warningGold)
                             Text(String(format: "%.1f", rating))
                             #if os(tvOS)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(AppFonts.bodySmall.weight(.semibold))
                             #else
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(AppFonts.captionSemibold)
                             #endif
-                                .foregroundStyle(Color(hex: "#C0C6D6"))
+                                .foregroundStyle(AppColors.onSurfaceVariant)
                         }
                     }
                 }
@@ -124,7 +124,7 @@ public struct VODCardView: View {
         .buttonStyle(.fluidScale)
         #endif
         .shadow(
-            color: isSelected ? Color(hex: "#0A84FF").opacity(0.3) : .clear,
+            color: isSelected ? AppColors.primary.opacity(0.3) : .clear,
             radius: 8, x: 0, y: 2
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -134,10 +134,10 @@ public struct VODCardView: View {
 private struct VODPosterPlaceholder: View {
     var body: some View {
         ZStack {
-            Color(hex: "#2C2C30")
+            AppColors.surfaceElevated
             Image(systemName: "film")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                .font(AppFonts.displayMedium.weight(.light))
+                .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.25))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .shimmeringPlaceholder(isLoading: true)

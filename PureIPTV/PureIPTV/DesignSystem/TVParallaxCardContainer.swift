@@ -14,7 +14,7 @@
             isFocused: Bool,
             isSelected: Bool = false,
             cornerRadius: CGFloat = 16,
-            accentColor: Color = Color(hex: "#0A84FF")
+            accentColor: Color = AppColors.primary
         ) {
             self.isFocused = isFocused
             self.isSelected = isSelected
@@ -31,13 +31,13 @@
                         .stroke(
                             isFocused
                                 ? accentColor
-                                : isSelected ? accentColor.opacity(0.5) : Color.white.opacity(0.08),
+                                : isSelected ? accentColor.opacity(0.5) : AppColors.glassPlate,
                             lineWidth: isFocused ? 3.5 : (isSelected ? 2 : 1)
                         )
                 )
                 // Çift Katmanlı Gölge: 1. Zemin derinlik gölgesi + 2. Neon ambiyans parlaması
                 .shadow(
-                    color: Color.black.opacity(isFocused ? 0.60 : 0.35),
+                    color: AppColors.oledBlack.opacity(isFocused ? 0.60 : 0.35),
                     radius: isFocused ? 28 : 8,
                     x: 0,
                     y: isFocused ? 14 : 4
@@ -67,7 +67,7 @@
             isFocused: Bool,
             isSelected: Bool = false,
             cornerRadius: CGFloat = 16,
-            accentColor: Color = Color(hex: "#0A84FF"),
+            accentColor: Color = AppColors.primary,
             @ViewBuilder backgroundContent: @escaping () -> Content,
             @ViewBuilder floatingContent: @escaping () -> FloatingContent
         ) {

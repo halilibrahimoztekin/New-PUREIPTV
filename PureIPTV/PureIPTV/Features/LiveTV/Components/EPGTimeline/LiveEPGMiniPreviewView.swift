@@ -55,15 +55,15 @@ public struct LiveEPGMiniPreviewView: View {
                 // Audio Status Pill
                 HStack(spacing: 3) {
                     Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppFonts.captionSmall.weight(.bold))
                     Text(isMuted ? "SES KAPALI" : "SES AÇIK")
-                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                        .font(AppFonts.captionSmall.weight(.heavy))
                 }
-                .foregroundStyle(isMuted ? Color.white.opacity(0.6) : Color(hex: "#0A84FF"))
+                .foregroundStyle(isMuted ? AppColors.textSecondary : AppColors.primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(
-                    isMuted ? Color.white.opacity(0.08) : Color(hex: "#0A84FF").opacity(0.18),
+                    isMuted ? AppColors.glassPlate : AppColors.primary.opacity(0.18),
                     in: Capsule()
                 )
 
@@ -74,20 +74,20 @@ public struct LiveEPGMiniPreviewView: View {
                     // Mute Button
                     Button(action: onToggleMute) {
                         Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.captionBold)
+                            .foregroundStyle(AppColors.textPrimary)
                             .frame(width: 26, height: 26)
-                            .background(Color.white.opacity(0.15), in: Circle())
+                            .background(AppColors.glassPlate.opacity(2.0), in: Circle())
                     }
                     .buttonStyle(.plain)
 
                     // Expand to Fullscreen Button
                     Button(action: onExpand) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(AppFonts.captionBold)
+                            .foregroundStyle(AppColors.textPrimary)
                             .frame(width: 26, height: 26)
-                            .background(Color(hex: "#0A84FF"), in: Circle())
+                            .background(AppColors.primary, in: Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(AppStrings.Player.expandEPGPreviewToFullscreen)
@@ -202,7 +202,7 @@ public struct LiveEPGMiniPreviewView: View {
         .frame(width: 280)
         .background(
             ZStack {
-                Color(hex: "#0C0C10").opacity(0.92)
+                AppColors.background.opacity(0.92)
                 Rectangle().fill(.ultraThinMaterial)
             }
         )
@@ -212,9 +212,9 @@ public struct LiveEPGMiniPreviewView: View {
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color(hex: "#0A84FF").opacity(0.65),
-                            Color.white.opacity(0.2),
-                            Color.purple.opacity(0.3),
+                            AppColors.primary.opacity(0.65),
+                            AppColors.borderSubtle,
+                            AppColors.premium.opacity(0.3),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -222,7 +222,7 @@ public struct LiveEPGMiniPreviewView: View {
                     lineWidth: 1.5
                 )
         )
-        .shadow(color: Color.black.opacity(0.55), radius: 16, x: 0, y: 8)
+        .shadow(color: AppColors.oledBlack.opacity(0.55), radius: 16, x: 0, y: 8)
         .onAppear {
             isPulsing = true
         }
@@ -230,20 +230,20 @@ public struct LiveEPGMiniPreviewView: View {
 
     private var fallbackLogo: some View {
         Image(systemName: "tv.fill")
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.4))
+            .font(AppFonts.caption)
+            .foregroundStyle(AppColors.textSecondary)
     }
 
     private var videoPlaceholder: some View {
         ZStack {
-            Color.black
+            AppColors.oledBlack
             VStack(spacing: 6) {
                 Image(systemName: "tv")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.white.opacity(0.3))
+                    .font(AppFonts.titleLarge)
+                    .foregroundStyle(AppColors.textSecondary)
                 Text("Önizleme Başlatılıyor")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(AppFonts.captionSmall)
+                    .foregroundStyle(AppColors.textSecondary)
             }
         }
     }
@@ -264,10 +264,10 @@ public struct LiveEPGMiniPreviewView: View {
         }()
 
         return Text(text)
-            .font(.system(size: 9, weight: .heavy, design: .rounded))
-            .foregroundStyle(Color(hex: "#0A84FF"))
+            .font(AppFonts.captionSmall.weight(.heavy))
+            .foregroundStyle(AppColors.primary)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(Color(hex: "#0A84FF").opacity(0.16), in: RoundedRectangle(cornerRadius: 4))
+            .background(AppColors.primary.opacity(0.16), in: RoundedRectangle(cornerRadius: 4))
     }
 }

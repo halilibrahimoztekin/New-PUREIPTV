@@ -13,92 +13,118 @@ struct FavoriteChannelListSwitcher: View {
     @Bindable var store: StoreOf<LiveTVFeature>
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Button {
-                    store.send(.favoriteListSelected(nil))
-                } label: {
-                    Text(AppStrings.Common.favorites)
-                        .lineLimit(1)
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 8)
+        LiquidGlassContainer(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
                     #if os(tvOS)
-                        .frame(minHeight: 44)
+                        Button {
+                            store.send(.favoriteListSelected(nil))
+                        } label: {
+                            Text(AppStrings.Common.favorites)
+                                .lineLimit(1)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 8)
+                                .frame(minHeight: 44)
+                                .background(isDefaultSelected ? AppColors.primary : AppColors.surfaceSecondary, in: Capsule())
+                        }
+                        .accessibilityLabel(AppStrings.Common.favorites)
+                        .accessibilityAddTraits(isDefaultSelected ? .isSelected : [])
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isDefaultSelected))
+                    #else
+                        LiquidGlassPill(
+                            title: AppStrings.Common.favorites,
+                            icon: "heart.fill",
+                            isSelected: isDefaultSelected,
+                            tint: AppColors.primary
+                        ) {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.favoriteListSelected(nil))
+                        }
+                        .accessibilityLabel(AppStrings.Common.favorites)
+                        .accessibilityAddTraits(isDefaultSelected ? .isSelected : [])
                     #endif
-                        .background(isDefaultSelected ? Color.accentColor : Color.white.opacity(0.1), in: Capsule())
-                }
-                .accessibilityLabel(AppStrings.Common.favorites)
-                .accessibilityAddTraits(isDefaultSelected ? .isSelected : [])
-                #if os(tvOS)
-                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isDefaultSelected))
-                #else
-                    .buttonStyle(.plain)
-                #endif
 
-                ForEach(store.favoriteLists) { list in
-                    let isSelected = store.selectedFavoriteListID == list.id && store.isFavoriteListMode
-                    Button {
-                        store.send(.favoriteListSelected(list.id))
-                    } label: {
-                        Text(list.name)
-                            .lineLimit(1)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 8)
+                    ForEach(store.favoriteLists) { list in
+                        let isSelected = store.selectedFavoriteListID == list.id && store.isFavoriteListMode
+                        #if os(tvOS)
+                            Button {
+                                store.send(.favoriteListSelected(list.id))
+                            } label: {
+                                Text(list.name)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 13)
+                                    .padding(.vertical, 8)
+                                    .frame(minHeight: 44)
+                                    .background(isSelected ? AppColors.primary : AppColors.surfaceSecondary, in: Capsule())
+                            }
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
+                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+                        #else
+                            LiquidGlassPill(
+                                title: list.name,
+                                isSelected: isSelected,
+                                tint: AppColors.primary
+                            ) {
+                                HapticManager.shared.trigger(.light)
+                                store.send(.favoriteListSelected(list.id))
+                            }
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        #endif
+                    }
+
+                    if store.isFavoriteListMode, !store.isChannelSelectionMode {
+                        Picker(AppStrings.LiveTV.sortTitle, selection: Binding(
+                            get: { store.favoriteSortMode },
+                            set: { store.send(.setFavoriteSortMode($0)) }
+                        )) {
+                            ForEach(FavoriteChannelSortMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityHint(AppStrings.Favorites.orderingDescription)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
                         #if os(tvOS)
                             .frame(minHeight: 44)
+                            .background(AppColors.surfaceSecondary, in: Capsule())
+                            .tvFocusEffect(shape: .capsule)
+                        #else
+                            .liquidGlass(shape: .capsule, isInteractive: true)
                         #endif
-                            .background(isSelected ? Color.accentColor : Color.white.opacity(0.1), in: Capsule())
                     }
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    #if os(tvOS)
-                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
-                    #else
-                        .buttonStyle(.plain)
-                    #endif
-                }
 
-                if store.isFavoriteListMode, !store.isChannelSelectionMode {
-                    Picker(AppStrings.LiveTV.sortTitle, selection: Binding(
-                        get: { store.favoriteSortMode },
-                        set: { store.send(.setFavoriteSortMode($0)) }
-                    )) {
-                        ForEach(FavoriteChannelSortMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                    #if os(tvOS)
+                        Button {
+                            store.send(.favoriteListManagementTapped)
+                        } label: {
+                            Label(AppStrings.LiveTV.manageFavoriteLists, systemImage: "slider.horizontal.3")
+                                .font(AppFonts.captionSemibold)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 8)
+                                .frame(minHeight: 44)
+                                .background(AppColors.surfaceSecondary, in: Capsule())
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .accessibilityHint(AppStrings.Favorites.orderingDescription)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    #if os(tvOS)
-                        .frame(minHeight: 44)
-                    #endif
-                        .background(Color.white.opacity(0.1), in: Capsule())
-                    #if os(tvOS)
-                        .tvFocusEffect(shape: .capsule)
+                        .accessibilityHint(AppStrings.LiveTV.manageFavoriteListsHint)
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
+                    #else
+                        Button {
+                            HapticManager.shared.trigger(.light)
+                            store.send(.favoriteListManagementTapped)
+                        } label: {
+                            Label(AppStrings.LiveTV.manageFavoriteLists, systemImage: "slider.horizontal.3")
+                                .font(AppFonts.captionSemibold)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                        }
+                        .liquidGlass(shape: .capsule, isInteractive: true)
+                        .buttonStyle(.plain)
+                        .accessibilityHint(AppStrings.LiveTV.manageFavoriteListsHint)
                     #endif
                 }
-
-                Button {
-                    store.send(.favoriteListManagementTapped)
-                } label: {
-                    Label(AppStrings.LiveTV.manageFavoriteLists, systemImage: "slider.horizontal.3")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 8)
-                    #if os(tvOS)
-                        .frame(minHeight: 44)
-                    #endif
-                        .background(Color.white.opacity(0.1), in: Capsule())
-                }
-                .accessibilityHint(AppStrings.LiveTV.manageFavoriteListsHint)
-                #if os(tvOS)
-                    .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: false))
-                #else
-                    .buttonStyle(.plain)
-                #endif
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
         #if os(tvOS)
         .focusSection()

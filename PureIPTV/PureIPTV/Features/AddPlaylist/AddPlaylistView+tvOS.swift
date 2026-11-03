@@ -33,8 +33,8 @@
 
                 EllipticalGradient(
                     colors: [
-                        Color(hex: "#0A84FF").opacity(0.1),
-                        Color(hex: "#BF5AF2").opacity(0.05),
+                        AppColors.primary.opacity(0.1),
+                        AppColors.premium.opacity(0.05),
                         Color.clear,
                     ],
                     center: .init(x: 0.5, y: 0.2),
@@ -52,17 +52,17 @@
                         PureMaterialLogo(size: 120, showGlow: true)
 
                         Text(AppStrings.Splash.appName)
-                            .font(.system(size: 52, weight: .heavy))
-                            .foregroundStyle(Color(hex: "#E4E1E7"))
+                            .font(AppFonts.displayLarge)
+                            .foregroundStyle(AppColors.onSurface)
                             .tracking(-1)
 
                         Text(AppStrings.AddPlaylist.title)
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.7))
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.7))
 
                         Text(AppStrings.AddPlaylist.connectWith)
-                            .font(.system(size: 24, weight: .regular))
-                            .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.5))
+                            .font(AppFonts.bodyLarge)
+                            .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.5))
                             .lineSpacing(4)
 
                         Spacer()
@@ -105,10 +105,10 @@
                             store.send(.qrTransferTapped)
                         } label: {
                             Label("iPhone ile QR üzerinden aktar", systemImage: "qrcode")
-                                .font(.system(size: 22, weight: .semibold))
+                                .font(AppFonts.titleSmall)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 64)
-                                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                                .background(AppColors.borderSubtle, in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(TVFocusButtonStyle())
                         .focused($focusedField, equals: .qrTransfer)
@@ -138,14 +138,14 @@
                         store.send(.playlistTypeChanged(type))
                     } label: {
                         Text(type.displayName)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(store.playlistType == type ? Color.white : Color(hex: "#C0C6D6").opacity(0.5))
+                            .font(AppFonts.titleSmall)
+                            .foregroundStyle(store.playlistType == type ? Color.white : AppColors.onSurfaceVariant.opacity(0.5))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background {
                                 if store.playlistType == type {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(Color(hex: "#0A84FF"))
+                                        .fill(AppColors.primary)
                                 } else {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                                         .fill(Color.white.opacity(0.06))
@@ -162,7 +162,7 @@
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(AppColors.borderSubtle, lineWidth: 1)
                     )
             )
             .focusSection()
@@ -220,11 +220,11 @@
             VStack(alignment: .leading, spacing: 16) {
                 if let pin = store.plexPIN {
                     Text("Open plex.tv/link and enter this code")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Color(hex: "#C0C6D6"))
+                        .font(AppFonts.titleSmall.weight(.medium))
+                        .foregroundStyle(AppColors.onSurfaceVariant)
                     Link(pin.code, destination: pin.signInURL)
                         .font(.system(size: 32, weight: .bold, design: .monospaced))
-                        .tint(Color(hex: "#E5A00D"))
+                        .tint(AppColors.amber)
                         .focused($focusedField, equals: .plexPINLink)
                 }
                 ForEach(store.discoveredPlexServers) { server in
@@ -239,10 +239,10 @@
                                 Image(systemName: "checkmark.circle.fill")
                             }
                         }
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(AppFonts.headline)
+                        .foregroundStyle(AppColors.textPrimary)
                         .padding(18)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppColors.borderSubtle, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(TVFocusButtonStyle())
                 }
@@ -264,22 +264,22 @@
         private func tvErrorBanner(message: String) -> some View {
             HStack(spacing: 14) {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(Color(hex: "#FF453A"))
-                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(AppColors.destructive)
+                    .font(AppFonts.headline)
 
                 Text(message)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(Color(hex: "#E4E1E7"))
+                    .font(AppFonts.titleSmall.weight(.medium))
+                    .foregroundStyle(AppColors.onSurface)
 
                 Spacer()
             }
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(hex: "#FF453A").opacity(0.14))
+                    .fill(AppColors.destructive.opacity(0.14))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color(hex: "#FF453A").opacity(0.35), lineWidth: 1)
+                            .stroke(AppColors.destructive.opacity(0.35), lineWidth: 1)
                     )
             )
         }
@@ -299,9 +299,9 @@
                     } else {
                         HStack(spacing: 12) {
                             Image(systemName: "play.fill")
-                                .font(.system(size: 20, weight: .bold))
+                                .font(AppFonts.bodyBold)
                             Text(AppStrings.AddPlaylist.connect)
-                                .font(.system(size: 28, weight: .bold))
+                                .font(AppFonts.displayMedium)
                         }
                         .foregroundStyle(.white)
                     }
@@ -313,12 +313,12 @@
                         .fill(
                             store.canConnect && !store.isLoading
                                 ? LinearGradient(
-                                    colors: [Color(hex: "#0A84FF"), Color(hex: "#0060CC")],
+                                    colors: [AppColors.primary, AppColors.primaryDark],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                                 : LinearGradient(
-                                    colors: [Color(hex: "#1F1F23"), Color(hex: "#1F1F23")],
+                                    colors: [AppColors.surfaceSecondary, AppColors.surfaceSecondary],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -344,8 +344,8 @@
         var body: some View {
             HStack(spacing: 16) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(isFocused ? Color(hex: "#0A84FF") : Color(hex: "#C0C6D6").opacity(0.5))
+                    .font(AppFonts.titleSmall.weight(.medium))
+                    .foregroundStyle(isFocused ? AppColors.primary : AppColors.onSurfaceVariant.opacity(0.5))
                     .frame(width: 30)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
 
@@ -356,20 +356,20 @@
                         TextField(placeholder, text: $text)
                     }
                 }
-                .font(.system(size: 26))
-                .foregroundStyle(Color(hex: "#E4E1E7"))
-                .tint(Color(hex: "#0A84FF"))
+                .font(AppFonts.title)
+                .foregroundStyle(AppColors.onSurface)
+                .tint(AppColors.primary)
                 .focused($isFocused)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isFocused ? Color(hex: "#0A84FF").opacity(0.08) : Color.white.opacity(0.05))
+                    .fill(isFocused ? AppColors.primary.opacity(0.08) : AppColors.borderSubtle)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(
-                                isFocused ? Color(hex: "#0A84FF").opacity(0.6) : Color.white.opacity(0.08),
+                                isFocused ? AppColors.primary.opacity(0.6) : AppColors.borderSubtle,
                                 lineWidth: isFocused ? 2 : 1
                             )
                     )
@@ -390,7 +390,7 @@
             configuration.label
                 .scaleEffect(isFocused ? 1.04 : 1.0)
                 .shadow(
-                    color: Color(hex: "#0A84FF").opacity(isFocused ? 0.5 : 0),
+                    color: AppColors.primary.opacity(isFocused ? 0.5 : 0),
                     radius: 16, x: 0, y: 4
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)

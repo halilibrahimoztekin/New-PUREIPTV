@@ -79,7 +79,7 @@ import SwiftUI
                     ZStack(alignment: .bottom) {
                         // Track background
                         Capsule()
-                            .fill(Color.white.opacity(0.18))
+                            .fill(AppColors.glassBorder)
                             .frame(width: 8)
 
                         // Active fill
@@ -87,8 +87,8 @@ import SwiftUI
                             .fill(
                                 LinearGradient(
                                     colors: osdType.isVolume
-                                        ? [Color(hex: "#0A84FF"), Color(hex: "#5E5CE6")]
-                                        : [Color(hex: "#FFD60A"), Color(hex: "#FF9F0A")],
+                                        ? [AppColors.primary, AppColors.purpleAccent]
+                                        : [AppColors.warningGold, AppColors.amber],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
@@ -102,7 +102,7 @@ import SwiftUI
 
                 // Percentage Badge
                 Text("\(osdType.percentage)%")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppFonts.captionBold.monospacedDigit())
                     .monospacedDigit()
                     .foregroundColor(.white)
             }

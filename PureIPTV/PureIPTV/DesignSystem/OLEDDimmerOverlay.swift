@@ -31,7 +31,7 @@ public struct OLEDDimmerOverlay: View {
                         HStack(spacing: 8) {
                             Image(systemName: "moon.stars.fill")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color(hex: "#5E5CE6"))
+                                .foregroundStyle(AppColors.purpleAccent)
 
                             Text(AppStrings.Player.oledDarkRoomMode)
                                 .font(.system(size: 13, weight: .medium))

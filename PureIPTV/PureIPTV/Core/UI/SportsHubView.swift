@@ -133,7 +133,7 @@ public struct SportsHubView: View {
         }
         .padding(14)
         .frame(width: 240)
-        .background(Color(hex: "#1A1A22"), in: RoundedRectangle(cornerRadius: 16))
+        .background(AppColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(match.isLiveNow ? Color.red.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1)

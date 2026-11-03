@@ -41,7 +41,7 @@ public struct ChannelCardView: View {
             ZStack(alignment: .bottomLeading) {
                 // ── Background & Obsidian Surface ──────────────────
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#16161C"))
+                    .fill(AppColors.surfaceContainer)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.white.opacity(0.04))
@@ -50,7 +50,7 @@ public struct ChannelCardView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(
                                 isSelected
-                                    ? Color(hex: "#0A84FF").opacity(0.8)
+                                    ? AppColors.primary.opacity(0.8)
                                     : Color.white.opacity(0.1),
                                 lineWidth: isSelected ? 2 : 1
                             )
@@ -100,22 +100,18 @@ public struct ChannelCardView: View {
                                     .font(.system(size: 11, weight: .bold, design: .rounded))
                                 #endif
                             #endif
-                                .foregroundStyle(Color(hex: "#64D2FF"))
+                                .foregroundStyle(AppColors.sky)
                         }
                         Text(presentationName ?? channel.cleanTitle)
                     }
                     #if os(tvOS)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppFonts.titleSmall)
                     #else
-                        #if os(tvOS)
-                            .font(.system(size: 18, weight: .semibold))
-                        #else
-                            .font(.system(size: 13, weight: .semibold))
-                        #endif
+                    .font(AppFonts.caption.weight(.semibold))
                     #endif
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
 
                     Spacer(minLength: 4)
 
@@ -146,7 +142,7 @@ public struct ChannelCardView: View {
             #endif
                 .scaleEffect(isSelected ? 1.02 : 1.0)
                 .shadow(
-                    color: isSelected ? Color(hex: "#0A84FF").opacity(0.4) : .black.opacity(0.2),
+                    color: isSelected ? AppColors.primary.opacity(0.4) : .black.opacity(0.2),
                     radius: isSelected ? 12 : 8, x: 0, y: 4
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -169,10 +165,10 @@ public struct ChannelCardView: View {
 private struct ChannelLogoPlaceholder: View {
     var body: some View {
         ZStack {
-            Color(hex: "#2C2C30")
+            AppColors.surfaceElevated
             Image(systemName: "tv.fill")
-                .font(.system(size: 22, weight: .light))
-                .foregroundStyle(Color(hex: "#C0C6D6").opacity(0.25))
+                .font(AppFonts.titleSmall.weight(.light))
+                .foregroundStyle(AppColors.onSurfaceVariant.opacity(0.25))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .shimmeringPlaceholder(isLoading: true)
@@ -201,12 +197,12 @@ public struct CategoryRowView: View {
             HStack(spacing: 10) {
                 // Selection indicator
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(isSelected ? Color(hex: "#0A84FF") : Color.clear)
+                    .fill(isSelected ? AppColors.primary : Color.clear)
                     .frame(width: 3, height: 20)
 
                 Text(category.name)
-                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color(hex: "#E4E1E7") : Color(hex: "#C0C6D6").opacity(0.65))
+                    .font(AppFonts.bodySmall.weight(isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? AppColors.onSurface : AppColors.onSurfaceVariant.opacity(0.65))
                     .lineLimit(1)
 
                 Spacer()
@@ -215,7 +211,7 @@ public struct CategoryRowView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color(hex: "#0A84FF").opacity(0.1) : Color.clear)
+                    .fill(isSelected ? AppColors.primary.opacity(0.1) : Color.clear)
             )
         }
         .buttonStyle(.fluidScale)

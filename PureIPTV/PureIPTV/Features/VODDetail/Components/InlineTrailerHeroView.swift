@@ -45,25 +45,25 @@ public struct InlineTrailerHeroView: View {
                                     kenBurnsZoom = true
                                 }
                         case .empty:
-                            Rectangle().fill(Color(hex: "#1A1A24")).shimmeringPlaceholder(isLoading: true)
+                            Rectangle().fill(AppColors.surfaceSecondary).shimmeringPlaceholder(isLoading: true)
                         case .failure:
-                            Rectangle().fill(Color(hex: "#1A1A24"))
+                            Rectangle().fill(AppColors.surfaceSecondary)
                         @unknown default:
-                            Rectangle().fill(Color(hex: "#1A1A24"))
+                            Rectangle().fill(AppColors.surfaceSecondary)
                         }
                     }
                 } else {
-                    Rectangle().fill(Color(hex: "#1A1A24"))
+                    Rectangle().fill(AppColors.surfaceSecondary)
                 }
             }
 
             // Cinematic Vignette & Bottom Gradient Fading to Screen Background
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.35), location: 0),
+                    .init(color: AppColors.oledBlack.opacity(0.35), location: 0),
                     .init(color: .clear, location: 0.35),
-                    .init(color: Color(hex: "#0F0F13").opacity(0.75), location: 0.75),
-                    .init(color: Color(hex: "#0F0F13"), location: 1.0),
+                    .init(color: AppColors.background.opacity(0.75), location: 0.75),
+                    .init(color: AppColors.background, location: 1.0),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

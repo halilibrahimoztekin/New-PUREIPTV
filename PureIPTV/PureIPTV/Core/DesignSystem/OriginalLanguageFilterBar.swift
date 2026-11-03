@@ -60,7 +60,7 @@ public struct OriginalLanguageFilterBar: View {
             .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.75))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(isSelected ? Color(hex: "#26314A") : Color.black.opacity(0.35), in: Capsule())
+            .background(isSelected ? AppColors.surfaceElevated : AppColors.glassPlate, in: Capsule())
             .overlay(Capsule().stroke(isSelected ? Color.accentColor : Color.white.opacity(0.12), lineWidth: 1))
         }
         #if os(tvOS)

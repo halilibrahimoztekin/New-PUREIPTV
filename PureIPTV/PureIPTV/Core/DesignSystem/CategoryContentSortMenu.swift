@@ -36,7 +36,7 @@ struct CategoryContentSortMenu: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .frame(minHeight: 44)
-                .background(Color(hex: "#1F1F23"), in: Capsule())
+                .background(AppColors.surfaceSecondary, in: Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
         }
         #if os(tvOS)

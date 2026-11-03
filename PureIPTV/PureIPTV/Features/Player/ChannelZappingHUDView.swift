@@ -92,11 +92,11 @@ public struct ChannelZappingHUDView: View {
 
                     if let q = item.cleanedMetadata.detectedQuality {
                         Text(q.rawValue)
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundColor(Color(hex: q.badgeColorHex))
+                            .font(AppFonts.captionSmall.weight(.heavy))
+                            .foregroundColor(q.badgeColor)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(Color(hex: q.badgeColorHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                            .background(q.badgeColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
                     }
 
                     if let country = item.cleanedMetadata.detectedCountry {

@@ -180,7 +180,16 @@ public struct SearchFeature: Sendable {
         }
 
         public var badgeColor: Color {
-            Color(hex: badgeColorHex)
+            switch self {
+            case .all, .live: AppColors.primary
+            case .vod: AppColors.premium
+            case .series: AppColors.amber
+            case .uhd4k: AppColors.warningGold
+            case .epgMatches: AppColors.success
+            case .people: AppColors.live
+            case .programs: AppColors.cyan
+            case .downloads: AppColors.success
+            }
         }
     }
 
@@ -229,6 +238,22 @@ public struct SearchFeature: Sendable {
             self.title = title
             self.icon = icon
             self.hexColor = hexColor
+        }
+
+        public var color: Color {
+            switch id {
+            case "spor": AppColors.amber
+            case "sinema": AppColors.live
+            case "haber": AppColors.primary
+            case "belgesel": AppColors.success
+            case "cocuk": AppColors.warningGold
+            case "muzik": AppColors.premium
+            case "4k": AppColors.cyan
+            case "aksiyon": AppColors.live
+            case "komedi": AppColors.cyan
+            case "dizi": AppColors.purpleAccent
+            default: AppColors.primary
+            }
         }
 
         public static let defaults: [QuickSearchTag] = [

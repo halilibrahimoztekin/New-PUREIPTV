@@ -88,13 +88,13 @@ public struct NowNextEPGPeekView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "#0A84FF"), Color(hex: "#00F5D4")],
+                                        colors: [AppColors.primary, AppColors.neonTeal],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                                 .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(progress))), height: isCompact ? 3.5 : 4.5)
-                                .shadow(color: Color(hex: "#0A84FF").opacity(0.5), radius: 4, x: 0, y: 0)
+                                .shadow(color: AppColors.primary.opacity(0.5), radius: 4, x: 0, y: 0)
                         }
                     }
                     .frame(height: isCompact ? 3.5 : 4.5)
@@ -102,10 +102,10 @@ public struct NowNextEPGPeekView: View {
                     if remainingMins > 0 {
                         Text(AppStrings.Player.minutesRemaining(remainingMins))
                             .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(hex: "#00F5D4"))
+                            .foregroundStyle(AppColors.neonTeal)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1.5)
-                            .background(Color(hex: "#00F5D4").opacity(0.15), in: Capsule())
+                            .background(AppColors.neonTeal.opacity(0.15), in: Capsule())
                     }
                 }
             }
@@ -128,7 +128,7 @@ public struct NowNextEPGPeekView: View {
                 .trim(from: 0.0, to: CGFloat(min(1.0, max(0.0, progress))))
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: "#0A84FF"), Color(hex: "#00F5D4")],
+                        colors: [AppColors.primary, AppColors.neonTeal],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -140,7 +140,7 @@ public struct NowNextEPGPeekView: View {
             // Center Percentage
             Text("\(percent)%")
                 .font(.system(size: isCompact ? 8 : 10, weight: .heavy, design: .monospaced))
-                .foregroundStyle(Color(hex: "#00F5D4"))
+                .foregroundStyle(AppColors.neonTeal)
         }
         .frame(width: size, height: size)
     }
@@ -152,14 +152,14 @@ public struct NowNextEPGPeekView: View {
             // "SONRAKİ" Badge
             Text(AppStrings.Player.nextLabel)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
-                .foregroundStyle(Color(hex: "#BF5AF2"))
+                .foregroundStyle(AppColors.premium)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color(hex: "#BF5AF2").opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+                .background(AppColors.premium.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
 
             Text(program.formattedStartTime(locale: locale))
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color(hex: "#BF5AF2").opacity(0.9))
+                .foregroundStyle(AppColors.premium.opacity(0.9))
 
             Text(program.title)
                 .font(.system(size: isCompact ? 12 : 13, weight: .medium))

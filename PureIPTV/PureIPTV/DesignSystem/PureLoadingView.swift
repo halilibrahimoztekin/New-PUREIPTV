@@ -90,10 +90,10 @@ public struct PureLoadingView: View {
                 .stroke(
                     AngularGradient(
                         gradient: Gradient(colors: [
-                            Color(hex: "#00D2FF"),
-                            Color(hex: "#0A84FF"),
-                            Color(hex: "#BF5AF2"),
-                            Color(hex: "#00D2FF").opacity(0.1),
+                            AppColors.cyan,
+                            AppColors.primary,
+                            AppColors.premium,
+                            AppColors.cyan.opacity(0.1),
                         ]),
                         center: .center
                     ),
@@ -109,10 +109,10 @@ public struct PureLoadingView: View {
                 .stroke(
                     AngularGradient(
                         gradient: Gradient(colors: [
-                            Color(hex: "#00D2FF"),
-                            Color(hex: "#0A84FF"),
-                            Color(hex: "#BF5AF2"),
-                            Color(hex: "#00D2FF").opacity(0.15),
+                            AppColors.cyan,
+                            AppColors.primary,
+                            AppColors.premium,
+                            AppColors.cyan.opacity(0.15),
                         ]),
                         center: .center
                     ),
@@ -131,8 +131,8 @@ public struct PureLoadingView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(hex: "#00D2FF"),
-                                Color(hex: "#0A84FF").opacity(0.7),
+                                AppColors.cyan,
+                                AppColors.primary.opacity(0.7),
                             ],
                             center: .center,
                             startRadius: 0,
@@ -157,7 +157,7 @@ public struct PureLoadingView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "#00D2FF"), Color(hex: "#0A84FF")],
+                            colors: [AppColors.cyan, AppColors.primary],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

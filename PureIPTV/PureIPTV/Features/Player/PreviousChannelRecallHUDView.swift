@@ -90,7 +90,7 @@ public struct PreviousChannelRecallHUDView: View {
                     #else
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(.ultraThinMaterial)
-                        Color.black.opacity(0.55)
+                        AppColors.oledBlack.opacity(0.55)
                     #endif
                 }
             )
@@ -100,8 +100,8 @@ public struct PreviousChannelRecallHUDView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color(hex: "#FF9F0A").opacity(0.6),
-                                Color.white.opacity(0.15),
+                                AppColors.amber.opacity(0.6),
+                                AppColors.borderSubtle,
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -109,8 +109,8 @@ public struct PreviousChannelRecallHUDView: View {
                         lineWidth: 1.2
                     )
             )
-            .shadow(color: Color(hex: "#FF9F0A").opacity(0.3), radius: 16, x: 0, y: 6)
-            .shadow(color: Color.black.opacity(0.6), radius: 10, x: 0, y: 4)
+            .shadow(color: AppColors.amber.opacity(0.3), radius: 16, x: 0, y: 6)
+            .shadow(color: AppColors.oledBlack.opacity(0.6), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }

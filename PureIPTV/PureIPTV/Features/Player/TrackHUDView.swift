@@ -12,13 +12,13 @@ public struct TrackHUDView: View {
     public var body: some View {
         HStack(spacing: 10) {
             Image(systemName: iconName)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(Color(hex: "#00F5D4"))
-                .shadow(color: Color(hex: "#00F5D4").opacity(0.5), radius: 6)
+                .font(AppFonts.headline)
+                .foregroundColor(AppColors.cyan)
+                .shadow(color: AppColors.cyan.opacity(0.5), radius: 6)
 
             Text(message)
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundColor(.white)
+                .font(AppFonts.bodySmall.weight(.semibold))
+                .foregroundColor(AppColors.textPrimary)
                 .lineLimit(1)
         }
         .padding(.horizontal, 16)
@@ -28,13 +28,13 @@ public struct TrackHUDView: View {
             Capsule()
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.35), Color(hex: "#00F5D4").opacity(0.3)],
+                        colors: [AppColors.borderSubtle, AppColors.cyan.opacity(0.3)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color.black.opacity(0.6), radius: 14, x: 0, y: 6)
+        .shadow(color: AppColors.oledBlack.opacity(0.6), radius: 14, x: 0, y: 6)
     }
 }

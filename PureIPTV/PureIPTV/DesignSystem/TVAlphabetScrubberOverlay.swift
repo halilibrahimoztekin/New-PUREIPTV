@@ -53,10 +53,10 @@
         private var magnifierCard: some View {
             VStack {
                 Text(currentLetter.uppercased())
-                    .font(.system(size: 68, weight: .black, design: .rounded))
+                    .font(AppFonts.displayLarge.weight(.heavy))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color.white, Color(hex: "#0A84FF")],
+                            colors: [AppColors.textPrimary, AppColors.primary],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -64,7 +64,7 @@
                     .frame(width: 124, height: 124)
                     .background(
                         ZStack {
-                            Color.black.opacity(0.85)
+                            AppColors.oledBlack.opacity(0.85)
                             Rectangle().fill(.ultraThinMaterial)
                         }
                     )
@@ -73,15 +73,15 @@
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(
                                 LinearGradient(
-                                    colors: [Color.white.opacity(0.4), Color(hex: "#0A84FF").opacity(0.3)],
+                                    colors: [AppColors.borderSubtle, AppColors.primary.opacity(0.3)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 1.5
                             )
                     )
-                    .shadow(color: Color.black.opacity(0.65), radius: 24, x: 0, y: 12)
-                    .shadow(color: Color(hex: "#0A84FF").opacity(0.4), radius: 20, x: 0, y: 0)
+                    .shadow(color: AppColors.oledBlack.opacity(0.65), radius: 24, x: 0, y: 12)
+                    .shadow(color: AppColors.primary.opacity(0.4), radius: 20, x: 0, y: 0)
                     .scaleEffect(isVisible ? 1.0 : 0.8)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: currentLetter)
             }
@@ -96,23 +96,19 @@
                     let isAvailable = availableLetters.isEmpty || availableLetters.contains(letter)
 
                     Text(letter)
-                        .font(.system(
-                            size: isSelected ? 13 : 10,
-                            weight: isSelected ? .black : (isAvailable ? .semibold : .regular),
-                            design: .rounded
-                        ))
+                        .font(isSelected ? AppFonts.captionBold : AppFonts.captionSmall)
                         .foregroundStyle(
                             isSelected
-                                ? Color.white
-                                : (isAvailable ? Color.white.opacity(0.85) : Color.white.opacity(0.22))
+                                ? AppColors.textPrimary
+                                : (isAvailable ? AppColors.textPrimary.opacity(0.85) : AppColors.textSecondary.opacity(0.4))
                         )
                         .frame(width: isSelected ? 24 : 18, height: isSelected ? 22 : 16)
                         .background(
                             Group {
                                 if isSelected {
                                     Capsule()
-                                        .fill(Color(hex: "#0A84FF"))
-                                        .shadow(color: Color(hex: "#0A84FF").opacity(0.6), radius: 6, x: 0, y: 0)
+                                        .fill(AppColors.primary)
+                                        .shadow(color: AppColors.primary.opacity(0.6), radius: 6, x: 0, y: 0)
                                 } else {
                                     Color.clear
                                 }
