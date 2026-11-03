@@ -201,29 +201,26 @@
                         .padding(.bottom, 8)
                 }
             case .continueWatching:
-                if !store.continueWatchingItems.isEmpty {
-                    featuredSection(title: AppStrings.Dashboard.continueWatching, items: store.continueWatchingItems) { item in
-                        ResumeWatchingCardView(item: item, userAgentOverride: config.userAgentOverride,
-                                               onResume: { store.send(.historySelected(item)) },
-                                               onRestart: { store.send(.restartHistorySelected(item)) },
-                                               onDelete: { store.send(.deleteHistorySelected(item)) })
-                    }
+                let continueWatching = store.continueWatchingItems
+                if !continueWatching.isEmpty {
+                    continueWatchingSection(continueWatching)
                 }
             case .favorites:
                 let favorites = store.favoriteItemsByType
+                let availability = store.favoriteMoveAvailability
                 if let items = favorites["live"], !items.isEmpty {
-                    favoriteSection(items, title: AppStrings.Dashboard.favoriteLiveTV)
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteLiveTV, moveAvailability: availability)
                 }
                 if let items = favorites["vod"], !items.isEmpty {
-                    favoriteSection(items, title: AppStrings.Dashboard.favoriteMovies)
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteMovies, moveAvailability: availability)
                 }
                 if let items = favorites["series"], !items.isEmpty {
-                    favoriteSection(items, title: AppStrings.Dashboard.favoriteSeries, showsSeriesSortControl: true)
+                    favoriteSection(items, title: AppStrings.Dashboard.favoriteSeries, showsSeriesSortControl: true, moveAvailability: availability)
                 }
                 let categorizedTypes = Set(["live", "vod", "series"])
                 let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
                 if !otherFavorites.isEmpty {
-                    favoriteSection(otherFavorites, title: AppStrings.Dashboard.myFavorites)
+                    favoriteSection(otherFavorites, title: AppStrings.Dashboard.myFavorites, moveAvailability: availability)
                 }
             case .featuredLiveTV:
                 if !store.featuredChannels.isEmpty {
@@ -625,10 +622,35 @@
             }
         }
 
+        private func continueWatchingSection(_ items: [WatchHistoryItem]) -> some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(AppStrings.Dashboard.continueWatching)
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(items, id: \.compositeID) { item in
+                            ResumeWatchingCardView(
+                                item: item,
+                                userAgentOverride: config.userAgentOverride,
+                                onResume: { store.send(.historySelected(item)) },
+                                onRestart: { store.send(.restartHistorySelected(item)) },
+                                onDelete: { store.send(.deleteHistorySelected(item)) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+
         private func favoriteSection(
             _ items: [FavoriteItem],
             title: String,
-            showsSeriesSortControl: Bool = false
+            showsSeriesSortControl: Bool = false,
+            moveAvailability: [FavoriteIdentity: Set<Int>]
         ) -> some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 12) {
@@ -652,7 +674,7 @@
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
                         ForEach(items, id: \.scopedIdentity) { item in
-                            favoriteCard(item)
+                            favoriteCard(item, moveOffsets: moveAvailability[item.scopedIdentity] ?? [])
                         }
                     }
                     .padding(.horizontal, 16)
@@ -701,10 +723,9 @@
         }
 
         @ViewBuilder
-        private func favoriteCard(_ item: FavoriteItem) -> some View {
-            let moveAvailability = store.favoriteMoveAvailability[item.scopedIdentity] ?? []
-            let canMoveEarlier = moveAvailability.contains(-1)
-            let canMoveLater = moveAvailability.contains(1)
+        private func favoriteCard(_ item: FavoriteItem, moveOffsets: Set<Int>) -> some View {
+            let canMoveEarlier = moveOffsets.contains(-1)
+            let canMoveLater = moveOffsets.contains(1)
             let mediaType = item.type.lowercased()
             let canReorder = mediaType == "vod"
                 || (mediaType == "series" && store.favoriteSeriesSortMode != .newestEpisode)

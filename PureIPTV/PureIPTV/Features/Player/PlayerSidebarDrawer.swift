@@ -81,9 +81,10 @@ public struct PlayerSidebarDrawer: View {
     // MARK: - Drawer Content
 
     private var drawerContent: some View {
-        VStack(spacing: 0) {
+        let channels = filteredChannels
+        return VStack(spacing: 0) {
             // Header
-            headerView
+            headerView(channelCount: channels.count)
 
             // Search Bar
             searchBarView
@@ -95,17 +96,17 @@ public struct PlayerSidebarDrawer: View {
                 .background(Color.white.opacity(0.12))
 
             // Channel List or Empty State
-            if filteredChannels.isEmpty {
+            if channels.isEmpty {
                 emptyStateView
             } else {
-                channelsListView
+                channelsListView(channels: channels)
             }
         }
     }
 
     // MARK: - Header
 
-    private var headerView: some View {
+    private func headerView(channelCount: Int) -> some View {
         HStack(alignment: .center, spacing: 14) {
             ZStack {
                 Circle()
@@ -130,7 +131,7 @@ public struct PlayerSidebarDrawer: View {
                 #endif
                     .foregroundStyle(.white)
 
-                let count = filteredChannels.count
+                let count = channelCount
                 HStack(spacing: 6) {
                     Text("\(count) " + "Kanal".localized)
                         .foregroundStyle(.white.opacity(0.6))
@@ -359,11 +360,19 @@ public struct PlayerSidebarDrawer: View {
 
     // MARK: - Filter Tabs (Smart Category Filter Chips)
 
+    private struct FilterChipItem: Identifiable, Equatable {
+        let filter: ChannelCategoryFilter
+        let count: Int
+        var id: String {
+            filter.id
+        }
+    }
+
     private var filterTabsView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(availableFilterChips, id: \.id) { chip in
-                    filterChipView(filter: chip)
+                ForEach(availableFilterChipItems) { chip in
+                    filterChipView(filter: chip.filter, count: chip.count)
                         .id(chip.id)
                 }
             }
@@ -379,9 +388,8 @@ public struct PlayerSidebarDrawer: View {
     }
 
     @ViewBuilder
-    private func filterChipView(filter: ChannelCategoryFilter) -> some View {
+    private func filterChipView(filter: ChannelCategoryFilter, count: Int) -> some View {
         let isSelected = selectedFilter == filter
-        let count = countForFilter(filter)
 
         Button {
             #if !os(tvOS)
@@ -501,11 +509,11 @@ public struct PlayerSidebarDrawer: View {
 
     // MARK: - Channels List
 
-    private var channelsListView: some View {
+    private func channelsListView(channels: [PlayerFeature.PlayableItem]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 6) {
-                    ForEach(Array(filteredChannels.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(channels.enumerated()), id: \.element.id) { index, item in
                         channelRow(item: item, index: index + 1)
                             .id(item.id)
                     }
@@ -522,7 +530,7 @@ public struct PlayerSidebarDrawer: View {
                 guard let restorationID = preferredChannelFocusID else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     guard focusedItemID == restorationID,
-                          filteredChannels.contains(where: { $0.id == restorationID })
+                          channels.contains(where: { $0.id == restorationID })
                     else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo(restorationID, anchor: .center)
@@ -767,77 +775,103 @@ public struct PlayerSidebarDrawer: View {
 
     // MARK: - Filter Logic & Counts
 
-    private var availableFilterChips: [ChannelCategoryFilter] {
+    private var availableFilterChipItems: [FilterChipItem] {
         guard let list = store.playlist, !list.isEmpty else {
-            return [.all]
+            return [FilterChipItem(filter: .all, count: 1)]
         }
 
-        var chips: [ChannelCategoryFilter] = [.all]
+        var altCount = 0
+        var sportsCount = 0
+        var newsCount = 0
+        var cinemaCount = 0
+        var docCount = 0
+        var kidsCount = 0
+        var uhdCount = 0
+        var musicCount = 0
 
-        let hasAlternatives = list.contains { candidate in
-            candidate.isLive && candidate.id != store.item.id
-                && PlayerFeature.areAlternativeSources(candidate.title, store.item.title)
+        var customCategoryCounts: [String: Int] = [:]
+        var orderedCustomCategories: [String] = []
+
+        let currentItemID = store.item.id
+        let currentItemTitle = store.item.title
+
+        for channel in list {
+            if channel.isLive, channel.id != currentItemID, PlayerFeature.areAlternativeSources(channel.title, currentItemTitle) {
+                altCount += 1
+            }
+            if ChannelCategoryFilter.sports.matches(title: channel.title, categoryID: channel.categoryID) {
+                sportsCount += 1
+            }
+            if ChannelCategoryFilter.news.matches(title: channel.title, categoryID: channel.categoryID) {
+                newsCount += 1
+            }
+            if ChannelCategoryFilter.cinema.matches(title: channel.title, categoryID: channel.categoryID) {
+                cinemaCount += 1
+            }
+            if ChannelCategoryFilter.documentaries.matches(title: channel.title, categoryID: channel.categoryID) {
+                docCount += 1
+            }
+            if ChannelCategoryFilter.kids.matches(title: channel.title, categoryID: channel.categoryID) {
+                kidsCount += 1
+            }
+            if ChannelCategoryFilter.ultraHD4K.matches(title: channel.title, categoryID: channel.categoryID) {
+                uhdCount += 1
+            }
+            if ChannelCategoryFilter.music.matches(title: channel.title, categoryID: channel.categoryID) {
+                musicCount += 1
+            }
+
+            if let cat = channel.categoryID, !cat.isEmpty {
+                if customCategoryCounts[cat] == nil {
+                    if orderedCustomCategories.count < 15 {
+                        orderedCustomCategories.append(cat)
+                    }
+                }
+                customCategoryCounts[cat, default: 0] += 1
+            }
         }
-        if hasAlternatives {
-            chips.append(.alternatives)
+
+        var result: [FilterChipItem] = [
+            FilterChipItem(filter: .all, count: list.count),
+        ]
+
+        if altCount > 0 {
+            result.append(FilterChipItem(filter: .alternatives, count: altCount))
         }
 
         if !store.zappingHistory.isEmpty {
-            chips.append(.history)
+            result.append(FilterChipItem(filter: .history, count: store.zappingHistory.count))
         }
 
-        // Smart Category candidates
-        let smartCandidates: [ChannelCategoryFilter] = [
-            .sports,
-            .news,
-            .cinema,
-            .documentaries,
-            .kids,
-            .ultraHD4K,
-            .music,
-        ]
+        if sportsCount > 0 {
+            result.append(FilterChipItem(filter: .sports, count: sportsCount))
+        }
+        if newsCount > 0 {
+            result.append(FilterChipItem(filter: .news, count: newsCount))
+        }
+        if cinemaCount > 0 {
+            result.append(FilterChipItem(filter: .cinema, count: cinemaCount))
+        }
+        if docCount > 0 {
+            result.append(FilterChipItem(filter: .documentaries, count: docCount))
+        }
+        if kidsCount > 0 {
+            result.append(FilterChipItem(filter: .kids, count: kidsCount))
+        }
+        if uhdCount > 0 {
+            result.append(FilterChipItem(filter: .ultraHD4K, count: uhdCount))
+        }
+        if musicCount > 0 {
+            result.append(FilterChipItem(filter: .music, count: musicCount))
+        }
 
-        for smart in smartCandidates {
-            let matchesAny = list.contains { smart.matches(title: $0.title, categoryID: $0.categoryID) }
-            if matchesAny {
-                chips.append(smart)
+        for cat in orderedCustomCategories {
+            if let count = customCategoryCounts[cat], count > 0 {
+                result.append(FilterChipItem(filter: .custom(cat), count: count))
             }
         }
 
-        // Distinct custom M3U categories
-        let rawCategories = list.compactMap(\.categoryID).filter { !$0.isEmpty }
-        var uniqueRaw: [String] = []
-        for cat in rawCategories where !uniqueRaw.contains(cat) {
-            uniqueRaw.append(cat)
-            // Limit to top 15 distinct categories to avoid drawer tab clutter
-            if uniqueRaw.count >= 15 {
-                break
-            }
-        }
-
-        for cat in uniqueRaw {
-            chips.append(.custom(cat))
-        }
-
-        return chips
-    }
-
-    private func countForFilter(_ filter: ChannelCategoryFilter) -> Int {
-        guard let list = store.playlist else { return filter == .all ? 1 : 0 }
-
-        switch filter {
-        case .all:
-            return list.count
-        case .history:
-            return store.zappingHistory.count
-        case .alternatives:
-            return list.filter {
-                $0.isLive && $0.id != store.item.id
-                    && PlayerFeature.areAlternativeSources($0.title, store.item.title)
-            }.count
-        default:
-            return list.filter { filter.matches(title: $0.title, categoryID: $0.categoryID) }.count
-        }
+        return result
     }
 
     private var filteredChannels: [PlayerFeature.PlayableItem] {

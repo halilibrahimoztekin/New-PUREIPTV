@@ -358,8 +358,6 @@ public struct PlayerEPGTimelineCard: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        AppFormatters.timeShort(date)
     }
 }

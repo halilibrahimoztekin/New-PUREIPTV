@@ -2277,9 +2277,7 @@ public struct EPGTimelineView: View {
     }
 
     private func formatDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE d"
-        return formatter.string(from: date)
+        AppFormatters.dayShort(date)
     }
 
     // MARK: - Renk Kodlu EPG Kategorileri (Madde #28)

@@ -52,6 +52,25 @@ public struct CleanedChannelMetadata: Equatable, Sendable {
 
 /// Ultra-fast regex-based channel title decluttering & metadata extraction engine.
 public nonisolated enum ChannelNameCleaner: Sendable {
+    // MARK: - Memoization Cache
+
+    private final class CacheHolder: @unchecked Sendable {
+        static let shared = CacheHolder()
+        let lock = NSLock()
+        let cache = NSCache<NSString, CachedMetadataWrapper>()
+
+        init() {
+            cache.countLimit = 3000
+        }
+    }
+
+    private final class CachedMetadataWrapper {
+        let metadata: CleanedChannelMetadata
+        init(_ metadata: CleanedChannelMetadata) {
+            self.metadata = metadata
+        }
+    }
+
     // MARK: - Regex Patterns
 
     private static func createRegex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
@@ -132,6 +151,15 @@ public nonisolated enum ChannelNameCleaner: Sendable {
                 hasStrippedClutter: false
             )
         }
+
+        let nsTitle = trimmed as NSString
+        let holder = CacheHolder.shared
+        holder.lock.lock()
+        if let cached = holder.cache.object(forKey: nsTitle) {
+            holder.lock.unlock()
+            return cached.metadata
+        }
+        holder.lock.unlock()
 
         var workingTitle = trimmed
         var detectedQuality: ChannelQualityBadge?
@@ -259,7 +287,7 @@ public nonisolated enum ChannelNameCleaner: Sendable {
         let finalTitle = cleaned.isEmpty ? trimmed : cleaned
         let hasStripped = finalTitle != trimmed
 
-        return CleanedChannelMetadata(
+        let result = CleanedChannelMetadata(
             originalTitle: trimmed,
             cleanTitle: finalTitle,
             detectedQuality: detectedQuality,
@@ -268,6 +296,12 @@ public nonisolated enum ChannelNameCleaner: Sendable {
             isHEVC: isHEVC,
             hasStrippedClutter: hasStripped
         )
+
+        holder.lock.lock()
+        holder.cache.setObject(CachedMetadataWrapper(result), forKey: nsTitle)
+        holder.lock.unlock()
+
+        return result
     }
 
     /// Convenience method returning just the cleaned channel title string.

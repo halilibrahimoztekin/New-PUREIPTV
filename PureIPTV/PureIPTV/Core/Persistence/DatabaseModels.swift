@@ -139,6 +139,10 @@ public final class WatchHistoryItem {
         self.profileID = profileID
         self.removedAt = removedAt
     }
+
+    public var compositeID: String {
+        "\(type)|\(playlistID?.uuidString ?? "")|\(id)"
+    }
 }
 
 /// Stable identity for a user-hidden VOD or series across playlists.

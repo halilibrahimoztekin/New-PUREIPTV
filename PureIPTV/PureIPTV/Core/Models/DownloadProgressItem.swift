@@ -51,12 +51,9 @@ public nonisolated struct DownloadProgressItem: Equatable, Identifiable, Sendabl
     }
 
     public var formattedSize: String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        let written = formatter.string(fromByteCount: bytesWritten)
+        let written = AppFormatters.formatFileSize(bytesWritten)
         if totalBytesExpected > 0 {
-            let total = formatter.string(fromByteCount: totalBytesExpected)
+            let total = AppFormatters.formatFileSize(totalBytesExpected)
             return "\(written) / \(total)"
         } else {
             return written
@@ -64,10 +61,6 @@ public nonisolated struct DownloadProgressItem: Equatable, Identifiable, Sendabl
     }
 
     public var formattedSpeed: String {
-        guard speedBytesPerSecond.isFinite, speedBytesPerSecond > 0 else { return "" }
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB]
-        formatter.countStyle = .file
-        return "\(formatter.string(fromByteCount: Int64(min(speedBytesPerSecond, Double(Int64.max / 2)))))/s"
+        AppFormatters.formatDownloadSpeed(speedBytesPerSecond)
     }
 }

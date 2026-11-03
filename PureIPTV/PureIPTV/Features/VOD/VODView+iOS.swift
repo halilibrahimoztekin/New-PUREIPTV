@@ -152,10 +152,11 @@
         }
 
         private var categoryBar: some View {
-            VStack(spacing: 8) {
+            let categories = filteredCategories
+            return VStack(spacing: 8) {
                 if !store.categories.isEmpty {
                     CategorySearchField(text: $categorySearchQuery) {
-                        if let firstMatch = filteredCategories.first {
+                        if let firstMatch = categories.first {
                             store.send(.categorySelected(firstMatch))
                         }
                     }
@@ -163,7 +164,7 @@
 
                     ScrollViewReader { proxy in
                         Group {
-                            if filteredCategories.isEmpty {
+                            if categories.isEmpty {
                                 Text(AppStrings.Common.categoryNotFound)
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.55))
@@ -172,7 +173,7 @@
                             } else {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        ForEach(filteredCategories) { category in
+                                        ForEach(categories) { category in
                                             CategoryPill(
                                                 name: category.name,
                                                 isSelected: store.selectedCategoryID == category.id
@@ -187,7 +188,7 @@
                             }
                         }
                         .onChange(of: categorySearchQuery) { _, _ in
-                            guard let firstMatchID = filteredCategories.first?.id else { return }
+                            guard let firstMatchID = categories.first?.id else { return }
                             if reduceMotion {
                                 proxy.scrollTo(firstMatchID, anchor: .center)
                             } else {
@@ -196,7 +197,7 @@
                         }
                         .onChange(of: store.selectedCategoryID) { _, selectedID in
                             guard let selectedID,
-                                  filteredCategories.contains(where: { $0.id == selectedID })
+                                  categories.contains(where: { $0.id == selectedID })
                             else { return }
                             if reduceMotion {
                                 proxy.scrollTo(selectedID, anchor: .center)

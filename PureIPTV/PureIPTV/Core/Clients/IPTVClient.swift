@@ -304,20 +304,7 @@ public enum M3URefreshStage: Equatable, Sendable {
 }
 
 private func parseXtreamReleaseDate(_ value: String?) -> Date? {
-    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
-    if let date = ISO8601DateFormatter().date(from: value) {
-        return date
-    }
-    for format in ["yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "dd/MM/yyyy"] {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = format
-        if let date = formatter.date(from: value) {
-            return date
-        }
-    }
-    return nil
+    AppFormatters.parseXtreamReleaseDate(value)
 }
 
 private extension M3UItemDTO {
@@ -1710,43 +1697,8 @@ extension IPTVClient: DependencyKey {
                     throw lastRequestError
                 }
 
-                let formatStrings = [
-                    "yyyy-MM-dd HH:mm:ss",
-                    "yyyy-MM-dd HH:mm",
-                    "yyyyMMddHHmmss Z",
-                    "yyyyMMddHHmmss zzz",
-                    "yyyyMMddHHmmss",
-                    "yyyyMMddHHmm Z",
-                    "yyyyMMddHHmm",
-                    "yyyy-MM-dd'T'HH:mm:ssZ",
-                    "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
-                    "yyyy-MM-dd'T'HH:mm:ssXXXXX",
-                ]
-                // Xtream normally includes epoch timestamps. Avoid creating ten
-                // DateFormatter instances for every channel response in that case.
-                let needsDateFormatterFallback = response.contains {
-                    $0.startTimestamp == nil || $0.stopTimestamp == nil
-                }
-                let formatters: [DateFormatter] = needsDateFormatterFallback ? formatStrings.map { fmt in
-                    let f = DateFormatter()
-                    f.dateFormat = fmt
-                    f.locale = Locale(identifier: "en_US_POSIX")
-                    f.timeZone = TimeZone(identifier: "UTC")
-                    return f
-                } : []
-
                 let parseEPGDate: (String) -> Date? = { str in
-                    let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return nil }
-                    if let ts = Double(trimmed), ts > 1_000_000_000, ts < 2_500_000_000 {
-                        return Date(timeIntervalSince1970: ts)
-                    }
-                    for f in formatters {
-                        if let d = f.date(from: trimmed) {
-                            return d
-                        }
-                    }
-                    return nil
+                    AppFormatters.parseEPGFallbackDate(str)
                 }
 
                 let decodeBase64OrSelf: (String) -> String = { text in

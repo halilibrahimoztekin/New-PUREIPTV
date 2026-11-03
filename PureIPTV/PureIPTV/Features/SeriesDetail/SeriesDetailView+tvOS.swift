@@ -596,6 +596,8 @@
                                     .requestModifier { request in
                                         PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
                                     }
+                                    .downsampling(size: CGSize(width: 260, height: 150))
+                                    .cancelOnDisappear(true)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {
@@ -744,6 +746,8 @@
                                     .requestModifier { request in
                                         PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
                                     }
+                                    .downsampling(size: CGSize(width: 260, height: 150))
+                                    .cancelOnDisappear(true)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                             } else {

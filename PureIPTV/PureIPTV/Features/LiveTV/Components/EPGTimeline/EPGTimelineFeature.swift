@@ -105,10 +105,7 @@ private func discardEPGResponseFromPreviousSource(
 }
 
 private func epgRetryDateText(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .short
-    return formatter.string(from: date)
+    AppFormatters.dateTimeShort(date)
 }
 
 private func epgProviderRateLimitMessage(retryAfter: Date?) -> String {
@@ -197,9 +194,7 @@ public struct EPGTimelineFeature {
 
         public var lastSyncFormatted: String? {
             guard let lastSyncTimestamp else { return nil }
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            return formatter.string(from: lastSyncTimestamp)
+            return AppFormatters.timeShort(lastSyncTimestamp)
         }
 
         public var providerCooldownFormatted: String? {

@@ -47,10 +47,7 @@ public enum WatchProgressFormatter {
         } else if calendar.isDateInYesterday(date) {
             return "Dün"
         } else {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            formatter.locale = Locale(identifier: "tr_TR")
-            return formatter.localizedString(for: date, relativeTo: now)
+            return AppFormatters.relativeDate(for: date, relativeTo: now)
         }
     }
 

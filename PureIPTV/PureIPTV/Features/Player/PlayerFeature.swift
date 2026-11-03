@@ -4912,9 +4912,7 @@ public struct PlayerFeature {
             let archiveStart = program.startTime.addingTimeInterval(
                 TimeInterval(customEPGMappingClient.getCatchupTimeShift(state.item.id, state.item.config?.playlistID) * 3600)
             )
-            let startFormat = DateFormatter()
-            startFormat.dateFormat = "yyyy-MM-dd:HH-mm"
-            let startTimeString = startFormat.string(from: archiveStart)
+            let startTimeString = AppFormatters.catchupTimeString(archiveStart)
             let durationMinutes = Int(program.endTime.timeIntervalSince(program.startTime) / 60)
 
             let catchupBaseURL: URL

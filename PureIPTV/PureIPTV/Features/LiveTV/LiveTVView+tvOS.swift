@@ -290,16 +290,17 @@
                                 .focused($focusedCategory, equals: "smart-group:\(group.id)")
                                 .id("smart-group:\(group.id)")
                             }
+                            let categories = filteredCategories
                             if !store.categories.isEmpty {
                                 CategorySearchField(text: $categorySearchQuery) {
-                                    if let firstMatch = filteredCategories.first {
+                                    if let firstMatch = categories.first {
                                         store.send(.categorySelected(firstMatch))
                                     }
                                 }
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 8)
                             }
-                            if !store.categories.isEmpty, filteredCategories.isEmpty {
+                            if !store.categories.isEmpty, categories.isEmpty {
                                 Text(AppStrings.Common.categoryNotFound)
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.55))
@@ -307,7 +308,7 @@
                                     .padding(.horizontal, 24)
                                     .padding(.vertical, 12)
                             }
-                            ForEach(filteredCategories) { category in
+                            ForEach(categories) { category in
                                 categoryRow(for: category, itemCount: itemCountsByCategory[category.id])
                             }
                         }

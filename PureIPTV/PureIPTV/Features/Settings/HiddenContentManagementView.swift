@@ -387,10 +387,6 @@ public struct HiddenContentManagementView: View {
     #endif
 
     private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "tr_TR")
-        return formatter.string(from: date)
+        AppFormatters.mediumDateShortTime(date)
     }
 }

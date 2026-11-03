@@ -152,9 +152,10 @@
                             }
                             .frame(height: 280)
                         } else {
+                            let categories = filteredCategories
                             if !store.categories.isEmpty {
                                 CategorySearchField(text: $categorySearchQuery) {
-                                    if let firstMatch = filteredCategories.first {
+                                    if let firstMatch = categories.first {
                                         store.send(.categorySelected(firstMatch))
                                     }
                                 }
@@ -162,7 +163,7 @@
                                 .padding(.bottom, 10)
                             }
 
-                            if !store.categories.isEmpty, filteredCategories.isEmpty {
+                            if !store.categories.isEmpty, categories.isEmpty {
                                 Text(AppStrings.Common.categoryNotFound)
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.55))
@@ -171,7 +172,7 @@
                                     .padding(.vertical, 12)
                             }
 
-                            ForEach(filteredCategories) { category in
+                            ForEach(categories) { category in
                                 TVSeriesCategoryRow(
                                     category: category,
                                     isSelected: store.selectedCategoryID == category.id,

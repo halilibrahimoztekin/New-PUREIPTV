@@ -39,11 +39,13 @@ public struct ChannelCardView: View {
             onTap?()
         } label: {
             ZStack(alignment: .bottomLeading) {
-                // ── Background & Glassmorphism ──────────────────────
+                // ── Background & Obsidian Surface ──────────────────
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.03))
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .fill(Color(hex: "#16161C"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(

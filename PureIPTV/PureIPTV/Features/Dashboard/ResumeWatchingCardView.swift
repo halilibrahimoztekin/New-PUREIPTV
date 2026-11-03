@@ -46,7 +46,12 @@ public struct ResumeWatchingCardView: View {
                 ZStack {
                     // Artwork / Poster
                     if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID) { phase in
+                        PlaylistAsyncImage(
+                            url: url,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: item.playlistID,
+                            downsamplingSize: CGSize(width: 280, height: 160)
+                        ) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable()

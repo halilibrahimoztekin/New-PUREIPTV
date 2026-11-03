@@ -66,7 +66,7 @@ public actor FeedbackReportManager {
         #else
             let deviceType = platform
         #endif
-        let generatedAt = ISO8601DateFormatter().string(from: Date())
+        let generatedAt = AppFormatters.iso8601String(from: Date())
 
         let connectionDetails = latestConnectionFailure.map {
             """
@@ -84,7 +84,7 @@ public actor FeedbackReportManager {
             return """
             Son playlist sağlık denetimi:
             Kaynak türü: \(healthReport.playlistType.rawValue)
-            Denetim zamanı: \(ISO8601DateFormatter().string(from: healthReport.checkedAt))
+            Denetim zamanı: \(AppFormatters.iso8601String(from: healthReport.checkedAt))
             \(checks)
             """
         } ?? "Henüz playlist sağlık denetimi yapılmadı."

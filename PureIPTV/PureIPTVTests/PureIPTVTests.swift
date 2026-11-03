@@ -44,6 +44,32 @@ final class PureIPTVTests: XCTestCase {
         XCTAssertTrue(entries[1].filterableConsoleLine.contains("[PureIPTV:Player] 🔴 [ERROR] [VLC]"))
     }
 
+    func testAppFormatters() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        XCTAssertFalse(AppFormatters.timeShort(date).isEmpty)
+        XCTAssertFalse(AppFormatters.dayShort(date).isEmpty)
+        XCTAssertFalse(AppFormatters.dateTimeShort(date).isEmpty)
+        XCTAssertFalse(AppFormatters.mediumDateShortTime(date).isEmpty)
+        XCTAssertFalse(AppFormatters.catchupTimeString(date).isEmpty)
+        XCTAssertTrue(AppFormatters.formatFileSize(1024 * 1024 * 50).contains("MB"))
+        XCTAssertTrue(AppFormatters.formatDownloadSpeed(1024 * 500).contains("/s"))
+
+        let parsedXtream = AppFormatters.parseXtreamReleaseDate("2024-05-15")
+        XCTAssertNotNil(parsedXtream)
+
+        let parsedFallback = AppFormatters.parseEPGFallbackDate("1700000000")
+        XCTAssertEqual(parsedFallback, date)
+    }
+
+    func testChannelNameCleanerMemoization() {
+        let title = "[TR] BEIN SPORTS 1 HD"
+        let res1 = ChannelNameCleaner.analyze(title)
+        let res2 = ChannelNameCleaner.analyze(title)
+        XCTAssertEqual(res1.cleanTitle, "BEIN SPORTS 1")
+        XCTAssertEqual(res2.cleanTitle, res1.cleanTitle)
+        XCTAssertEqual(res2.detectedQuality, res1.detectedQuality)
+    }
+
     func testPerformanceExample() {
         // This is an example of a performance test case.
         measure {

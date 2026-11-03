@@ -547,10 +547,7 @@ import SwiftUI
         }
 
         private func formattedByteCount(_ bytes: Int64) -> String {
-            let formatter = ByteCountFormatter()
-            formatter.allowedUnits = [.useGB, .useMB]
-            formatter.countStyle = .file
-            return formatter.string(fromByteCount: max(0, bytes))
+            AppFormatters.formatByteCountGeneral(bytes)
         }
     }
 #endif

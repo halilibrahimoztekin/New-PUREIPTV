@@ -156,15 +156,23 @@
             }
         }
 
-        private func favoriteShelf(_ items: [FavoriteItem], title: String, cardWidth: CGFloat) -> some View {
+        private func favoriteShelf(
+            _ items: [FavoriteItem],
+            title: String,
+            cardWidth: CGFloat,
+            moveAvailability: [FavoriteIdentity: Set<Int>]
+        ) -> some View {
             TVShelfSection(title: title) {
                 ForEach(items, id: \.scopedIdentity) { item in
-                    favoriteMediaCard(item, cardWidth: cardWidth)
+                    favoriteMediaCard(item, cardWidth: cardWidth, moveOffsets: moveAvailability[item.scopedIdentity] ?? [])
                 }
             }
         }
 
-        private func favoriteSeriesShelf(_ items: [FavoriteItem]) -> some View {
+        private func favoriteSeriesShelf(
+            _ items: [FavoriteItem],
+            moveAvailability: [FavoriteIdentity: Set<Int>]
+        ) -> some View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .center, spacing: 28) {
                     Text(AppStrings.Dashboard.favoriteSeries)
@@ -185,7 +193,7 @@
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 40) {
                         ForEach(items, id: \.scopedIdentity) { item in
-                            favoriteMediaCard(item, cardWidth: 220)
+                            favoriteMediaCard(item, cardWidth: 220, moveOffsets: moveAvailability[item.scopedIdentity] ?? [])
                         }
                     }
                     .padding(.horizontal, 60)
@@ -235,7 +243,7 @@
             )
         }
 
-        private func favoriteMediaCard(_ item: FavoriteItem, cardWidth: CGFloat) -> some View {
+        private func favoriteMediaCard(_ item: FavoriteItem, cardWidth: CGFloat, moveOffsets: Set<Int>) -> some View {
             let mediaType = item.type.lowercased()
             let canReorder = mediaType == "vod"
                 || (mediaType == "series" && store.favoriteSeriesSortMode != .newestEpisode)
@@ -251,16 +259,15 @@
             .frame(width: cardWidth)
             .contextMenu {
                 if canReorder, item.playlistID != nil {
-                    let moveAvailability = store.favoriteMoveAvailability[item.scopedIdentity] ?? []
                     Button { store.send(.moveFavorite(item, offset: -1)) } label: {
                         Label(AppStrings.Favorites.moveUp, systemImage: "arrow.left")
                     }
-                    .disabled(!moveAvailability.contains(-1))
+                    .disabled(!moveOffsets.contains(-1))
 
                     Button { store.send(.moveFavorite(item, offset: 1)) } label: {
                         Label(AppStrings.Favorites.moveDown, systemImage: "arrow.right")
                     }
-                    .disabled(!moveAvailability.contains(1))
+                    .disabled(!moveOffsets.contains(1))
                 }
                 Button { store.send(.favoriteSelected(item)) } label: {
                     Label(AppStrings.Common.watchNow, systemImage: "play.fill")
@@ -285,9 +292,10 @@
                         .focusSection()
                 }
             case .continueWatching:
-                if !store.continueWatchingItems.isEmpty {
+                let continueWatching = store.continueWatchingItems
+                if !continueWatching.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.continueWatching) {
-                        ForEach(store.continueWatchingItems) { item in
+                        ForEach(continueWatching, id: \.compositeID) { item in
                             ResumeWatchingCardView(item: item, userAgentOverride: config.userAgentOverride,
                                                    onResume: { store.send(.historySelected(item)) },
                                                    onRestart: { store.send(.restartHistorySelected(item)) },
@@ -297,19 +305,20 @@
                 }
             case .favorites:
                 let favorites = store.favoriteItemsByType
+                let availability = store.favoriteMoveAvailability
                 if let items = favorites["live"], !items.isEmpty {
-                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteLiveTV, cardWidth: 340)
+                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteLiveTV, cardWidth: 340, moveAvailability: availability)
                 }
                 if let items = favorites["vod"], !items.isEmpty {
-                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteMovies, cardWidth: 220)
+                    favoriteShelf(items, title: AppStrings.Dashboard.favoriteMovies, cardWidth: 220, moveAvailability: availability)
                 }
                 if let items = favorites["series"], !items.isEmpty {
-                    favoriteSeriesShelf(items)
+                    favoriteSeriesShelf(items, moveAvailability: availability)
                 }
                 let categorizedTypes = Set(["live", "vod", "series"])
                 let otherFavorites = favorites.filter { !categorizedTypes.contains($0.key) }.values.flatMap(\.self)
                 if !otherFavorites.isEmpty {
-                    favoriteShelf(otherFavorites, title: AppStrings.Dashboard.myFavorites, cardWidth: 220)
+                    favoriteShelf(otherFavorites, title: AppStrings.Dashboard.myFavorites, cardWidth: 220, moveAvailability: availability)
                 }
             case .featuredLiveTV:
                 if !store.featuredChannels.isEmpty {
@@ -921,6 +930,8 @@
                                 .requestModifier { request in
                                     PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: item.playlistID)
                                 }
+                                .downsampling(size: CGSize(width: 320, height: 180))
+                                .cancelOnDisappear(true)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 320, height: 180)
