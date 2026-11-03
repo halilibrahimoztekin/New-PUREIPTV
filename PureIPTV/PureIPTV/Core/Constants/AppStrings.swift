@@ -875,6 +875,7 @@ public enum AppStrings {
         public static let liveProgramMatch = "Canlı Program:".localized
         public static let playlistSource = "Liste:".localized
         public static let myCollection = "Koleksiyonum".localized
+        public static let openCategory = "Kategoriye Git".localized
     }
 
     // MARK: - MultiView

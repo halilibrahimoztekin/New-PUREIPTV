@@ -210,4 +210,43 @@ final class SearchFeatureTests: XCTestCase {
         XCTAssertEqual(diacriticsOutput.categories.count, 1)
         XCTAssertEqual(diacriticsOutput.categories.first?.category.id, "c_kids")
     }
+
+    func testGlobalSearchEngineMediaCategoryNameResolution() {
+        let badge = PlaylistSourceBadge(id: "badge1", playlistName: "Ana Liste", colorHex: "#3B82F6")
+
+        // Channel has numeric categoryID "10" (typical Xtream API)
+        let channel = MediaModels.Item(
+            id: "ch_tennis",
+            title: "Wimbledon Court 1",
+            categoryID: "10",
+            type: .live
+        )
+        let chItem = GlobalSearchResultItem(item: channel, playlistBadge: badge)
+
+        // Category definition mapping "10" -> "Tenis Turnuvaları"
+        let cat = MediaModels.Category(id: "10", name: "Tenis Turnuvaları")
+        let catItem = CategorySearchResultItem(category: cat, type: .live, playlistBadge: badge, itemCount: 12)
+
+        // Searching "tenis" should match the channel via category name resolution
+        let output = GlobalSearchEngine.search(
+            query: "tenis",
+            filter: .all,
+            selectedPlaylistID: nil,
+            channels: [chItem],
+            vods: [],
+            series: [],
+            categories: [catItem]
+        )
+
+        // 1. Category itself is matched
+        XCTAssertEqual(output.categories.count, 1)
+        XCTAssertEqual(output.categories.first?.category.id, "10")
+
+        // 2. Channel is also matched via resolved category name!
+        XCTAssertEqual(output.live.count, 1)
+        let matchedChannel = output.live.first
+        XCTAssertEqual(matchedChannel?.item.id, "ch_tennis")
+        XCTAssertEqual(matchedChannel?.searchMatch?.field, .category)
+        XCTAssertEqual(matchedChannel?.searchMatch?.sourceText, "Tenis Turnuvaları")
+    }
 }

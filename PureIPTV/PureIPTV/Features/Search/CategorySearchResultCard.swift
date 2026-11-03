@@ -139,5 +139,12 @@ public struct CategorySearchResultCard: View {
             #endif
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                onTap()
+            } label: {
+                Label(AppStrings.Search.openCategory, systemImage: result.typeIcon)
+            }
+        }
     }
 }

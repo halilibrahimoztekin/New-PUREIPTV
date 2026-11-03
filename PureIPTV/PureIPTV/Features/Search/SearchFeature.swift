@@ -344,6 +344,7 @@ public struct SearchFeature: Sendable {
         public var debouncedQuery: String = ""
         public var pendingSearchDebounceRequestID: UUID?
         public var filter: SearchFilter = .all
+        public var selectedCategoryTypeFilter: MediaModels.ItemType?
         public var searchContentScope: SearchContentScope = .all
         public var searchContentScopeProfileKey: String?
         public var searchContentScopesByProfile: [String: SearchContentScope] = [:]
@@ -517,12 +518,22 @@ public struct SearchFeature: Sendable {
             }
         }
 
+        public var filteredCategoryResults: [CategorySearchResultItem] {
+            guard let filter = selectedCategoryTypeFilter else { return categoryResults }
+            return categoryResults.filter { $0.type == filter }
+        }
+
         public var scopedDiscoveryCategories: [CategorySearchResultItem] {
             let raw = indexedCategories.isEmpty ? allCategories : indexedCategories
-            let scoped = searchScopedCategories(raw)
-            guard let selectedPlaylistID else { return scoped }
-            let sourceID = PlaylistSourceBadge.sourceID(for: selectedPlaylistID)
-            return scoped.filter { $0.playlistBadge.id == sourceID }
+            var scoped = searchScopedCategories(raw)
+            if let selectedPlaylistID {
+                let sourceID = PlaylistSourceBadge.sourceID(for: selectedPlaylistID)
+                scoped = scoped.filter { $0.playlistBadge.id == sourceID }
+            }
+            if let filter = selectedCategoryTypeFilter {
+                scoped = scoped.filter { $0.type == filter }
+            }
+            return scoped
         }
 
         public mutating func invalidateFocusMemory() {
@@ -829,6 +840,7 @@ public struct SearchFeature: Sendable {
         case vodSelected(MediaModels.Item)
         case seriesSelected(MediaModels.Item)
         case categorySelected(CategorySearchResultItem)
+        case categoryTypeFilterSelected(MediaModels.ItemType?)
         case toggleCuratedPlaylistItem(GlobalSearchResultItem)
         case removeCuratedPlaylistItem(String)
         case focusedResultChanged(String)
@@ -2285,6 +2297,9 @@ public struct SearchFeature: Sendable {
                 guard state.filter != filter else { return .none }
                 let wasSearchingDownloads = state.filter == .downloads
                 state.filter = filter
+                if filter != .categories {
+                    state.selectedCategoryTypeFilter = nil
+                }
                 state.prepareFocusRestorationForCurrentScope()
                 state.activeEPGEnrichmentRequestID = nil
                 let query = state.searchQuery
@@ -2409,6 +2424,7 @@ public struct SearchFeature: Sendable {
                 state.debouncedQuery = ""
                 state.pendingSearchDebounceRequestID = nil
                 state.filter = .all
+                state.selectedCategoryTypeFilter = nil
                 state.focusedResultID = nil
                 state.lastLoadedConfig = nil
                 state.selectedPlaylistID = nil
@@ -2491,6 +2507,10 @@ public struct SearchFeature: Sendable {
                         playlistID: playlistID
                     )))
                 }
+
+            case let .categoryTypeFilterSelected(type):
+                state.selectedCategoryTypeFilter = type
+                return .none
 
             case let .personCreditSelected(personCredit):
                 let item = personCredit.result.item.replacingPlaylistID(

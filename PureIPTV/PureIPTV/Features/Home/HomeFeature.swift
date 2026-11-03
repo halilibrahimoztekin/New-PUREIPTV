@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import FactoryKit
 import Foundation
 
 // MARK: - Home Tab
@@ -187,6 +188,8 @@ public struct HomeFeature {
             case presentHiddenMediaManagement
         }
     }
+
+    @Injected(\.playlistRepository) var playlistRepository
 
     public init() {}
 
@@ -408,17 +411,49 @@ public struct HomeFeature {
             case let .search(.delegate(.didSelectCategory(category, type, playlistID))):
                 return .send(.selectCategory(category: category, type: type, playlistID: playlistID))
 
-            case let .selectCategory(category, type, _):
+            case let .selectCategory(category, type, playlistID):
+                let targetConfig: PlaylistConfig? = if let playlistID {
+                    playlistRepository.getPlaylists().first(where: { $0.id == playlistID })?.toPlaylistConfig()
+                } else {
+                    nil
+                }
+
                 switch type {
                 case .live:
                     state.selectedTab = .liveTV
-                    return .send(.liveTV(.categorySelected(category)))
+                    if let targetConfig, state.liveTVSourceConfig != targetConfig {
+                        state.liveTVSourceConfig = targetConfig
+                        return .concatenate(
+                            .send(.liveTV(.onAppear(config: targetConfig))),
+                            .send(.liveTV(.categorySelected(category)))
+                        )
+                    } else {
+                        return .send(.liveTV(.categorySelected(category)))
+                    }
+
                 case .vod:
                     state.selectedTab = .movies
-                    return .send(.vod(.categorySelected(category)))
+                    if let targetConfig, state.moviesSourceConfig != targetConfig {
+                        state.moviesSourceConfig = targetConfig
+                        return .concatenate(
+                            .send(.vod(.onAppear(config: targetConfig))),
+                            .send(.vod(.categorySelected(category)))
+                        )
+                    } else {
+                        return .send(.vod(.categorySelected(category)))
+                    }
+
                 case .series:
                     state.selectedTab = .series
-                    return .send(.series(.categorySelected(category)))
+                    if let targetConfig, state.seriesSourceConfig != targetConfig {
+                        state.seriesSourceConfig = targetConfig
+                        return .concatenate(
+                            .send(.series(.onAppear(config: targetConfig))),
+                            .send(.series(.categorySelected(category)))
+                        )
+                    } else {
+                        return .send(.series(.categorySelected(category)))
+                    }
                 }
 
             case let .search(.delegate(.playOfflineMedia(item, episodeQueue))):

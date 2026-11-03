@@ -108,6 +108,26 @@ public nonisolated enum GlobalSearchEngine: Sendable {
             $0.playlistBadge.id == selectedSourceID
         }
 
+        // Build category name lookup maps so numeric category IDs (common in Xtream) resolve to readable names
+        var categoryNamesByKey: [String: String] = [:]
+        var categoryNamesByID: [String: String] = [:]
+        for cat in categories {
+            let name = cat.category.name
+            let id = cat.category.id
+            guard !name.isEmpty, !id.isEmpty else { continue }
+            let key = "\(cat.type.rawValue):\(cat.playlistBadge.id):\(id)"
+            categoryNamesByKey[key] = name
+            if categoryNamesByID[id] == nil {
+                categoryNamesByID[id] = name
+            }
+        }
+
+        func resolveCategoryName(categoryID: String?, type: MediaModels.ItemType, badgeID: String) -> String? {
+            guard let categoryID, !categoryID.isEmpty else { return nil }
+            let key = "\(type.rawValue):\(badgeID):\(categoryID)"
+            return categoryNamesByKey[key] ?? categoryNamesByID[categoryID]
+        }
+
         // 2. Score and search Channels
         var matchedChannels: [GlobalSearchResultItem] = []
         for (index, ch) in scopedChannels.enumerated() {
@@ -146,16 +166,17 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                     baseScore = max(baseScore ?? 0, weightedEPGScore)
                 }
             }
-            let channelCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: ch.item.categoryID) : 0
-            if channelCategoryScore > 0 {
-                if channelCategoryScore > (baseScore ?? 0) {
+            let resolvedCategory = resolveCategoryName(categoryID: ch.item.categoryID, type: .live, badgeID: ch.playlistBadge.id)
+            let channelCategoryMatch = hasTextQuery ? bestCategoryMatch(query: normalizedQuery, categoryID: ch.item.categoryID, categoryName: resolvedCategory) : nil
+            if let match = channelCategoryMatch, match.score > 0 {
+                if match.score > (baseScore ?? 0) {
                     searchMatch = SearchMatchDescription(
                         field: .category,
-                        sourceText: ch.item.categoryID,
+                        sourceText: match.matchedText,
                         queryTerms: intent.matchTerms
                     )
                 }
-                baseScore = max(baseScore ?? 0, channelCategoryScore)
+                baseScore = max(baseScore ?? 0, match.score)
             }
 
             if let score = baseScore {
@@ -194,12 +215,13 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                 searchMatch = SearchMatchDescription(field: .title, sourceText: titleMatch.title, queryTerms: intent.matchTerms)
             }
 
-            let vodCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: v.item.categoryID) : 0
-            if vodCategoryScore > 0 {
-                if vodCategoryScore > (baseScore ?? 0) {
-                    searchMatch = SearchMatchDescription(field: .category, sourceText: v.item.categoryID, queryTerms: intent.matchTerms)
+            let resolvedCategory = resolveCategoryName(categoryID: v.item.categoryID, type: .vod, badgeID: v.playlistBadge.id)
+            let vodCategoryMatch = hasTextQuery ? bestCategoryMatch(query: normalizedQuery, categoryID: v.item.categoryID, categoryName: resolvedCategory) : nil
+            if let match = vodCategoryMatch, match.score > 0 {
+                if match.score > (baseScore ?? 0) {
+                    searchMatch = SearchMatchDescription(field: .category, sourceText: match.matchedText, queryTerms: intent.matchTerms)
                 }
-                baseScore = max(baseScore ?? 0, vodCategoryScore)
+                baseScore = max(baseScore ?? 0, match.score)
             }
 
             if let score = baseScore {
@@ -237,12 +259,13 @@ public nonisolated enum GlobalSearchEngine: Sendable {
                 searchMatch = SearchMatchDescription(field: .title, sourceText: titleMatch.title, queryTerms: intent.matchTerms)
             }
 
-            let seriesCategoryScore = hasTextQuery ? categoryScore(query: normalizedQuery, category: s.item.categoryID) : 0
-            if seriesCategoryScore > 0 {
-                if seriesCategoryScore > (baseScore ?? 0) {
-                    searchMatch = SearchMatchDescription(field: .category, sourceText: s.item.categoryID, queryTerms: intent.matchTerms)
+            let resolvedCategory = resolveCategoryName(categoryID: s.item.categoryID, type: .series, badgeID: s.playlistBadge.id)
+            let seriesCategoryMatch = hasTextQuery ? bestCategoryMatch(query: normalizedQuery, categoryID: s.item.categoryID, categoryName: resolvedCategory) : nil
+            if let match = seriesCategoryMatch, match.score > 0 {
+                if match.score > (baseScore ?? 0) {
+                    searchMatch = SearchMatchDescription(field: .category, sourceText: match.matchedText, queryTerms: intent.matchTerms)
                 }
-                baseScore = max(baseScore ?? 0, seriesCategoryScore)
+                baseScore = max(baseScore ?? 0, match.score)
             }
 
             if let score = baseScore {
@@ -388,12 +411,33 @@ public nonisolated enum GlobalSearchEngine: Sendable {
         )
     }
 
-    private static func categoryScore(query: String, category: String?) -> Int {
-        guard
-            let category,
-            let score = FuzzySearchEngine.score(query: query, target: FuzzySearchEngine.normalize(category))
-        else { return 0 }
-        return min(score / 4, 100)
+    private static func bestCategoryMatch(
+        query: String,
+        categoryID: String?,
+        categoryName: String?
+    ) -> (score: Int, matchedText: String)? {
+        var best: (score: Int, text: String)?
+
+        if let categoryName, !categoryName.isEmpty {
+            let normalized = FuzzySearchEngine.normalize(categoryName)
+            if let rawScore = FuzzySearchEngine.score(query: query, target: normalized) {
+                let score = min(rawScore / 4, 100)
+                best = (score, categoryName)
+            }
+        }
+
+        if let categoryID, !categoryID.isEmpty, categoryID != categoryName {
+            let normalized = FuzzySearchEngine.normalize(categoryID)
+            if let rawScore = FuzzySearchEngine.score(query: query, target: normalized) {
+                let score = min(rawScore / 4, 100)
+                if best == nil || score > best!.score {
+                    best = (score, categoryID)
+                }
+            }
+        }
+
+        guard let best, best.score > 0 else { return nil }
+        return (score: best.score, matchedText: best.text)
     }
 
     private static func bestTitleMatch(

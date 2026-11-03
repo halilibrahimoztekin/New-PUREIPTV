@@ -62,7 +62,13 @@
 
                     // Instant Filter Badges Bar
                     filterBar
-                        .padding(.bottom, 12)
+                        .padding(.bottom, store.filter == .categories ? 8 : 12)
+
+                    // Category Sub-type Filter Bar
+                    if store.filter == .categories {
+                        categoryTypeFilterBar
+                            .padding(.bottom, 12)
+                    }
 
                     // Results or Discovery State
                     if store.isLoading, store.filter != .downloads {
@@ -304,6 +310,53 @@
             }
         }
 
+        private var categoryTypeFilterBar: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    categoryTypeFilterPill(title: AppStrings.Search.all, icon: "square.grid.2x2", type: nil, color: AppColors.cyan)
+                    categoryTypeFilterPill(title: AppStrings.Search.liveTV, icon: "tv.fill", type: .live, color: AppColors.primary)
+                    categoryTypeFilterPill(title: AppStrings.Search.movies, icon: "film.fill", type: .vod, color: AppColors.premium)
+                    categoryTypeFilterPill(title: AppStrings.Search.series, icon: "rectangle.stack.fill", type: .series, color: AppColors.amber)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+
+        private func categoryTypeFilterPill(title: String, icon: String, type: MediaModels.ItemType?, color: Color) -> some View {
+            let isSelected = store.selectedCategoryTypeFilter == type
+            return Button {
+                HapticManager.shared.trigger(.light)
+                store.send(.categoryTypeFilterSelected(type))
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(AppFonts.captionSmall.weight(.semibold))
+                    Text(title)
+                        .font(AppFonts.bodySmall.weight(isSelected ? .bold : .medium))
+                }
+                .foregroundStyle(isSelected ? .white : AppColors.onSurfaceVariant.opacity(0.8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? color : AppColors.surfaceSecondary)
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(isSelected ? 0.25 : 0.08), lineWidth: 1)
+                        )
+                )
+                .shadow(
+                    color: isSelected ? color.opacity(0.35) : .clear,
+                    radius: 5,
+                    x: 0,
+                    y: 2
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isSelected)
+        }
+
         private var contentScopeBar: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -352,12 +405,12 @@
                         }
 
                         // 0. Categories Section
-                        if store.filter == .all || store.filter == .categories, !store.categoryResults.isEmpty {
-                            resultSection(title: AppStrings.Search.categories, count: store.categoryResults.count) {
+                        if store.filter == .all || store.filter == .categories, !store.filteredCategoryResults.isEmpty {
+                            resultSection(title: AppStrings.Search.categories, count: store.filteredCategoryResults.count) {
                                 if store.filter == .all {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         LazyHStack(spacing: 12) {
-                                            ForEach(store.categoryResults) { result in
+                                            ForEach(store.filteredCategoryResults) { result in
                                                 CategorySearchResultCard(
                                                     result: result,
                                                     queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),
@@ -372,7 +425,7 @@
                                     }
                                 } else {
                                     LazyVGrid(columns: categoryColumns, spacing: 12) {
-                                        ForEach(store.categoryResults) { result in
+                                        ForEach(store.filteredCategoryResults) { result in
                                             CategorySearchResultCard(
                                                 result: result,
                                                 queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),

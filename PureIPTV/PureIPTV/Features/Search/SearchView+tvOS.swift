@@ -23,6 +23,7 @@
             case playlist(UUID?)
             case contentScope(SearchFeature.SearchContentScope)
             case filter(SearchFeature.SearchFilter)
+            case categoryTypeFilter(MediaModels.ItemType?)
             case result(String)
         }
 
@@ -78,7 +79,13 @@
 
                     // Instant Filter Badges Bar
                     filterBar
-                        .padding(.bottom, 12)
+                        .padding(.bottom, store.filter == .categories ? 8 : 12)
+
+                    // Category Sub-type Filter Bar
+                    if store.filter == .categories {
+                        categoryTypeFilterBar
+                            .padding(.bottom, 12)
+                    }
 
                     // Results or Discovery State
                     if store.isLoading, store.filter != .downloads {
@@ -266,9 +273,9 @@
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "globe.europe.africa.fill")
-                                .font(.system(size: 18))
+                                .font(AppFonts.titleSmall)
                             Text(AppStrings.Search.allPlaylistsShort)
-                                .font(.system(size: 20, weight: isGlobalSelected ? .bold : .medium))
+                                .font(AppFonts.titleSmall.weight(isGlobalSelected ? .bold : .medium))
                         }
                         .padding(.horizontal, 22)
                         .padding(.vertical, 10)
@@ -292,7 +299,7 @@
                                     .fill(badge.color)
                                     .frame(width: 10, height: 10)
                                 Text(playlist.name)
-                                    .font(.system(size: 20, weight: isSelected ? .bold : .medium))
+                                    .font(AppFonts.titleSmall.weight(isSelected ? .bold : .medium))
                             }
                             .padding(.horizontal, 22)
                             .padding(.vertical, 10)
@@ -321,14 +328,14 @@
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: filter.icon)
-                                    .font(.system(size: 20))
+                                    .font(AppFonts.titleSmall)
 
                                 Text(filter.title)
-                                    .font(.system(size: 22, weight: isSelected ? .bold : .medium))
+                                    .font(AppFonts.titleSmall.weight(isSelected ? .bold : .medium))
 
                                 if let count, count > 0 {
                                     Text("(\(count))")
-                                        .font(.system(size: 18, weight: .bold))
+                                        .font(AppFonts.bodyMedium.weight(.bold))
                                         .opacity(isSelected ? 0.95 : 0.6)
                                 }
                             }
@@ -346,6 +353,39 @@
             .focusSection()
         }
 
+        private var categoryTypeFilterBar: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    categoryTypeFilterButton(title: AppStrings.Search.all, icon: "square.grid.2x2", type: nil)
+                    categoryTypeFilterButton(title: AppStrings.Search.liveTV, icon: "tv.fill", type: .live)
+                    categoryTypeFilterButton(title: AppStrings.Search.movies, icon: "film.fill", type: .vod)
+                    categoryTypeFilterButton(title: AppStrings.Search.series, icon: "rectangle.stack.fill", type: .series)
+                }
+                .padding(.horizontal, 60)
+            }
+            .focusSection()
+        }
+
+        private func categoryTypeFilterButton(title: String, icon: String, type: MediaModels.ItemType?) -> some View {
+            let isSelected = store.selectedCategoryTypeFilter == type
+            return Button {
+                store.send(.categoryTypeFilterSelected(type))
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(AppFonts.titleSmall)
+                    Text(title)
+                        .font(AppFonts.titleSmall.weight(isSelected ? .bold : .medium))
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(TVCapsuleButtonStyle(isPrimary: false, isSelected: isSelected))
+            .focused($focusedTarget, equals: .categoryTypeFilter(type))
+            .accessibilityFocused($accessibilityFocusedTarget, equals: .categoryTypeFilter(type))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+
         private var contentScopeBar: some View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
@@ -356,9 +396,9 @@
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: scope.icon)
-                                    .font(.system(size: 20))
+                                    .font(AppFonts.titleSmall)
                                 Text(scope.title)
-                                    .font(.system(size: 22, weight: isSelected ? .bold : .medium))
+                                    .font(AppFonts.titleSmall.weight(isSelected ? .bold : .medium))
                             }
                             .padding(.horizontal, 26)
                             .padding(.vertical, 12)
@@ -387,10 +427,10 @@
                         }
 
                         // 0. Categories Section
-                        if store.filter == .all || store.filter == .categories, !store.categoryResults.isEmpty {
-                            resultSection(title: AppStrings.Search.categories, count: store.categoryResults.count) {
+                        if store.filter == .all || store.filter == .categories, !store.filteredCategoryResults.isEmpty {
+                            resultSection(title: AppStrings.Search.categories, count: store.filteredCategoryResults.count) {
                                 LazyVGrid(columns: categoryColumns, spacing: 40) {
-                                    ForEach(store.categoryResults) { result in
+                                    ForEach(store.filteredCategoryResults) { result in
                                         CategorySearchResultCard(
                                             result: result,
                                             queryTerms: store.debouncedQuery.split(whereSeparator: \.isWhitespace).map(String.init),
@@ -1123,7 +1163,7 @@
         private var isSearchOrFilterControlFocused: Bool {
             guard let focusedTarget else { return false }
             return switch focusedTarget {
-            case .search, .clearQuery, .pinSearch, .playlist(_), .contentScope, .filter: true
+            case .search, .clearQuery, .pinSearch, .playlist(_), .contentScope, .filter, .categoryTypeFilter: true
             case .result: false
             }
         }
