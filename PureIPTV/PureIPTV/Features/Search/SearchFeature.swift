@@ -10,6 +10,8 @@ import SwiftUI
 private let searchCancelID = "SearchFeature.search"
 private let searchCatalogLoadCancelID = "SearchFeature.catalogLoad"
 private let searchMultiPlaylistLoadCancelID = "SearchFeature.multiPlaylistLoad"
+private let searchCatalogPrepareCancelID = "SearchFeature.catalogPrepare"
+private let searchMultiPlaylistPrepareCancelID = "SearchFeature.multiPlaylistPrepare"
 private let searchEPGCancelID = "SearchFeature.searchEPG"
 private let searchPeopleCancelID = "SearchFeature.searchPeople"
 private let searchProgramsCancelID = "SearchFeature.searchPrograms"
@@ -27,6 +29,115 @@ private nonisolated func searchSourceBadge(for config: PlaylistConfig?) -> Playl
         return PlaylistSourceBadge(id: "default", playlistName: "Varsayılan", colorHex: "#0A84FF")
     }
     return UnifiedPlaylistManager.shared.badge(for: config)
+}
+
+public typealias SearchPrimaryCatalogData = (
+    channels: [MediaModels.Item],
+    vods: [MediaModels.Item],
+    series: [MediaModels.Item],
+    categories: [CategorySearchResultItem]
+)
+public typealias SearchMultiPlaylistCatalogData = [(
+    badge: PlaylistSourceBadge,
+    channels: [MediaModels.Item],
+    vods: [MediaModels.Item],
+    series: [MediaModels.Item],
+    categories: [CategorySearchResultItem]
+)]
+
+public nonisolated struct PreparedSearchPrimaryCatalog: Sendable {
+    let channels: [MediaModels.Item]
+    let vods: [MediaModels.Item]
+    let series: [MediaModels.Item]
+    let categories: [CategorySearchResultItem]
+    let indexedChannels: [GlobalSearchResultItem]
+    let indexedVODs: [GlobalSearchResultItem]
+    let indexedSeries: [GlobalSearchResultItem]
+}
+
+public nonisolated struct PreparedSearchMultiPlaylistCatalog: Sendable {
+    let channels: [GlobalSearchResultItem]
+    let vods: [GlobalSearchResultItem]
+    let series: [GlobalSearchResultItem]
+    let categories: [CategorySearchResultItem]
+}
+
+private nonisolated func prepareSearchPrimaryCatalog(
+    _ data: SearchPrimaryCatalogData,
+    hiddenChannelIDs: Set<String>,
+    blacklistedCategoryIDs: Set<String>,
+    hideAdult: Bool,
+    isAdultContent: @Sendable (String) -> Bool,
+    hiddenMediaEntries: [HiddenMediaEntry],
+    fallbackPlaylistID: UUID?,
+    badge: PlaylistSourceBadge
+) -> PreparedSearchPrimaryCatalog {
+    let channels = data.channels.filter { item in
+        !hiddenChannelIDs.contains(item.id)
+            && !blacklistedCategoryIDs.contains(item.categoryID)
+            && (!hideAdult || !isAdultContent(item.title))
+    }
+    let vods = data.vods.filter { !hideAdult || !isAdultContent($0.title) }
+    let series = data.series.filter { !hideAdult || !isAdultContent($0.title) }
+    let categories = data.categories.filter { item in
+        !blacklistedCategoryIDs.contains(item.category.id)
+            && (!hideAdult || (!isAdultContent(item.category.name) && !isAdultContent(item.category.sourceName)))
+    }
+    let hidden = Set(hiddenMediaEntries.map(\.identity))
+    let visibleVODs = vods.filter {
+        !hidden.contains(HiddenMediaIdentity(item: $0, fallbackPlaylistID: fallbackPlaylistID))
+    }
+    let visibleSeries = series.filter {
+        !hidden.contains(HiddenMediaIdentity(item: $0, fallbackPlaylistID: fallbackPlaylistID))
+    }
+    return PreparedSearchPrimaryCatalog(
+        channels: channels,
+        vods: visibleVODs,
+        series: visibleSeries,
+        categories: categories,
+        indexedChannels: channels.map { GlobalSearchResultItem(item: $0, playlistBadge: badge) },
+        indexedVODs: visibleVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: badge) },
+        indexedSeries: visibleSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: badge) }
+    )
+}
+
+private nonisolated func prepareSearchMultiPlaylistCatalog(
+    _ list: SearchMultiPlaylistCatalogData,
+    hiddenChannelIDs: Set<String>,
+    blacklistedCategoryIDs: Set<String>,
+    hideAdult: Bool,
+    isAdultContent: @Sendable (String) -> Bool,
+    hiddenMediaEntries: [HiddenMediaEntry]
+) -> PreparedSearchMultiPlaylistCatalog {
+    var channels: [GlobalSearchResultItem] = []
+    var vods: [GlobalSearchResultItem] = []
+    var series: [GlobalSearchResultItem] = []
+    var categories: [CategorySearchResultItem] = []
+    let hidden = Set(hiddenMediaEntries.map(\.identity))
+    for playlist in list {
+        let visibleChannels = playlist.channels.filter { item in
+            !hiddenChannelIDs.contains(item.id)
+                && !blacklistedCategoryIDs.contains(item.categoryID)
+                && (!hideAdult || !isAdultContent(item.title))
+        }
+        let visibleVODs = playlist.vods.filter { item in
+            (!hideAdult || !isAdultContent(item.title))
+                && !hidden.contains(HiddenMediaIdentity(item: item, fallbackPlaylistID: item.playlistID))
+        }
+        let visibleSeries = playlist.series.filter { item in
+            (!hideAdult || !isAdultContent(item.title))
+                && !hidden.contains(HiddenMediaIdentity(item: item, fallbackPlaylistID: item.playlistID))
+        }
+        let visibleCategories = playlist.categories.filter { item in
+            !blacklistedCategoryIDs.contains(item.category.id)
+                && (!hideAdult || (!isAdultContent(item.category.name) && !isAdultContent(item.category.sourceName)))
+        }
+        channels.append(contentsOf: visibleChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: playlist.badge) })
+        vods.append(contentsOf: visibleVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: playlist.badge) })
+        series.append(contentsOf: visibleSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: playlist.badge) })
+        categories.append(contentsOf: visibleCategories)
+    }
+    return PreparedSearchMultiPlaylistCatalog(channels: channels, vods: vods, series: series, categories: categories)
 }
 
 private nonisolated struct SearchCatalogSource: Equatable, Sendable {
@@ -811,17 +922,31 @@ public struct SearchFeature: Sendable {
         case curatedPlaylistLoaded(CuratedPlaylistSnapshot, ProfileContextSnapshot)
         case curatedPlaylistUpdated(CuratedPlaylistSnapshot, ProfileContextSnapshot)
         case hiddenMediaLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, Result<[HiddenMediaEntry], Error>)
+        case primaryCatalogPrepared(
+            requestID: UUID,
+            config: PlaylistConfig,
+            hiddenMediaRequestID: UUID?,
+            sourceData: SearchPrimaryCatalogData,
+            prepared: PreparedSearchPrimaryCatalog
+        )
+        case multiPlaylistCatalogPrepared(
+            requestID: UUID,
+            config: PlaylistConfig,
+            hiddenMediaRequestID: UUID?,
+            sourceData: SearchMultiPlaylistCatalogData,
+            prepared: PreparedSearchMultiPlaylistCatalog
+        )
         case reloadSearchCategoryPreferences
         case searchCategoryPreferencesLoaded(requestID: UUID, profileScope: ProfileContextSnapshot, hiddenCategoryIDs: Set<String>, errorMessage: String?)
         case loadAllDataResponse(
             requestID: UUID,
             config: PlaylistConfig,
-            result: Result<(channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], categories: [CategorySearchResultItem]), Error>
+            result: Result<SearchPrimaryCatalogData, Error>
         )
         case loadPlaylistsDataResponse(
             requestID: UUID,
             config: PlaylistConfig,
-            list: [(badge: PlaylistSourceBadge, channels: [MediaModels.Item], vods: [MediaModels.Item], series: [MediaModels.Item], categories: [CategorySearchResultItem])]
+            list: SearchMultiPlaylistCatalogData
         )
         case queryChanged(String)
         case debouncedSearchFired(query: String, requestID: UUID)
@@ -1084,6 +1209,8 @@ public struct SearchFeature: Sendable {
                     return .merge(
                         .cancel(id: searchCatalogLoadCancelID),
                         .cancel(id: searchMultiPlaylistLoadCancelID),
+                        .cancel(id: searchCatalogPrepareCancelID),
+                        .cancel(id: searchMultiPlaylistPrepareCancelID),
                         .cancel(id: searchCancelID),
                         .cancel(id: searchEPGCancelID),
                         .cancel(id: searchPeopleCancelID),
@@ -1298,6 +1425,8 @@ public struct SearchFeature: Sendable {
                 return .concatenate(
                     .cancel(id: searchCatalogLoadCancelID),
                     .cancel(id: searchMultiPlaylistLoadCancelID),
+                    .cancel(id: searchCatalogPrepareCancelID),
+                    .cancel(id: searchMultiPlaylistPrepareCancelID),
                     .cancel(id: searchCancelID),
                     .cancel(id: searchEPGCancelID),
                     .cancel(id: searchPeopleCancelID),
@@ -1355,6 +1484,51 @@ public struct SearchFeature: Sendable {
                 guard !state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .none }
                 guard state.pendingSearchDebounceRequestID == nil else { return .none }
                 return .send(.performSearch(state.searchQuery, debounceRequestID: nil))
+
+            case let .primaryCatalogPrepared(requestID, responseConfig, hiddenMediaRequestID, sourceData, prepared):
+                guard state.primaryCatalogLoadRequestID == requestID,
+                      state.lastLoadedConfig == responseConfig
+                else { return .none }
+                guard state.hiddenMediaLoadRequestID == hiddenMediaRequestID else {
+                    return .send(.loadAllDataResponse(requestID: requestID, config: responseConfig, result: .success(sourceData)))
+                }
+                state.allChannels = prepared.channels
+                state.allVODs = prepared.vods
+                state.allSeries = prepared.series
+                state.allCategories = prepared.categories
+                if state.indexedChannels.isEmpty {
+                    state.indexedChannels = prepared.indexedChannels
+                    state.indexedVODs = prepared.indexedVODs
+                    state.indexedSeries = prepared.indexedSeries
+                    state.indexedCategories = prepared.categories
+                }
+                state.primaryCatalogLoadRequestID = nil
+                state.isLoading = false
+                state.hasLoaded = true
+                state.refreshCuratedPlaylistResults()
+                if !state.debouncedQuery.isEmpty {
+                    guard state.multiPlaylistLoadRequestID == nil else { return .none }
+                    return .send(.performSearch(state.debouncedQuery, debounceRequestID: nil))
+                }
+                return .none
+
+            case let .multiPlaylistCatalogPrepared(requestID, responseConfig, hiddenMediaRequestID, sourceData, prepared):
+                guard state.multiPlaylistLoadRequestID == requestID,
+                      state.lastLoadedConfig == responseConfig
+                else { return .none }
+                guard state.hiddenMediaLoadRequestID == hiddenMediaRequestID else {
+                    return .send(.loadPlaylistsDataResponse(requestID: requestID, config: responseConfig, list: sourceData))
+                }
+                state.indexedChannels = prepared.channels
+                state.indexedVODs = prepared.vods
+                state.indexedSeries = prepared.series
+                state.indexedCategories = prepared.categories
+                state.multiPlaylistLoadRequestID = nil
+                state.refreshCuratedPlaylistResults()
+                if state.primaryCatalogLoadRequestID == nil, !state.debouncedQuery.isEmpty {
+                    return .send(.performSearch(state.debouncedQuery, debounceRequestID: nil))
+                }
+                return .none
 
             case .reloadSearchCategoryPreferences:
                 let profileScope = profileContextClient.snapshot()
@@ -1443,54 +1617,36 @@ public struct SearchFeature: Sendable {
                 guard state.primaryCatalogLoadRequestID == requestID,
                       state.lastLoadedConfig == responseConfig
                 else { return .none }
-                state.primaryCatalogLoadRequestID = nil
-                state.isLoading = false
-                state.hasLoaded = true
                 let hiddenIDs = parentalControlClient.hiddenChannelIDs()
                 let blacklistedCats = parentalControlClient.blacklistedCategoryIDs()
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
-
-                state.allChannels = data.channels.filter { ch in
-                    if hiddenIDs.contains(ch.id) {
-                        return false
-                    }
-                    if blacklistedCats.contains(ch.categoryID) {
-                        return false
-                    }
-                    if hideAdult, isAdult(ch.title) {
-                        return false
-                    }
-                    return true
+                let hiddenMediaRequestID = state.hiddenMediaLoadRequestID
+                let hiddenMediaEntries = state.hiddenMediaEntries
+                let fallbackPlaylistID = responseConfig.playlistID
+                let badge = searchSourceBadge(for: responseConfig)
+                return .run { send in
+                    let prepared = await Task.detached(priority: .userInitiated) {
+                        prepareSearchPrimaryCatalog(
+                            data,
+                            hiddenChannelIDs: hiddenIDs,
+                            blacklistedCategoryIDs: blacklistedCats,
+                            hideAdult: hideAdult,
+                            isAdultContent: isAdult,
+                            hiddenMediaEntries: hiddenMediaEntries,
+                            fallbackPlaylistID: fallbackPlaylistID,
+                            badge: badge
+                        )
+                    }.value
+                    await send(.primaryCatalogPrepared(
+                        requestID: requestID,
+                        config: responseConfig,
+                        hiddenMediaRequestID: hiddenMediaRequestID,
+                        sourceData: data,
+                        prepared: prepared
+                    ))
                 }
-                state.allVODs = hideAdult ? data.vods.filter { !isAdult($0.title) } : data.vods
-                state.allSeries = hideAdult ? data.series.filter { !isAdult($0.title) } : data.series
-                state.allCategories = data.categories.filter { cat in
-                    if blacklistedCats.contains(cat.category.id) {
-                        return false
-                    }
-                    if hideAdult, isAdult(cat.category.name) || isAdult(cat.category.sourceName) {
-                        return false
-                    }
-                    return true
-                }
-                state.filterHiddenMediaFromCatalogs()
-
-                // Create initial default indexed items if no multi-playlist items yet
-                if state.indexedChannels.isEmpty {
-                    let defaultBadge = searchSourceBadge(for: state.lastLoadedConfig)
-                    state.indexedChannels = state.allChannels.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
-                    state.indexedVODs = state.allVODs.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
-                    state.indexedSeries = state.allSeries.map { GlobalSearchResultItem(item: $0, playlistBadge: defaultBadge) }
-                    state.indexedCategories = state.allCategories
-                }
-                state.refreshCuratedPlaylistResults()
-
-                if !state.debouncedQuery.isEmpty {
-                    guard state.multiPlaylistLoadRequestID == nil else { return .none }
-                    return .send(.performSearch(state.debouncedQuery, debounceRequestID: nil))
-                }
-                return .none
+                .cancellable(id: searchCatalogPrepareCancelID, cancelInFlight: true)
 
             case let .loadAllDataResponse(requestID, responseConfig, .failure(error)):
                 guard state.primaryCatalogLoadRequestID == requestID,
@@ -1508,59 +1664,32 @@ public struct SearchFeature: Sendable {
                 guard state.multiPlaylistLoadRequestID == requestID,
                       state.lastLoadedConfig == responseConfig
                 else { return .none }
-                state.multiPlaylistLoadRequestID = nil
                 let hiddenIDs = parentalControlClient.hiddenChannelIDs()
                 let blacklistedCats = parentalControlClient.blacklistedCategoryIDs()
                 let hideAdult = settingsClient.hideAdultContent() || settingsClient.isParentalControlEnabled()
                 let isAdult = settingsClient.isAdultContent
-
-                var allIndexedCh: [GlobalSearchResultItem] = []
-                var allIndexedVo: [GlobalSearchResultItem] = []
-                var allIndexedSe: [GlobalSearchResultItem] = []
-                var allIndexedCats: [CategorySearchResultItem] = []
-
-                for item in list {
-                    let chs = item.channels.filter { ch in
-                        if hiddenIDs.contains(ch.id) {
-                            return false
-                        }
-                        if blacklistedCats.contains(ch.categoryID) {
-                            return false
-                        }
-                        if hideAdult, isAdult(ch.title) {
-                            return false
-                        }
-                        return true
-                    }
-                    let vos = hideAdult ? item.vods.filter { !isAdult($0.title) } : item.vods
-                    let ses = hideAdult ? item.series.filter { !isAdult($0.title) } : item.series
-                    let cats = item.categories.filter { cat in
-                        if blacklistedCats.contains(cat.category.id) {
-                            return false
-                        }
-                        if hideAdult, isAdult(cat.category.name) || isAdult(cat.category.sourceName) {
-                            return false
-                        }
-                        return true
-                    }
-
-                    allIndexedCh.append(contentsOf: chs.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
-                    allIndexedVo.append(contentsOf: vos.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
-                    allIndexedSe.append(contentsOf: ses.map { GlobalSearchResultItem(item: $0, playlistBadge: item.badge) })
-                    allIndexedCats.append(contentsOf: cats)
+                let hiddenMediaRequestID = state.hiddenMediaLoadRequestID
+                let hiddenMediaEntries = state.hiddenMediaEntries
+                return .run { send in
+                    let prepared = await Task.detached(priority: .userInitiated) {
+                        prepareSearchMultiPlaylistCatalog(
+                            list,
+                            hiddenChannelIDs: hiddenIDs,
+                            blacklistedCategoryIDs: blacklistedCats,
+                            hideAdult: hideAdult,
+                            isAdultContent: isAdult,
+                            hiddenMediaEntries: hiddenMediaEntries
+                        )
+                    }.value
+                    await send(.multiPlaylistCatalogPrepared(
+                        requestID: requestID,
+                        config: responseConfig,
+                        hiddenMediaRequestID: hiddenMediaRequestID,
+                        sourceData: list,
+                        prepared: prepared
+                    ))
                 }
-
-                state.indexedChannels = allIndexedCh
-                state.indexedVODs = allIndexedVo
-                state.indexedSeries = allIndexedSe
-                state.indexedCategories = allIndexedCats
-                state.filterHiddenMediaFromCatalogs()
-                state.refreshCuratedPlaylistResults()
-
-                if state.primaryCatalogLoadRequestID == nil, !state.debouncedQuery.isEmpty {
-                    return .send(.performSearch(state.debouncedQuery, debounceRequestID: nil))
-                }
-                return .none
+                .cancellable(id: searchMultiPlaylistPrepareCancelID, cancelInFlight: true)
 
             case let .queryChanged(query):
                 if state.searchQuery != query {
@@ -2313,6 +2442,8 @@ public struct SearchFeature: Sendable {
                     return .merge(
                         .cancel(id: searchCatalogLoadCancelID),
                         .cancel(id: searchMultiPlaylistLoadCancelID),
+                        .cancel(id: searchCatalogPrepareCancelID),
+                        .cancel(id: searchMultiPlaylistPrepareCancelID),
                         .cancel(id: searchOfflineMediaCancelID),
                         .cancel(id: searchOfflinePlaybackCancelID),
                         .send(.performSearch(query, debounceRequestID: nil))
@@ -2431,6 +2562,8 @@ public struct SearchFeature: Sendable {
                 return .merge(
                     .cancel(id: searchCatalogLoadCancelID),
                     .cancel(id: searchMultiPlaylistLoadCancelID),
+                    .cancel(id: searchCatalogPrepareCancelID),
+                    .cancel(id: searchMultiPlaylistPrepareCancelID),
                     .cancel(id: searchCancelID),
                     .cancel(id: searchEPGCancelID),
                     .cancel(id: searchPeopleCancelID),

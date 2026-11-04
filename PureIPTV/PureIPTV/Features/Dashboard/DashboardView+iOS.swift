@@ -33,7 +33,7 @@
                 AppColors.oledBlack.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    LazyVStack(spacing: 24) {
                         // Top Header Bar with Liquid Glass actions
                         DashboardHeaderBar_iOS(store: store, config: config, onSearch: onSearch)
 

@@ -5549,10 +5549,12 @@ public struct PlayerFeature {
                     // Apply initial progress / seek if not yet applied
                     if !state.hasAppliedInitialSeek {
                         state.hasAppliedInitialSeek = true
-                        if let startPosition = state.item.startPosition, startPosition > 0 {
-                            actions.append(.send(.seek(startPosition)))
-                        } else if let progress = state.item.initialProgress, progress > 1 {
+                        // Prefer the persisted absolute time for resume. A ratio seek can
+                        // be ignored by some engines while duration is still unknown.
+                        if let progress = state.item.initialProgress, progress > 1, progress.isFinite {
                             actions.append(.send(.seekToTime(Duration.seconds(progress))))
+                        } else if let startPosition = state.item.startPosition, startPosition > 0 {
+                            actions.append(.send(.seek(startPosition)))
                         }
                     }
 

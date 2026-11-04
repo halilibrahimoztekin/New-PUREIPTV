@@ -149,6 +149,10 @@
                         .padding(.horizontal, 16)
                 }
             }
+            .onScrollVisibilityChange(threshold: 0.5) { isVisible in
+                guard isVisible else { return }
+                store.send(.recommendationsSectionBecameVisible)
+            }
         }
 
         private func featuredShelf<T: Identifiable>(

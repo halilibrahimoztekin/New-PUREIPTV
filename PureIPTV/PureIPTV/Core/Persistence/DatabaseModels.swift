@@ -146,7 +146,7 @@ public final class WatchHistoryItem {
 }
 
 /// Stable identity for a user-hidden VOD or series across playlists.
-public struct HiddenMediaIdentity: Hashable, Sendable {
+public nonisolated struct HiddenMediaIdentity: Hashable, Sendable {
     public let type: String
     public let playlistID: UUID?
     public let mediaID: String

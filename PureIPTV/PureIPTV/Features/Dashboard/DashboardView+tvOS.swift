@@ -37,7 +37,7 @@
                 )
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 50) {
+                    LazyVStack(alignment: .leading, spacing: 50) {
                         // Top Bar: Active Playlist Fast Switcher
                         HStack(spacing: 20) {
                             Spacer()
@@ -113,6 +113,7 @@
                         if store.isLoading {
                             tvLoadingView
                                 .frame(maxWidth: .infinity)
+                                .animation(.easeInOut(duration: 0.2), value: store.isLoading)
                         }
                         if let error = store.errorMessage {
                             HStack(spacing: 18) {
@@ -143,8 +144,6 @@
                         }
                     }
                     .padding(.bottom, 80)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: store.isLoading)
                 }
                 .focusSection()
             }
@@ -262,6 +261,12 @@
                     )
                 }
             case .recommendations:
+                Color.clear
+                    .frame(height: 1)
+                    .onScrollVisibilityChange(threshold: 0.5) { isVisible in
+                        guard isVisible else { return }
+                        store.send(.recommendationsSectionBecameVisible)
+                    }
                 if !store.newEpisodeSeries.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.newEpisodesForYou) {
                         ForEach(store.newEpisodeSeries) { entry in

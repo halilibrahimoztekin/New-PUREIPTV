@@ -13,7 +13,21 @@ public nonisolated enum SharedDatabaseConfig {
             if let container {
                 return container
             }
-            let container = try SharedDatabaseConfig.createModelContainer()
+            let container: ModelContainer
+            do {
+                container = try SharedDatabaseConfig.createModelContainer()
+            } catch {
+                // Never make the whole app unusable because the primary store could not
+                // migrate or open. Keep it untouched and open a separate recovery store.
+                // The original database can then be diagnosed or migrated in a later release.
+                do {
+                    container = try SharedDatabaseConfig.createRecoveryModelContainer()
+                } catch {
+                    // Last resort: still let users reach the app. This store is session-only
+                    // and does not overwrite either persistent database.
+                    container = try SharedDatabaseConfig.createInMemoryModelContainer()
+                }
+            }
             self.container = container
             return container
         }
@@ -70,5 +84,42 @@ public nonisolated enum SharedDatabaseConfig {
 
     public static func createModelContainer() throws -> ModelContainer {
         try ModelContainer(for: schema, configurations: createConfigurations())
+    }
+
+    private static func createRecoveryModelContainer() throws -> ModelContainer {
+        let fileManager = FileManager.default
+        let baseURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.pureiptv.shared")
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try fileManager.createDirectory(at: baseURL, withIntermediateDirectories: true)
+
+        let cloudConfig = ModelConfiguration(
+            "RecoveryCloud",
+            schema: Schema(cloudModels),
+            url: baseURL.appendingPathComponent("PureIPTV_Recovery.sqlite"),
+            cloudKitDatabase: .none
+        )
+        let localConfig = ModelConfiguration(
+            "RecoveryLocal",
+            schema: Schema(localModels),
+            url: baseURL.appendingPathComponent("PureIPTV_Local_Recovery.sqlite"),
+            cloudKitDatabase: .none
+        )
+        return try ModelContainer(for: schema, configurations: [cloudConfig, localConfig])
+    }
+
+    private static func createInMemoryModelContainer() throws -> ModelContainer {
+        let cloudConfig = ModelConfiguration(
+            "SessionCloud",
+            schema: Schema(cloudModels),
+            isStoredInMemoryOnly: true,
+            cloudKitDatabase: .none
+        )
+        let localConfig = ModelConfiguration(
+            "SessionLocal",
+            schema: Schema(localModels),
+            isStoredInMemoryOnly: true,
+            cloudKitDatabase: .none
+        )
+        return try ModelContainer(for: schema, configurations: [cloudConfig, localConfig])
     }
 }
