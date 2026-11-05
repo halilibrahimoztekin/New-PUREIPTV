@@ -40,7 +40,7 @@
                             } else {
                                 LiquidGlassContainer(spacing: 8) {
                                     ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 8) {
+                                        LazyHStack(spacing: 8) {
                                             ForEach(categories) { category in
                                                 LiquidGlassPill(
                                                     title: category.name,

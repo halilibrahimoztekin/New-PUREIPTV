@@ -32,7 +32,8 @@ public enum AwardDiscoveryEngine: Sendable {
         let item: MediaModels.Item
     }
 
-    public nonisolated static func discover(
+    @concurrent
+    public static func discover(
         from providerMovies: [MediaModels.Item],
         using tmdbClient: TMDBClient,
         awardClient: WikidataAwardClient

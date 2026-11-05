@@ -263,7 +263,7 @@ private nonisolated func rawMediaServerItemID(
     return value
 }
 
-private struct PlexPlaybackSessionsResponse: Decodable {
+private nonisolated struct PlexPlaybackSessionsResponse: Decodable, Sendable {
     let mediaContainer: PlexPlaybackSessionsContainer
 
     enum CodingKeys: String, CodingKey {
@@ -271,7 +271,7 @@ private struct PlexPlaybackSessionsResponse: Decodable {
     }
 }
 
-private struct PlexPlaybackSessionsContainer: Decodable {
+private nonisolated struct PlexPlaybackSessionsContainer: Decodable, Sendable {
     let metadata: [PlexPlaybackSession]
 
     enum CodingKeys: String, CodingKey {
@@ -279,7 +279,7 @@ private struct PlexPlaybackSessionsContainer: Decodable {
     }
 }
 
-private struct PlexPlaybackSession: Decodable {
+private nonisolated struct PlexPlaybackSession: Decodable, Sendable {
     let ratingKey: String?
     let media: [PlexPlaybackSessionMedia]?
     let player: PlexPlaybackSessionPlayer?
@@ -291,7 +291,7 @@ private struct PlexPlaybackSession: Decodable {
     }
 }
 
-private struct PlexPlaybackSessionPlayer: Decodable {
+private nonisolated struct PlexPlaybackSessionPlayer: Decodable, Sendable {
     let machineIdentifier: String?
 
     enum CodingKeys: String, CodingKey {
@@ -299,7 +299,7 @@ private struct PlexPlaybackSessionPlayer: Decodable {
     }
 }
 
-private struct PlexPlaybackSessionMedia: Decodable {
+private nonisolated struct PlexPlaybackSessionMedia: Decodable, Sendable {
     let selected: Bool?
     let videoResolution: String?
     let bitrate: Int?
@@ -321,7 +321,7 @@ private struct PlexPlaybackSessionMedia: Decodable {
     }
 }
 
-private struct PlexPlaybackSessionPart: Decodable {
+private nonisolated struct PlexPlaybackSessionPart: Decodable, Sendable {
     let selected: Bool?
     let decision: String?
 
@@ -331,7 +331,7 @@ private struct PlexPlaybackSessionPart: Decodable {
     }
 }
 
-private struct EmbyPlaybackSession: Decodable {
+private nonisolated struct EmbyPlaybackSession: Decodable, Sendable {
     let deviceID: String?
     let userID: String?
     let nowPlayingItem: EmbyPlaybackSessionItem?
@@ -347,7 +347,7 @@ private struct EmbyPlaybackSession: Decodable {
     }
 }
 
-private struct EmbyPlaybackSessionItem: Decodable {
+private nonisolated struct EmbyPlaybackSessionItem: Decodable, Sendable {
     let id: String?
 
     enum CodingKeys: String, CodingKey {
@@ -355,7 +355,7 @@ private struct EmbyPlaybackSessionItem: Decodable {
     }
 }
 
-private struct EmbyPlaybackSessionPlayState: Decodable {
+private nonisolated struct EmbyPlaybackSessionPlayState: Decodable, Sendable {
     let playMethod: String?
     let mediaSource: EmbyPlaybackSessionMediaSource?
 
@@ -365,7 +365,7 @@ private struct EmbyPlaybackSessionPlayState: Decodable {
     }
 }
 
-private struct EmbyPlaybackSessionMediaSource: Decodable {
+private nonisolated struct EmbyPlaybackSessionMediaSource: Decodable, Sendable {
     let bitrate: Int?
     let mediaStreams: [EmbyPlaybackSessionMediaStream]?
 
@@ -375,7 +375,7 @@ private struct EmbyPlaybackSessionMediaSource: Decodable {
     }
 }
 
-private struct EmbyPlaybackSessionMediaStream: Decodable {
+private nonisolated struct EmbyPlaybackSessionMediaStream: Decodable, Sendable {
     let type: String?
     let width: Int?
     let height: Int?
@@ -387,7 +387,7 @@ private struct EmbyPlaybackSessionMediaStream: Decodable {
     }
 }
 
-private struct EmbyPlaybackSessionTranscodingInfo: Decodable {
+private nonisolated struct EmbyPlaybackSessionTranscodingInfo: Decodable, Sendable {
     let bitrate: Int?
     let width: Int?
     let height: Int?
@@ -567,7 +567,7 @@ enum MediaServerRequestContextFactory {
     }
 }
 
-private struct PlexPINResponse: Decodable {
+private nonisolated struct PlexPINResponse: Decodable, Sendable {
     let id: Int
     let code: String
     let authToken: String?
@@ -579,7 +579,7 @@ private struct PlexPINResponse: Decodable {
     }
 }
 
-private struct PlexResourceDevice: Decodable {
+private nonisolated struct PlexResourceDevice: Decodable, Sendable {
     let name: String?
     let clientIdentifier: String?
     let accessToken: String?
@@ -601,7 +601,7 @@ private struct PlexResourceDevice: Decodable {
     }
 }
 
-private struct PlexResourceConnection: Decodable {
+private nonisolated struct PlexResourceConnection: Decodable, Sendable {
     let uri: String
     let local: Bool?
     let relay: Bool?
@@ -621,7 +621,7 @@ private struct PlexResourceConnection: Decodable {
 }
 
 private extension KeyedDecodingContainer {
-    func decodeFlexibleBooleanIfPresent(forKey key: Key) throws -> Bool? {
+    nonisolated func decodeFlexibleBooleanIfPresent(forKey key: Key) throws -> Bool? {
         guard contains(key) else { return nil }
         if try decodeNil(forKey: key) {
             return nil
@@ -646,7 +646,7 @@ private struct EmbyAuthenticationRequest: Encodable {
     }
 }
 
-private struct EmbyAuthenticationResponse: Decodable {
+private nonisolated struct EmbyAuthenticationResponse: Decodable, Sendable {
     let accessToken: String?
     let serverID: String?
     let user: EmbyUser?
@@ -658,7 +658,7 @@ private struct EmbyAuthenticationResponse: Decodable {
     }
 }
 
-private struct EmbyUser: Decodable {
+private nonisolated struct EmbyUser: Decodable, Sendable {
     let id: String?
     let name: String?
 

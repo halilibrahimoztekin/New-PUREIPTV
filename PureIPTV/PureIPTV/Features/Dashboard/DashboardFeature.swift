@@ -645,6 +645,7 @@ public struct DashboardFeature {
         case onDisappear
         case presentationPreferencesSynchronized(generation: UUID, sections: [HomeSectionConfig])
         case refreshTapped
+        case retryPersonalizationTapped
         case dismissCatalogCountSummary
         case movieCategoryPoliciesUpdated
         case movieCategoryShelvesLoaded(playlistID: UUID, requestID: UUID, profileScope: ProfileContextSnapshot, collections: [ExploreCollection])
@@ -807,23 +808,29 @@ public struct DashboardFeature {
             state.activeAwardRefreshID = awardRefreshID
             state.hasLoadedAwardDiscovery = false
 
-            let movies = state.actorRecommendationMovieCandidates
-            let series = state.actorRecommendationSeriesCandidates
+            let movies = state.actorRecommendationMovieCandidates.isEmpty
+                ? state.featuredVODs
+                : state.actorRecommendationMovieCandidates
+            let series = state.actorRecommendationSeriesCandidates.isEmpty
+                ? state.featuredSeries
+                : state.actorRecommendationSeriesCandidates
             let isAdult = settingsClient.isAdultContent
             let cutoff = LocalPersonalizationPreferences.watchHistoryCutoff(for: scope.profileID)
-            let playlistHistory = state.watchHistoryItems.filter { item in
+            let history = state.watchHistoryItems.map(PersonalizationHistoryEntry.init)
+            let favorites = state.favoriteItems.map(PersonalizationFavoriteEntry.init)
+            let playlistHistory = history.filter { item in
                 guard item.playlistID == playlistID else { return false }
                 return cutoff.map { item.lastWatchedAt > $0 } ?? true
             }
             let eligibleHistory = hideAdult
                 ? playlistHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
                 : playlistHistory
-            let playlistFavorites = state.favoriteItems.filter { $0.playlistID == playlistID }
+            let playlistFavorites = favorites.filter { $0.playlistID == playlistID }
             let safeMovies = hideAdult ? movies.filter { !isAdult($0.title) } : movies
             let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
 
             let localRecommendationsEffect = Effect<Action>.run { send in
-                let scoredRecommendations = SmartRecommendationEngine.recommendations(
+                let scoredRecommendations = await SmartRecommendationEngine.recommendations(
                     from: safeMovies,
                     history: eligibleHistory,
                     favorites: playlistFavorites,
@@ -887,7 +894,8 @@ public struct DashboardFeature {
                     try? await Task.sleep(for: .milliseconds(600))
                     guard !Task.isCancelled else { return }
                     let fullEpisodeHistory = await (try? databaseClient.fetchEpisodeWatchHistory(scope)) ?? []
-                    let playlistEpisodeHistory = fullEpisodeHistory.filter { item in
+                    let historySnapshots = fullEpisodeHistory.map(PersonalizationHistoryEntry.init)
+                    let playlistEpisodeHistory = historySnapshots.filter { item in
                         guard item.playlistID == playlistID else { return false }
                         return cutoff.map { item.lastWatchedAt > $0 } ?? true
                     }
@@ -1466,6 +1474,16 @@ public struct DashboardFeature {
                     refreshID: refreshID
                 )
                 return .merge(.send(loadAction), .send(.loadRecentLiveChannels))
+
+            case .retryPersonalizationTapped:
+                guard state.isVisible,
+                      state.isPersonalizationEnabled
+                else { return .none }
+                state.hasEnteredRecommendationsSection = true
+                state.hasStartedPersonalizationForCurrentData = false
+                guard state.activeRefreshID == nil else { return .none }
+                guard state.hasLoadedLocalData else { return .send(.loadLocalData) }
+                return makePersonalizationEffects(state: &state)
 
             case .dismissCatalogCountSummary:
                 state.catalogCountChanges = []

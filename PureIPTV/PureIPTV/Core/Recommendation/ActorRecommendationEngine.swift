@@ -81,8 +81,9 @@ public enum ActorRecommendationEngine: Sendable {
         return fetched
     }
 
-    public nonisolated static func collections(
-        history: [WatchHistoryItem],
+    @concurrent
+    public static func collections(
+        history: [PersonalizationHistoryEntry],
         playlistID: UUID?,
         movies: [MediaModels.Item],
         series: [MediaModels.Item],
@@ -154,8 +155,9 @@ public enum ActorRecommendationEngine: Sendable {
         return result
     }
 
-    public nonisolated static func mostWatchedActors(
-        history: [WatchHistoryItem],
+    @concurrent
+    public static func mostWatchedActors(
+        history: [PersonalizationHistoryEntry],
         playlistID: UUID?,
         movies: [MediaModels.Item],
         series: [MediaModels.Item],
@@ -264,7 +266,8 @@ public enum ActorRecommendationEngine: Sendable {
         return result
     }
 
-    public nonisolated static func filmography(
+    @concurrent
+    public static func filmography(
         actorID: Int,
         actorName: String,
         movies: [MediaModels.Item],
@@ -305,7 +308,7 @@ public enum ActorRecommendationEngine: Sendable {
         return result
     }
 
-    private nonisolated static func recentSeeds(from history: [WatchHistoryItem], playlistID: UUID) -> [Seed] {
+    private nonisolated static func recentSeeds(from history: [PersonalizationHistoryEntry], playlistID: UUID) -> [Seed] {
         var seenIDs = Set<String>()
         var seenSeriesIDs = Set<String>()
         var result: [Seed] = []

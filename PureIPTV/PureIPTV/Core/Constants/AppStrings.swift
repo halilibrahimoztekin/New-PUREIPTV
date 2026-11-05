@@ -43,6 +43,7 @@ public enum AppStrings {
         public static let restart = "Baştan Başlat".localized
         public static let liveTV = "Canlı TV".localized
         public static let retry = "Tekrar Dene".localized
+        public static let continueWithoutPlaylist = "Playlist olmadan devam et".localized
         public static let play = "Oynat".localized
         public static let search = "Ara".localized
         public static let channels = "Kanallar".localized

@@ -1277,7 +1277,7 @@ private nonisolated func parseISODate(_ value: String?) -> Date? {
     return formatter.date(from: value)
 }
 
-private nonisolated struct PlexHubSearchResponse: Decodable {
+private nonisolated struct PlexHubSearchResponse: Decodable, Sendable {
     let mediaContainer: PlexHubSearchContainer
 
     enum CodingKeys: String, CodingKey {
@@ -1285,7 +1285,7 @@ private nonisolated struct PlexHubSearchResponse: Decodable {
     }
 }
 
-private nonisolated struct PlexHubSearchContainer: Decodable {
+private nonisolated struct PlexHubSearchContainer: Decodable, Sendable {
     let hubs: [PlexSearchHub]
 
     enum CodingKeys: String, CodingKey {
@@ -1298,7 +1298,7 @@ private nonisolated struct PlexHubSearchContainer: Decodable {
     }
 }
 
-private nonisolated struct PlexSearchHub: Decodable {
+private nonisolated struct PlexSearchHub: Decodable, Sendable {
     let type: String?
     let metadata: [PlexMetadata]
 
@@ -1314,7 +1314,7 @@ private nonisolated struct PlexSearchHub: Decodable {
     }
 }
 
-private nonisolated struct PlexContainerResponse: Decodable {
+private nonisolated struct PlexContainerResponse: Decodable, Sendable {
     let mediaContainer: PlexContainer
 
     enum CodingKeys: String, CodingKey {
@@ -1322,7 +1322,7 @@ private nonisolated struct PlexContainerResponse: Decodable {
     }
 }
 
-private nonisolated struct PlexContainer: Decodable {
+private nonisolated struct PlexContainer: Decodable, Sendable {
     let directories: [PlexLibrarySection]
     let metadata: [PlexMetadata]
     let totalSize: Int?
@@ -1341,7 +1341,7 @@ private nonisolated struct PlexContainer: Decodable {
     }
 }
 
-private nonisolated struct PlexLibrarySection: Decodable {
+private nonisolated struct PlexLibrarySection: Decodable, Sendable {
     let key: String
     let title: String
     let type: String?
@@ -1360,7 +1360,7 @@ private nonisolated struct PlexLibrarySection: Decodable {
     }
 }
 
-private nonisolated struct PlexMetadata: Decodable {
+private nonisolated struct PlexMetadata: Decodable, Sendable {
     let id: String?
     let ratingKey: String?
     let key: String?
@@ -1430,7 +1430,7 @@ private nonisolated struct PlexMetadata: Decodable {
     }
 }
 
-private nonisolated struct PlexMedia: Decodable {
+private nonisolated struct PlexMedia: Decodable, Sendable {
     let id: String?
     let videoResolution: String?
     let container: String?
@@ -1452,19 +1452,19 @@ private nonisolated struct PlexMedia: Decodable {
     }
 }
 
-private nonisolated struct PlexPart: Decodable {
+private nonisolated struct PlexPart: Decodable, Sendable {
     let key: String?
 
     enum CodingKeys: String, CodingKey { case key }
 }
 
-private nonisolated struct PlexTag: Decodable {
+private nonisolated struct PlexTag: Decodable, Sendable {
     let tag: String?
 
     enum CodingKeys: String, CodingKey { case tag }
 }
 
-private nonisolated struct EmbyItemsResponse: Decodable {
+private nonisolated struct EmbyItemsResponse: Decodable, Sendable {
     let items: [EmbyItem]
     let totalRecordCount: Int?
 
@@ -1480,7 +1480,7 @@ private nonisolated struct EmbyItemsResponse: Decodable {
     }
 }
 
-private nonisolated struct EmbyItem: Decodable {
+private nonisolated struct EmbyItem: Decodable, Sendable {
     let id: String?
     let name: String?
     let type: String?
@@ -1544,7 +1544,7 @@ private nonisolated struct EmbyItem: Decodable {
     }
 }
 
-private nonisolated struct EmbyPerson: Decodable {
+private nonisolated struct EmbyPerson: Decodable, Sendable {
     let name: String?
     let type: String?
 
@@ -1554,7 +1554,7 @@ private nonisolated struct EmbyPerson: Decodable {
     }
 }
 
-private nonisolated struct EmbyMediaSource: Decodable {
+private nonisolated struct EmbyMediaSource: Decodable, Sendable {
     let id: String?
     let container: String?
     let supportsDirectPlay: Bool?
@@ -1591,7 +1591,7 @@ private nonisolated struct EmbyMediaSource: Decodable {
     }
 }
 
-private nonisolated struct EmbyMediaStream: Decodable {
+private nonisolated struct EmbyMediaStream: Decodable, Sendable {
     let type: String?
     let height: Int?
 
@@ -1625,7 +1625,7 @@ private nonisolated struct EmbyPlaybackInfoRequest: Encodable {
     }
 }
 
-private nonisolated struct EmbyPlaybackInfoResponse: Decodable {
+private nonisolated struct EmbyPlaybackInfoResponse: Decodable, Sendable {
     let playSessionID: String?
     let mediaSources: [EmbyMediaSource]
 

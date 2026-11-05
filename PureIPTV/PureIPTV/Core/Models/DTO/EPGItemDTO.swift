@@ -1,6 +1,6 @@
 import Foundation
 
-public struct EPGResponseDTO: Codable, Sendable {
+public nonisolated struct EPGResponseDTO: Codable, Sendable {
     public let epgListings: [EPGItemDTO]
 
     enum CodingKeys: String, CodingKey {
@@ -12,7 +12,7 @@ public struct EPGResponseDTO: Codable, Sendable {
     }
 }
 
-public struct EPGItemDTO: Codable, Sendable {
+public nonisolated struct EPGItemDTO: Codable, Sendable {
     public var id: String
     public var epgId: String
     public var title: String

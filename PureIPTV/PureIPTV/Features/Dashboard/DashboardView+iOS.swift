@@ -89,9 +89,6 @@
 
         @ViewBuilder
         private func homeSectionView(_ section: HomeSectionConfig) -> some View {
-            let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
-            let newMovieItems = Array(store.featuredVODs.dropFirst(isHeroVisible ? 1 : 0))
-
             switch section.type {
             case .hero:
                 if let heroVOD = store.featuredVODs.first {
@@ -169,6 +166,8 @@
             case .recommendations:
                 DashboardRecommendationsSection_iOS(store: store)
             case .recentlyAddedVOD:
+                let isHeroVisible = store.homeSections.contains { $0.type == .hero && $0.isVisible }
+                let newMovieItems = Array(store.featuredVODs.dropFirst(isHeroVisible ? 1 : 0))
                 if !newMovieItems.isEmpty {
                     featuredSection(title: AppStrings.Dashboard.newMovies, items: newMovieItems) { vod in
                         VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }

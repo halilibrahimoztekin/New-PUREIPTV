@@ -315,14 +315,18 @@ public struct EPGTimelineFeature {
 
             // Pin favorite channels to the top when not searching or filtering by favorites
             if query.isEmpty, !isFavoritesOnly {
-                return result.sorted { a, b in
-                    let aFav = favoriteIDs.contains(a.id)
-                    let bFav = favoriteIDs.contains(b.id)
-                    if aFav != bFav {
-                        return aFav && !bFav
+                var favorites: [MediaModels.Item] = []
+                var remaining: [MediaModels.Item] = []
+                favorites.reserveCapacity(min(result.count, favoriteIDs.count))
+                remaining.reserveCapacity(result.count)
+                for channel in result {
+                    if favoriteIDs.contains(channel.id) {
+                        favorites.append(channel)
+                    } else {
+                        remaining.append(channel)
                     }
-                    return false
                 }
+                return favorites + remaining
             }
 
             return result

@@ -228,7 +228,7 @@ extension Notification.Name {
 /// Represents a search query in history
 @Model
 public final class SearchHistoryItem {
-    @Attribute(.unique) public var query: String
+    public var query: String = ""
     public var timestamp: Date = Date()
 
     public init(query: String, timestamp: Date = Date()) {

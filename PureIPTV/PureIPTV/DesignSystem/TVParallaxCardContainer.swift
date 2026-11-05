@@ -24,31 +24,21 @@
 
         public func body(content: Content) -> some View {
             content
-                .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.06 : 1.0))
-                .offset(y: reduceMotion ? 0 : (isFocused ? -3 : 0))
+                .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.045 : 1.0))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(
-                            isFocused
-                                ? accentColor
-                                : isSelected ? accentColor.opacity(0.5) : AppColors.glassPlate,
-                            lineWidth: isFocused ? 3.5 : (isSelected ? 2 : 1)
+                            isSelected ? accentColor.opacity(0.5) : AppColors.glassPlate,
+                            lineWidth: isSelected ? 2 : 1
                         )
                 )
-                // Çift Katmanlı Gölge: 1. Zemin derinlik gölgesi + 2. Neon ambiyans parlaması
                 .shadow(
-                    color: AppColors.oledBlack.opacity(isFocused ? 0.60 : 0.35),
-                    radius: isFocused ? 28 : 8,
+                    color: AppColors.oledBlack.opacity(0.35),
+                    radius: 8,
                     x: 0,
-                    y: isFocused ? 14 : 4
+                    y: 4
                 )
-                .shadow(
-                    color: isFocused ? accentColor.opacity(0.48) : Color.clear,
-                    radius: 36,
-                    x: 0,
-                    y: 16
-                )
-                .animation(.spring(response: 0.30, dampingFraction: 0.74), value: isFocused)
+                .animation(.spring(response: 0.26, dampingFraction: 0.82), value: isFocused)
         }
     }
 
@@ -85,70 +75,23 @@
                 backgroundContent()
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
-                // Katman 2: Specular Sheen (Işık Yansıması)
-                LinearGradient(
-                    stops: [
-                        .init(color: .white.opacity(isFocused ? 0.24 : 0.0), location: 0.0),
-                        .init(color: .white.opacity(isFocused ? 0.08 : 0.0), location: 0.35),
-                        .init(color: .clear, location: 0.85),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .allowsHitTesting(false)
-
-                // Üst Kenar Işık Yansıması (Top Bevel Reflection)
-                if isFocused {
-                    VStack {
-                        LinearGradient(
-                            colors: [.white.opacity(0.40), .white.opacity(0.0)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 2)
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                        Spacer()
-                    }
-                    .allowsHitTesting(false)
-                }
-
-                // Katman 3: Öne fırlayan Parallax içerik (Logo / Başlık / Rozet)
+                // Kart içeriği odak değişiminde sabit kalır; yalnızca kartın tamamı ölçeklenir.
                 floatingContent()
-                    .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.07 : 1.0))
-                    .offset(y: reduceMotion ? 0 : (isFocused ? -2 : 0))
-                    .shadow(color: Color.black.opacity(isFocused ? 0.50 : 0.0), radius: 6, y: 3)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isFocused)
 
-                // Katman 4: Neon Kenarlık
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isFocused
-                            ? accentColor
-                            : isSelected ? accentColor.opacity(0.5) : Color.white.opacity(0.08),
-                        lineWidth: isFocused ? 3.5 : (isSelected ? 2 : 1)
+                        isSelected ? accentColor.opacity(0.5) : Color.white.opacity(0.08),
+                        lineWidth: isSelected ? 2 : 1
                     )
             }
-            .tvHighContrastFocusOutline(
-                isFocused: isFocused,
-                shape: .roundedRectangle(cornerRadius: cornerRadius)
-            )
-            .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.06 : 1.0))
-            .offset(y: reduceMotion ? 0 : (isFocused ? -3 : 0))
-            // Çift Katmanlı Gölge: 1. Zemin derinlik gölgesi + 2. Neon ambiyans parlaması
+            .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.045 : 1.0))
             .shadow(
-                color: Color.black.opacity(isFocused ? 0.60 : 0.35),
-                radius: isFocused ? 28 : 8,
+                color: Color.black.opacity(0.35),
+                radius: 8,
                 x: 0,
-                y: isFocused ? 14 : 4
+                y: 4
             )
-            .shadow(
-                color: isFocused ? accentColor.opacity(0.48) : Color.clear,
-                radius: 36,
-                x: 0,
-                y: 16
-            )
-            .animation(.spring(response: 0.30, dampingFraction: 0.74), value: isFocused)
+            .animation(.spring(response: 0.26, dampingFraction: 0.82), value: isFocused)
         }
     }
 #endif

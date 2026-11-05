@@ -142,8 +142,11 @@
                     }
                 }
             }
-            .onAppear {
-                store.send(.onAppear(config: config))
+            .task {
+                // VOD's on-appear reducer synchronously updates catalog state.
+                // Run it as a view task so that work is not dispatched while
+                // SwiftUI is processing its appearance update group.
+                await store.send(.onAppear(config: config)).finish()
             }
             .onChange(of: config.playlistID) { _, _ in
                 categorySearchQuery = ""

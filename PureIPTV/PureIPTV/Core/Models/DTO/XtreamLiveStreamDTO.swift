@@ -1,6 +1,6 @@
 import Foundation
 
-public struct XtreamLiveStreamDTO: Codable, Sendable {
+public nonisolated struct XtreamLiveStreamDTO: Codable, Sendable {
     public let num: Int?
     public let name: String
     public let streamType: String?

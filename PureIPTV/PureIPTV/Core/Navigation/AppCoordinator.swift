@@ -81,6 +81,7 @@ public struct AppCoordinator {
 
         // Global flows
         case proceedToApp
+        case continueWithoutPlaylist
         case presentPaywall
         case presentParentalLock(ParentalLockFeature.State)
         case checkSubscriptionStatus
@@ -268,6 +269,7 @@ public struct AppCoordinator {
             reduceRouteAction(state: &state, routeIndex: routeIndex, screenAction: screenAction, action: action)
 
         case .proceedToApp,
+             .continueWithoutPlaylist,
              .checkSubscriptionStatus,
              .subscriptionStatusResponse,
              .presentPaywall,
@@ -2794,6 +2796,12 @@ public struct AppCoordinator {
         let previewPlayerClient = previewPlayerClient
 
         switch action {
+        case .continueWithoutPlaylist:
+            // Leave the saved Keychain record untouched so a later retry can recover it.
+            state.isStartupPlaylistReadFailed = false
+            state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
+            return .none
+
         case .proceedToApp:
             let activePlaylist: SavedPlaylist?
             switch playlistRepository.readStartupPlaylist() {
@@ -4315,6 +4323,11 @@ public struct AppCoordinatorView: View {
                 Button(AppStrings.Common.retry) { store.send(.proceedToApp) }
                     .buttonStyle(.borderedProminent)
                     .frame(minHeight: 48)
+                Button(AppStrings.Common.continueWithoutPlaylist) {
+                    store.send(.continueWithoutPlaylist)
+                }
+                .buttonStyle(.bordered)
+                .frame(minHeight: 48)
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: 900)

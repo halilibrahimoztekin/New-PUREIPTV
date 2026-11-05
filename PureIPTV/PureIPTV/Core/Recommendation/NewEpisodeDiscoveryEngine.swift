@@ -39,8 +39,9 @@ public enum NewEpisodeDiscoveryEngine: Sendable {
         let watchedEpisodeIDs: Set<String>
     }
 
-    public nonisolated static func discover(
-        history: [WatchHistoryItem],
+    @concurrent
+    public static func discover(
+        history: [PersonalizationHistoryEntry],
         playlistID: UUID?,
         seriesCatalog: [MediaModels.Item],
         favoriteSeriesIDs: Set<String> = [],

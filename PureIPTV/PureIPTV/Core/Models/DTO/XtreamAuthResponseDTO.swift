@@ -1,6 +1,6 @@
 @preconcurrency import Foundation
 
-public struct XtreamAuthResponseDTO: Codable, Sendable {
+public nonisolated struct XtreamAuthResponseDTO: Codable, Sendable {
     public let userInfo: UserInfo
     public let serverInfo: ServerInfo
 

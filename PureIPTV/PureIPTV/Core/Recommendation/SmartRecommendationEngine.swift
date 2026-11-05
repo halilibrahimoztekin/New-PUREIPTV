@@ -40,11 +40,21 @@ public enum SmartRecommendationEngine: Sendable {
     }
 
     /// Generates a concise explanation alongside each item, based on the scoring signal that actually contributed.
-    public nonisolated static func recommendations(
+    @concurrent
+    public static func recommendations(
         from candidates: [MediaModels.Item],
-        history: [WatchHistoryItem],
-        favorites: [FavoriteItem],
+        history: [PersonalizationHistoryEntry],
+        favorites: [PersonalizationFavoriteEntry],
         limit: Int = 14
+    ) async -> [Recommendation] {
+        makeRecommendations(from: candidates, history: history, favorites: favorites, limit: limit)
+    }
+
+    private nonisolated static func makeRecommendations(
+        from candidates: [MediaModels.Item],
+        history: [PersonalizationHistoryEntry],
+        favorites: [PersonalizationFavoriteEntry],
+        limit: Int
     ) -> [Recommendation] {
         var candidateIDs = Set<String>()
         let uniqueCandidates = candidates.filter { candidateIDs.insert($0.id).inserted }
@@ -185,7 +195,14 @@ public enum SmartRecommendationEngine: Sendable {
         favorites: [FavoriteItem],
         limit: Int = 14
     ) -> [MediaModels.Item] {
-        recommendations(from: candidates, history: history, favorites: favorites, limit: limit).map(\.item)
+        let historySnapshots = history.map(PersonalizationHistoryEntry.init)
+        let favoriteSnapshots = favorites.map(PersonalizationFavoriteEntry.init)
+        return makeRecommendations(
+            from: candidates,
+            history: historySnapshots,
+            favorites: favoriteSnapshots,
+            limit: limit
+        ).map(\.item)
     }
 
     /// Fallback ranking for new users: high ratings and diversity.

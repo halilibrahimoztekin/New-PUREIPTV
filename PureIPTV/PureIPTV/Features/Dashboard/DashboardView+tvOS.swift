@@ -261,220 +261,7 @@
                     )
                 }
             case .recommendations:
-                Color.clear
-                    .frame(height: 1)
-                    .onScrollVisibilityChange(threshold: 0.5) { isVisible in
-                        guard isVisible else { return }
-                        store.send(.recommendationsSectionBecameVisible)
-                    }
-                if !store.newEpisodeSeries.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.newEpisodesForYou) {
-                        ForEach(store.newEpisodeSeries) { entry in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVSeriesCard(series: entry.series, isSelected: false) {
-                                    store.send(.seriesSelected(entry.series))
-                                }
-                                .frame(width: 220)
-                                Text(String(format: AppStrings.Dashboard.newEpisodeCardSummary,
-                                            entry.latestSeason,
-                                            entry.latestEpisodeNumber,
-                                            entry.newEpisodeCount))
-                                    .font(AppFonts.captionMedium)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                                    .frame(width: 220, alignment: .leading)
-                            }
-                        }
-                    }
-                }
-                if !store.mostRatedMovies.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.mostRatedMovies) {
-                        ForEach(store.mostRatedMovies) { entry in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVVODCard(vod: entry.item, isSelected: false) {
-                                    store.send(.vodSelected(entry.item))
-                                }
-                                .frame(width: 220)
-                                Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
-                                    .font(AppFonts.captionMedium)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                                    .frame(width: 220, alignment: .leading)
-                            }
-                        }
-                    }
-                }
-                if !store.highestRatedMovies.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.highestRatedMovies) {
-                        ForEach(store.highestRatedMovies) { entry in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVVODCard(vod: entry.item, isSelected: false) {
-                                    store.send(.vodSelected(entry.item))
-                                }
-                                .frame(width: 220)
-                                Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
-                                    .font(AppFonts.captionMedium)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                                    .frame(width: 220, alignment: .leading)
-                            }
-                        }
-                    }
-                }
-                if !store.awardWinningMovies.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.awardWinningMovies) {
-                        ForEach(store.awardWinningMovies) { entry in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
-                                Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
-                                    .font(AppFonts.captionMedium)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                }
-                if !store.awardNomineeMovies.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.awardNomineeMovies) {
-                        ForEach(store.awardNomineeMovies) { entry in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }.frame(width: 220)
-                                Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
-                                    .font(AppFonts.captionMedium)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                }
-                if !store.mostWatchedActors.isEmpty {
-                    TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
-                        ? AppStrings.Dashboard.popularActors
-                        : AppStrings.Dashboard.mostWatchedActors)
-                    {
-                        ForEach(store.mostWatchedActors) { actor in
-                            Button { store.send(.actorSelected(id: actor.id, name: actor.name)) } label: {
-                                VStack(spacing: 10) {
-                                    AsyncImage(url: actor.profilePath.flatMap {
-                                        URL(string: "https://image.tmdb.org/t/p/w185\($0)")
-                                    }) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Text(String(actor.name.prefix(1)))
-                                            .font(AppFonts.titleLarge)
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                            .background(AppColors.surfaceElevated)
-                                    }
-                                    .frame(width: 132, height: 132)
-                                    .clipShape(Circle())
-
-                                    Text(actor.name)
-                                        .font(AppFonts.titleSmall)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                        .frame(width: 160, height: 48, alignment: .top)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .tvFocusEffect()
-                            .accessibilityLabel(Text(actor.name))
-                        }
-                    }
-                }
-                if store.isLoadingActorFilmography {
-                    ProgressView(AppStrings.Common.loading)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 40)
-                }
-                if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
-                    Text(AppStrings.Dashboard.actorFilmographyUnavailable)
-                        .font(AppFonts.bodyMedium)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .padding(.horizontal, 40)
-                }
-                if !store.recommendedVODs.isEmpty {
-                    TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
-                        ForEach(store.recommendedVODs) { vod in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
-                                    .frame(width: 220)
-                                    .contextMenu {
-                                        Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
-                                            Label(
-                                                favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id))
-                                                    ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
-                                                systemImage: favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id)) ? "heart.slash" : "heart"
-                                            )
-                                        }
-                                        Button { store.send(.vodSelected(vod)) } label: {
-                                            Label("Detayları Gör", systemImage: "info.circle")
-                                        }
-                                    }
-                                if let reason = store.recommendationReasons[vod.id] {
-                                    Text(reason.title)
-                                        .font(AppFonts.caption)
-                                        .foregroundStyle(AppColors.textSecondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .frame(width: 220, alignment: .leading)
-                        }
-                    }
-                }
-                if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
-                    if store.isLoadingPersonalizedContent {
-                        ProgressView(AppStrings.Common.loading)
-                            .font(AppFonts.titleSmall)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .padding(.horizontal, 40)
-                    } else if store.hasLoadedRemoteData {
-                        HStack(spacing: 22) {
-                            Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
-                                .font(AppFonts.headline)
-                                .foregroundStyle(AppColors.textSecondary)
-                            Button {
-                                store.send(.refreshTapped)
-                            } label: {
-                                Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
-                            .accessibilityValue(store.activeRefreshID == nil ? "" : AppStrings.Common.loading)
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                }
-                ForEach(store.actorRecommendationCollections) { collection in
-                    let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
-                                       collection.actorName,
-                                       collection.sourceTitle,
-                                       collection.kind.title)
-                    TVShelfSection(title: title) {
-                        ForEach(collection.items) { item in
-                            if collection.kind == .movie {
-                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                    .frame(width: 220)
-                            } else {
-                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                    .frame(width: 220)
-                            }
-                        }
-                    }
-                }
-                ForEach(store.selectedActorCollections) { collection in
-                    TVShelfSection(title: "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)") {
-                        ForEach(collection.items) { item in
-                            if collection.kind == .movie {
-                                TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
-                                    .frame(width: 220)
-                            } else {
-                                TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
-                                    .frame(width: 220)
-                            }
-                        }
-                    }
-                }
+                DashboardPersonalizationSection_tvOS(store: store, favoriteIDs: favoriteIDs)
             case .recentlyAddedVOD:
                 if !newMovieItems.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.newMovies) {
@@ -559,6 +346,230 @@
         private var tvLoadingView: some View {
             PureLoadingView(size: .large, text: AppStrings.Common.loadingAlt)
                 .transition(.opacity)
+        }
+    }
+
+    private struct DashboardPersonalizationSection_tvOS: View {
+        @Bindable var store: StoreOf<DashboardFeature>
+        let favoriteIDs: Set<FavoriteIdentity>
+
+        var body: some View {
+            Color.clear
+                .frame(height: 1)
+                .onScrollVisibilityChange(threshold: 0.5) { isVisible in
+                    guard isVisible else { return }
+                    store.send(.recommendationsSectionBecameVisible)
+                }
+            if !store.newEpisodeSeries.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.newEpisodesForYou) {
+                    ForEach(store.newEpisodeSeries) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVSeriesCard(series: entry.series, isSelected: false) {
+                                store.send(.seriesSelected(entry.series))
+                            }
+                            .frame(width: 220)
+                            Text(String(format: AppStrings.Dashboard.newEpisodeCardSummary,
+                                        entry.latestSeason,
+                                        entry.latestEpisodeNumber,
+                                        entry.newEpisodeCount))
+                                .font(AppFonts.captionMedium)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                                .frame(width: 220, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            if !store.mostRatedMovies.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.mostRatedMovies) {
+                    ForEach(store.mostRatedMovies) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVVODCard(vod: entry.item, isSelected: false) {
+                                store.send(.vodSelected(entry.item))
+                            }
+                            .frame(width: 220)
+                            Text(String(format: AppStrings.Dashboard.mostVotesSummary, entry.voteCount, entry.voteAverage))
+                                .font(AppFonts.captionMedium)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                                .frame(width: 220, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            if !store.highestRatedMovies.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.highestRatedMovies) {
+                    ForEach(store.highestRatedMovies) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVVODCard(vod: entry.item, isSelected: false) {
+                                store.send(.vodSelected(entry.item))
+                            }
+                            .frame(width: 220)
+                            Text(String(format: AppStrings.Dashboard.ratingVotesSummary, entry.voteAverage, entry.voteCount))
+                                .font(AppFonts.captionMedium)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                                .frame(width: 220, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            if !store.awardWinningMovies.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.awardWinningMovies) {
+                    ForEach(store.awardWinningMovies) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                                .frame(width: 220)
+                            Text(String(format: AppStrings.Dashboard.awardRecognitionCount, entry.recognitionCount))
+                                .font(AppFonts.captionMedium)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            if !store.awardNomineeMovies.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.awardNomineeMovies) {
+                    ForEach(store.awardNomineeMovies) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVVODCard(vod: entry.item, isSelected: false) { store.send(.vodSelected(entry.item)) }
+                                .frame(width: 220)
+                            Text(String(format: AppStrings.Dashboard.awardNominationCount, entry.recognitionCount))
+                                .font(AppFonts.captionMedium)
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            if !store.mostWatchedActors.isEmpty {
+                TVShelfSection(title: store.mostWatchedActors.first?.source == .popularFallback
+                    ? AppStrings.Dashboard.popularActors
+                    : AppStrings.Dashboard.mostWatchedActors)
+                {
+                    ForEach(store.mostWatchedActors) { actor in
+                        Button { store.send(.actorSelected(id: actor.id, name: actor.name)) } label: {
+                            VStack(spacing: 10) {
+                                AsyncImage(url: actor.profilePath.flatMap {
+                                    URL(string: "https://image.tmdb.org/t/p/w185\($0)")
+                                }) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    Text(String(actor.name.prefix(1)))
+                                        .font(AppFonts.titleLarge)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(AppColors.surfaceElevated)
+                                }
+                                .frame(width: 132, height: 132)
+                                .clipShape(Circle())
+
+                                Text(actor.name)
+                                    .font(AppFonts.titleSmall)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .frame(width: 160, height: 48, alignment: .top)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .tvFocusEffect()
+                        .accessibilityLabel(Text(actor.name))
+                    }
+                }
+            }
+            if store.isLoadingActorFilmography {
+                ProgressView(AppStrings.Common.loading)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 40)
+            }
+            if store.hasLoadedSelectedActorFilmography, store.selectedActorCollections.isEmpty {
+                Text(AppStrings.Dashboard.actorFilmographyUnavailable)
+                    .font(AppFonts.bodyMedium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .padding(.horizontal, 40)
+            }
+            if !store.recommendedVODs.isEmpty {
+                TVShelfSection(title: AppStrings.Dashboard.recommendedForYou) {
+                    ForEach(store.recommendedVODs) { vod in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TVVODCard(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                                .frame(width: 220)
+                                .contextMenu {
+                                    Button { store.send(.toggleFavorite(item: vod, type: "vod")) } label: {
+                                        Label(
+                                            favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id))
+                                                ? AppStrings.Common.removeFromFavorites : AppStrings.Common.addToFavorites,
+                                            systemImage: favoriteIDs.contains(FavoriteIdentity(type: "vod", playlistID: store.activePlaylistID, id: vod.id)) ? "heart.slash" : "heart"
+                                        )
+                                    }
+                                    Button { store.send(.vodSelected(vod)) } label: {
+                                        Label("Detayları Gör", systemImage: "info.circle")
+                                    }
+                                }
+                            if let reason = store.recommendationReasons[vod.id] {
+                                Text(reason.title)
+                                    .font(AppFonts.caption)
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(width: 220, alignment: .leading)
+                    }
+                }
+            }
+            if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
+                if store.isLoadingPersonalizedContent {
+                    ProgressView(AppStrings.Common.loading)
+                        .font(AppFonts.titleSmall)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 40)
+                } else if store.hasLoadedRemoteData {
+                    HStack(spacing: 22) {
+                        Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
+                            .font(AppFonts.headline)
+                            .foregroundStyle(AppColors.textSecondary)
+                        Button {
+                            store.send(.refreshTapped)
+                        } label: {
+                            Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(TVCapsuleButtonStyle(isPrimary: true, isSelected: false))
+                        .accessibilityValue(store.activeRefreshID == nil ? "" : AppStrings.Common.loading)
+                    }
+                    .padding(.horizontal, 40)
+                }
+            }
+            ForEach(store.actorRecommendationCollections) { collection in
+                let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
+                                   collection.actorName,
+                                   collection.sourceTitle,
+                                   collection.kind.title)
+                TVShelfSection(title: title) {
+                    ForEach(collection.items) { item in
+                        if collection.kind == .movie {
+                            TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                .frame(width: 220)
+                        } else {
+                            TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                .frame(width: 220)
+                        }
+                    }
+                }
+            }
+            ForEach(store.selectedActorCollections) { collection in
+                TVShelfSection(title: "\(store.selectedActorName ?? collection.actorName) • \(collection.kind.title)") {
+                    ForEach(collection.items) { item in
+                        if collection.kind == .movie {
+                            TVVODCard(vod: item, isSelected: false) { store.send(.vodSelected(item)) }
+                                .frame(width: 220)
+                        } else {
+                            TVSeriesCard(series: item, isSelected: false) { store.send(.seriesSelected(item)) }
+                                .frame(width: 220)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -31,7 +31,6 @@ public struct NetworkClient {
     private let session: URLSession
     private let credentialedSession: URLSession
     private let m3uSession: URLSession
-    private let decoder: JSONDecoder
 
     public init(session: URLSession = .shared) {
         self.session = session
@@ -50,10 +49,6 @@ public struct NetworkClient {
         m3uConfiguration.httpCookieStorage = nil
         m3uConfiguration.httpShouldSetCookies = false
         m3uSession = URLSession(configuration: m3uConfiguration)
-
-        decoder = JSONDecoder()
-        // Some APIs return empty arrays instead of objects on failure or empty results
-        // Also might need date decoding strategies depending on API format.
     }
 
     public func fetchData(url: URL, userAgentOverride: String? = nil) async throws -> Data {
@@ -267,30 +262,30 @@ public struct NetworkClient {
     }
 
     @MainActor
-    public func fetch<T: Decodable>(url: URL, userAgentOverride: String? = nil) async throws -> T {
+    public func fetch<T: Decodable & Sendable>(url: URL, userAgentOverride: String? = nil) async throws -> T {
         var request = URLRequest(url: url)
         UserAgentManager.shared.applyHeaders(to: &request, override: userAgentOverride)
-        return try await performFetch(request: request)
+        return try await Self.performFetch(request: request, session: session)
     }
 
     /// Executes an authenticated request whose credentials are carried in headers, never in its URL.
     @MainActor
-    public func fetch<T: Decodable>(request originalRequest: URLRequest) async throws -> T {
+    public func fetch<T: Decodable & Sendable>(request originalRequest: URLRequest) async throws -> T {
         var request = originalRequest
         if let url = request.url {
             request.url = mediaServerCredentialSafeURL(url)
         }
-        return try await performFetch(request: request, session: credentialedSession)
+        return try await Self.performFetch(request: request, session: credentialedSession)
     }
 
-    @MainActor
-    private func performFetch<T: Decodable>(request: URLRequest, session: URLSession? = nil) async throws -> T {
+    @concurrent
+    private nonisolated static func performFetch<T: Decodable & Sendable>(request: URLRequest, session: URLSession) async throws -> T {
         #if DEBUG
-            print("🌐 [NETWORK REQUEST] -> \(Self.redactedURL(request.url))")
+            print("🌐 [NETWORK REQUEST] -> \(redactedURL(request.url))")
             let startTime = CFAbsoluteTimeGetCurrent()
         #endif
 
-        let (data, response) = try await (session ?? self.session).data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         #if DEBUG
             let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
@@ -318,7 +313,10 @@ public struct NetworkClient {
         }
 
         do {
-            return try decoder.decode(T.self, from: data)
+            // NetworkClient is MainActor-isolated by the target's default isolation.
+            // Keep the synchronous JSON decode on this explicitly nonisolated path,
+            // and avoid sharing JSONDecoder across concurrent requests.
+            return try JSONDecoder().decode(T.self, from: data)
         } catch let DecodingError.dataCorrupted(context) {
             throw NetworkError.decodingFailed(description: "Data corrupted: \(context.debugDescription)")
         } catch let DecodingError.keyNotFound(key, context) {

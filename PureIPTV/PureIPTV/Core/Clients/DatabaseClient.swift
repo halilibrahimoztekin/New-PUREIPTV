@@ -665,6 +665,9 @@ extension DatabaseClient: DependencyKey {
 
                 if let first = existing.first {
                     first.timestamp = Date()
+                    for duplicate in existing.dropFirst() {
+                        context.delete(duplicate)
+                    }
                 } else {
                     let newItem = SearchHistoryItem(query: query)
                     context.insert(newItem)

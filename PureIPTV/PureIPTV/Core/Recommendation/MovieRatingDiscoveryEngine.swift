@@ -35,7 +35,8 @@ public enum MovieRatingDiscoveryEngine: Sendable {
         let item: MediaModels.Item
     }
 
-    public nonisolated static func discover(
+    @concurrent
+    public static func discover(
         from providerMovies: [MediaModels.Item],
         using client: TMDBClient
     ) async -> Shelves {

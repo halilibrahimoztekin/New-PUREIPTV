@@ -12,7 +12,8 @@
         }
 
         public var body: some View {
-            VStack(spacing: 24) {
+            LazyVStack(spacing: 24) {
+                localPersonalizationShelf
                 if !store.newEpisodeSeries.isEmpty {
                     newEpisodeDiscoverySection
                 }
@@ -78,43 +79,6 @@
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                 }
-                if !store.recommendedVODs.isEmpty {
-                    featuredShelf(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
-                        VStack(alignment: .leading, spacing: 6) {
-                            VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
-                            if let reason = store.recommendationReasons[vod.id] {
-                                Text(reason.title)
-                                    .font(AppFonts.captionSmall.weight(.medium))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .frame(width: 140, alignment: .leading)
-                    }
-                }
-                if store.isPersonalizationEnabled, !store.hasPersonalizedContent {
-                    if store.isLoadingPersonalizedContent {
-                        ProgressView(AppStrings.Common.loading)
-                            .tint(AppColors.textPrimary)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                    } else if store.hasLoadedRemoteData {
-                        HStack(spacing: 12) {
-                            Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
-                                .foregroundStyle(AppColors.textSecondary)
-                            Spacer()
-                            Button {
-                                store.send(.refreshTapped)
-                            } label: {
-                                Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(store.activeRefreshID != nil)
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                }
                 ForEach(store.actorRecommendationCollections) { collection in
                     let title = String(format: AppStrings.Dashboard.actorRecommendationTitle,
                                        collection.actorName,
@@ -149,7 +113,59 @@
                         .padding(.horizontal, 16)
                 }
             }
-            .onScrollVisibilityChange(threshold: 0.5) { isVisible in
+        }
+
+        private var localPersonalizationShelf: some View {
+            Group {
+                if !store.recommendedVODs.isEmpty {
+                    featuredShelf(title: AppStrings.Dashboard.recommendedForYou, items: store.recommendedVODs) { vod in
+                        VStack(alignment: .leading, spacing: 6) {
+                            VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
+                            if let reason = store.recommendationReasons[vod.id] {
+                                Text(reason.title)
+                                    .font(AppFonts.captionSmall.weight(.medium))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(width: 140, alignment: .leading)
+                    }
+                } else if store.isPersonalizationEnabled,
+                          !store.hasPersonalizedContent,
+                          store.isLoadingPersonalizedContent || !store.hasLoadedLocalData
+                {
+                    ProgressView(AppStrings.Common.loading)
+                        .tint(AppColors.textPrimary)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                } else if store.isPersonalizationEnabled,
+                          !store.hasPersonalizedContent,
+                          store.hasLoadedRemoteData
+                {
+                    HStack(spacing: 12) {
+                        Label(AppStrings.Dashboard.recommendedForYou, systemImage: "sparkles")
+                            .foregroundStyle(AppColors.textSecondary)
+                        Spacer()
+                        Button {
+                            store.send(.retryPersonalizationTapped)
+                        } label: {
+                            Label(AppStrings.Common.retry, systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(
+                            store.activeRefreshID != nil
+                                || store.isLoadingPersonalizedContent
+                                || !store.hasLoadedLocalData
+                        )
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .onAppear {
+                store.send(.recommendationsSectionBecameVisible)
+            }
+            .onScrollVisibilityChange(threshold: 0.1) { isVisible in
                 guard isVisible else { return }
                 store.send(.recommendationsSectionBecameVisible)
             }

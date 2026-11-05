@@ -1,7 +1,7 @@
 import Foundation
 
-enum XtreamDTOValueDecoder {
-    static func categoryID<Key: CodingKey>(
+nonisolated enum XtreamDTOValueDecoder {
+    nonisolated static func categoryID<Key: CodingKey>(
         from container: KeyedDecodingContainer<Key>,
         forKey key: Key
     ) throws -> String {

@@ -184,6 +184,7 @@
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .accessibilityLabel([
                 sequenceNumber.map { "\(AppStrings.LiveTV.channelNumber) \($0)" },
                 presentationNumber.map(String.init),
@@ -301,6 +302,7 @@
                 .aspectRatio(2 / 3, contentMode: .fit)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
         }
     }
 
@@ -402,6 +404,7 @@
                 .aspectRatio(2 / 3, contentMode: .fit)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
         }
     }
 
@@ -501,6 +504,7 @@
                 .aspectRatio(isLive ? 16 / 9 : 2 / 3, contentMode: .fit)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
         }
 
         private var placeholderBackground: some View {

@@ -20,11 +20,13 @@
                 set: { store.send(.tabSelected($0)) }
             )) {
                 ForEach(store.visibleTabs, id: \.self) { tab in
-                    tabContent(for: tab)
-                        .tabItem {
-                            Label(tab.rawValue, systemImage: store.selectedTab == tab ? tab.selectedIcon : tab.icon)
-                        }
-                        .tag(tab)
+                    RetainedLazyTabContent(isSelected: store.selectedTab == tab) {
+                        tabContent(for: tab)
+                    }
+                    .tabItem {
+                        Label(tab.rawValue, systemImage: store.selectedTab == tab ? tab.selectedIcon : tab.icon)
+                    }
+                    .tag(tab)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -82,6 +84,39 @@
                 )
             case .settings:
                 SettingsView(store: store.scope(state: \.settings, action: \.settings))
+            }
+        }
+    }
+
+    /// Defers the cost of constructing each tab until the user first selects it,
+    /// then retains its view state for subsequent tab switches.
+    private struct RetainedLazyTabContent<Content: View>: View {
+        let isSelected: Bool
+        let content: () -> Content
+        @State private var hasLoaded = false
+
+        init(isSelected: Bool, @ViewBuilder content: @escaping () -> Content) {
+            self.isSelected = isSelected
+            self.content = content
+        }
+
+        var body: some View {
+            Group {
+                if hasLoaded || isSelected {
+                    content()
+                } else {
+                    Color.clear
+                }
+            }
+            .onAppear {
+                if isSelected {
+                    hasLoaded = true
+                }
+            }
+            .onChange(of: isSelected) { _, selected in
+                if selected {
+                    hasLoaded = true
+                }
             }
         }
     }

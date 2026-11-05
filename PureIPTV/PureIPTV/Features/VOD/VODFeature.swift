@@ -157,6 +157,10 @@ public struct VODFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                let previousSelectedCategoryID = state.selectedCategoryID
+                let previousLanguageFilter = state.selectedLanguageFilter
+                let previousOriginalLanguageCode = state.selectedOriginalLanguageCode
+                let previousSortMethod = state.lastSortMethod
                 let configChanged = state.config != config
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 if configChanged {
@@ -218,7 +222,14 @@ public struct VODFeature {
                 }
                 state.isCategorySortOverridden = categorySortMethod != nil
                 state.lastSortMethod = categorySortMethod ?? settingsClient.getVODSortMethod()
-                state.rebuildDerivedData()
+                if playlistChanged || profileScopeChanged
+                    || previousSelectedCategoryID != state.selectedCategoryID
+                    || previousLanguageFilter != state.selectedLanguageFilter
+                    || previousOriginalLanguageCode != state.selectedOriginalLanguageCode
+                    || previousSortMethod != state.lastSortMethod
+                {
+                    state.rebuildDerivedData()
+                }
                 let loadFavorites: Effect<Action> = .run { send in
                     let favs = await (try? databaseClient.fetchFavoritesByType("vod", profileScope)) ?? []
                     let visible = favs.filter { $0.playlistID == config.playlistID || $0.playlistID == nil }

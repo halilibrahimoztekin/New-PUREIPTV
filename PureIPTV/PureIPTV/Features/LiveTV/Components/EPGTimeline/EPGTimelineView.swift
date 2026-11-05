@@ -135,6 +135,7 @@ public struct EPGTimelineView: View {
     public var body: some View {
         GeometryReader { geo in
             let availableGridWidth = max(100, geo.size.width - channelColumnWidth)
+            let channels = displayedChannels
 
             ZStack(alignment: .bottomTrailing) {
                 AppColors.background.ignoresSafeArea()
@@ -175,10 +176,10 @@ public struct EPGTimelineView: View {
                     Divider().background(AppColors.borderMedium)
 
                     // Virtualized Dual-Axis Grid Body
-                    if displayedChannels.isEmpty {
+                    if channels.isEmpty {
                         emptyStateView
                     } else {
-                        channelGridScrollView(availableWidth: availableGridWidth, containerHeight: geo.size.height)
+                        channelGridScrollView(channels: channels, availableWidth: availableGridWidth, containerHeight: geo.size.height)
                     }
 
                     HStack {
@@ -224,10 +225,9 @@ public struct EPGTimelineView: View {
                         focusedChannelId = displayedChannels.first?.id
                     }
                 #endif
-                // Prewarm first 15 channels EPG data
-                for channel in store.filteredChannels.prefix(15) {
-                    store.send(.fetchEPG(streamID: channel.id))
-                }
+                // Each visible LazyVStack row starts its own EPG request from
+                // `onAppear`; fetching the first 15 here duplicates those sends
+                // and starts work for rows that are still offscreen.
                 updateShimmerAnimation()
             }
             .onChange(of: availableGridWidth) { _, width in
@@ -802,15 +802,21 @@ public struct EPGTimelineView: View {
 
     // MARK: - Virtualized Body
 
-    private func channelGridScrollView(availableWidth: CGFloat, containerHeight _: CGFloat) -> some View {
+    private func channelGridScrollView(channels: [MediaModels.Item], availableWidth: CGFloat, containerHeight _: CGFloat) -> some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 2) {
-                    ForEach(displayedChannels) { channel in
+                    ForEach(Array(channels.enumerated()), id: \.element.id) { entry in
+                        let channel = entry.element
                         HStack(spacing: 0) {
                             // 100% Pinned Left Channel Cell
-                            stickyChannelCell(channel, timelineViewportWidth: availableWidth)
-                                .frame(width: channelColumnWidth, height: rowHeight)
+                            stickyChannelCell(
+                                channel,
+                                favoriteIndex: entry.offset,
+                                favoriteCount: channels.count,
+                                timelineViewportWidth: availableWidth
+                            )
+                            .frame(width: channelColumnWidth, height: rowHeight)
 
                             // Synchronized Program Strip
                             ZStack(alignment: .leading) {
@@ -884,10 +890,13 @@ public struct EPGTimelineView: View {
 
     // MARK: - Sticky Channel Cell
 
-    private func stickyChannelCell(_ channel: MediaModels.Item, timelineViewportWidth: CGFloat) -> some View {
+    private func stickyChannelCell(
+        _ channel: MediaModels.Item,
+        favoriteIndex: Int,
+        favoriteCount: Int,
+        timelineViewportWidth: CGFloat
+    ) -> some View {
         let isFav = store.defaultFavoriteIDs.contains(channel.id)
-        let favoriteIndex = displayedChannels.firstIndex(where: { $0.id == channel.id }) ?? 0
-        let favoriteCount = displayedChannels.count
 
         return Button {
             HapticManager.shared.trigger(.medium)

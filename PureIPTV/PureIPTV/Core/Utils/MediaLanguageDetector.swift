@@ -120,6 +120,19 @@ public enum MediaLanguageFilter: String, CaseIterable, Sendable, Equatable, Hash
 // MARK: - Media Language Detector Engine
 
 public enum MediaLanguageDetector {
+    /// Poster cards ask for the same title badge during many SwiftUI body evaluations.
+    /// Keep the regex result bounded and shared so view invalidations do not rescan titles.
+    private static let detectedTagCache: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 4096
+        return cache
+    }()
+
+    private static let dualAudioMask: UInt8 = 1 << 0
+    private static let turkishDubbedMask: UInt8 = 1 << 1
+    private static let turkishSubtitledMask: UInt8 = 1 << 2
+    private static let originalAudioMask: UInt8 = 1 << 3
+
     /// Regular Expression Patterns
     private static let turkishDubbedRegex: NSRegularExpression? = {
         let pattern = #"(?i)(?:\[|\(|\b)(?:TR[-_\.\s]?DUB(?:LAJ)?|T[ÜU]RK[ÇC]E[-_\.\s]?DUB(?:LAJ)?|TR[-_\.\s]?DUBLAJ|TUR[-_\.\s]?DUB)(?:\]|\)|\b)"#
@@ -143,27 +156,50 @@ public enum MediaLanguageDetector {
 
     /// Detects all matching audio and subtitle language tags in a title
     public static func detectTags(from title: String) -> Set<MediaAudioLanguageTag> {
-        var tags = Set<MediaAudioLanguageTag>()
+        let cacheKey = title as NSString
+        if let cachedMask = detectedTagCache.object(forKey: cacheKey) {
+            return tags(from: cachedMask.uint8Value)
+        }
+
+        var mask: UInt8 = 0
         let range = NSRange(title.startIndex ..< title.endIndex, in: title)
 
         if let regex = dualAudioRegex, regex.firstMatch(in: title, range: range) != nil {
-            tags.insert(.dualAudio)
+            mask |= dualAudioMask
             // Dual audio files invariably provide Turkish audio channel as well
-            tags.insert(.turkishDubbed)
+            mask |= turkishDubbedMask
         }
 
         if let regex = turkishDubbedRegex, regex.firstMatch(in: title, range: range) != nil {
-            tags.insert(.turkishDubbed)
+            mask |= turkishDubbedMask
         }
 
         if let regex = turkishSubtitledRegex, regex.firstMatch(in: title, range: range) != nil {
-            tags.insert(.turkishSubtitled)
+            mask |= turkishSubtitledMask
         }
 
         if let regex = originalAudioRegex, regex.firstMatch(in: title, range: range) != nil {
-            tags.insert(.originalAudio)
+            mask |= originalAudioMask
         }
 
+        detectedTagCache.setObject(NSNumber(value: mask), forKey: cacheKey)
+        return tags(from: mask)
+    }
+
+    private static func tags(from mask: UInt8) -> Set<MediaAudioLanguageTag> {
+        var tags = Set<MediaAudioLanguageTag>()
+        if mask & dualAudioMask != 0 {
+            tags.insert(.dualAudio)
+        }
+        if mask & turkishDubbedMask != 0 {
+            tags.insert(.turkishDubbed)
+        }
+        if mask & turkishSubtitledMask != 0 {
+            tags.insert(.turkishSubtitled)
+        }
+        if mask & originalAudioMask != 0 {
+            tags.insert(.originalAudio)
+        }
         return tags
     }
 
