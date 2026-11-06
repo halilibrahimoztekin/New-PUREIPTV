@@ -34,6 +34,7 @@ public struct GlobalSearchResultCard: View {
     public let isReminderScheduled: Bool
     public let isReminderPending: Bool
     public let onTap: () -> Void
+    @Environment(\.displayScale) private var displayScale
 
     #if os(tvOS)
         @Environment(\.isFocused) private var isFocused
@@ -148,7 +149,7 @@ public struct GlobalSearchResultCard: View {
                 fallbackURL: url == result.item.coverURL ? nil : result.item.coverURL,
                 userAgentOverride: result.item.userAgentOverride,
                 playlistID: result.item.playlistID,
-                downsamplingSize: isChannel ? CGSize(width: 320, height: 180) : CGSize(width: 240, height: 360)
+                downsamplingSize: mediaArtworkDownsamplingSize
             ) { phase in
                 if let image = phase.image {
                     image.resizable().aspectRatio(contentMode: isChannel ? .fit : .fill)
@@ -241,20 +242,33 @@ public struct GlobalSearchResultCard: View {
 
     private var bottomMetadata: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Group {
-                if let searchMatch = result.searchMatch,
-                   searchMatch.field == .title || searchMatch.field == .channel,
-                   searchMatch.sourceText == result.item.displayTitle
-                {
-                    highlightedSearchText(result.item.displayTitle, queryTerms: searchMatch.queryTerms)
-                } else {
-                    Text(result.item.displayTitle)
+            if let titleLogoCacheKey {
+                TMDBTitleLogoView(
+                    path: nil,
+                    title: result.item.displayTitle,
+                    maxWidth: 320,
+                    height: titleLogoHeight,
+                    fallbackFont: AppFonts.captionBold,
+                    userAgentOverride: result.item.userAgentOverride,
+                    playlistID: result.item.playlistID,
+                    cacheKey: titleLogoCacheKey
+                )
+            } else {
+                Group {
+                    if let searchMatch = result.searchMatch,
+                       searchMatch.field == .title || searchMatch.field == .channel,
+                       searchMatch.sourceText == result.item.displayTitle
+                    {
+                        highlightedSearchText(result.item.displayTitle, queryTerms: searchMatch.queryTerms)
+                    } else {
+                        Text(result.item.displayTitle)
+                    }
                 }
+                .font(AppFonts.captionBold)
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(isChannel ? 1 : 2)
+                .shadow(color: AppColors.oledBlack.opacity(0.8), radius: 2, x: 0, y: 1)
             }
-            .font(AppFonts.captionBold)
-            .foregroundStyle(AppColors.textPrimary)
-            .lineLimit(isChannel ? 1 : 2)
-            .shadow(color: AppColors.oledBlack.opacity(0.8), radius: 2, x: 0, y: 1)
 
             if let searchMatch = result.searchMatch {
                 HStack(spacing: 4) {
@@ -339,6 +353,45 @@ public struct GlobalSearchResultCard: View {
                 }
             }
         }
+        .padding(8)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppColors.oledBlack.opacity(0.88))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppColors.textPrimary.opacity(0.08), lineWidth: 0.7)
+                }
+        }
+    }
+
+    private var titleLogoCacheKey: String? {
+        guard !isChannel, result.item.presentationOverride?.title == nil else { return nil }
+        switch result.item.type {
+        case .vod:
+            return TMDBTitleLogoCache.key(for: result.item, mediaType: "movie")
+        case .series:
+            return TMDBTitleLogoCache.key(for: result.item, mediaType: "tv")
+        case .live:
+            return nil
+        }
+    }
+
+    private var titleLogoHeight: CGFloat {
+        #if os(tvOS)
+            54
+        #else
+            38
+        #endif
+    }
+
+    private var mediaArtworkDownsamplingSize: CGSize {
+        #if os(tvOS)
+            isChannel ? CGSize(width: 960, height: 540) : CGSize(width: 600, height: 900)
+        #else
+            isChannel
+                ? CGSize(width: 180 * displayScale, height: 102 * displayScale)
+                : CGSize(width: 180 * displayScale, height: 270 * displayScale)
+        #endif
     }
 
     // MARK: - Scaled Geometry Helpers

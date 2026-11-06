@@ -962,6 +962,7 @@ public enum AppStrings {
         public static let newMovies = "Yeni Eklenen Filmler".localized
         public static let newSeries = "Yeni Eklenen Diziler".localized
         public static let recommendedForYou = "Sana Özel Öneriler".localized
+        public static let noPersonalizedMovies = "Bu profil için şu anda kişisel film önerisi yok.".localized
         public static let actorRecommendationTitle = "Ortak oyuncu: %@ • İzlediğin: %@ • %@".localized
         public static let mostWatchedActors = "En Çok İzlediğin Oyuncular".localized
         public static let popularActors = "Popüler Oyuncular".localized

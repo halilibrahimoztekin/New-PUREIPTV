@@ -181,6 +181,7 @@
         let userAgentOverride: String?
         var unwatchedEpisodeCount: Int?
         let onTap: () -> Void
+        @Environment(\.displayScale) private var displayScale
 
         public init(
             item: FavoriteItem,
@@ -198,7 +199,15 @@
             Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let urlString = item.coverURL, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: item.playlistID) { phase in
+                        PlaylistAsyncImage(
+                            url: url,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: item.playlistID,
+                            downsamplingSize: CGSize(
+                                width: 140 * displayScale,
+                                height: (item.type == "live" ? 90 : 210) * displayScale
+                            )
+                        ) { phase in
                             if let image = phase.image {
                                 image.resizable().scaledToFill()
                             } else {

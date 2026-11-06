@@ -64,6 +64,7 @@
                     .padding(.vertical, 40)
                 }
                 .focusSection()
+                .focusEffectDisabled()
             }
         }
 
@@ -102,6 +103,7 @@
                     .padding(.vertical, 40)
                 }
                 .focusSection()
+                .focusEffectDisabled()
             }
         }
 

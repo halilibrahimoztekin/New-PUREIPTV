@@ -668,25 +668,31 @@ public struct VODDetailFeature {
             case let .tmdbSearchResponse(.success(response)):
                 state.tmdbSearchResults = response.results ?? []
                 guard !state.hasManualTMDBOverride else { return .none }
-                if let firstResult = response.results?.first {
-                    print("TMDB search found result: \(firstResult.title ?? "") (ID: \(firstResult.id))")
-                    return .run { send in
-                        await send(.tmdbDetailsResponse(
-                            Result { try await tmdbClient.fetchMovieDetails(firstResult.id) }
-                        ))
-                    }
-                } else {
-                    print("TMDB search returned 0 results for VOD")
+                guard let match = TMDBSearchMatchSelector.bestMatch(
+                    in: response.results ?? [],
+                    providerTitle: state.vod.title,
+                    providerReleaseDate: state.vod.releaseDate
+                ) else {
+                    print("TMDB search found no high-confidence match for VOD")
                     state.isTMDBLoading = false
                     if state.info != nil {
                         state.isLoading = false
                     }
                     return .none
                 }
+                print("TMDB search matched VOD: \(match.title ?? "") (ID: \(match.id))")
+                return .run { send in
+                    await send(.tmdbDetailsResponse(
+                        Result { try await tmdbClient.fetchMovieDetails(match.id) }
+                    ))
+                }
 
             case let .tmdbDetailsResponse(.success(movieDetails)):
                 guard !state.hasManualTMDBOverride else { return .none }
-                print("TMDB details fetched for VOD: \(movieDetails.title ?? "")")
+                print(
+                    "TMDB details fetched for VOD: \(movieDetails.title ?? ""), id=\(movieDetails.id), "
+                        + "logo=\(movieDetails.preferredTitleLogoPath != nil), backdrop=\(movieDetails.backdropPath != nil)"
+                )
                 state.isTMDBLoading = false
                 state.tmdbMovie = movieDetails
                 state.awardRecognitions = []
@@ -805,7 +811,10 @@ public struct VODDetailFeature {
                 state.isTMDBMatchPickerPresented = true
                 state.manualTMDBSearchRequestID = nil
                 state.tmdbSearchResults = []
-                return .send(.delegate(.presentTMDBMatchPicker(requestID: requestID)))
+                return .merge(
+                    .send(.delegate(.presentTMDBMatchPicker(requestID: requestID))),
+                    .send(.manualTMDBSearch(state.vod.title.cleanedForTMDBSearch()))
+                )
 
             case .dismissTMDBMatchPicker:
                 state.isTMDBMatchPickerPresented = false
@@ -911,6 +920,7 @@ public struct VODDetailFeature {
                 )
 
             case .tmdbTimeout:
+                guard state.isTMDBLoading else { return .none }
                 print("TMDB loading timed out after 4 seconds")
                 state.isTMDBLoading = false
                 state.isLoading = false
@@ -1073,7 +1083,7 @@ public struct VODDetailFeature {
                     id: state.vod.id,
                     title: state.vod.title,
                     streamURL: finalStreamURL,
-                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342) } ?? state.vod.coverURL,
                     startPosition: 0.0,
                     config: state.config
                 )
@@ -1103,7 +1113,7 @@ public struct VODDetailFeature {
                     id: state.vod.id,
                     title: state.vod.title,
                     streamURL: finalStreamURL,
-                    coverURL: state.tmdbMovie?.posterPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w342\($0)") } ?? state.vod.coverURL,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342) } ?? state.vod.coverURL,
                     startPosition: startPosition,
                     initialDuration: history.duration,
                     initialProgress: history.progress,
@@ -1168,7 +1178,7 @@ public struct VODDetailFeature {
 
                     let finalCoverURL: URL? = {
                         if let posterPath = state.tmdbMovie?.posterPath {
-                            return URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")
+                            return TMDBImageURL.make(path: posterPath, size: .w342)
                         } else if let url = state.vod.coverURL {
                             return url
                         }
@@ -1234,7 +1244,7 @@ public struct VODDetailFeature {
                     id: state.vod.id,
                     type: "vod",
                     title: state.vod.title,
-                    coverURL: state.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.vod.coverURL?.absoluteString,
+                    coverURL: state.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString } ?? state.vod.coverURL?.absoluteString,
                     streamURL: state.vod.streamURL?.absoluteString,
                     playlistID: state.config.playlistID
                 )

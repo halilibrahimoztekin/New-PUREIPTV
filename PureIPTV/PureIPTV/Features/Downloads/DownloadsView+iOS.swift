@@ -5,6 +5,7 @@
 
     public struct DownloadsView_iOS: View {
         @Bindable var store: StoreOf<DownloadsFeature>
+        @Environment(\.displayScale) private var displayScale
         @State private var exportPresentation: DownloadExportPresentation?
         @State private var isShowingExportError = false
 
@@ -289,7 +290,11 @@
         @ViewBuilder
         private func activeArtwork(_ item: DownloadProgressItem) -> some View {
             if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(
+                    url: coverURL,
+                    userAgentOverride: item.userAgentOverride,
+                    downsamplingSize: CGSize(width: 54 * displayScale, height: 80 * displayScale)
+                ) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()
@@ -647,7 +652,11 @@
         @ViewBuilder
         private func completedArtwork(_ item: OfflineMediaSnapshot) -> some View {
             if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(
+                    url: coverURL,
+                    userAgentOverride: item.userAgentOverride,
+                    downsamplingSize: CGSize(width: 60 * displayScale, height: 90 * displayScale)
+                ) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()

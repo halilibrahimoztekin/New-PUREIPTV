@@ -275,7 +275,11 @@ import SwiftUI
         @ViewBuilder
         private func activeArtwork(_ item: DownloadProgressItem) -> some View {
             if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(
+                    url: coverURL,
+                    userAgentOverride: item.userAgentOverride,
+                    downsamplingSize: CGSize(width: 240, height: 360)
+                ) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()
@@ -503,7 +507,11 @@ import SwiftUI
         @ViewBuilder
         private func completedArtwork(_ item: OfflineMediaSnapshot) -> some View {
             if let coverString = item.coverURL, let coverURL = URL(string: coverString) {
-                PlaylistAsyncImage(url: coverURL, userAgentOverride: item.userAgentOverride) { phase in
+                PlaylistAsyncImage(
+                    url: coverURL,
+                    userAgentOverride: item.userAgentOverride,
+                    downsamplingSize: CGSize(width: 640, height: 600)
+                ) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()

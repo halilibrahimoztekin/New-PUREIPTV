@@ -74,6 +74,7 @@ struct PlaylistAsyncImage<Content: View>: View {
             )
         }
         image
+            .cancelOnDisappear(true)
             .requestModifier { request in
                 PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: userAgentOverride, playlistID: playlistID)
             }

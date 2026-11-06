@@ -50,19 +50,16 @@ public struct ShuffleMoviePickerView: View {
                     HStack(spacing: 18) {
                         // Poster
                         if let coverURL = movie.coverURL {
-                            AsyncImage(url: coverURL) { phase in
-                                switch phase {
-                                case let .success(image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 140, height: 210)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                                        .shadow(radius: 8)
-                                default:
-                                    fallbackPoster(title: movie.title)
-                                }
+                            PlaylistPosterArtworkView(
+                                url: coverURL,
+                                userAgentOverride: movie.userAgentOverride,
+                                playlistID: movie.playlistID
+                            ) {
+                                fallbackPoster(title: movie.title)
                             }
+                            .frame(width: 140, height: 210)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .shadow(radius: 8)
                         } else {
                             fallbackPoster(title: movie.title)
                         }

@@ -13,9 +13,9 @@
             ZStack(alignment: .bottom) {
                 // Background Blur
                 GeometryReader { proxy in
-                    let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
+                    let cover = store.tmdbTV?.backdropPath.flatMap { TMDBImageURL.make(path: $0, size: .w1280)?.absoluteString } ??
                         store.series.presentationOverride?.posterURL?.absoluteString ??
-                        store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
+                        store.tmdbTV?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w780)?.absoluteString } ??
                         store.series.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
@@ -56,7 +56,7 @@
                     HStack(alignment: .bottom, spacing: 16) {
                         // Poster
                         let cover = store.series.presentationOverride?.posterURL?.absoluteString ??
-                            store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? store.series.coverURL?.absoluteString
+                            store.tmdbTV?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString } ?? store.series.coverURL?.absoluteString
 
                         if let urlString = cover, let url = URL(string: urlString) {
                             PlaylistAsyncImage(
@@ -89,11 +89,19 @@
 
                         // Info block
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title)
-                                .font(AppFonts.displaySmall)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(3)
-                                .fixedSize(horizontal: false, vertical: true)
+                            TMDBTitleLogoView(
+                                path: store.series.presentationOverride?.title == nil ? store.tmdbTV?.preferredTitleLogoPath : nil,
+                                backdropPath: store.tmdbTV?.backdropPath,
+                                title: store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title,
+                                maxWidth: .infinity,
+                                height: 88,
+                                fallbackFont: AppFonts.displaySmall,
+                                userAgentOverride: store.config.userAgentOverride,
+                                playlistID: store.config.playlistID,
+                                cacheKey: store.series.presentationOverride?.title == nil
+                                    ? TMDBTitleLogoCache.key(for: store.series, mediaType: "tv")
+                                    : nil
+                            )
 
                             // Rating and Status
                             HStack(spacing: 8) {

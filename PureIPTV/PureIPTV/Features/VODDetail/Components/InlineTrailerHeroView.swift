@@ -31,7 +31,11 @@ public struct InlineTrailerHeroView: View {
         ZStack(alignment: .bottomLeading) {
             GeometryReader { proxy in
                 if let url = backdropURL {
-                    PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride) { phase in
+                    PlaylistAsyncImage(
+                        url: url,
+                        userAgentOverride: userAgentOverride,
+                        downsamplingSize: CGSize(width: proxy.size.width * 3, height: 780)
+                    ) { phase in
                         switch phase {
                         case let .success(image):
                             image

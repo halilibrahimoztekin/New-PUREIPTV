@@ -20,8 +20,17 @@
                 set: { store.send(.tabSelected($0)) }
             )) {
                 ForEach(store.visibleTabs, id: \.self) { tab in
-                    RetainedLazyTabContent(isSelected: store.selectedTab == tab) {
-                        tabContent(for: tab)
+                    Group {
+                        if tab == .downloads || tab == .settings {
+                            // UIKit places overflow tabs inside its own More navigation stack.
+                            // Keep their actual content in the tab tree so that stack never
+                            // pushes a retained Color.clear placeholder for these destinations.
+                            tabContent(for: tab)
+                        } else {
+                            RetainedLazyTabContent(isSelected: store.selectedTab == tab) {
+                                tabContent(for: tab)
+                            }
+                        }
                     }
                     .tabItem {
                         Label(tab.rawValue, systemImage: store.selectedTab == tab ? tab.selectedIcon : tab.icon)

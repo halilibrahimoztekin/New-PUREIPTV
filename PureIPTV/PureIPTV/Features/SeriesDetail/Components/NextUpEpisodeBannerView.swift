@@ -7,6 +7,7 @@ public struct NextUpEpisodeBannerView: View {
     public let seriesTitle: String
     public let progressItem: WatchHistoryItem?
     public let onPlay: () -> Void
+    @Environment(\.displayScale) private var displayScale
 
     public init(
         episode: DetailModels.Episode,
@@ -38,13 +39,26 @@ public struct NextUpEpisodeBannerView: View {
         ratio > 0.02 && ratio < 0.90
     }
 
+    private var artworkDownsamplingSize: CGSize {
+        #if os(tvOS)
+            CGSize(width: 1280, height: 720)
+        #else
+            CGSize(width: 1280, height: 720 * displayScale / 3)
+        #endif
+    }
+
     public var body: some View {
         Button(action: onPlay) {
             ZStack(alignment: .bottomLeading) {
                 // Background Artwork with Blur and Gradient Scrim
                 ZStack {
                     if let url = episode.coverURL {
-                        PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: playlistID) { phase in
+                        PlaylistAsyncImage(
+                            url: url,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: playlistID,
+                            downsamplingSize: artworkDownsamplingSize
+                        ) { phase in
                             switch phase {
                             case let .success(img):
                                 img.resizable()

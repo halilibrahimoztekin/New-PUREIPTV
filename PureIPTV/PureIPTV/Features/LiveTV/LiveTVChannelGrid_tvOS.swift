@@ -289,6 +289,7 @@
                     : (canRepeatManualOrder ? AppStrings.Favorites.directionalReorderHint : "")))
             .accessibilityAddTraits(store.isChannelSelectionMode && !isUnavailable && store.selectedCurrentChannelIDs.contains(channel.id) ? .isSelected : [])
             .focused(focusedChannelID, equals: channel.id)
+            .focusEffectDisabled()
             .id(channel.id)
             .contextMenu {
                 channelContextMenu(for: channel)

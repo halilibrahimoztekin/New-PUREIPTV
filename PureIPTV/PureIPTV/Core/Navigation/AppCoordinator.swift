@@ -28,7 +28,26 @@ public struct AppCoordinator {
 
     @ObservableState
     public struct State: Equatable {
-        public var routes: [Route<AppScreen.State>]
+        /// Route state can contain the full HomeFeature state, including catalog
+        /// and recommendation arrays. Comparing the route array on every nested
+        /// update makes the observation registrar walk that entire value tree.
+        /// Keep the payload out of automatic observation equality and publish a
+        /// cheap revision whenever routes are read or written instead.
+        @ObservationStateIgnored
+        private var storedRoutes: [Route<AppScreen.State>]
+
+        public private(set) var routesRevision: UInt64 = 0
+
+        public var routes: [Route<AppScreen.State>] {
+            get {
+                _ = routesRevision
+                return storedRoutes
+            }
+            set {
+                storedRoutes = newValue
+                routesRevision &+= 1
+            }
+        }
 
         /// Mini player state when player is docked
         public var miniPlayer: PlayerFeature.State?
@@ -55,7 +74,7 @@ public struct AppCoordinator {
         }
 
         public init(routes: [Route<AppScreen.State>] = [.root(.splash(SplashFeature.State()), withNavigation: true)]) {
-            self.routes = routes
+            storedRoutes = routes
         }
 
         /// Helper to find the active playlist config from routes or repository
@@ -460,7 +479,10 @@ public struct AppCoordinator {
                 state.isStartupPlaylistReadFailed = true
                 return .none
             }
-            guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else { return .none }
+            guard let playlist = activePlaylist, let config = playlist.toPlaylistConfig() else {
+                state.routes = [.root(.addPlaylist(AddPlaylistFeature.State()), withNavigation: true)]
+                return .none
+            }
 
             withAnimation(.easeInOut(duration: 0.35)) {
                 state.routes = [.root(.home(makeHomeState(config: config, unlockedPlaylistIDs: state.unlockedPlaylistIDs)), withNavigation: true)]
@@ -6749,6 +6771,8 @@ private struct DetailActorBiographyRouteView: View {
                     actor: actor,
                     details: vodState.selectedActorDetails,
                     isLoading: vodState.isLoadingActorDetails,
+                    userAgentOverride: vodState.config.userAgentOverride,
+                    playlistID: vodState.config.playlistID,
                     close: close
                 )
             }
@@ -6909,7 +6933,12 @@ private struct DetailUnmatchedMovieRouteView: View {
     var body: some View {
         Group {
             if let state = vodState, let item = state.selectedUnmatchedMovie {
-                VODUnmatchedMovieRouteContent(item: item, close: close)
+                VODUnmatchedMovieRouteContent(
+                    item: item,
+                    userAgentOverride: state.config.userAgentOverride,
+                    playlistID: state.config.playlistID,
+                    close: close
+                )
             }
         }
         .onAppear(perform: closeIfStale)
@@ -6991,6 +7020,7 @@ private struct DetailTMDBMatchPickerRouteView: View {
                     results: state.tmdbSearchResults,
                     selectedTMDBID: state.selectedTMDBMatchID,
                     isLoading: state.isTMDBLoading,
+                    initialQuery: state.vod.title.cleanedForTMDBSearch(),
                     search: sendSearch,
                     select: sendSelection,
                     clear: sendClear,
@@ -7003,6 +7033,7 @@ private struct DetailTMDBMatchPickerRouteView: View {
                     results: state.tmdbSearchResults,
                     selectedTMDBID: state.selectedTMDBMatchID,
                     isLoading: state.isTMDBLoading,
+                    initialQuery: state.series.title.cleanedForTMDBSearch(),
                     search: sendSearch,
                     select: sendSelection,
                     clear: sendClear,

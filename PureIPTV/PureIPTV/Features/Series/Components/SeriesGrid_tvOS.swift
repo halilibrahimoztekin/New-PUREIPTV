@@ -119,6 +119,7 @@
                     )
                 )
             }
+            .focusEffectDisabled()
         }
 
         @ViewBuilder

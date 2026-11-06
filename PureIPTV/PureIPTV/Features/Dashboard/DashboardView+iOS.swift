@@ -45,10 +45,6 @@
                             .padding(.horizontal, 16)
                         }
 
-                        if store.isLoading {
-                            loadingView
-                        }
-
                         if let error = store.errorMessage {
                             errorBanner(error)
                         }
@@ -96,6 +92,8 @@
                         store.send(.vodSelected(heroVOD))
                     }
                     .padding(.bottom, 8)
+                } else if store.loadingPrimaryCatalogs.contains(.movies) {
+                    heroLoadingPlaceholder
                 }
             case .continueWatching:
                 let continueWatching = store.continueWatchingItems
@@ -110,6 +108,8 @@
                         ChannelCardView(channel: channel, isSelected: false) { store.send(.channelSelected(channel)) }
                             .frame(width: 240)
                     }
+                } else if store.loadingPrimaryCatalogs.contains(.live) {
+                    catalogLoadingShelf(title: AppStrings.Dashboard.featuredLiveTV, cardWidth: 240, cardHeight: 135)
                 }
                 primaryCatalogFeedback(
                     catalog: .live,
@@ -173,6 +173,8 @@
                         VODCardView(vod: vod, isSelected: false) { store.send(.vodSelected(vod)) }
                             .frame(width: 140)
                     }
+                } else if store.loadingPrimaryCatalogs.contains(.movies) {
+                    catalogLoadingShelf(title: AppStrings.Dashboard.newMovies, cardWidth: 140, cardHeight: 210)
                 }
                 primaryCatalogFeedback(
                     catalog: .movies,
@@ -186,6 +188,8 @@
                         SeriesCardView(series: series, isSelected: false) { store.send(.seriesSelected(series)) }
                             .frame(width: 140)
                     }
+                } else if store.loadingPrimaryCatalogs.contains(.series) {
+                    catalogLoadingShelf(title: AppStrings.Dashboard.newSeries, cardWidth: 140, cardHeight: 210)
                 }
                 primaryCatalogFeedback(
                     catalog: .series,
@@ -212,7 +216,11 @@
                     store.send(.refreshTapped)
                 }
                 .frame(height: 210)
-            } else if !hasContent, store.activeRefreshID != nil, !store.isLoading {
+            } else if !hasContent,
+                      store.activeRefreshID != nil,
+                      !store.isLoading,
+                      !store.loadingPrimaryCatalogs.contains(catalog)
+            {
                 ProgressView(AppStrings.Common.loading)
                     .tint(AppColors.textPrimary)
                     .foregroundStyle(AppColors.textPrimary)
@@ -328,47 +336,40 @@
             }
         }
 
-        private var loadingView: some View {
-            VStack(spacing: 24) {
-                // Skeleton for Channels
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(AppStrings.Common.loading)
-                        .font(AppFonts.headline)
-                        .foregroundColor(AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .shimmeringPlaceholder(isLoading: true)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(0 ..< 5, id: \.self) { _ in
-                                ChannelCardView(channel: .placeholder, isSelected: false) {}
-                                    .frame(width: 240)
-                                    .shimmeringPlaceholder(isLoading: true)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
+        private var heroLoadingPlaceholder: some View {
+            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                .fill(AppColors.surfaceSecondary)
+                .overlay {
+                    LinearGradient(
+                        colors: [.clear, AppColors.oledBlack.opacity(0.9)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 520)
+                .shimmeringPlaceholder(isLoading: true)
+                .padding(.bottom, 8)
+                .accessibilityLabel(AppStrings.Common.loading)
+        }
 
-                // Skeleton for VODs
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(AppStrings.Common.loading)
-                        .font(AppFonts.headline)
-                        .foregroundColor(AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .shimmeringPlaceholder(isLoading: true)
+        private func catalogLoadingShelf(title: String, cardWidth: CGFloat, cardHeight: CGFloat) -> some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(AppFonts.headline)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 16)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(0 ..< 5, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(AppColors.surfaceSecondary)
-                                    .frame(width: 140, height: 210)
-                                    .shimmeringPlaceholder(isLoading: true)
-                            }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(0 ..< 5, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(AppColors.surfaceSecondary)
+                                .frame(width: cardWidth, height: cardHeight)
+                                .shimmeringPlaceholder(isLoading: true)
                         }
-                        .padding(.horizontal, 16)
                     }
+                    .padding(.horizontal, 16)
                 }
             }
         }

@@ -5,7 +5,11 @@ struct VODActorBiographyContent: View {
     let actor: TMDBCastMemberDTO
     let details: TMDBPersonDetailsDTO?
     let isLoading: Bool
+    let userAgentOverride: String?
+    let playlistID: UUID?
     let close: () -> Void
+
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         #if os(tvOS)
@@ -24,9 +28,14 @@ struct VODActorBiographyContent: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
                             HStack(spacing: 18) {
-                                let avatarURL = (details?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w300\($0)" }
+                                let avatarURL = (details?.profilePath ?? actor.profilePath).flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString }
                                 if let urlString = avatarURL, let url = URL(string: urlString) {
-                                    AsyncImage(url: url) { phase in
+                                    PlaylistAsyncImage(
+                                        url: url,
+                                        userAgentOverride: userAgentOverride,
+                                        playlistID: playlistID,
+                                        downsamplingSize: CGSize(width: 90 * displayScale, height: 90 * displayScale)
+                                    ) { phase in
                                         if case let .success(image) = phase {
                                             image.resizable().scaledToFill()
                                         } else {
@@ -136,9 +145,14 @@ struct VODActorBiographyContent: View {
                 AppColors.surfaceDark.ignoresSafeArea()
 
                 HStack(spacing: 40) {
-                    let avatarURL = (details?.profilePath ?? actor.profilePath).map { "https://image.tmdb.org/t/p/w500\($0)" }
+                    let avatarURL = (details?.profilePath ?? actor.profilePath).flatMap { TMDBImageURL.make(path: $0, size: .w500)?.absoluteString }
                     if let urlString = avatarURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(
+                            url: url,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: playlistID,
+                            downsamplingSize: CGSize(width: 480 * displayScale, height: 640 * displayScale)
+                        ) { phase in
                             if case let .success(image) = phase {
                                 image.resizable().scaledToFill()
                             } else {

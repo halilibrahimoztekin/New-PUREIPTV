@@ -183,7 +183,7 @@
                 }
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .focusEffectDisabled()
             .accessibilityLabel([
                 sequenceNumber.map { "\(AppStrings.LiveTV.channelNumber) \($0)" },
@@ -279,11 +279,18 @@
                         }
 
                         Spacer()
-                        Text(vod.title)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                            .shadow(color: .black.opacity(0.8), radius: 6, x: 0, y: 2)
+                        TMDBTitleLogoView(
+                            path: nil,
+                            title: vod.displayTitle,
+                            maxWidth: .infinity,
+                            height: 46,
+                            fallbackFont: .system(size: 18, weight: .bold),
+                            userAgentOverride: vod.userAgentOverride,
+                            playlistID: vod.playlistID,
+                            cacheKey: vod.presentationOverride?.title == nil
+                                ? TMDBTitleLogoCache.key(for: vod, mediaType: "movie")
+                                : nil
+                        )
 
                         if let rating = vod.rating, rating > 0 {
                             HStack(spacing: 4) {
@@ -301,7 +308,7 @@
                 }
                 .aspectRatio(2 / 3, contentMode: .fit)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .focusEffectDisabled()
         }
     }
@@ -392,18 +399,25 @@
                         }
 
                         Spacer()
-                        Text(series.title)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                            .shadow(color: .black.opacity(0.8), radius: 6, x: 0, y: 2)
+                        TMDBTitleLogoView(
+                            path: nil,
+                            title: series.displayTitle,
+                            maxWidth: .infinity,
+                            height: 46,
+                            fallbackFont: .system(size: 18, weight: .bold),
+                            userAgentOverride: series.userAgentOverride,
+                            playlistID: series.playlistID,
+                            cacheKey: series.presentationOverride?.title == nil
+                                ? TMDBTitleLogoCache.key(for: series, mediaType: "tv")
+                                : nil
+                        )
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
                 }
                 .aspectRatio(2 / 3, contentMode: .fit)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .focusEffectDisabled()
         }
     }
@@ -503,7 +517,7 @@
                 }
                 .aspectRatio(isLive ? 16 / 9 : 2 / 3, contentMode: .fit)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.tvGridCard)
             .focusEffectDisabled()
         }
 

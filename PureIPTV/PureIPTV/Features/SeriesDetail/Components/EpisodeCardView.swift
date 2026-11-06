@@ -11,6 +11,7 @@ public struct EpisodeCardView: View {
     public let onPlay: () -> Void
     public let onDownload: () -> Void
     public let onMarkUnwatched: () -> Void
+    @Environment(\.displayScale) private var displayScale
 
     public init(
         episode: DetailModels.Episode,
@@ -54,6 +55,22 @@ public struct EpisodeCardView: View {
         ratio > 0.02 && ratio < 0.90
     }
 
+    private var listArtworkDownsamplingSize: CGSize {
+        #if os(tvOS)
+            CGSize(width: 480, height: 270)
+        #else
+            CGSize(width: 135 * displayScale, height: 76 * displayScale)
+        #endif
+    }
+
+    private var gridArtworkDownsamplingSize: CGSize {
+        #if os(tvOS)
+            CGSize(width: 480, height: 300)
+        #else
+            CGSize(width: 180 * displayScale, height: 100 * displayScale)
+        #endif
+    }
+
     public var body: some View {
         Group {
             if layoutMode == .list {
@@ -85,7 +102,12 @@ public struct EpisodeCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     Group {
                         if let url = episode.coverURL {
-                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: playlistID) { phase in
+                            PlaylistAsyncImage(
+                                url: url,
+                                userAgentOverride: userAgentOverride,
+                                playlistID: playlistID,
+                                downsamplingSize: listArtworkDownsamplingSize
+                            ) { phase in
                                 switch phase {
                                 case let .success(img):
                                     img.resizable().scaledToFill()
@@ -300,7 +322,12 @@ public struct EpisodeCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     Group {
                         if let url = episode.coverURL {
-                            PlaylistAsyncImage(url: url, userAgentOverride: userAgentOverride, playlistID: playlistID) { phase in
+                            PlaylistAsyncImage(
+                                url: url,
+                                userAgentOverride: userAgentOverride,
+                                playlistID: playlistID,
+                                downsamplingSize: gridArtworkDownsamplingSize
+                            ) { phase in
                                 switch phase {
                                 case let .success(img):
                                     img.resizable().scaledToFill()

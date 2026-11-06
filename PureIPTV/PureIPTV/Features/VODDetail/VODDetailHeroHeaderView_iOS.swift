@@ -8,9 +8,9 @@
         var body: some View {
             VStack(spacing: 0) {
                 // Edge-to-edge cinematic backdrop with an explicit trailer action.
-                let backdropURLString = store.tmdbMovie?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
+                let backdropURLString = store.tmdbMovie?.backdropPath.flatMap { TMDBImageURL.make(path: $0, size: .w1280)?.absoluteString } ??
                     store.vod.presentationOverride?.posterURL?.absoluteString ??
-                    store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
+                    store.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w780)?.absoluteString } ??
                     store.vod.coverURL?.absoluteString
                 let backdropURL = backdropURLString.flatMap { URL(string: $0) }
 
@@ -43,11 +43,11 @@
                 HStack(alignment: .top, spacing: 18) {
                     // High-res Floating Poster
                     let posterURLString = store.vod.presentationOverride?.posterURL?.absoluteString ??
-                        store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ??
+                        store.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w500)?.absoluteString } ??
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = posterURLString, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID, downsamplingSize: CGSize(width: 250, height: 376)) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -72,11 +72,19 @@
 
                     // Metadata & Action Buttons
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(store.vod.presentationOverride?.title ?? store.tmdbMovie?.title ?? store.vod.title)
-                            .font(AppFonts.title.bold())
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                        TMDBTitleLogoView(
+                            path: store.vod.presentationOverride?.title == nil ? store.tmdbMovie?.preferredTitleLogoPath : nil,
+                            backdropPath: store.tmdbMovie?.backdropPath,
+                            title: store.vod.presentationOverride?.title ?? store.tmdbMovie?.title ?? store.vod.title,
+                            maxWidth: .infinity,
+                            height: 72,
+                            fallbackFont: AppFonts.title.bold(),
+                            userAgentOverride: store.config.userAgentOverride,
+                            playlistID: store.config.playlistID,
+                            cacheKey: store.vod.presentationOverride?.title == nil
+                                ? TMDBTitleLogoCache.key(for: store.vod, mediaType: "movie")
+                                : nil
+                        )
 
                         // Rating & Tag row
                         HStack(spacing: 8) {

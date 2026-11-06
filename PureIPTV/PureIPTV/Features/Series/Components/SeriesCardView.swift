@@ -1,4 +1,3 @@
-import Kingfisher
 import Shimmer
 import SwiftUI
 
@@ -34,19 +33,14 @@ public struct SeriesCardView: View {
 
                 // Poster
                 if let coverURL = series.displayCoverURL {
-                    KFImage.url(coverURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: coverURL, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID))
-                        .requestModifier { request in
-                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: series.userAgentOverride, playlistID: series.playlistID)
-                        }
-                        .placeholder {
-                            SeriesPosterPlaceholder()
-                        }
-                        .downsampling(size: CGSize(width: 300, height: 450))
-                        .cacheOriginalImage()
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    PlaylistPosterArtworkView(
+                        url: coverURL,
+                        userAgentOverride: series.userAgentOverride,
+                        playlistID: series.playlistID
+                    ) {
+                        SeriesPosterPlaceholder()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } else {
                     SeriesPosterPlaceholder()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,10 +79,18 @@ public struct SeriesCardView: View {
 
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(series.displayTitle)
-                        .font(AppFonts.bodyBold)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(2)
+                    TMDBTitleLogoView(
+                        path: nil,
+                        title: series.displayTitle,
+                        maxWidth: .infinity,
+                        height: 50,
+                        fallbackFont: cardTitleFont,
+                        userAgentOverride: series.userAgentOverride,
+                        playlistID: series.playlistID,
+                        cacheKey: series.presentationOverride?.title == nil
+                            ? TMDBTitleLogoCache.key(for: series, mediaType: "tv")
+                            : nil
+                    )
 
                     if let rating = series.rating, rating > 0 {
                         HStack(spacing: 4) {
@@ -101,8 +103,18 @@ public struct SeriesCardView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppColors.oledBlack.opacity(0.88))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppColors.textPrimary.opacity(0.08), lineWidth: 0.7)
+                        }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 10)
             }
             .aspectRatio(2 / 3, contentMode: .fit)
         }
@@ -116,6 +128,14 @@ public struct SeriesCardView: View {
             radius: 8, x: 0, y: 2
         )
         .animation(.spring(duration: 0.3, bounce: 0.2), value: isSelected)
+    }
+
+    private var cardTitleFont: Font {
+        #if os(tvOS)
+            .system(size: 18, weight: .bold)
+        #else
+            .system(size: 15, weight: .semibold)
+        #endif
     }
 }
 

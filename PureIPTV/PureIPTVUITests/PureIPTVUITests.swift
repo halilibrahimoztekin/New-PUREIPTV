@@ -33,6 +33,43 @@ final class PureIPTVUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsRendersFromMoreTab() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-isOnboardingCompleted", "YES"]
+        app.launch()
+
+        let adultProfileButton = app.buttons["Yetişkin"]
+        if adultProfileButton.waitForExistence(timeout: 5) {
+            adultProfileButton.tap()
+        }
+
+        let moreTab = app.tabBars.buttons["Daha Fazla"]
+        XCTAssertTrue(moreTab.waitForExistence(timeout: 15))
+        moreTab.tap()
+
+        let settingsRow = app.staticTexts["Ayarlar"].firstMatch
+        XCTAssertTrue(settingsRow.waitForExistence(timeout: 10))
+        settingsRow.tap()
+
+        XCTAssertTrue(app.staticTexts["Hesap Yönetimi (Playlists)"].waitForExistence(timeout: 15))
+    }
+
+    @MainActor
+    func testAdultProfileSelectionLeavesProfilePicker() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-isOnboardingCompleted", "YES"]
+        app.launch()
+
+        let adultProfileButton = app.buttons["Yetişkin"]
+        guard adultProfileButton.waitForExistence(timeout: 10) else {
+            throw XCTSkip("Profile picker is not shown for this simulator state.")
+        }
+
+        adultProfileButton.tap()
+        XCTAssertFalse(adultProfileButton.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testDashboardPersonalizationSectionScroll() {
         let app = XCUIApplication()
         app.launchArguments += ["-isOnboardingCompleted", "YES"]

@@ -9,9 +9,9 @@
         let config: PlaylistConfig
         let onSearch: (() -> Void)?
 
-        /// For Series, we usually show 3 columns on iPhone
+        /// Adaptive sizing keeps posters large; standard iPhone widths fit two columns.
         private let columns: [GridItem] = [
-            GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 12),
+            GridItem(.adaptive(minimum: 148, maximum: 210), spacing: 14),
         ]
         @State private var categorySearchQuery = ""
         @Environment(\.accessibilityReduceMotion) private var reduceMotion

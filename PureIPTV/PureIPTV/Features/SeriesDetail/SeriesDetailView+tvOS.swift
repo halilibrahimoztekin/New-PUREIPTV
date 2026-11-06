@@ -129,9 +129,9 @@
         private var headerView: some View {
             ZStack(alignment: .bottomLeading) {
                 // Background Blur
-                let cover = store.tmdbTV?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" }
+                let cover = store.tmdbTV?.backdropPath.flatMap { TMDBImageURL.make(path: $0, size: .w1280)?.absoluteString }
                     ?? store.series.presentationOverride?.posterURL?.absoluteString
-                    ?? store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" }
+                    ?? store.tmdbTV?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w780)?.absoluteString }
                     ?? store.series.coverURL?.absoluteString
 
                 if let urlString = cover, let url = URL(string: urlString) {
@@ -139,6 +139,7 @@
                         .requestModifier { request in
                             PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID)
                         }
+                        .downsampling(size: CGSize(width: 2560, height: 1300))
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(height: 650)
@@ -166,13 +167,14 @@
                 HStack(alignment: .bottom, spacing: 40) {
                     // Poster
                     let posterURL = store.series.presentationOverride?.posterURL?.absoluteString ??
-                        store.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" } ?? store.series.coverURL?.absoluteString
+                        store.tmdbTV?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w500)?.absoluteString } ?? store.series.coverURL?.absoluteString
 
                     if let urlString = posterURL, let url = URL(string: urlString) {
                         KFImage.url(url, cacheKey: PlaylistArtworkRequest.cacheKey(for: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID))
                             .requestModifier { request in
                                 PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID)
                             }
+                            .downsampling(size: CGSize(width: 480, height: 720))
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 240, height: 360)
@@ -182,10 +184,19 @@
 
                     // Info
                     VStack(alignment: .leading, spacing: 20) {
-                        Text(store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title)
-                            .font(AppFonts.displayLarge)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(2)
+                        TMDBTitleLogoView(
+                            path: store.series.presentationOverride?.title == nil ? store.tmdbTV?.preferredTitleLogoPath : nil,
+                            backdropPath: store.tmdbTV?.backdropPath,
+                            title: store.series.presentationOverride?.title ?? store.tmdbTV?.name ?? store.series.title,
+                            maxWidth: 900,
+                            height: 150,
+                            fallbackFont: AppFonts.displayLarge,
+                            userAgentOverride: store.config.userAgentOverride,
+                            playlistID: store.config.playlistID,
+                            cacheKey: store.series.presentationOverride?.title == nil
+                                ? TMDBTitleLogoCache.key(for: store.series, mediaType: "tv")
+                                : nil
+                        )
 
                         // Rating + Status
                         HStack(spacing: 16) {

@@ -77,8 +77,13 @@
                             }
                         }
                     }
+                    // Constrain the reader itself. Constraining only the content inside
+                    // ScrollViewReader can still let the reader claim the remaining
+                    // vertical space in the parent VStack on iPhone layouts.
+                    .frame(height: 40)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 #endif

@@ -1,6 +1,6 @@
 #if os(iOS)
     import Foundation
-    @preconcurrency import GoogleCast
+    @preconcurrency import GoogleCastStatic
 
     @MainActor
     final class GoogleCastPlaybackCoordinator: NSObject, GCKSessionManagerListener, GCKRequestDelegate {

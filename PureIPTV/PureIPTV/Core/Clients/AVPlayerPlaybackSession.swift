@@ -13,11 +13,23 @@ final class AVPlayerPlaybackSession {
 
     private var timeObserver: Any?
     private var playerObservation: NSKeyValueObservation?
+    private var currentItemObservation: NSKeyValueObservation?
     private var itemObservation: NSKeyValueObservation?
+    private var observedItem: AVPlayerItem?
     private var endObserver: NSObjectProtocol?
     private var eventContinuation: AsyncStream<PlayerEvent>.Continuation?
     private var eventGeneration = UUID()
     private var preparationGeneration = UUID()
+    private var pendingSeekID: UUID?
+    private var pendingSeekContinuation: CheckedContinuation<SeekAttempt, Never>?
+    private var pendingSeekTimeoutTask: Task<Void, Never>?
+    private let seekTolerance = CMTime(value: 1, timescale: 2)
+
+    private enum SeekAttempt {
+        case completed(Bool)
+        case timedOut
+        case cancelled
+    }
 
     var currentTimeSeconds: Double {
         let seconds = player.currentTime().seconds
@@ -90,12 +102,11 @@ final class AVPlayerPlaybackSession {
         }
 
         let clampedPosition = min(durationSeconds, max(0, positionSeconds.isFinite ? positionSeconds : 0))
-        let target = CMTime(seconds: clampedPosition, preferredTimescale: 600)
-        let didSeek = await player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        // Use the same bounded, cancellation-aware seek path as user initiated
+        // seeks. Without this, restoring a position during engine preparation
+        // could leave the player loading forever if AVPlayer never calls back.
+        try await seek(to: clampedPosition)
         try checkPreparation(generation)
-        guard didSeek else {
-            throw PlaybackEngineSwitchError.seekFailed
-        }
 
         if isPlaying {
             player.playImmediately(atRate: max(0.25, min(4, playbackRate)))
@@ -129,7 +140,7 @@ final class AVPlayerPlaybackSession {
 
     func stop() {
         preparationGeneration = UUID()
-        removeObservers()
+        cancelPendingSeek()
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -151,9 +162,69 @@ final class AVPlayerPlaybackSession {
         let duration = item.duration.seconds
         let safeDuration = duration.isFinite && duration > 0 ? duration : max(0, seconds)
         let target = CMTime(seconds: min(safeDuration, max(0, seconds)), preferredTimescale: 600)
-        guard await player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) else {
-            throw PlaybackEngineSwitchError.seekFailed
+
+        let seekID = UUID()
+        let attempt = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                cancelPendingSeek()
+                pendingSeekID = seekID
+                pendingSeekContinuation = continuation
+                pendingSeekTimeoutTask = Task { @MainActor [self] in
+                    do {
+                        try await Task.sleep(for: .seconds(6))
+                    } catch {
+                        return
+                    }
+                    guard pendingSeekID == seekID else { return }
+                    player.currentItem?.cancelPendingSeeks()
+                    finishPendingSeek(seekID, with: .timedOut)
+                }
+
+                // Sample-accurate seeks can add decoding delay on compressed streams.
+                // The reducer confirms the landed time, so a half-second window keeps
+                // forward seeking responsive without accepting a large jump.
+                player.seek(
+                    to: target,
+                    toleranceBefore: seekTolerance,
+                    toleranceAfter: seekTolerance
+                ) { [session = self] finished in
+                    Task { @MainActor in
+                        session.finishPendingSeek(seekID, with: .completed(finished))
+                    }
+                }
+            }
+        } onCancel: { [session = self] in
+            Task { @MainActor in
+                session.cancelPendingSeek(seekID: seekID)
+            }
         }
+
+        switch attempt {
+        case let .completed(didSeek):
+            guard didSeek else { throw PlaybackEngineSwitchError.seekFailed }
+        case .timedOut:
+            throw PlaybackEngineSwitchError.seekTimedOut
+        case .cancelled:
+            throw CancellationError()
+        }
+    }
+
+    private func cancelPendingSeek(seekID: UUID? = nil) {
+        guard let pendingSeekID,
+              seekID == nil || seekID == pendingSeekID
+        else { return }
+        player.currentItem?.cancelPendingSeeks()
+        finishPendingSeek(pendingSeekID, with: .cancelled)
+    }
+
+    private func finishPendingSeek(_ seekID: UUID, with result: SeekAttempt) {
+        guard pendingSeekID == seekID else { return }
+        pendingSeekID = nil
+        pendingSeekTimeoutTask?.cancel()
+        pendingSeekTimeoutTask = nil
+        let continuation = pendingSeekContinuation
+        pendingSeekContinuation = nil
+        continuation?.resume(returning: result)
     }
 
     func events() -> AsyncStream<PlayerEvent> {
@@ -169,48 +240,13 @@ final class AVPlayerPlaybackSession {
                     emitCurrentState()
                 }
             }
-
-            if let item = player.currentItem {
-                itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                    Task { @MainActor [weak self] in
-                        guard let self, eventGeneration == generation else { return }
-                        switch item.status {
-                        case .readyToPlay:
-                            let seconds = item.duration.seconds
-                            if seconds.isFinite, seconds > 0 {
-                                eventContinuation?.yield(.lengthChanged(.seconds(seconds)))
-                            }
-                            eventContinuation?.yield(.tracksChanged)
-                        case .failed:
-                            eventContinuation?.yield(.encounteredError)
-                        case .unknown:
-                            break
-                        @unknown default:
-                            break
-                        }
-                    }
-                }
-
-                endObserver = NotificationCenter.default.addObserver(
-                    forName: .AVPlayerItemDidPlayToEndTime,
-                    object: item,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        guard let self, eventGeneration == generation else { return }
-                        eventContinuation?.yield(.endReached)
-                        eventContinuation?.yield(.stateChanged(.stopped))
-                    }
-                }
-            }
-
-            timeObserver = player.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-                queue: .main
-            ) { [weak self] time in
+            currentItemObservation = player.observe(\.currentItem, options: [.initial, .new]) { [weak self] _, _ in
                 Task { @MainActor [weak self] in
                     guard let self, eventGeneration == generation else { return }
-                    emitTime(time)
+                    // Read the live value on the actor. KVO callbacks are
+                    // asynchronous here, so multiple item replacements can
+                    // coalesce before this task runs.
+                    observe(item: player.currentItem, generation: generation)
                 }
             }
 
@@ -252,19 +288,94 @@ final class AVPlayerPlaybackSession {
 
     private func emitCurrentState() {
         guard let eventContinuation else { return }
+        // Ignore the empty interval between stopping the previous item and
+        // installing the next one. Reporting `.paused` here makes the reducer
+        // dismiss its loading state before the new engine has produced a frame.
+        guard let item = player.currentItem else { return }
         switch player.timeControlStatus {
         case .playing:
             eventContinuation.yield(.stateChanged(.playing))
         case .waitingToPlayAtSpecifiedRate:
             eventContinuation.yield(.stateChanged(.buffering))
         case .paused:
-            eventContinuation.yield(.stateChanged(.paused))
+            eventContinuation.yield(.stateChanged(item.status == .readyToPlay ? .paused : .opening))
         @unknown default:
             eventContinuation.yield(.stateChanged(.opening))
         }
     }
 
+    private func observe(item: AVPlayerItem?, generation: UUID) {
+        guard eventGeneration == generation else { return }
+        guard player.currentItem === item else { return }
+        if let item, observedItem === item, itemObservation != nil {
+            return
+        }
+        itemObservation?.invalidate()
+        itemObservation = nil
+        removeTimeObserver()
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+
+        guard let item else {
+            observedItem = nil
+            return
+        }
+        observedItem = item
+        itemObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      eventGeneration == generation,
+                      player.currentItem === item
+                else { return }
+                switch item.status {
+                case .readyToPlay:
+                    let seconds = item.duration.seconds
+                    if seconds.isFinite, seconds > 0 {
+                        eventContinuation?.yield(.lengthChanged(.seconds(seconds)))
+                    }
+                    eventContinuation?.yield(.tracksChanged)
+                    emitCurrentState()
+                case .failed:
+                    eventContinuation?.yield(.encounteredError)
+                case .unknown:
+                    emitCurrentState()
+                @unknown default:
+                    break
+                }
+            }
+        }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      eventGeneration == generation,
+                      player.currentItem === item
+                else { return }
+                eventContinuation?.yield(.endReached)
+                eventContinuation?.yield(.stateChanged(.stopped))
+            }
+        }
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      eventGeneration == generation,
+                      player.currentItem === item
+                else { return }
+                emitTime(time)
+            }
+        }
+    }
+
     private func emitTime(_ time: CMTime) {
+        guard player.currentItem != nil else { return }
         let seconds = time.seconds
         guard seconds.isFinite else { return }
         eventContinuation?.yield(.timeChanged(.seconds(seconds)))
@@ -275,20 +386,27 @@ final class AVPlayerPlaybackSession {
 
     private func removeObservers() {
         eventGeneration = UUID()
-        if let timeObserver {
-            player.removeTimeObserver(timeObserver)
-            self.timeObserver = nil
-        }
+        removeTimeObserver()
         playerObservation?.invalidate()
         playerObservation = nil
+        currentItemObservation?.invalidate()
+        currentItemObservation = nil
         itemObservation?.invalidate()
         itemObservation = nil
+        observedItem = nil
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
         }
         eventContinuation?.finish()
         eventContinuation = nil
+    }
+
+    private func removeTimeObserver() {
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+        }
     }
 }
 
@@ -298,6 +416,7 @@ enum PlaybackEngineSwitchError: LocalizedError {
     case backendNotReady
     case mediaUnavailable
     case seekFailed
+    case seekTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -306,6 +425,7 @@ enum PlaybackEngineSwitchError: LocalizedError {
         case .backendNotReady: "AVPlayer did not become ready in time."
         case .mediaUnavailable: "AVPlayer could not play this media URL."
         case .seekFailed: "AVPlayer could not restore the current playback position."
+        case .seekTimedOut: "AVPlayer did not finish seeking before the timeout."
         }
     }
 }

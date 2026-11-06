@@ -9,8 +9,6 @@
         public let vod: MediaModels.Item
         public let onTap: () -> Void
 
-        @Environment(\.isFocused) private var isFocused
-
         public init(vod: MediaModels.Item, onTap: @escaping () -> Void) {
             self.vod = vod
             self.onTap = onTap
@@ -64,7 +62,25 @@
                     .padding(60)
                 }
             }
-            .tvFocusEffect()
+            .buttonStyle(DashboardHeroFocusButtonStyle())
+            .focusEffectDisabled()
+        }
+    }
+
+    private struct DashboardHeroFocusButtonStyle: ButtonStyle {
+        @Environment(\.isFocused) private var isFocused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(
+                    reduceMotion ? 1.0 : (isFocused ? 1.035 : (configuration.isPressed ? 0.98 : 1.0))
+                )
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
+                    value: isFocused
+                )
+                .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
         }
     }
 #endif

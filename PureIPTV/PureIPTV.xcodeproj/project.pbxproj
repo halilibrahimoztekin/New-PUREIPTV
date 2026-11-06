@@ -21,7 +21,7 @@
 		8BCF7814303D6B6F00E02EB4 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7813303D6B6F00E02EB4 /* SwiftVLC */; };
 		8BCF781A303D6B9000E02EB4 /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 8BCF7819303D6B9000E02EB4 /* Shimmer */; };
 		A1DB9941CB1E79DE68CBCB27 /* OnboardingKit in Frameworks */ = {isa = PBXBuildFile; productRef = A0FC5A1ED5C5EED8E65BAFDA /* OnboardingKit */; };
-		F13E8C7B5D864C8CB6E2B740 /* GoogleCastDynamic in Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; productRef = F13E8C7B5D864C8CB6E2B741 /* GoogleCastDynamic */; };
+		F13E8C7B5D864C8CB6E2B740 /* GoogleCastStatic in Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; productRef = F13E8C7B5D864C8CB6E2B741 /* GoogleCastStatic */; };
 		FECA3440445C9C1F8D8EFBC9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = ECDF2429A9FF03E2C6931483 /* Kingfisher */; };
 /* End PBXBuildFile section */
 
@@ -121,7 +121,7 @@
 				2BCD5B67B86EBB0D7D5AFB9A /* FactoryKit in Frameworks */,
 				FECA3440445C9C1F8D8EFBC9 /* Kingfisher in Frameworks */,
 				A1DB9941CB1E79DE68CBCB27 /* OnboardingKit in Frameworks */,
-				F13E8C7B5D864C8CB6E2B740 /* GoogleCastDynamic in Frameworks */,
+				F13E8C7B5D864C8CB6E2B740 /* GoogleCastStatic in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,7 +217,7 @@
 				8B6032063075285C00188D32 /* RevenueCat */,
 				8B6032083075285C00188D32 /* RevenueCatUI */,
 				8B82FE3A3088C5FA00498ED5 /* TCACoordinators */,
-				F13E8C7B5D864C8CB6E2B741 /* GoogleCastDynamic */,
+				F13E8C7B5D864C8CB6E2B741 /* GoogleCastStatic */,
 			);
 			productName = PureIPTV;
 			productReference = 8BCF6C753035797400E02EB4 /* PureIPTV.app */;
@@ -1053,10 +1053,10 @@
 			package = 62F66F6373CD00171EA4CEA7 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
 		};
-		F13E8C7B5D864C8CB6E2B741 /* GoogleCastDynamic */ = {
+		F13E8C7B5D864C8CB6E2B741 /* GoogleCastStatic */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F13E8C7B5D864C8CB6E2B742 /* XCRemoteSwiftPackageReference "google-cast-ios-sdk" */;
-			productName = GoogleCastDynamic;
+			productName = GoogleCastStatic;
 		};
 		F8D6AE8C55A98894700C6740 /* Shimmer */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -16,6 +16,7 @@ public struct TMDBMatchPickerSheet: View {
         results: [TMDBMovieSearchResultDTO],
         selectedTMDBID: Int?,
         isLoading: Bool,
+        initialQuery: String = "",
         search: @escaping (String) -> Void,
         select: @escaping (Int) -> Void,
         clear: @escaping () -> Void,
@@ -24,6 +25,7 @@ public struct TMDBMatchPickerSheet: View {
         self.results = results
         self.selectedTMDBID = selectedTMDBID
         self.isLoading = isLoading
+        _query = State(initialValue: initialQuery)
         onSearch = search
         onSelect = select
         onClear = clear

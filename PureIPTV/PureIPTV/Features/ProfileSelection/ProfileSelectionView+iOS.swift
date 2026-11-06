@@ -54,6 +54,7 @@
                                         }
                                     }
                                 }
+                                .accessibilityLabel(profile.name)
                                 .buttonStyle(.plain)
 
                                 Text(profile.name)

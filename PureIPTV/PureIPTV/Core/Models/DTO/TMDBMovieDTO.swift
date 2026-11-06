@@ -76,6 +76,69 @@ public nonisolated struct TMDBMovieSearchResultDTO: Codable, Equatable, Sendable
     }
 }
 
+public nonisolated struct TMDBImagesDTO: Codable, Equatable, Sendable {
+    public let id: Int?
+    public let backdrops: [TMDBImageAssetDTO]?
+    public let logos: [TMDBImageAssetDTO]?
+    public let posters: [TMDBImageAssetDTO]?
+
+    public var preferredTitleLogoPath: String? {
+        logos?
+            .filter(\.isSupportedTitleLogo)
+            .sorted { lhs, rhs in
+                let leftLanguage = lhs.titleLogoLanguagePriority
+                let rightLanguage = rhs.titleLogoLanguagePriority
+                if leftLanguage != rightLanguage {
+                    return leftLanguage < rightLanguage
+                }
+                if lhs.voteAverage != rhs.voteAverage {
+                    return (lhs.voteAverage ?? 0) > (rhs.voteAverage ?? 0)
+                }
+                if lhs.voteCount != rhs.voteCount {
+                    return (lhs.voteCount ?? 0) > (rhs.voteCount ?? 0)
+                }
+                return lhs.filePath < rhs.filePath
+            }
+            .first?
+            .filePath
+    }
+}
+
+public nonisolated struct TMDBImageAssetDTO: Codable, Equatable, Sendable {
+    public let filePath: String
+    public let fileType: String?
+    public let iso6391: String?
+    public let aspectRatio: Double?
+    public let voteAverage: Double?
+    public let voteCount: Int?
+    public let width: Int?
+    public let height: Int?
+
+    public var isSupportedTitleLogo: Bool {
+        let path = filePath.lowercased()
+        return path.hasSuffix(".png") || fileType?.lowercased() == "image/png"
+    }
+
+    fileprivate var titleLogoLanguagePriority: Int {
+        switch iso6391?.lowercased() {
+        case "tr": 0
+        case "en": 1
+        case nil: 2
+        default: 3
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case filePath = "file_path"
+        case fileType = "file_type"
+        case iso6391 = "iso_639_1"
+        case aspectRatio = "aspect_ratio"
+        case voteAverage = "vote_average"
+        case voteCount = "vote_count"
+        case width, height
+    }
+}
+
 public nonisolated struct TMDBMovieDetailsDTO: Codable, Equatable, Sendable {
     public let id: Int
     public let title: String?
@@ -93,9 +156,14 @@ public nonisolated struct TMDBMovieDetailsDTO: Codable, Equatable, Sendable {
     public let productionCountries: [TMDBProductionCountryDTO]?
     public let similar: TMDBSimilarResponseDTO?
     public let videos: TMDBVideosResponseDTO?
+    public let images: TMDBImagesDTO?
+
+    public var preferredTitleLogoPath: String? {
+        images?.preferredTitleLogoPath
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, overview, runtime, genres, credits, status, similar, videos
+        case id, title, overview, runtime, genres, credits, status, similar, videos, images
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
         case releaseDate = "release_date"
@@ -362,9 +430,14 @@ public nonisolated struct TMDBTVDetailsDTO: Codable, Equatable, Sendable {
     public let productionCountries: [TMDBProductionCountryDTO]?
     public let similar: TMDBSimilarResponseDTO?
     public let videos: TMDBVideosResponseDTO?
+    public let images: TMDBImagesDTO?
+
+    public var preferredTitleLogoPath: String? {
+        images?.preferredTitleLogoPath
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, overview, genres, credits, status, similar, videos
+        case id, name, overview, genres, credits, status, similar, videos, images
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
         case firstAirDate = "first_air_date"

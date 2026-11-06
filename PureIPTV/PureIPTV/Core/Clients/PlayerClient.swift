@@ -228,11 +228,18 @@ public struct CatchupSeekResult: Equatable, Sendable {
     public let currentTime: Duration
     public let position: Double
     public let didSucceed: Bool
+    public let status: PlaybackSeekStatus?
 
-    public init(currentTime: Duration, position: Double, didSucceed: Bool) {
+    public init(
+        currentTime: Duration,
+        position: Double,
+        didSucceed: Bool,
+        status: PlaybackSeekStatus? = nil
+    ) {
         self.currentTime = currentTime
         self.position = position
         self.didSucceed = didSucceed
+        self.status = status
     }
 }
 
@@ -832,41 +839,61 @@ extension PlayerClient: DependencyKey {
                     )
                     let rawCurrentTime = session.currentTimeSeconds
                     let currentTime = rawCurrentTime.isFinite ? max(0, rawCurrentTime) : 0
-                    guard let duration else {
-                        return CatchupSeekResult(currentTime: .seconds(max(0, currentTime)), position: 0, didSucceed: false)
-                    }
 
-                    let target: Double = switch command {
+                    let rawTarget: Double
+                    switch command {
                     case let .relative(seconds, _):
-                        max(0, min(duration, currentTime + Double(seconds)))
+                        rawTarget = currentTime + Double(seconds)
                     case let .position(position, _):
-                        max(0, min(1, position)) * duration
+                        guard let duration else {
+                            return CatchupSeekResult(
+                                currentTime: .seconds(currentTime),
+                                position: 0,
+                                didSucceed: false,
+                                status: .rejected
+                            )
+                        }
+                        rawTarget = max(0, min(1, position)) * duration
                     case let .time(time, _):
-                        max(0, min(duration, seconds(time)))
+                        rawTarget = seconds(time)
                     }
+                    let target = max(0, duration.map { min($0, rawTarget) } ?? rawTarget)
 
                     do {
                         try await session.seek(to: target)
                         let rawLandedTime = session.currentTimeSeconds
-                        let landedTime = rawLandedTime.isFinite ? max(0, min(duration, rawLandedTime)) : currentTime
+                        let landedTime = rawLandedTime.isFinite
+                            ? max(0, duration.map { min($0, rawLandedTime) } ?? rawLandedTime)
+                            : currentTime
                         return CatchupSeekResult(
                             currentTime: .seconds(max(0, landedTime)),
-                            position: max(0, min(1, landedTime / duration)),
-                            didSucceed: true
+                            position: duration.map { max(0, min(1, landedTime / $0)) } ?? 0,
+                            didSucceed: true,
+                            status: .settled
                         )
                     } catch {
                         let rawLandedTime = session.currentTimeSeconds
-                        let landedTime = rawLandedTime.isFinite ? max(0, min(duration, rawLandedTime)) : currentTime
+                        let landedTime = rawLandedTime.isFinite
+                            ? max(0, duration.map { min($0, rawLandedTime) } ?? rawLandedTime)
+                            : currentTime
+                        let status: PlaybackSeekStatus = if let switchError = error as? PlaybackEngineSwitchError,
+                                                            case .seekTimedOut = switchError
+                        {
+                            .timedOut
+                        } else {
+                            .rejected
+                        }
                         return CatchupSeekResult(
                             currentTime: .seconds(max(0, landedTime)),
-                            position: max(0, min(1, landedTime / duration)),
-                            didSucceed: false
+                            position: duration.map { max(0, min(1, landedTime / $0)) } ?? 0,
+                            didSucceed: false,
+                            status: status
                         )
                     }
                 }
 
                 let player = box.getPlayer()
-                @MainActor func snapshot(didSucceed: Bool) -> CatchupSeekResult {
+                @MainActor func snapshot(status: PlaybackSeekStatus) -> CatchupSeekResult {
                     let currentTime = seconds(player.currentTime)
                     let duration: Double? = switch command {
                     case .relative, .position, .time:
@@ -882,7 +909,8 @@ extension PlayerClient: DependencyKey {
                     return CatchupSeekResult(
                         currentTime: .seconds(boundedTime),
                         position: rawPosition.isFinite ? max(0, min(1, rawPosition)) : 0,
-                        didSucceed: didSucceed
+                        didSucceed: status == .settled || status == .inaccurate,
+                        status: status
                     )
                 }
 
@@ -900,7 +928,7 @@ extension PlayerClient: DependencyKey {
                         do {
                             request = try player.requestSeek(to: .seconds(targetSeconds), fast: false)
                         } catch {
-                            return snapshot(didSucceed: false)
+                            return snapshot(status: .rejected)
                         }
                     } else {
                         request = player.requestJump(by: .seconds(Double(offsetSeconds)))
@@ -911,7 +939,7 @@ extension PlayerClient: DependencyKey {
                         do {
                             request = try player.requestSeek(to: .seconds(boundedPosition * duration), fast: false)
                         } catch {
-                            return snapshot(didSucceed: false)
+                            return snapshot(status: .rejected)
                         }
                     } else {
                         request = player.requestSeek(toPosition: PlaybackPosition(boundedPosition), fast: false)
@@ -921,33 +949,54 @@ extension PlayerClient: DependencyKey {
                     do {
                         request = try player.requestSeek(to: .seconds(targetSeconds), fast: false)
                     } catch {
-                        return snapshot(didSucceed: false)
+                        return snapshot(status: .rejected)
                     }
                 }
 
                 let initialOutcome = request.initialOutcome
                 guard initialOutcome == .pending else {
-                    return snapshot(didSucceed: initialOutcome == .settled || initialOutcome == .inaccurate)
+                    let status: PlaybackSeekStatus = switch initialOutcome {
+                    case .settled: .settled
+                    case .inaccurate: .inaccurate
+                    case .timedOut: .timedOut
+                    case .superseded: .superseded
+                    case .rejected, .pending: .rejected
+                    }
+                    return snapshot(status: status)
                 }
 
                 let outcome = await request.outcome
-                return snapshot(didSucceed: outcome == .settled || outcome == .inaccurate)
+                let status: PlaybackSeekStatus = switch outcome {
+                case .settled: .settled
+                case .inaccurate: .inaccurate
+                case .timedOut: .timedOut
+                case .superseded: .superseded
+                case .rejected, .pending: .rejected
+                }
+                return snapshot(status: status)
             },
             seekAndConfirm: { command in
                 if box.playbackEngine == .avPlayer {
                     let session = box.getAlternateSession()
                     let rawCurrentTime = session.player.currentTime().seconds
                     let currentTime = rawCurrentTime.isFinite ? max(0, rawCurrentTime) : nil
-                    let duration = session.player.currentItem?.duration.seconds ?? 0
-                    guard duration.isFinite, duration > 0 else {
-                        return PlaybackSeekResult(currentTime: currentTime.map { .seconds($0) }, position: nil, status: .rejected)
-                    }
+                    let rawDuration = session.player.currentItem?.duration.seconds ?? 0
+                    let duration = rawDuration.isFinite && rawDuration > 0 ? rawDuration : nil
                     let target: Double
                     switch command {
                     case let .position(position):
+                        guard let duration else {
+                            return PlaybackSeekResult(
+                                currentTime: currentTime.map { .seconds($0) },
+                                position: nil,
+                                status: .rejected
+                            )
+                        }
                         target = max(0, min(1, position)) * duration
                     case let .time(time):
-                        target = Double(time.components.seconds)
+                        let components = time.components
+                        target = Double(components.seconds)
+                            + Double(components.attoseconds) / 1_000_000_000_000_000_000
                     case let .relative(seconds):
                         guard let currentTime else {
                             return PlaybackSeekResult(currentTime: nil, position: nil, status: .rejected)
@@ -961,23 +1010,37 @@ extension PlayerClient: DependencyKey {
                             status: .rejected
                         )
                     }
-                    let clampedTarget = max(0, min(duration, target))
+                    let clampedTarget = max(0, duration.map { min($0, target) } ?? target)
                     do {
                         try await session.seek(to: clampedTarget)
                         let rawLandedTime = session.player.currentTime().seconds
                         let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : nil
                         return PlaybackSeekResult(
                             currentTime: landedTime.map { .seconds($0) },
-                            position: landedTime.map { max(0, min(1, $0 / duration)) },
+                            position: duration.flatMap { duration in
+                                landedTime.map { max(0, min(1, $0 / duration)) }
+                            },
                             status: .settled
                         )
                     } catch {
                         let rawLandedTime = session.player.currentTime().seconds
                         let landedTime = rawLandedTime.isFinite ? max(0, rawLandedTime) : nil
+                        let seekStatus: PlaybackSeekStatus = if let switchError = error as? PlaybackEngineSwitchError,
+                                                                case .seekTimedOut = switchError
+                        {
+                            // Keep timeouts distinct: the reducer must perform a
+                            // confirmed rollback because AVPlayer may have moved
+                            // before its seek callback timed out.
+                            .timedOut
+                        } else {
+                            .rejected
+                        }
                         return PlaybackSeekResult(
                             currentTime: landedTime.map { .seconds($0) },
-                            position: landedTime.map { max(0, min(1, $0 / duration)) },
-                            status: .rejected
+                            position: duration.flatMap { duration in
+                                landedTime.map { max(0, min(1, $0 / duration)) }
+                            },
+                            status: seekStatus
                         )
                     }
                 }
@@ -1162,17 +1225,21 @@ extension PlayerClient: DependencyKey {
                 }
             },
             events: {
-                if box.playbackEngine == .avPlayer {
-                    return box.getAlternateSession().events()
-                }
-                let player = box.getPlayer()
+                // Playback can switch engines after the feature starts listening
+                // (events are subscribed before `play` to catch startup state).
+                // Subscribe to both sources and forward only the active engine's
+                // events so an AVPlayer start is never stranded on the VLC stream.
+                let playerEvents = box.getPlayer().events
+                let alternateEvents = box.getAlternateSession().events()
                 return AsyncStream { continuation in
-                    let task = Task {
+                    let vlcTask = Task { @MainActor in
                         var lastEmittedTimeSecond: Int64 = -1
                         var lastEmittedPosition: Double = -1.0
                         var lastEmittedPositionDate = Date.distantPast
 
-                        for await event in player.events {
+                        for await event in playerEvents {
+                            guard !Task.isCancelled else { return }
+                            guard box.playbackEngine == .vlc else { continue }
                             switch event {
                             case .bufferingProgress:
                                 continue
@@ -1200,8 +1267,16 @@ extension PlayerClient: DependencyKey {
                             }
                         }
                     }
+                    let alternateTask = Task { @MainActor in
+                        for await event in alternateEvents {
+                            guard !Task.isCancelled else { return }
+                            guard box.playbackEngine == .avPlayer else { continue }
+                            continuation.yield(event)
+                        }
+                    }
                     continuation.onTermination = { _ in
-                        task.cancel()
+                        vlcTask.cancel()
+                        alternateTask.cancel()
                     }
                 }
             },

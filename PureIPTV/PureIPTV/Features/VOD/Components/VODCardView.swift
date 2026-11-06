@@ -1,4 +1,3 @@
-import Kingfisher
 import Shimmer
 import SwiftUI
 
@@ -34,19 +33,14 @@ public struct VODCardView: View {
 
                 // Poster
                 if let posterURL = vod.displayCoverURL {
-                    KFImage.url(posterURL, cacheKey: PlaylistArtworkRequest.cacheKey(for: posterURL, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID))
-                        .requestModifier { request in
-                            PlaylistArtworkRequest.applyHeaders(to: &request, userAgentOverride: vod.userAgentOverride, playlistID: vod.playlistID)
-                        }
-                        .placeholder {
-                            VODPosterPlaceholder()
-                        }
-                        .downsampling(size: CGSize(width: 300, height: 450))
-                        .cacheOriginalImage()
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    PlaylistPosterArtworkView(
+                        url: posterURL,
+                        userAgentOverride: vod.userAgentOverride,
+                        playlistID: vod.playlistID
+                    ) {
+                        VODPosterPlaceholder()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } else {
                     VODPosterPlaceholder()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,14 +79,18 @@ public struct VODCardView: View {
 
                 // Title + Rating
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(vod.displayTitle)
-                    #if os(tvOS)
-                        .font(AppFonts.titleLarge)
-                    #else
-                        .font(AppFonts.headline)
-                    #endif
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(2)
+                    TMDBTitleLogoView(
+                        path: nil,
+                        title: vod.displayTitle,
+                        maxWidth: .infinity,
+                        height: 50,
+                        fallbackFont: cardTitleFont,
+                        userAgentOverride: vod.userAgentOverride,
+                        playlistID: vod.playlistID,
+                        cacheKey: vod.presentationOverride?.title == nil
+                            ? TMDBTitleLogoCache.key(for: vod, mediaType: "movie")
+                            : nil
+                    )
 
                     if let rating = vod.rating, rating > 0 {
                         HStack(spacing: 4) {
@@ -113,8 +111,18 @@ public struct VODCardView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppColors.oledBlack.opacity(0.88))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppColors.textPrimary.opacity(0.08), lineWidth: 0.7)
+                        }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 10)
             }
             .aspectRatio(2 / 3, contentMode: .fit)
         }
@@ -128,6 +136,14 @@ public struct VODCardView: View {
             radius: 8, x: 0, y: 2
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+
+    private var cardTitleFont: Font {
+        #if os(tvOS)
+            AppFonts.titleLarge
+        #else
+            .system(size: 15, weight: .semibold)
+        #endif
     }
 }
 

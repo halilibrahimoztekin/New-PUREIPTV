@@ -149,6 +149,13 @@ private nonisolated struct FavoriteSeriesDateFetchOutcome: Sendable {
     let failed: Bool
 }
 
+private nonisolated struct PreparedDashboardPersonalizationInputs: Sendable {
+    let eligibleHistory: [PersonalizationHistoryEntry]
+    let playlistFavorites: [PersonalizationFavoriteEntry]
+    let safeMovies: [MediaModels.Item]
+    let safeSeries: [MediaModels.Item]
+}
+
 private nonisolated func latestFavoriteEpisodeDate(in episodes: [DetailModels.Episode], asOf now: Date) -> Date? {
     episodes.reduce(into: Date?.none) { latest, episode in
         let candidate: Date? = if let releaseDate = episode.releaseDate {
@@ -279,6 +286,7 @@ public struct DashboardFeature {
         public var hasMovieContent = true
         public var hasResolvedSeriesCatalog = false
         public var hasSeriesContent = true
+        public var loadingPrimaryCatalogs: Set<PrimaryCatalog> = []
         public var failedPrimaryCatalogs: Set<PrimaryCatalog> = []
         public var epgCandidateChannels: [MediaModels.Item] = []
         public var epgCandidatePlaylistID: UUID?
@@ -375,6 +383,17 @@ public struct DashboardFeature {
         public var activeMovieRatingRefreshID: UUID?
         public var activeAwardRefreshID: UUID?
         public var activeActorRecommendationRefreshID: UUID?
+        // Recommendation output is staged until every discovery task for this
+        // refresh has completed, so asynchronous shelves cannot shift rows
+        // above the user's scroll position one at a time.
+        var pendingRecommendedVODs: [MediaModels.Item]?
+        var pendingRecommendationReasons: [String: SmartRecommendationEngine.Reason]?
+        var pendingActorRecommendationCollections: [ActorRecommendationEngine.Collection]?
+        var pendingMostWatchedActors: [ActorRecommendationEngine.MostWatchedActor]?
+        var pendingNewEpisodeSeries: [NewEpisodeDiscoveryEngine.SeriesEntry]?
+        var pendingFavoriteSeriesUnwatchedEpisodeCounts: [String: Int]?
+        var pendingMovieRatingShelves: MovieRatingDiscoveryEngine.Shelves?
+        var pendingAwardShelves: AwardDiscoveryEngine.Shelves?
         public var exploreCollections: [ExploreCollection] = []
         public var availableHomeCategoryCollections: [ExploreCollection] = []
         public var pinnedHomeCategoryIDs: [String] = []
@@ -807,6 +826,7 @@ public struct DashboardFeature {
             let awardRefreshID = UUID()
             state.activeAwardRefreshID = awardRefreshID
             state.hasLoadedAwardDiscovery = false
+            Self.clearPendingPersonalization(&state)
 
             let movies = state.actorRecommendationMovieCandidates.isEmpty
                 ? state.featuredVODs
@@ -818,22 +838,29 @@ public struct DashboardFeature {
             let cutoff = LocalPersonalizationPreferences.watchHistoryCutoff(for: scope.profileID)
             let history = state.watchHistoryItems.map(PersonalizationHistoryEntry.init)
             let favorites = state.favoriteItems.map(PersonalizationFavoriteEntry.init)
-            let playlistHistory = history.filter { item in
-                guard item.playlistID == playlistID else { return false }
-                return cutoff.map { item.lastWatchedAt > $0 } ?? true
+            let preparedInputsTask = Task.detached(priority: .utility) {
+                let playlistHistory = history.filter { item in
+                    guard item.playlistID == playlistID else { return false }
+                    return cutoff.map { item.lastWatchedAt > $0 } ?? true
+                }
+                let eligibleHistory = hideAdult
+                    ? playlistHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
+                    : playlistHistory
+                return PreparedDashboardPersonalizationInputs(
+                    eligibleHistory: eligibleHistory,
+                    playlistFavorites: favorites.filter { $0.playlistID == playlistID },
+                    safeMovies: hideAdult ? movies.filter { !isAdult($0.title) } : movies,
+                    safeSeries: hideAdult ? series.filter { !isAdult($0.title) } : series
+                )
             }
-            let eligibleHistory = hideAdult
-                ? playlistHistory.filter { !isAdult($0.title) && !isAdult($0.seriesTitle ?? "") }
-                : playlistHistory
-            let playlistFavorites = favorites.filter { $0.playlistID == playlistID }
-            let safeMovies = hideAdult ? movies.filter { !isAdult($0.title) } : movies
-            let safeSeries = hideAdult ? series.filter { !isAdult($0.title) } : series
 
             let localRecommendationsEffect = Effect<Action>.run { send in
+                let preparedInputs = await preparedInputsTask.value
+                guard !Task.isCancelled else { return }
                 let scoredRecommendations = await SmartRecommendationEngine.recommendations(
-                    from: safeMovies,
-                    history: eligibleHistory,
-                    favorites: playlistFavorites,
+                    from: preparedInputs.safeMovies,
+                    history: preparedInputs.eligibleHistory,
+                    favorites: preparedInputs.playlistFavorites,
                     limit: 12
                 )
                 let recommendations = scoredRecommendations.map(\.item)
@@ -860,20 +887,22 @@ public struct DashboardFeature {
                 // when this lazy section enters the render tree.
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
+                let preparedInputs = await preparedInputsTask.value
+                guard !Task.isCancelled else { return }
                 let collections = await ActorRecommendationEngine.collections(
-                    history: eligibleHistory,
+                    history: preparedInputs.eligibleHistory,
                     playlistID: playlistID,
-                    movies: safeMovies,
-                    series: safeSeries,
+                    movies: preparedInputs.safeMovies,
+                    series: preparedInputs.safeSeries,
                     tmdbClient: tmdbClient
                 )
-                let actors = safeMovies.isEmpty && safeSeries.isEmpty
+                let actors = preparedInputs.safeMovies.isEmpty && preparedInputs.safeSeries.isEmpty
                     ? []
                     : await ActorRecommendationEngine.mostWatchedActors(
-                        history: eligibleHistory,
+                        history: preparedInputs.eligibleHistory,
                         playlistID: playlistID,
-                        movies: safeMovies,
-                        series: safeSeries,
+                        movies: preparedInputs.safeMovies,
+                        series: preparedInputs.safeSeries,
                         tmdbClient: tmdbClient
                     )
                 guard !Task.isCancelled else { return }
@@ -893,6 +922,8 @@ public struct DashboardFeature {
                 newEpisodeEffect = .run { send in
                     try? await Task.sleep(for: .milliseconds(600))
                     guard !Task.isCancelled else { return }
+                    let preparedInputs = await preparedInputsTask.value
+                    guard !Task.isCancelled else { return }
                     let fullEpisodeHistory = await (try? databaseClient.fetchEpisodeWatchHistory(scope)) ?? []
                     let historySnapshots = fullEpisodeHistory.map(PersonalizationHistoryEntry.init)
                     let playlistEpisodeHistory = historySnapshots.filter { item in
@@ -905,8 +936,8 @@ public struct DashboardFeature {
                     let entries = await NewEpisodeDiscoveryEngine.discover(
                         history: eligibleEpisodeHistory,
                         playlistID: playlistID,
-                        seriesCatalog: safeSeries,
-                        favoriteSeriesIDs: Set(playlistFavorites.filter {
+                        seriesCatalog: preparedInputs.safeSeries,
+                        favoriteSeriesIDs: Set(preparedInputs.playlistFavorites.filter {
                             $0.type.caseInsensitiveCompare("series") == .orderedSame
                         }.map(\.id)),
                         config: config,
@@ -930,7 +961,9 @@ public struct DashboardFeature {
             let movieRatingEffect = Effect<Action>.run { send in
                 try? await Task.sleep(for: .milliseconds(900))
                 guard !Task.isCancelled else { return }
-                let shelves = await MovieRatingDiscoveryEngine.discover(from: safeMovies, using: tmdbClient)
+                let preparedInputs = await preparedInputsTask.value
+                guard !Task.isCancelled else { return }
+                let shelves = await MovieRatingDiscoveryEngine.discover(from: preparedInputs.safeMovies, using: tmdbClient)
                 guard !Task.isCancelled else { return }
                 await send(.movieRatingShelvesLoaded(
                     playlistID: playlistID,
@@ -944,8 +977,10 @@ public struct DashboardFeature {
             let awardEffect = Effect<Action>.run { send in
                 try? await Task.sleep(for: .milliseconds(1200))
                 guard !Task.isCancelled else { return }
+                let preparedInputs = await preparedInputsTask.value
+                guard !Task.isCancelled else { return }
                 let shelves = await AwardDiscoveryEngine.discover(
-                    from: safeMovies,
+                    from: preparedInputs.safeMovies,
                     using: tmdbClient,
                     awardClient: wikidataAwardClient
                 )
@@ -1019,6 +1054,7 @@ public struct DashboardFeature {
                 let profileChanged = state.activeProfileScope != profileScope
                 let playlistChanged = state.activePlaylistID != playlistID
                 if profileChanged || playlistChanged {
+                    state.loadingPrimaryCatalogs = []
                     state.hasLoadedLocalData = false
                     state.hasEnteredRecommendationsSection = false
                     state.hasStartedPersonalizationForCurrentData = false
@@ -1091,6 +1127,7 @@ public struct DashboardFeature {
                 state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
                 state.manualEPGChannelMappings = Self.loadManualEPGChannelMappings(playlistID: playlistID)
                 if playlistChanged {
+                    state.loadingPrimaryCatalogs = []
                     state.hasResolvedLiveCatalog = false
                     state.hasLiveContent = true
                     state.hasResolvedMovieCatalog = false
@@ -1136,6 +1173,7 @@ public struct DashboardFeature {
                 state.isSportsHubVisible = isSportsHubVisible
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
+                    state.loadingPrimaryCatalogs = []
                     Self.clearPersonalizationState(&state)
                     state.hasResolvedLiveCatalog = false
                     state.hasLiveContent = true
@@ -1631,6 +1669,7 @@ public struct DashboardFeature {
                     state.hasLoadedAwardDiscovery = false
                 }
                 state.activeAwardRefreshID = nil
+                Self.clearPendingPersonalization(&state)
                 state.recentLiveChannelsRequestID = nil
                 state.favoriteMediaOrderRequestID = nil
                 state.favoriteSeriesSortLoadRequestID = nil
@@ -2315,16 +2354,19 @@ public struct DashboardFeature {
 
                 switch type {
                 case .live:
+                    state.loadingPrimaryCatalogs.remove(.live)
                     state.failedPrimaryCatalogs.remove(.live)
                     state.hasResolvedLiveCatalog = true
                     state.hasLiveContent = !items.isEmpty
                     state.featuredChannels = items
                 case .vod:
+                    state.loadingPrimaryCatalogs.remove(.movies)
                     state.failedPrimaryCatalogs.remove(.movies)
                     state.hasResolvedMovieCatalog = true
                     state.hasMovieContent = !items.isEmpty
                     state.featuredVODs = items
                 case .series:
+                    state.loadingPrimaryCatalogs.remove(.series)
                     state.failedPrimaryCatalogs.remove(.series)
                     state.hasResolvedSeriesCatalog = true
                     state.hasSeriesContent = !items.isEmpty
@@ -2346,6 +2388,7 @@ public struct DashboardFeature {
                 else { return .none }
                 state.isPersonalizationEnabled = personalizationEnabled
                 state.failedPrimaryCatalogs = []
+                state.loadingPrimaryCatalogs = catalogsToRefresh
                 state.activePersonalizationRefreshID = nil
                 if !personalizationEnabled {
                     Self.clearPersonalizationState(&state)
@@ -2357,6 +2400,7 @@ public struct DashboardFeature {
                 state.hasLoadedMovieRatingDiscovery = false
                 state.activeAwardRefreshID = nil
                 state.hasLoadedAwardDiscovery = false
+                Self.clearPendingPersonalization(&state)
                 state.isLoadingActorFilmography = false
                 state.hasLoadedSelectedActorFilmography = false
                 state.selectedActorID = nil
@@ -2759,8 +2803,9 @@ public struct DashboardFeature {
                     state.activePersonalizationRefreshID == refreshID
                 else { return .none }
                 state.activePersonalizationRefreshID = nil
-                state.recommendedVODs = recommendations
-                state.recommendationReasons = reasons
+                state.pendingRecommendedVODs = recommendations
+                state.pendingRecommendationReasons = reasons
+                Self.commitPendingPersonalizationIfReady(&state)
                 return .none
 
             case let .dataLoaded(playlistID, hideAdult, refreshID, profileScope, movieCategoryPolicyRevision, catalogsToRefresh, catalogCounts, loadEPGEvents, channels, epgCandidateChannels, epgSourceLoaded, vods, series, failedPrimaryCatalogs, actorMovieCandidates, actorSeriesCandidates, vodExploreCollections, seriesExploreCollections, yearExploreCollections, homeCategoryCollections):
@@ -2792,6 +2837,7 @@ public struct DashboardFeature {
                     )
                 }
                 state.isLoading = false
+                state.loadingPrimaryCatalogs = []
                 state.hasLoadedRemoteData = true
                 state.activeRefreshID = nil
                 state.activeAutomaticRefreshProfileID = nil
@@ -2913,9 +2959,10 @@ public struct DashboardFeature {
                     state.lastAdultHidden == hideAdult,
                     state.activeActorRecommendationRefreshID == refreshID
                 else { return .none }
-                state.actorRecommendationCollections = collections
-                state.mostWatchedActors = actors
+                state.pendingActorRecommendationCollections = collections
+                state.pendingMostWatchedActors = actors
                 state.activeActorRecommendationRefreshID = nil
+                Self.commitPendingPersonalizationIfReady(&state)
                 return .none
 
             case let .newEpisodeSeriesLoaded(playlistID, hideAdult, refreshID, profileScope, series):
@@ -2926,12 +2973,13 @@ public struct DashboardFeature {
                       state.lastAdultHidden == hideAdult,
                       state.activeNewEpisodeRefreshID == refreshID
                 else { return .none }
-                state.newEpisodeSeries = series.filter { $0.newEpisodeCount > 0 }
-                state.favoriteSeriesUnwatchedEpisodeCounts = Dictionary(
+                state.pendingNewEpisodeSeries = series.filter { $0.newEpisodeCount > 0 }
+                state.pendingFavoriteSeriesUnwatchedEpisodeCounts = Dictionary(
                     series.filter { $0.unwatchedEpisodeCount > 0 }.map { ($0.id, $0.unwatchedEpisodeCount) },
                     uniquingKeysWith: { first, _ in first }
                 )
                 state.activeNewEpisodeRefreshID = nil
+                Self.commitPendingPersonalizationIfReady(&state)
                 return .none
 
             case let .movieRatingShelvesLoaded(playlistID, hideAdult, refreshID, shelves):
@@ -2940,18 +2988,16 @@ public struct DashboardFeature {
                     state.lastAdultHidden == hideAdult,
                     state.activeMovieRatingRefreshID == refreshID
                 else { return .none }
-                state.mostRatedMovies = shelves.mostRated
-                state.highestRatedMovies = shelves.highestRated
+                state.pendingMovieRatingShelves = shelves
                 state.activeMovieRatingRefreshID = nil
-                state.hasLoadedMovieRatingDiscovery = true
+                Self.commitPendingPersonalizationIfReady(&state)
                 return .none
 
             case let .awardShelvesLoaded(playlistID, hideAdult, refreshID, shelves):
                 guard state.activePlaylistID == playlistID, state.lastAdultHidden == hideAdult, state.activeAwardRefreshID == refreshID else { return .none }
-                state.awardWinningMovies = shelves.winners
-                state.awardNomineeMovies = shelves.nominees
+                state.pendingAwardShelves = shelves
                 state.activeAwardRefreshID = nil
-                state.hasLoadedAwardDiscovery = true
+                Self.commitPendingPersonalizationIfReady(&state)
                 return .none
 
             case let .dataFailed(playlistID, hideAdult, refreshID, error):
@@ -3761,6 +3807,65 @@ public struct DashboardFeature {
         state.activeActorRecommendationRefreshID = nil
         state.activeNewEpisodeRefreshID = nil
         state.activePersonalizationRefreshID = nil
+        clearPendingPersonalization(&state)
+    }
+
+    private static func clearPendingPersonalization(_ state: inout State) {
+        state.pendingRecommendedVODs = nil
+        state.pendingRecommendationReasons = nil
+        state.pendingActorRecommendationCollections = nil
+        state.pendingMostWatchedActors = nil
+        state.pendingNewEpisodeSeries = nil
+        state.pendingFavoriteSeriesUnwatchedEpisodeCounts = nil
+        state.pendingMovieRatingShelves = nil
+        state.pendingAwardShelves = nil
+    }
+
+    private static func commitPendingPersonalizationIfReady(_ state: inout State) {
+        guard state.activePersonalizationRefreshID == nil,
+              state.activeActorRecommendationRefreshID == nil,
+              state.activeNewEpisodeRefreshID == nil,
+              state.activeMovieRatingRefreshID == nil,
+              state.activeAwardRefreshID == nil
+        else { return }
+
+        if let recommendations = state.pendingRecommendedVODs {
+            state.recommendedVODs = recommendations
+        }
+        if let reasons = state.pendingRecommendationReasons {
+            state.recommendationReasons = reasons
+        }
+        if let collections = state.pendingActorRecommendationCollections {
+            state.actorRecommendationCollections = collections
+        }
+        if let actors = state.pendingMostWatchedActors {
+            state.mostWatchedActors = actors
+        }
+        if let series = state.pendingNewEpisodeSeries {
+            state.newEpisodeSeries = series
+        }
+        if let counts = state.pendingFavoriteSeriesUnwatchedEpisodeCounts {
+            state.favoriteSeriesUnwatchedEpisodeCounts = counts
+        }
+        if let shelves = state.pendingMovieRatingShelves {
+            state.mostRatedMovies = shelves.mostRated
+            state.highestRatedMovies = shelves.highestRated
+            state.hasLoadedMovieRatingDiscovery = true
+        }
+        if let shelves = state.pendingAwardShelves {
+            state.awardWinningMovies = shelves.winners
+            state.awardNomineeMovies = shelves.nominees
+            state.hasLoadedAwardDiscovery = true
+        }
+
+        state.pendingRecommendedVODs = nil
+        state.pendingRecommendationReasons = nil
+        state.pendingActorRecommendationCollections = nil
+        state.pendingMostWatchedActors = nil
+        state.pendingNewEpisodeSeries = nil
+        state.pendingFavoriteSeriesUnwatchedEpisodeCounts = nil
+        state.pendingMovieRatingShelves = nil
+        state.pendingAwardShelves = nil
     }
 
     private static func applySportsFollowRecords(

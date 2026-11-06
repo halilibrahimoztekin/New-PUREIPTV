@@ -572,25 +572,31 @@ public struct SeriesDetailFeature {
             case let .tmdbSearchResponse(.success(response)):
                 state.tmdbSearchResults = response.results ?? []
                 guard !state.hasManualTMDBOverride else { return .none }
-                if let firstResult = response.results?.first {
-                    print("TMDB search found result for TV: \(firstResult.name ?? "") (ID: \(firstResult.id))")
-                    return .run { send in
-                        await send(.tmdbDetailsResponse(
-                            Result { try await tmdbClient.fetchTVDetails(firstResult.id) }
-                        ))
-                    }
-                } else {
-                    print("TMDB search returned 0 results for TV")
+                guard let match = TMDBSearchMatchSelector.bestMatch(
+                    in: response.results ?? [],
+                    providerTitle: state.series.title,
+                    providerReleaseDate: state.series.releaseDate
+                ) else {
+                    print("TMDB search found no high-confidence match for TV")
                     state.isTMDBLoading = false
                     if !state.seasons.isEmpty {
                         state.isLoading = false
                     }
                     return .none
                 }
+                print("TMDB search matched TV: \(match.name ?? "") (ID: \(match.id))")
+                return .run { send in
+                    await send(.tmdbDetailsResponse(
+                        Result { try await tmdbClient.fetchTVDetails(match.id) }
+                    ))
+                }
 
             case let .tmdbDetailsResponse(.success(tvDetails)):
                 guard !state.hasManualTMDBOverride else { return .none }
-                print("TMDB details fetched for TV: \(tvDetails.name ?? "")")
+                print(
+                    "TMDB details fetched for TV: \(tvDetails.name ?? ""), id=\(tvDetails.id), "
+                        + "logo=\(tvDetails.preferredTitleLogoPath != nil), backdrop=\(tvDetails.backdropPath != nil)"
+                )
                 state.isTMDBLoading = false
                 state.tmdbTV = tvDetails
                 state.awardRecognitions = []
@@ -695,7 +701,10 @@ public struct SeriesDetailFeature {
                 state.isTMDBMatchPickerPresented = true
                 state.manualTMDBSearchRequestID = nil
                 state.tmdbSearchResults = []
-                return .send(.delegate(.presentTMDBMatchPicker(requestID: requestID)))
+                return .merge(
+                    .send(.delegate(.presentTMDBMatchPicker(requestID: requestID))),
+                    .send(.manualTMDBSearch(state.series.title.cleanedForTMDBSearch()))
+                )
 
             case .dismissTMDBMatchPicker:
                 state.isTMDBMatchPickerPresented = false
@@ -801,6 +810,7 @@ public struct SeriesDetailFeature {
                 )
 
             case .tmdbTimeout:
+                guard state.isTMDBLoading else { return .none }
                 print("TMDB loading timed out after 4 seconds")
                 state.isTMDBLoading = false
                 state.isLoading = false
@@ -1102,7 +1112,7 @@ public struct SeriesDetailFeature {
                         if let url = episode.coverURL {
                             return url
                         } else if let poster = state.tmdbTV?.posterPath {
-                            return URL(string: "https://image.tmdb.org/t/p/w342\(poster)")
+                            return TMDBImageURL.make(path: poster, size: .w342)
                         } else if let url = state.series.coverURL {
                             return url
                         }
@@ -1173,7 +1183,7 @@ public struct SeriesDetailFeature {
                     id: state.series.id,
                     type: "series",
                     title: state.series.title,
-                    coverURL: state.tmdbTV?.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" } ?? state.series.coverURL?.absoluteString,
+                    coverURL: state.tmdbTV?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString } ?? state.series.coverURL?.absoluteString,
                     streamURL: nil,
                     playlistID: state.config.playlistID
                 )

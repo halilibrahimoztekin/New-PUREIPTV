@@ -25,13 +25,12 @@
         public func body(content: Content) -> some View {
             content
                 .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.045 : 1.0))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(
-                            isSelected ? accentColor.opacity(0.5) : AppColors.glassPlate,
-                            lineWidth: isSelected ? 2 : 1
-                        )
-                )
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(accentColor.opacity(0.5), lineWidth: 2)
+                    }
+                }
                 .shadow(
                     color: AppColors.oledBlack.opacity(0.35),
                     radius: 8,
@@ -77,14 +76,7 @@
 
                 // Kart içeriği odak değişiminde sabit kalır; yalnızca kartın tamamı ölçeklenir.
                 floatingContent()
-
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        isSelected ? accentColor.opacity(0.5) : Color.white.opacity(0.08),
-                        lineWidth: isSelected ? 2 : 1
-                    )
             }
-            .scaleEffect(reduceMotion ? 1.0 : (isFocused ? 1.045 : 1.0))
             .shadow(
                 color: Color.black.opacity(0.35),
                 radius: 8,

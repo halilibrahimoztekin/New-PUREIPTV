@@ -77,16 +77,21 @@
 
                     // Mode Switcher (Kanallar / Yayın Akışı)
                     LiveTVModePicker_iOS(store: store)
+                        .frame(height: 44)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 10)
 
                     if store.selectedTabMode == .channels {
                         // Smart Group horizontal bar
-                        LiveTVSmartGroupBar_iOS(store: store)
-                            .padding(.bottom, 8)
+                        if !store.smartChannelGroups.isEmpty {
+                            LiveTVSmartGroupBar_iOS(store: store)
+                                .frame(height: 44)
+                                .padding(.bottom, 8)
+                        }
 
                         // Favorite lists switcher
                         FavoriteChannelListSwitcher(store: store)
+                            .frame(height: 44)
                             .padding(.bottom, 8)
 
                         // Category search & pills

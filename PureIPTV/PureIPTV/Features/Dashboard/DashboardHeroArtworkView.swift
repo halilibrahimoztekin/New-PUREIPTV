@@ -6,7 +6,19 @@ struct DashboardHeroArtworkView: View {
     let height: CGFloat
 
     @Dependency(\.tmdbClient) private var tmdbClient
+    @Environment(\.displayScale) private var displayScale
     @State private var tmdbBackdropURL: URL?
+    @ObservedObject private var cachedArtwork: TMDBTitleLogo
+
+    init(vod: MediaModels.Item, height: CGFloat) {
+        self.vod = vod
+        self.height = height
+        _cachedArtwork = ObservedObject(wrappedValue: TMDBTitleLogoCache.shared.logo(for: Self.cacheKey(for: vod)))
+    }
+
+    private static func cacheKey(for vod: MediaModels.Item) -> String {
+        TMDBTitleLogoCache.key(for: vod, mediaType: vod.type == .series ? "tv" : "movie")
+    }
 
     private var requestID: String {
         [vod.playlistID?.uuidString ?? "", vod.type.rawValue, vod.id, vod.title, vod.releaseDate ?? ""]
@@ -14,12 +26,18 @@ struct DashboardHeroArtworkView: View {
     }
 
     var body: some View {
+        let resolvedBackdropURL = tmdbBackdropURL ?? TMDBImageURL.make(path: cachedArtwork.backdropPath, size: .w1280)
         ZStack {
             providerArtworkFallback
 
-            if let tmdbBackdropURL {
-                AsyncImage(url: tmdbBackdropURL) { phase in
-                    if let image = phase.image {
+            if let resolvedBackdropURL {
+                PlaylistAsyncImage(
+                    url: resolvedBackdropURL,
+                    userAgentOverride: vod.userAgentOverride,
+                    playlistID: vod.playlistID,
+                    downsamplingSize: backdropDownsamplingSize
+                ) { phase in
+                    if case let .success(image) = phase {
                         image
                             .resizable()
                             .scaledToFill()
@@ -33,12 +51,29 @@ struct DashboardHeroArtworkView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(height: height)
         .clipped()
-        .animation(.easeInOut(duration: 0.25), value: tmdbBackdropURL)
+        .animation(.easeInOut(duration: 0.25), value: resolvedBackdropURL)
+        .onChange(of: cachedArtwork.backdropPath) { _, newPath in
+            tmdbBackdropURL = TMDBImageURL.make(path: newPath, size: .w1280)
+        }
         .task(id: requestID) {
-            tmdbBackdropURL = nil
-            let resolvedURL = await resolveTMDBBackdropURL()
+            let cachedURL = TMDBImageURL.make(path: cachedArtwork.backdropPath, size: .w1280)
+            tmdbBackdropURL = cachedURL
+
+            let cacheKey = Self.cacheKey(for: vod)
+            if cachedArtwork.path != nil || cachedArtwork.didResolveTitleAssets {
+                return
+            }
+
+            guard let assets = await resolveTMDBHeroAssets() else { return }
             guard !Task.isCancelled else { return }
-            tmdbBackdropURL = resolvedURL
+            TMDBTitleLogoCache.shared.insert(assets.logoPath, for: cacheKey)
+            TMDBTitleLogoCache.shared.insertBackdrop(assets.backdropPath, for: cacheKey)
+            if assets.didResolveImages {
+                TMDBTitleLogoCache.shared.markTitleAssetsResolved(for: cacheKey)
+            }
+            if let path = assets.backdropPath {
+                tmdbBackdropURL = TMDBImageURL.make(path: path, size: .w1280)
+            }
         }
         .accessibilityHidden(true)
         .allowsHitTesting(false)
@@ -50,7 +85,8 @@ struct DashboardHeroArtworkView: View {
                 PlaylistAsyncImage(
                     url: coverURL,
                     userAgentOverride: vod.userAgentOverride,
-                    playlistID: vod.playlistID
+                    playlistID: vod.playlistID,
+                    downsamplingSize: backdropDownsamplingSize
                 ) { phase in
                     if let image = phase.image {
                         image
@@ -70,6 +106,15 @@ struct DashboardHeroArtworkView: View {
         .clipped()
     }
 
+    private var backdropDownsamplingSize: CGSize {
+        // Backdrops are 16:9; bound decoding to the requested TMDB w1280 asset and
+        // the actual banner height so a 4K source is never decoded at original size.
+        CGSize(
+            width: min(1280, height * displayScale * 16 / 9),
+            height: min(720, height * displayScale)
+        )
+    }
+
     private var atmosphericFallback: some View {
         ZStack {
             LinearGradient(
@@ -86,51 +131,63 @@ struct DashboardHeroArtworkView: View {
         }
     }
 
-    private func resolveTMDBBackdropURL() async -> URL? {
+    private func resolveTMDBHeroAssets() async -> TMDBHeroAssets? {
         do {
             let response: TMDBSearchResponseDTO
+            let searchTitle = vod.title.cleanedForTMDBSearch()
             switch vod.type {
             case .vod:
-                response = try await tmdbClient.searchMovie(vod.title)
+                response = try await tmdbClient.searchMovie(searchTitle)
             case .series:
-                response = try await tmdbClient.searchTV(vod.title)
+                response = try await tmdbClient.searchTV(searchTitle)
             case .live:
                 return nil
             }
 
             guard !Task.isCancelled else { return nil }
-            let targetTitle = normalized(vod.title)
-            guard !targetTitle.isEmpty else { return nil }
-            let targetYear = yearPrefix(vod.releaseDate)
-
-            let result = response.results?.first { candidate in
-                guard let backdropPath = candidate.backdropPath, !backdropPath.isEmpty else { return false }
-                let titles = [candidate.title, candidate.name, candidate.originalTitle, candidate.originalName]
-                    .compactMap(\.self)
-                guard titles.contains(where: { normalized($0) == targetTitle }) else { return false }
-
-                guard let targetYear,
-                      let candidateYear = yearPrefix(candidate.releaseDate ?? candidate.firstAirDate)
-                else { return true }
-                return targetYear == candidateYear
+            let match = TMDBSearchMatchSelector.bestMatch(
+                in: response.results ?? [],
+                providerTitle: vod.title,
+                providerReleaseDate: vod.releaseDate
+            )
+            guard let match else {
+                return TMDBHeroAssets(logoPath: nil, backdropPath: nil, didResolveImages: true)
             }
 
-            guard let path = result?.backdropPath else { return nil }
-            return URL(string: "https://image.tmdb.org/t/p/w1280\(path)")
+            do {
+                switch vod.type {
+                case .vod:
+                    let images = try await tmdbClient.fetchMovieImages(match.id)
+                    return TMDBHeroAssets(
+                        logoPath: images.preferredTitleLogoPath,
+                        backdropPath: match.backdropPath ?? images.backdrops?.first?.filePath,
+                        didResolveImages: true
+                    )
+                case .series:
+                    let images = try await tmdbClient.fetchTVImages(match.id)
+                    return TMDBHeroAssets(
+                        logoPath: images.preferredTitleLogoPath,
+                        backdropPath: match.backdropPath ?? images.backdrops?.first?.filePath,
+                        didResolveImages: true
+                    )
+                case .live:
+                    return nil
+                }
+            } catch {
+                return TMDBHeroAssets(
+                    logoPath: nil,
+                    backdropPath: match.backdropPath,
+                    didResolveImages: false
+                )
+            }
         } catch {
             return nil
         }
     }
+}
 
-    private func normalized(_ value: String) -> String {
-        value
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .filter { $0.isLetter || $0.isNumber }
-    }
-
-    private func yearPrefix(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let year = String(value.prefix(4))
-        return year.count == 4 && year.allSatisfy(\.isNumber) ? year : nil
-    }
+private struct TMDBHeroAssets {
+    let logoPath: String?
+    let backdropPath: String?
+    let didResolveImages: Bool
 }

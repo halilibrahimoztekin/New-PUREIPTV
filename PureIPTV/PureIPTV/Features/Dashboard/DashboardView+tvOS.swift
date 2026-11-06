@@ -7,6 +7,7 @@
 
     public struct DashboardView_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
+        @Environment(\.displayScale) private var displayScale
         let config: PlaylistConfig
         @State private var isShowingFollowedSportsEvents = false
 
@@ -261,7 +262,12 @@
                     )
                 }
             case .recommendations:
-                DashboardPersonalizationSection_tvOS(store: store, favoriteIDs: favoriteIDs)
+                DashboardPersonalizationSection_tvOS(
+                    store: store,
+                    favoriteIDs: favoriteIDs,
+                    config: config,
+                    displayScale: displayScale
+                )
             case .recentlyAddedVOD:
                 if !newMovieItems.isEmpty {
                     TVShelfSection(title: AppStrings.Dashboard.newMovies) {
@@ -352,6 +358,8 @@
     private struct DashboardPersonalizationSection_tvOS: View {
         @Bindable var store: StoreOf<DashboardFeature>
         let favoriteIDs: Set<FavoriteIdentity>
+        let config: PlaylistConfig
+        let displayScale: CGFloat
 
         var body: some View {
             Color.clear
@@ -450,16 +458,21 @@
                     ForEach(store.mostWatchedActors) { actor in
                         Button { store.send(.actorSelected(id: actor.id, name: actor.name)) } label: {
                             VStack(spacing: 10) {
-                                AsyncImage(url: actor.profilePath.flatMap {
-                                    URL(string: "https://image.tmdb.org/t/p/w185\($0)")
-                                }) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Text(String(actor.name.prefix(1)))
-                                        .font(AppFonts.titleLarge)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                        .background(AppColors.surfaceElevated)
+                                PlaylistAsyncImage(
+                                    url: actor.profilePath.flatMap { TMDBImageURL.make(path: $0, size: .w185) },
+                                    userAgentOverride: nil,
+                                    playlistID: config.playlistID,
+                                    downsamplingSize: CGSize(width: 132 * displayScale, height: 132 * displayScale)
+                                ) { phase in
+                                    if let image = phase.image {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        Text(String(actor.name.prefix(1)))
+                                            .font(AppFonts.titleLarge)
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                            .background(AppColors.surfaceElevated)
+                                    }
                                 }
                                 .frame(width: 132, height: 132)
                                 .clipShape(Circle())

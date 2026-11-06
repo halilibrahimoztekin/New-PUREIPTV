@@ -2041,7 +2041,7 @@ public struct SearchFeature: Sendable {
                         var matches: [PersonCreditResult] = []
                         for person in people.prefix(30) {
                             guard !Task.isCancelled, let name = person.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { continue }
-                            let portraitURL = person.profilePath.flatMap { URL(string: "https://image.tmdb.org/t/p/w185/\($0.trimmingCharacters(in: CharacterSet(charactersIn: "/")))") }
+                            let portraitURL = person.profilePath.flatMap { TMDBImageURL.make(path: $0, size: .w185) }
                             let searchableCredits: [(mediaType: String?, titles: [String?], releaseDate: String?)] = if let combinedCredits = combinedCreditsByPersonID[person.id], !combinedCredits.isEmpty {
                                 combinedCredits.map {
                                     ($0.mediaType, [$0.title, $0.originalTitle, $0.name, $0.originalName], $0.releaseDate ?? $0.firstAirDate)

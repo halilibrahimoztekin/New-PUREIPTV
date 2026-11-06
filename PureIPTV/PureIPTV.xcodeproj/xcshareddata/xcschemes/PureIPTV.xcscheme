@@ -32,6 +32,17 @@
 
          <TestableReference
             skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "8BCF6C853035797500E02EB4"
+               BuildableName = "PureIPTVTests.xctest"
+               ReferencedContainer = "container:PureIPTV.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+
+         <TestableReference
+            skipped = "NO"
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"

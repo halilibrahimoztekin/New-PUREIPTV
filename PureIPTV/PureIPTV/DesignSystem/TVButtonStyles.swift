@@ -113,56 +113,25 @@
         }
 
         public func makeBody(configuration: Configuration) -> some View {
-            TVGridCardButtonBody(configuration: configuration, cornerRadius: cornerRadius)
+            TVGridCardButtonBody(configuration: configuration)
         }
 
         private struct TVGridCardButtonBody: View {
             let configuration: Configuration
-            let cornerRadius: CGFloat
             @Environment(\.isFocused) private var isFocused
-
-            private var scale: CGFloat {
-                if isFocused {
-                    1.08
-                } else if configuration.isPressed {
-                    0.96
-                } else {
-                    1.0
-                }
-            }
-
-            private var strokeColor: Color {
-                isFocused ? Color.white.opacity(0.9) : Color.clear
-            }
-
-            private var shadowColor: Color {
-                isFocused ? AppColors.primary.opacity(0.6) : Color.black.opacity(0.4)
-            }
-
-            private var shadowRadius: CGFloat {
-                isFocused ? 16.0 : 8.0
-            }
-
-            private var shadowY: CGFloat {
-                isFocused ? 6.0 : 2.0
-            }
+            @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
             var body: some View {
                 configuration.label
-                    .scaleEffect(scale)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(strokeColor, lineWidth: 3)
+                    .scaleEffect(
+                        reduceMotion ? 1 : (isFocused ? 1.045 : (configuration.isPressed ? 0.98 : 1))
                     )
-                    .shadow(
-                        color: shadowColor,
-                        radius: shadowRadius,
-                        x: 0,
-                        y: shadowY
+                    .shadow(color: Color.black.opacity(0.35), radius: 8, x: 0, y: 3)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82),
+                        value: isFocused
                     )
-                    .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
                     .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: cornerRadius))
             }
         }
     }

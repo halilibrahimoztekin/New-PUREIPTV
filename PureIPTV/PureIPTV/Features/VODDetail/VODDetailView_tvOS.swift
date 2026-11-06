@@ -19,13 +19,13 @@
             ZStack(alignment: .leading) {
                 // Background
                 GeometryReader { proxy in
-                    let cover = store.tmdbMovie?.backdropPath.map { "https://image.tmdb.org/t/p/w1280\($0)" } ??
+                    let cover = store.tmdbMovie?.backdropPath.flatMap { TMDBImageURL.make(path: $0, size: .w1280)?.absoluteString } ??
                         store.vod.presentationOverride?.posterURL?.absoluteString ??
-                        store.tmdbMovie?.posterPath.map { "https://image.tmdb.org/t/p/w780\($0)" } ??
+                        store.tmdbMovie?.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w780)?.absoluteString } ??
                         store.vod.coverURL?.absoluteString
 
                     if let urlString = cover, let url = URL(string: urlString) {
-                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID) { phase in
+                        PlaylistAsyncImage(url: url, userAgentOverride: store.config.userAgentOverride, playlistID: store.config.playlistID, downsamplingSize: CGSize(width: proxy.size.width * 2, height: proxy.size.height * 2)) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()
@@ -57,10 +57,19 @@
                     HStack(spacing: 80) {
                         // Info Section
                         VStack(alignment: .leading, spacing: 28) {
-                            Text(store.vod.presentationOverride?.title ?? store.tmdbMovie?.title ?? store.vod.title)
-                                .font(.system(size: 58, weight: .bold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(2)
+                            TMDBTitleLogoView(
+                                path: store.vod.presentationOverride?.title == nil ? store.tmdbMovie?.preferredTitleLogoPath : nil,
+                                backdropPath: store.tmdbMovie?.backdropPath,
+                                title: store.vod.presentationOverride?.title ?? store.tmdbMovie?.title ?? store.vod.title,
+                                maxWidth: 760,
+                                height: 130,
+                                fallbackFont: .system(size: 58, weight: .bold),
+                                userAgentOverride: store.config.userAgentOverride,
+                                playlistID: store.config.playlistID,
+                                cacheKey: store.vod.presentationOverride?.title == nil
+                                    ? TMDBTitleLogoCache.key(for: store.vod, mediaType: "movie")
+                                    : nil
+                            )
 
                             // Metadata
                             HStack(spacing: 20) {
@@ -249,15 +258,20 @@
                                         .foregroundStyle(AppColors.textPrimary)
 
                                     ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 20) {
+                                        LazyHStack(spacing: 20) {
                                             ForEach(cast.prefix(12), id: \.id) { actor in
                                                 Button {
                                                     store.send(.actorTapped(actor))
                                                 } label: {
                                                     VStack(spacing: 8) {
-                                                        let avatarURL = actor.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                                                        let avatarURL = actor.profilePath.flatMap { TMDBImageURL.make(path: $0, size: .w185)?.absoluteString }
                                                         if let urlString = avatarURL, let url = URL(string: urlString) {
-                                                            AsyncImage(url: url) { phase in
+                                                            PlaylistAsyncImage(
+                                                                url: url,
+                                                                userAgentOverride: store.config.userAgentOverride,
+                                                                playlistID: store.config.playlistID,
+                                                                downsamplingSize: CGSize(width: 160, height: 160)
+                                                            ) { phase in
                                                                 switch phase {
                                                                 case let .success(img):
                                                                     img.resizable().scaledToFill()
@@ -318,7 +332,7 @@
                                     }
 
                                     ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 24) {
+                                        LazyHStack(spacing: 24) {
                                             ForEach(similar.prefix(12), id: \.id) { item in
                                                 let isMatched = store.matchedVODsByTMDBId[item.id] != nil
                                                 Button {
@@ -326,9 +340,14 @@
                                                 } label: {
                                                     VStack(alignment: .leading, spacing: 10) {
                                                         ZStack(alignment: .topTrailing) {
-                                                            let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" }
+                                                            let cover = item.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString }
                                                             if let urlString = cover, let url = URL(string: urlString) {
-                                                                AsyncImage(url: url) { phase in
+                                                                PlaylistAsyncImage(
+                                                                    url: url,
+                                                                    userAgentOverride: store.config.userAgentOverride,
+                                                                    playlistID: store.config.playlistID,
+                                                                    downsamplingSize: CGSize(width: 280, height: 420)
+                                                                ) { phase in
                                                                     switch phase {
                                                                     case let .success(img):
                                                                         img.resizable().scaledToFill()

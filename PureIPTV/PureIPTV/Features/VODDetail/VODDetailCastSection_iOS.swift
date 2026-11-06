@@ -5,6 +5,7 @@
     struct VODDetailCastSection_iOS: View {
         let store: StoreOf<VODDetailFeature>
         let onPresentSynopsis: (String) -> Void
+        @Environment(\.displayScale) private var displayScale
 
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
@@ -99,9 +100,14 @@
                                     } label: {
                                         VStack(spacing: 7) {
                                             // Avatar
-                                            let avatarURL = actor.profilePath.map { "https://image.tmdb.org/t/p/w185\($0)" }
+                                            let avatarURL = actor.profilePath.flatMap { TMDBImageURL.make(path: $0, size: .w185)?.absoluteString }
                                             if let urlString = avatarURL, let url = URL(string: urlString) {
-                                                AsyncImage(url: url) { phase in
+                                                PlaylistAsyncImage(
+                                                    url: url,
+                                                    userAgentOverride: store.config.userAgentOverride,
+                                                    playlistID: store.config.playlistID,
+                                                    downsamplingSize: CGSize(width: 70 * displayScale, height: 70 * displayScale)
+                                                ) { phase in
                                                     switch phase {
                                                     case let .success(img):
                                                         img.resizable().scaledToFill()
@@ -242,7 +248,7 @@
                         .padding(.horizontal, 24)
 
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
+                            LazyHStack(spacing: 12) {
                                 ForEach(similar, id: \.id) { item in
                                     let isMatched = store.matchedVODsByTMDBId[item.id] != nil
                                     Button {
@@ -251,9 +257,14 @@
                                     } label: {
                                         VStack(alignment: .leading, spacing: 6) {
                                             ZStack(alignment: .topTrailing) {
-                                                let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w342\($0)" }
+                                                let cover = item.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w342)?.absoluteString }
                                                 if let urlString = cover, let url = URL(string: urlString) {
-                                                    AsyncImage(url: url) { phase in
+                                                    PlaylistAsyncImage(
+                                                        url: url,
+                                                        userAgentOverride: store.config.userAgentOverride,
+                                                        playlistID: store.config.playlistID,
+                                                        downsamplingSize: CGSize(width: 110 * displayScale, height: 165 * displayScale)
+                                                    ) { phase in
                                                         switch phase {
                                                         case let .success(image):
                                                             image.resizable().scaledToFill()

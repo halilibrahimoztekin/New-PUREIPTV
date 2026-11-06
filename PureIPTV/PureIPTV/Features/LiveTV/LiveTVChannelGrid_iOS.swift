@@ -24,6 +24,7 @@
                     channelsContent
                 }
             }
+            .frame(maxHeight: .infinity)
         }
 
         // MARK: - Channels Content

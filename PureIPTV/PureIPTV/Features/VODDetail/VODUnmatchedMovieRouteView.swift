@@ -3,7 +3,11 @@ import SwiftUI
 
 struct VODUnmatchedMovieRouteContent: View {
     let item: TMDBSimilarItemDTO
+    let userAgentOverride: String?
+    let playlistID: UUID?
     let close: () -> Void
+
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         #if os(tvOS)
@@ -21,25 +25,33 @@ struct VODUnmatchedMovieRouteContent: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
-                            let backdropURL = item.backdropPath.map { "https://image.tmdb.org/t/p/w780\($0)" }
-                                ?? item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
+                            let backdropURL = item.backdropPath.flatMap { TMDBImageURL.make(path: $0, size: .w780)?.absoluteString }
+                                ?? item.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w500)?.absoluteString }
                             if let urlString = backdropURL, let url = URL(string: urlString) {
-                                AsyncImage(url: url) { phase in
-                                    if case let .success(image) = phase {
-                                        image.resizable().scaledToFill()
-                                    } else {
-                                        Rectangle().fill(AppColors.surfaceSecondary)
+                                GeometryReader { geometry in
+                                    PlaylistAsyncImage(
+                                        url: url,
+                                        userAgentOverride: userAgentOverride,
+                                        playlistID: playlistID,
+                                        downsamplingSize: CGSize(width: geometry.size.width * displayScale, height: 180 * displayScale)
+                                    ) { phase in
+                                        if case let .success(image) = phase {
+                                            image.resizable().scaledToFill()
+                                        } else {
+                                            Rectangle().fill(AppColors.surfaceSecondary)
+                                        }
                                     }
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                    .clipped()
+                                    .overlay(
+                                        LinearGradient(
+                                            colors: [Color.clear, AppColors.surfaceDark],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
                                 }
                                 .frame(height: 180)
-                                .clipped()
-                                .overlay(
-                                    LinearGradient(
-                                        colors: [Color.clear, AppColors.surfaceDark],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
                             }
 
                             VStack(alignment: .leading, spacing: 14) {
@@ -141,9 +153,14 @@ struct VODUnmatchedMovieRouteContent: View {
                 AppColors.surfaceDark.ignoresSafeArea()
 
                 HStack(spacing: 40) {
-                    let cover = item.posterPath.map { "https://image.tmdb.org/t/p/w500\($0)" }
+                    let cover = item.posterPath.flatMap { TMDBImageURL.make(path: $0, size: .w500)?.absoluteString }
                     if let urlString = cover, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
+                        PlaylistAsyncImage(
+                            url: url,
+                            userAgentOverride: userAgentOverride,
+                            playlistID: playlistID,
+                            downsamplingSize: CGSize(width: 480 * displayScale, height: 720 * displayScale)
+                        ) { phase in
                             if case let .success(image) = phase {
                                 image.resizable().scaledToFill()
                             } else {
