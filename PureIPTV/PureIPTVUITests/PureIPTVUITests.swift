@@ -51,7 +51,13 @@ final class PureIPTVUITests: XCTestCase {
         XCTAssertTrue(settingsRow.waitForExistence(timeout: 10))
         settingsRow.tap()
 
-        XCTAssertTrue(app.staticTexts["Hesap Yönetimi (Playlists)"].waitForExistence(timeout: 15))
+        let accountRow = app.staticTexts["Hesap Yönetimi (Playlists)"]
+        let backupRestoreRow = app.staticTexts["Yedekten Geri Yükle (.iptvbackup)"]
+        let switchProfileRow = app.staticTexts["Profil Değiştir"]
+        XCTAssertTrue(accountRow.waitForExistence(timeout: 15))
+        XCTAssertTrue(accountRow.isHittable)
+        XCTAssertTrue(backupRestoreRow.isHittable)
+        XCTAssertTrue(switchProfileRow.isHittable)
     }
 
     @MainActor

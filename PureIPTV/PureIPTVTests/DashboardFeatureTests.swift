@@ -20,6 +20,7 @@ final class DashboardFeatureTests: XCTestCase {
             DashboardFeature()
         } withDependencies: {
             $0.profileContextClient.snapshot = { scope }
+            $0.wikidataAwardClient.fetchRecognitions = { _, _ in [] }
         }
         store.exhaustivity = .off
 
@@ -82,6 +83,7 @@ final class DashboardFeatureTests: XCTestCase {
             DashboardFeature()
         } withDependencies: {
             $0.profileContextClient.snapshot = { scope }
+            $0.wikidataAwardClient.fetchRecognitions = { _, _ in [] }
         }
         store.exhaustivity = .off
 
@@ -140,5 +142,83 @@ final class DashboardFeatureTests: XCTestCase {
         XCTAssertNil(store.state.activeNewEpisodeRefreshID)
         XCTAssertNil(store.state.activeMovieRatingRefreshID)
         XCTAssertNil(store.state.activeAwardRefreshID)
+    }
+
+    func testOnDisappearPreservesLoadedPersonalizationAndKeepsDiscoveryInFlight() async {
+        let playlistID = UUID()
+        let profileID = UUID()
+        let scope = ProfileContextSnapshot(profileID: profileID, generation: UUID())
+        let series = MediaModels.Item(
+            id: "series",
+            title: "Series",
+            categoryID: "series",
+            type: .series
+        )
+        let recommendation = MediaModels.Item(
+            id: "recommendation",
+            title: "Recommendation",
+            categoryID: "movies",
+            type: .vod
+        )
+        let episodeEntry = NewEpisodeDiscoveryEngine.SeriesEntry(
+            series: series,
+            newEpisodeCount: 2,
+            unwatchedEpisodeCount: 3,
+            latestSeason: 1,
+            latestEpisodeNumber: 4,
+            latestEpisodeTitle: "Episode"
+        )
+
+        var initialState = DashboardFeature.State()
+        initialState.isVisible = true
+        initialState.activePlaylistID = playlistID
+        initialState.activeProfileScope = scope
+        initialState.lastAdultHidden = false
+        initialState.hasLoadedRemoteData = true
+        initialState.hasLoadedLocalData = true
+        initialState.hasEnteredRecommendationsSection = true
+        initialState.hasStartedPersonalizationForCurrentData = true
+        initialState.recommendedVODs = [recommendation]
+        initialState.newEpisodeSeries = [episodeEntry]
+        initialState.favoriteSeriesUnwatchedEpisodeCounts = [series.id: 3]
+        initialState.activePersonalizationRefreshID = UUID()
+        initialState.activeNewEpisodeRefreshID = UUID()
+        initialState.pendingRecommendedVODs = [recommendation]
+
+        let store = TestStore(initialState: initialState) {
+            DashboardFeature()
+        } withDependencies: {
+            $0.profileContextClient.snapshot = { scope }
+            $0.wikidataAwardClient.fetchRecognitions = { _, _ in [] }
+        }
+        store.exhaustivity = .off
+
+        await store.send(.onDisappear)
+
+        XCTAssertFalse(store.state.isVisible)
+        XCTAssertEqual(store.state.recommendedVODs, [recommendation])
+        XCTAssertEqual(store.state.newEpisodeSeries, [episodeEntry])
+        XCTAssertEqual(store.state.favoriteSeriesUnwatchedEpisodeCounts, [series.id: 3])
+        XCTAssertTrue(store.state.hasStartedPersonalizationForCurrentData)
+        XCTAssertNotNil(store.state.activePersonalizationRefreshID)
+        XCTAssertNotNil(store.state.activeNewEpisodeRefreshID)
+        XCTAssertEqual(store.state.pendingRecommendedVODs, [recommendation])
+    }
+
+    func testOffscreenLocalDatabaseChangesMarkSnapshotStaleWithoutFetching() async {
+        var initialState = DashboardFeature.State()
+        initialState.hasLoadedLocalData = true
+
+        let store = TestStore(initialState: initialState) {
+            DashboardFeature()
+        } withDependencies: {
+            $0.wikidataAwardClient.fetchRecognitions = { _, _ in [] }
+        }
+        store.exhaustivity = .off
+
+        await store.send(.localDatabaseDidChange)
+
+        XCTAssertTrue(store.state.needsLocalDataRefresh)
+        XCTAssertTrue(store.state.hasLoadedLocalData)
     }
 }

@@ -1469,7 +1469,10 @@ extension AppScreen.State: Hashable {
         case let (.home(l), .home(r)): l == r
         case let (.globalSearch(l), .globalSearch(r)): l.presentationID == r.presentationID
         case let (.hiddenMediaManagement(l), .hiddenMediaManagement(r)): l.presentationID == r.presentationID
-        case let (.player(l), .player(r)): l == r
+        // Player routes are identified by the playable item, matching `hash(into:)`.
+        // Comparing the full PlayerFeature.State here walks large playback/catalog state
+        // during route-store lookups and can stall SwiftUI updates on the main thread.
+        case let (.player(l), .player(r)): l.item.id == r.item.id
         case let (.epgGuide(l), .epgGuide(r)): l.presentationID == r.presentationID
         case let (.epgTimeline(l), .epgTimeline(r)): l.presentationID == r.presentationID
         case let (.epgTimelineProgramDetail(l), .epgTimelineProgramDetail(r)): l.presentationID == r.presentationID

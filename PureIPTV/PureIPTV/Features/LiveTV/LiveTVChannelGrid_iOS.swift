@@ -10,21 +10,64 @@
         @Bindable var store: StoreOf<LiveTVFeature>
         let config: PlaylistConfig
 
+        private struct ScrollScope: Equatable {
+            let playlistID: UUID?
+            let categoryID: String?
+            let smartGroupID: String?
+            let favoriteListID: UUID?
+            let isFavoriteListMode: Bool
+        }
+
+        private enum ScrollAnchor: Hashable {
+            case top
+        }
+
         private let columns: [GridItem] = [
             GridItem(.adaptive(minimum: 155, maximum: 200), spacing: 12),
         ]
 
         var body: some View {
-            ScrollView {
-                if store.isLoadingChannels, store.displayChannels.isEmpty {
-                    loadingShimmerView
-                } else if store.displayChannels.isEmpty {
-                    emptyStateView
-                } else {
-                    channelsContent
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear
+                        .frame(height: 1)
+                        .accessibilityHidden(true)
+                        .id(ScrollAnchor.top)
+
+                    if store.isLoadingChannels, store.displayChannels.isEmpty {
+                        loadingShimmerView
+                    } else if store.displayChannels.isEmpty {
+                        emptyStateView
+                    } else {
+                        channelsContent
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                .onChange(of: scrollScope) { _, _ in
+                    // A new category/group can contain far fewer rows than the previous
+                    // one. Preserve no stale vertical offset that leaves the new grid
+                    // floating below a blank area.
+                    resetScrollPosition(using: proxy)
                 }
             }
-            .frame(maxHeight: .infinity)
+        }
+
+        private func resetScrollPosition(using proxy: ScrollViewProxy) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(ScrollAnchor.top, anchor: .top)
+            }
+        }
+
+        private var scrollScope: ScrollScope {
+            ScrollScope(
+                playlistID: config.playlistID,
+                categoryID: store.selectedCategoryID,
+                smartGroupID: store.selectedSmartGroupID,
+                favoriteListID: store.selectedFavoriteListID,
+                isFavoriteListMode: store.isFavoriteListMode
+            )
         }
 
         // MARK: - Channels Content

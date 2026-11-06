@@ -71,35 +71,10 @@
         func body(content: Content) -> some View {
             content
                 .scaleEffect(isFocused ? 1.035 : 1)
-                .overlay {
-                    focusOutline
-                }
-                .shadow(
-                    color: accentColor.opacity(isFocused ? 0.32 : 0),
-                    radius: isFocused ? 12 : 0,
-                    x: 0,
-                    y: isFocused ? 4 : 0
-                )
                 .animation(
                     reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
                     value: isFocused
                 )
-                .tvHighContrastFocusOutline(isFocused: isFocused, shape: shape)
-        }
-
-        @ViewBuilder
-        private var focusOutline: some View {
-            let color = isFocused ? accentColor.opacity(0.9) : Color.clear
-
-            switch shape {
-            case let .roundedRectangle(cornerRadius):
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(color, lineWidth: 2)
-            case .capsule:
-                Capsule().stroke(color, lineWidth: 2)
-            case .circle:
-                Circle().stroke(color, lineWidth: 2)
-            }
         }
     }
 
@@ -126,7 +101,6 @@
                     .scaleEffect(
                         reduceMotion ? 1 : (isFocused ? 1.045 : (configuration.isPressed ? 0.98 : 1))
                     )
-                    .shadow(color: Color.black.opacity(0.35), radius: 8, x: 0, y: 3)
                     .animation(
                         reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82),
                         value: isFocused
@@ -170,32 +144,11 @@
             let accentColor: Color
             let isSelected: Bool
             @Environment(\.isFocused) private var isFocused
-
             private var fillColor: Color {
-                if isFocused {
-                    accentColor.opacity(0.24)
-                } else if isSelected {
+                if isSelected {
                     accentColor.opacity(0.12)
                 } else {
                     Color.clear
-                }
-            }
-
-            private var strokeColor: Color {
-                isFocused ? accentColor.opacity(0.75) : Color.clear
-            }
-
-            private var shadowColor: Color {
-                isFocused ? accentColor.opacity(0.4) : Color.clear
-            }
-
-            private var scale: CGFloat {
-                if isFocused {
-                    1.04
-                } else if configuration.isPressed {
-                    0.97
-                } else {
-                    1.0
                 }
             }
 
@@ -209,12 +162,11 @@
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(strokeColor, lineWidth: 1.5)
+                            .stroke(Color.clear, lineWidth: 1.5)
                     )
-                    .shadow(color: shadowColor, radius: 10, x: 0, y: 0)
-                    .scaleEffect(scale)
+                    .scaleEffect(isFocused ? 1.04 : (configuration.isPressed ? 0.97 : 1))
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 12))
+                    .focusEffectDisabled()
             }
         }
     }
@@ -231,6 +183,7 @@
         private struct TVEpisodeCardButtonBody: View {
             let configuration: Configuration
             @Environment(\.isFocused) private var isFocused
+            @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
             private var scale: CGFloat {
                 if isFocused {
@@ -242,37 +195,21 @@
                 }
             }
 
-            private var fillColor: Color {
-                isFocused ? Color.white.opacity(0.18) : AppColors.surfaceTertiary
-            }
-
-            private var strokeColor: Color {
-                isFocused ? Color.white.opacity(0.85) : AppColors.borderSubtle
-            }
-
-            private var strokeWidth: CGFloat {
-                isFocused ? 2.5 : 1.0
-            }
-
-            private var shadowColor: Color {
-                isFocused ? AppColors.primary.opacity(0.4) : Color.black.opacity(0.3)
-            }
-
             var body: some View {
                 configuration.label
                     .padding(20)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(fillColor)
+                            .fill(AppColors.surfaceTertiary)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(strokeColor, lineWidth: strokeWidth)
+                            .stroke(AppColors.borderSubtle, lineWidth: 1)
                     )
-                    .shadow(color: shadowColor, radius: isFocused ? 16 : 8, x: 0, y: isFocused ? 4 : 2)
-                    .scaleEffect(scale)
+                    .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 2)
+                    .scaleEffect(reduceMotion ? 1 : scale)
                     .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isFocused)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .roundedRectangle(cornerRadius: 16))
+                    .focusEffectDisabled()
             }
         }
     }
@@ -303,9 +240,7 @@
             @Environment(\.isFocused) private var isFocused
 
             private var fillColor: Color {
-                if isFocused {
-                    Color.white
-                } else if isSelected || isPrimary {
+                if isSelected || isPrimary {
                     Color.red
                 } else {
                     AppColors.surfaceTertiary
@@ -313,13 +248,11 @@
             }
 
             private var foregroundColor: Color {
-                isFocused ? Color.black : Color.white
+                Color.white
             }
 
             private var strokeColor: Color {
-                if isFocused {
-                    Color.clear
-                } else if isSelected {
+                if isSelected {
                     Color.red.opacity(0.8)
                 } else {
                     Color.white.opacity(0.15)
@@ -328,7 +261,7 @@
 
             private var scale: CGFloat {
                 if isFocused {
-                    1.08
+                    1.035
                 } else if configuration.isPressed {
                     0.96
                 } else {
@@ -347,10 +280,9 @@
                         Capsule()
                             .stroke(strokeColor, lineWidth: 1.5)
                     )
-                    .shadow(color: isFocused ? Color.white.opacity(0.35) : Color.clear, radius: 12, x: 0, y: 0)
                     .scaleEffect(scale)
+                    .focusEffectDisabled()
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .capsule)
             }
         }
     }
@@ -374,9 +306,7 @@
             @Environment(\.isFocused) private var isFocused
 
             private var fillColor: Color {
-                if isFocused {
-                    Color.white.opacity(0.3)
-                } else if isFavorite {
+                if isFavorite {
                     Color.red.opacity(0.25)
                 } else {
                     Color.white.opacity(0.08)
@@ -384,16 +314,16 @@
             }
 
             private var strokeColor: Color {
-                isFocused ? Color.white.opacity(0.9) : (isFavorite ? Color.red.opacity(0.6) : Color.white.opacity(0.2))
+                isFavorite ? Color.red.opacity(0.6) : Color.white.opacity(0.2)
             }
 
             private var strokeWidth: CGFloat {
-                isFocused ? 2.5 : 1.5
+                1.5
             }
 
             private var scale: CGFloat {
                 if isFocused {
-                    1.12
+                    1.035
                 } else if configuration.isPressed {
                     0.95
                 } else {
@@ -411,10 +341,9 @@
                         Circle()
                             .stroke(strokeColor, lineWidth: strokeWidth)
                     )
-                    .shadow(color: isFocused ? Color.white.opacity(0.3) : Color.clear, radius: 10, x: 0, y: 0)
                     .scaleEffect(scale)
                     .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
-                    .tvHighContrastFocusOutline(isFocused: isFocused, shape: .circle)
+                    .focusEffectDisabled()
             }
         }
     }

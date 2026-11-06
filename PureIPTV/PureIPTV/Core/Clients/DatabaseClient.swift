@@ -310,6 +310,7 @@ private func setFavoriteItems(
     guard changed else { return true }
     guard profileContextClient.snapshot() == scope else { return false }
     try context.save()
+    NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
     return true
 }
 
@@ -381,6 +382,7 @@ extension DatabaseClient: DependencyKey {
                     }
                     guard profileContextClient.snapshot() == scope else { return false }
                     try context.save()
+                    NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
                     return first.removedAt == nil
                 }
                 if let profileID, profileID == legacyDataOwnerID(in: context) {
@@ -392,6 +394,7 @@ extension DatabaseClient: DependencyKey {
                         legacy.removedAt = Date()
                         guard profileContextClient.snapshot() == scope else { return false }
                         try context.save()
+                        NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
                         return false
                     }
                 }
@@ -403,6 +406,7 @@ extension DatabaseClient: DependencyKey {
                 ))
                 guard profileContextClient.snapshot() == scope else { return false }
                 try context.save()
+                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
                 return true
             },
             setFavorites: { items, isFavorite, scope in

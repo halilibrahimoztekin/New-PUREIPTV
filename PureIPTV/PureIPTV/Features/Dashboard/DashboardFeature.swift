@@ -413,6 +413,9 @@ public struct DashboardFeature {
         public var homeSections: [HomeSectionConfig] = HomeSectionManager.defaultSections
         public var hasLoadedRemoteData = false
         public var hasLoadedLocalData = false
+        public var needsLocalDataRefresh = false
+        public var hasLoadedFavoriteOrdering = false
+        public var localDataRequestID: UUID?
         public var hasEnteredRecommendationsSection = false
         public var hasStartedPersonalizationForCurrentData = false
         public var activePlaylistID: UUID?
@@ -691,6 +694,7 @@ public struct DashboardFeature {
         case primaryCatalogLoaded(playlistID: UUID?, hideAdult: Bool, refreshID: UUID, profileScope: ProfileContextSnapshot, type: MediaModels.ItemType, items: [MediaModels.Item])
         case loadEPGEvents(config: PlaylistConfig, playlistID: UUID?, refreshID: UUID, channels: [MediaModels.Item])
         case loadLocalData
+        case localDatabaseDidChange
         case localDataLoaded(requestID: UUID, favorites: [FavoriteItem], history: [WatchHistoryItem], hiddenMedia: [HiddenMediaEntry], scope: ProfileContextSnapshot)
         case favoriteMediaOrdersLoaded(requestID: UUID, orders: [String: FavoriteChannelOrderSnapshot], scope: ProfileContextSnapshot)
         case favoriteSeriesSortStateLoaded(requestID: UUID, mode: FavoriteSeriesSortMode, episodeDates: [UUID: [String: FavoriteSeriesEpisodeDateCacheEntry]], scope: ProfileContextSnapshot)
@@ -748,6 +752,7 @@ public struct DashboardFeature {
         case favoriteSeriesSortDates
         case watchHistoryObserver
         case hiddenMediaObserver
+        case favoritesObserver
         case personalizationPreferencesObserver
         case localRecommendations
         case remoteData
@@ -1016,9 +1021,13 @@ public struct DashboardFeature {
                 } else if !config.automaticallyRefreshCatalogOnStartup {
                     state.deferInitialRemoteRefresh = true
                 }
-                state.activePlaylistConfig = config
-                state.activePlaylistName = playlistRepository.getActivePlaylist()?.name ?? ""
-                let localEffect: Effect<Action> = .send(.loadLocalData)
+                if state.activePlaylistConfig != config {
+                    state.activePlaylistConfig = config
+                }
+                let playlistName = playlistRepository.getActivePlaylist()?.name ?? ""
+                if state.activePlaylistName != playlistName {
+                    state.activePlaylistName = playlistName
+                }
                 let presentationPreferenceEffect: Effect<Action> = .run { send in
                     guard let sections = try? await cloudSyncClient.syncPresentationPreferences() else { return }
                     await send(.presentationPreferencesSynchronized(
@@ -1056,6 +1065,8 @@ public struct DashboardFeature {
                 if profileChanged || playlistChanged {
                     state.loadingPrimaryCatalogs = []
                     state.hasLoadedLocalData = false
+                    state.needsLocalDataRefresh = true
+                    state.hasLoadedFavoriteOrdering = false
                     state.hasEnteredRecommendationsSection = false
                     state.hasStartedPersonalizationForCurrentData = false
                     state.catalogCountChanges = []
@@ -1074,13 +1085,18 @@ public struct DashboardFeature {
                     state.activeEPGRefreshID = nil
                     state.isLoading = false
                 }
+                let localEffect: Effect<Action> = state.hasLoadedLocalData && !state.needsLocalDataRefresh
+                    ? .none
+                    : .send(.loadLocalData)
                 if profileChanged || playlistChanged {
                     TopShelfService.shared.updateTopShelfData(continueWatching: [], favoriteChannels: [], recentMovies: [])
                 }
                 let personalizationEnabled = LocalPersonalizationPreferences.recommendationsEnabled(
                     for: profileScope.profileID
                 )
-                state.isPersonalizationEnabled = personalizationEnabled
+                if state.isPersonalizationEnabled != personalizationEnabled {
+                    state.isPersonalizationEnabled = personalizationEnabled
+                }
                 if profileChanged || playlistChanged || !personalizationEnabled {
                     Self.clearPersonalizationState(&state)
                 }
@@ -1107,7 +1123,9 @@ public struct DashboardFeature {
                     state.epgCandidatePlaylistID = nil
                     state.epgCandidateSourceLoaded = false
                 }
-                state.activeProfileScope = profileScope
+                if state.activeProfileScope != profileScope {
+                    state.activeProfileScope = profileScope
+                }
                 let profileCancellationEffect: Effect<Action> = profileChanged
                     ? .merge(
                         .cancel(id: CancelID.localRecommendations),
@@ -1124,8 +1142,14 @@ public struct DashboardFeature {
                         .cancel(id: CancelID.movieCategoryShelves)
                     )
                     : .none
-                state.pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
-                state.manualEPGChannelMappings = Self.loadManualEPGChannelMappings(playlistID: playlistID)
+                let pinnedHomeCategoryIDs = HomeCategoryPinStore.load(profileID: profileScope.profileID, playlistID: playlistID)
+                if state.pinnedHomeCategoryIDs != pinnedHomeCategoryIDs {
+                    state.pinnedHomeCategoryIDs = pinnedHomeCategoryIDs
+                }
+                let manualEPGChannelMappings = Self.loadManualEPGChannelMappings(playlistID: playlistID)
+                if state.manualEPGChannelMappings != manualEPGChannelMappings {
+                    state.manualEPGChannelMappings = manualEPGChannelMappings
+                }
                 if playlistChanged {
                     state.loadingPrimaryCatalogs = []
                     state.hasResolvedLiveCatalog = false
@@ -1166,11 +1190,16 @@ public struct DashboardFeature {
                     state.epgCandidatePlaylistID = nil
                     state.epgCandidateSourceLoaded = false
                 }
-                state.homeSections = HomeSectionManager.shared.sections
+                let homeSections = HomeSectionManager.shared.sections
+                if state.homeSections != homeSections {
+                    state.homeSections = homeSections
+                }
                 let isSportsHubVisible = state.homeSections.first {
                     $0.type == .sportsHub
                 }?.isVisible ?? true
-                state.isSportsHubVisible = isSportsHubVisible
+                if state.isSportsHubVisible != isSportsHubVisible {
+                    state.isSportsHubVisible = isSportsHubVisible
+                }
                 let preferencesChanged = state.lastAdultHidden.map { $0 != currentAdultHidden } ?? false
                 if preferencesChanged {
                     state.loadingPrimaryCatalogs = []
@@ -1311,16 +1340,22 @@ public struct DashboardFeature {
                 }
                 let notificationEffect: Effect<Action> = .run { send in
                     for await _ in NotificationCenter.default.notifications(named: .watchHistoryDidChange) {
-                        await send(.loadLocalData)
+                        await send(.localDatabaseDidChange)
                     }
                 }
                 .cancellable(id: CancelID.watchHistoryObserver, cancelInFlight: true)
                 let hiddenMediaNotificationEffect: Effect<Action> = .run { send in
                     for await _ in NotificationCenter.default.notifications(named: .hiddenMediaDidChange) {
-                        await send(.loadLocalData)
+                        await send(.localDatabaseDidChange)
                     }
                 }
                 .cancellable(id: CancelID.hiddenMediaObserver, cancelInFlight: true)
+                let favoritesNotificationEffect: Effect<Action> = .run { send in
+                    for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
+                        await send(.localDatabaseDidChange)
+                    }
+                }
+                .cancellable(id: CancelID.favoritesObserver, cancelInFlight: true)
                 let recentChannelsNotificationEffect: Effect<Action> = .run { send in
                     for await notification in NotificationCenter.default.notifications(named: .recentChannelsDidChange) {
                         let changedProfileID = notification.userInfo?["profileID"] as? String ?? ""
@@ -1349,6 +1384,7 @@ public struct DashboardFeature {
                     profileCancellationEffect,
                     notificationEffect,
                     hiddenMediaNotificationEffect,
+                    favoritesNotificationEffect,
                     personalizationNotificationEffect,
                     personalizationEffect
                 )
@@ -1630,7 +1666,9 @@ public struct DashboardFeature {
             case .onDisappear:
                 state.isVisible = false
                 state.presentationPreferencesGeneration = nil
-                state.sportsFollowLoadRequestID = nil
+                if state.sportsFollowLoadRequestID != nil {
+                    state.sportsFollowLoadRequestID = nil
+                }
                 for catalog in state.activeAutomaticRefreshTargets {
                     playlistRefreshScheduleClient.clearAutomaticRefreshAttempt(
                         state.activeAutomaticRefreshProfileID,
@@ -1638,43 +1676,67 @@ public struct DashboardFeature {
                         catalog.refreshTarget
                     )
                 }
-                state.activeAutomaticRefreshProfileID = nil
-                state.activeAutomaticRefreshPlaylistID = nil
-                state.activeAutomaticRefreshTargets = []
+                if state.activeAutomaticRefreshProfileID != nil {
+                    state.activeAutomaticRefreshProfileID = nil
+                }
+                if state.activeAutomaticRefreshPlaylistID != nil {
+                    state.activeAutomaticRefreshPlaylistID = nil
+                }
+                if !state.activeAutomaticRefreshTargets.isEmpty {
+                    state.activeAutomaticRefreshTargets = []
+                }
                 if state.activeEPGRefreshID != nil {
                     state.hasLoadedEPGEvents = false
+                    state.activeEPGRefreshID = nil
                 }
-                state.activeRefreshID = nil
-                state.activeMovieCategoryShelvesRequestID = nil
-                state.activeEPGRefreshID = nil
-                state.activeActorRecommendationRefreshID = nil
-                state.activePersonalizationRefreshID = nil
-                state.isLoadingActorFilmography = false
-                state.hasLoadedSelectedActorFilmography = false
-                state.selectedActorID = nil
-                state.selectedActorFilmographyRequestID = nil
-                state.selectedActorName = nil
-                state.selectedActorCollections = []
-                state.newEpisodeSeries = []
-                state.favoriteSeriesUnwatchedEpisodeCounts = [:]
-                state.activeNewEpisodeRefreshID = nil
-                if state.activeMovieRatingRefreshID != nil,
-                   state.mostRatedMovies.isEmpty,
-                   state.highestRatedMovies.isEmpty
+                if state.activeRefreshID != nil {
+                    state.activeRefreshID = nil
+                }
+                if state.activeMovieCategoryShelvesRequestID != nil {
+                    state.activeMovieCategoryShelvesRequestID = nil
+                }
+                // Personalization discovery is independent of dashboard visibility. Let
+                // in-flight work finish so tab switches do not discard its results and
+                // repeat the same expensive catalog passes on the next appearance.
+                if state.isLoadingActorFilmography
+                    || state.hasLoadedSelectedActorFilmography
+                    || state.selectedActorID != nil
+                    || state.selectedActorFilmographyRequestID != nil
+                    || state.selectedActorName != nil
+                    || !state.selectedActorCollections.isEmpty
                 {
-                    state.hasLoadedMovieRatingDiscovery = false
+                    state.isLoadingActorFilmography = false
+                    state.hasLoadedSelectedActorFilmography = false
+                    state.selectedActorID = nil
+                    state.selectedActorFilmographyRequestID = nil
+                    state.selectedActorName = nil
+                    state.selectedActorCollections = []
                 }
-                state.activeMovieRatingRefreshID = nil
-                if state.activeAwardRefreshID != nil, state.awardWinningMovies.isEmpty, state.awardNomineeMovies.isEmpty {
-                    state.hasLoadedAwardDiscovery = false
+                if state.recentLiveChannelsRequestID != nil {
+                    state.recentLiveChannelsRequestID = nil
                 }
-                state.activeAwardRefreshID = nil
-                Self.clearPendingPersonalization(&state)
-                state.recentLiveChannelsRequestID = nil
-                state.favoriteMediaOrderRequestID = nil
-                state.favoriteSeriesSortLoadRequestID = nil
-                state.favoriteSeriesSortRequestID = nil
-                state.isLoadingFavoriteSeriesSortDates = false
+                if state.favoriteMediaOrderRequestID != nil || state.favoriteSeriesSortLoadRequestID != nil {
+                    state.needsLocalDataRefresh = true
+                    state.hasLoadedFavoriteOrdering = false
+                }
+                if state.localDataRequestID != nil {
+                    state.needsLocalDataRefresh = true
+                    state.localDataRequestID = nil
+                }
+                if state.favoriteMediaOrderRequestID != nil {
+                    state.favoriteMediaOrderRequestID = nil
+                }
+                if state.favoriteSeriesSortLoadRequestID != nil {
+                    state.favoriteSeriesSortLoadRequestID = nil
+                }
+                if state.favoriteSeriesSortRequestID != nil {
+                    state.favoriteSeriesSortRequestID = nil
+                }
+                if state.isLoadingFavoriteSeriesSortDates {
+                    state.isLoadingFavoriteSeriesSortDates = false
+                }
+                // Database observers stay active across tab switches. Offscreen changes only
+                // invalidate the snapshot; data is fetched when the dashboard is visible again.
                 return .merge(
                     .cancel(id: CancelID.remoteData),
                     .cancel(id: CancelID.movieCategoryShelves),
@@ -1684,19 +1746,12 @@ public struct DashboardFeature {
                     .cancel(id: CancelID.favoriteMediaOrder),
                     .cancel(id: CancelID.favoriteSeriesSortState),
                     .cancel(id: CancelID.favoriteSeriesSortDates),
-                    .cancel(id: CancelID.actorRecommendations),
                     .cancel(id: CancelID.actorFilmography),
-                    .cancel(id: CancelID.newEpisodeDiscovery),
-                    .cancel(id: CancelID.movieRatingDiscovery),
-                    .cancel(id: CancelID.awardDiscovery),
-                    .cancel(id: CancelID.watchHistoryObserver),
                     .cancel(id: CancelID.personalizationPreferencesObserver),
                     .cancel(id: CancelID.presentationPreferences),
                     .cancel(id: CancelID.presentationPreferenceObserver),
                     .cancel(id: CancelID.sportsFollowLoad),
-                    .cancel(id: CancelID.sportsFollowObserver),
-                    .cancel(id: CancelID.hiddenMediaObserver),
-                    .cancel(id: CancelID.localRecommendations)
+                    .cancel(id: CancelID.sportsFollowObserver)
                 )
 
             case .openManagePlaylistsTapped:
@@ -1887,11 +1942,9 @@ public struct DashboardFeature {
 
             case .loadLocalData:
                 guard state.isVisible else { return .none }
-                state.hasStartedPersonalizationForCurrentData = false
                 let profileScope = profileContextClient.snapshot()
                 let requestID = UUID()
-                state.favoriteMediaOrderRequestID = requestID
-                state.favoriteSeriesSortLoadRequestID = requestID
+                state.localDataRequestID = requestID
                 return .run { send in
                     let favorites = await (try? databaseClient.fetchFavorites(profileScope)) ?? []
                     let history = await (try? databaseClient.fetchWatchHistory(profileScope)) ?? []
@@ -1905,6 +1958,10 @@ public struct DashboardFeature {
                     ))
                 }
                 .cancellable(id: CancelID.localData, cancelInFlight: true)
+
+            case .localDatabaseDidChange:
+                state.needsLocalDataRefresh = true
+                return state.isVisible ? .send(.loadLocalData) : .none
 
             case .localPersonalizationPreferencesChanged:
                 guard state.isVisible else { return .none }
@@ -1931,13 +1988,35 @@ public struct DashboardFeature {
             case let .localDataLoaded(requestID, favorites, history, hiddenMedia, scope):
                 guard profileContextClient.snapshot() == scope,
                       state.activeProfileScope == scope,
-                      state.favoriteMediaOrderRequestID == requestID
+                      state.localDataRequestID == requestID
                 else { return .none }
-                state.favoriteSeriesUnwatchedEpisodeCounts = [:]
-                state.favoriteItems = favorites
-                state.watchHistoryItems = history
-                state.hiddenMediaEntries = hiddenMedia
-                state.hasLoadedLocalData = true
+                state.localDataRequestID = nil
+                let favoritesChanged = state.favoriteItems != favorites
+                let reloadFavoriteOrdering = !state.hasLoadedFavoriteOrdering || favoritesChanged
+                let localDataChanged = favoritesChanged
+                    || state.watchHistoryItems != history
+                    || state.hiddenMediaEntries != hiddenMedia
+                if localDataChanged {
+                    state.hasStartedPersonalizationForCurrentData = false
+                }
+                if state.favoriteItems != favorites {
+                    state.favoriteItems = favorites
+                }
+                if state.watchHistoryItems != history {
+                    state.watchHistoryItems = history
+                }
+                if state.hiddenMediaEntries != hiddenMedia {
+                    state.hiddenMediaEntries = hiddenMedia
+                }
+                if !state.hasLoadedLocalData {
+                    state.hasLoadedLocalData = true
+                }
+                state.needsLocalDataRefresh = false
+                if reloadFavoriteOrdering {
+                    state.favoriteMediaOrderRequestID = requestID
+                    state.favoriteSeriesSortLoadRequestID = requestID
+                    state.hasLoadedFavoriteOrdering = true
+                }
                 let playlistIDs = Set(playlistRepository.getPlaylists().map(\.id) + favorites.compactMap(\.playlistID))
                 let orderScopes = playlistIDs
                     .flatMap { playlistID in
@@ -1946,7 +2025,7 @@ public struct DashboardFeature {
                     .sorted { $0.storageKey < $1.storageKey }
                 let orderClient = favoriteChannelOrderClient
                 let seriesSortClient = favoriteSeriesSortClient
-                let favoriteOrderLoadEffect: Effect<Action> = .run { send in
+                let favoriteOrderLoadEffect: Effect<Action> = reloadFavoriteOrdering ? .run { send in
                     let orders = await withTaskGroup(of: FavoriteMediaOrderRecord.self) { group in
                         for orderScope in orderScopes {
                             group.addTask {
@@ -1971,11 +2050,11 @@ public struct DashboardFeature {
                     )
                     await send(.favoriteMediaOrdersLoaded(requestID: requestID, orders: snapshots, scope: scope))
                 }
-                .cancellable(id: CancelID.favoriteMediaOrder, cancelInFlight: true)
+                .cancellable(id: CancelID.favoriteMediaOrder, cancelInFlight: true) : .none
                 let seriesPlaylistIDs = Set(favorites.compactMap { item in
                     item.type.lowercased() == "series" ? item.playlistID : nil
                 })
-                let favoriteSeriesSortStateLoadEffect: Effect<Action> = .run { send in
+                let favoriteSeriesSortStateLoadEffect: Effect<Action> = reloadFavoriteOrdering ? .run { send in
                     let mode = await seriesSortClient.loadMode(scope.profileID)
                     let episodeDates = await withTaskGroup(of: (UUID, [String: FavoriteSeriesEpisodeDateCacheEntry]).self) { group in
                         for playlistID in seriesPlaylistIDs {
@@ -1998,7 +2077,7 @@ public struct DashboardFeature {
                         scope: scope
                     ))
                 }
-                .cancellable(id: CancelID.favoriteSeriesSortState, cancelInFlight: true)
+                .cancellable(id: CancelID.favoriteSeriesSortState, cancelInFlight: true) : .none
                 Self.syncTopShelf(
                     history: history,
                     favorites: favorites,

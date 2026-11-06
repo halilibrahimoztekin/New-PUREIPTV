@@ -8,6 +8,8 @@ private let favoriteOrderLoadCancellationID = "LiveTVFeature.favoriteOrderLoad"
 private let favoriteListExportCancellationID = "LiveTVFeature.favoriteListExport"
 private let channelSortEPGCancellationID = "LiveTVFeature.channelSortEPG"
 private let channelSortClockCancellationID = "LiveTVFeature.channelSortClock"
+private let favoritesObserverCancellationID = "LiveTVFeature.favoritesObserver"
+private let favoritesLoadCancellationID = "LiveTVFeature.favoritesLoad"
 
 private func currentProgramStartTimesByChannelID(
     _ programsByChannelID: [String: [EPGProgram]],
@@ -268,7 +270,9 @@ public struct LiveTVFeature {
         public var activeCategoryRequestID: UUID?
         public var refreshMessage: String?
         public var errorMessage: String?
+        public var isVisible = false
         public var favoriteIDs: Set<String> = []
+        public var hasLoadedFavoriteIDs = false
         public var hiddenChannelIDs: Set<String> = []
         public var categoryPreferences: [String: CategoryPreferenceDTO] = [:]
         public var categoryPreferenceScope: CategoryPreferenceScope?
@@ -288,11 +292,13 @@ public struct LiveTVFeature {
         public var activeSmartGroupRequestID: UUID?
         public var activeSmartGroupLoadID: UUID?
         public var smartGroupPersistenceRevision: UInt64 = 0
+        public var hasLoadedSmartGroups = false
         public var isLoadingSmartGroups = false
         public var favoriteLists: [NamedFavoriteChannelList] = []
         public var favoriteListPlaylistID: UUID?
         public var favoriteListProfileScope: ProfileContextSnapshot?
         public var favoriteListPersistenceRevision: UInt64 = 0
+        public var hasLoadedFavoriteLists = false
         public var favoriteListLoadRequestID: UUID?
         public var favoriteListPendingMutations: [FavoriteChannelListPendingMutation] = []
         public var isChannelSelectionMode = false
@@ -325,6 +331,7 @@ public struct LiveTVFeature {
         public var channelPresentationPlaylistID: UUID?
         public var channelPresentationProfileScope: ProfileContextSnapshot?
         public var channelPresentationLoadID: UUID?
+        public var hasLoadedChannelPresentationOverrides = false
         public var excludedRecentChannelIDs: Set<String> = []
         public var recentChannelExclusionPlaylistID: UUID?
         public var recentChannelExclusionProfileScope: ProfileContextSnapshot?
@@ -379,6 +386,22 @@ public struct LiveTVFeature {
         }
 
         public mutating func resetChannelSelection() {
+            let hasBulkMutations = favoriteListPendingMutations.contains { mutation in
+                if case .bulk = mutation {
+                    return true
+                }
+                return false
+            }
+            guard isChannelSelectionMode
+                || isConfirmingHideSelectedChannels
+                || !selectedChannelIDs.isEmpty
+                || channelSelectionPlaylistID != nil
+                || channelSelectionProfileScope != nil
+                || channelSelectionGenerationID != nil
+                || hasBulkMutations
+                || bulkFavoriteNotice != nil
+                || activeBulkFavoriteRequestID != nil
+            else { return }
             isChannelSelectionMode = false
             isConfirmingHideSelectedChannels = false
             selectedChannelIDs = []
@@ -548,6 +571,8 @@ public struct LiveTVFeature {
     public enum Action {
         case onAppear(config: PlaylistConfig)
         case onDisappear
+        case favoritesDidChange
+        case loadFavoriteIDs
         case categoriesResponse(
             Result<[MediaModels.Category], Error>,
             preferences: [String: CategoryPreferenceDTO] = [:],
@@ -707,9 +732,17 @@ public struct LiveTVFeature {
         Reduce { state, action in
             switch action {
             case let .onAppear(config):
+                state.isVisible = true
                 let configChanged = state.config != config
                 let playlistChanged = state.config?.playlistID != config.playlistID
                 let profileScope = profileContextClient.snapshot()
+                let profileScopeChanged = state.categoryUnlockProfileScope != profileScope
+                if playlistChanged || profileScopeChanged {
+                    state.hasLoadedFavoriteIDs = false
+                    state.hasLoadedSmartGroups = false
+                    state.hasLoadedFavoriteLists = false
+                    state.hasLoadedChannelPresentationOverrides = false
+                }
                 let categoryAccessScopeChanged = state.categoryUnlockPlaylistID != config.playlistID
                     || state.categoryUnlockProfileScope != profileScope
                 let previousChannelSortOption = state.channelSortOption
@@ -759,17 +792,25 @@ public struct LiveTVFeature {
                     state.channelPresentationOverrides = [:]
                     state.channelPresentationPlaylistID = config.playlistID
                     state.channelPresentationProfileScope = profileScope
+                    state.channelPresentationLoadID = nil
+                    state.hasLoadedChannelPresentationOverrides = false
                 }
-                let presentationLoadID = UUID()
-                state.channelPresentationLoadID = presentationLoadID
                 let presentationOverridesLoad: Effect<Action>
-                if let playlistID = config.playlistID {
+                if let playlistID = config.playlistID,
+                   !state.hasLoadedChannelPresentationOverrides,
+                   state.channelPresentationLoadID == nil
+                {
+                    let presentationLoadID = UUID()
+                    state.channelPresentationLoadID = presentationLoadID
                     presentationOverridesLoad = .run { send in
                         let values = await channelPresentationOverrideClient.load(profileScope.profileID, playlistID)
                         await send(.channelPresentationOverridesLoaded(values, playlistID: playlistID, profileScope: profileScope, requestID: presentationLoadID))
                     }
                 } else {
-                    state.channelPresentationLoadID = nil
+                    if config.playlistID == nil {
+                        state.channelPresentationLoadID = nil
+                        state.hasLoadedChannelPresentationOverrides = true
+                    }
                     presentationOverridesLoad = .none
                 }
                 if playlistChanged {
@@ -803,10 +844,13 @@ public struct LiveTVFeature {
                 let scopeChanged = state.smartGroupPlaylistID != config.playlistID
                     || state.smartGroupProfileScope != profileScope
                 if scopeChanged {
+                    state.hasLoadedSmartGroups = false
                     state.smartChannelGroups = []
                     state.selectedSmartGroupID = nil
                     state.smartGroupChannels = []
                     state.activeSmartGroupRequestID = nil
+                    state.activeSmartGroupLoadID = nil
+                    state.isLoadingSmartGroups = false
                     state.isLoadingChannels = false
                     state.selectedChannel = nil
                     state.smartGroupPlaylistID = config.playlistID
@@ -822,6 +866,7 @@ public struct LiveTVFeature {
                     ? .cancel(id: favoriteListResolutionCancellationID)
                     : .none
                 if favoriteListScopeChanged {
+                    state.hasLoadedFavoriteLists = false
                     state.pendingNamedFavoriteBulk = nil
                     state.favoriteLists = []
                     state.favoriteListResolvedChannels = []
@@ -830,35 +875,55 @@ public struct LiveTVFeature {
                     state.selectedFavoriteListID = nil
                     state.isFavoriteListMode = false
                     state.activeFavoriteListRequestID = nil
+                    state.favoriteListLoadRequestID = nil
                     state.favoriteListPlaylistID = config.playlistID
                     state.favoriteListProfileScope = profileScope
                 }
-                let groupLoadID = UUID()
-                state.activeSmartGroupLoadID = groupLoadID
-                state.isLoadingSmartGroups = true
                 let cancelPreviousGroupResolution: Effect<Action> = scopeChanged
                     ? .cancel(id: smartGroupResolutionCancellationID)
                     : .none
-                let groupLoadEffect: Effect<Action> = if let profileID = profileScope.profileID, let playlistID = config.playlistID {
-                    .run { send in
-                        let snapshot = await smartChannelGroupClient.load(profileID, playlistID)
-                        await send(.smartGroupsLoaded(snapshot, playlistID: config.playlistID, profileScope: profileScope, requestID: groupLoadID))
+                let groupLoadEffect: Effect<Action>
+                if !state.hasLoadedSmartGroups, state.activeSmartGroupLoadID == nil {
+                    let groupLoadID = UUID()
+                    state.activeSmartGroupLoadID = groupLoadID
+                    state.isLoadingSmartGroups = true
+                    if let profileID = profileScope.profileID, let playlistID = config.playlistID {
+                        groupLoadEffect = .run { send in
+                            let snapshot = await smartChannelGroupClient.load(profileID, playlistID)
+                            await send(.smartGroupsLoaded(snapshot, playlistID: config.playlistID, profileScope: profileScope, requestID: groupLoadID))
+                        }
+                    } else {
+                        groupLoadEffect = .send(.smartGroupsLoaded(
+                            SmartChannelGroupSnapshot(groups: [], revision: 0),
+                            playlistID: config.playlistID,
+                            profileScope: profileScope,
+                            requestID: groupLoadID
+                        ))
                     }
                 } else {
-                    .send(.smartGroupsLoaded(SmartChannelGroupSnapshot(groups: [], revision: 0), playlistID: config.playlistID, profileScope: profileScope, requestID: groupLoadID))
+                    groupLoadEffect = .none
                 }
 
-                let favoriteListLoadID = UUID()
-                state.favoriteListLoadRequestID = favoriteListLoadID
-                let favoriteListsEffect: Effect<Action> = if let profileID = profileScope.profileID, let playlistID = config.playlistID {
-                    .run { send in
-                        let snapshot = await favoriteChannelListsClient.load(profileID, playlistID)
-                        await send(.favoriteListsLoaded(snapshot, playlistID: config.playlistID,
-                                                        profileScope: profileScope, requestID: favoriteListLoadID))
+                let favoriteListsEffect: Effect<Action>
+                if !state.hasLoadedFavoriteLists, state.favoriteListLoadRequestID == nil {
+                    let favoriteListLoadID = UUID()
+                    state.favoriteListLoadRequestID = favoriteListLoadID
+                    if let profileID = profileScope.profileID, let playlistID = config.playlistID {
+                        favoriteListsEffect = .run { send in
+                            let snapshot = await favoriteChannelListsClient.load(profileID, playlistID)
+                            await send(.favoriteListsLoaded(snapshot, playlistID: config.playlistID,
+                                                            profileScope: profileScope, requestID: favoriteListLoadID))
+                        }
+                    } else {
+                        favoriteListsEffect = .send(.favoriteListsLoaded(
+                            FavoriteChannelListsSnapshot(),
+                            playlistID: config.playlistID,
+                            profileScope: profileScope,
+                            requestID: favoriteListLoadID
+                        ))
                     }
                 } else {
-                    .send(.favoriteListsLoaded(FavoriteChannelListsSnapshot(), playlistID: config.playlistID,
-                                               profileScope: profileScope, requestID: favoriteListLoadID))
+                    favoriteListsEffect = .none
                 }
 
                 let sortCategoryIDOnAppear = state.selectedCategoryID
@@ -884,6 +949,23 @@ public struct LiveTVFeature {
                 } else {
                     .none
                 }
+                let resumeChannelSortClockOnAppear: Effect<Action> = if !shouldLoadSortEPGOnAppear,
+                                                                        state.channelSortOption == .currentProgramStartTime,
+                                                                        !state.isFavoriteListMode,
+                                                                        state.selectedSmartGroupID == nil,
+                                                                        let categoryID = sortCategoryIDOnAppear,
+                                                                        state.channelSortLoadedCategoryID == categoryID
+                {
+                    scheduleLiveTVChannelSortClockRefresh(
+                        programsByChannelID: state.channelSortProgramsByChannelID,
+                        categoryID: categoryID,
+                        playlistID: config.playlistID,
+                        profileScope: profileScope,
+                        referenceDate: state.channelSortReferenceDate ?? Date()
+                    )
+                } else {
+                    .none
+                }
                 let cancelChannelSortOnAppear: Effect<Action> = if channelSortScopeChanged, !shouldLoadSortEPGOnAppear {
                     .merge(
                         .cancel(id: channelSortEPGCancellationID),
@@ -893,11 +975,17 @@ public struct LiveTVFeature {
                     .none
                 }
 
-                let loadFavorites: Effect<Action> = .run { send in
-                    let favs = await (try? databaseClient.fetchFavoritesByType("live", profileScope)) ?? []
-                    let visible = favs.filter { $0.playlistID == config.playlistID && config.playlistID != nil }
-                    await send(.favoritesLoaded(Set(visible.map(\.id)), playlistID: config.playlistID, profileScope))
+                let loadFavorites: Effect<Action> = state.hasLoadedFavoriteIDs ? .none : .send(.loadFavoriteIDs)
+                let favoritesObserverEffect: Effect<Action> = .run { send in
+                    for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
+                        await send(.favoritesDidChange)
+                    }
                 }
+                .cancellable(id: favoritesObserverCancellationID, cancelInFlight: true)
+                let loadRecentExclusions: Effect<Action> = state.recentChannelExclusionsLoaded
+                    || state.recentChannelExclusionLoadID != nil
+                    ? .none
+                    : .send(.loadRecentChannelExclusions)
 
                 let refreshSelectedGroup: Effect<Action>
                 if !scopeChanged, !state.categories.isEmpty, let selectedGroupToRefresh {
@@ -919,10 +1007,24 @@ public struct LiveTVFeature {
                     refreshSelectedFavoriteList = .none
                 }
 
-                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions)) }
-                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions)) } // Prevent re-fetching on view re-appear
+                guard !state.isLoadingCategories else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, resumeChannelSortClockOnAppear, loadRecentExclusions, favoritesObserverEffect) }
+                guard state.categories.isEmpty else { return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, resumeChannelSortClockOnAppear, loadRecentExclusions, favoritesObserverEffect) } // Prevent re-fetching on view re-appear
 
-                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, .send(.loadRecentChannelExclusions), .send(.reloadCategories(config: config)))
+                return .merge(loadFavorites, groupLoadEffect, favoriteListsEffect, presentationOverridesLoad, cancelPreviousGroupResolution, cancelPreviousFavoriteListResolution, refreshSelectedGroup, refreshSelectedFavoriteList, cancelChannelSortOnAppear, sortEPGOnAppear, resumeChannelSortClockOnAppear, loadRecentExclusions, favoritesObserverEffect, .send(.reloadCategories(config: config)))
+
+            case .favoritesDidChange:
+                state.hasLoadedFavoriteIDs = false
+                return state.isVisible ? .send(.loadFavoriteIDs) : .none
+
+            case .loadFavoriteIDs:
+                guard let config = state.config else { return .none }
+                let profileScope = profileContextClient.snapshot()
+                return .run { send in
+                    let favs = await (try? databaseClient.fetchFavoritesByType("live", profileScope)) ?? []
+                    let visible = favs.filter { $0.playlistID == config.playlistID && config.playlistID != nil }
+                    await send(.favoritesLoaded(Set(visible.map(\.id)), playlistID: config.playlistID, profileScope))
+                }
+                .cancellable(id: favoritesLoadCancellationID, cancelInFlight: true)
 
             case let .channelPresentationOverridesLoaded(values, playlistID, profileScope, requestID):
                 guard state.config?.playlistID == playlistID,
@@ -931,7 +1033,10 @@ public struct LiveTVFeature {
                       state.channelPresentationProfileScope == profileScope,
                       profileContextClient.snapshot() == profileScope else { return .none }
                 state.channelPresentationLoadID = nil
-                state.channelPresentationOverrides = values
+                if state.channelPresentationOverrides != values {
+                    state.channelPresentationOverrides = values
+                }
+                state.hasLoadedChannelPresentationOverrides = true
                 return .none
 
             case .loadRecentChannelExclusions:
@@ -1046,24 +1151,47 @@ public struct LiveTVFeature {
                 )))
 
             case .onDisappear:
-                state.pendingEPGGuideCategoryID = nil
-                state.isRefreshingContent = false
-                state.activeContentRefreshID = nil
-                state.refreshStage = nil
-                state.activeCategoryRequestID = nil
-                state.categoryContentRequestIDs = [:]
-                state.activeSmartGroupRequestID = nil
-                state.isLoadingChannels = false
-                state.activeFavoriteListRequestID = nil
-                state.favoriteOrderRequestID = nil
-                state.favoriteListExportRequestID = nil
-                state.favoriteListExport = nil
-                state.channelSortEPGRequestID = nil
-                state.channelSortLoadedCategoryID = nil
-                state.channelSortProgramsByChannelID = [:]
-                state.channelSortCurrentProgramStartByChannelID = [:]
-                state.channelSortReferenceDate = nil
-                state.isLoadingChannelSortEPG = false
+                state.isVisible = false
+                if state.pendingEPGGuideCategoryID != nil {
+                    state.pendingEPGGuideCategoryID = nil
+                }
+                if state.isRefreshingContent {
+                    state.isRefreshingContent = false
+                }
+                if state.activeContentRefreshID != nil {
+                    state.activeContentRefreshID = nil
+                }
+                if state.refreshStage != nil {
+                    state.refreshStage = nil
+                }
+                if state.activeCategoryRequestID != nil {
+                    state.activeCategoryRequestID = nil
+                }
+                if !state.categoryContentRequestIDs.isEmpty {
+                    state.categoryContentRequestIDs = [:]
+                }
+                if state.activeSmartGroupRequestID != nil {
+                    state.activeSmartGroupRequestID = nil
+                }
+                if state.isLoadingChannels {
+                    state.isLoadingChannels = false
+                }
+                if state.activeFavoriteListRequestID != nil {
+                    state.activeFavoriteListRequestID = nil
+                }
+                if state.favoriteOrderRequestID != nil {
+                    state.favoriteOrderRequestID = nil
+                }
+                if state.favoriteListExportRequestID != nil {
+                    state.favoriteListExportRequestID = nil
+                }
+                if state.favoriteListExport != nil {
+                    state.favoriteListExport = nil
+                }
+                if state.channelSortEPGRequestID != nil {
+                    state.channelSortEPGRequestID = nil
+                    state.isLoadingChannelSortEPG = false
+                }
                 state.resetChannelSelection()
                 return .merge(
                     .cancel(id: smartGroupResolutionCancellationID),
@@ -1595,8 +1723,11 @@ public struct LiveTVFeature {
                       state.smartGroupPlaylistID == playlistID,
                       state.smartGroupProfileScope == profileScope,
                       profileContextClient.snapshot() == profileScope else { return .none }
-                state.smartChannelGroups = snapshot.groups
+                if state.smartChannelGroups != snapshot.groups {
+                    state.smartChannelGroups = snapshot.groups
+                }
                 state.smartGroupPersistenceRevision = snapshot.revision
+                state.hasLoadedSmartGroups = true
                 state.activeSmartGroupLoadID = nil
                 state.isLoadingSmartGroups = false
                 return .none
@@ -1718,8 +1849,12 @@ public struct LiveTVFeature {
                       state.favoriteListProfileScope == profileScope,
                       profileContextClient.snapshot() == profileScope else { return .none }
                 state.favoriteListLoadRequestID = nil
+                state.hasLoadedFavoriteLists = true
                 if snapshot.revision >= state.favoriteListPersistenceRevision {
-                    state.favoriteLists = Array(snapshot.lists.prefix(20))
+                    let lists = Array(snapshot.lists.prefix(20))
+                    if state.favoriteLists != lists {
+                        state.favoriteLists = lists
+                    }
                     state.favoriteListPersistenceRevision = snapshot.revision
                 }
                 let pendingMutations = state.favoriteListPendingMutations
@@ -2935,7 +3070,10 @@ public struct LiveTVFeature {
             case let .favoritesLoaded(favIDs, playlistID, scope):
                 guard profileContextClient.snapshot() == scope,
                       state.config?.playlistID == playlistID else { return .none }
-                state.favoriteIDs = favIDs
+                if state.favoriteIDs != favIDs {
+                    state.favoriteIDs = favIDs
+                }
+                state.hasLoadedFavoriteIDs = true
                 if state.isFavoriteListMode, state.selectedFavoriteListID == nil {
                     return .send(.favoriteListSelected(nil))
                 }

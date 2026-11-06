@@ -111,11 +111,6 @@
                             .padding(.horizontal, 60)
                         }
 
-                        if store.isLoading {
-                            tvLoadingView
-                                .frame(maxWidth: .infinity)
-                                .animation(.easeInOut(duration: 0.2), value: store.isLoading)
-                        }
                         if let error = store.errorMessage {
                             HStack(spacing: 18) {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -168,6 +163,11 @@
                 if let heroVOD = store.featuredVODs.first {
                     DashboardHeroBannerView_tvOS(vod: heroVOD) { store.send(.vodSelected(heroVOD)) }
                         .focusSection()
+                } else {
+                    // Keep downstream shelves in place while the featured catalog loads.
+                    Color.clear
+                        .frame(height: 600)
+                        .accessibilityHidden(true)
                 }
             case .continueWatching:
                 let continueWatching = store.continueWatchingItems
@@ -347,11 +347,6 @@
                     .foregroundStyle(AppColors.textPrimary)
                     .padding(.horizontal, 40)
             }
-        }
-
-        private var tvLoadingView: some View {
-            PureLoadingView(size: .large, text: AppStrings.Common.loadingAlt)
-                .transition(.opacity)
         }
     }
 
